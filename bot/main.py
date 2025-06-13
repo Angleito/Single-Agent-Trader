@@ -534,32 +534,43 @@ class TradingEngine:
                 # Get LLM trading decision
                 trade_action = await self.llm_agent.analyze_market(market_state)
 
-                # Skip Cipher B filtering - AI has final say
-                # cipher_b_filtered_action = self._apply_cipher_b_filter(trade_action, market_state)
+                # LLM has final say - if it says LONG/SHORT, execute immediately
+                if trade_action.action in ["LONG", "SHORT"]:
+                    # Validate the trade action for basic structure only
+                    validated_action = self.validator.validate(trade_action)
 
-                # Validate the trade action
-                validated_action = self.validator.validate(trade_action)
-
-                # Apply risk management
-                risk_approved, final_action, risk_reason = (
-                    self.risk_manager.evaluate_risk(
-                        validated_action, self.current_position, current_price
+                    self.logger.info(
+                        f"Loop {loop_count}: Price=${current_price} | "
+                        f"LLM={trade_action.action} | "
+                        f"Action={validated_action.action} ({validated_action.size_pct}%) | "
+                        f"Risk=LLM_OVERRIDE - AI has final say"
                     )
-                )
 
-                # Log decision process
-                # cipher_b_filtered = cipher_b_filtered_action.action != trade_action.action
-                # filter_status = " [Cipher-B-Filtered]" if cipher_b_filtered else ""
-                self.logger.info(
-                    f"Loop {loop_count}: Price=${current_price} | "
-                    f"LLM={trade_action.action} | "
-                    f"Action={final_action.action} ({final_action.size_pct}%) | "
-                    f"Risk={risk_reason}"
-                )
+                    # Execute LLM decision immediately without risk management filtering
+                    await self._execute_trade(validated_action, current_price)
+                    final_action = validated_action
 
-                # Execute trade if approved
-                if risk_approved and final_action.action != "HOLD":
-                    await self._execute_trade(final_action, current_price)
+                else:
+                    # For HOLD or CLOSE actions, apply normal risk management
+                    validated_action = self.validator.validate(trade_action)
+
+                    # Apply risk management for non-directional trades
+                    risk_approved, final_action, risk_reason = (
+                        self.risk_manager.evaluate_risk(
+                            validated_action, self.current_position, current_price
+                        )
+                    )
+
+                    self.logger.info(
+                        f"Loop {loop_count}: Price=${current_price} | "
+                        f"LLM={trade_action.action} | "
+                        f"Action={final_action.action} ({final_action.size_pct}%) | "
+                        f"Risk={risk_reason}"
+                    )
+
+                    # Execute trade if approved
+                    if risk_approved and final_action.action != "HOLD":
+                        await self._execute_trade(final_action, current_price)
 
                 # Update position tracking and risk metrics
                 await self._update_position_tracking(current_price)

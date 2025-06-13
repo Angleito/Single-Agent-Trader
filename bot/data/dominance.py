@@ -721,7 +721,7 @@ class DominanceCandleBuilder:
 
         except Exception as e:
             logger.error(f"Error building candles: {e}")
-            raise ValueError(f"Failed to build candles: {e}")
+            raise ValueError(f"Failed to build candles: {e}") from e
 
     def _calculate_volume(self, group_snapshots: list[DominanceData]) -> Decimal:
         """
@@ -868,7 +868,7 @@ class DominanceCandleBuilder:
 
         except Exception as e:
             logger.error(f"Error calculating technical indicators: {e}")
-            raise ValueError(f"Failed to calculate technical indicators: {e}")
+            raise ValueError(f"Failed to calculate technical indicators: {e}") from e
 
     def _calculate_rsi(self, values: list[float], period: int = 14) -> list[float]:
         """
@@ -1251,7 +1251,7 @@ class DominanceCandleBuilder:
 
         except Exception as e:
             logger.error(f"Error detecting divergences: {e}")
-            raise ValueError(f"Failed to detect divergences: {e}")
+            raise ValueError(f"Failed to detect divergences: {e}") from e
 
     def _analyze_divergence_pattern(
         self,
@@ -1515,7 +1515,7 @@ class DominanceCandleBuilder:
 
             # Check for duplicates
             seen_timestamps = set()
-            for i, snapshot in enumerate(sorted_snapshots):
+            for snapshot in sorted_snapshots:
                 if snapshot.timestamp in seen_timestamps:
                     duplicates.append(
                         {
@@ -1660,7 +1660,7 @@ class DominanceCandleBuilder:
                         return default
                     return (
                         str(float(value))
-                        if isinstance(value, (int, float, Decimal))
+                        if isinstance(value, int | float | Decimal)
                         else str(value)
                     )
 
@@ -1690,7 +1690,7 @@ class DominanceCandleBuilder:
 
         except Exception as e:
             logger.error(f"Error exporting candles for TradingView: {e}")
-            raise ValueError(f"Failed to export candles: {e}")
+            raise ValueError(f"Failed to export candles: {e}") from e
 
     def get_candle_statistics(
         self, candles: list[DominanceCandleData]
@@ -1723,8 +1723,6 @@ class DominanceCandleBuilder:
 
             # Technical indicator values (filter out None)
             rsi_values = [c.rsi for c in candles if c.rsi is not None]
-            ema_fast_values = [c.ema_fast for c in candles if c.ema_fast is not None]
-            ema_slow_values = [c.ema_slow for c in candles if c.ema_slow is not None]
             momentum_values = [c.momentum for c in candles if c.momentum is not None]
 
             statistics = {
@@ -1756,7 +1754,10 @@ class DominanceCandleBuilder:
                         "min_low": min(low_values),
                         "max_high": max(high_values),
                         "avg_range": np.mean(
-                            [h - l for h, l in zip(high_values, low_values)]
+                            [
+                                h - low
+                                for h, low in zip(high_values, low_values, strict=True)
+                            ]
                         ),
                     },
                 },
@@ -2288,7 +2289,7 @@ def test_dominance_candlestick_functionality():
             )  # Export first 10 candles
             lines = csv_content.split("\n")
 
-            print(f"   ✓ CSV Export successful")
+            print("   ✓ CSV Export successful")
             print(f"   ✓ Header: {lines[0]}")
             print(f"   ✓ Sample data line: {lines[1] if len(lines) > 1 else 'No data'}")
             print(f"   ✓ Total lines: {len(lines)} (header + {len(lines)-1} data rows)")
@@ -2314,7 +2315,7 @@ def test_dominance_candlestick_functionality():
 
         # Test with empty data
         try:
-            empty_builder = DominanceCandleBuilder([])
+            DominanceCandleBuilder([])
             print("   ✗ Empty data test should have failed")
         except ValueError:
             print("   ✓ Empty data validation working")
@@ -2339,9 +2340,10 @@ def test_dominance_candlestick_functionality():
         # Test 9: Performance and memory usage
         print("\n9. Testing performance with larger dataset...")
 
-        import time
-        import psutil
         import os
+        import time
+
+        import psutil
 
         # Create larger dataset (1000 snapshots)
         large_snapshots = []
