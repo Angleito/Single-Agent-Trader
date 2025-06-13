@@ -5,12 +5,12 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Literal, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, Field, validator, root_validator
+from pydantic import BaseModel, Field, root_validator
 
 if TYPE_CHECKING:
-    from .data.dominance import DominanceCandleData
+    pass
 
 
 class TradeAction(BaseModel):
@@ -35,24 +35,32 @@ class TradeAction(BaseModel):
     @root_validator(skip_on_failure=True)
     def validate_trade_action(cls, values):
         """Validate the entire trade action for consistency."""
-        action = values.get('action')
-        take_profit_pct = values.get('take_profit_pct')
-        stop_loss_pct = values.get('stop_loss_pct')
-        
+        action = values.get("action")
+        take_profit_pct = values.get("take_profit_pct")
+        stop_loss_pct = values.get("stop_loss_pct")
+
         # For HOLD and CLOSE actions, allow 0 values
-        if action in ['HOLD', 'CLOSE']:
+        if action in ["HOLD", "CLOSE"]:
             # Ensure percentages are reasonable for these actions
-            if take_profit_pct is not None and (take_profit_pct < 0 or take_profit_pct > 50):
+            if take_profit_pct is not None and (
+                take_profit_pct < 0 or take_profit_pct > 50
+            ):
                 raise ValueError("Take profit percentage must be between 0 and 50")
             if stop_loss_pct is not None and (stop_loss_pct < 0 or stop_loss_pct > 50):
                 raise ValueError("Stop loss percentage must be between 0 and 50")
         else:
             # For LONG/SHORT actions, require > 0
-            if take_profit_pct is not None and (take_profit_pct <= 0 or take_profit_pct > 50):
-                raise ValueError("Take profit percentage must be between 0 and 50, and greater than 0 for trading actions")
+            if take_profit_pct is not None and (
+                take_profit_pct <= 0 or take_profit_pct > 50
+            ):
+                raise ValueError(
+                    "Take profit percentage must be between 0 and 50, and greater than 0 for trading actions"
+                )
             if stop_loss_pct is not None and (stop_loss_pct <= 0 or stop_loss_pct > 50):
-                raise ValueError("Stop loss percentage must be between 0 and 50, and greater than 0 for trading actions")
-        
+                raise ValueError(
+                    "Stop loss percentage must be between 0 and 50, and greater than 0 for trading actions"
+                )
+
         return values
 
     # Optional futures-specific fields
@@ -133,7 +141,7 @@ class IndicatorData(BaseModel):
     ema_fast: float | None = None
     ema_slow: float | None = None
     vwap: float | None = None
-    
+
     # Stablecoin dominance indicators
     usdt_dominance: float | None = None
     usdc_dominance: float | None = None
@@ -142,9 +150,11 @@ class IndicatorData(BaseModel):
     dominance_rsi: float | None = None  # RSI of dominance
     stablecoin_velocity: float | None = None  # Trading volume / market cap
     market_sentiment: str | None = None  # BULLISH/BEARISH/NEUTRAL based on dominance
-    
+
     # Dominance candlestick data for trend analysis
-    dominance_candles: Optional[list[Any]] = None  # Will be list[DominanceCandleData] at runtime
+    dominance_candles: list[Any] | None = (
+        None  # Will be list[DominanceCandleData] at runtime
+    )
 
     class Config:
         """Pydantic configuration."""
@@ -162,12 +172,14 @@ class MarketState(BaseModel):
     ohlcv_data: list[MarketData]
     indicators: IndicatorData
     current_position: Position
-    
+
     # Stablecoin dominance data for sentiment analysis
-    dominance_data: Optional[Any] = None  # Will be DominanceData when available
-    
-    # Dominance candlesticks for technical analysis  
-    dominance_candles: Optional[list[Any]] = None  # Will be list[DominanceCandleData] at runtime
+    dominance_data: Any | None = None  # Will be DominanceData when available
+
+    # Dominance candlesticks for technical analysis
+    dominance_candles: list[Any] | None = (
+        None  # Will be list[DominanceCandleData] at runtime
+    )
 
     class Config:
         """Pydantic configuration."""

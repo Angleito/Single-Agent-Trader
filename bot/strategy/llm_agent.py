@@ -61,17 +61,19 @@ class LLMAgent:
         self._completion_logger: Optional[Any] = None
         self._langchain_callback: Optional[Any] = None
         self._completion_count = 0
-        
+
         # Initialize completion logging if enabled
         if settings.llm.enable_completion_logging:
             self._completion_logger = create_llm_logger(
                 log_level=settings.llm.completion_log_level,
-                log_file=settings.llm.completion_log_file
+                log_file=settings.llm.completion_log_file,
             )
-            
+
             # Create LangChain callback handler if enabled
             if settings.llm.enable_langchain_callbacks and self._completion_logger:
-                self._langchain_callback = create_langchain_callback(self._completion_logger)
+                self._langchain_callback = create_langchain_callback(
+                    self._completion_logger
+                )
 
         # Load prompt template
         self._load_prompt_template()
@@ -271,7 +273,7 @@ Instructions:
             TradeAction with decision and parameters
         """
         request_id = None
-        
+
         try:
             # Prepare input data for the LLM
             llm_input = self._prepare_llm_input(market_state)
@@ -280,25 +282,25 @@ Instructions:
             if self._chain is not None:
                 result = await self._get_llm_decision(llm_input)
                 # Extract request_id from the last completion for decision logging
-                request_id = getattr(self, '_last_request_id', None)
+                request_id = getattr(self, "_last_request_id", None)
             else:
                 result = self._get_fallback_decision(market_state)
 
             logger.info(f"Generated trade action: {result.action} - {result.rationale}")
-            
+
             # Log the trading decision if completion logging is enabled
             if self._completion_logger and settings.llm.enable_completion_logging:
                 self._completion_logger.log_trading_decision(
                     request_id=request_id or "fallback",
                     trade_action=result,
-                    market_state=market_state
+                    market_state=market_state,
                 )
-                
+
             return result
 
         except Exception as e:
             logger.error(f"Error in market analysis: {e}")
-            
+
             # Log the error decision
             if self._completion_logger and settings.llm.enable_completion_logging:
                 error_action = TradeAction(
@@ -308,14 +310,14 @@ Instructions:
                     stop_loss_pct=1.0,
                     rationale="Error in analysis - holding position",
                 )
-                
+
                 self._completion_logger.log_trading_decision(
                     request_id=request_id or "error",
                     trade_action=error_action,
                     market_state=market_state,
-                    validation_result=f"Error: {str(e)}"
+                    validation_result=f"Error: {str(e)}",
                 )
-            
+
             # Return safe default action
             return TradeAction(
                 action="HOLD",
@@ -337,10 +339,10 @@ Instructions:
         """
         # Get recent OHLCV data (show summary of 24h data)
         all_candles = market_state.ohlcv_data
-        
+
         # Show detailed last 10 candles
         recent_candles = all_candles[-10:] if len(all_candles) >= 10 else all_candles
-        
+
         ohlcv_lines = []
         ohlcv_lines.append(f"=== Last 10 candles (of {len(all_candles)} total) ===")
         for candle in recent_candles:
@@ -348,7 +350,7 @@ Instructions:
                 f"{candle.timestamp.strftime('%H:%M')}: "
                 f"O:{candle.open} H:{candle.high} L:{candle.low} C:{candle.close} V:{candle.volume}"
             )
-        
+
         # Add 24h summary statistics
         if len(all_candles) > 10:
             ohlcv_lines.append("\n=== 24h Summary ===")
@@ -358,7 +360,7 @@ Instructions:
             open_24h = all_candles[0].open
             close_24h = all_candles[-1].close
             change_24h = ((close_24h - open_24h) / open_24h) * 100
-            
+
             ohlcv_lines.append(f"24h High: {high_24h}, Low: {low_24h}")
             ohlcv_lines.append(f"24h Change: {change_24h:+.2f}%")
             ohlcv_lines.append(f"24h Volume: {volume_24h}")
@@ -392,7 +394,8 @@ Instructions:
         dominance_data = {
             "usdt_dominance": market_state.indicators.usdt_dominance or "N/A",
             "usdc_dominance": market_state.indicators.usdc_dominance or "N/A",
-            "stablecoin_dominance": market_state.indicators.stablecoin_dominance or "N/A",
+            "stablecoin_dominance": market_state.indicators.stablecoin_dominance
+            or "N/A",
             "dominance_trend": market_state.indicators.dominance_trend or "N/A",
             "dominance_rsi": market_state.indicators.dominance_rsi or "N/A",
             "market_sentiment": market_state.indicators.market_sentiment or "UNKNOWN",
@@ -400,13 +403,15 @@ Instructions:
 
         # Format dominance candlestick data for analysis
         dominance_candles_analysis = self._format_dominance_candles(market_state)
-        
+
         # Format VuManChu dominance technical analysis
-        dominance_vumanchu_analysis = self._format_dominance_vumanchu_analysis(market_state)
-        
+        dominance_vumanchu_analysis = self._format_dominance_vumanchu_analysis(
+            market_state
+        )
+
         # Calculate Cipher B signal alignment
         cipher_b_alignment = self._calculate_cipher_b_alignment(market_state.indicators)
-        
+
         return {
             "symbol": market_state.symbol,
             "interval": market_state.interval,
@@ -435,80 +440,99 @@ Instructions:
     def _format_dominance_candles(self, market_state: MarketState) -> str:
         """
         Format dominance candlestick data for LLM analysis.
-        
+
         Args:
             market_state: Market state containing dominance candles
-            
+
         Returns:
             Formatted string with dominance candlestick analysis
         """
         try:
-            # Try to get dominance candles from both IndicatorData and MarketState
-            dominance_candles = None
-            
-            if hasattr(market_state.indicators, 'dominance_candles') and market_state.indicators.dominance_candles:
-                dominance_candles = market_state.indicators.dominance_candles
-            elif hasattr(market_state, 'dominance_candles') and market_state.dominance_candles:
-                dominance_candles = market_state.dominance_candles
-                
+            # Try to get dominance candles from MarketState
+            dominance_candles = getattr(market_state, "dominance_candles", None)
+
             if not dominance_candles:
                 return "No dominance candle data available for analysis"
-                
+
             # Take last 5 candles for analysis (like OHLCV)
-            recent_candles = dominance_candles[-5:] if len(dominance_candles) >= 5 else dominance_candles
-            
+            recent_candles = (
+                dominance_candles[-5:]
+                if len(dominance_candles) >= 5
+                else dominance_candles
+            )
+
             if not recent_candles:
                 return "Insufficient dominance candle data for analysis"
-                
+
             # Format candlestick data
             candle_lines = []
             for i, candle in enumerate(recent_candles):
                 # Determine candle color/direction
-                direction = "🟢" if candle.close > candle.open else "🔴" if candle.close < candle.open else "⚪"
-                change_pct = ((candle.close - candle.open) / candle.open * 100) if candle.open > 0 else 0
-                
+                direction = (
+                    "🟢"
+                    if candle.close > candle.open
+                    else "🔴" if candle.close < candle.open else "⚪"
+                )
+                change_pct = (
+                    ((candle.close - candle.open) / candle.open * 100)
+                    if candle.open > 0
+                    else 0
+                )
+
                 # Format time
-                time_str = candle.timestamp.strftime('%H:%M') if hasattr(candle, 'timestamp') else f"T-{len(recent_candles)-i}"
-                
+                time_str = (
+                    candle.timestamp.strftime("%H:%M")
+                    if hasattr(candle, "timestamp")
+                    else f"T-{len(recent_candles)-i}"
+                )
+
                 # Create candle summary
                 candle_line = (
                     f"{time_str}: {direction} O:{candle.open:.2f}% H:{candle.high:.2f}% "
                     f"L:{candle.low:.2f}% C:{candle.close:.2f}% ({change_pct:+.2f}%)"
                 )
-                
+
                 # Add technical indicators if available
                 indicators = []
-                if hasattr(candle, 'rsi') and candle.rsi is not None:
+                if hasattr(candle, "rsi") and candle.rsi is not None:
                     indicators.append(f"RSI:{candle.rsi:.1f}")
-                if hasattr(candle, 'trend_signal') and candle.trend_signal:
+                if hasattr(candle, "trend_signal") and candle.trend_signal:
                     indicators.append(f"Signal:{candle.trend_signal}")
-                    
+
                 if indicators:
                     candle_line += f" [{', '.join(indicators)}]"
-                    
+
                 candle_lines.append(candle_line)
-            
+
             # Calculate overall trend
             if len(recent_candles) >= 2:
                 first_close = recent_candles[0].close
                 last_close = recent_candles[-1].close
-                overall_trend = ((last_close - first_close) / first_close * 100) if first_close > 0 else 0
-                
-                trend_direction = "RISING" if overall_trend > 0.1 else "FALLING" if overall_trend < -0.1 else "SIDEWAYS"
+                overall_trend = (
+                    ((last_close - first_close) / first_close * 100)
+                    if first_close > 0
+                    else 0
+                )
+
+                trend_direction = (
+                    "RISING"
+                    if overall_trend > 0.1
+                    else "FALLING" if overall_trend < -0.1 else "SIDEWAYS"
+                )
                 trend_line = f"Overall Trend: {trend_direction} ({overall_trend:+.2f}% over {len(recent_candles)} candles)"
             else:
                 trend_line = "Overall Trend: Insufficient data"
-                
+
             # Create analysis summary
             analysis_lines = [
                 f"Last {len(recent_candles)} Dominance Candles (3-minute intervals):",
                 *candle_lines,
                 trend_line,
-                f"Latest Dominance: {recent_candles[-1].close:.2f}% ({'increasing stablecoin inflows' if recent_candles[-1].close > recent_candles[-1].open else 'decreasing dominance'})"
+                f"Latest Dominance: {recent_candles[-1].close:.2f}% ({'increasing stablecoin inflows' if recent_candles[-1].close > recent_candles[-1].open else 'decreasing dominance'})",
             ]
-            
+
             return "\n".join(analysis_lines)
-            
+
         except Exception as e:
             logger.warning(f"Error formatting dominance candles: {e}")
             return f"Error formatting dominance candles: {str(e)}"
@@ -516,45 +540,61 @@ Instructions:
     def _format_dominance_vumanchu_analysis(self, market_state: MarketState) -> str:
         """
         Format VuManChu dominance technical analysis for LLM consumption.
-        
+
         Args:
             market_state: Market state containing dominance VuManChu indicators
-            
+
         Returns:
             Formatted string with VuManChu dominance analysis
         """
         try:
             indicators = market_state.indicators
-            
+
             # Check if we have VuManChu dominance analysis
-            if not hasattr(indicators, 'dominance_cipher_a_signal'):
+            if not hasattr(indicators, "dominance_cipher_a_signal"):
                 return "VuManChu dominance analysis not available"
-            
+
             analysis_lines = []
-            
+
             # Cipher A Dominance Analysis
-            cipher_a_signal = getattr(indicators, 'dominance_cipher_a_signal', 0)
-            cipher_a_confidence = getattr(indicators, 'dominance_cipher_a_confidence', 0.0)
-            
+            cipher_a_signal = getattr(indicators, "dominance_cipher_a_signal", 0)
+            cipher_a_confidence = getattr(
+                indicators, "dominance_cipher_a_confidence", 0.0
+            )
+
             if cipher_a_signal != 0:
-                signal_text = "🔴 BEARISH for crypto" if cipher_a_signal > 0 else "🟢 BULLISH for crypto"
-                analysis_lines.append(f"Dominance Cipher A: {signal_text} (confidence: {cipher_a_confidence:.1f}%)")
+                signal_text = (
+                    "🔴 BEARISH for crypto"
+                    if cipher_a_signal > 0
+                    else "🟢 BULLISH for crypto"
+                )
+                analysis_lines.append(
+                    f"Dominance Cipher A: {signal_text} (confidence: {cipher_a_confidence:.1f}%)"
+                )
             else:
                 analysis_lines.append("Dominance Cipher A: ⚪ NEUTRAL")
-            
-            # Cipher B Dominance Analysis  
-            cipher_b_signal = getattr(indicators, 'dominance_cipher_b_signal', 0)
-            cipher_b_confidence = getattr(indicators, 'dominance_cipher_b_confidence', 0.0)
-            
+
+            # Cipher B Dominance Analysis
+            cipher_b_signal = getattr(indicators, "dominance_cipher_b_signal", 0)
+            cipher_b_confidence = getattr(
+                indicators, "dominance_cipher_b_confidence", 0.0
+            )
+
             if cipher_b_signal != 0:
-                signal_text = "🔴 BEARISH for crypto" if cipher_b_signal > 0 else "🟢 BULLISH for crypto"
-                analysis_lines.append(f"Dominance Cipher B: {signal_text} (confidence: {cipher_b_confidence:.1f}%)")
+                signal_text = (
+                    "🔴 BEARISH for crypto"
+                    if cipher_b_signal > 0
+                    else "🟢 BULLISH for crypto"
+                )
+                analysis_lines.append(
+                    f"Dominance Cipher B: {signal_text} (confidence: {cipher_b_confidence:.1f}%)"
+                )
             else:
                 analysis_lines.append("Dominance Cipher B: ⚪ NEUTRAL")
-            
+
             # WaveTrend on Dominance
-            wt1 = getattr(indicators, 'dominance_wt1', None)
-            wt2 = getattr(indicators, 'dominance_wt2', None)
+            wt1 = getattr(indicators, "dominance_wt1", None)
+            wt2 = getattr(indicators, "dominance_wt2", None)
             if wt1 is not None and wt2 is not None:
                 wt_condition = ""
                 if wt2 > 60:
@@ -563,41 +603,57 @@ Instructions:
                     wt_condition = "📉 Oversold dominance (bullish for crypto)"
                 else:
                     wt_condition = "📊 Neutral zone"
-                analysis_lines.append(f"Dominance WaveTrend: WT1={wt1:.1f}, WT2={wt2:.1f} - {wt_condition}")
-            
+                analysis_lines.append(
+                    f"Dominance WaveTrend: WT1={wt1:.1f}, WT2={wt2:.1f} - {wt_condition}"
+                )
+
             # Price vs Dominance Divergence
-            price_divergence = getattr(indicators, 'dominance_price_divergence', 'NONE')
-            if price_divergence != 'NONE':
+            price_divergence = getattr(indicators, "dominance_price_divergence", "NONE")
+            if price_divergence != "NONE":
                 divergence_emoji = {
-                    'BULLISH': '🚀',
-                    'BEARISH': '🔻', 
-                    'HIDDEN_BULLISH': '💎',
-                    'HIDDEN_BEARISH': '⚠️'
-                }.get(price_divergence, '❓')
-                analysis_lines.append(f"Price-Dominance Divergence: {divergence_emoji} {price_divergence}")
+                    "BULLISH": "🚀",
+                    "BEARISH": "🔻",
+                    "HIDDEN_BULLISH": "💎",
+                    "HIDDEN_BEARISH": "⚠️",
+                }.get(price_divergence, "❓")
+                analysis_lines.append(
+                    f"Price-Dominance Divergence: {divergence_emoji} {price_divergence}"
+                )
             else:
-                analysis_lines.append("Price-Dominance Divergence: ➡️ No divergence detected")
-            
+                analysis_lines.append(
+                    "Price-Dominance Divergence: ➡️ No divergence detected"
+                )
+
             # Overall Dominance Sentiment
-            dominance_sentiment = getattr(indicators, 'dominance_sentiment', 'NEUTRAL')
+            dominance_sentiment = getattr(indicators, "dominance_sentiment", "NEUTRAL")
             sentiment_emoji = {
-                'STRONG_BULLISH': '🚀🚀',
-                'BULLISH': '🚀',
-                'NEUTRAL': '➡️',
-                'BEARISH': '🔻',
-                'STRONG_BEARISH': '🔻🔻'
-            }.get(dominance_sentiment, '❓')
-            analysis_lines.append(f"VuManChu Dominance Sentiment: {sentiment_emoji} {dominance_sentiment}")
-            
+                "STRONG_BULLISH": "🚀🚀",
+                "BULLISH": "🚀",
+                "NEUTRAL": "➡️",
+                "BEARISH": "🔻",
+                "STRONG_BEARISH": "🔻🔻",
+            }.get(dominance_sentiment, "❓")
+            analysis_lines.append(
+                f"VuManChu Dominance Sentiment: {sentiment_emoji} {dominance_sentiment}"
+            )
+
             # Key Insight
             analysis_lines.append("")
-            analysis_lines.append("📝 Key Insight: Dominance signals are INVERTED for crypto:")
-            analysis_lines.append("   • Rising dominance = Money flowing to stables = Bearish for crypto")
-            analysis_lines.append("   • Falling dominance = Money leaving stables = Bullish for crypto")
-            analysis_lines.append("   • Cipher signals on dominance predict stablecoin flow direction")
-            
+            analysis_lines.append(
+                "📝 Key Insight: Dominance signals are INVERTED for crypto:"
+            )
+            analysis_lines.append(
+                "   • Rising dominance = Money flowing to stables = Bearish for crypto"
+            )
+            analysis_lines.append(
+                "   • Falling dominance = Money leaving stables = Bullish for crypto"
+            )
+            analysis_lines.append(
+                "   • Cipher signals on dominance predict stablecoin flow direction"
+            )
+
             return "\n".join(analysis_lines)
-            
+
         except Exception as e:
             logger.warning(f"Error formatting VuManChu dominance analysis: {e}")
             return f"Error formatting VuManChu dominance analysis: {str(e)}"
@@ -614,44 +670,56 @@ Instructions:
         """
         request_id = None
         start_time = time.time()
-        
+
         try:
             self._completion_count += 1
-            
+
             # Log the request if completion logging is enabled
             if self._completion_logger and settings.llm.enable_completion_logging:
                 # Create prompt for logging (simulate what will be sent)
-                formatted_prompt = self._prompt_template.format(**llm_input) if self._prompt_template else str(llm_input)
-                
+                formatted_prompt = (
+                    self._prompt_template.format(**llm_input)
+                    if self._prompt_template
+                    else str(llm_input)
+                )
+
                 # Extract market context for logging
-                market_context = {
-                    "symbol": llm_input.get("symbol"),
-                    "current_price": llm_input.get("current_price"),
-                    "current_position": llm_input.get("current_position"),
-                    "cipher_a_dot": llm_input.get("cipher_a_dot"),
-                    "cipher_b_wave": llm_input.get("cipher_b_wave"),
-                    "rsi": llm_input.get("rsi"),
-                    "stablecoin_dominance": llm_input.get("stablecoin_dominance"),
-                    "market_sentiment": llm_input.get("market_sentiment")
-                } if settings.llm.log_market_context else None
-                
+                market_context = (
+                    {
+                        "symbol": llm_input.get("symbol"),
+                        "current_price": llm_input.get("current_price"),
+                        "current_position": llm_input.get("current_position"),
+                        "cipher_a_dot": llm_input.get("cipher_a_dot"),
+                        "cipher_b_wave": llm_input.get("cipher_b_wave"),
+                        "rsi": llm_input.get("rsi"),
+                        "stablecoin_dominance": llm_input.get("stablecoin_dominance"),
+                        "market_sentiment": llm_input.get("market_sentiment"),
+                    }
+                    if settings.llm.log_market_context
+                    else None
+                )
+
                 request_id = self._completion_logger.log_completion_request(
                     prompt=formatted_prompt,
                     model=self.model_name,
                     temperature=self.temperature,
                     max_tokens=settings.llm.max_tokens,
-                    market_context=market_context
+                    market_context=market_context,
                 )
-                
+
                 # Store request_id for decision logging
                 self._last_request_id = request_id
-            
+
             # Invoke the chain with callback if available
-            chain_kwargs = {"config": {"callbacks": [self._langchain_callback]}} if self._langchain_callback else {}
+            chain_kwargs = (
+                {"config": {"callbacks": [self._langchain_callback]}}
+                if self._langchain_callback
+                else {}
+            )
             result = await self._chain.ainvoke(llm_input, **chain_kwargs)
-            
+
             response_time = time.time() - start_time
-            
+
             # Ensure result is a TradeAction
             if isinstance(result, dict):
                 trade_action = TradeAction(**result)
@@ -659,7 +727,7 @@ Instructions:
                 trade_action = result
             else:
                 raise ValueError(f"Unexpected result type: {type(result)}")
-            
+
             # Log successful response
             if self._completion_logger and request_id:
                 # Note: Token usage would need to be extracted from the response
@@ -669,18 +737,20 @@ Instructions:
                     response=trade_action,
                     response_time=response_time,
                     token_usage=None,  # Would need special handling to extract from OpenAI response
-                    success=True
+                    success=True,
                 )
-                
+
                 # Log performance metrics periodically
-                if (self._completion_count % settings.llm.performance_log_interval) == 0:
+                if (
+                    self._completion_count % settings.llm.performance_log_interval
+                ) == 0:
                     self._completion_logger.log_performance_metrics()
-            
+
             return trade_action
 
         except Exception as e:
             response_time = time.time() - start_time
-            
+
             # Log failed response
             if self._completion_logger and request_id:
                 self._completion_logger.log_completion_response(
@@ -688,53 +758,55 @@ Instructions:
                     response=None,
                     response_time=response_time,
                     success=False,
-                    error=str(e)
+                    error=str(e),
                 )
-            
+
             logger.error(f"LLM decision error: {e}")
             raise
 
     def _calculate_cipher_b_alignment(self, indicators) -> str:
         """
         Calculate and describe Cipher B signal alignment.
-        
+
         Args:
             indicators: IndicatorData object
-            
+
         Returns:
             String describing Cipher B signal alignment
         """
         if indicators.cipher_b_wave is None or indicators.cipher_b_money_flow is None:
             return "Cipher B indicators not available"
-        
+
         wave = indicators.cipher_b_wave
         money_flow = indicators.cipher_b_money_flow
-        
+
         # Determine signal states
         wave_bullish = wave > 0.0
         wave_bearish = wave < 0.0
         money_flow_bullish = money_flow > 50.0
         money_flow_bearish = money_flow < 50.0
-        
+
         # Check alignments
         bullish_aligned = wave_bullish and money_flow_bullish
         bearish_aligned = wave_bearish and money_flow_bearish
-        
+
         # Build alignment description
         lines = []
         lines.append(f"Wave: {wave:.2f} ({'bullish' if wave_bullish else 'bearish'})")
-        lines.append(f"Money Flow: {money_flow:.2f} ({'bullish' if money_flow_bullish else 'bearish'})")
-        
+        lines.append(
+            f"Money Flow: {money_flow:.2f} ({'bullish' if money_flow_bullish else 'bearish'})"
+        )
+
         if bullish_aligned:
             lines.append("✓ BULLISH ALIGNMENT - Both signals confirm upward momentum")
             lines.append("Traditional Cipher B would trigger LONG here")
         elif bearish_aligned:
-            lines.append("✓ BEARISH ALIGNMENT - Both signals confirm downward momentum") 
+            lines.append("✓ BEARISH ALIGNMENT - Both signals confirm downward momentum")
             lines.append("Traditional Cipher B would trigger SHORT here")
         else:
             lines.append("⚠ MIXED SIGNALS - Wave and Money Flow disagree")
             lines.append("Traditional Cipher B would wait for alignment")
-            
+
         # Add signal strength
         wave_strength = abs(wave)
         if wave_strength > 60:
@@ -743,7 +815,7 @@ Instructions:
             lines.append(f"Wave strength: MODERATE ({wave_strength:.1f})")
         else:
             lines.append(f"Wave strength: WEAK ({wave_strength:.1f})")
-            
+
         return "\n".join(lines)
 
     def _get_fallback_decision(self, market_state: MarketState) -> TradeAction:
@@ -763,7 +835,7 @@ Instructions:
         # Default to hold
         action = "HOLD"
         size_pct = 0
-        
+
         # Check dominance for market sentiment
         dominance_bias = 0  # -1 = bearish, 0 = neutral, 1 = bullish
         if indicators.stablecoin_dominance is not None:
@@ -771,7 +843,7 @@ Instructions:
                 dominance_bias = -1
             elif indicators.stablecoin_dominance < 5:  # Low dominance = bullish
                 dominance_bias = 1
-            
+
             # Check dominance trend
             if indicators.dominance_trend is not None:
                 if indicators.dominance_trend > 0.5:  # Rising dominance = bearish
@@ -784,11 +856,15 @@ Instructions:
             if indicators.cipher_a_dot > 0 and indicators.cipher_b_wave > 0:
                 if current_pos.side == "FLAT" and dominance_bias >= 0:
                     action = "LONG"
-                    size_pct = 10 if dominance_bias == 0 else 15  # Larger size if bullish dominance
+                    size_pct = (
+                        10 if dominance_bias == 0 else 15
+                    )  # Larger size if bullish dominance
             elif indicators.cipher_a_dot < 0 and indicators.cipher_b_wave < 0:
                 if current_pos.side == "FLAT" and dominance_bias <= 0:
                     action = "SHORT"
-                    size_pct = 10 if dominance_bias == 0 else 15  # Larger size if bearish dominance
+                    size_pct = (
+                        10 if dominance_bias == 0 else 15
+                    )  # Larger size if bearish dominance
                 elif current_pos.side == "LONG":
                     action = "CLOSE"
 
@@ -841,35 +917,41 @@ Instructions:
             "completion_logging_enabled": settings.llm.enable_completion_logging,
             "completion_count": self._completion_count,
         }
-        
+
         # Add performance metrics if completion logger is available
         if self._completion_logger and settings.llm.enable_performance_tracking:
             try:
                 performance_metrics = self._completion_logger.log_performance_metrics()
-                status.update({
-                    "performance_metrics": performance_metrics,
-                    "avg_response_time_ms": performance_metrics.get("avg_response_time_ms", 0),
-                    "total_cost_estimate_usd": performance_metrics.get("total_cost_estimate_usd", 0),
-                })
+                status.update(
+                    {
+                        "performance_metrics": performance_metrics,
+                        "avg_response_time_ms": performance_metrics.get(
+                            "avg_response_time_ms", 0
+                        ),
+                        "total_cost_estimate_usd": performance_metrics.get(
+                            "total_cost_estimate_usd", 0
+                        ),
+                    }
+                )
             except Exception as e:
                 logger.warning(f"Could not retrieve performance metrics: {e}")
-                
+
         return status
-    
+
     def log_decision_with_validation(
         self,
         request_id: str,
         trade_action: TradeAction,
         market_state: MarketState,
         validation_result: Optional[str] = None,
-        risk_assessment: Optional[str] = None
+        risk_assessment: Optional[str] = None,
     ) -> None:
         """
         Log a trading decision with validation and risk assessment results.
-        
+
         This method can be called from the main trading loop to include
         post-LLM processing information in the logs.
-        
+
         Args:
             request_id: Request ID from the original LLM completion
             trade_action: Final trade action after validation/risk management
@@ -883,5 +965,5 @@ Instructions:
                 trade_action=trade_action,
                 market_state=market_state,
                 validation_result=validation_result,
-                risk_assessment=risk_assessment
+                risk_assessment=risk_assessment,
             )

@@ -116,7 +116,9 @@ class TradeValidator:
         # Set default size for LONG/SHORT actions if not provided
         if validated.action in ["LONG", "SHORT"] and validated.size_pct == 0:
             validated.size_pct = 5  # Default 5% position size
-            logger.info(f"Set default position size: {validated.size_pct}% for {validated.action}")
+            logger.info(
+                f"Set default position size: {validated.size_pct}% for {validated.action}"
+            )
 
         if validated.size_pct > self.max_size_pct:
             logger.warning(

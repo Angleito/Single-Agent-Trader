@@ -140,7 +140,9 @@ class RiskManager:
         daily_data = self._daily_pnl[today]
         total_pnl = daily_data.realized_pnl + daily_data.unrealized_pnl
 
-        max_loss_usd = self._account_balance * (Decimal(str(self.max_daily_loss_pct)) / Decimal("100"))
+        max_loss_usd = self._account_balance * (
+            Decimal(str(self.max_daily_loss_pct)) / Decimal("100")
+        )
 
         if total_pnl <= -max_loss_usd:
             logger.warning(f"Daily loss limit reached: {total_pnl} <= -{max_loss_usd}")
@@ -231,7 +233,9 @@ class RiskManager:
         if trade_action.size_pct == 0:
             return {"max_loss_usd": Decimal("0"), "max_gain_usd": Decimal("0")}
 
-        position_value = self._account_balance * (Decimal(str(trade_action.size_pct)) / Decimal("100"))
+        position_value = self._account_balance * (
+            Decimal(str(trade_action.size_pct)) / Decimal("100")
+        )
         leveraged_exposure = position_value * Decimal(str(self.leverage))
 
         # Calculate potential loss (stop loss)

@@ -20,10 +20,10 @@ try:
     # Use standard exceptions since SDK doesn't export specific ones
     class CoinbaseAPIException(Exception):
         pass
-    
+
     class CoinbaseAuthenticationException(Exception):
         pass
-    
+
     class CoinbaseConnectionException(Exception):
         pass
 
@@ -53,7 +53,9 @@ try:
                 if isinstance(acc, dict):
                     accounts_list.append(acc)
                 else:
-                    accounts_list.append(acc.to_dict() if hasattr(acc, "to_dict") else acc.__dict__)
+                    accounts_list.append(
+                        acc.to_dict() if hasattr(acc, "to_dict") else acc.__dict__
+                    )
             return {"accounts": accounts_list}
 
     COINBASE_AVAILABLE = True
@@ -61,7 +63,9 @@ try:
 except ImportError:
     # Fallback to the deprecated coinbase-advanced-trader package if present
     try:
-        from coinbase_advanced_trader.client import CoinbaseAdvancedTrader  # type: ignore
+        from coinbase_advanced_trader.client import (
+            CoinbaseAdvancedTrader,  # type: ignore
+        )
         from coinbase_advanced_trader.exceptions import (  # type: ignore
             CoinbaseAPIException,
             CoinbaseAuthenticationException,
@@ -283,8 +287,7 @@ class CoinbaseClient:
 
         # Compose a concise init message to avoid line length issues
         init_msg = (
-            "Initialized CoinbaseClient (auth=%s sandbox=%s futures=%s "
-            "acct_type=%s)"
+            "Initialized CoinbaseClient (auth=%s sandbox=%s futures=%s " "acct_type=%s)"
         )
         logger.info(
             init_msg,
@@ -293,7 +296,7 @@ class CoinbaseClient:
             self.enable_futures,
             self.futures_account_type,
         )
-        
+
         # Log detailed connection configuration
         logger.debug("CoinbaseClient Configuration Details:")
         logger.debug(f"  Authentication method: {self.auth_method}")
@@ -302,7 +305,9 @@ class CoinbaseClient:
         logger.debug(f"  Futures account type: {self.futures_account_type}")
         logger.debug(f"  Auto cash transfer: {self.auto_cash_transfer}")
         logger.debug(f"  Max futures leverage: {self.max_futures_leverage}")
-        logger.debug(f"  Rate limit: {self._rate_limiter.max_requests} req/{self._rate_limiter.window_seconds}s")
+        logger.debug(
+            f"  Rate limit: {self._rate_limiter.max_requests} req/{self._rate_limiter.window_seconds}s"
+        )
         logger.debug(f"  Max retries: {self._max_retries}")
         logger.debug(f"  Has credentials: {bool(self.auth_method != 'none')}")
 
@@ -364,8 +369,7 @@ class CoinbaseClient:
                 # Note: Modern coinbase-advanced-py SDK handles sandbox vs production based on the API key,
                 # not through a separate sandbox parameter
                 self._client = CoinbaseAdvancedTrader(
-                    api_key=self.cdp_api_key_name,
-                    api_secret=self.cdp_private_key
+                    api_key=self.cdp_api_key_name, api_secret=self.cdp_private_key
                 )
 
             else:
@@ -385,28 +389,36 @@ class CoinbaseClient:
             logger.info(
                 f"Connected to Coinbase {'Sandbox' if self.sandbox else 'Live'} successfully"
             )
-            
+
             # Log connection success details
             logger.debug("Connection Success Details:")
-            logger.debug(f"  Environment: {'Sandbox' if self.sandbox else 'Production'}")
+            logger.debug(
+                f"  Environment: {'Sandbox' if self.sandbox else 'Production'}"
+            )
             logger.debug(f"  Authentication method: {self.auth_method}")
             logger.debug(f"  Health check timestamp: {self._last_health_check}")
             logger.debug(f"  SDK available: {COINBASE_AVAILABLE}")
-            
+
             # Log account access test
             try:
                 accounts = await self._retry_request(self._client.get_accounts)
-                account_count = len(accounts.get('accounts', []))
-                logger.debug(f"  Account access test: SUCCESS ({account_count} accounts found)")
+                account_count = len(accounts.get("accounts", []))
+                logger.debug(
+                    f"  Account access test: SUCCESS ({account_count} accounts found)"
+                )
             except Exception as e:
                 logger.warning(f"  Account access test: FAILED ({e})")
-            
+
             # Log futures capabilities if enabled
             if self.enable_futures:
                 try:
-                    balance_response = await self._retry_request(self._client.get_fcm_balance_summary)
-                    logger.debug(f"  Futures access test: SUCCESS")
-                    logger.debug(f"  CFM account ready: {hasattr(balance_response, 'balance_summary')}")
+                    balance_response = await self._retry_request(
+                        self._client.get_fcm_balance_summary
+                    )
+                    logger.debug("  Futures access test: SUCCESS")
+                    logger.debug(
+                        f"  CFM account ready: {hasattr(balance_response, 'balance_summary')}"
+                    )
                 except Exception as e:
                     logger.warning(f"  Futures access test: FAILED ({e})")
             return True
@@ -444,7 +456,6 @@ class CoinbaseClient:
                     # Could add cleanup logic here
             except Exception as e:
                 logger.warning(f"Error during cleanup: {e}")
-
 
         self._client = None
         self._authenticated = False
@@ -1248,14 +1259,16 @@ class CoinbaseClient:
             )
 
             # Handle response object format
-            if hasattr(balance_response, 'balance_summary'):
+            if hasattr(balance_response, "balance_summary"):
                 balance_data = balance_response.balance_summary
                 # Get CFM USD balance from the response - use direct attribute access
                 cfm_balance = balance_data.cfm_usd_balance.get("value", "0")
                 futures_balance = Decimal(str(cfm_balance))
             else:
                 # Fallback for dict format
-                cash_balance = balance_response.get("cash_balance", {}).get("value", "0")
+                cash_balance = balance_response.get("cash_balance", {}).get(
+                    "value", "0"
+                )
                 futures_balance = Decimal(str(cash_balance))
 
             logger.debug(f"Retrieved futures USD balance: {futures_balance}")
@@ -1321,7 +1334,7 @@ class CoinbaseClient:
             margin_info = await self.get_margin_info()
 
             # Parse account information based on response format
-            if hasattr(balance_response, 'balance_summary'):
+            if hasattr(balance_response, "balance_summary"):
                 balance_data = balance_response.balance_summary
                 cash_balance = Decimal(
                     str(balance_data.cbi_usd_balance.get("value", "0"))
@@ -1381,7 +1394,7 @@ class CoinbaseClient:
             )
 
             # Parse margin information based on response format
-            if hasattr(balance_response, 'balance_summary'):
+            if hasattr(balance_response, "balance_summary"):
                 balance_data = balance_response.balance_summary
                 cash_balance = Decimal(
                     str(balance_data.total_usd_balance.get("value", "0"))
@@ -1524,10 +1537,12 @@ class CoinbaseClient:
 
         try:
             # Get positions from FCM account
-            positions_response = await self._retry_request(self._client.get_fcm_positions)
+            positions_response = await self._retry_request(
+                self._client.get_fcm_positions
+            )
 
             # Handle response object format
-            if hasattr(positions_response, 'positions'):
+            if hasattr(positions_response, "positions"):
                 positions_list = positions_response.positions
             else:
                 # Fallback for dict format

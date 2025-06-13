@@ -458,7 +458,6 @@ class TradingEngine:
                     "ema_fast": indicator_state.get("cipher_a", {}).get("ema_fast"),
                     "ema_slow": indicator_state.get("cipher_a", {}).get("ema_slow"),
                     "vwap": indicator_state.get("cipher_b", {}).get("vwap"),
-                    "dominance_candles": dominance_candles,  # Pass dominance candles to MarketState
                 }
 
                 # Add VuManChu dominance analysis if available

@@ -202,7 +202,8 @@ class LLMSettings(BaseModel):
         default="INFO", description="Log level for LLM completions"
     )
     completion_log_file: str = Field(
-        default="logs/llm_completions.log", description="Path to LLM completion log file"
+        default="logs/llm_completions.log",
+        description="Path to LLM completion log file",
     )
     log_prompt_preview_length: int = Field(
         default=500, ge=100, le=2000, description="Length of prompt preview in logs"
@@ -214,7 +215,8 @@ class LLMSettings(BaseModel):
         default=True, description="Enable LLM performance and cost tracking"
     )
     enable_langchain_callbacks: bool = Field(
-        default=True, description="Enable LangChain callback handlers for detailed tracing"
+        default=True,
+        description="Enable LangChain callback handlers for detailed tracing",
     )
     log_market_context: bool = Field(
         default=True, description="Include market context in LLM completion logs"
@@ -223,7 +225,10 @@ class LLMSettings(BaseModel):
         default=True, description="Track and log token usage for cost analysis"
     )
     performance_log_interval: int = Field(
-        default=10, ge=1, le=100, description="Log performance metrics every N completions"
+        default=10,
+        ge=1,
+        le=100,
+        description="Log performance metrics every N completions",
     )
 
     @field_validator("openai_api_key", "anthropic_api_key")
@@ -448,10 +453,11 @@ class DataSettings(BaseModel):
     cipher_b_vwap_length: int = Field(
         default=20, ge=5, le=100, description="Cipher B VWAP length"
     )
-    
+
     # Cipher B Signal Filter Configuration
     enable_cipher_b_filter: bool = Field(
-        default=True, description="Enable Cipher B signal filtering for trade validation"
+        default=True,
+        description="Enable Cipher B signal filtering for trade validation",
     )
     cipher_b_wave_bullish_threshold: float = Field(
         default=0.0, description="Cipher B wave threshold for bullish signals"
@@ -460,10 +466,16 @@ class DataSettings(BaseModel):
         default=0.0, description="Cipher B wave threshold for bearish signals"
     )
     cipher_b_money_flow_bullish_threshold: float = Field(
-        default=50.0, ge=0.0, le=100.0, description="Cipher B money flow threshold for bullish signals"
+        default=50.0,
+        ge=0.0,
+        le=100.0,
+        description="Cipher B money flow threshold for bullish signals",
     )
     cipher_b_money_flow_bearish_threshold: float = Field(
-        default=50.0, ge=0.0, le=100.0, description="Cipher B money flow threshold for bearish signals"
+        default=50.0,
+        ge=0.0,
+        le=100.0,
+        description="Cipher B money flow threshold for bearish signals",
     )
 
     # Storage Configuration
@@ -495,7 +507,10 @@ class DominanceSettings(BaseModel):
 
     # Update Configuration
     update_interval: int = Field(
-        default=300, ge=60, le=3600, description="Dominance data update interval in seconds"
+        default=300,
+        ge=60,
+        le=3600,
+        description="Dominance data update interval in seconds",
     )
     cache_ttl: int = Field(
         default=300, ge=30, le=3600, description="Dominance data cache TTL in seconds"
@@ -503,24 +518,24 @@ class DominanceSettings(BaseModel):
 
     # Analysis Configuration
     dominance_weight_in_decisions: float = Field(
-        default=0.2, 
-        ge=0.0, 
-        le=1.0, 
-        description="Weight of dominance data in trading decisions (0-1)"
+        default=0.2,
+        ge=0.0,
+        le=1.0,
+        description="Weight of dominance data in trading decisions (0-1)",
     )
-    
+
     # Alert Thresholds
     dominance_alert_threshold: float = Field(
-        default=12.0, 
-        ge=5.0, 
-        le=20.0, 
-        description="Stablecoin dominance percentage to trigger alerts"
+        default=12.0,
+        ge=5.0,
+        le=20.0,
+        description="Stablecoin dominance percentage to trigger alerts",
     )
     dominance_change_alert_threshold: float = Field(
-        default=1.0, 
-        ge=0.1, 
-        le=5.0, 
-        description="Dominance change percentage (24h) to trigger alerts"
+        default=1.0,
+        ge=0.1,
+        le=5.0,
+        description="Dominance change percentage (24h) to trigger alerts",
     )
 
 

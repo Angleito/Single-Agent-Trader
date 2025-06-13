@@ -12,12 +12,11 @@ smoothing calculations and state management for historical value dependencies.
 import logging
 import time
 import tracemalloc
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import pandas_ta as ta
-from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +24,11 @@ logger = logging.getLogger(__name__)
 class SchaffTrendCycle:
     """
     Schaff Trend Cycle implementation.
-    
+
     The STC indicator combines slow stochastics with MACD-like calculations to create
     a cyclical oscillator that can identify trend changes with less lag than traditional
     moving average-based indicators.
-    
+
     Features:
     - Exact implementation of Pine Script algorithm
     - Proper handling of recursive smoothing calculations
@@ -37,7 +36,7 @@ class SchaffTrendCycle:
     - Signal generation capabilities
     - Performance optimized for large datasets
     """
-    
+
     def __init__(
         self,
         length: int = 10,
@@ -49,7 +48,7 @@ class SchaffTrendCycle:
     ):
         """
         Initialize Schaff Trend Cycle parameters.
-        
+
         Args:
             length: Period for stochastic calculations
             fast_length: Fast EMA period for MACD calculation
@@ -64,46 +63,49 @@ class SchaffTrendCycle:
         self.factor = factor
         self.overbought = overbought
         self.oversold = oversold
-        
+
         # State variables for recursive calculations
-        self._prev_delta: Optional[float] = None
-        self._prev_stc: Optional[float] = None
-        
+        self._prev_delta: float | None = None
+        self._prev_stc: float | None = None
+
         # Initialize performance tracking
         self._calculation_count = 0
         self._total_calculation_time = 0.0
         self._last_data_quality_check = None
-        
-        logger.info("Schaff Trend Cycle indicator initialized", extra={
-            "indicator": "schaff_trend_cycle",
-            "parameters": {
-                "length": length,
-                "fast_length": fast_length,
-                "slow_length": slow_length,
-                "factor": factor,
-                "overbought": overbought,
-                "oversold": oversold
-            }
-        })
-    
+
+        logger.info(
+            "Schaff Trend Cycle indicator initialized",
+            extra={
+                "indicator": "schaff_trend_cycle",
+                "parameters": {
+                    "length": length,
+                    "fast_length": fast_length,
+                    "slow_length": slow_length,
+                    "factor": factor,
+                    "overbought": overbought,
+                    "oversold": oversold,
+                },
+            },
+        )
+
     def calculate_stc(
-        self, 
-        src: pd.Series, 
-        length: Optional[int] = None,
-        fast_length: Optional[int] = None,
-        slow_length: Optional[int] = None,
-        factor: Optional[float] = None
+        self,
+        src: pd.Series,
+        length: int | None = None,
+        fast_length: int | None = None,
+        slow_length: int | None = None,
+        factor: float | None = None,
     ) -> pd.Series:
         """
         Calculate STC values following the Pine Script algorithm exactly.
-        
+
         Args:
             src: Source price series (typically close prices)
             length: Override default length parameter
             fast_length: Override default fast_length parameter
             slow_length: Override default slow_length parameter
             factor: Override default factor parameter
-            
+
         Returns:
             Series with STC values (0-100 range)
         """
@@ -112,284 +114,318 @@ class SchaffTrendCycle:
         fast_length = fast_length or self.fast_length
         slow_length = slow_length or self.slow_length
         factor = factor or self.factor
-        
+
         start_time = time.perf_counter()
         tracemalloc.start()
-        
-        logger.debug("Starting Schaff Trend Cycle calculation", extra={
-            "indicator": "schaff_trend_cycle",
-            "step": "stc_calculation",
-            "data_points": len(src),
-            "parameters": {
-                "length": length,
-                "fast_length": fast_length,
-                "slow_length": slow_length,
-                "factor": factor
-            },
-            "calculation_id": self._calculation_count
-        })
-        
-        min_required = max(length, fast_length, slow_length)
-        if len(src) < min_required:
-            logger.warning("Insufficient data for STC calculation", extra={
+
+        logger.debug(
+            "Starting Schaff Trend Cycle calculation",
+            extra={
                 "indicator": "schaff_trend_cycle",
-                "issue": "insufficient_data",
-                "data_points": len(src),
-                "min_required": min_required,
-                "shortage": min_required - len(src)
-            })
-            return pd.Series(dtype=float, index=src.index)
-        
-        # Data quality validation
-        self._validate_input_data_quality(src)
-        
-        try:
-            # Step 1: Calculate EMAs
-            logger.debug("Calculating EMAs for STC", extra={
-                "indicator": "schaff_trend_cycle",
-                "step": "ema_calculation",
-                "fast_length": fast_length,
-                "slow_length": slow_length
-            })
-            ema1 = ta.ema(src, length=fast_length)
-            ema2 = ta.ema(src, length=slow_length)
-            
-            if ema1 is None or ema2 is None:
-                logger.error("EMA calculation failed for STC", extra={
-                    "indicator": "schaff_trend_cycle",
-                    "error_type": "ema_calculation_failed",
-                    "ema1_failed": ema1 is None,
-                    "ema2_failed": ema2 is None
-                })
-                return pd.Series(dtype=float, index=src.index)
-            
-            # Step 2: Calculate MACD
-            logger.debug("Calculating MACD for STC", extra={
-                "indicator": "schaff_trend_cycle",
-                "step": "macd_calculation"
-            })
-            macd_val = ema1 - ema2
-            
-            # Step 3: First stochastic calculation
-            logger.debug("First stochastic calculation for STC", extra={
-                "indicator": "schaff_trend_cycle",
-                "step": "first_stochastic",
-                "length": length
-            })
-            # alpha = lowest(macdVal, length)
-            alpha = macd_val.rolling(window=length, min_periods=1).min()
-            
-            # beta = highest(macdVal, length) - alpha
-            beta = macd_val.rolling(window=length, min_periods=1).max() - alpha
-            
-            # Check for zero beta values (division by zero)
-            zero_beta_count = (beta == 0).sum()
-            if zero_beta_count > 0:
-                logger.warning("Zero beta values detected in STC calculation", extra={
-                    "indicator": "schaff_trend_cycle",
-                    "issue": "zero_beta_values",
-                    "zero_count": int(zero_beta_count),
-                    "total_points": len(beta)
-                })
-            
-            # gamma = (macdVal - alpha) / beta * 100
-            # Handle division by zero
-            gamma = pd.Series(dtype=float, index=src.index)
-            non_zero_beta = beta != 0
-            gamma.loc[non_zero_beta] = (macd_val.loc[non_zero_beta] - alpha.loc[non_zero_beta]) / beta.loc[non_zero_beta] * 100
-            
-            # gamma := beta > 0 ? gamma : nz(gamma[1])
-            # Forward fill when beta is zero
-            gamma = gamma.ffill()
-            
-            # Step 4: First smoothing (delta calculation)
-            logger.debug("First smoothing (delta) for STC", extra={
-                "indicator": "schaff_trend_cycle",
-                "step": "first_smoothing",
-                "factor": factor
-            })
-            # delta = gamma
-            # delta := na(delta[1]) ? delta : delta[1] + tcfactor * (gamma - delta[1])
-            delta = self._apply_recursive_smoothing(gamma, factor)
-            
-            # Step 5: Second stochastic calculation
-            logger.debug("Second stochastic calculation for STC", extra={
-                "indicator": "schaff_trend_cycle",
-                "step": "second_stochastic"
-            })
-            # epsilon = lowest(delta, length)
-            epsilon = delta.rolling(window=length, min_periods=1).min()
-            
-            # zeta = highest(delta, length) - epsilon
-            zeta = delta.rolling(window=length, min_periods=1).max() - epsilon
-            
-            # Check for zero zeta values
-            zero_zeta_count = (zeta == 0).sum()
-            if zero_zeta_count > 0:
-                logger.warning("Zero zeta values detected in STC calculation", extra={
-                    "indicator": "schaff_trend_cycle",
-                    "issue": "zero_zeta_values",
-                    "zero_count": int(zero_zeta_count),
-                    "total_points": len(zeta)
-                })
-            
-            # eta = (delta - epsilon) / zeta * 100
-            eta = pd.Series(dtype=float, index=src.index)
-            non_zero_zeta = zeta != 0
-            eta.loc[non_zero_zeta] = (delta.loc[non_zero_zeta] - epsilon.loc[non_zero_zeta]) / zeta.loc[non_zero_zeta] * 100
-            
-            # eta := zeta > 0 ? eta : nz(eta[1])
-            eta = eta.ffill()
-            
-            # Step 6: Final smoothing (STC calculation)
-            logger.debug("Final smoothing (STC) calculation", extra={
-                "indicator": "schaff_trend_cycle",
-                "step": "final_smoothing"
-            })
-            # stcReturn = eta
-            # stcReturn := na(stcReturn[1]) ? stcReturn : stcReturn[1] + tcfactor * (eta - stcReturn[1])
-            stc_return = self._apply_recursive_smoothing(eta, factor)
-            
-            # Performance logging
-            end_time = time.perf_counter()
-            calculation_duration = (end_time - start_time) * 1000
-            
-            current, peak = tracemalloc.get_traced_memory()
-            tracemalloc.stop()
-            
-            self._calculation_count += 1
-            self._total_calculation_time += calculation_duration
-            avg_calculation_time = self._total_calculation_time / self._calculation_count
-            
-            # Final validation
-            valid_count = (~stc_return.isna()).sum()
-            
-            # Calculate value statistics
-            stc_stats = {
-                "min": float(stc_return.min()) if valid_count > 0 else 0,
-                "max": float(stc_return.max()) if valid_count > 0 else 0,
-                "mean": float(stc_return.mean()) if valid_count > 0 else 0,
-                "std": float(stc_return.std()) if valid_count > 0 else 0
-            }
-            
-            # Count values in different ranges
-            overbought_count = (stc_return > self.overbought).sum()
-            oversold_count = (stc_return < self.oversold).sum()
-            
-            logger.info("Schaff Trend Cycle calculation completed", extra={
-                "indicator": "schaff_trend_cycle",
-                "duration_ms": round(calculation_duration, 2),
-                "memory_current_mb": round(current / 1024 / 1024, 2),
-                "memory_peak_mb": round(peak / 1024 / 1024, 2),
-                "data_points": len(src),
-                "valid_count": int(valid_count),
-                "calculation_count": self._calculation_count,
-                "avg_duration_ms": round(avg_calculation_time, 2),
-                "stc_statistics": stc_stats,
-                "level_analysis": {
-                    "overbought_periods": int(overbought_count),
-                    "oversold_periods": int(oversold_count),
-                    "neutral_periods": int(valid_count - overbought_count - oversold_count)
-                }
-            })
-            
-            return stc_return.astype(float)
-            
-        except Exception as e:
-            logger.error("Schaff Trend Cycle calculation failed with exception", extra={
-                "indicator": "schaff_trend_cycle",
-                "error_type": "calculation_exception",
-                "error_message": str(e),
+                "step": "stc_calculation",
                 "data_points": len(src),
                 "parameters": {
                     "length": length,
                     "fast_length": fast_length,
                     "slow_length": slow_length,
-                    "factor": factor
-                }
-            })
+                    "factor": factor,
+                },
+                "calculation_id": self._calculation_count,
+            },
+        )
+
+        min_required = max(length, fast_length, slow_length)
+        if len(src) < min_required:
+            logger.warning(
+                "Insufficient data for STC calculation",
+                extra={
+                    "indicator": "schaff_trend_cycle",
+                    "issue": "insufficient_data",
+                    "data_points": len(src),
+                    "min_required": min_required,
+                    "shortage": min_required - len(src),
+                },
+            )
             return pd.Series(dtype=float, index=src.index)
-    
+
+        # Data quality validation
+        self._validate_input_data_quality(src)
+
+        try:
+            # Step 1: Calculate EMAs
+            logger.debug(
+                "Calculating EMAs for STC",
+                extra={
+                    "indicator": "schaff_trend_cycle",
+                    "step": "ema_calculation",
+                    "fast_length": fast_length,
+                    "slow_length": slow_length,
+                },
+            )
+            ema1 = ta.ema(src, length=fast_length)
+            ema2 = ta.ema(src, length=slow_length)
+
+            if ema1 is None or ema2 is None:
+                logger.error(
+                    "EMA calculation failed for STC",
+                    extra={
+                        "indicator": "schaff_trend_cycle",
+                        "error_type": "ema_calculation_failed",
+                        "ema1_failed": ema1 is None,
+                        "ema2_failed": ema2 is None,
+                    },
+                )
+                return pd.Series(dtype=float, index=src.index)
+
+            # Step 2: Calculate MACD
+            logger.debug(
+                "Calculating MACD for STC",
+                extra={"indicator": "schaff_trend_cycle", "step": "macd_calculation"},
+            )
+            macd_val = ema1 - ema2
+
+            # Step 3: First stochastic calculation
+            logger.debug(
+                "First stochastic calculation for STC",
+                extra={
+                    "indicator": "schaff_trend_cycle",
+                    "step": "first_stochastic",
+                    "length": length,
+                },
+            )
+            # alpha = lowest(macdVal, length)
+            alpha = macd_val.rolling(window=length, min_periods=1).min()
+
+            # beta = highest(macdVal, length) - alpha
+            beta = macd_val.rolling(window=length, min_periods=1).max() - alpha
+
+            # Check for zero beta values (division by zero)
+            zero_beta_count = (beta == 0).sum()
+            if zero_beta_count > 0:
+                logger.warning(
+                    "Zero beta values detected in STC calculation",
+                    extra={
+                        "indicator": "schaff_trend_cycle",
+                        "issue": "zero_beta_values",
+                        "zero_count": int(zero_beta_count),
+                        "total_points": len(beta),
+                    },
+                )
+
+            # gamma = (macdVal - alpha) / beta * 100
+            # Handle division by zero
+            gamma = pd.Series(dtype=float, index=src.index)
+            non_zero_beta = beta != 0
+            gamma.loc[non_zero_beta] = (
+                (macd_val.loc[non_zero_beta] - alpha.loc[non_zero_beta])
+                / beta.loc[non_zero_beta]
+                * 100
+            )
+
+            # gamma := beta > 0 ? gamma : nz(gamma[1])
+            # Forward fill when beta is zero
+            gamma = gamma.ffill()
+
+            # Step 4: First smoothing (delta calculation)
+            logger.debug(
+                "First smoothing (delta) for STC",
+                extra={
+                    "indicator": "schaff_trend_cycle",
+                    "step": "first_smoothing",
+                    "factor": factor,
+                },
+            )
+            # delta = gamma
+            # delta := na(delta[1]) ? delta : delta[1] + tcfactor * (gamma - delta[1])
+            delta = self._apply_recursive_smoothing(gamma, factor)
+
+            # Step 5: Second stochastic calculation
+            logger.debug(
+                "Second stochastic calculation for STC",
+                extra={"indicator": "schaff_trend_cycle", "step": "second_stochastic"},
+            )
+            # epsilon = lowest(delta, length)
+            epsilon = delta.rolling(window=length, min_periods=1).min()
+
+            # zeta = highest(delta, length) - epsilon
+            zeta = delta.rolling(window=length, min_periods=1).max() - epsilon
+
+            # Check for zero zeta values
+            zero_zeta_count = (zeta == 0).sum()
+            if zero_zeta_count > 0:
+                logger.warning(
+                    "Zero zeta values detected in STC calculation",
+                    extra={
+                        "indicator": "schaff_trend_cycle",
+                        "issue": "zero_zeta_values",
+                        "zero_count": int(zero_zeta_count),
+                        "total_points": len(zeta),
+                    },
+                )
+
+            # eta = (delta - epsilon) / zeta * 100
+            eta = pd.Series(dtype=float, index=src.index)
+            non_zero_zeta = zeta != 0
+            eta.loc[non_zero_zeta] = (
+                (delta.loc[non_zero_zeta] - epsilon.loc[non_zero_zeta])
+                / zeta.loc[non_zero_zeta]
+                * 100
+            )
+
+            # eta := zeta > 0 ? eta : nz(eta[1])
+            eta = eta.ffill()
+
+            # Step 6: Final smoothing (STC calculation)
+            logger.debug(
+                "Final smoothing (STC) calculation",
+                extra={"indicator": "schaff_trend_cycle", "step": "final_smoothing"},
+            )
+            # stcReturn = eta
+            # stcReturn := na(stcReturn[1]) ? stcReturn : stcReturn[1] + tcfactor * (eta - stcReturn[1])
+            stc_return = self._apply_recursive_smoothing(eta, factor)
+
+            # Performance logging
+            end_time = time.perf_counter()
+            calculation_duration = (end_time - start_time) * 1000
+
+            current, peak = tracemalloc.get_traced_memory()
+            tracemalloc.stop()
+
+            self._calculation_count += 1
+            self._total_calculation_time += calculation_duration
+            avg_calculation_time = (
+                self._total_calculation_time / self._calculation_count
+            )
+
+            # Final validation
+            valid_count = (~stc_return.isna()).sum()
+
+            # Calculate value statistics
+            stc_stats = {
+                "min": float(stc_return.min()) if valid_count > 0 else 0,
+                "max": float(stc_return.max()) if valid_count > 0 else 0,
+                "mean": float(stc_return.mean()) if valid_count > 0 else 0,
+                "std": float(stc_return.std()) if valid_count > 0 else 0,
+            }
+
+            # Count values in different ranges
+            overbought_count = (stc_return > self.overbought).sum()
+            oversold_count = (stc_return < self.oversold).sum()
+
+            logger.info(
+                "Schaff Trend Cycle calculation completed",
+                extra={
+                    "indicator": "schaff_trend_cycle",
+                    "duration_ms": round(calculation_duration, 2),
+                    "memory_current_mb": round(current / 1024 / 1024, 2),
+                    "memory_peak_mb": round(peak / 1024 / 1024, 2),
+                    "data_points": len(src),
+                    "valid_count": int(valid_count),
+                    "calculation_count": self._calculation_count,
+                    "avg_duration_ms": round(avg_calculation_time, 2),
+                    "stc_statistics": stc_stats,
+                    "level_analysis": {
+                        "overbought_periods": int(overbought_count),
+                        "oversold_periods": int(oversold_count),
+                        "neutral_periods": int(
+                            valid_count - overbought_count - oversold_count
+                        ),
+                    },
+                },
+            )
+
+            return stc_return.astype(float)
+
+        except Exception as e:
+            logger.error(
+                "Schaff Trend Cycle calculation failed with exception",
+                extra={
+                    "indicator": "schaff_trend_cycle",
+                    "error_type": "calculation_exception",
+                    "error_message": str(e),
+                    "data_points": len(src),
+                    "parameters": {
+                        "length": length,
+                        "fast_length": fast_length,
+                        "slow_length": slow_length,
+                        "factor": factor,
+                    },
+                },
+            )
+            return pd.Series(dtype=float, index=src.index)
+
     def _apply_recursive_smoothing(self, series: pd.Series, factor: float) -> pd.Series:
         """
         Apply recursive smoothing as done in Pine Script.
-        
+
         This implements: value := na(value[1]) ? value : value[1] + factor * (input - value[1])
-        
+
         Args:
             series: Input series to smooth
             factor: Smoothing factor
-            
+
         Returns:
             Smoothed series
         """
         result = pd.Series(dtype=float, index=series.index)
-        
+
         for i in range(len(series)):
-            if i == 0 or pd.isna(result.iloc[i-1]):
+            if i == 0 or pd.isna(result.iloc[i - 1]):
                 # First value or previous value is NaN
                 result.iloc[i] = series.iloc[i]
             else:
                 # Recursive smoothing formula
-                prev_val = result.iloc[i-1]
+                prev_val = result.iloc[i - 1]
                 current_input = series.iloc[i]
                 if not pd.isna(current_input):
                     result.iloc[i] = prev_val + factor * (current_input - prev_val)
                 else:
                     result.iloc[i] = prev_val
-        
+
         return result
-    
+
     def get_trend_signals(
-        self, 
-        stc_values: pd.Series, 
-        threshold_levels: Optional[Dict[str, float]] = None
+        self, stc_values: pd.Series, threshold_levels: dict[str, float] | None = None
     ) -> pd.Series:
         """
         Generate trend change signals based on STC values.
-        
+
         Args:
             stc_values: Series of STC values
             threshold_levels: Dictionary with 'overbought' and 'oversold' keys
-            
+
         Returns:
             Series with signals: 1 = bullish, -1 = bearish, 0 = neutral
         """
         if threshold_levels is None:
             threshold_levels = {
-                'overbought': self.overbought,
-                'oversold': self.oversold
+                "overbought": self.overbought,
+                "oversold": self.oversold,
             }
-        
-        overbought = threshold_levels.get('overbought', self.overbought)
-        oversold = threshold_levels.get('oversold', self.oversold)
-        
+
+        overbought = threshold_levels.get("overbought", self.overbought)
+        oversold = threshold_levels.get("oversold", self.oversold)
+
         signals = pd.Series(0, index=stc_values.index, dtype=int)
-        
+
         # Bullish signal: STC crosses above oversold level
-        bullish_cross = (
-            (stc_values.shift(1) <= oversold) & 
-            (stc_values > oversold)
-        )
-        
+        bullish_cross = (stc_values.shift(1) <= oversold) & (stc_values > oversold)
+
         # Bearish signal: STC crosses below overbought level
-        bearish_cross = (
-            (stc_values.shift(1) >= overbought) & 
-            (stc_values < overbought)
-        )
-        
+        bearish_cross = (stc_values.shift(1) >= overbought) & (stc_values < overbought)
+
         signals.loc[bullish_cross] = 1
         signals.loc[bearish_cross] = -1
-        
+
         return signals
-    
-    def get_cycle_analysis(self, stc_values: pd.Series) -> Dict[str, pd.Series]:
+
+    def get_cycle_analysis(self, stc_values: pd.Series) -> dict[str, pd.Series]:
         """
         Perform cycle phase analysis on STC values.
-        
+
         Args:
             stc_values: Series of STC values
-            
+
         Returns:
             Dictionary containing cycle analysis components:
             - phase: Current cycle phase (0=bottom, 1=rising, 2=top, 3=falling)
@@ -398,53 +434,55 @@ class SchaffTrendCycle:
             - trend_strength: Measure of trend strength
         """
         analysis = {}
-        
+
         # Calculate momentum (rate of change)
         momentum = stc_values.diff()
-        analysis['momentum'] = momentum
-        
+        analysis["momentum"] = momentum
+
         # Determine cycle phase
         phase = pd.Series(0, index=stc_values.index, dtype=int)
-        
+
         # Phase 0: Bottom (STC < 25 and rising)
         bottom_phase = (stc_values < 25) & (momentum > 0)
         phase.loc[bottom_phase] = 0
-        
+
         # Phase 1: Rising (25 <= STC < 75 and rising)
         rising_phase = (stc_values >= 25) & (stc_values < 75) & (momentum > 0)
         phase.loc[rising_phase] = 1
-        
+
         # Phase 2: Top (STC >= 75 and falling)
         top_phase = (stc_values >= 75) & (momentum < 0)
         phase.loc[top_phase] = 2
-        
+
         # Phase 3: Falling (25 <= STC < 75 and falling)
         falling_phase = (stc_values >= 25) & (stc_values < 75) & (momentum < 0)
         phase.loc[falling_phase] = 3
-        
-        analysis['phase'] = phase
-        
+
+        analysis["phase"] = phase
+
         # Normalize cycle position (0 = oversold extreme, 1 = overbought extreme)
-        cycle_position = (stc_values - stc_values.rolling(window=50, min_periods=1).min()) / (
-            stc_values.rolling(window=50, min_periods=1).max() - 
-            stc_values.rolling(window=50, min_periods=1).min()
+        cycle_position = (
+            stc_values - stc_values.rolling(window=50, min_periods=1).min()
+        ) / (
+            stc_values.rolling(window=50, min_periods=1).max()
+            - stc_values.rolling(window=50, min_periods=1).min()
         )
-        analysis['cycle_position'] = cycle_position.fillna(0.5)
-        
+        analysis["cycle_position"] = cycle_position.fillna(0.5)
+
         # Calculate trend strength based on momentum consistency
         momentum_sign = np.sign(momentum)
         trend_strength = momentum_sign.rolling(window=5, min_periods=1).mean().abs()
-        analysis['trend_strength'] = trend_strength
-        
+        analysis["trend_strength"] = trend_strength
+
         return analysis
-    
+
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Calculate STC indicator for a DataFrame.
-        
+
         Args:
             df: DataFrame with OHLCV data (must contain 'close' column)
-            
+
         Returns:
             DataFrame with added STC columns:
             - stc: STC values
@@ -454,181 +492,222 @@ class SchaffTrendCycle:
             - stc_trend_strength: Trend strength
         """
         start_time = time.perf_counter()
-        
-        logger.info("Starting Schaff Trend Cycle DataFrame calculation", extra={
-            "indicator": "schaff_trend_cycle",
-            "input_data_points": len(df),
-            "calculation_id": self._calculation_count + 1
-        })
-        
-        if df.empty or 'close' not in df.columns:
-            logger.warning("Invalid DataFrame for STC calculation", extra={
+
+        logger.info(
+            "Starting Schaff Trend Cycle DataFrame calculation",
+            extra={
                 "indicator": "schaff_trend_cycle",
-                "issue": "invalid_dataframe",
-                "is_empty": df.empty,
-                "has_close": 'close' in df.columns if not df.empty else False,
-                "available_columns": list(df.columns) if not df.empty else []
-            })
+                "input_data_points": len(df),
+                "calculation_id": self._calculation_count + 1,
+            },
+        )
+
+        if df.empty or "close" not in df.columns:
+            logger.warning(
+                "Invalid DataFrame for STC calculation",
+                extra={
+                    "indicator": "schaff_trend_cycle",
+                    "issue": "invalid_dataframe",
+                    "is_empty": df.empty,
+                    "has_close": "close" in df.columns if not df.empty else False,
+                    "available_columns": list(df.columns) if not df.empty else [],
+                },
+            )
             return df.copy()
-        
+
         result = df.copy()
-        
+
         # Data quality validation
         self._validate_input_dataframe_quality(result)
-        
+
         # Ensure close column is proper float64 dtype
-        result['close'] = pd.to_numeric(result['close'], errors='coerce').astype('float64')
-        
+        result["close"] = pd.to_numeric(result["close"], errors="coerce").astype(
+            "float64"
+        )
+
         try:
             # Calculate STC
-            logger.debug("Calculating STC values", extra={
-                "indicator": "schaff_trend_cycle",
-                "step": "stc_calculation"
-            })
-            stc_values = self.calculate_stc(result['close'])
-            result['stc'] = stc_values
-            
+            logger.debug(
+                "Calculating STC values",
+                extra={"indicator": "schaff_trend_cycle", "step": "stc_calculation"},
+            )
+            stc_values = self.calculate_stc(result["close"])
+            result["stc"] = stc_values
+
             # Generate signals
-            logger.debug("Generating trend signals", extra={
-                "indicator": "schaff_trend_cycle",
-                "step": "signal_generation"
-            })
+            logger.debug(
+                "Generating trend signals",
+                extra={"indicator": "schaff_trend_cycle", "step": "signal_generation"},
+            )
             signals = self.get_trend_signals(stc_values)
-            result['stc_signal'] = signals
-            
+            result["stc_signal"] = signals
+
             # Perform cycle analysis
-            logger.debug("Performing cycle analysis", extra={
-                "indicator": "schaff_trend_cycle",
-                "step": "cycle_analysis"
-            })
+            logger.debug(
+                "Performing cycle analysis",
+                extra={"indicator": "schaff_trend_cycle", "step": "cycle_analysis"},
+            )
             cycle_analysis = self.get_cycle_analysis(stc_values)
-            result['stc_phase'] = cycle_analysis['phase']
-            result['stc_momentum'] = cycle_analysis['momentum']
-            result['stc_trend_strength'] = cycle_analysis['trend_strength']
-            
+            result["stc_phase"] = cycle_analysis["phase"]
+            result["stc_momentum"] = cycle_analysis["momentum"]
+            result["stc_trend_strength"] = cycle_analysis["trend_strength"]
+
             # Count signals for logging
             bullish_signals = (signals == 1).sum()
             bearish_signals = (signals == -1).sum()
-            
+
             if bullish_signals > 0:
-                logger.info("STC bullish signals generated", extra={
-                    "indicator": "schaff_trend_cycle",
-                    "signal_type": "bullish_signals",
-                    "signal_count": int(bullish_signals),
-                    "signal_frequency": round((bullish_signals / len(df)) * 100, 2) if len(df) > 0 else 0
-                })
-            
+                logger.info(
+                    "STC bullish signals generated",
+                    extra={
+                        "indicator": "schaff_trend_cycle",
+                        "signal_type": "bullish_signals",
+                        "signal_count": int(bullish_signals),
+                        "signal_frequency": (
+                            round((bullish_signals / len(df)) * 100, 2)
+                            if len(df) > 0
+                            else 0
+                        ),
+                    },
+                )
+
             if bearish_signals > 0:
-                logger.info("STC bearish signals generated", extra={
-                    "indicator": "schaff_trend_cycle",
-                    "signal_type": "bearish_signals",
-                    "signal_count": int(bearish_signals),
-                    "signal_frequency": round((bearish_signals / len(df)) * 100, 2) if len(df) > 0 else 0
-                })
-            
+                logger.info(
+                    "STC bearish signals generated",
+                    extra={
+                        "indicator": "schaff_trend_cycle",
+                        "signal_type": "bearish_signals",
+                        "signal_count": int(bearish_signals),
+                        "signal_frequency": (
+                            round((bearish_signals / len(df)) * 100, 2)
+                            if len(df) > 0
+                            else 0
+                        ),
+                    },
+                )
+
             # Final validation and performance logging
             end_time = time.perf_counter()
             total_duration = (end_time - start_time) * 1000
-            
+
             # Count valid outputs
-            stc_valid = (~result['stc'].isna()).sum()
-            
+            stc_valid = (~result["stc"].isna()).sum()
+
             # Generate comprehensive summary
             summary = self._generate_calculation_summary(result)
-            
-            logger.info("Schaff Trend Cycle DataFrame calculation completed", extra={
-                "indicator": "schaff_trend_cycle",
-                "duration_ms": round(total_duration, 2),
-                "input_data_points": len(df),
-                "output_data_points": len(result),
-                "stc_valid_count": int(stc_valid),
-                "signal_summary": {
-                    "bullish": int(bullish_signals),
-                    "bearish": int(bearish_signals),
-                    "total": int(bullish_signals + bearish_signals)
+
+            logger.info(
+                "Schaff Trend Cycle DataFrame calculation completed",
+                extra={
+                    "indicator": "schaff_trend_cycle",
+                    "duration_ms": round(total_duration, 2),
+                    "input_data_points": len(df),
+                    "output_data_points": len(result),
+                    "stc_valid_count": int(stc_valid),
+                    "signal_summary": {
+                        "bullish": int(bullish_signals),
+                        "bearish": int(bearish_signals),
+                        "total": int(bullish_signals + bearish_signals),
+                    },
+                    "analysis_summary": summary,
+                    "calculation_success": True,
                 },
-                "analysis_summary": summary,
-                "calculation_success": True
-            })
-            
+            )
+
             return result
-            
+
         except Exception as e:
-            logger.error("Schaff Trend Cycle DataFrame calculation failed", extra={
-                "indicator": "schaff_trend_cycle",
-                "error_type": "dataframe_calculation_failed",
-                "error_message": str(e),
-                "input_data_points": len(df)
-            })
+            logger.error(
+                "Schaff Trend Cycle DataFrame calculation failed",
+                extra={
+                    "indicator": "schaff_trend_cycle",
+                    "error_type": "dataframe_calculation_failed",
+                    "error_message": str(e),
+                    "input_data_points": len(df),
+                },
+            )
             return df.copy()
-    
-    def get_latest_values(self, df: pd.DataFrame) -> Dict[str, Any]:
+
+    def get_latest_values(self, df: pd.DataFrame) -> dict[str, Any]:
         """
         Get the latest STC values.
-        
+
         Args:
             df: DataFrame with calculated STC indicators
-            
+
         Returns:
             Dictionary with latest STC values
         """
         if df.empty:
-            logger.warning("Empty DataFrame provided for latest values", extra={
-                "indicator": "schaff_trend_cycle",
-                "issue": "empty_dataframe"
-            })
+            logger.warning(
+                "Empty DataFrame provided for latest values",
+                extra={"indicator": "schaff_trend_cycle", "issue": "empty_dataframe"},
+            )
             return {}
-        
+
         latest = df.iloc[-1]
-        
-        stc_value = latest.get('stc', 0)
-        signal_value = latest.get('stc_signal', 0)
-        phase_value = latest.get('stc_phase', 0)
-        
+
+        stc_value = latest.get("stc", 0)
+        signal_value = latest.get("stc_signal", 0)
+        phase_value = latest.get("stc_phase", 0)
+
         latest_values = {
-            'stc': stc_value,
-            'stc_signal': signal_value,
-            'stc_phase': phase_value,
-            'stc_momentum': latest.get('stc_momentum'),
-            'stc_trend_strength': latest.get('stc_trend_strength'),
-            'is_overbought': stc_value > self.overbought if stc_value is not None else False,
-            'is_oversold': stc_value < self.oversold if stc_value is not None else False,
+            "stc": stc_value,
+            "stc_signal": signal_value,
+            "stc_phase": phase_value,
+            "stc_momentum": latest.get("stc_momentum"),
+            "stc_trend_strength": latest.get("stc_trend_strength"),
+            "is_overbought": (
+                stc_value > self.overbought if stc_value is not None else False
+            ),
+            "is_oversold": (
+                stc_value < self.oversold if stc_value is not None else False
+            ),
         }
-        
+
         # Log any active signals or conditions
         active_conditions = []
-        if latest_values.get('is_overbought'):
-            active_conditions.append('overbought')
-        if latest_values.get('is_oversold'):
-            active_conditions.append('oversold')
+        if latest_values.get("is_overbought"):
+            active_conditions.append("overbought")
+        if latest_values.get("is_oversold"):
+            active_conditions.append("oversold")
         if signal_value == 1:
-            active_conditions.append('bullish_signal')
+            active_conditions.append("bullish_signal")
         elif signal_value == -1:
-            active_conditions.append('bearish_signal')
-        
-        phase_names = {0: 'bottom', 1: 'rising', 2: 'top', 3: 'falling'}
-        current_phase = phase_names.get(phase_value, 'unknown')
-        
+            active_conditions.append("bearish_signal")
+
+        phase_names = {0: "bottom", 1: "rising", 2: "top", 3: "falling"}
+        current_phase = phase_names.get(phase_value, "unknown")
+
         if active_conditions or stc_value is not None:
-            logger.info("Active Schaff Trend Cycle signals detected", extra={
-                "indicator": "schaff_trend_cycle",
-                "signal_type": "current_signals",
-                "active_conditions": active_conditions,
-                "stc_value": float(stc_value) if stc_value is not None else None,
-                "current_phase": current_phase,
-                "signal_value": int(signal_value) if signal_value is not None else 0,
-                "trend_strength": float(latest_values.get('stc_trend_strength', 0)) if latest_values.get('stc_trend_strength') is not None else 0
-            })
-        
+            logger.info(
+                "Active Schaff Trend Cycle signals detected",
+                extra={
+                    "indicator": "schaff_trend_cycle",
+                    "signal_type": "current_signals",
+                    "active_conditions": active_conditions,
+                    "stc_value": float(stc_value) if stc_value is not None else None,
+                    "current_phase": current_phase,
+                    "signal_value": (
+                        int(signal_value) if signal_value is not None else 0
+                    ),
+                    "trend_strength": (
+                        float(latest_values.get("stc_trend_strength", 0))
+                        if latest_values.get("stc_trend_strength") is not None
+                        else 0
+                    ),
+                },
+            )
+
         return latest_values
-    
+
     def get_interpretation(self, stc_value: float) -> str:
         """
         Get human-readable interpretation of STC value.
-        
+
         Args:
             stc_value: Current STC value
-            
+
         Returns:
             String interpretation of the current STC state
         """
@@ -640,148 +719,178 @@ class SchaffTrendCycle:
             return "Bullish territory"
         else:
             return "Bearish territory"
-    
-    def get_trade_suggestions(self, df: pd.DataFrame) -> List[Dict[str, Union[str, float]]]:
+
+    def get_trade_suggestions(
+        self, df: pd.DataFrame
+    ) -> list[dict[str, str | float]]:
         """
         Generate trade suggestions based on STC analysis.
-        
+
         Args:
             df: DataFrame with calculated STC indicators
-            
+
         Returns:
             List of trade suggestion dictionaries
         """
         if df.empty or len(df) < 2:
             return []
-        
+
         suggestions = []
         latest = df.iloc[-1]
         previous = df.iloc[-2]
-        
-        stc_current = latest.get('stc', 0)
-        stc_previous = previous.get('stc', 0)
-        signal = latest.get('stc_signal', 0)
-        phase = latest.get('stc_phase', 0)
-        
+
+        stc_current = latest.get("stc", 0)
+        stc_previous = previous.get("stc", 0)
+        signal = latest.get("stc_signal", 0)
+        phase = latest.get("stc_phase", 0)
+
         # Strong buy signal
-        if (signal == 1 and stc_current < 30 and phase == 0):
-            suggestions.append({
-                'action': 'BUY',
-                'strength': 'STRONG',
-                'reason': 'STC crossed above oversold with bullish momentum',
-                'confidence': 0.8
-            })
-        
+        if signal == 1 and stc_current < 30 and phase == 0:
+            suggestions.append(
+                {
+                    "action": "BUY",
+                    "strength": "STRONG",
+                    "reason": "STC crossed above oversold with bullish momentum",
+                    "confidence": 0.8,
+                }
+            )
+
         # Strong sell signal
-        elif (signal == -1 and stc_current > 70 and phase == 2):
-            suggestions.append({
-                'action': 'SELL',
-                'strength': 'STRONG',
-                'reason': 'STC crossed below overbought with bearish momentum',
-                'confidence': 0.8
-            })
-        
+        elif signal == -1 and stc_current > 70 and phase == 2:
+            suggestions.append(
+                {
+                    "action": "SELL",
+                    "strength": "STRONG",
+                    "reason": "STC crossed below overbought with bearish momentum",
+                    "confidence": 0.8,
+                }
+            )
+
         # Moderate signals
         elif signal == 1:
-            suggestions.append({
-                'action': 'BUY',
-                'strength': 'MODERATE',
-                'reason': 'STC bullish crossover',
-                'confidence': 0.6
-            })
-        
+            suggestions.append(
+                {
+                    "action": "BUY",
+                    "strength": "MODERATE",
+                    "reason": "STC bullish crossover",
+                    "confidence": 0.6,
+                }
+            )
+
         elif signal == -1:
-            suggestions.append({
-                'action': 'SELL',
-                'strength': 'MODERATE',
-                'reason': 'STC bearish crossover',
-                'confidence': 0.6
-            })
-        
+            suggestions.append(
+                {
+                    "action": "SELL",
+                    "strength": "MODERATE",
+                    "reason": "STC bearish crossover",
+                    "confidence": 0.6,
+                }
+            )
+
         # Divergence warnings
         if len(df) >= 10:
-            price_trend = df['close'].iloc[-10:].diff().sum()
-            stc_trend = df['stc'].iloc[-10:].diff().sum()
-            
+            price_trend = df["close"].iloc[-10:].diff().sum()
+            stc_trend = df["stc"].iloc[-10:].diff().sum()
+
             if price_trend > 0 and stc_trend < 0:
-                suggestions.append({
-                    'action': 'CAUTION',
-                    'strength': 'WARNING',
-                    'reason': 'Bearish divergence detected - price rising but STC falling',
-                    'confidence': 0.7
-                })
+                suggestions.append(
+                    {
+                        "action": "CAUTION",
+                        "strength": "WARNING",
+                        "reason": "Bearish divergence detected - price rising but STC falling",
+                        "confidence": 0.7,
+                    }
+                )
             elif price_trend < 0 and stc_trend > 0:
-                suggestions.append({
-                    'action': 'OPPORTUNITY',
-                    'strength': 'WARNING',
-                    'reason': 'Bullish divergence detected - price falling but STC rising',
-                    'confidence': 0.7
-                })
-        
+                suggestions.append(
+                    {
+                        "action": "OPPORTUNITY",
+                        "strength": "WARNING",
+                        "reason": "Bullish divergence detected - price falling but STC rising",
+                        "confidence": 0.7,
+                    }
+                )
+
         return suggestions
-    
+
     def _validate_input_data_quality(self, src: pd.Series) -> None:
         """
         Validate input data quality and log issues.
-        
+
         Args:
             src: Input price series to validate
         """
         # Check for NaN values
         nan_count = src.isna().sum()
         if nan_count > 0:
-            logger.warning("NaN values in Schaff Trend Cycle input data", extra={
-                "indicator": "schaff_trend_cycle",
-                "issue": "input_nan_values",
-                "nan_count": int(nan_count),
-                "total_points": len(src),
-                "nan_percentage": round((nan_count / len(src)) * 100, 2)
-            })
-        
+            logger.warning(
+                "NaN values in Schaff Trend Cycle input data",
+                extra={
+                    "indicator": "schaff_trend_cycle",
+                    "issue": "input_nan_values",
+                    "nan_count": int(nan_count),
+                    "total_points": len(src),
+                    "nan_percentage": round((nan_count / len(src)) * 100, 2),
+                },
+            )
+
         # Check for zero or negative prices
         invalid_prices = (src <= 0).sum()
         if invalid_prices > 0:
-            logger.warning("Invalid price values in Schaff Trend Cycle input data", extra={
-                "indicator": "schaff_trend_cycle",
-                "issue": "invalid_prices",
-                "invalid_count": int(invalid_prices),
-                "min_price": float(src.min()) if not src.empty else 0
-            })
-        
+            logger.warning(
+                "Invalid price values in Schaff Trend Cycle input data",
+                extra={
+                    "indicator": "schaff_trend_cycle",
+                    "issue": "invalid_prices",
+                    "invalid_count": int(invalid_prices),
+                    "min_price": float(src.min()) if not src.empty else 0,
+                },
+            )
+
         # Check for extreme price changes
         if len(src) > 1:
             price_changes = src.pct_change().abs()
             extreme_changes = (price_changes > 0.3).sum()  # More than 30% change
             if extreme_changes > 0:
-                logger.warning("Extreme price changes in Schaff Trend Cycle input data", extra={
-                    "indicator": "schaff_trend_cycle",
-                    "issue": "extreme_price_changes",
-                    "extreme_change_count": int(extreme_changes),
-                    "max_change_pct": round(float(price_changes.max()) * 100, 2) if not price_changes.empty else 0
-                })
-    
+                logger.warning(
+                    "Extreme price changes in Schaff Trend Cycle input data",
+                    extra={
+                        "indicator": "schaff_trend_cycle",
+                        "issue": "extreme_price_changes",
+                        "extreme_change_count": int(extreme_changes),
+                        "max_change_pct": (
+                            round(float(price_changes.max()) * 100, 2)
+                            if not price_changes.empty
+                            else 0
+                        ),
+                    },
+                )
+
     def _validate_input_dataframe_quality(self, df: pd.DataFrame) -> None:
         """
         Validate input DataFrame quality and log issues.
-        
+
         Args:
             df: Input DataFrame to validate
         """
-        if 'close' not in df.columns:
+        if "close" not in df.columns:
             return
-            
-        close_series = df['close']
-        
+
+        close_series = df["close"]
+
         # Check for duplicate timestamps
-        if hasattr(df.index, 'duplicated'):
+        if hasattr(df.index, "duplicated"):
             duplicate_count = df.index.duplicated().sum()
             if duplicate_count > 0:
-                logger.warning("Duplicate timestamps in Schaff Trend Cycle input data", extra={
-                    "indicator": "schaff_trend_cycle",
-                    "issue": "duplicate_timestamps",
-                    "duplicate_count": int(duplicate_count)
-                })
-        
+                logger.warning(
+                    "Duplicate timestamps in Schaff Trend Cycle input data",
+                    extra={
+                        "indicator": "schaff_trend_cycle",
+                        "issue": "duplicate_timestamps",
+                        "duplicate_count": int(duplicate_count),
+                    },
+                )
+
         # Check data continuity
         if len(close_series) > 1:
             # Check for gaps in data
@@ -790,78 +899,87 @@ class SchaffTrendCycle:
                 median_diff = time_diffs.median()
                 large_gaps = (time_diffs > median_diff * 3).sum()
                 if large_gaps > 0:
-                    logger.warning("Large time gaps detected in Schaff Trend Cycle input data", extra={
-                        "indicator": "schaff_trend_cycle",
-                        "issue": "large_time_gaps",
-                        "gap_count": int(large_gaps),
-                        "median_diff": str(median_diff)
-                    })
-    
-    def _generate_calculation_summary(self, df: pd.DataFrame) -> Dict[str, Any]:
+                    logger.warning(
+                        "Large time gaps detected in Schaff Trend Cycle input data",
+                        extra={
+                            "indicator": "schaff_trend_cycle",
+                            "issue": "large_time_gaps",
+                            "gap_count": int(large_gaps),
+                            "median_diff": str(median_diff),
+                        },
+                    )
+
+    def _generate_calculation_summary(self, df: pd.DataFrame) -> dict[str, Any]:
         """
         Generate summary of calculation results for logging.
-        
+
         Args:
             df: DataFrame with calculated STC analysis
-            
+
         Returns:
             Dictionary with calculation summary
         """
-        summary = {
-            "total_data_points": len(df)
-        }
-        
+        summary = {"total_data_points": len(df)}
+
         # STC value statistics
-        if 'stc' in df.columns:
-            stc_series = df['stc'].dropna()
+        if "stc" in df.columns:
+            stc_series = df["stc"].dropna()
             if not stc_series.empty:
-                summary.update({
-                    "stc_valid_count": len(stc_series),
-                    "stc_min": round(float(stc_series.min()), 2),
-                    "stc_max": round(float(stc_series.max()), 2),
-                    "stc_mean": round(float(stc_series.mean()), 2),
-                    "stc_std": round(float(stc_series.std()), 2)
-                })
-        
+                summary.update(
+                    {
+                        "stc_valid_count": len(stc_series),
+                        "stc_min": round(float(stc_series.min()), 2),
+                        "stc_max": round(float(stc_series.max()), 2),
+                        "stc_mean": round(float(stc_series.mean()), 2),
+                        "stc_std": round(float(stc_series.std()), 2),
+                    }
+                )
+
         # Phase distribution
-        if 'stc_phase' in df.columns:
-            phase_counts = df['stc_phase'].value_counts().to_dict()
-            phase_names = {0: 'bottom', 1: 'rising', 2: 'top', 3: 'falling'}
+        if "stc_phase" in df.columns:
+            phase_counts = df["stc_phase"].value_counts().to_dict()
+            phase_names = {0: "bottom", 1: "rising", 2: "top", 3: "falling"}
             phase_distribution = {}
             for phase_num, count in phase_counts.items():
-                phase_name = phase_names.get(phase_num, f'unknown_{phase_num}')
+                phase_name = phase_names.get(phase_num, f"unknown_{phase_num}")
                 phase_distribution[phase_name] = int(count)
-            summary['phase_distribution'] = phase_distribution
-        
+            summary["phase_distribution"] = phase_distribution
+
         # Signal distribution
-        if 'stc_signal' in df.columns:
-            signal_counts = df['stc_signal'].value_counts().to_dict()
-            summary['signal_distribution'] = {
-                'bullish': signal_counts.get(1, 0),
-                'bearish': signal_counts.get(-1, 0),
-                'neutral': signal_counts.get(0, 0)
+        if "stc_signal" in df.columns:
+            signal_counts = df["stc_signal"].value_counts().to_dict()
+            summary["signal_distribution"] = {
+                "bullish": signal_counts.get(1, 0),
+                "bearish": signal_counts.get(-1, 0),
+                "neutral": signal_counts.get(0, 0),
             }
-        
+
         # Trend strength statistics
-        if 'stc_trend_strength' in df.columns:
-            strength_series = df['stc_trend_strength'].dropna()
+        if "stc_trend_strength" in df.columns:
+            strength_series = df["stc_trend_strength"].dropna()
             if not strength_series.empty:
-                summary.update({
-                    "avg_trend_strength": round(float(strength_series.mean()), 4),
-                    "max_trend_strength": round(float(strength_series.max()), 4)
-                })
-        
+                summary.update(
+                    {
+                        "avg_trend_strength": round(float(strength_series.mean()), 4),
+                        "max_trend_strength": round(float(strength_series.max()), 4),
+                    }
+                )
+
         return summary
-    
-    def get_performance_metrics(self) -> Dict[str, Any]:
+
+    def get_performance_metrics(self) -> dict[str, Any]:
         """
         Get performance metrics for monitoring.
-        
+
         Returns:
             Dictionary with performance metrics
         """
-        avg_time = self._total_calculation_time / self._calculation_count if self._calculation_count > 0 else 0
-        
+        avg_time = (
+            self._total_calculation_time / self._calculation_count
+            if self._calculation_count > 0
+            else 0
+        )
+
         metrics = {
             "calculation_count": self._calculation_count,
             "total_calculation_time_ms": round(self._total_calculation_time, 2),
@@ -872,14 +990,14 @@ class SchaffTrendCycle:
                 "slow_length": self.slow_length,
                 "factor": self.factor,
                 "overbought": self.overbought,
-                "oversold": self.oversold
+                "oversold": self.oversold,
             },
-            "last_data_quality_check": self._last_data_quality_check
+            "last_data_quality_check": self._last_data_quality_check,
         }
-        
-        logger.debug("Schaff Trend Cycle performance metrics", extra={
-            "indicator": "schaff_trend_cycle",
-            "metrics": metrics
-        })
-        
+
+        logger.debug(
+            "Schaff Trend Cycle performance metrics",
+            extra={"indicator": "schaff_trend_cycle", "metrics": metrics},
+        )
+
         return metrics
