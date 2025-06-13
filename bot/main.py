@@ -435,6 +435,7 @@ class TradingEngine:
                             self.logger.warning(
                                 f"Failed to build dominance candles for VuManChu: {e}"
                             )
+                            dominance_candles = None  # Ensure variable is properly reset on error
 
                 # Calculate indicators with dominance candle support
                 df_with_indicators = self.indicator_calc.calculate_all(
