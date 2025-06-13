@@ -4,7 +4,7 @@ import asyncio
 import logging
 import signal
 import sys
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -15,8 +15,8 @@ from rich.table import Table
 
 # Import bot components
 from .config import Settings, create_settings
+from .data.dominance import DominanceCandleBuilder, DominanceDataProvider
 from .data.market import MarketDataProvider
-from .data.dominance import DominanceDataProvider, DominanceCandleBuilder
 from .exchange.coinbase import CoinbaseClient
 from .indicators.vumanchu import VuManChuIndicators
 from .paper_trading import PaperTradingAccount
@@ -91,14 +91,18 @@ class TradingEngine:
         )
         self.risk_manager = RiskManager(position_manager=self.position_manager)
         self.exchange_client = CoinbaseClient()
-        
+
         # Initialize dominance data provider if enabled
         self.dominance_provider = None
         if self.settings.dominance.enable_dominance_data:
             self.dominance_provider = DominanceDataProvider(
                 data_source=self.settings.dominance.data_source,
-                api_key=self.settings.dominance.api_key.get_secret_value() if self.settings.dominance.api_key else None,
-                update_interval=self.settings.dominance.update_interval
+                api_key=(
+                    self.settings.dominance.api_key.get_secret_value()
+                    if self.settings.dominance.api_key
+                    else None
+                ),
+                update_interval=self.settings.dominance.update_interval,
             )
 
         # Position tracking
@@ -186,7 +190,7 @@ class TradingEngine:
 
             # Display startup summary
             self._display_startup_summary()
-            
+
             # Log initial data status for debugging
             data_status = self.market_data.get_data_status()
             self.logger.info(f"Initial market data status: {data_status}")
@@ -235,7 +239,7 @@ class TradingEngine:
         # Load initial market data
         console.print("  • Loading initial market data...")
         await self._wait_for_initial_data()
-        
+
         # Initialize dominance data provider
         if self.dominance_provider:
             console.print("  • Connecting to stablecoin dominance data...")
@@ -243,7 +247,7 @@ class TradingEngine:
                 await self.dominance_provider.connect()
                 console.print("    [green]✓ Dominance data connected[/green]")
             except Exception as e:
-                logger.warning(f"Failed to connect dominance data: {e}")
+                self.logger.warning(f"Failed to connect dominance data: {e}")
                 console.print("    [yellow]⚠ Dominance data unavailable[/yellow]")
 
         console.print("[green]✓ All components initialized successfully[/green]")
@@ -260,26 +264,32 @@ class TradingEngine:
             if elapsed_time > max_wait_time:
                 # Get detailed status before failing
                 status = self.market_data.get_data_status()
-                self.logger.error(f"Timeout waiting for initial market data. Status: {status}")
-                raise RuntimeError(f"Timeout waiting for initial market data after {max_wait_time}s")
+                self.logger.error(
+                    f"Timeout waiting for initial market data. Status: {status}"
+                )
+                raise RuntimeError(
+                    f"Timeout waiting for initial market data after {max_wait_time}s"
+                )
 
             # Check for historical data
             data = self.market_data.get_latest_ohlcv(limit=50)
             if len(data) >= 50 and not historical_data_loaded:
                 self.logger.info(f"Loaded {len(data)} historical candles for analysis")
                 historical_data_loaded = True
-            
+
             # Check for WebSocket data
             if self.market_data.has_websocket_data() and not websocket_data_received:
                 self.logger.info("WebSocket is receiving real-time market data")
                 websocket_data_received = True
-            
+
             # We're ready when we have historical data and either:
             # 1. WebSocket is receiving data, OR
             # 2. We've waited at least 10 seconds for WebSocket (market might be closed/inactive)
             if historical_data_loaded:
                 if websocket_data_received:
-                    self.logger.info("Both historical and real-time data available, ready to trade")
+                    self.logger.info(
+                        "Both historical and real-time data available, ready to trade"
+                    )
                     break
                 elif elapsed_time > 10:
                     # After 10 seconds, proceed if we have historical data even without WebSocket
@@ -288,7 +298,7 @@ class TradingEngine:
                         "(market may be closed or inactive)"
                     )
                     break
-            
+
             # Log progress every 5 seconds
             if int(elapsed_time) % 5 == 0 and elapsed_time > 0:
                 status = self.market_data.get_data_status()
@@ -311,7 +321,11 @@ class TradingEngine:
 
         # Market data status
         data_status = self.market_data.get_data_status()
-        ws_status = "✓ Receiving data" if data_status.get('websocket_data_received', False) else "⚠ Waiting for data"
+        ws_status = (
+            "✓ Receiving data"
+            if data_status.get("websocket_data_received", False)
+            else "⚠ Waiting for data"
+        )
         table.add_row(
             "Market Data",
             "✓ Connected" if data_status["connected"] else "✗ Disconnected",
@@ -335,7 +349,6 @@ class TradingEngine:
         )
 
         # Risk manager
-        risk_metrics = self.risk_manager.get_risk_metrics()
         table.add_row(
             "Risk Manager",
             "✓ Active",
@@ -356,7 +369,6 @@ class TradingEngine:
         self._running = True
 
         loop_count = 0
-        last_data_update = datetime.now(UTC)
 
         while self._running and not self._shutdown_requested:
             try:
@@ -370,8 +382,10 @@ class TradingEngine:
                     )
                     # Check if WebSocket handler is already reconnecting
                     data_status = self.market_data.get_data_status()
-                    if data_status.get('reconnect_attempts', 0) > 0:
-                        self.logger.info("WebSocket handler is already attempting reconnection, waiting...")
+                    if data_status.get("reconnect_attempts", 0) > 0:
+                        self.logger.info(
+                            "WebSocket handler is already attempting reconnection, waiting..."
+                        )
                         await asyncio.sleep(5)  # Wait for WebSocket reconnection
                         continue
                     else:
@@ -391,103 +405,122 @@ class TradingEngine:
 
                 # Calculate technical indicators
                 df = self.market_data.to_dataframe(limit=200)
-                
+
+                # Initialize dominance candles
+                dominance_candles = None
+
                 # Generate dominance candlesticks for technical analysis if not already done
                 if dominance_candles is None and self.dominance_provider:
-                    dominance_history = self.dominance_provider.get_dominance_history(hours=2)
-                    if len(dominance_history) >= 6:  # Need at least 6 snapshots for 3-minute candles
+                    dominance_history = self.dominance_provider.get_dominance_history(
+                        hours=2
+                    )
+                    if (
+                        len(dominance_history) >= 6
+                    ):  # Need at least 6 snapshots for 3-minute candles
                         try:
                             candle_builder = DominanceCandleBuilder(dominance_history)
-                            dominance_candles = candle_builder.build_candles(interval='3T')
+                            dominance_candles = candle_builder.build_candles(
+                                interval="3T"
+                            )
                             # Keep only the last 20 candles for analysis
-                            dominance_candles = dominance_candles[-20:] if len(dominance_candles) > 20 else dominance_candles
-                            self.logger.debug(f"Generated {len(dominance_candles)} dominance candles for VuManChu analysis")
+                            dominance_candles = (
+                                dominance_candles[-20:]
+                                if len(dominance_candles) > 20
+                                else dominance_candles
+                            )
+                            self.logger.debug(
+                                f"Generated {len(dominance_candles)} dominance candles for VuManChu analysis"
+                            )
                         except Exception as e:
-                            self.logger.warning(f"Failed to build dominance candles for VuManChu: {e}")
-                
+                            self.logger.warning(
+                                f"Failed to build dominance candles for VuManChu: {e}"
+                            )
+
                 # Calculate indicators with dominance candle support
-                df_with_indicators = self.indicator_calc.calculate_all(df, dominance_candles=dominance_candles)
+                df_with_indicators = self.indicator_calc.calculate_all(
+                    df, dominance_candles=dominance_candles
+                )
                 indicator_state = self.indicator_calc.get_latest_state(
                     df_with_indicators
                 )
-                
+
                 # Prepare indicator data
                 indicator_dict = {
-                    'timestamp': datetime.now(UTC),
-                    'cipher_a_dot': indicator_state.get('cipher_a', {}).get('trend_dot'),
-                    'cipher_b_wave': indicator_state.get('cipher_b', {}).get('wave'),
-                    'cipher_b_money_flow': indicator_state.get('cipher_b', {}).get('money_flow'),
-                    'rsi': indicator_state.get('cipher_a', {}).get('rsi'),
-                    'ema_fast': indicator_state.get('cipher_a', {}).get('ema_fast'),
-                    'ema_slow': indicator_state.get('cipher_a', {}).get('ema_slow'),
-                    'vwap': indicator_state.get('cipher_b', {}).get('vwap'),
-                    'dominance_candles': dominance_candles,  # Pass dominance candles to MarketState
+                    "timestamp": datetime.now(UTC),
+                    "cipher_a_dot": indicator_state.get("cipher_a", {}).get(
+                        "trend_dot"
+                    ),
+                    "cipher_b_wave": indicator_state.get("cipher_b", {}).get("wave"),
+                    "cipher_b_money_flow": indicator_state.get("cipher_b", {}).get(
+                        "money_flow"
+                    ),
+                    "rsi": indicator_state.get("cipher_a", {}).get("rsi"),
+                    "ema_fast": indicator_state.get("cipher_a", {}).get("ema_fast"),
+                    "ema_slow": indicator_state.get("cipher_a", {}).get("ema_slow"),
+                    "vwap": indicator_state.get("cipher_b", {}).get("vwap"),
+                    "dominance_candles": dominance_candles,  # Pass dominance candles to MarketState
                 }
-                
+
                 # Add VuManChu dominance analysis if available
-                dominance_analysis = indicator_state.get('dominance_analysis', {})
+                dominance_analysis = indicator_state.get("dominance_analysis", {})
                 if dominance_analysis:
                     # Add key dominance indicators to the main indicator dict
-                    indicator_dict.update({
-                        'dominance_cipher_a_signal': dominance_analysis.get('cipher_a_signal'),
-                        'dominance_cipher_b_signal': dominance_analysis.get('cipher_b_signal'), 
-                        'dominance_sentiment': dominance_analysis.get('sentiment'),
-                        'dominance_price_divergence': dominance_analysis.get('price_divergence'),
-                        'dominance_trend': dominance_analysis.get('trend'),
-                        'dominance_wt1': dominance_analysis.get('wt1'),
-                        'dominance_wt2': dominance_analysis.get('wt2'),
-                    })
-                    self.logger.debug(f"Added dominance analysis indicators: {list(dominance_analysis.keys())}")
-                
+                    indicator_dict.update(
+                        {
+                            "dominance_cipher_a_signal": dominance_analysis.get(
+                                "cipher_a_signal"
+                            ),
+                            "dominance_cipher_b_signal": dominance_analysis.get(
+                                "cipher_b_signal"
+                            ),
+                            "dominance_sentiment": dominance_analysis.get("sentiment"),
+                            "dominance_price_divergence": dominance_analysis.get(
+                                "price_divergence"
+                            ),
+                            "dominance_trend": dominance_analysis.get("trend"),
+                            "dominance_wt1": dominance_analysis.get("wt1"),
+                            "dominance_wt2": dominance_analysis.get("wt2"),
+                        }
+                    )
+                    self.logger.debug(
+                        f"Added dominance analysis indicators: {list(dominance_analysis.keys())}"
+                    )
+
                 # Add dominance data to indicators if available
                 dominance_obj = None
                 if self.dominance_provider:
                     dominance_data = self.dominance_provider.get_latest_dominance()
                     if dominance_data:
                         # Add dominance metrics to indicator dict
-                        indicator_dict.update({
-                            'usdt_dominance': dominance_data.usdt_dominance,
-                            'usdc_dominance': dominance_data.usdc_dominance,
-                            'stablecoin_dominance': dominance_data.stablecoin_dominance,
-                            'dominance_trend': dominance_data.dominance_24h_change,
-                            'dominance_rsi': dominance_data.dominance_rsi,
-                            'stablecoin_velocity': dominance_data.stablecoin_velocity,
-                        })
-                        
+                        indicator_dict.update(
+                            {
+                                "usdt_dominance": dominance_data.usdt_dominance,
+                                "usdc_dominance": dominance_data.usdc_dominance,
+                                "stablecoin_dominance": dominance_data.stablecoin_dominance,
+                                "dominance_trend": dominance_data.dominance_24h_change,
+                                "dominance_rsi": dominance_data.dominance_rsi,
+                                "stablecoin_velocity": dominance_data.stablecoin_velocity,
+                            }
+                        )
+
                         # Get market sentiment based on dominance
-                        sentiment_analysis = self.dominance_provider.get_market_sentiment()
-                        indicator_dict['market_sentiment'] = sentiment_analysis.get('sentiment', 'NEUTRAL')
-                        
+                        sentiment_analysis = (
+                            self.dominance_provider.get_market_sentiment()
+                        )
+                        indicator_dict["market_sentiment"] = sentiment_analysis.get(
+                            "sentiment", "NEUTRAL"
+                        )
+
                         # Store dominance object for MarketState
                         dominance_obj = dominance_data
-                
-                # Generate dominance candlesticks for technical analysis
-                dominance_candles = None
-                if self.dominance_provider:
-                    dominance_history = self.dominance_provider.get_dominance_history(hours=2)
-                    if len(dominance_history) >= 6:  # Need at least 6 snapshots for 3-minute candles
-                        try:
-                            candle_builder = DominanceCandleBuilder(dominance_history)
-                            dominance_candles = candle_builder.build_candles(interval='3T')
-                            # Keep only the last 20 candles for analysis
-                            dominance_candles = dominance_candles[-20:] if len(dominance_candles) > 20 else dominance_candles
-                            
-                            # Add dominance candles to indicator data
-                            indicator_dict['dominance_candles'] = dominance_candles
-                            
-                            self.logger.debug(f"Generated {len(dominance_candles)} dominance candles for analysis")
-                        except Exception as e:
-                            self.logger.warning(f"Failed to build dominance candles: {e}")
-                    else:
-                        self.logger.debug(f"Insufficient dominance data for candles: {len(dominance_history)} snapshots (need >= 6)")
 
                 # Calculate how many candles represent 24 hours based on interval
                 interval_minutes = self._get_interval_minutes(self.interval)
                 candles_per_24h = min((24 * 60) // interval_minutes, len(latest_data))
-                
+
                 # Get the last 24 hours of data (or all available if less)
                 historical_data = latest_data[-candles_per_24h:]
-                
+
                 # Create market state for LLM analysis with enhanced historical context
                 market_state = MarketState(
                     symbol=self.symbol,
@@ -624,25 +657,25 @@ class TradingEngine:
     def _get_interval_minutes(self, interval: str) -> int:
         """
         Convert interval string to minutes.
-        
+
         Args:
             interval: Interval string (e.g., '1m', '5m', '1h', '1d')
-            
+
         Returns:
             Number of minutes in the interval
         """
         interval_map = {
-            '1m': 1,
-            '3m': 3,
-            '5m': 5,
-            '15m': 15,
-            '30m': 30,
-            '1h': 60,
-            '2h': 120,
-            '4h': 240,
-            '6h': 360,
-            '12h': 720,
-            '1d': 1440,
+            "1m": 1,
+            "3m": 3,
+            "5m": 5,
+            "15m": 15,
+            "30m": 30,
+            "1h": 60,
+            "2h": 120,
+            "4h": 240,
+            "6h": 360,
+            "12h": 720,
+            "1d": 1440,
         }
         return interval_map.get(interval.lower(), 5)  # Default to 5 minutes
 
@@ -693,19 +726,18 @@ class TradingEngine:
             "Last Action", f"{last_action.action} ({last_action.rationale})"
         )
         status_table.add_row("Uptime", str(uptime).split(".")[0])
-        
+
         # Add dominance data if available
         if self.dominance_provider:
             dominance_data = self.dominance_provider.get_latest_dominance()
             if dominance_data:
                 status_table.add_row(
-                    "Stablecoin Dominance", 
-                    f"{dominance_data.stablecoin_dominance:.2f}% ({dominance_data.dominance_24h_change:+.2f}%)"
+                    "Stablecoin Dominance",
+                    f"{dominance_data.stablecoin_dominance:.2f}% ({dominance_data.dominance_24h_change:+.2f}%)",
                 )
                 sentiment = self.dominance_provider.get_market_sentiment()
                 status_table.add_row(
-                    "Market Sentiment", 
-                    sentiment.get('sentiment', 'UNKNOWN')
+                    "Market Sentiment", sentiment.get("sentiment", "UNKNOWN")
                 )
 
         # Add paper trading specific metrics
@@ -775,7 +807,7 @@ class TradingEngine:
             # Close exchange connection
             console.print("  • Disconnecting from exchange...")
             await self.exchange_client.disconnect()
-            
+
             # Close dominance data connection
             if self.dominance_provider:
                 console.print("  • Disconnecting from dominance data...")
@@ -886,52 +918,64 @@ class TradingEngine:
 
         console.print(summary_table)
 
-    def _apply_cipher_b_filter(self, trade_action: TradeAction, market_state: MarketState) -> TradeAction:
+    def _apply_cipher_b_filter(
+        self, trade_action: TradeAction, market_state: MarketState
+    ) -> TradeAction:
         """
         Apply Cipher B signal filtering to the LLM trading decision.
-        
+
         This method implements filtering logic to only allow trades when Cipher B signals
         are aligned with the trading direction. Acts as a confirmation layer.
-        
+
         Args:
             trade_action: Original trade action from LLM
             market_state: Current market state with indicators
-            
+
         Returns:
             Filtered trade action (may be converted to HOLD if signals don't align)
         """
         try:
             # Check if Cipher B filtering is enabled
             if not self.settings.data.enable_cipher_b_filter:
-                self.logger.debug("Cipher B filter: Disabled in configuration, allowing original action")
+                self.logger.debug(
+                    "Cipher B filter: Disabled in configuration, allowing original action"
+                )
                 return trade_action
-                
+
             # Get Cipher B indicator values
             cipher_b_wave = market_state.indicators.cipher_b_wave
             cipher_b_money_flow = market_state.indicators.cipher_b_money_flow
-            
+
             # Skip filtering for HOLD and CLOSE actions
             if trade_action.action in ["HOLD", "CLOSE"]:
-                self.logger.debug("Cipher B filter: Allowing HOLD/CLOSE action without filtering")
+                self.logger.debug(
+                    "Cipher B filter: Allowing HOLD/CLOSE action without filtering"
+                )
                 return trade_action
-            
+
             # Skip filtering if Cipher B indicators are not available
             if cipher_b_wave is None or cipher_b_money_flow is None:
-                self.logger.warning("Cipher B filter: Indicators not available, allowing original action")
+                self.logger.warning(
+                    "Cipher B filter: Indicators not available, allowing original action"
+                )
                 return trade_action
-            
+
             # Get Cipher B signal thresholds from configuration
             wave_bullish_threshold = self.settings.data.cipher_b_wave_bullish_threshold
             wave_bearish_threshold = self.settings.data.cipher_b_wave_bearish_threshold
-            money_flow_bullish_threshold = self.settings.data.cipher_b_money_flow_bullish_threshold
-            money_flow_bearish_threshold = self.settings.data.cipher_b_money_flow_bearish_threshold
-            
+            money_flow_bullish_threshold = (
+                self.settings.data.cipher_b_money_flow_bullish_threshold
+            )
+            money_flow_bearish_threshold = (
+                self.settings.data.cipher_b_money_flow_bearish_threshold
+            )
+
             # Determine Cipher B signals
             wave_bullish = cipher_b_wave > wave_bullish_threshold
             wave_bearish = cipher_b_wave < wave_bearish_threshold
             money_flow_bullish = cipher_b_money_flow > money_flow_bullish_threshold
             money_flow_bearish = cipher_b_money_flow < money_flow_bearish_threshold
-            
+
             # Check signal alignment for LONG trades
             if trade_action.action == "LONG":
                 # Require both wave and money flow to be bullish
@@ -956,9 +1000,9 @@ class TradingEngine:
                         stop_loss_pct=1.0,
                         leverage=trade_action.leverage,
                         reduce_only=False,
-                        rationale=f"Cipher B filter: LONG rejected - Wave:{cipher_b_wave:.2f}, MF:{cipher_b_money_flow:.2f}"
+                        rationale=f"Cipher B filter: LONG rejected - Wave:{cipher_b_wave:.2f}, MF:{cipher_b_money_flow:.2f}",
                     )
-            
+
             # Check signal alignment for SHORT trades
             elif trade_action.action == "SHORT":
                 # Require both wave and money flow to be bearish
@@ -983,13 +1027,15 @@ class TradingEngine:
                         stop_loss_pct=1.0,
                         leverage=trade_action.leverage,
                         reduce_only=False,
-                        rationale=f"Cipher B filter: SHORT rejected - Wave:{cipher_b_wave:.2f}, MF:{cipher_b_money_flow:.2f}"
+                        rationale=f"Cipher B filter: SHORT rejected - Wave:{cipher_b_wave:.2f}, MF:{cipher_b_money_flow:.2f}",
                     )
-            
+
             # Default fallback - should not reach here
-            self.logger.warning(f"Cipher B filter: Unexpected action '{trade_action.action}', allowing original")
+            self.logger.warning(
+                f"Cipher B filter: Unexpected action '{trade_action.action}', allowing original"
+            )
             return trade_action
-            
+
         except Exception as e:
             self.logger.error(f"Error in Cipher B filtering: {e}")
             # On error, allow the original trade action to prevent system failure
