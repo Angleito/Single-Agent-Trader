@@ -1,0 +1,485 @@
+name: CI - Continuous Integration
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.12"
+  POETRY_VERSION: "1.8.2"
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Code quality checks
+  code-quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Cache Poetry installation
+      uses: actions/cache@v3
+      with:
+        path: ~/.local
+        key: poetry-${{ runner.os }}-${{ env.POETRY_VERSION }}
+    
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: ${{ env.POETRY_VERSION }}
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+        installer-parallel: true
+    
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+        restore-keys: |
+          venv-${{ runner.os }}-
+    
+    - name: Install dependencies
+      run: |
+        poetry install --with dev
+    
+    - name: Run Black formatting check
+      run: |
+        poetry run black --check --diff .
+    
+    - name: Run Ruff linting
+      run: |
+        poetry run ruff check .
+    
+    - name: Run MyPy type checking
+      run: |
+        poetry run mypy bot/
+      continue-on-error: true  # Allow to continue even if type checking fails
+    
+    - name: Check Poetry lock file
+      run: |
+        poetry check
+        poetry lock --check
+
+  # Security scanning
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: ${{ env.POETRY_VERSION }}
+    
+    - name: Install dependencies
+      run: |
+        poetry install --only=main
+    
+    - name: Run Safety security check
+      run: |
+        poetry add --group dev safety
+        poetry run safety check --json || true
+    
+    - name: Run Bandit security linting
+      run: |
+        poetry add --group dev bandit
+        poetry run bandit -r bot/ -f json || true
+    
+    - name: Run Semgrep security scan
+      uses: returntocorp/semgrep-action@v1
+      with:
+        config: >-
+          p/security-audit
+          p/secrets
+          p/python
+      continue-on-error: true
+
+  # Unit and integration tests
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+    
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: test_trading_bot
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: ${{ env.POETRY_VERSION }}
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+    
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
+    
+    - name: Install dependencies
+      run: |
+        poetry install --with dev
+    
+    - name: Create test environment file
+      run: |
+        cat > .env.test << EOF
+        ENVIRONMENT=test
+        LOG_LEVEL=DEBUG
+        DRY_RUN=true
+        DB_HOST=localhost
+        DB_PORT=5432
+        DB_NAME=test_trading_bot
+        DB_USER=test_user
+        DB_PASSWORD=test_password
+        REDIS_HOST=localhost
+        REDIS_PORT=6379
+        COINBASE_API_KEY=test_key
+        COINBASE_API_SECRET=test_secret
+        COINBASE_PASSPHRASE=test_passphrase
+        OPENAI_API_KEY=test_openai_key
+        EOF
+    
+    - name: Run pytest with coverage
+      env:
+        ENV_FILE: .env.test
+      run: |
+        poetry run pytest \
+          --cov=bot \
+          --cov-report=xml \
+          --cov-report=html \
+          --cov-report=term-missing \
+          --junitxml=pytest-results.xml \
+          -v
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      if: success()
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results-${{ matrix.python-version }}
+        path: |
+          pytest-results.xml
+          htmlcov/
+          coverage.xml
+
+  # Configuration validation
+  config-validation:
+    name: Configuration Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: ${{ env.POETRY_VERSION }}
+    
+    - name: Install dependencies
+      run: |
+        poetry install --only=main
+    
+    - name: Validate configuration files
+      run: |
+        # Create minimal environment for validation
+        cat > .env.validation << EOF
+        ENVIRONMENT=test
+        DRY_RUN=true
+        COINBASE_API_KEY=test_key
+        COINBASE_API_SECRET=test_secret
+        COINBASE_PASSPHRASE=test_passphrase
+        OPENAI_API_KEY=test_openai_key
+        EOF
+        
+        # Run configuration validation
+        ENV_FILE=.env.validation poetry run python -c "
+        from bot.config import Settings
+        from bot.config_utils import StartupValidator
+        settings = Settings()
+        validator = StartupValidator(settings)
+        result = validator.run_comprehensive_validation()
+        print(f'Configuration validation: {\"PASSED\" if result[\"valid\"] else \"FAILED\"}')
+        if not result['valid']:
+            for error in result['critical_errors']:
+                print(f'ERROR: {error}')
+            exit(1)
+        "
+    
+    - name: Validate Docker Compose files
+      run: |
+        docker-compose -f docker-compose.yml config
+        docker-compose -f docker-compose.prod.yml config
+    
+    - name: Validate Kubernetes manifests
+      run: |
+        # Install kubeval for Kubernetes validation
+        curl -L https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz | tar xz
+        sudo mv kubeval /usr/local/bin
+        
+        # Validate all Kubernetes manifests
+        find k8s/ -name "*.yaml" -exec kubeval {} \;
+
+  # Build Docker image
+  build-image:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [code-quality, security-scan, test, config-validation]
+    if: github.event_name != 'pull_request'
+    
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-tag: ${{ steps.meta.outputs.tags }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Log in to Container Registry
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+        labels: |
+          org.opencontainers.image.title=AI Trading Bot
+          org.opencontainers.image.description=LangChain-powered crypto futures trading bot
+          org.opencontainers.image.vendor=AI Trading Bot Project
+    
+    - name: Build and push Docker image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        build-args: |
+          BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+          VCS_REF=${{ github.sha }}
+          VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+    
+    - name: Run container security scan
+      uses: aquasecurity/trivy-action@master
+      if: github.event_name != 'pull_request'
+      with:
+        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+    
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always() && github.event_name != 'pull_request'
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # Integration tests with Docker
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [build-image]
+    if: github.event_name != 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Create test environment
+      run: |
+        cat > .env.integration << EOF
+        ENVIRONMENT=test
+        LOG_LEVEL=INFO
+        DRY_RUN=true
+        COINBASE_API_KEY=test_key
+        COINBASE_API_SECRET=test_secret
+        COINBASE_PASSPHRASE=test_passphrase
+        OPENAI_API_KEY=test_openai_key
+        EOF
+    
+    - name: Run integration tests
+      run: |
+        # Override image in docker-compose for testing
+        export AI_TRADING_BOT_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        
+        # Start services
+        docker-compose -f docker-compose.yml --env-file .env.integration up -d
+        
+        # Wait for services to be ready
+        sleep 30
+        
+        # Run health checks
+        docker-compose exec -T ai-trading-bot python -c "
+        from bot.config import Settings
+        from bot.health import create_health_endpoints
+        settings = Settings()
+        health = create_health_endpoints(settings)
+        status = health.get_health_detailed()
+        print(f'Health check: {status}')
+        assert status.get('status') in ['healthy', 'warning'], f'Unexpected status: {status}'
+        "
+        
+        # Run integration tests
+        docker-compose exec -T ai-trading-bot python -m pytest tests/integration/ -v
+    
+    - name: Collect logs
+      if: always()
+      run: |
+        docker-compose logs > integration-test-logs.txt
+    
+    - name: Upload logs
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: integration-test-logs
+        path: integration-test-logs.txt
+    
+    - name: Cleanup
+      if: always()
+      run: |
+        docker-compose down -v
+
+  # Generate and upload reports
+  reports:
+    name: Generate Reports
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [code-quality, security-scan, test, integration-test]
+    if: always()
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Download test artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: ./artifacts
+    
+    - name: Generate CI report
+      run: |
+        cat > ci-report.md << EOF
+        # CI Pipeline Report
+        
+        **Commit:** ${{ github.sha }}
+        **Branch:** ${{ github.ref_name }}
+        **Workflow:** ${{ github.workflow }}
+        **Run ID:** ${{ github.run_id }}
+        **Date:** $(date -u)
+        
+        ## Job Status
+        - Code Quality: ${{ needs.code-quality.result }}
+        - Security Scan: ${{ needs.security-scan.result }}
+        - Tests: ${{ needs.test.result }}
+        - Integration Tests: ${{ needs.integration-test.result }}
+        
+        ## Artifacts
+        $(find ./artifacts -type f -name "*.xml" -o -name "*.json" -o -name "*.html" | head -10)
+        EOF
+    
+    - name: Upload CI report
+      uses: actions/upload-artifact@v3
+      with:
+        name: ci-report
+        path: ci-report.md

@@ -1,0 +1,30 @@
+{
+  "name": "ai-trading-bot-dashboard",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "AI Trading Bot Dashboard Frontend",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@types/ws": "^8.5.13",
+    "@typescript-eslint/eslint-plugin": "^8.19.1",
+    "@typescript-eslint/parser": "^8.19.1",
+    "eslint": "^9.18.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

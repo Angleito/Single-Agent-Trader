@@ -1,0 +1,136 @@
+# OrbStack-specific Docker Compose configuration for AI Trading Bot
+# Optimized for OrbStack performance and resource usage
+
+services:
+  ai-trading-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.minimal
+    image: ai-trading-bot:orbstack
+    container_name: ai-trading-bot-orbstack
+    restart: unless-stopped
+    
+    # Environment variables from .env file
+    env_file:
+      - .env
+    
+    # OrbStack-optimized environment variables
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DRY_RUN=${DRY_RUN:-true}
+      - SYMBOL=${SYMBOL:-BTC-USD}
+      - INTERVAL=${INTERVAL:-1m}
+      - ENABLE_PAPER_TRADING=true
+      - ENVIRONMENT=orbstack
+      # VuManChu indicator specific settings
+      - VUMANCHU_ENABLED=true
+      - CIPHER_A_ENABLED=true
+      - CIPHER_B_ENABLED=true
+      - INDICATOR_LOGGING_LEVEL=INFO
+      
+    # Volume mounts optimized for OrbStack
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./config:/app/config:ro
+      # OrbStack-specific caching for better performance
+      - orbstack_cache:/tmp/indicators_cache
+      
+    # Health check configuration
+    healthcheck:
+      test: ["CMD-SHELL", "/app/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+      
+    # OrbStack-optimized resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+          
+    # Optimized logging for OrbStack
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+        
+    # Start command with new VuManChu indicators
+    command: ["python", "-m", "bot.main", "live", "--dry-run", "--symbol", "${SYMBOL:-BTC-USD}", "--interval", "${INTERVAL:-1m}"]
+    
+    networks:
+      - trading-network
+
+  # Performance monitoring service for OrbStack
+  performance-monitor:
+    image: prom/node-exporter:latest
+    container_name: performance-monitor
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - trading-network
+    profiles:
+      - monitoring
+
+  # Log aggregator for better monitoring
+  log-aggregator:
+    image: fluent/fluent-bit:latest
+    container_name: log-aggregator
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs:ro
+      - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+    networks:
+      - trading-network
+    profiles:
+      - monitoring
+    depends_on:
+      - ai-trading-bot
+
+volumes:
+  # OrbStack-optimized volumes
+  logs:
+    name: trading-bot-logs-orbstack
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/logs
+      
+  data:
+    name: trading-bot-data-orbstack
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/data
+      
+  # Performance cache for indicators
+  orbstack_cache:
+    name: orbstack-indicators-cache
+
+networks:
+  trading-network:
+    name: trading-network-orbstack
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16

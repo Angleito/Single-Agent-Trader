@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visibility Handler Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1a1a1a;
+            color: white;
+        }
+        .log {
+            background: #2a2a2a;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .visible { background: #0f5132; }
+        .hidden { background: #842029; }
+        button {
+            padding: 10px 15px;
+            margin: 5px;
+            background: #0d6efd;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover { background: #0b5ed7; }
+    </style>
+</head>
+<body>
+    <h1>Visibility Handler Test</h1>
+    <div id="status" class="status">Initializing...</div>
+    <button onclick="clearLog()">Clear Log</button>
+    <button onclick="testVisibility()">Test Current State</button>
+    <div id="log" class="log"></div>
+
+    <script>
+        // Simplified version of our VisibilityHandler for testing
+        class VisibilityHandler {
+            constructor() {
+                this.callbacks = new Set();
+                this.isVisible = !document.hidden;
+                this.isInitialized = false;
+                this.initializationTimeout = null;
+                
+                this.log(`Constructor: initial state = ${this.isVisible ? 'visible' : 'hidden'}`);
+                this.log(`document.hidden = ${document.hidden}, document.hasFocus() = ${document.hasFocus()}`);
+                
+                // Check browser compatibility for Page Visibility API
+                if (typeof document.hidden === 'undefined') {
+                    this.log('WARNING: Page Visibility API not supported - using fallback visibility detection');
+                    this.isVisible = document.hasFocus();
+                }
+                
+                // Delay initialization to avoid false triggers during page load
+                this.initializationTimeout = setTimeout(() => {
+                    this.setupVisibilityListeners();
+                    this.isInitialized = true;
+                    this.log(`VisibilityHandler initialized - initial state: ${this.isVisible ? 'visible' : 'hidden'}`);
+                    this.updateStatus();
+                }, 100); // Small delay to let page settle
+            }
+
+            setupVisibilityListeners() {
+                const handleVisibilityChange = () => {
+                    // Use proper browser compatibility check
+                    let visible;
+                    if (typeof document.hidden !== 'undefined') {
+                        visible = !document.hidden;
+                    } else {
+                        // Fallback for older browsers
+                        visible = document.hasFocus();
+                    }
+                    
+                    if (visible !== this.isVisible && this.isInitialized) {
+                        this.isVisible = visible;
+                        this.log(`Visibility changed: ${visible ? 'visible' : 'hidden'} (document.hidden: ${document.hidden}, hasFocus: ${document.hasFocus()})`);
+                        this.callbacks.forEach(callback => callback(visible));
+                        this.updateStatus();
+                    }
+                };
+
+                const handleFocus = () => {
+                    if (this.isInitialized && !this.isVisible) {
+                        this.log('Window focus - page becoming visible');
+                        this.isVisible = true;
+                        this.callbacks.forEach(cb => cb(true));
+                        this.updateStatus();
+                    }
+                };
+
+                const handleBlur = () => {
+                    if (this.isInitialized) {
+                        // Only trigger blur if document is actually hidden or we're really losing focus
+                        // Check with a small delay to avoid false positives during initialization
+                        setTimeout(() => {
+                            // Additional check: if the active element is within an iframe (like TradingView),
+                            // don't consider the page as hidden
+                            const activeElement = document.activeElement;
+                            const isIframeActive = activeElement && activeElement.tagName === 'IFRAME';
+                            
+                            if ((document.hidden || (!document.hasFocus() && !isIframeActive)) && this.isVisible) {
+                                this.log('Window blur - page becoming hidden');
+                                this.isVisible = false;
+                                this.callbacks.forEach(cb => cb(false));
+                                this.updateStatus();
+                            } else if (isIframeActive) {
+                                this.log('Focus moved to iframe - keeping page visible');
+                            }
+                        }, 50);
+                    }
+                };
+
+                // Primary visibility API (most reliable)
+                document.addEventListener('visibilitychange', handleVisibilityChange);
+                
+                // Secondary focus/blur events (with safeguards)
+                window.addEventListener('focus', handleFocus);
+                window.addEventListener('blur', handleBlur);
+                
+                // Page lifecycle events for better detection
+                window.addEventListener('pageshow', () => {
+                    if (this.isInitialized) {
+                        this.log('pageshow event');
+                        this.isVisible = true;
+                        this.callbacks.forEach(cb => cb(true));
+                        this.updateStatus();
+                    }
+                });
+                
+                window.addEventListener('pagehide', () => {
+                    if (this.isInitialized) {
+                        this.log('pagehide event');
+                        this.isVisible = false;
+                        this.callbacks.forEach(cb => cb(false));
+                        this.updateStatus();
+                    }
+                });
+
+                this.log('Event listeners attached');
+            }
+
+            onVisibilityChange(callback) {
+                this.callbacks.add(callback);
+                
+                // If not initialized yet, don't trigger immediately
+                // If initialized and the current state is different from expected, trigger once
+                if (this.isInitialized && this.callbacks.size === 1) {
+                    // First callback - verify current state is correct
+                    const actualVisible = !document.hidden;
+                    if (actualVisible !== this.isVisible) {
+                        this.log(`State correction: ${actualVisible ? 'visible' : 'hidden'}`);
+                        this.isVisible = actualVisible;
+                        callback(actualVisible);
+                        this.updateStatus();
+                    }
+                }
+            }
+
+            get visible() {
+                return this.isVisible;
+            }
+
+            log(message) {
+                const timestamp = new Date().toISOString().substr(11, 12);
+                const logEl = document.getElementById('log');
+                if (logEl) {
+                    logEl.innerHTML += `[${timestamp}] ${message}\n`;
+                    logEl.scrollTop = logEl.scrollHeight;
+                }
+                console.log(`[${timestamp}] ${message}`);
+            }
+
+            updateStatus() {
+                const statusEl = document.getElementById('status');
+                if (statusEl) {
+                    statusEl.textContent = `Page is ${this.isVisible ? 'VISIBLE' : 'HIDDEN'}`;
+                    statusEl.className = `status ${this.isVisible ? 'visible' : 'hidden'}`;
+                }
+            }
+        }
+
+        // Test functions
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        function testVisibility() {
+            const state = {
+                handlerVisible: visibilityHandler.visible,
+                documentHidden: document.hidden,
+                documentHasFocus: document.hasFocus(),
+                activeElement: document.activeElement?.tagName || 'none'
+            };
+            visibilityHandler.log(`Manual test: ${JSON.stringify(state)}`);
+        }
+
+        // Initialize test
+        let visibilityHandler;
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            visibilityHandler = new VisibilityHandler();
+            
+            // Add callback to test
+            visibilityHandler.onVisibilityChange((visible) => {
+                visibilityHandler.log(`CALLBACK TRIGGERED: Page is now ${visible ? 'VISIBLE' : 'HIDDEN'}`);
+            });
+        });
+    </script>
+</body>
+</html>

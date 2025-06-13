@@ -1,0 +1,161 @@
+services:
+  dashboard-backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dashboard-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./backend/logs:/app/logs
+      - ./backend/data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - DOCKER_ENV=true
+    restart: unless-stopped
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 5
+    #   start_period: 30s
+    networks:
+      - dashboard-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.3'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  dashboard-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: dashboard-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - DOCKER_ENV=true
+      - VITE_API_URL=http://localhost:8000
+      - VITE_WS_URL=ws://localhost:8000
+      - CHOKIDAR_USEPOLLING=true
+    restart: unless-stopped
+    networks:
+      - dashboard-network
+    depends_on:
+      dashboard-backend:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.2'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Production frontend service
+  dashboard-frontend-prod:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+    container_name: dashboard-frontend-prod
+    ports:
+      - "80:80"
+    environment:
+      - NODE_ENV=production
+      - VITE_API_URL=http://dashboard-backend:8000
+      - VITE_WS_URL=ws://dashboard-backend:8000
+    restart: unless-stopped
+    networks:
+      - dashboard-network
+    depends_on:
+      dashboard-backend:
+        condition: service_healthy
+    profiles:
+      - production
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Nginx reverse proxy for production
+  dashboard-nginx:
+    image: nginx:alpine
+    container_name: dashboard-nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    restart: unless-stopped
+    networks:
+      - dashboard-network
+    depends_on:
+      - dashboard-backend
+      - dashboard-frontend-prod
+    profiles:
+      - production
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.1'
+        reservations:
+          memory: 32M
+          cpus: '0.05'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+volumes:
+  dashboard-logs:
+    name: dashboard-logs
+  dashboard-data:
+    name: dashboard-data
+  node_modules:
+    name: dashboard-node-modules
+
+networks:
+  dashboard-network:
+    name: dashboard-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

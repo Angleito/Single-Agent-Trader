@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="AI Trading Bot Dashboard - Real-time crypto trading monitoring and analysis" />
+    <meta name="theme-color" content="#1a1a1a" />
+    <title>AI Trading Bot Dashboard</title>
+    
+    <!-- Service Worker Cleanup -->
+    <script>
+      // Aggressive service worker cleanup to prevent phantom registrations
+      (function() {
+        console.log('[SW Cleanup] Starting service worker cleanup...');
+        
+        // Function to unregister all service workers
+        async function unregisterAllServiceWorkers() {
+          if ('serviceWorker' in navigator) {
+            try {
+              const registrations = await navigator.serviceWorker.getRegistrations();
+              console.log(`[SW Cleanup] Found ${registrations.length} service worker registrations`);
+              
+              for (const registration of registrations) {
+                console.log(`[SW Cleanup] Unregistering service worker:`, registration.scope);
+                
+                // Special handling for Advanced Service Worker version 2.0.1
+                if (registration.active && registration.active.scriptURL) {
+                  const scriptURL = registration.active.scriptURL;
+                  if (scriptURL.includes('service-worker.js') || 
+                      scriptURL.includes('sw.js') ||
+                      scriptURL.includes('tradingview') ||
+                      scriptURL.includes('unpkg') ||
+                      scriptURL.includes('advanced-service-worker')) {
+                    console.log(`[SW Cleanup] Targeting problematic service worker: ${scriptURL}`);
+                  }
+                }
+                
+                await registration.unregister();
+              }
+              
+              if (registrations.length > 0) {
+                console.log('[SW Cleanup] All service workers unregistered successfully');
+              }
+            } catch (error) {
+              console.error('[SW Cleanup] Error during service worker cleanup:', error);
+            }
+          }
+        }
+        
+        // Clear service worker cache
+        async function clearServiceWorkerCaches() {
+          if ('caches' in window) {
+            try {
+              const cacheNames = await caches.keys();
+              console.log(`[SW Cleanup] Found ${cacheNames.length} cache(s) to clear`);
+              
+              for (const cacheName of cacheNames) {
+                // Target caches that might be created by service workers
+                if (cacheName.includes('sw-') || 
+                    cacheName.includes('service-worker') ||
+                    cacheName.includes('tradingview') ||
+                    cacheName.includes('advanced-sw') ||
+                    cacheName.includes('v2.0.1')) {
+                  console.log(`[SW Cleanup] Deleting cache: ${cacheName}`);
+                  await caches.delete(cacheName);
+                }
+              }
+            } catch (error) {
+              console.error('[SW Cleanup] Error clearing caches:', error);
+            }
+          }
+        }
+        
+        // Block known problematic script URLs
+        function blockProblematicScripts() {
+          const originalAppendChild = document.head.appendChild;
+          document.head.appendChild = function(child) {
+            if (child.tagName === 'SCRIPT' && child.src) {
+              const src = child.src.toLowerCase();
+              if (src.includes('service-worker.js') ||
+                  src.includes('sw.js') ||
+                  src.includes('advanced-service-worker') ||
+                  (src.includes('unpkg.com') && src.includes('service'))) {
+                console.warn('[SW Cleanup] Blocked problematic script:', child.src);
+                return child;
+              }
+            }
+            return originalAppendChild.call(this, child);
+          };
+        }
+        
+        // Override console messages from service workers to reduce noise
+        function interceptServiceWorkerLogs() {
+          const originalLog = console.log;
+          const originalWarn = console.warn;
+          const originalError = console.error;
+          
+          console.log = function(...args) {
+            const message = args.join(' ');
+            if (message.includes('[SW]') && 
+                (message.includes('Advanced Service Worker') || 
+                 message.includes('version 2.0.1') ||
+                 message.includes('Failed to construct \'Response\''))) {
+              console.warn('[SW Cleanup] Suppressed service worker log:', message);
+              return;
+            }
+            return originalLog.apply(console, args);
+          };
+          
+          console.error = function(...args) {
+            const message = args.join(' ');
+            if (message.includes('service-worker.js') && 
+                message.includes('Failed to construct \'Response\'')) {
+              console.warn('[SW Cleanup] Suppressed service worker error:', message);
+              return;
+            }
+            return originalError.apply(console, args);
+          };
+        }
+        
+        // Run all cleanup functions
+        unregisterAllServiceWorkers();
+        clearServiceWorkerCaches();
+        blockProblematicScripts();
+        interceptServiceWorkerLogs();
+        
+        // Run cleanup again after a short delay (in case any scripts register SWs)
+        setTimeout(() => {
+          unregisterAllServiceWorkers();
+          clearServiceWorkerCaches();
+        }, 2000);
+        
+        // Monitor for new service worker registrations and block them
+        if ('serviceWorker' in navigator) {
+          const originalRegister = navigator.serviceWorker.register;
+          navigator.serviceWorker.register = function(...args) {
+            const [scriptURL] = args;
+            console.warn('[SW Cleanup] Blocked service worker registration attempt:', scriptURL);
+            
+            // Log specific blocking for known problematic workers
+            if (scriptURL && typeof scriptURL === 'string') {
+              if (scriptURL.includes('advanced-service-worker') || 
+                  scriptURL.includes('service-worker.js') ||
+                  scriptURL.includes('v2.0.1')) {
+                console.warn('[SW Cleanup] Blocked known problematic service worker:', scriptURL);
+              }
+            }
+            
+            return Promise.reject(new Error('Service worker registration blocked by dashboard'));
+          };
+        }
+        
+        console.log('[SW Cleanup] Service worker cleanup and monitoring initialized');
+      })();
+    </script>
+
+    <!-- TradingView Charting Library with enhanced loading and timeout handling -->
+    <script>
+      // Enhanced TradingView loading with comprehensive error handling, fallbacks, and extended timeouts
+      (function() {
+        let loadAttempted = false;
+        let attemptCount = 0;
+        const maxAttempts = 3;
+        const cdnSources = [
+          'https://s3.tradingview.com/tv.js',
+          'https://charting-library.tradingview-widget.com/tv.js',
+          'https://s3.tradingview.com/charting_library/bundles/tv.js'
+        ];
+        
+        // Enhanced loading function with timeout and retry logic
+        function loadTradingViewWithRetry(attemptIndex = 0) {
+          if (attemptIndex >= maxAttempts) {
+            console.error('All TradingView CDN sources failed after maximum attempts');
+            window.tradingViewError = true;
+            return;
+          }
+          
+          const src = cdnSources[attemptIndex % cdnSources.length];
+          console.log(`Loading TradingView from CDN (attempt ${attemptIndex + 1}/${maxAttempts}):`, src);
+          
+          // Remove any existing failed scripts
+          const existingScripts = document.querySelectorAll('script[src*="tradingview"]');
+          existingScripts.forEach(script => {
+            if (script.src !== src) {
+              script.remove();
+            }
+          });
+          
+          const script = document.createElement('script');
+          script.src = src;
+          script.async = true;
+          script.crossOrigin = 'anonymous';
+          
+          // Extended timeout for each attempt (30 seconds)
+          const timeout = setTimeout(() => {
+            console.warn(`TradingView script load timeout from ${src} (30s)`);
+            script.remove();
+            
+            // Exponential backoff before retry
+            const delay = Math.min(1000 * Math.pow(2, attemptIndex), 5000);
+            setTimeout(() => {
+              loadTradingViewWithRetry(attemptIndex + 1);
+            }, delay);
+          }, 30000);
+          
+          script.onload = function() {
+            clearTimeout(timeout);
+            console.log(`✅ TradingView loaded successfully from ${src}`);
+            window.tradingViewLoaded = true;
+            
+            // Additional verification that the library is fully loaded
+            setTimeout(() => {
+              if (window.TradingView && window.TradingView.widget && typeof window.TradingView.widget === 'function') {
+                console.log('✅ TradingView library fully initialized');
+              } else {
+                console.warn('⚠️ TradingView script loaded but library not fully initialized');
+              }
+            }, 1000);
+          };
+          
+          script.onerror = function(error) {
+            clearTimeout(timeout);
+            console.error(`❌ Failed to load TradingView from ${src}:`, error);
+            script.remove();
+            
+            // Exponential backoff before retry
+            const delay = Math.min(1000 * Math.pow(2, attemptIndex), 5000);
+            setTimeout(() => {
+              loadTradingViewWithRetry(attemptIndex + 1);
+            }, delay);
+          };
+          
+          document.head.appendChild(script);
+        }
+        
+        // Network connectivity check and initial load
+        function initializeTradingViewLoading() {
+          if (!navigator.onLine) {
+            console.warn('🌐 No network connection detected - TradingView chart will not be available');
+            window.tradingViewError = true;
+            return;
+          }
+          
+          // Test basic connectivity before attempting load
+          fetch('https://www.google.com/favicon.ico', { 
+            method: 'HEAD', 
+            mode: 'no-cors',
+            cache: 'no-cache'
+          }).then(() => {
+            console.log('🌐 Network connectivity confirmed');
+            loadTradingViewWithRetry(0);
+          }).catch(() => {
+            console.warn('🌐 Network connectivity test failed, attempting load anyway');
+            loadTradingViewWithRetry(0);
+          });
+        }
+        
+        // Enhanced network monitoring
+        window.addEventListener('online', function() {
+          console.log('🌐 Network connection restored');
+          if (!window.TradingView && !window.tradingViewLoaded && !window.tradingViewError) {
+            console.log('🔄 Attempting to load TradingView after network restoration...');
+            // Reset error state and attempt count
+            window.tradingViewError = false;
+            attemptCount = 0;
+            setTimeout(() => initializeTradingViewLoading(), 1000);
+          }
+        });
+        
+        window.addEventListener('offline', function() {
+          console.warn('🌐 Network connection lost');
+        });
+        
+        // Monitor page visibility changes
+        document.addEventListener('visibilitychange', function() {
+          if (document.visibilityState === 'visible' && 
+              !window.TradingView && 
+              !window.tradingViewLoaded && 
+              !window.tradingViewError && 
+              navigator.onLine) {
+            console.log('👁️ Page became visible, checking TradingView status...');
+            setTimeout(() => initializeTradingViewLoading(), 500);
+          }
+        });
+        
+        // Start the enhanced loading process
+        initializeTradingViewLoading();
+        
+        console.log('📊 TradingView enhanced loading system initialized');
+      })();
+    </script>
+    
+    <!-- Preload critical resources -->
+    <link rel="preconnect" href="https://api.coinbase.com">
+    <link rel="preconnect" href="https://ws-feed.pro.coinbase.com">
+  </head>
+  <body>
+    <div id="app">
+      <!-- Loading Screen -->
+      <div id="loading" class="loading-screen" data-loading="true">
+        <div class="loading-content">
+          <div class="loading-spinner"></div>
+          <h2>AI Trading Bot Dashboard</h2>
+          <p class="loading-message">Initializing trading systems...</p>
+          <div class="loading-progress">
+            <div class="progress-bar" data-progress="0"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Dashboard -->
+      <div id="dashboard" class="dashboard-container" data-dashboard="hidden">
+        <!-- Header -->
+        <header class="dashboard-header" role="banner">
+          <div class="header-content">
+            <div class="header-left">
+              <h1 class="dashboard-title">
+                <span class="title-icon" aria-hidden="true">🤖</span>
+                AI Trading Bot Dashboard
+              </h1>
+              <div class="header-subtitle">
+                Powered by LangChain & VuManChu Cipher
+              </div>
+            </div>
+            <div class="header-right">
+              <div class="connection-status" data-connection="disconnected">
+                <span class="status-indicator" aria-label="Connection status"></span>
+                <span class="status-text">Connecting...</span>
+              </div>
+              <div class="last-update" data-last-update="">
+                <span class="update-label">Last Update:</span>
+                <span class="update-time">--:--:--</span>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <!-- Status Bar -->
+        <div class="status-bar" role="complementary" aria-label="System status">
+          <div class="status-item" data-status-item="bot">
+            <span class="status-label">Bot Status:</span>
+            <span class="status-value" data-bot-status="initializing">Initializing</span>
+            <span class="status-indicator" data-bot-indicator="loading"></span>
+          </div>
+          <div class="status-item" data-status-item="mode">
+            <span class="status-label">Mode:</span>
+            <span class="status-value" data-trading-mode="dry-run">Dry Run</span>
+          </div>
+          <div class="status-item" data-status-item="symbol">
+            <span class="status-label">Symbol:</span>
+            <span class="status-value" data-trading-symbol="BTC-USD">BTC-USD</span>
+          </div>
+          <div class="status-item" data-status-item="leverage">
+            <span class="status-label">Leverage:</span>
+            <span class="status-value" data-leverage="5">5x</span>
+          </div>
+        </div>
+
+        <!-- Main Content Grid -->
+        <main class="dashboard-main" role="main">
+          <!-- Left Sidebar - Quick Stats & AI Log -->
+          <aside class="sidebar-left" role="complementary" aria-label="Trading statistics and AI decisions">
+            <!-- Quick Stats Panel -->
+            <section class="stats-panel" aria-labelledby="stats-title">
+              <h2 id="stats-title" class="panel-title">Quick Stats</h2>
+              <div class="stats-grid">
+                <div class="stat-item" data-stat="price">
+                  <div class="stat-label">Current Price</div>
+                  <div class="stat-value" data-current-price="--">$--</div>
+                  <div class="stat-change" data-price-change="0">+0.00%</div>
+                </div>
+                <div class="stat-item" data-stat="position">
+                  <div class="stat-label">Position Size</div>
+                  <div class="stat-value" data-position-size="0">0.00</div>
+                  <div class="stat-unit">BTC</div>
+                </div>
+                <div class="stat-item" data-stat="pnl">
+                  <div class="stat-label">P&L (24h)</div>
+                  <div class="stat-value" data-pnl="0">$0.00</div>
+                  <div class="stat-change" data-pnl-change="0">+0.00%</div>
+                </div>
+                <div class="stat-item" data-stat="risk">
+                  <div class="stat-label">Risk Level</div>
+                  <div class="stat-value" data-risk-level="low">Low</div>
+                  <div class="risk-indicator" data-risk-color="green"></div>
+                </div>
+              </div>
+            </section>
+
+            <!-- AI Decision Log -->
+            <section class="ai-log-panel" aria-labelledby="ai-log-title">
+              <h2 id="ai-log-title" class="panel-title">AI Decision Log</h2>
+              <div class="log-controls">
+                <button class="log-control-btn" data-log-action="clear" aria-label="Clear log">
+                  Clear
+                </button>
+                <button class="log-control-btn" data-log-action="pause" aria-label="Pause updates">
+                  Pause
+                </button>
+              </div>
+              <div class="log-container" data-log-container="">
+                <div class="log-empty" data-log-empty="true">
+                  <p>No AI decisions yet...</p>
+                  <small>Decision logs will appear here when the bot is active</small>
+                </div>
+                <div class="log-content" data-log-content="" role="log" aria-live="polite">
+                  <!-- AI decision entries will be inserted here -->
+                </div>
+              </div>
+            </section>
+          </aside>
+
+          <!-- Center - TradingView Chart -->
+          <section class="chart-section" aria-labelledby="chart-title">
+            <div class="chart-header">
+              <h2 id="chart-title" class="chart-title">Price Chart</h2>
+              <div class="chart-controls">
+                <div class="chart-symbol" data-chart-symbol="BTC-USD">BTC-USD</div>
+                <div class="chart-timeframe" data-chart-timeframe="1H">1H</div>
+                <button class="chart-control-btn" data-chart-action="fullscreen" aria-label="Toggle fullscreen">
+                  ⛶
+                </button>
+              </div>
+            </div>
+            <div class="chart-container">
+              <div id="tradingview-chart" 
+                   class="tradingview-widget" 
+                   data-chart-widget="tradingview"
+                   role="img" 
+                   aria-label="TradingView price chart">
+                <!-- TradingView widget will be rendered here -->
+              </div>
+              <div class="chart-loading" data-chart-loading="true">
+                <div class="chart-loading-spinner"></div>
+                <p>Loading TradingView chart...</p>
+              </div>
+              <div class="chart-error" data-chart-error="hidden">
+                <p>Failed to load chart</p>
+                <button class="retry-btn" data-chart-retry="">Retry</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- Right Sidebar - Performance & Risk -->
+          <aside class="sidebar-right" role="complementary" aria-label="Performance metrics and risk management">
+            <!-- Performance Panel -->
+            <section class="performance-panel" aria-labelledby="performance-title">
+              <h2 id="performance-title" class="panel-title">Performance</h2>
+              <div class="performance-metrics">
+                <div class="metric-row">
+                  <span class="metric-label">Total Return:</span>
+                  <span class="metric-value" data-total-return="0">+0.00%</span>
+                </div>
+                <div class="metric-row">
+                  <span class="metric-label">Win Rate:</span>
+                  <span class="metric-value" data-win-rate="0">0%</span>
+                </div>
+                <div class="metric-row">
+                  <span class="metric-label">Avg Win:</span>
+                  <span class="metric-value" data-avg-win="0">$0.00</span>
+                </div>
+                <div class="metric-row">
+                  <span class="metric-label">Avg Loss:</span>
+                  <span class="metric-value" data-avg-loss="0">$0.00</span>
+                </div>
+                <div class="metric-row">
+                  <span class="metric-label">Max Drawdown:</span>
+                  <span class="metric-value" data-max-drawdown="0">0.00%</span>
+                </div>
+                <div class="metric-row">
+                  <span class="metric-label">Sharpe Ratio:</span>
+                  <span class="metric-value" data-sharpe-ratio="0">0.00</span>
+                </div>
+              </div>
+            </section>
+
+            <!-- Risk Management Panel -->
+            <section class="risk-panel" aria-labelledby="risk-title">
+              <h2 id="risk-title" class="panel-title">Risk Management</h2>
+              <div class="risk-metrics">
+                <div class="risk-gauge" data-risk-gauge="">
+                  <div class="gauge-label">Risk Level</div>
+                  <div class="gauge-container">
+                    <div class="gauge-fill" data-risk-percentage="0"></div>
+                    <div class="gauge-text" data-risk-text="Low">Low</div>
+                  </div>
+                </div>
+                <div class="risk-details">
+                  <div class="risk-row">
+                    <span class="risk-label">Position Size:</span>
+                    <span class="risk-value" data-position-value="$0">$0</span>
+                  </div>
+                  <div class="risk-row">
+                    <span class="risk-label">Stop Loss:</span>
+                    <span class="risk-value" data-stop-loss="--">--</span>
+                  </div>
+                  <div class="risk-row">
+                    <span class="risk-label">Take Profit:</span>
+                    <span class="risk-value" data-take-profit="--">--</span>
+                  </div>
+                  <div class="risk-row">
+                    <span class="risk-label">Risk per Trade:</span>
+                    <span class="risk-value" data-risk-per-trade="2%">2%</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- System Health Panel -->
+            <section class="health-panel" aria-labelledby="health-title">
+              <h2 id="health-title" class="panel-title">System Health</h2>
+              <div class="health-indicators">
+                <div class="health-item" data-health-item="api">
+                  <span class="health-label">API Connection:</span>
+                  <span class="health-status" data-api-status="connected">Connected</span>
+                  <div class="health-indicator" data-api-indicator="green"></div>
+                </div>
+                <div class="health-item" data-health-item="websocket">
+                  <span class="health-label">WebSocket:</span>
+                  <span class="health-status" data-websocket-status="connected">Connected</span>
+                  <div class="health-indicator" data-websocket-indicator="green"></div>
+                </div>
+                <div class="health-item" data-health-item="llm">
+                  <span class="health-label">LLM Agent:</span>
+                  <span class="health-status" data-llm-status="ready">Ready</span>
+                  <div class="health-indicator" data-llm-indicator="green"></div>
+                </div>
+                <div class="health-item" data-health-item="indicators">
+                  <span class="health-label">Indicators:</span>
+                  <span class="health-status" data-indicators-status="calculating">Calculating</span>
+                  <div class="health-indicator" data-indicators-indicator="yellow"></div>
+                </div>
+              </div>
+            </section>
+          </aside>
+        </main>
+
+        <!-- Footer -->
+        <footer class="dashboard-footer" role="contentinfo">
+          <div class="footer-content">
+            <div class="footer-left">
+              <div class="system-info">
+                <span class="info-item">
+                  <span class="info-label">Version:</span>
+                  <span class="info-value" data-version="1.0.0">1.0.0</span>
+                </span>
+                <span class="info-item">
+                  <span class="info-label">Uptime:</span>
+                  <span class="info-value" data-uptime="00:00:00">00:00:00</span>
+                </span>
+                <span class="info-item">
+                  <span class="info-label">Memory:</span>
+                  <span class="info-value" data-memory-usage="0MB">0MB</span>
+                </span>
+              </div>
+            </div>
+            <div class="footer-center">
+              <div class="api-status">
+                <span class="api-item" data-api-item="coinbase">
+                  <span class="api-label">Coinbase:</span>
+                  <span class="api-indicator" data-coinbase-status="connected"></span>
+                </span>
+                <span class="api-item" data-api-item="openai">
+                  <span class="api-label">OpenAI:</span>
+                  <span class="api-indicator" data-openai-status="connected"></span>
+                </span>
+              </div>
+            </div>
+            <div class="footer-right">
+              <div class="timestamp-info">
+                <span class="timestamp-item">
+                  <span class="timestamp-label">Server Time:</span>
+                  <span class="timestamp-value" data-server-time="--:--:--">--:--:--</span>
+                </span>
+                <span class="timestamp-item">
+                  <span class="timestamp-label">Market:</span>
+                  <span class="timestamp-value" data-market-status="closed">Closed</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </footer>
+      </div>
+
+      <!-- Error Modal -->
+      <div id="error-modal" class="modal" data-modal="hidden" role="dialog" aria-modal="true" aria-labelledby="error-title">
+        <div class="modal-overlay" data-modal-overlay=""></div>
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3 id="error-title" class="modal-title">System Error</h3>
+            <button class="modal-close" data-modal-close="" aria-label="Close error modal">&times;</button>
+          </div>
+          <div class="modal-body">
+            <p class="error-message" data-error-message="">An unexpected error occurred.</p>
+            <details class="error-details">
+              <summary>Technical Details</summary>
+              <pre class="error-stack" data-error-stack=""></pre>
+            </details>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-primary" data-error-retry="">Retry</button>
+            <button class="btn btn-secondary" data-modal-close="">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

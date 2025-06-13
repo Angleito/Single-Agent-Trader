@@ -1,0 +1,266 @@
+# Docker Compose for AI Trading Bot with Dashboard
+
+services:
+  ai-trading-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.minimal
+    image: ai-trading-bot:latest
+    container_name: ai-trading-bot
+    restart: unless-stopped
+    
+    # Environment variables from .env file
+    env_file:
+      - .env
+    
+    # Override specific environment variables for Docker  
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DRY_RUN=true
+      - SYMBOL=BTC-USD
+      - ENABLE_PAPER_TRADING=true
+      - ENVIRONMENT=development
+      # LLM Logging Configuration
+      - LLM__ENABLE_COMPLETION_LOGGING=${LLM_ENABLE_COMPLETION_LOGGING:-true}
+      - LLM__COMPLETION_LOG_LEVEL=${LLM_COMPLETION_LOG_LEVEL:-INFO}
+      - LLM__COMPLETION_LOG_FILE=${LLM_COMPLETION_LOG_FILE:-logs/llm_completions.log}
+      - LLM__ENABLE_PERFORMANCE_TRACKING=${LLM_ENABLE_PERFORMANCE_TRACKING:-true}
+      - LLM__ENABLE_LANGCHAIN_CALLBACKS=${LLM_ENABLE_LANGCHAIN_CALLBACKS:-true}
+      - LLM__LOG_MARKET_CONTEXT=${LLM_LOG_MARKET_CONTEXT:-true}
+      
+    # Volume mounts for persistence and configuration
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./config:/app/config:ro  # Read-only config mount
+      # Mount separate log directories for different log types
+      - ./logs/llm_completions:/app/logs/llm_completions
+      - ./logs/trading_decisions:/app/logs/trading_decisions
+      
+    # Health check configuration
+    healthcheck:
+      test: ["CMD-SHELL", "/app/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+      
+    # Resource limits for safety
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+          
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        
+    # Default command - starts in dry-run mode for safety
+    command: ["python", "-m", "bot.main", "live", "--dry-run", "--symbol", "BTC-USD", "--interval", "3m"]
+    
+    # Connect to shared network for dashboard communication
+    networks:
+      - trading-network
+
+  # Dashboard Backend Service
+  dashboard-backend:
+    build: 
+      context: ./dashboard/backend
+      dockerfile: Dockerfile
+    container_name: dashboard-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./dashboard/backend/logs:/app/logs
+      - ./dashboard/backend/data:/app/data
+      - ./logs:/app/trading-logs:ro  # Access to trading bot logs
+      - ./data:/app/trading-data:ro  # Access to trading bot data
+      # Access to LLM completion logs for dashboard analytics
+      - ./logs/llm_completions:/app/llm-logs:ro
+      - ./logs/trading_decisions:/app/decision-logs:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - TRADING_BOT_CONTAINER=ai-trading-bot
+    restart: unless-stopped
+    depends_on:
+      - ai-trading-bot
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - trading-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.3'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Dashboard Frontend Service (Development)
+  dashboard-frontend:
+    build:
+      context: ./dashboard/frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: dashboard-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./dashboard/frontend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:8000
+      - VITE_WS_URL=ws://localhost:8000
+      - CHOKIDAR_USEPOLLING=true
+    restart: unless-stopped
+    networks:
+      - trading-network
+    depends_on:
+      - dashboard-backend
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.2'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Dashboard Frontend Service (Production)
+  dashboard-frontend-prod:
+    build:
+      context: ./dashboard/frontend
+      dockerfile: Dockerfile
+      target: production
+    container_name: dashboard-frontend-prod
+    ports:
+      - "3001:8080"
+    environment:
+      - NODE_ENV=production
+      - VITE_API_URL=http://dashboard-backend:8000
+      - VITE_WS_URL=ws://dashboard-backend:8000
+    restart: unless-stopped
+    networks:
+      - trading-network
+    depends_on:
+      - dashboard-backend
+    profiles:
+      - production
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Nginx reverse proxy for production
+  dashboard-nginx:
+    image: nginx:alpine
+    container_name: dashboard-nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ./dashboard/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./dashboard/nginx/conf.d:/etc/nginx/conf.d:ro
+    restart: unless-stopped
+    networks:
+      - trading-network
+    depends_on:
+      - dashboard-backend
+      - dashboard-frontend-prod
+    profiles:
+      - production
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.1'
+        reservations:
+          memory: 32M
+          cpus: '0.05'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  # Development service (optional) - use with: docker-compose --profile dev up
+  ai-trading-bot-dev:
+    extends: ai-trading-bot
+    container_name: ai-trading-bot-dev
+    profiles:
+      - dev
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - DEBUG=true
+      - TESTING=true
+      - DRY_RUN=true
+    volumes:
+      - .:/app:delegated  # Mount entire project for development
+      - ./logs:/app/logs
+      - ./data:/app/data
+    networks:
+      - trading-network
+    command: ["python", "-m", "bot.main", "live", "--dry-run", "--symbol", "BTC-USD"]
+
+volumes:
+  # Trading bot data persistence
+  logs:
+    name: trading-bot-logs
+  data:
+    name: trading-bot-data
+  
+  # Dashboard data persistence
+  dashboard-logs:
+    name: dashboard-logs
+  dashboard-data:
+    name: dashboard-data
+  dashboard-node-modules:
+    name: dashboard-node-modules
+
+networks:
+  trading-network:
+    name: trading-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16

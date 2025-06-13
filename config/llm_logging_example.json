@@ -1,0 +1,61 @@
+{
+  "trading": {
+    "symbol": "BTC-USD",
+    "interval": "3m",
+    "leverage": 5,
+    "max_size_pct": 20.0,
+    "enable_futures": true,
+    "auto_cash_transfer": true
+  },
+  "llm": {
+    "provider": "openai",
+    "model_name": "o3-mini",
+    "temperature": 0.1,
+    "max_tokens": 30000,
+    "enable_completion_logging": true,
+    "completion_log_level": "INFO",
+    "completion_log_file": "logs/llm_completions.log",
+    "log_prompt_preview_length": 500,
+    "log_response_preview_length": 1000,
+    "enable_performance_tracking": true,
+    "enable_langchain_callbacks": true,
+    "log_market_context": true,
+    "enable_token_usage_tracking": true,
+    "performance_log_interval": 10
+  },
+  "system": {
+    "dry_run": true,
+    "environment": "development",
+    "log_level": "INFO",
+    "log_file_path": "logs/bot.log",
+    "log_to_console": true,
+    "log_to_file": true,
+    "max_log_size_mb": 100,
+    "log_backup_count": 5
+  },
+  "risk": {
+    "max_daily_loss_pct": 5.0,
+    "max_concurrent_trades": 3,
+    "default_stop_loss_pct": 2.0,
+    "default_take_profit_pct": 4.0
+  },
+  "data": {
+    "candle_limit": 200,
+    "real_time_updates": true,
+    "data_cache_ttl_seconds": 30,
+    "enable_cipher_b_filter": true
+  },
+  "dominance": {
+    "enable_dominance_data": true,
+    "data_source": "coingecko",
+    "update_interval": 300,
+    "dominance_weight_in_decisions": 0.2
+  },
+  "paper_trading": {
+    "starting_balance": 10000.0,
+    "fee_rate": 0.001,
+    "slippage_rate": 0.0005,
+    "enable_daily_reports": true,
+    "track_drawdown": true
+  }
+}

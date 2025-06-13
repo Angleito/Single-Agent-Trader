@@ -1,0 +1,48 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "lib": ["ES2020", "DOM", "DOM.Iterable", "WebWorker"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+
+    /* Type checking */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitReturns": true,
+    "noImplicitOverride": true,
+
+    /* Path mapping */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@/types": ["src/types.ts"]
+    },
+
+    /* Global declarations */
+    "types": ["vite/client", "node"]
+  },
+  "include": [
+    "src/**/*",
+    "src/**/*.ts",
+    "vite.config.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

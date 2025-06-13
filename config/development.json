@@ -1,0 +1,73 @@
+{
+  "trading": {
+    "symbol": "BTC-USD",
+    "interval": "3m",
+    "leverage": 2,
+    "max_size_pct": 10.0,
+    "order_timeout_seconds": 30,
+    "slippage_tolerance_pct": 0.1,
+    "min_profit_pct": 0.5
+  },
+  "llm": {
+    "provider": "openai",
+    "model_name": "gpt-4o",
+    "temperature": 0.1,
+    "max_tokens": 4000,
+    "openai_api_key": null,
+    "anthropic_api_key": null,
+    "ollama_base_url": "http://localhost:11434",
+    "request_timeout": 30,
+    "max_retries": 3,
+    "retry_delay": 1.0
+  },
+  "exchange": {
+    "cb_api_key": null,
+    "cb_api_secret": null,
+    "cb_passphrase": null,
+    "cb_sandbox": true,
+    "api_timeout": 10,
+    "rate_limit_requests": 10,
+    "websocket_reconnect_attempts": 5
+  },
+  "risk": {
+    "max_daily_loss_pct": 2.0,
+    "max_weekly_loss_pct": 10.0,
+    "max_monthly_loss_pct": 25.0,
+    "max_concurrent_trades": 1,
+    "max_position_hold_hours": 12,
+    "default_stop_loss_pct": 1.5,
+    "default_take_profit_pct": 3.0,
+    "min_account_balance": 50,
+    "emergency_stop_loss_pct": 5.0
+  },
+  "data": {
+    "candle_limit": 100,
+    "real_time_updates": true,
+    "data_cache_ttl_seconds": 60,
+    "indicator_warmup": 30,
+    "cipher_a_ema_length": 21,
+    "cipher_b_vwap_length": 20,
+    "enable_cipher_b_filter": true,
+    "cipher_b_wave_bullish_threshold": 0.0,
+    "cipher_b_wave_bearish_threshold": 0.0,
+    "cipher_b_money_flow_bullish_threshold": 50.0,
+    "cipher_b_money_flow_bearish_threshold": 50.0,
+    "data_storage_path": "data",
+    "keep_historical_days": 7
+  },
+  "system": {
+    "dry_run": true,
+    "environment": "development",
+    "log_level": "DEBUG",
+    "log_file_path": "logs/bot_dev.log",
+    "max_log_size_mb": 50,
+    "log_retention_days": 7,
+    "update_frequency_seconds": 30.0,
+    "parallel_processing": false,
+    "max_worker_threads": 2,
+    "enable_monitoring": true,
+    "alert_webhook_url": null,
+    "health_check_interval": 600
+  },
+  "profile": "conservative"
+}

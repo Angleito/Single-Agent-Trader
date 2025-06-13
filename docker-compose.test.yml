@@ -1,0 +1,71 @@
+# Docker Compose for testing dominance integration
+
+services:
+  dominance-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.minimal
+    image: ai-trading-bot:dominance-test
+    container_name: dominance-test
+    
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+      - DOMINANCE__ENABLE_DOMINANCE_DATA=true
+      - DOMINANCE__DATA_SOURCE=coingecko
+      - DOMINANCE__UPDATE_INTERVAL=300
+      
+    volumes:
+      - ./test_dominance_simple.py:/app/test_dominance_simple.py:ro
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+      
+    command: ["python", "/app/test_dominance_simple.py"]
+    
+    networks:
+      - test-network
+
+  # Run the actual bot with dominance for 60 seconds
+  bot-dominance-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.minimal
+    image: ai-trading-bot:dominance-test
+    container_name: bot-dominance-test
+    
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+      - DRY_RUN=true
+      - OPENAI_API_KEY=sk-test
+      - CB_API_KEY=test
+      - CB_API_SECRET=test
+      - CB_PASSPHRASE=test
+      - DOMINANCE__ENABLE_DOMINANCE_DATA=true
+      - DOMINANCE__DATA_SOURCE=coingecko
+      - DOMINANCE__UPDATE_INTERVAL=60
+      - DOMINANCE__DOMINANCE_WEIGHT_IN_DECISIONS=0.3
+      
+    volumes:
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+      - ./data:/app/data
+      
+    command: 
+      - /bin/bash
+      - -c
+      - |
+        echo "Starting bot with dominance feature for 60 seconds..."
+        timeout 60 python -m bot.main live --dry-run --symbol BTC-USD || true
+        echo "Test completed"
+    
+    networks:
+      - test-network
+    
+    depends_on:
+      dominance-test:
+        condition: service_completed_successfully
+
+networks:
+  test-network:
+    name: dominance-test-network

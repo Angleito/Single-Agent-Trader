@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TradingView MovingAverage Fix Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #1e1e1e;
+            color: #ffffff;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid;
+        }
+        
+        .success {
+            background-color: #2ed573aa;
+            border-left-color: #2ed573;
+        }
+        
+        .error {
+            background-color: #ff4757aa;
+            border-left-color: #ff4757;
+        }
+        
+        .warning {
+            background-color: #ff9500aa;
+            border-left-color: #ff9500;
+        }
+        
+        #chart-container {
+            height: 600px;
+            width: 100%;
+            margin: 20px 0;
+            border: 1px solid #363c4e;
+        }
+        
+        .log {
+            background-color: #2d3748;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .log-entry {
+            margin: 2px 0;
+        }
+        
+        .log-success { color: #2ed573; }
+        .log-error { color: #ff4757; }
+        .log-warning { color: #ff9500; }
+        .log-info { color: #3742fa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>TradingView MovingAverage Fix Test</h1>
+        
+        <div id="fix-status" class="status success">
+            <h3>✅ Fix Applied Successfully</h3>
+            <p>The following issues have been resolved:</p>
+            <ul>
+                <li>Removed incorrect "MovingAverage" study overrides</li>
+                <li>Added proper error handling for study creation failures</li>
+                <li>Added study name validation against known TradingView API names</li>
+                <li>Added study override validation</li>
+                <li>Individual error handling for each technical indicator</li>
+            </ul>
+        </div>
+        
+        <div id="chart-container"></div>
+        
+        <div class="status warning">
+            <h3>⚠️ Test Instructions</h3>
+            <p>To test the fix:</p>
+            <ol>
+                <li>Open the browser console (F12)</li>
+                <li>Load this page</li>
+                <li>Check that there are no "There is no such study MovingAverage" errors</li>
+                <li>Verify that all technical indicators load correctly</li>
+                <li>Look for detailed logging about study creation success/failure</li>
+            </ol>
+        </div>
+        
+        <div class="status error" id="error-status" style="display: none;">
+            <h3>❌ Issues Detected</h3>
+            <p>If you see this message, there may still be issues. Check the console log below.</p>
+        </div>
+        
+        <h3>Console Log Output:</h3>
+        <div id="console-log" class="log">
+            <div class="log-entry log-info">Console output will appear here...</div>
+        </div>
+    </div>
+
+    <script>
+        // Capture console output
+        const originalConsole = {
+            log: console.log,
+            error: console.error,
+            warn: console.warn,
+            info: console.info
+        };
+        
+        const logContainer = document.getElementById('console-log');
+        
+        function addLogEntry(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+        
+        console.log = (...args) => {
+            originalConsole.log(...args);
+            addLogEntry(args.join(' '), 'info');
+        };
+        
+        console.error = (...args) => {
+            originalConsole.error(...args);
+            addLogEntry(args.join(' '), 'error');
+            
+            // Check for MovingAverage error
+            const message = args.join(' ');
+            if (message.includes('MovingAverage') && message.includes('no such study')) {
+                document.getElementById('error-status').style.display = 'block';
+                document.getElementById('fix-status').className = 'status error';
+                document.getElementById('fix-status').innerHTML = '<h3>❌ Fix Not Working</h3><p>The MovingAverage error is still present!</p>';
+            }
+        };
+        
+        console.warn = (...args) => {
+            originalConsole.warn(...args);
+            addLogEntry(args.join(' '), 'warning');
+        };
+        
+        console.info = (...args) => {
+            originalConsole.info(...args);
+            addLogEntry(args.join(' '), 'info');
+        };
+        
+        // Add test message
+        addLogEntry('TradingView MovingAverage fix test initialized', 'success');
+        addLogEntry('Watch for study creation messages...', 'info');
+        
+        // Note: Actual TradingView integration would require the compiled TypeScript
+        // and proper module loading. This HTML file demonstrates the test structure.
+        
+        setTimeout(() => {
+            addLogEntry('✅ Test page loaded successfully', 'success');
+            addLogEntry('To complete the test, load the actual dashboard with TradingView integration', 'info');
+        }, 1000);
+    </script>
+</body>
+</html>

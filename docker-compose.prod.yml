@@ -1,0 +1,44 @@
+# Docker Compose Production Configuration
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
+
+version: '3.8'
+
+services:
+  ai-trading-bot:
+    # Production environment overrides
+    environment:
+      - DRY_RUN=false  # Enable live trading in production
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+    # Remove development volumes
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./config:/app/config:ro
+
+  dashboard-backend:
+    # Production environment
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - DEBUG=false
+    # Remove development source code mount
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - dashboard-logs:/app/logs
+      - dashboard-data:/app/data
+      - ./logs:/app/trading-logs:ro
+      - ./data:/app/trading-data:ro
+    # Use production command
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+
+  dashboard-frontend-prod:
+    # This service is enabled in production profile
+    ports:
+      - "3000:80"  # Map to port 3000 for consistency
+
+  dashboard-nginx:
+    # Enable nginx in production
+    ports:
+      - "80:80"    # Main web access
+      - "8080:80"  # Alternative access

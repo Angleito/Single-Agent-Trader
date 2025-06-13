@@ -1,0 +1,130 @@
+# Git and version control
+.git
+.gitignore
+.gitattributes
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Python cache and build artifacts
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.tox
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis
+.pytest_cache
+*.egg-info/
+dist/
+build/
+.wheel/
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+.ENV/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Documentation
+docs/
+*.md
+README*
+CHANGELOG*
+LICENSE*
+
+# Development and testing
+# tests/  # Keep tests for dominance integration
+test_*.py
+*_test.py
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Logs and data (these should be mounted as volumes)
+logs/
+*.log
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker files (to avoid recursive copying)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+Jenkinsfile
+
+# Package managers
+poetry.lock
+package-lock.json
+yarn.lock
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Scripts (will be copied separately if needed)
+scripts/
+
+# Monitoring and config templates
+monitoring/
+config/
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Node modules (if any)
+node_modules/
+
+# Jupyter notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# Large data files
+*.csv
+*.json
+*.parquet
+*.h5
+*.hdf5

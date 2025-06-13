@@ -1,0 +1,355 @@
+# Docker Compose for VuManChu E2E Testing Suite
+#
+# This configuration provides an isolated testing environment for comprehensive
+# VuManChu implementation testing with:
+# - Isolated test environment with controlled resources
+# - Volume mounts for test data and results
+# - Proper networking for external data sources
+# - Resource limits for performance testing
+# - Dedicated test containers for different scenarios
+
+version: '3.8'
+
+services:
+  # Main E2E Test Runner
+  e2e-test-runner:
+    build:
+      context: ..
+      dockerfile: Dockerfile.minimal
+      target: testing  # Custom testing stage if available
+    image: ai-trading-bot:e2e-testing
+    container_name: vumanchu-e2e-tests
+    
+    # Environment variables for testing
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONPATH=/app
+      - DOCKER_CONTAINER=true
+      - TESTING=true
+      - DRY_RUN=true
+      - LOG_LEVEL=INFO
+      - SYMBOL=BTC-USD
+      - ENABLE_PAPER_TRADING=true
+      - E2E_TEST_MODE=true
+      - TEST_DATA_DIR=/app/test_data
+      - TEST_RESULTS_DIR=/app/test_results
+      
+    # Volume mounts for test data and results
+    volumes:
+      # Test data persistence
+      - e2e-test-data:/app/test_data
+      - e2e-test-results:/app/test_results
+      - e2e-test-logs:/app/logs
+      
+      # Configuration and source code (for development)
+      - ../tests:/app/tests:ro
+      - ../config:/app/config:ro
+      - ../bot:/app/bot:ro
+      
+      # Host volume mounts for result export
+      - ../test_results:/app/host_results
+      - ../logs:/app/host_logs
+    
+    # Resource limits for controlled testing
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+    
+    # Health check for test environment
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import bot.indicators.vumanchu; print(\"OK\")'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+        labels: "service=e2e-testing"
+    
+    # Network configuration
+    networks:
+      - e2e-testing-network
+    
+    # Default command runs the E2E test suite
+    command: [
+      "python", "-m", "pytest", 
+      "/app/tests/test_e2e_vumanchu_docker.py",
+      "-v", "--tb=short", "--capture=no",
+      "--junitxml=/app/test_results/e2e_results.xml",
+      "--cov=bot.indicators",
+      "--cov-report=html:/app/test_results/coverage",
+      "--cov-report=term"
+    ]
+    
+    # Don't restart automatically for tests
+    restart: "no"
+
+  # Performance Test Runner (Heavy Load Testing)
+  performance-test-runner:
+    extends: e2e-test-runner
+    container_name: vumanchu-performance-tests
+    
+    # Higher resource limits for performance testing
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+        reservations:
+          memory: 2G
+          cpus: '1.0'
+    
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONPATH=/app
+      - DOCKER_CONTAINER=true
+      - TESTING=true
+      - PERFORMANCE_TESTING=true
+      - DRY_RUN=true
+      - LOG_LEVEL=DEBUG
+      - TEST_DATA_DIR=/app/test_data
+      - TEST_RESULTS_DIR=/app/test_results
+    
+    command: [
+      "python", "-m", "pytest",
+      "/app/tests/test_e2e_vumanchu_docker.py::TestE2EPerformance",
+      "-v", "--tb=short", "--capture=no",
+      "--junitxml=/app/test_results/performance_results.xml"
+    ]
+    
+    profiles:
+      - performance
+
+  # Memory Test Runner (Long-running Memory Tests)
+  memory-test-runner:
+    extends: e2e-test-runner
+    container_name: vumanchu-memory-tests
+    
+    # Lower memory limits to test memory efficiency
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+    
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1  
+      - PYTHONPATH=/app
+      - DOCKER_CONTAINER=true
+      - TESTING=true
+      - MEMORY_TESTING=true
+      - DRY_RUN=true
+      - LOG_LEVEL=INFO
+      - TEST_DATA_DIR=/app/test_data
+      - TEST_RESULTS_DIR=/app/test_results
+    
+    command: [
+      "python", "-m", "pytest",
+      "/app/tests/test_e2e_vumanchu_docker.py::TestE2EPerformance::test_memory_usage_under_load",
+      "-v", "--tb=short", "--capture=no",
+      "--junitxml=/app/test_results/memory_results.xml"
+    ]
+    
+    profiles:
+      - memory
+
+  # Signal Quality Test Runner
+  signal-quality-test-runner:
+    extends: e2e-test-runner
+    container_name: vumanchu-signal-tests
+    
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONPATH=/app
+      - DOCKER_CONTAINER=true
+      - TESTING=true
+      - SIGNAL_TESTING=true
+      - DRY_RUN=true
+      - LOG_LEVEL=INFO
+      - TEST_DATA_DIR=/app/test_data
+      - TEST_RESULTS_DIR=/app/test_results
+    
+    command: [
+      "python", "-m", "pytest",
+      "/app/tests/test_e2e_vumanchu_docker.py::TestE2ESignalQuality",
+      "-v", "--tb=short", "--capture=no",
+      "--junitxml=/app/test_results/signal_results.xml"
+    ]
+    
+    profiles:
+      - signals
+
+  # Integration Test Runner
+  integration-test-runner:
+    extends: e2e-test-runner
+    container_name: vumanchu-integration-tests
+    
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONPATH=/app
+      - DOCKER_CONTAINER=true
+      - TESTING=true
+      - INTEGRATION_TESTING=true
+      - DRY_RUN=true
+      - LOG_LEVEL=INFO
+      - TEST_DATA_DIR=/app/test_data
+      - TEST_RESULTS_DIR=/app/test_results
+      # Add minimal API keys for integration testing (if needed)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-test_key}
+      - CB_API_KEY=${CB_API_KEY:-test_key}
+      - CB_API_SECRET=${CB_API_SECRET:-test_secret}
+    
+    command: [
+      "python", "-m", "pytest",
+      "/app/tests/test_e2e_vumanchu_docker.py::TestE2EIntegration",
+      "-v", "--tb=short", "--capture=no",
+      "--junitxml=/app/test_results/integration_results.xml"
+    ]
+    
+    profiles:
+      - integration
+
+  # Error Recovery Test Runner
+  error-recovery-test-runner:
+    extends: e2e-test-runner
+    container_name: vumanchu-error-tests
+    
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONPATH=/app
+      - DOCKER_CONTAINER=true
+      - TESTING=true
+      - ERROR_TESTING=true
+      - DRY_RUN=true
+      - LOG_LEVEL=DEBUG
+      - TEST_DATA_DIR=/app/test_data
+      - TEST_RESULTS_DIR=/app/test_results
+    
+    command: [
+      "python", "-m", "pytest",
+      "/app/tests/test_e2e_vumanchu_docker.py::TestE2EErrorRecovery",
+      "-v", "--tb=short", "--capture=no",
+      "--junitxml=/app/test_results/error_results.xml"
+    ]
+    
+    profiles:
+      - errors
+
+  # Test Data Generator Service
+  test-data-generator:
+    extends: e2e-test-runner
+    container_name: vumanchu-data-generator
+    
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONPATH=/app
+      - DOCKER_CONTAINER=true
+      - DATA_GENERATION=true
+      - TEST_DATA_DIR=/app/test_data
+    
+    command: [
+      "python", "/app/tests/data/generate_test_market_data.py",
+      "--scenarios", "default,trending,ranging,volatile,gap_data",
+      "--output-dir", "/app/test_data",
+      "--sizes", "1000,5000,10000"
+    ]
+    
+    profiles:
+      - datagen
+
+  # Test Results Aggregator
+  test-results-aggregator:
+    extends: e2e-test-runner
+    container_name: vumanchu-results-aggregator
+    
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONPATH=/app
+      - DOCKER_CONTAINER=true
+      - RESULTS_AGGREGATION=true
+      - TEST_RESULTS_DIR=/app/test_results
+    
+    command: [
+      "python", "-c",
+      "
+      import json
+      import glob
+      from pathlib import Path
+      
+      results_dir = Path('/app/test_results')
+      xml_files = glob.glob(str(results_dir / '*.xml'))
+      
+      summary = {
+        'total_test_files': len(xml_files),
+        'test_files': xml_files,
+        'aggregation_time': '$(date -Iseconds)'
+      }
+      
+      with open(results_dir / 'test_summary.json', 'w') as f:
+        json.dump(summary, f, indent=2)
+      
+      print('Test results aggregated')
+      "
+    ]
+    
+    depends_on:
+      - e2e-test-runner
+    
+    profiles:
+      - aggregate
+
+# Named volumes for test data persistence
+volumes:
+  e2e-test-data:
+    name: vumanchu-test-data
+    driver: local
+  
+  e2e-test-results:
+    name: vumanchu-test-results
+    driver: local
+  
+  e2e-test-logs:
+    name: vumanchu-test-logs
+    driver: local
+
+# Isolated network for testing
+networks:
+  e2e-testing-network:
+    name: vumanchu-e2e-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
+
+# Service configuration for different test profiles
+x-test-profiles: &test-profiles
+  default: ["e2e-test-runner"]
+  full: ["e2e-test-runner", "performance-test-runner", "memory-test-runner", "signal-quality-test-runner", "integration-test-runner", "error-recovery-test-runner"]
+  performance: ["performance-test-runner"]
+  memory: ["memory-test-runner"]
+  signals: ["signal-quality-test-runner"]
+  integration: ["integration-test-runner"]
+  errors: ["error-recovery-test-runner"]
+  datagen: ["test-data-generator"]
+  aggregate: ["test-results-aggregator"]

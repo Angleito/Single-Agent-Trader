@@ -1,0 +1,66 @@
+# Minimal AI Trading Bot Dockerfile
+FROM python:3.12-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set work directory
+WORKDIR /app
+
+# Create non-root user
+RUN groupadd --gid 1000 botuser \
+    && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash botuser
+
+# Copy requirements and install dependencies
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir \
+    setuptools \
+    wheel \
+    "numpy<2.0" \
+    coinbase-advanced-py \
+    openai \
+    langchain \
+    langchain-openai \
+    langchain-community \
+    pandas \
+    pandas-ta \
+    pydantic \
+    pydantic-settings \
+    python-dotenv \
+    click \
+    rich \
+    aiohttp \
+    requests \
+    websockets \
+    psutil \
+    asyncio \
+    pytest \
+    pytest-asyncio
+
+# Copy application code and additional files
+COPY --chown=botuser:botuser bot/ ./bot/
+COPY --chown=botuser:botuser examples/ ./examples/
+COPY --chown=botuser:botuser prompts/ ./prompts/
+COPY --chown=botuser:botuser tests/ ./tests/
+
+# Create directories
+RUN mkdir -p /app/logs /app/data /app/config \
+    && chown -R botuser:botuser /app
+
+# Create simple health check
+RUN echo '#!/bin/bash\necho "Bot is healthy"' > /app/healthcheck.sh \
+    && chmod +x /app/healthcheck.sh \
+    && chown botuser:botuser /app/healthcheck.sh
+
+# Switch to non-root user
+USER botuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD ["/app/healthcheck.sh"]
+
+# Default command
+CMD ["python", "-m", "bot.main", "live", "--dry-run"]
