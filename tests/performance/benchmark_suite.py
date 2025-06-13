@@ -513,7 +513,7 @@ class PerformanceBenchmarks:
 
         for i in range(iterations):
             # Start monitoring
-            cpu_start = process.cpu_percent()
+            process.cpu_percent()
 
             # Run the function
             start_time = time.perf_counter()
@@ -537,7 +537,7 @@ class PerformanceBenchmarks:
         final_memory = process.memory_info().rss / 1024 / 1024
         memory_usage = final_memory - initial_memory
 
-        avg_execution_time = statistics.mean(execution_times) if execution_times else 0
+        statistics.mean(execution_times) if execution_times else 0
         total_execution_time = sum(execution_times)
         avg_cpu = statistics.mean(cpu_percents) if cpu_percents else None
 

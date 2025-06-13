@@ -430,9 +430,7 @@ class LangChainCallbackHandler(BaseCallbackHandler):
 
             self._current_request_id = None
 
-    def on_llm_error(
-        self, error: Exception | KeyboardInterrupt, **kwargs: Any
-    ) -> None:
+    def on_llm_error(self, error: Exception | KeyboardInterrupt, **kwargs: Any) -> None:
         """Called when an LLM encounters an error."""
         if self._current_request_id and self.completion_logger:
             self.completion_logger.log_completion_response(

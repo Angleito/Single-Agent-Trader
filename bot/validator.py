@@ -85,7 +85,7 @@ class TradeValidator:
                 parsed_json = json.loads(llm_output.strip())
                 return TradeAction(**parsed_json)
             except json.JSONDecodeError as e:
-                raise ValueError(f"Invalid JSON format: {e}")
+                raise ValueError(f"Invalid JSON format: {e}") from e
 
         else:
             raise ValueError(f"Unsupported LLM output type: {type(llm_output)}")

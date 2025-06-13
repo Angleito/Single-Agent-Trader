@@ -191,7 +191,7 @@ class TestCompleteTradingFlow:
             engine = TradingEngine(symbol="BTC-USD", interval="1m", dry_run=True)
 
             # Track state changes
-            initial_position = engine.current_position.model_copy()
+            engine.current_position.model_copy()
 
             # Simulate trading cycles
             await engine._initialize_components()
@@ -412,7 +412,7 @@ class TestCompleteTradingFlow:
             engine.market_data = market_data_mock
 
             # Simulate one iteration of trading loop with connection issues
-            latest_data = engine.market_data.get_latest_ohlcv(limit=200)
+            engine.market_data.get_latest_ohlcv(limit=200)
 
             # Should attempt reconnection when disconnected
             assert market_data_mock.connect.call_count >= 1

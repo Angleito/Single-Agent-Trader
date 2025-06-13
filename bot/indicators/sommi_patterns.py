@@ -2,7 +2,7 @@
 Sommi Flag and Diamond Patterns implementation with Higher Timeframe Analysis.
 
 This module provides advanced pattern recognition for the Sommi Flag and Diamond patterns
-from the VuManChu Cipher B indicator. These patterns use higher timeframe analysis 
+from the VuManChu Cipher B indicator. These patterns use higher timeframe analysis
 and Heikin Ashi candle direction detection for enhanced signal quality.
 
 Based on Pine Script patterns:

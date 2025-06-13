@@ -350,11 +350,15 @@ async def get_status():
             "log_streamer_running": log_streamer.running,
         }
 
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=500, detail="Timeout checking container status")
+    except subprocess.TimeoutExpired as e:
+        raise HTTPException(
+            status_code=500, detail="Timeout checking container status"
+        ) from e
     except Exception as e:
         logger.error(f"Error getting status: {e}")
-        raise HTTPException(status_code=500, detail=f"Error getting status: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error getting status: {str(e)}"
+        ) from e
 
 
 @app.get("/trading-data")
@@ -433,13 +437,15 @@ async def get_trading_data():
 
         return trading_data
 
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=500, detail="Timeout getting trading data")
+    except subprocess.TimeoutExpired as e:
+        raise HTTPException(
+            status_code=500, detail="Timeout getting trading data"
+        ) from e
     except Exception as e:
         logger.error(f"Error getting trading data: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error getting trading data: {str(e)}"
-        )
+        ) from e
 
 
 @app.get("/logs")
@@ -455,7 +461,9 @@ async def get_logs(limit: int = 100):
         }
     except Exception as e:
         logger.error(f"Error getting logs: {e}")
-        raise HTTPException(status_code=500, detail=f"Error getting logs: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error getting logs: {str(e)}"
+        ) from e
 
 
 # LLM Monitoring Endpoints
@@ -500,7 +508,7 @@ async def get_llm_status():
         logger.error(f"Error getting LLM status: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error getting LLM status: {str(e)}"
-        )
+        ) from e
 
 
 @app.get("/llm/metrics")
@@ -534,7 +542,7 @@ async def get_llm_metrics(
         logger.error(f"Error getting LLM metrics: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error getting LLM metrics: {str(e)}"
-        )
+        ) from e
 
 
 @app.get("/llm/activity")
@@ -554,7 +562,7 @@ async def get_llm_activity(limit: int = Query(50, ge=1, le=500)):
         logger.error(f"Error getting LLM activity: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error getting LLM activity: {str(e)}"
-        )
+        ) from e
 
 
 @app.get("/llm/alerts")
@@ -587,7 +595,7 @@ async def get_llm_alerts(
         logger.error(f"Error getting LLM alerts: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error getting LLM alerts: {str(e)}"
-        )
+        ) from e
 
 
 @app.get("/llm/sessions")
@@ -656,7 +664,7 @@ async def get_llm_sessions():
         logger.error(f"Error getting LLM sessions: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error getting LLM sessions: {str(e)}"
-        )
+        ) from e
 
 
 @app.get("/llm/cost-analysis")
@@ -716,7 +724,7 @@ async def get_llm_cost_analysis():
         logger.error(f"Error getting LLM cost analysis: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error getting LLM cost analysis: {str(e)}"
-        )
+        ) from e
 
 
 @app.get("/llm/export")
@@ -742,7 +750,7 @@ async def export_llm_data(
         logger.error(f"Error exporting LLM data: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error exporting LLM data: {str(e)}"
-        )
+        ) from e
 
 
 @app.post("/llm/alerts/configure")
@@ -782,7 +790,7 @@ async def configure_llm_alerts(thresholds: dict[str, Any]):
         logger.error(f"Error configuring LLM alerts: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error configuring alerts: {str(e)}"
-        )
+        ) from e
 
 
 @app.post("/control/restart")
@@ -813,11 +821,13 @@ async def restart_bot():
                 status_code=500, detail=f"Failed to restart bot: {result.stderr}"
             )
 
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=500, detail="Timeout restarting bot")
+    except subprocess.TimeoutExpired as e:
+        raise HTTPException(status_code=500, detail="Timeout restarting bot") from e
     except Exception as e:
         logger.error(f"Error restarting bot: {e}")
-        raise HTTPException(status_code=500, detail=f"Error restarting bot: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error restarting bot: {str(e)}"
+        ) from e
 
 
 # Health check endpoint
@@ -1007,7 +1017,9 @@ async def update_trading_data(symbol: str, data: dict[str, Any]):
 
     except Exception as e:
         logger.error(f"Error updating trading data: {e}")
-        raise HTTPException(status_code=500, detail=f"Error updating data: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error updating data: {str(e)}"
+        ) from e
 
 
 @app.get("/tradingview/summary")
@@ -1046,7 +1058,9 @@ async def add_llm_decision_to_chart(decision_data: dict[str, Any]):
 
     except Exception as e:
         logger.error(f"Error adding LLM decision to chart: {e}")
-        raise HTTPException(status_code=500, detail=f"Error adding decision: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error adding decision: {str(e)}"
+        ) from e
 
 
 # Error handlers

@@ -50,7 +50,7 @@ class TestComponentIntegration:
             prices.append(prices[-1] * (1 + ret))
 
         data = []
-        for i, (timestamp, close) in enumerate(zip(dates, prices, strict=False)):
+        for _i, (timestamp, close) in enumerate(zip(dates, prices, strict=False)):
             open_price = close * (1 + np.random.normal(0, 0.0005))
             high_price = max(open_price, close) * (1 + abs(np.random.normal(0, 0.0003)))
             low_price = min(open_price, close) * (1 - abs(np.random.normal(0, 0.0003)))
@@ -200,7 +200,7 @@ class TestComponentIntegration:
         order_manager = OrderManager()
 
         # Test opening a position
-        initial_position = Position(
+        Position(
             symbol="BTC-USD",
             side="FLAT",
             size=Decimal("0"),
@@ -575,8 +575,8 @@ class TestComponentIntegration:
 
         # Verify indicator data integrity
         assert latest_state["timestamp"] is not None
-        assert isinstance(latest_state.get("rsi"), (int, float, type(None)))
-        assert isinstance(latest_state.get("ema_fast"), (int, float, type(None)))
+        assert isinstance(latest_state.get("rsi"), int | float | type(None))
+        assert isinstance(latest_state.get("ema_fast"), int | float | type(None))
 
         # Test risk metrics reflect position
         assert isinstance(risk_metrics.current_positions, int)

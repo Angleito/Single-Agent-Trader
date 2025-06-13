@@ -50,7 +50,7 @@ class TestErrorHandlingIntegration:
         """Test handling of API connection failures."""
         # Test market data API failure
         market_data_mock = Mock()
-        market_data_mock.connect.side_effect = Exception("API connection failed")
+        market_data_mock.connect.side_effect = ConnectionError("API connection failed")
         market_data_mock.is_connected.return_value = False
 
         with (
@@ -68,12 +68,12 @@ class TestErrorHandlingIntegration:
             engine = TradingEngine(symbol="BTC-USD", interval="1m", dry_run=True)
 
             # Should raise exception during initialization
-            with pytest.raises(Exception):
+            with pytest.raises(ConnectionError):
                 await engine._initialize_components()
 
         # Test exchange API failure
         exchange_mock = Mock()
-        exchange_mock.connect.side_effect = Exception("Exchange API unreachable")
+        exchange_mock.connect.side_effect = ConnectionError("Exchange API unreachable")
 
         with (
             patch("bot.main.CoinbaseClient", return_value=exchange_mock),
@@ -89,7 +89,7 @@ class TestErrorHandlingIntegration:
             engine = TradingEngine(symbol="BTC-USD", interval="1m", dry_run=True)
 
             # Should handle exchange connection failure
-            with pytest.raises(Exception):
+            with pytest.raises(ConnectionError):
                 await engine._initialize_components()
 
     @pytest.mark.asyncio

@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from bot.config import Environment, Settings, TradingProfile, create_settings
 from bot.main import TradingEngine
@@ -125,7 +126,7 @@ class TestStartupValidation:
             json.dump(invalid_config_data, f)
 
         # Loading should fail with validation errors
-        with pytest.raises(Exception):  # Pydantic validation error
+        with pytest.raises(ValidationError):  # Pydantic validation error
             Settings.load_from_file(str(config_file))
 
     def test_environment_variable_override(self, temp_config_dir, valid_config_data):
@@ -438,7 +439,7 @@ class TestStartupValidation:
             patch.multiple(
                 "bot.main.MarketDataProvider",
                 connect=AsyncMock(
-                    side_effect=Exception("Market data connection failed")
+                    side_effect=ConnectionError("Market data connection failed")
                 ),
             ),
             patch.multiple(
@@ -449,7 +450,7 @@ class TestStartupValidation:
             engine = TradingEngine(symbol="BTC-USD", interval="1m", dry_run=True)
 
             # Should raise exception during initialization
-            with pytest.raises(Exception):
+            with pytest.raises(ConnectionError):
                 await engine._initialize_components()
 
         # Test exchange connection failure

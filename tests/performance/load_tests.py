@@ -286,7 +286,7 @@ class LoadTestSuite:
             # Time the indicator calculation
             op_start = time.perf_counter()
             try:
-                result = self.indicator_calc.calculate_all(df)
+                self.indicator_calc.calculate_all(df)
                 op_end = time.perf_counter()
 
                 response_times.append((op_end - op_start) * 1000)
@@ -329,7 +329,7 @@ class LoadTestSuite:
 
         # Generate test data
         test_data = []
-        for i in range(self.config.concurrent_users):
+        for _i in range(self.config.concurrent_users):
             data = self.market_simulator.generate_tick_data(500)
             df_data = []
             for tick in data:
@@ -402,7 +402,7 @@ class LoadTestSuite:
 
         # Create test market states
         test_states = []
-        for i in range(min(5, self.config.concurrent_users)):  # Limit LLM tests
+        for _i in range(min(5, self.config.concurrent_users)):  # Limit LLM tests
             test_position = Position(
                 symbol="BTC-USD",
                 side="FLAT",
@@ -600,7 +600,7 @@ class LoadTestSuite:
             df.set_index("timestamp", inplace=True)
 
             op_start = time.perf_counter()
-            result = self.indicator_calc.calculate_all(df)
+            self.indicator_calc.calculate_all(df)
             op_end = time.perf_counter()
 
             return (op_end - op_start) * 1000
@@ -674,7 +674,7 @@ class LoadTestSuite:
 
             # Create burst of operations
             tasks = []
-            for i in range(burst_size):
+            for _i in range(burst_size):
                 task = self._create_burst_operation()
                 tasks.append(task)
 
@@ -741,7 +741,7 @@ class LoadTestSuite:
         # Inject errors randomly
         error_rate = 0.2  # 20% error rate
 
-        for i in range(100):
+        for _i in range(100):
             op_start = time.perf_counter()
 
             try:
@@ -755,7 +755,7 @@ class LoadTestSuite:
                     if error_type == "invalid_data":
                         # Test with invalid data
                         invalid_df = pd.DataFrame({"invalid": [1, 2, 3]})
-                        result = self.indicator_calc.calculate_all(invalid_df)
+                        self.indicator_calc.calculate_all(invalid_df)
                     elif error_type == "timeout":
                         # Simulate timeout
                         await asyncio.sleep(0.1)
@@ -781,7 +781,7 @@ class LoadTestSuite:
 
                     df = pd.DataFrame(df_data)
                     df.set_index("timestamp", inplace=True)
-                    result = self.indicator_calc.calculate_all(df)
+                    self.indicator_calc.calculate_all(df)
 
                 op_end = time.perf_counter()
                 response_times.append((op_end - op_start) * 1000)
@@ -848,7 +848,7 @@ class LoadTestSuite:
 
             # Create operations at current load level
             tasks = []
-            for i in range(current_load):
+            for _i in range(current_load):
                 # Create increasingly large datasets
                 data_size = 500 * current_load
                 task = self._create_resource_intensive_operation(data_size)
@@ -1106,7 +1106,7 @@ if __name__ == "__main__":
             if result.additional_metrics:
                 print("  Additional Metrics:")
                 for key, value in result.additional_metrics.items():
-                    if isinstance(value, (int, float)):
+                    if isinstance(value, int | float):
                         print(f"    {key}: {value:.2f}")
                     else:
                         print(f"    {key}: {value}")

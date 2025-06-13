@@ -77,7 +77,7 @@ def print_benchmark_summary(suite: BenchmarkSuite):
         if result.get("additional_metrics"):
             metrics = list(result["additional_metrics"].items())[:3]
             for key, value in metrics:
-                if isinstance(value, (int, float)):
+                if isinstance(value, int | float):
                     print(f"   📝 {key}: {value:.2f}")
                 else:
                     print(f"   📝 {key}: {value}")
@@ -117,7 +117,7 @@ def print_load_test_summary(results):
             ]:
                 if key in metrics:
                     value = metrics[key]
-                    if isinstance(value, (int, float)):
+                    if isinstance(value, int | float):
                         print(f"   📝 {key}: {value:.2f}")
                     else:
                         print(f"   📝 {key}: {value}")
@@ -182,7 +182,7 @@ def generate_html_report(results: dict[str, Any], output_file: Path):
         <h1>AI Trading Bot - Performance Test Report</h1>
         <p>Generated on: {timestamp}</p>
     </div>
-    
+
     {content}
 </body>
 </html>
@@ -199,7 +199,7 @@ def generate_html_report(results: dict[str, Any], output_file: Path):
             <h2>Benchmark Results</h2>
             <p>Total Benchmarks: {benchmarks.get('total_benchmarks', 0)}</p>
             <p>Total Duration: {benchmarks.get('total_duration_seconds', 0):.2f} seconds</p>
-            
+
             <table>
                 <tr>
                     <th>Benchmark</th>

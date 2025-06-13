@@ -78,7 +78,7 @@ class TestDominanceDataProvider:
     @pytest.mark.asyncio
     async def test_connect_disconnect(self, dominance_provider):
         """Test connection lifecycle."""
-        with patch("aiohttp.ClientSession") as mock_session:
+        with patch("aiohttp.ClientSession"):
             await dominance_provider.connect()
             assert dominance_provider._session is not None
             assert dominance_provider._running is True

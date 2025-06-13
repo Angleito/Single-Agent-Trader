@@ -720,9 +720,7 @@ class SchaffTrendCycle:
         else:
             return "Bearish territory"
 
-    def get_trade_suggestions(
-        self, df: pd.DataFrame
-    ) -> list[dict[str, str | float]]:
+    def get_trade_suggestions(self, df: pd.DataFrame) -> list[dict[str, str | float]]:
         """
         Generate trade suggestions based on STC analysis.
 
@@ -740,7 +738,7 @@ class SchaffTrendCycle:
         previous = df.iloc[-2]
 
         stc_current = latest.get("stc", 0)
-        stc_previous = previous.get("stc", 0)
+        previous.get("stc", 0)
         signal = latest.get("stc_signal", 0)
         phase = latest.get("stc_phase", 0)
 

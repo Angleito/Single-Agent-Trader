@@ -425,14 +425,14 @@ class CoinbaseClient:
 
         except CoinbaseAuthenticationException as e:
             logger.error(f"Coinbase authentication failed: {e}")
-            raise CoinbaseAuthError(f"Authentication failed: {e}")
+            raise CoinbaseAuthError(f"Authentication failed: {e}") from e
         except CoinbaseConnectionException as e:
             logger.error(f"Coinbase connection failed: {e}")
-            raise CoinbaseConnectionError(f"Connection failed: {e}")
+            raise CoinbaseConnectionError(f"Connection failed: {e}") from e
         except Exception as e:
             logger.error(f"Failed to connect to Coinbase: {e}")
             logger.debug(f"Connection error traceback: {traceback.format_exc()}")
-            raise CoinbaseConnectionError(f"Unexpected error: {e}")
+            raise CoinbaseConnectionError(f"Unexpected error: {e}") from e
 
     async def _test_connection(self) -> None:
         """Test the connection with a simple API call."""
@@ -808,13 +808,13 @@ class CoinbaseClient:
 
         except CoinbaseAPIException as e:
             if "insufficient funds" in str(e).lower():
-                raise CoinbaseInsufficientFundsError(f"Insufficient funds: {e}")
+                raise CoinbaseInsufficientFundsError(f"Insufficient funds: {e}") from e
             else:
-                raise CoinbaseOrderError(f"API error: {e}")
+                raise CoinbaseOrderError(f"API error: {e}") from e
         except Exception as e:
             logger.error(f"Failed to place market order: {e}")
             logger.debug(f"Market order error traceback: {traceback.format_exc()}")
-            raise CoinbaseOrderError(f"Failed to place market order: {e}")
+            raise CoinbaseOrderError(f"Failed to place market order: {e}") from e
 
     async def place_limit_order(
         self, symbol: str, side: str, quantity: Decimal, price: Decimal
@@ -899,13 +899,13 @@ class CoinbaseClient:
 
         except CoinbaseAPIException as e:
             if "insufficient funds" in str(e).lower():
-                raise CoinbaseInsufficientFundsError(f"Insufficient funds: {e}")
+                raise CoinbaseInsufficientFundsError(f"Insufficient funds: {e}") from e
             else:
-                raise CoinbaseOrderError(f"API error: {e}")
+                raise CoinbaseOrderError(f"API error: {e}") from e
         except Exception as e:
             logger.error(f"Failed to place limit order: {e}")
             logger.debug(f"Limit order error traceback: {traceback.format_exc()}")
-            raise CoinbaseOrderError(f"Failed to place limit order: {e}")
+            raise CoinbaseOrderError(f"Failed to place limit order: {e}") from e
 
     async def _place_stop_loss(
         self, base_order: Order, trade_action: TradeAction, current_price: Decimal
@@ -1068,13 +1068,13 @@ class CoinbaseClient:
 
         except CoinbaseAPIException as e:
             if "insufficient funds" in str(e).lower():
-                raise CoinbaseInsufficientFundsError(f"Insufficient funds: {e}")
+                raise CoinbaseInsufficientFundsError(f"Insufficient funds: {e}") from e
             else:
-                raise CoinbaseOrderError(f"API error: {e}")
+                raise CoinbaseOrderError(f"API error: {e}") from e
         except Exception as e:
             logger.error(f"Failed to place stop order: {e}")
             logger.debug(f"Stop order error traceback: {traceback.format_exc()}")
-            raise CoinbaseOrderError(f"Failed to place stop order: {e}")
+            raise CoinbaseOrderError(f"Failed to place stop order: {e}") from e
 
     async def place_futures_market_order(
         self,
@@ -1173,15 +1173,17 @@ class CoinbaseClient:
             ):
                 raise CoinbaseInsufficientFundsError(
                     f"Insufficient margin for futures order: {e}"
-                )
+                ) from e
             else:
-                raise CoinbaseOrderError(f"Futures API error: {e}")
+                raise CoinbaseOrderError(f"Futures API error: {e}") from e
         except Exception as e:
             logger.error(f"Failed to place futures market order: {e}")
             logger.debug(
                 f"Futures market order error traceback: {traceback.format_exc()}"
             )
-            raise CoinbaseOrderError(f"Failed to place futures market order: {e}")
+            raise CoinbaseOrderError(
+                f"Failed to place futures market order: {e}"
+            ) from e
 
     async def get_account_balance(
         self, account_type: AccountType | None = None
@@ -1214,7 +1216,7 @@ class CoinbaseClient:
 
         except Exception as e:
             logger.error(f"Failed to get account balance: {e}")
-            raise CoinbaseExchangeError(f"Failed to get account balance: {e}")
+            raise CoinbaseExchangeError(f"Failed to get account balance: {e}") from e
 
     async def get_spot_balance(self) -> Decimal:
         """
@@ -1243,7 +1245,7 @@ class CoinbaseClient:
 
         except Exception as e:
             logger.error(f"Failed to get spot balance: {e}")
-            raise CoinbaseExchangeError(f"Failed to get spot balance: {e}")
+            raise CoinbaseExchangeError(f"Failed to get spot balance: {e}") from e
 
     async def get_futures_balance(self) -> Decimal:
         """
@@ -1496,7 +1498,7 @@ class CoinbaseClient:
             return False
 
         try:
-            transfer_request = CashTransferRequest(
+            CashTransferRequest(
                 from_account=AccountType.CBI,
                 to_account=AccountType.CFM,
                 amount=amount,
@@ -1637,7 +1639,7 @@ class CoinbaseClient:
 
         except Exception as e:
             logger.error(f"Failed to get positions: {e}")
-            raise CoinbaseExchangeError(f"Failed to get positions: {e}")
+            raise CoinbaseExchangeError(f"Failed to get positions: {e}") from e
 
     async def cancel_order(self, order_id: str) -> bool:
         """

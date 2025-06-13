@@ -407,9 +407,7 @@ class TradingViewDataFeed:
             )
             return []
 
-    def get_real_time_bar(
-        self, symbol: str, resolution: str
-    ) -> dict[str, Any] | None:
+    def get_real_time_bar(self, symbol: str, resolution: str) -> dict[str, Any] | None:
         """Get the most recent bar for real-time updates"""
         try:
             if (

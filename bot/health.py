@@ -118,7 +118,7 @@ class HealthCheckEndpoints:
         validation_results = validator.run_comprehensive_validation()
 
         # Determine readiness based on validation
-        ready = validation_results["valid"]
+        validation_results["valid"]
 
         # Additional readiness checks
         readiness_checks = {

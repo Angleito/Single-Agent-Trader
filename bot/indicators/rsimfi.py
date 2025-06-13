@@ -3,7 +3,7 @@ RSI+MFI Combined Indicator implementation.
 
 This module provides a Python implementation of the custom RSI+MFI hybrid indicator
 from VuManChu Cipher indicators, originally written in Pine Script. The formula is:
-f_rsimfi(_period, _multiplier, _tf) => 
+f_rsimfi(_period, _multiplier, _tf) =>
     security(syminfo.tickerid, _tf, sma(((close - open) / (high - low)) * _multiplier, _period))
 
 This differs from standard MFI as it uses a custom price ratio calculation

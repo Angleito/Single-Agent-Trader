@@ -7,7 +7,7 @@ Based on the original Pine Script implementation with exact logic matching.
 
 Key Signals Implemented:
 - Red Diamond: wtGreenCross and wtCrossDown
-- Green Diamond: wtRedCross and wtCrossUp  
+- Green Diamond: wtRedCross and wtCrossUp
 - Yellow Cross Up: redDiamond and wt2 < 45 and wt2 > osLevel3 and rsi < 30 and rsi > 15
 - Yellow Cross Down: greenDiamond and wt2 > 55 and wt2 < obLevel3 and rsi < 70 and rsi < 85
 - Dump Diamond: redDiamond and redCross
@@ -243,8 +243,8 @@ class CipherASignals:
         )
         overbought_cross_down = ob_os_conditions["overbought_cross_down"]
         oversold_cross_up = ob_os_conditions["oversold_cross_up"]
-        overbought = ob_os_conditions["overbought"]
-        oversold = ob_os_conditions["oversold"]
+        ob_os_conditions["overbought"]
+        ob_os_conditions["oversold"]
 
         # Calculate specific cross patterns
         # wtGreenCross: wt1 crosses above wt2 when in oversold territory
@@ -404,9 +404,8 @@ class CipherASignals:
         rsi_above_min = rsi > self.yellow_cross_up_rsi_min
 
         # Optional RSI+MFI condition (commented in original Pine Script)
-        rsimfi_condition_up = True  # rsimfi < -5 (currently disabled as in Pine Script)
         if rsimfi is not None and not rsimfi.empty:
-            rsimfi_condition_up = rsimfi < -5
+            pass
 
         yellow_cross_up = (
             red_diamond
@@ -424,11 +423,8 @@ class CipherASignals:
         rsi_above_min_down = rsi > self.yellow_cross_down_rsi_min
 
         # Optional RSI+MFI condition (commented in original Pine Script)
-        rsimfi_condition_down = (
-            True  # rsimfi > 95 (currently disabled as in Pine Script)
-        )
         if rsimfi is not None and not rsimfi.empty:
-            rsimfi_condition_down = rsimfi > 95
+            pass
 
         yellow_cross_down = (
             green_diamond

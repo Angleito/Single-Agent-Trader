@@ -400,9 +400,9 @@ class CipherA:
         try:
             # Get pre-calculated signal from cipher_a_signals if available
             if "cipher_a_signal" in df.columns:
-                base_signals = df["cipher_a_signal"].fillna(0)
+                df["cipher_a_signal"].fillna(0)
             else:
-                base_signals = pd.Series(0, index=df.index)
+                pd.Series(0, index=df.index)
 
             # Get confidence score
             confidence = df.get("cipher_a_confidence", pd.Series(0.0, index=df.index))
@@ -1248,12 +1248,12 @@ class CipherB:
         try:
             # Get pre-calculated signals from cipher_b_signals if available
             if "cipher_b_signal" in df.columns:
-                base_signals = df["cipher_b_signal"].fillna(0)
+                df["cipher_b_signal"].fillna(0)
             else:
-                base_signals = pd.Series(0, index=df.index)
+                pd.Series(0, index=df.index)
 
             # Get signal strength and confidence if available
-            strength = df.get("cipher_b_strength", pd.Series(0.0, index=df.index))
+            df.get("cipher_b_strength", pd.Series(0.0, index=df.index))
             confidence = df.get("cipher_b_confidence", pd.Series(0.0, index=df.index))
 
             # High priority signals (strongest)
@@ -2052,7 +2052,7 @@ class VuManChuIndicators:
                 )
 
                 # Add all dominance indicators as the latest value in the main DataFrame
-                latest_idx = result.index[-1] if not result.empty else 0
+                result.index[-1] if not result.empty else 0
 
                 # Initialize dominance columns with default values
                 for col, default_val in {

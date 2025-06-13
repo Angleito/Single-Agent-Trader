@@ -256,8 +256,8 @@ class StochasticRSI:
             return result
 
         # Find local peaks and troughs in both series
-        price_peaks = self._find_local_extrema(price_data, lookback, find_peaks=True)
-        price_troughs = self._find_local_extrema(price_data, lookback, find_peaks=False)
+        self._find_local_extrema(price_data, lookback, find_peaks=True)
+        self._find_local_extrema(price_data, lookback, find_peaks=False)
         stoch_peaks = self._find_local_extrema(stoch_k, lookback, find_peaks=True)
         stoch_troughs = self._find_local_extrema(stoch_k, lookback, find_peaks=False)
 
