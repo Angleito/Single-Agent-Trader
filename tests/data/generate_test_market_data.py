@@ -268,7 +268,9 @@ class MarketDataGenerator:
         # Generate OHLCV data
         data = []
 
-        for i, (timestamp, close_price) in enumerate(zip(timestamps, prices, strict=True)):
+        for i, (timestamp, close_price) in enumerate(
+            zip(timestamps, prices, strict=True)
+        ):
             # Calculate realistic OHLC from close and return
             return_vol = abs(returns[i]) if i < len(returns) else 0.01
             price_range = close_price * return_vol * np.random.uniform(0.5, 2.0)
@@ -357,7 +359,9 @@ class TestDataSuite:
             "crypto_weekend": "Crypto weekend trading patterns",
         }
 
-    def generate_all_scenarios(self, sizes: list[int] | None = None) -> dict[str, list[str]]:
+    def generate_all_scenarios(
+        self, sizes: list[int] | None = None
+    ) -> dict[str, list[str]]:
         """Generate all test scenarios with multiple sizes."""
         if sizes is None:
             sizes = [1000, 5000, 10000]
