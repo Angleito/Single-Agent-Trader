@@ -151,21 +151,16 @@ class TradingEngine:
             self.settings.system.log_file_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Configure logging
+        handlers = []
+        if self.settings.system.log_to_console:
+            handlers.append(logging.StreamHandler())
+        if self.settings.system.log_to_file:
+            handlers.append(logging.FileHandler(self.settings.system.log_file_path))
+
         logging.basicConfig(
             level=log_level,
             format=self.settings.system.log_format,
-            handlers=[
-                (
-                    logging.StreamHandler()
-                    if self.settings.system.log_to_console
-                    else None
-                ),
-                (
-                    logging.FileHandler(self.settings.system.log_file_path)
-                    if self.settings.system.log_to_file
-                    else None
-                ),
-            ],
+            handlers=handlers,
         )
 
         # Remove None handlers
@@ -435,7 +430,9 @@ class TradingEngine:
                             self.logger.warning(
                                 f"Failed to build dominance candles for VuManChu: {e}"
                             )
-                            dominance_candles = None  # Ensure variable is properly reset on error
+                            dominance_candles = (
+                                None  # Ensure variable is properly reset on error
+                            )
 
                 # Calculate indicators with dominance candle support
                 df_with_indicators = self.indicator_calc.calculate_all(

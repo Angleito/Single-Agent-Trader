@@ -340,8 +340,10 @@ class BacktestEngine:
             price: Entry price
         """
         # Calculate position size
-        position_value = self.current_balance * (action.size_pct / 100)
-        leverage = 5  # Default leverage
+        position_value = (
+            self.current_balance * Decimal(action.size_pct) / Decimal("100")
+        )
+        leverage = Decimal("5")  # Default leverage
         position_size = position_value * leverage / price
 
         self.current_position = BacktestTrade(

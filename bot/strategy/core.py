@@ -23,7 +23,7 @@ class CoreStrategy:
 
     def __init__(self):
         """Initialize the core strategy."""
-        self.max_size_pct = settings.max_size_pct
+        self.max_size_pct = settings.trading.max_size_pct
         self.default_tp_pct = 2.0
         self.default_sl_pct = 1.5
 

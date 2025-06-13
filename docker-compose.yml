@@ -4,7 +4,7 @@ services:
   ai-trading-bot:
     build:
       context: .
-      dockerfile: Dockerfile.minimal
+      dockerfile: Dockerfile
     image: ai-trading-bot:latest
     container_name: ai-trading-bot
     restart: unless-stopped
@@ -35,6 +35,7 @@ services:
       - ./logs:/app/logs
       - ./data:/app/data
       - ./config:/app/config:ro  # Read-only config mount
+      - ./bot:/app/bot:ro  # Mount bot code with fixes
       # Mount separate log directories for different log types
       - ./logs/llm_completions:/app/logs/llm_completions
       - ./logs/trading_decisions:/app/logs/trading_decisions

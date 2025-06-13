@@ -22,6 +22,7 @@ try:
 
     class CoinbaseAdvancedTrader(_BaseClient):
         """Adapter class exposing legacy method names used in this codebase."""
+
         pass
 
     COINBASE_AVAILABLE = True
@@ -105,13 +106,15 @@ class MarketDataProvider:
 
         # Data validation settings
         self._max_price_deviation = 0.1  # 10% max price deviation
-        self._min_volume = Decimal('0')
+        self._min_volume = Decimal("0")
 
         # Track WebSocket data reception
         self._websocket_data_received = False
         self._first_websocket_data_time: datetime | None = None
 
-        logger.info(f"Initialized MarketDataProvider for {self.symbol} at {self.interval}")
+        logger.info(
+            f"Initialized MarketDataProvider for {self.symbol} at {self.interval}"
+        )
 
     def _build_websocket_jwt(self) -> str | None:
         """
@@ -122,41 +125,63 @@ class MarketDataProvider:
         """
         try:
             # Check if CDP credentials are available
-            cdp_api_key_obj = getattr(settings.exchange, 'cdp_api_key_name', None)
-            cdp_private_key_obj = getattr(settings.exchange, 'cdp_private_key', None)
+            cdp_api_key_obj = getattr(settings.exchange, "cdp_api_key_name", None)
+            cdp_private_key_obj = getattr(settings.exchange, "cdp_private_key", None)
 
             if not cdp_api_key_obj or not cdp_private_key_obj:
-                logger.debug("CDP credentials not available for WebSocket authentication")
+                logger.debug(
+                    "CDP credentials not available for WebSocket authentication"
+                )
                 return None
 
             # Extract actual values from SecretStr objects
-            cdp_api_key = cdp_api_key_obj.get_secret_value() if hasattr(cdp_api_key_obj, 'get_secret_value') else str(cdp_api_key_obj)
-            cdp_private_key = cdp_private_key_obj.get_secret_value() if hasattr(cdp_private_key_obj, 'get_secret_value') else str(cdp_private_key_obj)
+            cdp_api_key = (
+                cdp_api_key_obj.get_secret_value()
+                if hasattr(cdp_api_key_obj, "get_secret_value")
+                else str(cdp_api_key_obj)
+            )
+            cdp_private_key = (
+                cdp_private_key_obj.get_secret_value()
+                if hasattr(cdp_private_key_obj, "get_secret_value")
+                else str(cdp_private_key_obj)
+            )
 
             # Use SDK's built-in JWT generator for WebSocket authentication
-            logger.debug(f"Generating JWT with API key: {cdp_api_key[:50]}... (length: {len(cdp_api_key)})")
-            logger.debug(f"Private key length: {len(cdp_private_key)}, starts with: {cdp_private_key[:20]}...")
+            logger.debug(
+                f"Generating JWT with API key: {cdp_api_key[:50]}... (length: {len(cdp_api_key)})"
+            )
+            logger.debug(
+                f"Private key length: {len(cdp_private_key)}, starts with: {cdp_private_key[:20]}..."
+            )
 
             try:
                 jwt_token = jwt_generator.build_ws_jwt(cdp_api_key, cdp_private_key)
 
                 if jwt_token:
-                    logger.info(f"Successfully generated WebSocket JWT token using SDK (length: {len(jwt_token)})")
+                    logger.info(
+                        f"Successfully generated WebSocket JWT token using SDK (length: {len(jwt_token)})"
+                    )
                     logger.debug(f"JWT preview: {jwt_token[:50]}...")
                     return jwt_token
                 else:
-                    logger.warning("SDK jwt_generator returned None - this should not happen with valid credentials")
+                    logger.warning(
+                        "SDK jwt_generator returned None - this should not happen with valid credentials"
+                    )
                     return None
 
             except Exception as jwt_error:
                 logger.error(f"Exception in jwt_generator.build_ws_jwt: {jwt_error}")
                 import traceback
+
                 logger.debug(f"JWT generation traceback: {traceback.format_exc()}")
                 return None
 
         except Exception as e:
-            logger.warning(f"Failed to generate WebSocket JWT token (outer exception): {e}")
+            logger.warning(
+                f"Failed to generate WebSocket JWT token (outer exception): {e}"
+            )
             import traceback
+
             logger.debug(f"Outer exception traceback: {traceback.format_exc()}")
             return None
 
@@ -181,7 +206,9 @@ class MarketDataProvider:
                 try:
                     await self.fetch_historical_data()
                 except Exception as e:
-                    logger.warning(f"Failed to fetch historical data, continuing with WebSocket only: {e}")
+                    logger.warning(
+                        f"Failed to fetch historical data, continuing with WebSocket only: {e}"
+                    )
 
             # Try to get current price to ensure connectivity
             try:
@@ -230,38 +257,44 @@ class MarketDataProvider:
 
         # Initialize Coinbase REST client if credentials are available
         # Check for legacy credentials
-        has_legacy_credentials = all([
-            settings.exchange.cb_api_key,
-            settings.exchange.cb_api_secret,
-            settings.exchange.cb_passphrase
-        ])
+        has_legacy_credentials = all(
+            [
+                settings.exchange.cb_api_key,
+                settings.exchange.cb_api_secret,
+                settings.exchange.cb_passphrase,
+            ]
+        )
 
         # Check for CDP credentials
-        has_cdp_credentials = all([
-            settings.exchange.cdp_api_key_name,
-            settings.exchange.cdp_private_key
-        ])
+        has_cdp_credentials = all(
+            [settings.exchange.cdp_api_key_name, settings.exchange.cdp_private_key]
+        )
 
         if has_legacy_credentials:
             self._rest_client = CoinbaseAdvancedTrader(
                 api_key=settings.exchange.cb_api_key.get_secret_value(),
                 api_secret=settings.exchange.cb_api_secret.get_secret_value(),
                 passphrase=settings.exchange.cb_passphrase.get_secret_value(),
-                sandbox=settings.exchange.cb_sandbox
+                sandbox=settings.exchange.cb_sandbox,
             )
             logger.info("Initialized REST client with legacy Coinbase credentials")
         elif has_cdp_credentials:
             self._rest_client = CoinbaseAdvancedTrader(
                 api_key=settings.exchange.cdp_api_key_name.get_secret_value(),
-                api_secret=settings.exchange.cdp_private_key.get_secret_value()
+                api_secret=settings.exchange.cdp_private_key.get_secret_value(),
             )
             logger.info("Initialized REST client with CDP Coinbase credentials")
         else:
-            logger.warning("No Coinbase credentials provided, using public endpoints only")
+            logger.warning(
+                "No Coinbase credentials provided, using public endpoints only"
+            )
 
-    async def fetch_historical_data(self, start_time: datetime | None = None,
-                                  end_time: datetime | None = None,
-                                  granularity: str | None = None) -> list[MarketData]:
+    async def fetch_historical_data(
+        self,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        granularity: str | None = None,
+    ) -> list[MarketData]:
         """
         Fetch historical OHLCV data from Coinbase REST API.
 
@@ -296,7 +329,9 @@ class MarketDataProvider:
                 # Reduce time range to fit within API limits
                 safe_time_range = 300 * api_interval_seconds
                 max_candles = int(safe_time_range / interval_seconds)
-                logger.warning(f"Adjusted candle limit from {self.candle_limit} to {max_candles} due to API granularity mismatch")
+                logger.warning(
+                    f"Adjusted candle limit from {self.candle_limit} to {max_candles} due to API granularity mismatch"
+                )
 
         default_start = end_time - timedelta(seconds=interval_seconds * max_candles)
         start_time = start_time or default_start
@@ -307,33 +342,43 @@ class MarketDataProvider:
 
         # Final safety check - ensure we never exceed 350 candles
         if expected_candles > 350:
-            logger.error(f"Calculated {expected_candles} candles which exceeds API limit of 350!")
+            logger.error(
+                f"Calculated {expected_candles} candles which exceeds API limit of 350!"
+            )
             # Adjust start_time to ensure we stay under limit
             safe_seconds = 300 * api_interval_seconds  # Use 300 to be extra safe
             start_time = end_time - timedelta(seconds=safe_seconds)
             time_diff = safe_seconds
             expected_candles = 300
-            logger.warning(f"Adjusted start_time to {start_time} to stay within API limits")
+            logger.warning(
+                f"Adjusted start_time to {start_time} to stay within API limits"
+            )
 
-        logger.info(f"Fetching historical data for {self.symbol} from {start_time} to {end_time}")
-        logger.info(f"Requesting {expected_candles} candles at {api_granularity} granularity (requested: {granularity})")
+        logger.info(
+            f"Fetching historical data for {self.symbol} from {start_time} to {end_time}"
+        )
+        logger.info(
+            f"Requesting {expected_candles} candles at {api_granularity} granularity (requested: {granularity})"
+        )
 
         try:
             # Use public API endpoint for historical candles
             url = f"{self.COINBASE_REST_URL}/api/v3/brokerage/market/products/{self.symbol}/candles"
 
             params = {
-                'start': int(start_time.timestamp()),
-                'end': int(end_time.timestamp()),
-                'granularity': self._format_granularity(granularity)
+                "start": int(start_time.timestamp()),
+                "end": int(end_time.timestamp()),
+                "granularity": self._format_granularity(granularity),
             }
 
             async with self._session.get(url, params=params) as response:
                 if response.status != 200:
-                    raise Exception(f"API request failed with status {response.status}: {await response.text()}")
+                    raise Exception(
+                        f"API request failed with status {response.status}: {await response.text()}"
+                    )
 
                 data = await response.json()
-                candles = data.get('candles', [])
+                candles = data.get("candles", [])
 
                 # Convert to MarketData objects
                 historical_data = []
@@ -350,9 +395,9 @@ class MarketDataProvider:
                 historical_data.sort(key=lambda x: x.timestamp)
 
                 # Update cache
-                self._ohlcv_cache = historical_data[-self.candle_limit:]
+                self._ohlcv_cache = historical_data[-self.candle_limit :]
                 self._last_update = datetime.now(UTC)
-                self._cache_timestamps['ohlcv'] = self._last_update
+                self._cache_timestamps["ohlcv"] = self._last_update
 
                 logger.info(f"Loaded {len(self._ohlcv_cache)} historical candles")
                 return historical_data
@@ -373,8 +418,8 @@ class MarketDataProvider:
             Latest price as Decimal or None if unavailable
         """
         # Check cache first
-        if self._is_cache_valid('price'):
-            return self._price_cache.get('price')
+        if self._is_cache_valid("price"):
+            return self._price_cache.get("price")
 
         try:
             url = f"{self.COINBASE_REST_URL}/api/v3/brokerage/market/products/{self.symbol}"
@@ -385,13 +430,13 @@ class MarketDataProvider:
                     return self.get_latest_price()  # Fall back to cached data
 
                 data = await response.json()
-                price_str = data.get('price')
+                price_str = data.get("price")
 
                 if price_str:
                     price = Decimal(price_str)
                     # Update cache
-                    self._price_cache['price'] = price
-                    self._cache_timestamps['price'] = datetime.now(UTC)
+                    self._price_cache["price"] = price
+                    self._cache_timestamps["price"] = datetime.now(UTC)
                     return price
 
         except Exception as e:
@@ -411,13 +456,13 @@ class MarketDataProvider:
             Order book data or None if unavailable
         """
         # Check cache first
-        cache_key = f'orderbook_l{level}'
+        cache_key = f"orderbook_l{level}"
         if self._is_cache_valid(cache_key):
             return self._orderbook_cache.get(cache_key)
 
         try:
             url = f"{self.COINBASE_REST_URL}/api/v3/brokerage/market/products/{self.symbol}/book"
-            params = {'limit': min(level * 10, 50)}  # Reasonable limit based on level
+            params = {"limit": min(level * 10, 50)}  # Reasonable limit based on level
 
             async with self._session.get(url, params=params) as response:
                 if response.status != 200:
@@ -426,9 +471,15 @@ class MarketDataProvider:
 
                 data = await response.json()
                 orderbook = {
-                    'bids': [(Decimal(bid['price']), Decimal(bid['size'])) for bid in data.get('bids', [])],
-                    'asks': [(Decimal(ask['price']), Decimal(ask['size'])) for ask in data.get('asks', [])],
-                    'timestamp': datetime.now(UTC)
+                    "bids": [
+                        (Decimal(bid["price"]), Decimal(bid["size"]))
+                        for bid in data.get("bids", [])
+                    ],
+                    "asks": [
+                        (Decimal(ask["price"]), Decimal(ask["size"]))
+                        for ask in data.get("asks", [])
+                    ],
+                    "timestamp": datetime.now(UTC),
                 }
 
                 # Update cache
@@ -467,11 +518,17 @@ class MarketDataProvider:
                 logger.error(f"WebSocket connection error: {e}")
                 if self._reconnect_attempts < self._max_reconnect_attempts:
                     self._reconnect_attempts += 1
-                    delay = min(2 ** self._reconnect_attempts, 60)  # Exponential backoff, max 60s
-                    logger.info(f"Reconnecting in {delay}s (attempt {self._reconnect_attempts}/{self._max_reconnect_attempts})")
+                    delay = min(
+                        2**self._reconnect_attempts, 60
+                    )  # Exponential backoff, max 60s
+                    logger.info(
+                        f"Reconnecting in {delay}s (attempt {self._reconnect_attempts}/{self._max_reconnect_attempts})"
+                    )
                     await asyncio.sleep(delay)
                 else:
-                    logger.error("Max reconnection attempts reached, stopping WebSocket")
+                    logger.error(
+                        "Max reconnection attempts reached, stopping WebSocket"
+                    )
                     break
 
     async def _connect_websocket(self) -> None:
@@ -485,20 +542,16 @@ class MarketDataProvider:
         # Note: Use the correct WebSocket subscription format per Coinbase documentation
         # Use individual channel subscriptions rather than channels array to avoid auth issues
         subscriptions = [
+            {"type": "subscribe", "product_ids": [self.symbol], "channel": "ticker"},
             {
                 "type": "subscribe",
                 "product_ids": [self.symbol],
-                "channel": "ticker"
+                "channel": "market_trades",
             },
             {
                 "type": "subscribe",
-                "product_ids": [self.symbol],
-                "channel": "market_trades"
+                "channel": "heartbeats",  # No product_ids needed for heartbeats
             },
-            {
-                "type": "subscribe",
-                "channel": "heartbeats"  # No product_ids needed for heartbeats
-            }
         ]
 
         # Add JWT authentication if available
@@ -512,19 +565,22 @@ class MarketDataProvider:
         logger.debug(f"WebSocket subscriptions: {json.dumps(subscriptions, indent=2)}")
 
         async with websockets.connect(
-            self.COINBASE_WS_URL,
-            timeout=settings.exchange.websocket_timeout
+            self.COINBASE_WS_URL, timeout=settings.exchange.websocket_timeout
         ) as websocket:
             self._ws_connection = websocket
 
             # Send all subscriptions
             for i, subscription in enumerate(subscriptions):
                 await websocket.send(json.dumps(subscription))
-                logger.debug(f"Sent subscription {i+1}/{len(subscriptions)}: {subscription.get('channel', 'unknown')}")
+                logger.debug(
+                    f"Sent subscription {i+1}/{len(subscriptions)}: {subscription.get('channel', 'unknown')}"
+                )
                 # Small delay between subscriptions to avoid overwhelming the server
                 await asyncio.sleep(0.1)
 
-            logger.info(f"Subscribed to {len(subscriptions)} WebSocket feeds for {self.symbol}")
+            logger.info(
+                f"Subscribed to {len(subscriptions)} WebSocket feeds for {self.symbol}"
+            )
 
             # Reset reconnection counter on successful connection
             self._reconnect_attempts = 0
@@ -538,7 +594,9 @@ class MarketDataProvider:
 
                     # Log first few messages for debugging
                     if message_count <= 5:
-                        logger.debug(f"WebSocket message #{message_count}: {parsed_message.get('channel', 'unknown')} - {parsed_message.get('type', 'unknown')}")
+                        logger.debug(
+                            f"WebSocket message #{message_count}: {parsed_message.get('channel', 'unknown')} - {parsed_message.get('type', 'unknown')}"
+                        )
 
                     await self._handle_websocket_message(parsed_message)
                 except json.JSONDecodeError as e:
@@ -554,29 +612,35 @@ class MarketDataProvider:
             message: Parsed WebSocket message
         """
         # Handle different message formats from Coinbase Advanced Trading API
-        channel = message.get('channel')
-        msg_type = message.get('type')  # Note: not all messages have 'type'
+        channel = message.get("channel")
+        msg_type = message.get("type")  # Note: not all messages have 'type'
 
-        if channel == 'subscriptions':
+        if channel == "subscriptions":
             # Subscription confirmation message
-            logger.info(f"WebSocket subscriptions confirmed: {message.get('events', [])}")
-        elif channel == 'heartbeats':
+            logger.info(
+                f"WebSocket subscriptions confirmed: {message.get('events', [])}"
+            )
+        elif channel == "heartbeats":
             # Heartbeat messages - just log occasionally to confirm connection
-            events = message.get('events', [])
+            events = message.get("events", [])
             if events:
-                counter = events[0].get('heartbeat_counter', 'unknown')
+                counter = events[0].get("heartbeat_counter", "unknown")
                 logger.debug(f"Heartbeat #{counter} received")
-        elif channel == 'ticker':
+        elif channel == "ticker":
             await self._handle_ticker_update(message)
-        elif channel == 'market_trades':
+        elif channel == "market_trades":
             await self._handle_trade_update(message)
-        elif msg_type == 'error':
+        elif msg_type == "error":
             logger.error(f"WebSocket error: {message.get('message', 'Unknown error')}")
             # Log the full error message for debugging
-            logger.debug(f"Full WebSocket error message: {json.dumps(message, indent=2)}")
+            logger.debug(
+                f"Full WebSocket error message: {json.dumps(message, indent=2)}"
+            )
         else:
             # Log any unhandled message types for debugging
-            logger.debug(f"Unhandled WebSocket message - Channel: {channel}, Type: {msg_type}")
+            logger.debug(
+                f"Unhandled WebSocket message - Channel: {channel}, Type: {msg_type}"
+            )
             logger.debug(f"Message: {json.dumps(message, indent=2)}")
 
     async def _handle_ticker_update(self, message: dict[str, Any]) -> None:
@@ -588,29 +652,33 @@ class MarketDataProvider:
         """
         try:
             # Advanced Trading API format: events array with tickers
-            events = message.get('events', [])
-            timestamp = datetime.fromisoformat(message.get('timestamp', '').replace('Z', '+00:00'))
+            events = message.get("events", [])
+            timestamp = datetime.fromisoformat(
+                message.get("timestamp", "").replace("Z", "+00:00")
+            )
 
             for event in events:
-                event_type = event.get('type')
-                if event_type in ['snapshot', 'update']:
-                    tickers = event.get('tickers', [])
+                event_type = event.get("type")
+                if event_type in ["snapshot", "update"]:
+                    tickers = event.get("tickers", [])
                     for ticker in tickers:
-                        if ticker.get('product_id') != self.symbol:
+                        if ticker.get("product_id") != self.symbol:
                             continue
 
-                        price = Decimal(ticker['price'])
+                        price = Decimal(ticker["price"])
 
                         # Update price cache
-                        self._price_cache['price'] = price
-                        self._price_cache['timestamp'] = timestamp
-                        self._cache_timestamps['price'] = datetime.now(UTC)
+                        self._price_cache["price"] = price
+                        self._price_cache["timestamp"] = timestamp
+                        self._cache_timestamps["price"] = datetime.now(UTC)
 
                         # Mark that we've received real WebSocket data
                         if not self._websocket_data_received:
                             self._websocket_data_received = True
                             self._first_websocket_data_time = datetime.now(UTC)
-                            logger.info(f"First WebSocket market data received for {self.symbol} at ${price}")
+                            logger.info(
+                                f"First WebSocket market data received for {self.symbol} at ${price}"
+                            )
 
                         # Update last update time to keep connection status fresh
                         self._last_update = datetime.now(UTC)
@@ -624,8 +692,14 @@ class MarketDataProvider:
                             # Ensure both timestamps have timezone info for comparison
                             last_timestamp = last_candle.timestamp
                             if last_timestamp.tzinfo is None:
-                                last_timestamp = last_timestamp.replace(tzinfo=timestamp.tzinfo)
-                            if (timestamp - last_timestamp).total_seconds() < self._interval_to_seconds(self.interval):
+                                last_timestamp = last_timestamp.replace(
+                                    tzinfo=timestamp.tzinfo
+                                )
+                            if (
+                                timestamp - last_timestamp
+                            ).total_seconds() < self._interval_to_seconds(
+                                self.interval
+                            ):
                                 # Update existing candle
                                 updated_candle = MarketData(
                                     symbol=last_candle.symbol,
@@ -634,7 +708,7 @@ class MarketDataProvider:
                                     high=max(last_candle.high, price),
                                     low=min(last_candle.low, price),
                                     close=price,
-                                    volume=last_candle.volume  # Volume updated separately via trades
+                                    volume=last_candle.volume,  # Volume updated separately via trades
                                 )
                                 self._ohlcv_cache[-1] = updated_candle
 
@@ -654,32 +728,42 @@ class MarketDataProvider:
         """
         try:
             # Advanced Trading API format: events array with trades
-            events = message.get('events', [])
-            timestamp = datetime.fromisoformat(message.get('timestamp', '').replace('Z', '+00:00'))
+            events = message.get("events", [])
+            timestamp = datetime.fromisoformat(
+                message.get("timestamp", "").replace("Z", "+00:00")
+            )
 
             for event in events:
-                event_type = event.get('type')
-                if event_type in ['snapshot', 'update']:
-                    trades = event.get('trades', [])
+                event_type = event.get("type")
+                if event_type in ["snapshot", "update"]:
+                    trades = event.get("trades", [])
                     for trade in trades:
-                        if trade.get('product_id') != self.symbol:
+                        if trade.get("product_id") != self.symbol:
                             continue
 
                         trade_data = {
-                            'price': Decimal(trade['price']),
-                            'size': Decimal(trade['size']),
-                            'side': trade['side'],
-                            'timestamp': datetime.fromisoformat(trade.get('time', timestamp.isoformat()).replace('Z', '+00:00')),
-                            'trade_id': trade.get('trade_id', '')
+                            "price": Decimal(trade["price"]),
+                            "size": Decimal(trade["size"]),
+                            "side": trade["side"],
+                            "timestamp": datetime.fromisoformat(
+                                trade.get("time", timestamp.isoformat()).replace(
+                                    "Z", "+00:00"
+                                )
+                            ),
+                            "trade_id": trade.get("trade_id", ""),
                         }
 
-                        logger.debug(f"Trade update: {self.symbol} {trade_data['side']} {trade_data['size']} @ ${trade_data['price']}")
+                        logger.debug(
+                            f"Trade update: {self.symbol} {trade_data['side']} {trade_data['size']} @ ${trade_data['price']}"
+                        )
 
                         # Mark that we've received real WebSocket data
                         if not self._websocket_data_received:
                             self._websocket_data_received = True
                             self._first_websocket_data_time = datetime.now(UTC)
-                            logger.info(f"First WebSocket market data received for {self.symbol} via trade at ${trade_data['price']}")
+                            logger.info(
+                                f"First WebSocket market data received for {self.symbol} via trade at ${trade_data['price']}"
+                            )
 
                         # Update last update time to keep connection status fresh
                         self._last_update = datetime.now(UTC)
@@ -696,8 +780,12 @@ class MarketDataProvider:
                             # Ensure both timestamps have timezone info for comparison
                             last_timestamp = last_candle.timestamp
                             if last_timestamp.tzinfo is None:
-                                last_timestamp = last_timestamp.replace(tzinfo=trade_data['timestamp'].tzinfo)
-                            if (trade_data['timestamp'] - last_timestamp).total_seconds() < interval_seconds:
+                                last_timestamp = last_timestamp.replace(
+                                    tzinfo=trade_data["timestamp"].tzinfo
+                                )
+                            if (
+                                trade_data["timestamp"] - last_timestamp
+                            ).total_seconds() < interval_seconds:
                                 # Add trade volume to current candle
                                 updated_candle = MarketData(
                                     symbol=last_candle.symbol,
@@ -706,7 +794,7 @@ class MarketDataProvider:
                                     high=last_candle.high,
                                     low=last_candle.low,
                                     close=last_candle.close,
-                                    volume=last_candle.volume + trade_data['size']
+                                    volume=last_candle.volume + trade_data["size"],
                                 )
                                 self._ohlcv_cache[-1] = updated_candle
 
@@ -737,8 +825,8 @@ class MarketDataProvider:
             Latest price or None if no data available
         """
         # Try price cache first
-        if 'price' in self._price_cache:
-            return self._price_cache['price']
+        if "price" in self._price_cache:
+            return self._price_cache["price"]
 
         # Fall back to latest candle close price
         if self._ohlcv_cache:
@@ -763,17 +851,19 @@ class MarketDataProvider:
 
         df_data = []
         for candle in data:
-            df_data.append({
-                'timestamp': candle.timestamp,
-                'open': float(candle.open),
-                'high': float(candle.high),
-                'low': float(candle.low),
-                'close': float(candle.close),
-                'volume': float(candle.volume)
-            })
+            df_data.append(
+                {
+                    "timestamp": candle.timestamp,
+                    "open": float(candle.open),
+                    "high": float(candle.high),
+                    "low": float(candle.low),
+                    "close": float(candle.close),
+                    "volume": float(candle.volume),
+                }
+            )
 
         df = pd.DataFrame(df_data)
-        df.set_index('timestamp', inplace=True)
+        df.set_index("timestamp", inplace=True)
 
         return df
 
@@ -859,7 +949,7 @@ class MarketDataProvider:
                 return False
 
             # Check WebSocket connection status
-            if self._ws_connection and hasattr(self._ws_connection, 'state'):
+            if self._ws_connection and hasattr(self._ws_connection, "state"):
                 ws_state = self._ws_connection.state
                 if ws_state != 1:  # Not OPEN
                     logger.warning(f"WebSocket not in OPEN state: {ws_state}")
@@ -880,26 +970,29 @@ class MarketDataProvider:
         if self._ws_connection is not None:
             try:
                 # Check if WebSocket is in OPEN state (1)
-                ws_connected = hasattr(self._ws_connection, 'state') and self._ws_connection.state == 1
+                ws_connected = (
+                    hasattr(self._ws_connection, "state")
+                    and self._ws_connection.state == 1
+                )
             except Exception:
                 ws_connected = False
 
         return {
-            'symbol': self.symbol,
-            'interval': self.interval,
-            'connected': self.is_connected(),
-            'websocket_connected': ws_connected,
-            'websocket_data_received': self._websocket_data_received,
-            'first_websocket_data_time': self._first_websocket_data_time,
-            'cached_candles': len(self._ohlcv_cache),
-            'cached_ticks': len(self._tick_cache),
-            'last_update': self._last_update,
-            'latest_price': self.get_latest_price(),
-            'subscribers': len(self._subscribers),
-            'reconnect_attempts': self._reconnect_attempts,
-            'cache_status': {
+            "symbol": self.symbol,
+            "interval": self.interval,
+            "connected": self.is_connected(),
+            "websocket_connected": ws_connected,
+            "websocket_data_received": self._websocket_data_received,
+            "first_websocket_data_time": self._first_websocket_data_time,
+            "cached_candles": len(self._ohlcv_cache),
+            "cached_ticks": len(self._tick_cache),
+            "last_update": self._last_update,
+            "latest_price": self.get_latest_price(),
+            "subscribers": len(self._subscribers),
+            "reconnect_attempts": self._reconnect_attempts,
+            "cache_status": {
                 key: self._is_cache_valid(key) for key in self._cache_timestamps.keys()
-            }
+            },
         }
 
     def _is_cache_valid(self, cache_key: str) -> bool:
@@ -928,11 +1021,7 @@ class MarketDataProvider:
         Returns:
             Interval in seconds
         """
-        multipliers = {
-            'm': 60,
-            'h': 3600,
-            'd': 86400
-        }
+        multipliers = {"m": 60, "h": 3600, "d": 86400}
 
         if interval[-1] in multipliers:
             return int(interval[:-1]) * multipliers[interval[-1]]
@@ -952,14 +1041,14 @@ class MarketDataProvider:
         """
         # Coinbase uses specific granularity values
         granularity_map = {
-            '1m': 'ONE_MINUTE',
-            '5m': 'FIVE_MINUTE',
-            '15m': 'FIFTEEN_MINUTE',
-            '30m': 'THIRTY_MINUTE',
-            '1h': 'ONE_HOUR',
-            '2h': 'TWO_HOUR',
-            '6h': 'SIX_HOUR',
-            '1d': 'ONE_DAY'
+            "1m": "ONE_MINUTE",
+            "5m": "FIVE_MINUTE",
+            "15m": "FIFTEEN_MINUTE",
+            "30m": "THIRTY_MINUTE",
+            "1h": "ONE_HOUR",
+            "2h": "TWO_HOUR",
+            "6h": "SIX_HOUR",
+            "1d": "ONE_DAY",
         }
 
         # For unsupported intervals like 3m, find the next higher supported interval
@@ -969,24 +1058,28 @@ class MarketDataProvider:
 
             # Find the closest supported interval that's greater than or equal
             supported_intervals = [
-                ('1m', 60),
-                ('5m', 300),
-                ('15m', 900),
-                ('30m', 1800),
-                ('1h', 3600),
-                ('2h', 7200),
-                ('6h', 21600),
-                ('1d', 86400)
+                ("1m", 60),
+                ("5m", 300),
+                ("15m", 900),
+                ("30m", 1800),
+                ("1h", 3600),
+                ("2h", 7200),
+                ("6h", 21600),
+                ("1d", 86400),
             ]
 
             for supported_interval, seconds in supported_intervals:
                 if seconds >= interval_seconds:
-                    logger.warning(f"Interval {interval} not supported by Coinbase API, using {supported_interval} instead")
+                    logger.warning(
+                        f"Interval {interval} not supported by Coinbase API, using {supported_interval} instead"
+                    )
                     return granularity_map[supported_interval]
 
             # Default to ONE_DAY if interval is larger than all supported
-            logger.warning(f"Interval {interval} not supported by Coinbase API, defaulting to ONE_DAY")
-            return 'ONE_DAY'
+            logger.warning(
+                f"Interval {interval} not supported by Coinbase API, defaulting to ONE_DAY"
+            )
+            return "ONE_DAY"
 
         return granularity_map[interval]
 
@@ -1001,14 +1094,14 @@ class MarketDataProvider:
             Interval in seconds
         """
         api_intervals = {
-            'ONE_MINUTE': 60,
-            'FIVE_MINUTE': 300,
-            'FIFTEEN_MINUTE': 900,
-            'THIRTY_MINUTE': 1800,
-            'ONE_HOUR': 3600,
-            'TWO_HOUR': 7200,
-            'SIX_HOUR': 21600,
-            'ONE_DAY': 86400
+            "ONE_MINUTE": 60,
+            "FIVE_MINUTE": 300,
+            "FIFTEEN_MINUTE": 900,
+            "THIRTY_MINUTE": 1800,
+            "ONE_HOUR": 3600,
+            "TWO_HOUR": 7200,
+            "SIX_HOUR": 21600,
+            "ONE_DAY": 86400,
         }
 
         return api_intervals.get(api_granularity, 60)
@@ -1025,12 +1118,12 @@ class MarketDataProvider:
         """
         return MarketData(
             symbol=self.symbol,
-            timestamp=datetime.fromtimestamp(int(candle_data['start'])),
-            open=Decimal(str(candle_data['open'])),
-            high=Decimal(str(candle_data['high'])),
-            low=Decimal(str(candle_data['low'])),
-            close=Decimal(str(candle_data['close'])),
-            volume=Decimal(str(candle_data['volume']))
+            timestamp=datetime.fromtimestamp(int(candle_data["start"])),
+            open=Decimal(str(candle_data["open"])),
+            high=Decimal(str(candle_data["high"])),
+            low=Decimal(str(candle_data["low"])),
+            close=Decimal(str(candle_data["close"])),
+            volume=Decimal(str(candle_data["volume"])),
         )
 
     def _validate_market_data(self, data: MarketData) -> bool:
@@ -1054,8 +1147,12 @@ class MarketDataProvider:
                 return False
 
             # Price consistency checks
-            if data.high < max(data.open, data.close) or data.low > min(data.open, data.close):
-                logger.warning(f"Inconsistent OHLC data: High={data.high}, Low={data.low}, Open={data.open}, Close={data.close}")
+            if data.high < max(data.open, data.close) or data.low > min(
+                data.open, data.close
+            ):
+                logger.warning(
+                    f"Inconsistent OHLC data: High={data.high}, Low={data.low}, Open={data.open}, Close={data.close}"
+                )
                 return False
 
             # Check for extreme price movements (compared to previous candle)
@@ -1063,7 +1160,9 @@ class MarketDataProvider:
                 last_price = self._ohlcv_cache[-1].close
                 price_change = abs(data.close - last_price) / last_price
                 if price_change > self._max_price_deviation:
-                    logger.warning(f"Extreme price movement detected: {price_change:.2%} change")
+                    logger.warning(
+                        f"Extreme price movement detected: {price_change:.2%} change"
+                    )
                     # Don't reject, but log for monitoring
 
             return True
@@ -1143,9 +1242,9 @@ class MarketDataClient:
             self._initialized = False
             logger.info("MarketDataClient disconnected")
 
-    async def get_historical_data(self,
-                                lookback_hours: int = 24,
-                                granularity: str | None = None) -> pd.DataFrame:
+    async def get_historical_data(
+        self, lookback_hours: int = 24, granularity: str | None = None
+    ) -> pd.DataFrame:
         """
         Get historical data as a pandas DataFrame.
 
@@ -1163,9 +1262,7 @@ class MarketDataClient:
         start_time = end_time - timedelta(hours=lookback_hours)
 
         data = await self.provider.fetch_historical_data(
-            start_time=start_time,
-            end_time=end_time,
-            granularity=granularity
+            start_time=start_time, end_time=end_time, granularity=granularity
         )
 
         return self._to_dataframe(data)
@@ -1209,7 +1306,9 @@ class MarketDataClient:
         """
         return self.provider.to_dataframe(limit)
 
-    def subscribe_to_price_updates(self, callback: Callable[[MarketData], None]) -> None:
+    def subscribe_to_price_updates(
+        self, callback: Callable[[MarketData], None]
+    ) -> None:
         """
         Subscribe to real-time price updates.
 
@@ -1218,7 +1317,9 @@ class MarketDataClient:
         """
         self.provider.subscribe_to_updates(callback)
 
-    def unsubscribe_from_price_updates(self, callback: Callable[[MarketData], None]) -> None:
+    def unsubscribe_from_price_updates(
+        self, callback: Callable[[MarketData], None]
+    ) -> None:
         """
         Unsubscribe from real-time price updates.
 
@@ -1251,24 +1352,28 @@ class MarketDataClient:
 
         df_data = []
         for candle in data:
-            df_data.append({
-                'timestamp': candle.timestamp,
-                'open': float(candle.open),
-                'high': float(candle.high),
-                'low': float(candle.low),
-                'close': float(candle.close),
-                'volume': float(candle.volume)
-            })
+            df_data.append(
+                {
+                    "timestamp": candle.timestamp,
+                    "open": float(candle.open),
+                    "high": float(candle.high),
+                    "low": float(candle.low),
+                    "close": float(candle.close),
+                    "volume": float(candle.volume),
+                }
+            )
 
         df = pd.DataFrame(df_data)
-        df.set_index('timestamp', inplace=True)
+        df.set_index("timestamp", inplace=True)
         df.sort_index(inplace=True)
 
         return df
 
 
 # Factory function for easy client creation
-def create_market_data_client(symbol: str = None, interval: str = None) -> MarketDataClient:
+def create_market_data_client(
+    symbol: str = None, interval: str = None
+) -> MarketDataClient:
     """
     Factory function to create a MarketDataClient instance.
 
