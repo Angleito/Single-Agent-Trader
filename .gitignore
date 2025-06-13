@@ -189,7 +189,8 @@ $RECYCLE.BIN/
 # Trading Bot Specific
 logs/
 *.log
-data/
+# Data files (but not bot/data source code)
+/data/
 backtest_results/
 *.db
 *.sqlite

@@ -15,10 +15,11 @@ __description__ = "AI-powered crypto futures trading bot"
 
 # Core components
 # Backtesting
-from .backtest.engine import BacktestEngine
+from .backtest.engine import BacktestEngine, BacktestResults, BacktestTrade
 from .config import settings
 
 # Data and indicators
+from .data.dominance import DominanceData, DominanceDataProvider
 from .data.market import MarketDataProvider
 
 # Exchange integration
@@ -46,10 +47,14 @@ __all__ = [
     "LLMAgent",
     "CoreStrategy",
     "MarketDataProvider",
+    "DominanceData",
+    "DominanceDataProvider",
     "VuManChuIndicators",
     "CipherA",
     "CipherB",
     "CoinbaseClient",
     "BacktestEngine",
+    "BacktestResults",
+    "BacktestTrade",
     "RAGReader",
 ]
