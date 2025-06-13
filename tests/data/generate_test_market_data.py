@@ -18,11 +18,9 @@ for accurate indicator testing and signal validation.
 import argparse
 import json
 import logging
-import os
 import warnings
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -166,7 +164,7 @@ class MarketDataGenerator:
         self,
         periods: int = 2000,
         gap_frequency: int = 200,
-        gap_size_range: Tuple[float, float] = (0.02, 0.08),
+        gap_size_range: tuple[float, float] = (0.02, 0.08),
         frequency: str = "1min",
     ) -> pd.DataFrame:
         """Generate data with gaps and extreme moves."""
@@ -258,10 +256,10 @@ class MarketDataGenerator:
         self,
         timestamps: pd.DatetimeIndex,
         returns: np.ndarray,
-        custom_volumes: Optional[np.ndarray] = None,
+        custom_volumes: np.ndarray | None = None,
     ) -> pd.DataFrame:
         """Create realistic OHLCV data from returns."""
-        periods = len(timestamps)
+        # periods = len(timestamps)  # Commented out as it's not used
 
         # Generate price series
         prices = self.base_price * np.exp(np.cumsum(returns))
@@ -270,7 +268,7 @@ class MarketDataGenerator:
         # Generate OHLCV data
         data = []
 
-        for i, (timestamp, close_price) in enumerate(zip(timestamps, prices)):
+        for i, (timestamp, close_price) in enumerate(zip(timestamps, prices, strict=True)):
             # Calculate realistic OHLC from close and return
             return_vol = abs(returns[i]) if i < len(returns) else 0.01
             price_range = close_price * return_vol * np.random.uniform(0.5, 2.0)
@@ -359,7 +357,7 @@ class TestDataSuite:
             "crypto_weekend": "Crypto weekend trading patterns",
         }
 
-    def generate_all_scenarios(self, sizes: List[int] = None) -> Dict[str, List[str]]:
+    def generate_all_scenarios(self, sizes: list[int] | None = None) -> dict[str, list[str]]:
         """Generate all test scenarios with multiple sizes."""
         if sizes is None:
             sizes = [1000, 5000, 10000]
@@ -439,7 +437,7 @@ class TestDataSuite:
             data.to_csv(filepath)
             logger.info(f"Generated standard file: {filepath}")
 
-    def generate_data_summary(self) -> Dict:
+    def generate_data_summary(self) -> dict:
         """Generate summary of all test data."""
         summary = {
             "generation_time": datetime.now().isoformat(),
