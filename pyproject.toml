@@ -37,8 +37,9 @@ ruff = "^0.3.0"
 pre-commit = "^3.6.0"
 mypy = "^1.8.0"
 types-requests = "^2.31.0"
-psutil = "^5.9.0"
+psutil = "^6.1.0"
 memory-profiler = "^0.61.0"
+safety = "^3.5.2"
 
 [tool.poetry.scripts]
 ai-trading-bot = "bot.main:cli"
