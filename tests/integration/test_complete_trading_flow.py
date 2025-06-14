@@ -178,11 +178,8 @@ class TestCompleteTradingFlow:
                     return_value={"connected": True, "sandbox": True}
                 ),
                 execute_trade_action=AsyncMock(
-                    side_effect=[
-                        mock_orders["successful_long"],
-                        mock_orders["successful_short"],
-                    ]
-                ),
+                    return_value=None
+                ),  # Will be set dynamically
                 cancel_all_orders=AsyncMock(return_value=True),
                 _get_account_balance=AsyncMock(return_value=Decimal("10000")),
             ),
@@ -190,11 +187,14 @@ class TestCompleteTradingFlow:
             # Create trading engine with dry run
             engine = TradingEngine(symbol="BTC-USD", interval="1m", dry_run=True)
 
-            # Track state changes
-            engine.current_position.model_copy()
-
             # Simulate trading cycles
             await engine._initialize_components()
+
+            # Reset positions to ensure clean state for test
+            engine.position_manager.reset_positions()
+
+            # Track state changes
+            engine.current_position.model_copy()
 
             # First cycle - should go long
             latest_data = engine.market_data.get_latest_ohlcv(limit=200)
@@ -225,6 +225,20 @@ class TestCompleteTradingFlow:
                 )
             )
 
+            # Set up dynamic mock for first trade execution (paper trading)
+            first_order = Order(
+                id="order_123",
+                symbol="BTC-USD",
+                side="BUY",
+                type="MARKET",
+                quantity=Decimal("0.1"),
+                price=current_price,  # Use actual current price
+                status=OrderStatus.FILLED,
+                timestamp=datetime.utcnow(),
+                filled_quantity=Decimal("0.1"),
+            )
+            engine.paper_account.execute_trade_action = Mock(return_value=first_order)
+
             # Execute trade
             if risk_approved and final_action.action != "HOLD":
                 await engine._execute_trade(final_action, current_price)
@@ -244,6 +258,20 @@ class TestCompleteTradingFlow:
                     validated_action, engine.current_position, current_price
                 )
             )
+
+            # Set up dynamic mock for second trade execution (close)
+            second_order = Order(
+                id="order_124",
+                symbol="BTC-USD",
+                side="SELL",
+                type="MARKET",
+                quantity=engine.current_position.size,  # Close entire position
+                price=current_price,  # Use actual current price
+                status=OrderStatus.FILLED,
+                timestamp=datetime.utcnow(),
+                filled_quantity=engine.current_position.size,
+            )
+            engine.paper_account.execute_trade_action = Mock(return_value=second_order)
 
             if risk_approved and final_action.action != "HOLD":
                 await engine._execute_trade(final_action, current_price)
@@ -290,6 +318,9 @@ class TestCompleteTradingFlow:
         ):
             engine = TradingEngine(symbol="BTC-USD", interval="1m", dry_run=True)
             await engine._initialize_components()
+
+            # Reset positions to ensure clean state for test
+            engine.position_manager.reset_positions()
 
             # Open position
             current_price = Decimal("50000")
@@ -344,6 +375,9 @@ class TestCompleteTradingFlow:
         ):
             engine = TradingEngine(symbol="BTC-USD", interval="1m", dry_run=True)
             await engine._initialize_components()
+
+            # Reset positions to ensure clean state for test
+            engine.position_manager.reset_positions()
 
             # Test that engine handles LLM failure gracefully
             current_price = mock_market_data[-1].close
@@ -409,6 +443,10 @@ class TestCompleteTradingFlow:
         ):
 
             engine = TradingEngine(symbol="BTC-USD", interval="1m", dry_run=True)
+
+            # Reset positions to ensure clean state for test
+            engine.position_manager.reset_positions()
+
             engine.market_data = market_data_mock
 
             # Simulate one iteration of trading loop with connection issues
@@ -454,6 +492,9 @@ class TestCompleteTradingFlow:
         ):
             engine = TradingEngine(symbol="BTC-USD", interval="1m", dry_run=True)
             await engine._initialize_components()
+
+            # Reset positions to ensure clean state for test
+            engine.position_manager.reset_positions()
 
             current_price = mock_market_data[-1].close
 
@@ -533,6 +574,9 @@ class TestCompleteTradingFlow:
         ):
             engine = TradingEngine(symbol="BTC-USD", interval="1m", dry_run=True)
             await engine._initialize_components()
+
+            # Reset positions to ensure clean state for test
+            engine.position_manager.reset_positions()
 
             current_price = mock_market_data[-1].close
 
@@ -621,6 +665,9 @@ class TestCompleteTradingFlow:
 
             # Initialize and then shutdown
             await engine._initialize_components()
+
+            # Reset positions to ensure clean state for test
+            engine.position_manager.reset_positions()
 
             # Set some state to verify preservation
             engine.trade_count = 5

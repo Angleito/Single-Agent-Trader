@@ -160,10 +160,8 @@ class OrderManager:
     def add_order(self, order: Order) -> None:
         """
         Add an existing order to the manager.
-        
         This method is primarily for testing and integration scenarios
         where an order object is already created and needs to be tracked.
-        
         Args:
             order: Order object to add
         """
@@ -178,10 +176,8 @@ class OrderManager:
             else:
                 # Add to history if already completed
                 self._order_history.append(order)
-                
             # Persist state
             self._save_state()
-            
             logger.info(f"Added existing order {order.id} with status {order.status}")
 
     def update_order_status(

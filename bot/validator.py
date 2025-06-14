@@ -210,8 +210,10 @@ class TradeValidator:
         # Truncate reason to fit within rationale max_length (200 chars)
         # Account for "Validator: " prefix (11 chars)
         max_reason_length = 200 - 11
-        truncated_reason = reason[:max_reason_length] if len(reason) > max_reason_length else reason
-        
+        truncated_reason = (
+            reason[:max_reason_length] if len(reason) > max_reason_length else reason
+        )
+
         return TradeAction(
             action="HOLD",
             size_pct=0,

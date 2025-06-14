@@ -134,7 +134,7 @@ class TestComponentIntegration:
         # Verify state has required indicators
         indicator_keys = [
             "combined_signal",
-            "combined_confidence", 
+            "combined_confidence",
             "market_sentiment",
             "close",
             "volume",
