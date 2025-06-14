@@ -164,7 +164,7 @@ class ChatCompletionLogger:
             "prompt_preview": prompt[:500] + "..." if len(prompt) > 500 else prompt,
             "market_context": market_context or {},
         }
-        
+
         # Only include temperature if it's not None (o3 models don't support it)
         if temperature is not None:
             log_entry["temperature"] = temperature
@@ -400,7 +400,7 @@ class LangChainCallbackHandler(BaseCallbackHandler):
             model = serialized.get("kwargs", {}).get("model_name", "unknown")
             temperature = serialized.get("kwargs", {}).get("temperature")
             max_tokens = serialized.get("kwargs", {}).get("max_tokens", 0)
-            
+
             # o3 models don't support temperature - set to None for logging
             if model.startswith("o3") and temperature is not None:
                 temperature = None

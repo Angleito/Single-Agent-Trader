@@ -1046,13 +1046,14 @@ def create_settings(
     # Ensure .env file is loaded
     try:
         from dotenv import load_dotenv
+
         env_path = env_file or ".env"
         if Path(env_path).exists():
             load_dotenv(env_path)
     except ImportError:
         # dotenv not available, rely on pydantic-settings
         pass
-    
+
     # Set environment file if provided
     if env_file:
         os.environ.setdefault("ENV_FILE", env_file)

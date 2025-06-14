@@ -20,8 +20,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from ..utils import ta
 
+from ..utils import ta
 from .cipher_a_signals import CipherASignals
 from .cipher_b_signals import CipherBSignals
 from .divergence_detector import DivergenceDetector

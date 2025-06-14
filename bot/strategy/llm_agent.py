@@ -50,7 +50,7 @@ class LLMAgent:
         """
         self.model_provider = model_provider or settings.llm.provider
         self.model_name = model_name or settings.llm.model_name
-        
+
         # o3 models don't support temperature parameter - must be None or 1.0
         if self.model_name.startswith("o3"):
             self.temperature = None  # No temperature for o3 models
@@ -231,13 +231,15 @@ Instructions:
 
                 # o3 family models don't support most parameters, only pass essentials
                 if self.model_name.startswith("o3"):
-                    # o3 models only support basic parameters - no temperature, top_p, penalties
+                    # o3 models only support basic parameters - no temperature, top_p, penalties, or max_tokens
                     # For o3 models, pass max_completion_tokens directly in model_kwargs to avoid LangChain warning
+                    # Explicitly set temperature to None to prevent LangChain from adding defaults
+                    base_kwargs["temperature"] = None
                     base_kwargs["model_kwargs"] = {
                         "max_completion_tokens": settings.llm.max_tokens
                     }
                     logger.info(
-                        "Initializing OpenAI o3 model with minimal parameters (no temperature/penalties)"
+                        f"Initializing OpenAI o3 model with minimal parameters. Base kwargs: {base_kwargs}"
                     )
                 else:
                     # Non-o3 models support full parameter set
@@ -708,8 +710,10 @@ Instructions:
                 )
 
                 # For o3 models, don't pass temperature to logging
-                log_temperature = self.temperature if not self.model_name.startswith("o3") else None
-                
+                log_temperature = (
+                    self.temperature if not self.model_name.startswith("o3") else None
+                )
+
                 request_id = self._completion_logger.log_completion_request(
                     prompt=formatted_prompt,
                     model=self.model_name,
@@ -922,7 +926,9 @@ Instructions:
         status = {
             "model_provider": self.model_provider,
             "model_name": self.model_name,
-            "temperature": self.temperature if self.temperature is not None else "N/A (o3 model)",
+            "temperature": (
+                self.temperature if self.temperature is not None else "N/A (o3 model)"
+            ),
             "llm_available": self._chain is not None,
             "prompt_loaded": self._prompt_template is not None,
             "completion_logging_enabled": settings.llm.enable_completion_logging,

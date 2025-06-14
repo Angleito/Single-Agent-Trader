@@ -1,18 +1,21 @@
 """Main CLI entry point for the AI Trading Bot."""
 
+# ruff: noqa: E402
 # CRITICAL: Initialize comprehensive warning suppression before ANY imports
 # This must be the very first code that runs to catch import-time warnings
-import warnings
-import sys
 import os
+import sys
+import warnings
 
 # Clear any existing warning registry and set up fresh
 warnings.resetwarnings()
-if not hasattr(sys.modules[__name__], '__warningregistry__'):
+if not hasattr(sys.modules[__name__], "__warningregistry__"):
     sys.modules[__name__].__warningregistry__ = {}
 
 # Set environment variable to suppress warnings at the Python level
-os.environ['PYTHONWARNINGS'] = 'ignore::UserWarning,ignore::DeprecationWarning,ignore::SyntaxWarning'
+os.environ["PYTHONWARNINGS"] = (
+    "ignore::UserWarning,ignore::DeprecationWarning,ignore::SyntaxWarning"
+)
 
 # Nuclear option: ignore ALL warnings temporarily during imports
 warnings.filterwarnings("ignore")
@@ -21,16 +24,23 @@ warnings.filterwarnings("ignore")
 message_patterns = [
     r".*pkg_resources.*",
     r".*deprecated.*",
-    r".*slated.*removal.*", 
+    r".*slated.*removal.*",
     r".*escape sequence.*",
     r".*setup\.py.*",
     r".*distutils.*",
     r".*importlib.*",
     r".*setuptools.*",
-    r".*pandas_ta.*"
+    r".*pandas_ta.*",
 ]
 
-warning_categories = [UserWarning, DeprecationWarning, FutureWarning, SyntaxWarning, ImportWarning, RuntimeWarning]
+warning_categories = [
+    UserWarning,
+    DeprecationWarning,
+    FutureWarning,
+    SyntaxWarning,
+    ImportWarning,
+    RuntimeWarning,
+]
 
 # Apply comprehensive message-based filters
 for pattern in message_patterns:
@@ -38,12 +48,21 @@ for pattern in message_patterns:
         warnings.filterwarnings("ignore", message=pattern, category=category)
 
 # Apply module-based filters for problematic modules
-problematic_modules = ["pkg_resources", "pandas_ta", "setuptools", "distutils", "importlib_metadata", "_distutils_hack"]
+problematic_modules = [
+    "pkg_resources",
+    "pandas_ta",
+    "setuptools",
+    "distutils",
+    "importlib_metadata",
+    "_distutils_hack",
+]
 for module_name in problematic_modules:
     for category in warning_categories:
         warnings.filterwarnings("ignore", category=category, module=module_name)
         warnings.filterwarnings("ignore", category=category, module=f"{module_name}.*")
-        warnings.filterwarnings("ignore", category=category, module=f".*{module_name}.*")
+        warnings.filterwarnings(
+            "ignore", category=category, module=f".*{module_name}.*"
+        )
 
 # Global catch-all filters - be very aggressive
 warnings.filterwarnings("ignore", message=r".*pkg_resources.*")
@@ -52,23 +71,24 @@ warnings.filterwarnings("ignore", module=r".*pandas_ta.*")
 
 # Use simplefilter to ignore by category globally
 warnings.simplefilter("ignore", UserWarning)
-warnings.simplefilter("ignore", DeprecationWarning) 
+warnings.simplefilter("ignore", DeprecationWarning)
 warnings.simplefilter("ignore", SyntaxWarning)
 
+# Standard library imports
 import asyncio
 import logging
 import signal
-import sys
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
+# Third-party imports
 import click
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-# Import bot components
+# Local imports
 from .config import Settings, create_settings
 from .data.dominance import DominanceCandleBuilder, DominanceDataProvider
 from .data.market import MarketDataProvider

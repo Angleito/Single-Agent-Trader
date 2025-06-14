@@ -242,26 +242,30 @@ class StartupValidator:
                 # Check if API key is available
                 if not self.settings.llm.openai_api_key:
                     return {"success": False, "error": "OpenAI API key not configured"}
-                
+
                 # Get the secret value properly
                 api_key = self.settings.llm.openai_api_key.get_secret_value()
-                headers = {
-                    "Authorization": f"Bearer {api_key}"
-                }
+                headers = {"Authorization": f"Bearer {api_key}"}
                 response = requests.get(
                     "https://api.openai.com/v1/models", headers=headers, timeout=10
                 )
-                
+
                 if response.status_code == 200:
                     return {"success": True, "error": None}
                 else:
-                    return {"success": False, "error": f"HTTP {response.status_code}: {response.text[:200]}"}
+                    return {
+                        "success": False,
+                        "error": f"HTTP {response.status_code}: {response.text[:200]}",
+                    }
 
             elif self.settings.llm.provider == "anthropic" and requests:
                 # Check if API key is available
                 if not self.settings.llm.anthropic_api_key:
-                    return {"success": False, "error": "Anthropic API key not configured"}
-                
+                    return {
+                        "success": False,
+                        "error": "Anthropic API key not configured",
+                    }
+
                 api_key = self.settings.llm.anthropic_api_key.get_secret_value()
                 headers = {"x-api-key": api_key}
                 # Anthropic doesn't have a simple health check, so we'll just verify key format
@@ -271,11 +275,14 @@ class StartupValidator:
                 response = requests.get(
                     f"{self.settings.llm.ollama_base_url}/api/tags", timeout=10
                 )
-                
+
                 if response.status_code == 200:
                     return {"success": True, "error": None}
                 else:
-                    return {"success": False, "error": f"HTTP {response.status_code}: {response.text[:200]}"}
+                    return {
+                        "success": False,
+                        "error": f"HTTP {response.status_code}: {response.text[:200]}",
+                    }
 
             else:
                 return {
@@ -1053,10 +1060,11 @@ def setup_configuration(
     config_file: str | None = None,
 ) -> Settings:
     """Setup configuration with environment and profile detection."""
-    
+
     # Ensure .env file is loaded first
     try:
         from dotenv import load_dotenv
+
         if Path(".env").exists():
             load_dotenv()
             logger.debug("Loaded .env file")
@@ -1081,7 +1089,7 @@ def setup_configuration(
             profile = TradingProfile(profile_var)
         except ValueError:
             logger.warning(
-                f"Unknown trading profile '{profile_var}', " f"defaulting to moderate"
+                f"Unknown trading profile '{profile_var}', defaulting to moderate"
             )
             profile = TradingProfile.MODERATE
 

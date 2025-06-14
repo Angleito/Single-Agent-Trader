@@ -23,8 +23,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from ..utils import ta
 
+from ..utils import ta
 from .rsimfi import RSIMFIIndicator
 from .wavetrend import WaveTrend
 

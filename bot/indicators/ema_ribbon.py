@@ -13,6 +13,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+
 from ..utils import ta
 
 logger = logging.getLogger(__name__)
