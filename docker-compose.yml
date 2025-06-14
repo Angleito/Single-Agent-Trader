@@ -17,6 +17,7 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONWARNINGS=ignore::UserWarning,ignore::DeprecationWarning,ignore::SyntaxWarning,ignore::FutureWarning
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - DRY_RUN=true
       - SYMBOL=BTC-USD

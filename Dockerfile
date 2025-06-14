@@ -2,7 +2,7 @@
 # Optimized for macOS with OrbStack
 
 # Build stage
-FROM python:3.12-slim as builder
+FROM python:3.12-slim AS builder
 
 # Build arguments
 ARG BUILD_DATE
@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Poetry
 ENV POETRY_HOME="/opt/poetry" \
-    POETRY_VENV_IN_PROJECT=1 \
+    POETRY_VENV_IN_PROJECT=true \
     POETRY_NO_INTERACTION=1 \
     POETRY_CACHE_DIR=/tmp/poetry_cache
 RUN curl -sSL https://install.python-poetry.org | python3 - --version=${POETRY_VERSION}
@@ -38,15 +38,15 @@ WORKDIR /app
 COPY pyproject.toml poetry.lock* ./
 
 # Install dependencies and ensure venv is in project
-RUN poetry install --only=main --no-root \
+RUN poetry config virtualenvs.in-project true \
+    && poetry install --only=main --no-root \
     && poetry run pip list \
     && ls -la /app/ \
     && find /app -name ".venv" -type d \
-    && find /root -name "*trading*" -type d 2>/dev/null || true \
     && rm -rf $POETRY_CACHE_DIR
 
 # Production stage
-FROM python:3.12-slim as production
+FROM python:3.12-slim AS production
 
 # Copy build arguments
 ARG BUILD_DATE
@@ -57,7 +57,7 @@ ARG VERSION=0.1.0
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/app/.venv/bin:$PATH" \
-    PYTHONPATH="/app:$PYTHONPATH" \
+    PYTHONPATH="/app" \
     APP_VERSION=${VERSION}
 
 # Install runtime dependencies

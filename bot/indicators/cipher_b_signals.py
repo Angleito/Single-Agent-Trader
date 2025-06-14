@@ -528,7 +528,7 @@ class CipherBSignals:
             df_stoch = self.stoch_rsi.calculate(df.copy())
 
             # Calculate RSI
-            import pandas_ta as ta
+            from ..utils import ta
 
             rsi = ta.rsi(df["close"], length=self.rsi_length)
 

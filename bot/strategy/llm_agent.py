@@ -50,7 +50,12 @@ class LLMAgent:
         """
         self.model_provider = model_provider or settings.llm.provider
         self.model_name = model_name or settings.llm.model_name
-        self.temperature = settings.llm.temperature
+        
+        # o3 models don't support temperature parameter - must be None or 1.0
+        if self.model_name.startswith("o3"):
+            self.temperature = None  # No temperature for o3 models
+        else:
+            self.temperature = settings.llm.temperature
 
         # LangChain components
         self._model = None
@@ -219,7 +224,7 @@ Instructions:
                     raise ValueError("OpenAI API key not configured")
 
                 # Base kwargs required for any OpenAI chat completion
-                model_kwargs = {
+                base_kwargs = {
                     "model": self.model_name,
                     "api_key": settings.llm.openai_api_key.get_secret_value(),
                 }
@@ -227,19 +232,22 @@ Instructions:
                 # o3 family models don't support most parameters, only pass essentials
                 if self.model_name.startswith("o3"):
                     # o3 models only support basic parameters - no temperature, top_p, penalties
-                    model_kwargs["max_tokens"] = settings.llm.max_tokens
+                    # For o3 models, pass max_completion_tokens directly in model_kwargs to avoid LangChain warning
+                    base_kwargs["model_kwargs"] = {
+                        "max_completion_tokens": settings.llm.max_tokens
+                    }
                     logger.info(
                         "Initializing OpenAI o3 model with minimal parameters (no temperature/penalties)"
                     )
                 else:
                     # Non-o3 models support full parameter set
-                    model_kwargs["temperature"] = self.temperature
-                    model_kwargs["max_tokens"] = settings.llm.max_tokens
-                    model_kwargs["top_p"] = settings.llm.top_p
-                    model_kwargs["frequency_penalty"] = settings.llm.frequency_penalty
-                    model_kwargs["presence_penalty"] = settings.llm.presence_penalty
+                    base_kwargs["temperature"] = self.temperature
+                    base_kwargs["max_tokens"] = settings.llm.max_tokens
+                    base_kwargs["top_p"] = settings.llm.top_p
+                    base_kwargs["frequency_penalty"] = settings.llm.frequency_penalty
+                    base_kwargs["presence_penalty"] = settings.llm.presence_penalty
 
-                self._model = ChatOpenAI(**model_kwargs)
+                self._model = ChatOpenAI(**base_kwargs)
 
             elif self.model_provider == "ollama":
                 # TODO: Implement Ollama support
@@ -699,10 +707,13 @@ Instructions:
                     else None
                 )
 
+                # For o3 models, don't pass temperature to logging
+                log_temperature = self.temperature if not self.model_name.startswith("o3") else None
+                
                 request_id = self._completion_logger.log_completion_request(
                     prompt=formatted_prompt,
                     model=self.model_name,
-                    temperature=self.temperature,
+                    temperature=log_temperature,
                     max_tokens=settings.llm.max_tokens,
                     market_context=market_context,
                 )
@@ -911,7 +922,7 @@ Instructions:
         status = {
             "model_provider": self.model_provider,
             "model_name": self.model_name,
-            "temperature": self.temperature,
+            "temperature": self.temperature if self.temperature is not None else "N/A (o3 model)",
             "llm_available": self._chain is not None,
             "prompt_loaded": self._prompt_template is not None,
             "completion_logging_enabled": settings.llm.enable_completion_logging,

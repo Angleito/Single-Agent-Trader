@@ -128,7 +128,7 @@ class ChatCompletionLogger:
         self,
         prompt: str,
         model: str,
-        temperature: float,
+        temperature: float | None,
         max_tokens: int,
         market_context: dict[str, Any] | None = None,
         request_id: str | None = None,
@@ -159,12 +159,15 @@ class ChatCompletionLogger:
             "request_id": request_id,
             "completion_number": self._completion_count,
             "model": model,
-            "temperature": temperature,
             "max_tokens": max_tokens,
             "prompt_length": len(prompt),
             "prompt_preview": prompt[:500] + "..." if len(prompt) > 500 else prompt,
             "market_context": market_context or {},
         }
+        
+        # Only include temperature if it's not None (o3 models don't support it)
+        if temperature is not None:
+            log_entry["temperature"] = temperature
 
         self.logger.info(f"LLM_REQUEST: {json.dumps(log_entry, cls=DecimalEncoder)}")
         return request_id
@@ -395,8 +398,12 @@ class LangChainCallbackHandler(BaseCallbackHandler):
         if prompts and self.completion_logger:
             # Extract model info from serialized data
             model = serialized.get("kwargs", {}).get("model_name", "unknown")
-            temperature = serialized.get("kwargs", {}).get("temperature", 0.0)
+            temperature = serialized.get("kwargs", {}).get("temperature")
             max_tokens = serialized.get("kwargs", {}).get("max_tokens", 0)
+            
+            # o3 models don't support temperature - set to None for logging
+            if model.startswith("o3") and temperature is not None:
+                temperature = None
 
             # Log the request
             self._current_request_id = self.completion_logger.log_completion_request(

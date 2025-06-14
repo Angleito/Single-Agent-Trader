@@ -119,7 +119,7 @@ class TradingSettings(BaseModel):
 class LLMSettings(BaseModel):
     """LLM and AI configuration."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, protected_namespaces=())
 
     # Provider Configuration
     provider: Literal["openai", "anthropic", "ollama"] = Field(
@@ -1043,6 +1043,16 @@ def create_settings(
     env_file: str | None = None, profile: TradingProfile | None = None, **overrides: Any
 ) -> Settings:
     """Factory function to create settings with optional overrides."""
+    # Ensure .env file is loaded
+    try:
+        from dotenv import load_dotenv
+        env_path = env_file or ".env"
+        if Path(env_path).exists():
+            load_dotenv(env_path)
+    except ImportError:
+        # dotenv not available, rely on pydantic-settings
+        pass
+    
     # Set environment file if provided
     if env_file:
         os.environ.setdefault("ENV_FILE", env_file)

@@ -1,0 +1,73 @@
+import { defineConfig } from 'vite'
+
+export default defineConfig({
+  // Development server configuration
+  server: {
+    port: 3000,
+    host: true, // Allow external connections
+    cors: true,
+    proxy: {
+      // Proxy API calls to backend within Docker network
+      '/api': {
+        target: 'http://dashboard-backend:8000',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/ws': {
+        target: 'ws://dashboard-backend:8000',
+        ws: true,
+        changeOrigin: true
+      }
+    }
+  },
+
+  // Build configuration
+  build: {
+    target: 'es2020',
+    outDir: 'dist',
+    assetsDir: 'assets',
+    minify: 'esbuild', // Use esbuild for faster builds
+    sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Separate vendor libraries
+          vendor: ['ws']
+        }
+      }
+    },
+    // Optimize chunk size
+    chunkSizeWarningLimit: 1000
+  },
+
+  // Development optimizations
+  optimizeDeps: {
+    include: ['ws'],
+    force: true // Force re-optimize dependencies
+  },
+
+  // Asset handling
+  publicDir: 'public',
+  
+  // Define environment variables available to the app
+  define: {
+    __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '1.0.0'),
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString())
+  },
+
+  // Enable hot module replacement
+  plugins: [],
+
+  // CSS configuration
+  css: {
+    devSourcemap: true
+  },
+
+  // Preview server (for production builds)
+  preview: {
+    port: 4173,
+    host: true,
+    cors: true
+  }
+})

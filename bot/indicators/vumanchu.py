@@ -20,7 +20,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-import pandas_ta as ta
+from ..utils import ta
 
 from .cipher_a_signals import CipherASignals
 from .cipher_b_signals import CipherBSignals

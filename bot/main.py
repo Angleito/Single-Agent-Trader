@@ -1,5 +1,60 @@
 """Main CLI entry point for the AI Trading Bot."""
 
+# CRITICAL: Initialize comprehensive warning suppression before ANY imports
+# This must be the very first code that runs to catch import-time warnings
+import warnings
+import sys
+import os
+
+# Clear any existing warning registry and set up fresh
+warnings.resetwarnings()
+if not hasattr(sys.modules[__name__], '__warningregistry__'):
+    sys.modules[__name__].__warningregistry__ = {}
+
+# Set environment variable to suppress warnings at the Python level
+os.environ['PYTHONWARNINGS'] = 'ignore::UserWarning,ignore::DeprecationWarning,ignore::SyntaxWarning'
+
+# Nuclear option: ignore ALL warnings temporarily during imports
+warnings.filterwarnings("ignore")
+
+# Then apply specific comprehensive filters
+message_patterns = [
+    r".*pkg_resources.*",
+    r".*deprecated.*",
+    r".*slated.*removal.*", 
+    r".*escape sequence.*",
+    r".*setup\.py.*",
+    r".*distutils.*",
+    r".*importlib.*",
+    r".*setuptools.*",
+    r".*pandas_ta.*"
+]
+
+warning_categories = [UserWarning, DeprecationWarning, FutureWarning, SyntaxWarning, ImportWarning, RuntimeWarning]
+
+# Apply comprehensive message-based filters
+for pattern in message_patterns:
+    for category in warning_categories:
+        warnings.filterwarnings("ignore", message=pattern, category=category)
+
+# Apply module-based filters for problematic modules
+problematic_modules = ["pkg_resources", "pandas_ta", "setuptools", "distutils", "importlib_metadata", "_distutils_hack"]
+for module_name in problematic_modules:
+    for category in warning_categories:
+        warnings.filterwarnings("ignore", category=category, module=module_name)
+        warnings.filterwarnings("ignore", category=category, module=f"{module_name}.*")
+        warnings.filterwarnings("ignore", category=category, module=f".*{module_name}.*")
+
+# Global catch-all filters - be very aggressive
+warnings.filterwarnings("ignore", message=r".*pkg_resources.*")
+warnings.filterwarnings("ignore", module=r".*pkg_resources.*")
+warnings.filterwarnings("ignore", module=r".*pandas_ta.*")
+
+# Use simplefilter to ignore by category globally
+warnings.simplefilter("ignore", UserWarning)
+warnings.simplefilter("ignore", DeprecationWarning) 
+warnings.simplefilter("ignore", SyntaxWarning)
+
 import asyncio
 import logging
 import signal
@@ -24,6 +79,7 @@ from .position_manager import PositionManager
 from .risk import RiskManager
 from .strategy.llm_agent import LLMAgent
 from .types import IndicatorData, MarketState, Position, TradeAction
+from .utils import setup_warnings_suppression
 from .validator import TradeValidator
 
 console = Console()
@@ -1054,6 +1110,8 @@ class TradingEngine:
 @click.version_option(version="0.1.0", prog_name="ai-trading-bot")
 def cli() -> None:
     """AI Trading Bot - LangChain-powered crypto futures trading."""
+    # Set up comprehensive warning suppression for third-party libraries
+    setup_warnings_suppression()
     pass
 
 
