@@ -362,7 +362,7 @@ class MarketDataProvider:
         logger.info(
             f"Requesting {expected_candles} candles at {api_granularity} granularity (requested: {granularity})"
         )
-        
+
         # Warn if we're not getting enough data for indicators
         min_required_for_indicators = 100  # VuManChu needs ~80 + buffer
         if expected_candles < min_required_for_indicators:
@@ -410,10 +410,10 @@ class MarketDataProvider:
                 self._cache_timestamps["ohlcv"] = self._last_update
 
                 logger.info(f"Loaded {len(self._ohlcv_cache)} historical candles")
-                
+
                 # Validate we have sufficient data for indicators
                 self._validate_data_sufficiency(len(self._ohlcv_cache))
-                
+
                 return historical_data
 
         except Exception as e:
@@ -1196,7 +1196,7 @@ class MarketDataProvider:
         # RSI+MFI period=60, EMA ribbon max=34, plus buffer
         min_required = 100  # Conservative estimate with buffer
         optimal_required = 200  # Optimal for stable calculations
-        
+
         if candle_count < min_required:
             logger.error(
                 f"Insufficient data for reliable indicator calculations! "

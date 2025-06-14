@@ -92,14 +92,14 @@ class WaveTrend:
         try:
             if series.empty or series.isna().all():
                 return default_threshold
-                
+
             series_std = series.std()
             if pd.isna(series_std) or series_std <= 0:
                 return default_threshold
-                
+
             # Use 5 standard deviations as threshold, with bounds
             adaptive_threshold = min(500, max(50, 5 * series_std))
-            
+
             logger.debug(
                 "Adaptive threshold calculated",
                 extra={
@@ -109,9 +109,9 @@ class WaveTrend:
                     "default_threshold": default_threshold,
                 },
             )
-            
+
             return float(adaptive_threshold)
-            
+
         except Exception as e:
             logger.warning(
                 "Failed to calculate adaptive threshold, using default",
@@ -136,17 +136,17 @@ class WaveTrend:
         try:
             if series.empty or series.isna().all():
                 return 1e-6
-                
+
             series_std = series.std()
             if pd.isna(series_std) or series_std <= 0:
                 return 1e-6
-                
+
             # Use 0.1% of standard deviation as minimum, with bounds
             min_threshold = max(series_std * 0.001, 1e-6)
             min_threshold = min(min_threshold, 1e-3)  # Cap at reasonable maximum
-            
+
             return float(min_threshold)
-            
+
         except Exception:
             return 1e-6
 
@@ -338,7 +338,7 @@ class WaveTrend:
                     "length": ch_len,
                 },
             )
-            
+
             # Validate source data before ESA calculation
             if src.isna().all():
                 logger.error(
@@ -352,13 +352,13 @@ class WaveTrend:
                 return pd.Series(dtype=float, index=src.index), pd.Series(
                     dtype=float, index=src.index
                 )
-            
+
             # Clean source data for calculation
             src_clean = src.ffill().bfill()
             if src_clean.isna().all():
                 # If still all NaN, use the mean value
                 src_clean = src_clean.fillna(src_clean.mean()).fillna(0.0)
-            
+
             try:
                 esa = ta.ema(src_clean, length=ch_len)
             except Exception as e:
@@ -381,7 +381,7 @@ class WaveTrend:
                         "length": ch_len,
                     },
                 )
-            
+
             # Check if pandas_ta returned None or too many NaN values
             nan_threshold = len(src_clean) * 0.8  # If more than 80% NaN, use fallback
             if esa is None or (hasattr(esa, 'isna') and esa.isna().sum() > nan_threshold):
@@ -394,7 +394,7 @@ class WaveTrend:
                     },
                 )
                 esa = self._calculate_ema_fallback(src_clean, ch_len)
-                
+
             if esa is None:
                 logger.error(
                     "Failed to calculate ESA with all methods",
@@ -422,11 +422,11 @@ class WaveTrend:
                     "length": ch_len,
                 },
             )
-            
+
             # Calculate deviation with robust handling
             deviation = abs(src_clean - esa)
             deviation = deviation.fillna(0.0)
-            
+
             try:
                 de = ta.ema(deviation, length=ch_len)
             except Exception as e:
@@ -449,7 +449,7 @@ class WaveTrend:
                         "length": ch_len,
                     },
                 )
-            
+
             # Check if pandas_ta returned None or too many NaN values
             if de is None or (hasattr(de, 'isna') and de.isna().sum() > nan_threshold):
                 logger.warning(
@@ -461,7 +461,7 @@ class WaveTrend:
                     },
                 )
                 de = self._calculate_ema_fallback(deviation, ch_len)
-                
+
             if de is None:
                 logger.error(
                     "Failed to calculate DE with all methods",
@@ -479,7 +479,7 @@ class WaveTrend:
             de = pd.Series(de, index=src.index, dtype="float64")
             de = de.ffill().bfill().fillna(1e-6)
             de = np.where(np.isinf(de), 1e-6, de)
-            
+
             # Ensure DE is positive (it should be by definition, but safety check)
             de = np.maximum(de, 1e-8)
 
@@ -501,46 +501,49 @@ class WaveTrend:
                 "Calculating CI (Commodity Channel Index)",
                 extra={"indicator": "wavetrend", "step": "ci_calculation"},
             )
-            
+
             # Robust handling of DE values to prevent division issues
             min_de_threshold = self._get_safe_minimum_threshold(de)
-            
+
             # Replace zeros and very small values
             de_safe = de.copy()
             # Ensure de_safe is a pandas Series
             if not isinstance(de_safe, pd.Series):
                 de_safe = pd.Series(de_safe, index=src.index)
-            
+
             small_de_mask = (de_safe <= min_de_threshold) | de_safe.isna()
             de_safe.loc[small_de_mask] = min_de_threshold
-            
+
             # Ensure no infinite or NaN values in denominator
             de_safe = de_safe.fillna(min_de_threshold)
-            de_safe = np.where(np.isinf(de_safe), min_de_threshold, de_safe)
-            
+            de_safe_values = np.where(np.isinf(de_safe), min_de_threshold, de_safe)
+            de_safe = pd.Series(de_safe_values, index=de_safe.index)
+
             # Calculate CI with improved numerical stability
             numerator = src_clean - esa
             denominator = 0.015 * de_safe
-            
+
             # Additional safety check for denominator
-            denominator = np.where(denominator == 0, 0.015 * min_de_threshold, denominator)
-            
+            denominator_values = np.where(denominator == 0, 0.015 * min_de_threshold, denominator)
+            denominator = pd.Series(denominator_values, index=src.index)
+
             ci = numerator / denominator
             ci = pd.Series(ci, index=src.index, dtype="float64")
-            
+
             # Handle any remaining NaN or infinite values
             ci = ci.fillna(0.0)
-            ci = np.where(np.isinf(ci), 0.0, ci)
-            
+            ci_values = np.where(np.isinf(ci), 0.0, ci)
+            ci = pd.Series(ci_values, index=ci.index, dtype="float64")
+
             # Apply adaptive clipping based on data characteristics
             clip_threshold = self._calculate_adaptive_threshold(ci, default_threshold=100.0)
             ci = ci.clip(-clip_threshold, clip_threshold)
-            
+
             # Final validation
             ci_nan_count = ci.isna().sum()
             ci_inf_count = np.isinf(ci).sum()
             extreme_values = (np.abs(ci) > 1000).sum()
-            
+
             if ci_nan_count > 0 or ci_inf_count > 0:
                 logger.warning(
                     "Invalid CI values detected after safety measures",
@@ -557,7 +560,7 @@ class WaveTrend:
                 # Force clean any remaining invalid values
                 ci = ci.fillna(0.0)
                 ci = np.where(np.isinf(ci), 0.0, ci)
-            
+
             # Log statistics for monitoring
             if len(ci) > 0:
                 logger.debug(
@@ -584,7 +587,7 @@ class WaveTrend:
                     "length": avg_len,
                 },
             )
-            
+
             # Validate CI input before TCI calculation
             if ci.isna().all():
                 logger.error(
@@ -598,10 +601,10 @@ class WaveTrend:
                 return pd.Series(dtype=float, index=src.index), pd.Series(
                     dtype=float, index=src.index
                 )
-            
+
             # Replace any remaining NaN values in CI with forward/backward fill
             ci_clean = ci.ffill().bfill().fillna(0.0)
-            
+
             try:
                 tci = ta.ema(ci_clean, length=avg_len)
             except Exception as e:
@@ -624,7 +627,7 @@ class WaveTrend:
                         "length": avg_len,
                     },
                 )
-            
+
             # Check if pandas_ta returned None or too many NaN values
             tci_nan_threshold = len(ci_clean) * 0.8  # If more than 80% NaN, use fallback
             if tci is None or (hasattr(tci, 'isna') and tci.isna().sum() > tci_nan_threshold):
@@ -637,7 +640,7 @@ class WaveTrend:
                     },
                 )
                 tci = self._calculate_ema_fallback(ci_clean, avg_len)
-                
+
             if tci is None:
                 logger.error(
                     "Failed to calculate TCI with all methods",
@@ -654,8 +657,9 @@ class WaveTrend:
             # Ensure TCI is properly formatted and clean
             tci = pd.Series(tci, index=src.index, dtype="float64")
             tci = tci.fillna(0.0)
-            tci = np.where(np.isinf(tci), 0.0, tci)
-            
+            tci_values = np.where(np.isinf(tci), 0.0, tci)
+            tci = pd.Series(tci_values, index=tci.index, dtype="float64")
+
             # Apply reasonable bounds to TCI
             tci = tci.clip(-clip_threshold, clip_threshold)
 
@@ -671,7 +675,7 @@ class WaveTrend:
                     "length": ma_length,
                 },
             )
-            
+
             # Validate WT1 input before WT2 calculation
             if wt1.isna().all():
                 logger.error(
@@ -685,10 +689,10 @@ class WaveTrend:
                 return pd.Series(dtype=float, index=src.index), pd.Series(
                     dtype=float, index=src.index
                 )
-            
+
             # Clean WT1 for calculation
             wt1_clean = wt1.ffill().bfill().fillna(0.0)
-            
+
             try:
                 wt2 = ta.sma(wt1_clean, length=ma_length)
             except Exception as e:
@@ -711,7 +715,7 @@ class WaveTrend:
                         "length": ma_length,
                     },
                 )
-            
+
             # Check if pandas_ta returned None or too many NaN values
             wt2_nan_threshold = len(wt1_clean) * 0.8  # If more than 80% NaN, use fallback
             if wt2 is None or (hasattr(wt2, 'isna') and wt2.isna().sum() > wt2_nan_threshold):
@@ -724,13 +728,13 @@ class WaveTrend:
                     },
                 )
                 wt2 = self._calculate_sma_fallback(wt1_clean, ma_length)
-                
+
             if wt2 is None:
                 logger.error(
                     "Failed to calculate WT2 with all methods",
                     extra={
                         "indicator": "wavetrend",
-                        "error_type": "wt2_calculation_failed", 
+                        "error_type": "wt2_calculation_failed",
                         "ma_length": ma_length,
                     },
                 )
@@ -741,8 +745,9 @@ class WaveTrend:
             # Ensure WT2 is properly formatted and clean
             wt2 = pd.Series(wt2, index=src.index, dtype="float64")
             wt2 = wt2.fillna(0.0)
-            wt2 = np.where(np.isinf(wt2), 0.0, wt2)
-            
+            wt2_values = np.where(np.isinf(wt2), 0.0, wt2)
+            wt2 = pd.Series(wt2_values, index=wt2.index, dtype="float64")
+
             # Apply reasonable bounds to WT2
             wt2 = wt2.clip(-clip_threshold, clip_threshold)
 

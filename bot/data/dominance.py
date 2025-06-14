@@ -61,7 +61,7 @@ class DominanceDataProvider:
     - Caching with configurable TTL
     - High-frequency data collection support (30-second intervals)
     """
-    
+
     # Class variable to track all instances for cleanup
     _instances: list["DominanceDataProvider"] = []
     _cleanup_registered = False
@@ -105,7 +105,7 @@ class DominanceDataProvider:
 
         # Register instance for cleanup
         DominanceDataProvider._instances.append(self)
-        
+
         # Register atexit handler once
         if not DominanceDataProvider._cleanup_registered:
             DominanceDataProvider._cleanup_registered = True
@@ -442,24 +442,24 @@ class DominanceDataProvider:
         try:
             # Filter out None values and validate data before DataFrame creation
             valid_data = [
-                (i, d) for i, d in enumerate(self._dominance_cache) 
+                (i, d) for i, d in enumerate(self._dominance_cache)
                 if d.stablecoin_dominance is not None and not pd.isna(d.stablecoin_dominance)
             ]
-            
+
             if len(valid_data) < 20:
                 logger.warning(f"Insufficient valid dominance data for trend calculation: {len(valid_data)} valid points out of {len(self._dominance_cache)} total")
                 return
-            
+
             # Extract only valid dominance values
             dominance_values = [d[1].stablecoin_dominance for d in valid_data]
-            
+
             # Ensure all values are numeric
             dominance_values = [float(val) for val in dominance_values if isinstance(val, (int, float)) and not pd.isna(val)]
-            
+
             if len(dominance_values) < 20:
                 logger.warning(f"Insufficient numeric dominance data after cleaning: {len(dominance_values)} values")
                 return
-            
+
             # Create DataFrame with clean data
             df = pd.DataFrame({"dominance": dominance_values})
 
@@ -487,7 +487,7 @@ class DominanceDataProvider:
                 latest.dominance_rsi = (
                     float(df["rsi"].iloc[-1]) if not pd.isna(df["rsi"].iloc[-1]) else None
                 )
-                
+
         except Exception as e:
             logger.error(f"Error calculating dominance trend indicators: {e}")
             # Don't let trend calculation failures break the system

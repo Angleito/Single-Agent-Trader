@@ -130,7 +130,7 @@ class EMAribbon:
 
         max_length = max(self.lengths)
         min_data_points = max_length * 2  # Require 2x the longest EMA for proper convergence
-        
+
         if len(df) < min_data_points:
             logger.warning(
                 "Insufficient data for reliable EMA ribbon calculation",
@@ -193,12 +193,12 @@ class EMAribbon:
                     valid_count = (~ema_values.isna()).sum()
                     total_count = len(ema_values)
                     valid_percentage = (valid_count / total_count) * 100 if total_count > 0 else 0
-                    
+
                     # Calculate expected convergence point for this EMA length
                     convergence_point = min(length * 3, total_count)  # EMAs typically converge after 3x their period
                     expected_valid_from_convergence = max(0, total_count - convergence_point)
                     expected_valid_percentage = (expected_valid_from_convergence / total_count) * 100 if total_count > 0 else 0
-                    
+
                     # Only warn if valid percentage is significantly below expected
                     if valid_percentage < max(50.0, expected_valid_percentage * 0.8):  # At least 50% or 80% of expected
                         logger.warning(
@@ -348,7 +348,7 @@ class EMAribbon:
                 result["ribbon_strength"] = (
                     ema_spread / close_safe * 100
                 )  # As percentage
-                
+
                 # Handle flat market conditions
                 low_variance_mask = ema_spread < (result["close"] * 1e-6)  # Less than 0.0001% of price
                 if low_variance_mask.sum() > 0:
@@ -679,7 +679,7 @@ class EMAribbon:
                 extra={"indicator": "ema_ribbon", "step": "overall_signal"},
             )
             result = self._calculate_overall_signal(result)
-            
+
             # Handle flat market conditions
             logger.debug(
                 "Step 7: Handling flat market conditions",
@@ -910,7 +910,7 @@ class EMAribbon:
 
         max_length = max(self.lengths)
         min_recommended = max_length * 2  # Recommend 2x for good convergence
-        
+
         if len(df) < max_length:
             return (
                 False,
@@ -1163,19 +1163,19 @@ class EMAribbon:
             DataFrame with flat market conditions handled
         """
         result = df.copy()
-        
+
         if "close" not in result.columns:
             return result
-            
+
         # Detect flat market periods
         price_changes = result["close"].pct_change().abs()
         flat_threshold = 1e-5  # 0.001% change threshold
         flat_mask = price_changes < flat_threshold
-        
+
         # Count consecutive flat periods
         consecutive_flat = flat_mask.groupby((~flat_mask).cumsum()).cumsum()
         long_flat_mask = consecutive_flat > 10  # More than 10 consecutive flat periods
-        
+
         if long_flat_mask.sum() > 0:
             logger.debug(
                 "Long flat market periods detected in EMA ribbon - suppressing signals",
@@ -1185,7 +1185,7 @@ class EMAribbon:
                     "total_periods": len(result),
                 },
             )
-            
+
             # Suppress signals during flat periods
             signal_columns = [
                 "long_ema_signal", "short_ema_signal", "ema_crossover_signal",
@@ -1193,12 +1193,12 @@ class EMAribbon:
                 "blue_triangle_up", "blue_triangle_down", "triangle_signal",
                 "ribbon_overall_signal"
             ]
-            
+
             for col in signal_columns:
                 if col in result.columns:
                     if result[col].dtype == bool:
                         result.loc[long_flat_mask, col] = False
                     else:
                         result.loc[long_flat_mask, col] = 0
-                        
+
         return result

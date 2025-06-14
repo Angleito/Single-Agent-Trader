@@ -212,14 +212,14 @@ class CipherA:
         if df.empty:
             logger.error("Cannot calculate Cipher A indicators on empty DataFrame")
             return pd.DataFrame()
-        
+
         # Check for required columns
         required_cols = ['open', 'high', 'low', 'close', 'volume']
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
             logger.error(f"Missing required columns for Cipher A calculation: {missing_cols}")
             return df.copy()
-        
+
         # Check for sufficient data
         min_length = (
             max(
@@ -256,12 +256,12 @@ class CipherA:
                 else:
                     result[col] = pd.Series([default_val] * len(result), index=result.index, dtype='float64')
             return result
-        
+
         # Validate data quality
         close_prices = df['close']
         if close_prices.isna().sum() > len(df) * 0.1:  # More than 10% NaN
             logger.warning(f"High percentage of NaN values in close prices: {close_prices.isna().sum()}/{len(df)}")
-        
+
         # Check for zero or negative prices
         invalid_prices = (close_prices <= 0).sum()
         if invalid_prices > 0:
@@ -2562,7 +2562,7 @@ class VuManChuIndicators:
         """
         result = df.copy()
         current_price = df['close'].iloc[-1] if len(df) > 0 else 0.0
-        
+
         fallback_columns = {
             'wt1': 0.0,
             'wt2': 0.0,
@@ -2575,13 +2575,13 @@ class VuManChuIndicators:
             'cipher_a_diamond': False,
             'cipher_a_yellow_cross': False,
         }
-        
+
         for col, default_val in fallback_columns.items():
             if isinstance(default_val, bool):
                 result[col] = pd.Series([default_val] * len(result), index=result.index)
             else:
                 result[col] = pd.Series([default_val] * len(result), index=result.index, dtype='float64')
-        
+
         logger.info("Added Cipher A fallback values due to calculation failure")
         return result
 
@@ -2597,7 +2597,7 @@ class VuManChuIndicators:
         """
         result = df.copy()
         current_price = df['close'].iloc[-1] if len(df) > 0 else 0.0
-        
+
         fallback_columns = {
             'cipher_b_wave': 0.0,
             'cipher_b_money_flow': 50.0,
@@ -2606,12 +2606,12 @@ class VuManChuIndicators:
             'cipher_b_sell_signal': False,
             'cipher_b_gold_signal': False,
         }
-        
+
         for col, default_val in fallback_columns.items():
             if isinstance(default_val, bool):
                 result[col] = pd.Series([default_val] * len(result), index=result.index)
             else:
                 result[col] = pd.Series([default_val] * len(result), index=result.index, dtype='float64')
-        
+
         logger.info("Added Cipher B fallback values due to calculation failure")
         return result

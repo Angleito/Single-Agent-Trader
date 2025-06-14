@@ -10,7 +10,7 @@ import json
 import logging
 import threading
 from collections.abc import Callable
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from enum import Enum
 from pathlib import Path

@@ -418,7 +418,7 @@ class LangChainCallbackHandler(BaseCallbackHandler):
 
             # Extract market context from prompt if available
             market_context = self._extract_market_context_from_prompt(prompts[0])
-            
+
             # Log the request
             self._current_request_id = self.completion_logger.log_completion_request(
                 prompt=prompts[0],
@@ -446,7 +446,7 @@ class LangChainCallbackHandler(BaseCallbackHandler):
                             "completion_tokens": raw_usage.get("completion_tokens", 0),
                             "total_tokens": raw_usage.get("total_tokens", 0)
                         }
-                        
+
                         # Handle o3-style response format if available
                         if "completion_tokens_details" in raw_usage:
                             token_usage["completion_tokens_details"] = raw_usage["completion_tokens_details"]
@@ -496,26 +496,26 @@ class LangChainCallbackHandler(BaseCallbackHandler):
             Dictionary with market context data or None if extraction fails
         """
         import re
-        
+
         try:
             context = {}
-            
+
             # Extract basic market info
             symbol_match = re.search(r"Symbol:\s*(\S+)", prompt)
             if symbol_match:
                 context["symbol"] = symbol_match.group(1)
-                
+
             price_match = re.search(r"Current Price:\s*\$?([\d,.]+)", prompt)
             if price_match:
                 try:
                     context["current_price"] = float(price_match.group(1).replace(",", ""))
                 except ValueError:
                     pass
-                    
+
             position_match = re.search(r"Current Position:\s*([^\n]+)", prompt)
             if position_match:
                 context["current_position"] = position_match.group(1).strip()
-            
+
             # Extract technical indicators
             rsi_match = re.search(r"RSI:\s*([\d.]+)", prompt)
             if rsi_match:
@@ -523,21 +523,21 @@ class LangChainCallbackHandler(BaseCallbackHandler):
                     context["rsi"] = float(rsi_match.group(1))
                 except ValueError:
                     pass
-                    
+
             cipher_a_match = re.search(r"Cipher A Trend Dot:\s*([\d.-]+)", prompt)
             if cipher_a_match:
                 try:
                     context["cipher_a_dot"] = float(cipher_a_match.group(1))
                 except ValueError:
                     pass
-                    
+
             cipher_b_wave_match = re.search(r"Cipher B Wave:\s*([\d.-]+)", prompt)
             if cipher_b_wave_match:
                 try:
                     context["cipher_b_wave"] = float(cipher_b_wave_match.group(1))
                 except ValueError:
                     pass
-            
+
             # Extract dominance data
             dominance_match = re.search(r"Total Stablecoin Dominance:\s*([\d.]+)%", prompt)
             if dominance_match:
@@ -545,14 +545,14 @@ class LangChainCallbackHandler(BaseCallbackHandler):
                     context["stablecoin_dominance"] = float(dominance_match.group(1))
                 except ValueError:
                     pass
-                    
+
             sentiment_match = re.search(r"Market Sentiment:\s*(\w+)", prompt)
             if sentiment_match:
                 context["market_sentiment"] = sentiment_match.group(1)
-            
+
             # Only return context if we extracted at least some data
             return context if context else None
-            
+
         except Exception as e:
             self.logger.warning(f"Failed to extract market context from prompt: {e}")
             return None

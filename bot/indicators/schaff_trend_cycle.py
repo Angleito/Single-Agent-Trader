@@ -204,7 +204,7 @@ class SchaffTrendCycle:
             min_beta_threshold = 1e-8  # Minimum threshold for beta values
             zero_beta_mask = beta.abs() < min_beta_threshold
             zero_beta_count = zero_beta_mask.sum()
-            
+
             if zero_beta_count > 0:
                 logger.debug(
                     "Small beta values detected in STC calculation - applying threshold",
@@ -254,7 +254,7 @@ class SchaffTrendCycle:
             min_zeta_threshold = 1e-8  # Minimum threshold for zeta values
             zero_zeta_mask = zeta.abs() < min_zeta_threshold
             zero_zeta_count = zero_zeta_mask.sum()
-            
+
             if zero_zeta_count > 0:
                 logger.debug(
                     "Small zeta values detected in STC calculation - applying threshold",
@@ -284,7 +284,7 @@ class SchaffTrendCycle:
             # stcReturn = eta
             # stcReturn := na(stcReturn[1]) ? stcReturn : stcReturn[1] + tcfactor * (eta - stcReturn[1])
             stc_return = self._apply_recursive_smoothing(eta, factor)
-            
+
             # Handle flat market conditions
             stc_return = self._handle_flat_market_conditions(stc_return)
 
@@ -373,9 +373,9 @@ class SchaffTrendCycle:
         """
         if series.empty:
             return series.copy()
-            
+
         result = pd.Series(dtype=float, index=series.index)
-        
+
         # Handle flat market conditions by checking for minimal variance
         series_variance = series.var()
         if pd.isna(series_variance) or series_variance < 1e-10:
@@ -1046,16 +1046,16 @@ class SchaffTrendCycle:
         """
         if series.empty:
             return series
-            
+
         # Detect flat periods (very small changes)
         series_changes = series.diff().abs()
         flat_threshold = 1e-6  # Very small change threshold
         flat_mask = series_changes < flat_threshold
-        
+
         # Count consecutive flat periods
         consecutive_flat = flat_mask.groupby((~flat_mask).cumsum()).cumsum()
         long_flat_mask = consecutive_flat > 10  # More than 10 consecutive flat periods
-        
+
         if long_flat_mask.sum() > 0:
             logger.debug(
                 "Long flat market periods detected in STC - applying fallback values",
@@ -1069,5 +1069,5 @@ class SchaffTrendCycle:
             # Set long flat periods to the default value (neutral)
             series = series.copy()
             series.loc[long_flat_mask] = default_value
-            
+
         return series

@@ -7,7 +7,6 @@ through LLM decision-making to trade execution and position tracking.
 
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import List
 from unittest.mock import AsyncMock, Mock, patch
 
 import numpy as np
@@ -511,7 +510,7 @@ class TestCompleteTradingFlow:
             assert final_action.size_pct <= 20  # Should be capped to reasonable level
             assert "risk" in risk_reason.lower() or "size" in risk_reason.lower()
 
-    def _create_mock_dataframe(self, market_data: List[MarketData]) -> pd.DataFrame:
+    def _create_mock_dataframe(self, market_data: list[MarketData]) -> pd.DataFrame:
         """Convert market data to DataFrame for indicator calculations."""
         data = []
         for candle in market_data:

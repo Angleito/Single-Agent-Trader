@@ -290,7 +290,7 @@ class MCPSettings(BaseModel):
         default=None,
         description="API key for memory server (if required)"
     )
-    
+
     # Memory Configuration
     max_memories_per_query: int = Field(
         default=10,
@@ -310,7 +310,7 @@ class MCPSettings(BaseModel):
         le=365,
         description="Days to retain trading memories"
     )
-    
+
     # Learning Configuration
     enable_pattern_learning: bool = Field(
         default=True,
@@ -334,7 +334,7 @@ class MCPSettings(BaseModel):
         le=0.99,
         description="Decay rate for pattern confidence over time"
     )
-    
+
     # Experience Collection
     track_trade_lifecycle: bool = Field(
         default=True,
