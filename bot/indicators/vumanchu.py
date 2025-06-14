@@ -234,9 +234,28 @@ class CipherA:
 
         if len(df) < min_length:
             logger.warning(
-                f"Insufficient data for Cipher A calculation. Need {min_length}, got {len(df)}"
+                f"Insufficient data for Cipher A calculation. Need {min_length}, got {len(df)}. "
+                f"Returning DataFrame with fallback indicator values."
             )
-            return df.copy()
+            # Return DataFrame with safe fallback values instead of empty calculations
+            result = df.copy()
+            # Add basic fallback columns to prevent downstream errors
+            fallback_columns = {
+                'wt1': 0.0,
+                'wt2': 0.0,
+                'rsi': 50.0,
+                'cipher_a_dot': 0.0,
+                'ema_fast': df['close'].iloc[-1] if len(df) > 0 else 0.0,
+                'ema_slow': df['close'].iloc[-1] if len(df) > 0 else 0.0,
+                'ema_ribbon_bullish': False,
+                'ema_ribbon_bearish': False,
+            }
+            for col, default_val in fallback_columns.items():
+                if isinstance(default_val, bool):
+                    result[col] = pd.Series([default_val] * len(result), index=result.index)
+                else:
+                    result[col] = pd.Series([default_val] * len(result), index=result.index, dtype='float64')
+            return result
         
         # Validate data quality
         close_prices = df['close']
