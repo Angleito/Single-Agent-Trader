@@ -7,14 +7,14 @@ and stores experiences for learning.
 
 import asyncio
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import Any
 from uuid import uuid4
 
 from ..config import settings
 from ..mcp.memory_server import MCPMemoryServer
-from ..types import MarketState, Order, OrderStatus, Position, TradeAction
+from ..types import MarketState, Order, Position, TradeAction
 
 logger = logging.getLogger(__name__)
 
@@ -38,18 +38,18 @@ class ActiveTrade:
 
         # Trade lifecycle tracking
         self.entry_time = datetime.now(UTC)
-        self.exit_time: Optional[datetime] = None
-        self.exit_order: Optional[Order] = None
-        self.exit_price: Optional[Decimal] = None
+        self.exit_time: datetime | None = None
+        self.exit_order: Order | None = None
+        self.exit_price: Decimal | None = None
 
         # Performance tracking
         self.unrealized_pnl: Decimal = Decimal("0")
-        self.realized_pnl: Optional[Decimal] = None
+        self.realized_pnl: Decimal | None = None
         self.max_favorable_excursion: Decimal = Decimal("0")  # Best unrealized PnL
         self.max_adverse_excursion: Decimal = Decimal("0")  # Worst unrealized PnL
 
         # Market snapshots
-        self.market_snapshots: List[Dict[str, Any]] = []
+        self.market_snapshots: list[dict[str, Any]] = []
         self.last_snapshot_time = datetime.now(UTC)
 
 
@@ -66,13 +66,13 @@ class ExperienceManager:
         self.memory_server = memory_server
 
         # Active trade tracking
-        self.active_trades: Dict[str, ActiveTrade] = {}
+        self.active_trades: dict[str, ActiveTrade] = {}
 
         # Pending experiences awaiting trade execution
-        self.pending_experiences: Dict[str, str] = {}  # order_id -> experience_id
+        self.pending_experiences: dict[str, str] = {}  # order_id -> experience_id
 
         # Background task for monitoring trades
-        self._monitor_task: Optional[asyncio.Task] = None
+        self._monitor_task: asyncio.Task | None = None
         self._running = False
 
         logger.info("Initialized experience manager")
@@ -159,7 +159,7 @@ class ExperienceManager:
 
     def start_tracking_trade(
         self, order: Order, trade_action: TradeAction, market_state: MarketState
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Start tracking an executed trade.
 
@@ -203,7 +203,7 @@ class ExperienceManager:
         self,
         position: Position,
         current_price: Decimal,
-        market_state: Optional[MarketState] = None,
+        market_state: MarketState | None = None,
     ) -> None:
         """
         Update progress of active trades.
@@ -262,7 +262,7 @@ class ExperienceManager:
         self,
         exit_order: Order,
         exit_price: Decimal,
-        market_state_at_exit: Optional[MarketState] = None,
+        market_state_at_exit: MarketState | None = None,
     ) -> bool:
         """
         Complete a trade and update its experience with outcome.
@@ -441,7 +441,7 @@ class ExperienceManager:
 
     def _extract_indicators_snapshot(
         self, market_state: MarketState
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Extract key indicators for snapshot."""
         snapshot = {}
 
@@ -472,7 +472,7 @@ class ExperienceManager:
 
         return snapshot
 
-    def get_active_trades_summary(self) -> Dict[str, Any]:
+    def get_active_trades_summary(self) -> dict[str, Any]:
         """Get summary of all active trades."""
         summary = {
             "active_count": len(self.active_trades),

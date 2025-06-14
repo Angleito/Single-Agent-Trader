@@ -7,9 +7,9 @@ and evolves trading parameters based on performance.
 
 import logging
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 from pydantic import BaseModel, Field
@@ -51,7 +51,7 @@ class LearningInsight(BaseModel):
     insight_id: str
     insight_type: str  # "pattern", "correlation", "timing", "risk"
     description: str
-    supporting_evidence: List[str]  # Experience IDs
+    supporting_evidence: list[str]  # Experience IDs
     confidence: float = Field(ge=0.0, le=1.0)
     actionable: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -70,18 +70,18 @@ class SelfImprovementEngine:
         self.memory_server = memory_server
 
         # Pattern performance tracking
-        self.pattern_performance: Dict[str, PatternPerformance] = {}
+        self.pattern_performance: dict[str, PatternPerformance] = {}
 
         # Learned insights
-        self.insights: List[LearningInsight] = []
+        self.insights: list[LearningInsight] = []
 
         # Strategy parameters and their performance
-        self.parameter_performance: Dict[str, List[Tuple[Any, float]]] = defaultdict(
+        self.parameter_performance: dict[str, list[tuple[Any, float]]] = defaultdict(
             list
         )
 
         # Market condition classifiers
-        self.market_conditions: Dict[str, callable] = {
+        self.market_conditions: dict[str, Callable[[Any], bool]] = {
             "trending_up": lambda ind: ind.get("ema_fast", 0) > ind.get("ema_slow", 0),
             "trending_down": lambda ind: ind.get("ema_fast", 0)
             < ind.get("ema_slow", 0),
@@ -96,7 +96,7 @@ class SelfImprovementEngine:
 
         logger.info("Initialized self-improvement engine")
 
-    async def analyze_recent_performance(self, hours: int = 24) -> Dict[str, Any]:
+    async def analyze_recent_performance(self, hours: int = 24) -> dict[str, Any]:
         """
         Analyze recent trading performance and generate insights.
 
@@ -157,8 +157,8 @@ class SelfImprovementEngine:
         return analysis
 
     async def _analyze_patterns(
-        self, experiences: List[TradingExperience]
-    ) -> Dict[str, Dict[str, Any]]:
+        self, experiences: list[TradingExperience]
+    ) -> dict[str, dict[str, Any]]:
         """Analyze pattern performance."""
         pattern_stats = defaultdict(
             lambda: {"count": 0, "successes": 0, "total_pnl": 0.0, "durations": []}
@@ -204,8 +204,8 @@ class SelfImprovementEngine:
         return pattern_performance
 
     def _analyze_market_conditions(
-        self, experiences: List[TradingExperience]
-    ) -> Dict[str, Dict[str, Any]]:
+        self, experiences: list[TradingExperience]
+    ) -> dict[str, dict[str, Any]]:
         """Analyze performance under different market conditions."""
         condition_stats = defaultdict(
             lambda: {"count": 0, "successes": 0, "total_pnl": 0.0}
@@ -247,8 +247,8 @@ class SelfImprovementEngine:
         return condition_performance
 
     async def _generate_adjustments(
-        self, experiences: List[TradingExperience]
-    ) -> List[Dict[str, Any]]:
+        self, experiences: list[TradingExperience]
+    ) -> list[dict[str, Any]]:
         """Generate strategy parameter adjustments based on performance."""
         adjustments = []
 
@@ -275,8 +275,8 @@ class SelfImprovementEngine:
         return adjustments
 
     def _analyze_position_sizing(
-        self, experiences: List[TradingExperience]
-    ) -> Optional[StrategyAdjustment]:
+        self, experiences: list[TradingExperience]
+    ) -> StrategyAdjustment | None:
         """Analyze position sizing effectiveness."""
         # Group by position size ranges
         size_buckets = {"small": (0, 10), "medium": (10, 20), "large": (20, 100)}
@@ -332,8 +332,8 @@ class SelfImprovementEngine:
         return None
 
     def _analyze_leverage_performance(
-        self, experiences: List[TradingExperience]
-    ) -> Optional[StrategyAdjustment]:
+        self, experiences: list[TradingExperience]
+    ) -> StrategyAdjustment | None:
         """Analyze leverage usage and performance."""
         leverage_stats = defaultdict(lambda: {"count": 0, "successes": 0, "pnl": 0})
 
@@ -376,8 +376,8 @@ class SelfImprovementEngine:
         return None
 
     def _analyze_stop_loss_performance(
-        self, experiences: List[TradingExperience]
-    ) -> Optional[StrategyAdjustment]:
+        self, experiences: list[TradingExperience]
+    ) -> StrategyAdjustment | None:
         """Analyze stop loss effectiveness."""
         # Track trades that likely hit stop loss
         stop_loss_hits = 0
@@ -415,8 +415,8 @@ class SelfImprovementEngine:
         return None
 
     def _analyze_timing_patterns(
-        self, experiences: List[TradingExperience]
-    ) -> Optional[StrategyAdjustment]:
+        self, experiences: list[TradingExperience]
+    ) -> StrategyAdjustment | None:
         """Analyze entry and exit timing patterns."""
         # Analyze hold duration vs success
         duration_buckets = {
@@ -465,8 +465,8 @@ class SelfImprovementEngine:
         return None
 
     async def _generate_insights(
-        self, experiences: List[TradingExperience]
-    ) -> List[Dict[str, Any]]:
+        self, experiences: list[TradingExperience]
+    ) -> list[dict[str, Any]]:
         """Generate new learning insights from recent experiences."""
         insights = []
 
@@ -493,8 +493,8 @@ class SelfImprovementEngine:
         return insights
 
     def _find_pattern_correlations(
-        self, experiences: List[TradingExperience]
-    ) -> List[LearningInsight]:
+        self, experiences: list[TradingExperience]
+    ) -> list[LearningInsight]:
         """Find correlations between patterns and outcomes."""
         insights = []
 
@@ -542,8 +542,8 @@ class SelfImprovementEngine:
         return insights
 
     def _identify_market_regimes(
-        self, experiences: List[TradingExperience]
-    ) -> List[LearningInsight]:
+        self, experiences: list[TradingExperience]
+    ) -> list[LearningInsight]:
         """Identify market regime patterns."""
         insights = []
 
@@ -583,8 +583,8 @@ class SelfImprovementEngine:
         return insights
 
     def _analyze_risk_factors(
-        self, experiences: List[TradingExperience]
-    ) -> List[LearningInsight]:
+        self, experiences: list[TradingExperience]
+    ) -> list[LearningInsight]:
         """Analyze risk factors and generate insights."""
         insights = []
 
@@ -648,9 +648,9 @@ class SelfImprovementEngine:
 
     async def get_recommendations_for_market(
         self,
-        current_indicators: Dict[str, float],
-        current_dominance: Optional[Dict[str, float]] = None,
-    ) -> Dict[str, Any]:
+        current_indicators: dict[str, float],
+        current_dominance: dict[str, float] | None = None,
+    ) -> dict[str, Any]:
         """
         Get specific recommendations for current market conditions.
 
@@ -731,7 +731,7 @@ class SelfImprovementEngine:
 
         return recommendations
 
-    def export_learning_report(self) -> Dict[str, Any]:
+    def export_learning_report(self) -> dict[str, Any]:
         """Export a comprehensive learning report."""
         report = {
             "generated_at": datetime.now(UTC).isoformat(),

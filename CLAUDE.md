@@ -83,13 +83,17 @@ docker-compose down
 - **Data Layer** (`bot/data/market.py`): Real-time market data from Coinbase WebSocket/REST
 - **Indicators** (`bot/indicators/vumanchu.py`): VuManChu Cipher A & B indicators
 - **LLM Agent** (`bot/strategy/llm_agent.py`): LangChain-powered trading decisions  
+- **Memory-Enhanced Agent** (`bot/strategy/memory_enhanced_agent.py`): LLM with learning from past trades
+- **MCP Memory Server** (`bot/mcp/memory_server.py`): Persistent memory storage for experiences
+- **Experience Manager** (`bot/learning/experience_manager.py`): Trade lifecycle tracking
+- **Self-Improvement Engine** (`bot/learning/self_improvement.py`): Pattern analysis and strategy optimization
 - **Validator** (`bot/validator.py`): JSON schema validation with fallback to HOLD
 - **Risk Manager** (`bot/risk.py`): Position sizing, leverage control, loss limits
 - **Exchange** (`bot/exchange/coinbase.py`): Coinbase order execution
 - **CLI** (`bot/main.py`): Command-line interface and orchestration
 
 ### Data Flow
-Market Data → Indicators → LLM Agent → Validator → Risk Manager → Exchange
+Market Data → Indicators → LLM Agent (with Memory) → Validator → Risk Manager → Exchange → Experience Tracking → Learning
 
 ### Configuration System
 - Environment variables in `.env` file
@@ -129,16 +133,41 @@ Market Data → Indicators → LLM Agent → Validator → Risk Manager → Exch
 - Backtest coverage on multiple time periods and symbols
 - Use pytest fixtures for consistent test data
 
+### Memory and Learning System (MCP)
+When MCP is enabled, the bot:
+- Stores every trading decision with full market context
+- Tracks trade outcomes from entry to exit
+- Analyzes patterns in successful/failed trades
+- Retrieves similar past experiences before making decisions
+- Generates insights and strategy adjustments based on performance
+- Maintains a persistent memory across bot restarts
+
+To enable memory features:
+1. Set `MCP_ENABLED=true` in your `.env` file
+2. Run `docker-compose up mcp-memory` to start the memory server
+3. The bot will automatically use the memory-enhanced agent
+
+The memory system includes:
+- **TradingExperience**: Complete record of a trade with context and outcome
+- **MemoryQuery**: Similarity-based retrieval of relevant past trades
+- **PatternPerformance**: Statistical tracking of pattern success rates
+- **StrategyAdjustment**: Recommended parameter changes based on analysis
+- **LearningInsight**: Discovered correlations and market behaviors
+
 ## Important Files
 
 - `bot/main.py` - CLI entry point and orchestration
-- `bot/config.py` - Configuration management with pydantic
+- `bot/config.py` - Configuration management with pydantic (includes MCP settings)
 - `bot/strategy/llm_agent.py` - Core AI decision making
+- `bot/strategy/memory_enhanced_agent.py` - Memory-enhanced LLM with learning capabilities
 - `bot/indicators/vumanchu.py` - Custom technical indicators
 - `bot/risk.py` - Risk management and position sizing
 - `bot/validator.py` - JSON schema validation
+- `bot/mcp/memory_server.py` - MCP memory server for persistent learning
+- `bot/learning/experience_manager.py` - Trade lifecycle tracking
+- `bot/learning/self_improvement.py` - Pattern analysis and improvement engine
 - `pyproject.toml` - Poetry dependencies and tool configuration
-- `docker-compose.yml` - Container orchestration
+- `docker-compose.yml` - Container orchestration (includes MCP memory server)
 - `docs/AI_Trading_Bot_Architecture.md` - Detailed architecture guide
 
 ## Environment Setup
@@ -150,6 +179,12 @@ Required environment variables:
 - `DRY_RUN` - Set to "false" for live trading (default: "true")
 - `SYMBOL` - Trading pair (default: "BTC-USD")
 - `LEVERAGE` - Futures leverage (default: 5)
+
+Optional MCP/Learning environment variables:
+- `MCP_ENABLED` - Enable memory and learning features (default: "false")
+- `MCP_SERVER_URL` - MCP memory server URL (default: "http://localhost:8765")
+- `MEM0_API_KEY` - API key for Mem0 if using cloud storage
+- `MCP_MEMORY_RETENTION_DAYS` - Days to retain memories (default: 90)
 
 ## Security Notes
 

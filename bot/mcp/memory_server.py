@@ -12,7 +12,7 @@ import os
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import uuid4
 
 import aiohttp
@@ -34,22 +34,22 @@ class TradingExperience(BaseModel):
     # Market context at decision time
     symbol: str
     price: Decimal
-    market_state_snapshot: Dict[str, Any]  # Serialized MarketState
-    indicators: Dict[str, float]
-    dominance_data: Optional[Dict[str, float]] = None
+    market_state_snapshot: dict[str, Any]  # Serialized MarketState
+    indicators: dict[str, float]
+    dominance_data: dict[str, float] | None = None
 
     # Trading decision
-    decision: Dict[str, Any]  # Serialized TradeAction
+    decision: dict[str, Any]  # Serialized TradeAction
     decision_rationale: str
 
     # Outcome tracking
-    outcome: Optional[Dict[str, Any]] = None  # Filled after trade completion
-    trade_duration_minutes: Optional[float] = None
-    market_reaction: Optional[Dict[str, float]] = None
+    outcome: dict[str, Any] | None = None  # Filled after trade completion
+    trade_duration_minutes: float | None = None
+    market_reaction: dict[str, float] | None = None
 
     # Learning insights
-    learned_insights: Optional[str] = None
-    pattern_tags: List[str] = Field(default_factory=list)
+    learned_insights: str | None = None
+    pattern_tags: list[str] = Field(default_factory=list)
     confidence_score: float = Field(default=0.5, ge=0.0, le=1.0)
 
     class Config:
@@ -59,11 +59,11 @@ class TradingExperience(BaseModel):
 class MemoryQuery(BaseModel):
     """Query parameters for retrieving memories."""
 
-    current_price: Optional[Decimal] = None
-    indicators: Optional[Dict[str, float]] = None
-    dominance_data: Optional[Dict[str, float]] = None
-    market_sentiment: Optional[str] = None
-    pattern_tags: Optional[List[str]] = None
+    current_price: Decimal | None = None
+    indicators: dict[str, float] | None = None
+    dominance_data: dict[str, float] | None = None
+    market_sentiment: str | None = None
+    pattern_tags: list[str] | None = None
 
     max_results: int = Field(default=10, ge=1, le=50)
     min_similarity: float = Field(default=0.7, ge=0.0, le=1.0)
@@ -78,7 +78,7 @@ class MCPMemoryServer:
     based on market similarity and performance outcomes.
     """
 
-    def __init__(self, server_url: Optional[str] = None, api_key: Optional[str] = None):
+    def __init__(self, server_url: str | None = None, api_key: str | None = None):
         """Initialize the MCP memory server connection."""
         self.server_url = server_url or settings.mcp.server_url
         self.api_key = api_key or (
@@ -88,11 +88,11 @@ class MCPMemoryServer:
         )
 
         # Local cache for fast access
-        self.memory_cache: Dict[str, TradingExperience] = {}
-        self.pattern_index: Dict[str, List[str]] = {}  # pattern -> experience_ids
+        self.memory_cache: dict[str, TradingExperience] = {}
+        self.pattern_index: dict[str, list[str]] = {}  # pattern -> experience_ids
 
         # Session for async HTTP requests
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
         self._connected = False
 
         # Local persistence
@@ -148,7 +148,7 @@ class MCPMemoryServer:
         self,
         market_state: MarketState,
         trade_action: TradeAction,
-        additional_context: Optional[Dict[str, Any]] = None,
+        additional_context: dict[str, Any] | None = None,
     ) -> str:
         """
         Store a new trading experience in memory.
@@ -207,7 +207,7 @@ class MCPMemoryServer:
         pnl: Decimal,
         exit_price: Decimal,
         duration_minutes: float,
-        market_data_at_exit: Optional[MarketState] = None,
+        market_data_at_exit: MarketState | None = None,
     ) -> bool:
         """
         Update an experience with its outcome after trade completion.
@@ -276,8 +276,8 @@ class MCPMemoryServer:
         return True
 
     async def query_similar_experiences(
-        self, market_state: MarketState, query_params: Optional[MemoryQuery] = None
-    ) -> List[TradingExperience]:
+        self, market_state: MarketState, query_params: MemoryQuery | None = None
+    ) -> list[TradingExperience]:
         """
         Query for similar past trading experiences.
 
@@ -296,7 +296,7 @@ class MCPMemoryServer:
 
         # Score all experiences
         scored_experiences = []
-        for exp_id, experience in self.memory_cache.items():
+        for _, experience in self.memory_cache.items():
             # Skip experiences without outcomes
             if not experience.outcome:
                 continue
@@ -324,7 +324,7 @@ class MCPMemoryServer:
 
         return results
 
-    async def get_pattern_statistics(self) -> Dict[str, Dict[str, Any]]:
+    async def get_pattern_statistics(self) -> dict[str, dict[str, Any]]:
         """
         Get statistics about identified patterns and their success rates.
 
@@ -357,7 +357,7 @@ class MCPMemoryServer:
 
         return pattern_stats
 
-    def _serialize_market_state(self, market_state: MarketState) -> Dict[str, Any]:
+    def _serialize_market_state(self, market_state: MarketState) -> dict[str, Any]:
         """Serialize MarketState to dictionary."""
         return {
             "symbol": market_state.symbol,
@@ -369,7 +369,7 @@ class MCPMemoryServer:
             "position_size": float(market_state.current_position.size),
         }
 
-    def _serialize_trade_action(self, trade_action: TradeAction) -> Dict[str, Any]:
+    def _serialize_trade_action(self, trade_action: TradeAction) -> dict[str, Any]:
         """Serialize TradeAction to dictionary."""
         return {
             "action": trade_action.action,
@@ -381,7 +381,7 @@ class MCPMemoryServer:
             "rationale": trade_action.rationale,
         }
 
-    def _extract_indicators(self, market_state: MarketState) -> Dict[str, float]:
+    def _extract_indicators(self, market_state: MarketState) -> dict[str, float]:
         """Extract indicator values from market state."""
         indicators = {}
 
@@ -410,7 +410,7 @@ class MCPMemoryServer:
 
     def _extract_dominance_data(
         self, market_state: MarketState
-    ) -> Optional[Dict[str, float]]:
+    ) -> dict[str, float] | None:
         """Extract dominance data from market state."""
         if not market_state.dominance_data:
             return None
@@ -424,7 +424,7 @@ class MCPMemoryServer:
 
     def _identify_patterns(
         self, market_state: MarketState, trade_action: TradeAction
-    ) -> List[str]:
+    ) -> list[str]:
         """Identify market patterns for tagging."""
         patterns = []
 
@@ -468,7 +468,9 @@ class MCPMemoryServer:
 
         return patterns
 
-    def _extract_features(self, market_state: MarketState) -> np.ndarray:
+    def _extract_features(
+        self, market_state: MarketState
+    ) -> np.ndarray[Any, np.dtype[np.float64]]:
         """Extract feature vector from market state for similarity comparison."""
         features = []
 
@@ -520,7 +522,7 @@ class MCPMemoryServer:
 
     def _extract_features_from_experience(
         self, experience: TradingExperience
-    ) -> np.ndarray:
+    ) -> np.ndarray[Any, np.dtype[np.float64]]:
         """Extract feature vector from stored experience."""
         features = []
 
@@ -554,7 +556,10 @@ class MCPMemoryServer:
         return np.array(features)
 
     def _calculate_similarity(
-        self, features1: np.ndarray, features2: np.ndarray, time_weight: float = 0.2
+        self,
+        features1: np.ndarray[Any, np.dtype[np.float64]],
+        features2: np.ndarray[Any, np.dtype[np.float64]],
+        time_weight: float = 0.2,
     ) -> float:
         """Calculate similarity score between two feature vectors."""
         # Cosine similarity for features
@@ -711,7 +716,7 @@ class MCPMemoryServer:
         """Load experiences from local storage into cache."""
         try:
             for file_path in self.local_storage_path.glob("*.json"):
-                with open(file_path, "r") as f:
+                with open(file_path) as f:
                     data = json.load(f)
                     experience = TradingExperience(**data)
                     self.memory_cache[experience.experience_id] = experience
@@ -732,7 +737,7 @@ class MCPMemoryServer:
         for experience in self.memory_cache.values():
             await self._save_experience_local(experience)
 
-    async def cleanup_old_memories(self, days: Optional[int] = None) -> int:
+    async def cleanup_old_memories(self, days: int | None = None) -> int:
         """
         Clean up old memories based on retention policy.
 
@@ -778,7 +783,6 @@ async def main():
     """Main entry point for running the MCP memory server."""
     import uvicorn
     from fastapi import FastAPI, HTTPException
-    from fastapi.responses import JSONResponse
 
     # Create FastAPI app
     app = FastAPI(
@@ -805,7 +809,7 @@ async def main():
     async def store_experience(
         market_state: dict,
         trade_action: dict,
-        additional_context: Optional[dict] = None,
+        additional_context: dict | None = None,
     ):
         """Store a new trading experience."""
         try:
@@ -818,7 +822,7 @@ async def main():
             )
             return {"experience_id": experience_id}
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
     @app.get("/experience/{experience_id}")
     async def get_experience(experience_id: str):
@@ -829,9 +833,7 @@ async def main():
         return experience.dict()
 
     @app.post("/query")
-    async def query_experiences(
-        market_state: dict, query_params: Optional[dict] = None
-    ):
+    async def query_experiences(market_state: dict, query_params: dict | None = None):
         """Query similar experiences."""
         try:
             # Convert and query
@@ -844,7 +846,7 @@ async def main():
                 "experiences": [exp.dict() for exp in experiences],
             }
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
     @app.on_event("shutdown")
     async def shutdown_event():

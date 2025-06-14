@@ -1026,9 +1026,23 @@ class CipherB:
 
         if len(df) < min_length:
             logger.warning(
-                f"Insufficient data for Cipher B calculation. Need {min_length}, got {len(df)}"
+                f"Insufficient data for Cipher B calculation. Need {min_length}, got {len(df)}. "
+                f"Returning DataFrame with fallback indicator values."
             )
-            return df.copy()
+            # Return DataFrame with safe fallback values instead of empty calculations
+            result = df.copy()
+            # Add basic fallback columns to prevent downstream errors
+            fallback_columns = {
+                'cipher_b_wave': 0.0,
+                'cipher_b_money_flow': 50.0,
+                'vwap': df['close'].iloc[-1] if len(df) > 0 else 0.0,
+                'wt1': 0.0,
+                'wt2': 0.0,
+                'rsi': 50.0,
+            }
+            for col, default_val in fallback_columns.items():
+                result[col] = pd.Series([default_val] * len(result), index=result.index, dtype='float64')
+            return result
 
         result = df.copy()
 
@@ -1795,6 +1809,15 @@ class VuManChuIndicators:
             logger.warning("Empty DataFrame provided for indicator calculation")
             return df.copy()
 
+        # Check data sufficiency before starting calculations
+        min_required = 100  # VuManChu indicators need ~80 + buffer
+        if len(df) < min_required:
+            logger.warning(
+                f"Insufficient data for reliable VuManChu calculation. "
+                f"Have {len(df)} candles, need {min_required}. "
+                f"Calculations may be unreliable."
+            )
+
         # Start with original data
         result = df.copy()
 
@@ -1803,11 +1826,21 @@ class VuManChuIndicators:
 
             # Calculate Cipher A with all integrated components
             logger.info("Calculating Cipher A indicators")
-            result = self.cipher_a.calculate(result)
+            try:
+                result = self.cipher_a.calculate(result)
+            except Exception as e:
+                logger.error(f"Cipher A calculation failed: {e}")
+                # Add fallback values for Cipher A
+                result = self._add_cipher_a_fallbacks(result)
 
             # Calculate Cipher B with all integrated components
             logger.info("Calculating Cipher B indicators")
-            result = self.cipher_b.calculate(result)
+            try:
+                result = self.cipher_b.calculate(result)
+            except Exception as e:
+                logger.error(f"Cipher B calculation failed: {e}")
+                # Add fallback values for Cipher B
+                result = self._add_cipher_b_fallbacks(result)
 
             # Add utility indicators
             logger.info("Adding utility indicators")
@@ -2516,3 +2549,69 @@ class VuManChuIndicators:
         except Exception as e:
             logger.error(f"Error generating combined interpretation: {str(e)}")
             return "Error generating signal interpretation."
+
+    def _add_cipher_a_fallbacks(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Add fallback values for Cipher A indicators when calculation fails.
+        
+        Args:
+            df: Input DataFrame
+            
+        Returns:
+            DataFrame with Cipher A fallback values
+        """
+        result = df.copy()
+        current_price = df['close'].iloc[-1] if len(df) > 0 else 0.0
+        
+        fallback_columns = {
+            'wt1': 0.0,
+            'wt2': 0.0,
+            'rsi': 50.0,
+            'cipher_a_dot': 0.0,
+            'ema_fast': current_price,
+            'ema_slow': current_price,
+            'ema_ribbon_bullish': False,
+            'ema_ribbon_bearish': False,
+            'cipher_a_diamond': False,
+            'cipher_a_yellow_cross': False,
+        }
+        
+        for col, default_val in fallback_columns.items():
+            if isinstance(default_val, bool):
+                result[col] = pd.Series([default_val] * len(result), index=result.index)
+            else:
+                result[col] = pd.Series([default_val] * len(result), index=result.index, dtype='float64')
+        
+        logger.info("Added Cipher A fallback values due to calculation failure")
+        return result
+
+    def _add_cipher_b_fallbacks(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Add fallback values for Cipher B indicators when calculation fails.
+        
+        Args:
+            df: Input DataFrame
+            
+        Returns:
+            DataFrame with Cipher B fallback values
+        """
+        result = df.copy()
+        current_price = df['close'].iloc[-1] if len(df) > 0 else 0.0
+        
+        fallback_columns = {
+            'cipher_b_wave': 0.0,
+            'cipher_b_money_flow': 50.0,
+            'vwap': current_price,
+            'cipher_b_buy_signal': False,
+            'cipher_b_sell_signal': False,
+            'cipher_b_gold_signal': False,
+        }
+        
+        for col, default_val in fallback_columns.items():
+            if isinstance(default_val, bool):
+                result[col] = pd.Series([default_val] * len(result), index=result.index)
+            else:
+                result[col] = pd.Series([default_val] * len(result), index=result.index, dtype='float64')
+        
+        logger.info("Added Cipher B fallback values due to calculation failure")
+        return result

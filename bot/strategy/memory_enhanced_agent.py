@@ -6,7 +6,7 @@ allowing it to learn from past experiences and improve over time.
 """
 
 import logging
-from typing import Any, List, Optional
+from typing import Any
 
 from ..config import settings
 from ..mcp.memory_server import MCPMemoryServer, MemoryQuery, TradingExperience
@@ -28,9 +28,9 @@ class MemoryEnhancedLLMAgent(LLMAgent):
 
     def __init__(
         self,
-        model_provider: str = None,
-        model_name: str = None,
-        memory_server: Optional[MCPMemoryServer] = None,
+        model_provider: str | None = None,
+        model_name: str | None = None,
+        memory_server: MCPMemoryServer | None = None,
     ):
         """
         Initialize the memory-enhanced LLM agent.
@@ -113,7 +113,7 @@ IMPORTANT: Consider these past experiences when making your decision, but adapt 
 
     async def _retrieve_relevant_memories(
         self, market_state: MarketState
-    ) -> List[TradingExperience]:
+    ) -> list[TradingExperience]:
         """
         Retrieve relevant past trading experiences.
 
@@ -148,7 +148,7 @@ IMPORTANT: Consider these past experiences when making your decision, but adapt 
             logger.error(f"Failed to retrieve memories: {e}")
             return []
 
-    def _format_memory_context(self, experiences: List[TradingExperience]) -> str:
+    def _format_memory_context(self, experiences: list[TradingExperience]) -> str:
         """
         Format past experiences into context for the LLM.
 
@@ -166,8 +166,6 @@ IMPORTANT: Consider these past experiences when making your decision, but adapt 
         for i, exp in enumerate(experiences[:5]):  # Limit to top 5
             # Format basic trade info
             action = exp.decision.get("action", "UNKNOWN")
-            size = exp.decision.get("size_pct", 0)
-            leverage = exp.decision.get("leverage", 1)
 
             context_lines.append(f"\n{i+1}. Past {action} trade:")
             context_lines.append(f"   Market conditions: ${exp.price}")
@@ -330,7 +328,7 @@ IMPORTANT: Consider these past experiences when making your decision, but adapt 
 
     def _extract_dominance_dict(
         self, market_state: MarketState
-    ) -> Optional[dict[str, float]]:
+    ) -> dict[str, float] | None:
         """Extract dominance data as a dictionary for memory queries."""
         if not market_state.dominance_data:
             return None

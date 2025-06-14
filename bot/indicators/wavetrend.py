@@ -150,6 +150,58 @@ class WaveTrend:
         except Exception:
             return 1e-6
 
+    def _calculate_ema_fallback(self, series: pd.Series, length: int) -> pd.Series:
+        """
+        Fallback EMA calculation using pandas ewm when pandas_ta fails.
+        
+        Args:
+            series: Input series
+            length: EMA length
+            
+        Returns:
+            EMA series
+        """
+        try:
+            # Convert length to alpha for ewm
+            alpha = 2.0 / (length + 1.0)
+            return series.ewm(alpha=alpha, adjust=False).mean()
+        except Exception as e:
+            logger.error(
+                "EMA fallback calculation failed",
+                extra={
+                    "indicator": "wavetrend",
+                    "error_message": str(e),
+                    "fallback_method": "ewm",
+                },
+            )
+            # Ultimate fallback: simple moving average
+            return series.rolling(window=length, min_periods=1).mean()
+
+    def _calculate_sma_fallback(self, series: pd.Series, length: int) -> pd.Series:
+        """
+        Fallback SMA calculation using pandas rolling when pandas_ta fails.
+        
+        Args:
+            series: Input series
+            length: SMA length
+            
+        Returns:
+            SMA series
+        """
+        try:
+            return series.rolling(window=length, min_periods=1).mean()
+        except Exception as e:
+            logger.error(
+                "SMA fallback calculation failed",
+                extra={
+                    "indicator": "wavetrend",
+                    "error_message": str(e),
+                    "fallback_method": "rolling_mean",
+                },
+            )
+            # Return the original series if everything fails
+            return series.copy()
+
     def calculate_wavetrend(
         self,
         src: pd.Series,
@@ -319,33 +371,33 @@ class WaveTrend:
                         "channel_length": ch_len,
                     },
                 )
-                # Fallback: use simple moving average if EMA fails
-                try:
-                    esa = src_clean.rolling(window=ch_len, min_periods=1).mean()
-                    logger.warning(
-                        "Using SMA fallback for ESA calculation",
-                        extra={
-                            "indicator": "wavetrend",
-                            "fallback": "sma_for_esa",
-                            "length": ch_len,
-                        },
-                    )
-                except Exception as fallback_e:
-                    logger.error(
-                        "ESA fallback calculation also failed",
-                        extra={
-                            "indicator": "wavetrend",
-                            "error_type": "esa_fallback_failed",
-                            "error_message": str(fallback_e),
-                        },
-                    )
-                    return pd.Series(dtype=float, index=src.index), pd.Series(
-                        dtype=float, index=src.index
-                    )
+                # Use robust fallback method
+                esa = self._calculate_ema_fallback(src_clean, ch_len)
+                logger.warning(
+                    "Using EMA fallback for ESA calculation",
+                    extra={
+                        "indicator": "wavetrend",
+                        "fallback": "ema_fallback_for_esa",
+                        "length": ch_len,
+                    },
+                )
             
+            # Check if pandas_ta returned None or too many NaN values
+            nan_threshold = len(src_clean) * 0.8  # If more than 80% NaN, use fallback
+            if esa is None or (hasattr(esa, 'isna') and esa.isna().sum() > nan_threshold):
+                logger.warning(
+                    "pandas_ta EMA returned None or all NaN, using fallback",
+                    extra={
+                        "indicator": "wavetrend",
+                        "issue": "esa_pandas_ta_failed",
+                        "channel_length": ch_len,
+                    },
+                )
+                esa = self._calculate_ema_fallback(src_clean, ch_len)
+                
             if esa is None:
                 logger.error(
-                    "Failed to calculate ESA",
+                    "Failed to calculate ESA with all methods",
                     extra={
                         "indicator": "wavetrend",
                         "error_type": "esa_calculation_failed",
@@ -387,33 +439,32 @@ class WaveTrend:
                         "channel_length": ch_len,
                     },
                 )
-                # Fallback: use simple moving average if EMA fails
-                try:
-                    de = deviation.rolling(window=ch_len, min_periods=1).mean()
-                    logger.warning(
-                        "Using SMA fallback for DE calculation",
-                        extra={
-                            "indicator": "wavetrend",
-                            "fallback": "sma_for_de",
-                            "length": ch_len,
-                        },
-                    )
-                except Exception as fallback_e:
-                    logger.error(
-                        "DE fallback calculation also failed",
-                        extra={
-                            "indicator": "wavetrend",
-                            "error_type": "de_fallback_failed",
-                            "error_message": str(fallback_e),
-                        },
-                    )
-                    return pd.Series(dtype=float, index=src.index), pd.Series(
-                        dtype=float, index=src.index
-                    )
+                # Use robust fallback method
+                de = self._calculate_ema_fallback(deviation, ch_len)
+                logger.warning(
+                    "Using EMA fallback for DE calculation",
+                    extra={
+                        "indicator": "wavetrend",
+                        "fallback": "ema_fallback_for_de",
+                        "length": ch_len,
+                    },
+                )
             
+            # Check if pandas_ta returned None or too many NaN values
+            if de is None or (hasattr(de, 'isna') and de.isna().sum() > nan_threshold):
+                logger.warning(
+                    "pandas_ta EMA returned None or all NaN for DE, using fallback",
+                    extra={
+                        "indicator": "wavetrend",
+                        "issue": "de_pandas_ta_failed",
+                        "channel_length": ch_len,
+                    },
+                )
+                de = self._calculate_ema_fallback(deviation, ch_len)
+                
             if de is None:
                 logger.error(
-                    "Failed to calculate DE",
+                    "Failed to calculate DE with all methods",
                     extra={
                         "indicator": "wavetrend",
                         "error_type": "de_calculation_failed",
@@ -456,6 +507,10 @@ class WaveTrend:
             
             # Replace zeros and very small values
             de_safe = de.copy()
+            # Ensure de_safe is a pandas Series
+            if not isinstance(de_safe, pd.Series):
+                de_safe = pd.Series(de_safe, index=src.index)
+            
             small_de_mask = (de_safe <= min_de_threshold) | de_safe.isna()
             de_safe.loc[small_de_mask] = min_de_threshold
             
@@ -513,8 +568,10 @@ class WaveTrend:
                         "ci_max": float(ci.max()),
                         "ci_mean": float(ci.mean()),
                         "ci_std": float(ci.std()),
+                        "ci_valid_count": int((~ci.isna()).sum()),
                         "small_de_count": int(small_de_mask.sum()),
                         "extreme_ci_count": int(extreme_values),
+                        "clip_threshold": float(clip_threshold),
                     },
                 )
 
@@ -557,33 +614,33 @@ class WaveTrend:
                         "average_length": avg_len,
                     },
                 )
-                # Fallback: use simple moving average if EMA fails
-                try:
-                    tci = ci_clean.rolling(window=avg_len, min_periods=1).mean()
-                    logger.warning(
-                        "Using SMA fallback for TCI calculation",
-                        extra={
-                            "indicator": "wavetrend",
-                            "fallback": "sma_for_tci",
-                            "length": avg_len,
-                        },
-                    )
-                except Exception as fallback_e:
-                    logger.error(
-                        "TCI fallback calculation also failed",
-                        extra={
-                            "indicator": "wavetrend",
-                            "error_type": "tci_fallback_failed",
-                            "error_message": str(fallback_e),
-                        },
-                    )
-                    return pd.Series(dtype=float, index=src.index), pd.Series(
-                        dtype=float, index=src.index
-                    )
+                # Use robust fallback method
+                tci = self._calculate_ema_fallback(ci_clean, avg_len)
+                logger.warning(
+                    "Using EMA fallback for TCI calculation",
+                    extra={
+                        "indicator": "wavetrend",
+                        "fallback": "ema_fallback_for_tci",
+                        "length": avg_len,
+                    },
+                )
             
+            # Check if pandas_ta returned None or too many NaN values
+            tci_nan_threshold = len(ci_clean) * 0.8  # If more than 80% NaN, use fallback
+            if tci is None or (hasattr(tci, 'isna') and tci.isna().sum() > tci_nan_threshold):
+                logger.warning(
+                    "pandas_ta EMA returned None or all NaN for TCI, using fallback",
+                    extra={
+                        "indicator": "wavetrend",
+                        "issue": "tci_pandas_ta_failed",
+                        "average_length": avg_len,
+                    },
+                )
+                tci = self._calculate_ema_fallback(ci_clean, avg_len)
+                
             if tci is None:
                 logger.error(
-                    "Failed to calculate TCI",
+                    "Failed to calculate TCI with all methods",
                     extra={
                         "indicator": "wavetrend",
                         "error_type": "tci_calculation_failed",
@@ -644,33 +701,33 @@ class WaveTrend:
                         "ma_length": ma_length,
                     },
                 )
-                # Fallback: use pandas rolling mean if ta.sma fails
-                try:
-                    wt2 = wt1_clean.rolling(window=ma_length, min_periods=1).mean()
-                    logger.warning(
-                        "Using pandas rolling mean fallback for WT2 calculation",
-                        extra={
-                            "indicator": "wavetrend",
-                            "fallback": "pandas_rolling_for_wt2",
-                            "length": ma_length,
-                        },
-                    )
-                except Exception as fallback_e:
-                    logger.error(
-                        "WT2 fallback calculation also failed",
-                        extra={
-                            "indicator": "wavetrend",
-                            "error_type": "wt2_fallback_failed",
-                            "error_message": str(fallback_e),
-                        },
-                    )
-                    return pd.Series(dtype=float, index=src.index), pd.Series(
-                        dtype=float, index=src.index
-                    )
+                # Use robust fallback method
+                wt2 = self._calculate_sma_fallback(wt1_clean, ma_length)
+                logger.warning(
+                    "Using SMA fallback for WT2 calculation",
+                    extra={
+                        "indicator": "wavetrend",
+                        "fallback": "sma_fallback_for_wt2",
+                        "length": ma_length,
+                    },
+                )
             
+            # Check if pandas_ta returned None or too many NaN values
+            wt2_nan_threshold = len(wt1_clean) * 0.8  # If more than 80% NaN, use fallback
+            if wt2 is None or (hasattr(wt2, 'isna') and wt2.isna().sum() > wt2_nan_threshold):
+                logger.warning(
+                    "pandas_ta SMA returned None or all NaN for WT2, using fallback",
+                    extra={
+                        "indicator": "wavetrend",
+                        "issue": "wt2_pandas_ta_failed",
+                        "ma_length": ma_length,
+                    },
+                )
+                wt2 = self._calculate_sma_fallback(wt1_clean, ma_length)
+                
             if wt2 is None:
                 logger.error(
-                    "Failed to calculate WT2",
+                    "Failed to calculate WT2 with all methods",
                     extra={
                         "indicator": "wavetrend",
                         "error_type": "wt2_calculation_failed", 
@@ -742,6 +799,7 @@ class WaveTrend:
                     "indicator": "wavetrend",
                     "error_type": "calculation_exception",
                     "error_message": str(e),
+                    "error_traceback": str(e.__traceback__),
                     "data_points": len(src),
                     "parameters": {
                         "channel_length": ch_len,
@@ -750,6 +808,9 @@ class WaveTrend:
                     },
                 },
             )
+            # Print the full traceback for debugging
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             return pd.Series(dtype=float, index=src.index), pd.Series(
                 dtype=float, index=src.index
             )
