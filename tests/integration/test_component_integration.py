@@ -133,13 +133,12 @@ class TestComponentIntegration:
 
         # Verify state has required indicators
         indicator_keys = [
-            "cipher_a_dot",
-            "cipher_b_wave",
-            "cipher_b_money_flow",
-            "rsi",
-            "ema_fast",
-            "ema_slow",
-            "vwap",
+            "combined_signal",
+            "combined_confidence", 
+            "market_sentiment",
+            "close",
+            "volume",
+            "timestamp",
         ]
         for key in indicator_keys:
             assert key in latest_state

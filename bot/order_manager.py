@@ -157,6 +157,33 @@ class OrderManager:
             )
             return order.copy()
 
+    def add_order(self, order: Order) -> None:
+        """
+        Add an existing order to the manager.
+        
+        This method is primarily for testing and integration scenarios
+        where an order object is already created and needs to be tracked.
+        
+        Args:
+            order: Order object to add
+        """
+        with self._lock:
+            # Add to active orders if not completed
+            if order.status in [
+                OrderStatus.PENDING,
+                OrderStatus.OPEN,
+            ]:
+                self._active_orders[order.id] = order
+                self._trigger_callbacks(order.id, OrderEvent.CREATED)
+            else:
+                # Add to history if already completed
+                self._order_history.append(order)
+                
+            # Persist state
+            self._save_state()
+            
+            logger.info(f"Added existing order {order.id} with status {order.status}")
+
     def update_order_status(
         self,
         order_id: str,

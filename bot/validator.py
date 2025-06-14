@@ -207,12 +207,17 @@ class TradeValidator:
         Returns:
             Safe TradeAction with HOLD
         """
+        # Truncate reason to fit within rationale max_length (200 chars)
+        # Account for "Validator: " prefix (11 chars)
+        max_reason_length = 200 - 11
+        truncated_reason = reason[:max_reason_length] if len(reason) > max_reason_length else reason
+        
         return TradeAction(
             action="HOLD",
             size_pct=0,
             take_profit_pct=2.0,
             stop_loss_pct=1.5,
-            rationale=f"Validator: {reason}",
+            rationale=f"Validator: {truncated_reason}",
         )
 
     def validate_json_schema(self, json_data: dict[str, Any]) -> bool:

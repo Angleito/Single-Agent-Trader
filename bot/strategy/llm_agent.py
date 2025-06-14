@@ -231,15 +231,17 @@ Instructions:
 
                 # o3 family models don't support most parameters, only pass essentials
                 if self.model_name.startswith("o3"):
-                    # o3 models only support basic parameters - no temperature, top_p, penalties, or max_tokens
+                    # o3 models only support basic parameters - no temperature other than 1.0, no top_p, penalties, or max_tokens
                     # For o3 models, pass max_completion_tokens directly in model_kwargs to avoid LangChain warning
-                    # Explicitly set temperature to None to prevent LangChain from adding defaults
-                    base_kwargs["temperature"] = None
+                    # Set temperature=1.0 explicitly as top-level parameter (the only value o3 supports)
+                    base_kwargs["temperature"] = (
+                        1.0  # o3 models only support temperature=1.0 (default)
+                    )
                     base_kwargs["model_kwargs"] = {
                         "max_completion_tokens": settings.llm.max_tokens
                     }
                     logger.info(
-                        f"Initializing OpenAI o3 model with minimal parameters. Base kwargs: {base_kwargs}"
+                        f"Initializing OpenAI o3 model with temperature=1.0. Base kwargs: {list(base_kwargs.keys())}"
                     )
                 else:
                     # Non-o3 models support full parameter set

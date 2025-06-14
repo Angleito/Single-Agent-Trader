@@ -1379,10 +1379,10 @@ class CipherB:
                 # Calculate Money Flow Index (MFI) using pandas-ta
                 logger.debug("Calculating MFI")
                 mfi_values = ta.mfi(
-                    df["high"],
-                    df["low"],
-                    df["close"],
-                    df["volume"],
+                    df["high"].astype("float64"),
+                    df["low"].astype("float64"),
+                    df["close"].astype("float64"),
+                    df["volume"].astype("float64"),
                     length=self.mfi_length,
                 )
                 df["money_flow"] = (
