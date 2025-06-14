@@ -290,7 +290,7 @@ class CoinbaseClient:
         self._portfolios = {}
         self._futures_portfolio_id = None
         self._default_portfolio_id = None
-        
+
         # Futures contract management
         self._futures_contract_manager = None
 
@@ -487,7 +487,7 @@ class CoinbaseClient:
 
             # Load portfolios information
             await self._load_portfolios()
-            
+
             # Initialize futures contract manager if futures are enabled
             if self.enable_futures:
                 self._futures_contract_manager = FuturesContractManager(self)
@@ -674,37 +674,43 @@ class CoinbaseClient:
     async def get_trading_symbol(self, base_symbol: str) -> str:
         """
         Get the appropriate trading symbol based on whether futures are enabled.
-        
+
         Args:
             base_symbol: Base symbol like "ETH-USD"
-            
+
         Returns:
             Actual trading symbol (spot or futures contract)
         """
         if not self.enable_futures:
             # Use spot symbol as-is
             return base_symbol
-        
-        # For Coinbase, ETH-USD and BTC-USD support futures trading directly
-        # when the leverage parameter is included in orders
-        if base_symbol in ['ETH-USD', 'BTC-USD', 'SOL-USD', 'DOGE-USD', 'LTC-USD', 'BCH-USD']:
-            logger.info(f"{base_symbol} supports futures trading with leverage parameter")
-            return base_symbol
-        
+
+        # Map spot symbols to actual futures contracts
+        # Coinbase uses abbreviated symbols with date suffixes
+        futures_mappings = {
+            'ETH-USD': 'ET-27JUN25-CDE',
+            'BTC-USD': 'BT-27JUN25-CDE',  # Assuming similar pattern
+        }
+
+        if base_symbol in futures_mappings:
+            futures_symbol = futures_mappings[base_symbol]
+            logger.info(f"Mapped {base_symbol} to futures contract {futures_symbol}")
+            return futures_symbol
+
         # For other symbols, try to find dated contracts
         base_currency = base_symbol.split('-')[0]
-        
+
         # Try to get cached contract first
         if self._futures_contract_manager:
             cached_contract = self._futures_contract_manager.get_cached_contract()
             if cached_contract:
                 return cached_contract
-            
+
             # Fetch current active contract
             active_contract = await self._futures_contract_manager.get_active_futures_contract(base_currency)
             if active_contract:
                 return active_contract
-        
+
         # Fallback to original symbol
         logger.info(f"Using {base_symbol} for futures trading")
         return base_symbol
@@ -731,7 +737,7 @@ class CoinbaseClient:
             # Get the actual trading symbol (spot or futures contract)
             actual_symbol = await self.get_trading_symbol(symbol)
             logger.info(f"Using trading symbol: {actual_symbol} (requested: {symbol})")
-            
+
             if trade_action.action == "HOLD":
                 logger.info("Action is HOLD - no trade executed")
                 return None
@@ -809,48 +815,36 @@ class CoinbaseClient:
 
             # Calculate position size based on available margin
             available_margin = futures_account.margin_info.available_margin
-            
-            # For safety, use only 80% of available margin to avoid insufficient funds errors
-            usable_margin = available_margin * Decimal("0.8")
-            
-            position_value = min(
-                usable_margin * Decimal(str(trade_action.size_pct / 100)),
-                futures_account.max_position_size,
-            )
 
             # Use leverage from trade action or default
             leverage = trade_action.leverage or settings.trading.leverage
             leverage = min(leverage, self.max_futures_leverage)
 
-            # Calculate quantity for futures
-            # On Coinbase, 1 ETH futures contract = 0.1 ETH (nano-sized)
-            CONTRACT_SIZE = Decimal("0.1")  # 0.1 ETH per contract
-
-            # Check if we're using fixed contract size from config
-            if (
-                hasattr(settings.trading, "fixed_contract_size")
-                and settings.trading.fixed_contract_size
-            ):
-                # Use fixed number of contracts
-                num_contracts = int(settings.trading.fixed_contract_size)
-                quantity = CONTRACT_SIZE * num_contracts
+            # Calculate quantity for futures - ALWAYS USE 1 CONTRACT
+            # Check if this is an actual futures contract (ends with -CDE)
+            if symbol.endswith('-CDE'):
+                # Real futures contracts use CONTRACT COUNT, not ETH amount
+                # Each contract = 0.1 ETH (nano futures)
+                # FIXED: Always trade exactly 1 contract
+                num_contracts = 1
+                quantity = Decimal("1")  # For CDE contracts, quantity is the number of contracts
+                logger.info(f"Futures contract {symbol}: FIXED 1 contract (0.1 ETH)")
             else:
-                # Calculate based on position value
-                notional_value = position_value * leverage
-                quantity_in_eth = notional_value / current_price
-                # Convert to number of contracts and round down
-                num_contracts = int(quantity_in_eth / CONTRACT_SIZE)
-                num_contracts = max(1, num_contracts)  # Minimum 1 contract
-                quantity = CONTRACT_SIZE * num_contracts
+                # Spot with leverage: use nano contract sizing
+                CONTRACT_SIZE = Decimal("0.1")  # 0.1 ETH per contract
 
-            logger.info(f"Futures position: {num_contracts} contracts = {quantity} ETH")
+                # FIXED: Always trade exactly 1 contract
+                num_contracts = 1
+                quantity = CONTRACT_SIZE * num_contracts  # 0.1 ETH
+
+                logger.info(f"Futures position: FIXED 1 contract = {quantity} ETH")
 
             # Calculate actual notional value based on contracts
             actual_notional_value = quantity * current_price
 
             # Check if we need to transfer cash for margin
             margin_required = actual_notional_value / leverage
-            
+
             # Check CFM balance and transfer if needed
             if futures_account.futures_balance < margin_required:
                 transfer_amount = margin_required - futures_account.futures_balance + Decimal("10")  # Add buffer
@@ -858,25 +852,25 @@ class CoinbaseClient:
                     f"CFM balance ${futures_account.futures_balance} < margin required ${margin_required}. "
                     f"Transferring ${transfer_amount} from CBI to CFM..."
                 )
-                
+
                 transfer_success = await self.transfer_cash_to_futures(
-                    amount=transfer_amount, 
+                    amount=transfer_amount,
                     reason="AUTO_REBALANCE"
                 )
-                
+
                 if not transfer_success:
                     logger.error("Failed to transfer funds to CFM. Cannot open futures position.")
                     return None
-                    
+
                 # Wait a bit for transfer to settle
                 await asyncio.sleep(2)
-                
+
                 # Re-check futures account info
                 futures_account = await self.get_futures_account_info()
                 if not futures_account:
                     logger.error("Cannot verify transfer - account info unavailable")
                     return None
-            
+
             logger.info(
                 f"Margin required: ${margin_required}, Available margin: ${available_margin}"
             )
@@ -1065,6 +1059,21 @@ class CoinbaseClient:
                 elif hasattr(result, "order_id"):
                     # Fallback for old format
                     order_id = result.order_id
+
+                    order = Order(
+                        id=order_id
+                        or f"cb_{int(datetime.utcnow().timestamp() * 1000)}",
+                        symbol=symbol,
+                        side=side,
+                        type="MARKET",
+                        quantity=quantity,
+                        status=OrderStatus.PENDING,
+                        timestamp=datetime.utcnow(),
+                        filled_quantity=Decimal("0"),
+                    )
+
+                    logger.info(f"Market order placed successfully: {order_id}")
+                    return order
                 else:
                     # Try dictionary access for backward compatibility
                     if isinstance(result, dict) and result.get("success"):
@@ -1145,6 +1154,11 @@ class CoinbaseClient:
             if side not in ["BUY", "SELL"]:
                 raise CoinbaseOrderError(f"Invalid side: {side}")
 
+            # Generate a unique client order ID
+            import uuid
+
+            client_order_id = f"ai-bot-{uuid.uuid4().hex[:8]}"
+
             # Place the limit order
             order_data = {
                 "product_id": symbol,
@@ -1158,7 +1172,9 @@ class CoinbaseClient:
             }
 
             logger.info(f"Placing {side} limit order: {quantity} {symbol} @ {price}")
-            result = await self._retry_request(self._client.create_order, **order_data)
+            result = await self._retry_request(
+                self._client.create_order, client_order_id, **order_data
+            )
 
             # Parse the response
             if result.get("success"):
@@ -1307,6 +1323,11 @@ class CoinbaseClient:
             else:
                 limit_price = stop_price * (1 - Decimal(str(slippage_pct)))
 
+            # Generate a unique client order ID
+            import uuid
+
+            client_order_id = f"ai-bot-{uuid.uuid4().hex[:8]}"
+
             # Place stop-limit order
             order_data = {
                 "product_id": symbol,
@@ -1328,7 +1349,9 @@ class CoinbaseClient:
             logger.info(
                 f"Placing {side} stop order: {quantity} {symbol} stop @ {stop_price}, limit @ {limit_price}"
             )
-            result = await self._retry_request(self._client.create_order, **order_data)
+            result = await self._retry_request(
+                self._client.create_order, client_order_id, **order_data
+            )
 
             # Parse the response
             if result.get("success"):
@@ -1420,8 +1443,13 @@ class CoinbaseClient:
 
             client_order_id = f"ai-bot-{uuid.uuid4().hex[:8]}"
 
-            # Round quantity to appropriate precision (6 decimal places for ETH)
-            rounded_quantity = round(float(quantity), 6)
+            # Round quantity appropriately
+            if symbol.endswith('-CDE'):
+                # For futures contracts, quantity must be whole number (contracts)
+                rounded_quantity = int(quantity)
+            else:
+                # For spot/leverage, use decimal precision
+                rounded_quantity = round(float(quantity), 6)
 
             # Place the futures order using Coinbase Advanced Trader
             order_data = {
@@ -1429,14 +1457,17 @@ class CoinbaseClient:
                 "side": side,
                 "order_configuration": {
                     "market_market_ioc": {"base_size": str(rounded_quantity)}
-                },
-                "leverage": str(leverage),  # This makes it a futures order
+                }
             }
+
+            # Only add leverage for spot symbols, not for actual futures contracts
+            if not symbol.endswith('-CDE'):
+                order_data["leverage"] = str(leverage)
 
             # Add reduce_only only if True
             if reduce_only:
                 order_data["reduce_only"] = reduce_only
-                
+
             # Don't add portfolio ID for futures - Coinbase handles the routing automatically
 
             logger.info(
@@ -1475,6 +1506,21 @@ class CoinbaseClient:
                 elif hasattr(result, "order_id"):
                     # Fallback for old format
                     order_id = result.order_id
+
+                    order = Order(
+                        id=order_id
+                        or f"cb_futures_{int(datetime.utcnow().timestamp() * 1000)}",
+                        symbol=symbol,
+                        side=side,
+                        type="MARKET",
+                        quantity=quantity,
+                        status=OrderStatus.PENDING,
+                        timestamp=datetime.utcnow(),
+                        filled_quantity=Decimal("0"),
+                    )
+
+                    logger.info(f"Futures market order placed successfully: {order_id}")
+                    return order
                 else:
                     # Try dictionary access for backward compatibility
                     if isinstance(result, dict) and result.get("success"):
@@ -1871,18 +1917,18 @@ class CoinbaseClient:
                     logger.debug("Cancelled pending futures sweep")
                 except Exception:
                     pass  # Ignore if no pending sweep
-                
+
                 # Schedule a new sweep
-                result = await self._retry_request(
+                await self._retry_request(
                     self._client.schedule_futures_sweep,
                     usd_amount=str(amount)
                 )
-                
+
                 logger.info(f"Successfully scheduled futures sweep for ${amount}")
-                
+
                 # Wait a bit for the sweep to process
                 await asyncio.sleep(3)
-                
+
                 # Check if transfer completed
                 balance_resp = await self._retry_request(self._client.get_futures_balance_summary)
                 if hasattr(balance_resp, 'balance_summary'):
@@ -1890,10 +1936,10 @@ class CoinbaseClient:
                     if cfm_balance > 0:
                         logger.info(f"Transfer completed. CFM balance: ${cfm_balance}")
                         return True
-                
+
                 logger.warning("Transfer scheduled but not yet completed")
                 return True  # Return true since sweep was scheduled
-                
+
             except Exception as e:
                 logger.error(f"Failed to schedule futures sweep: {e}")
                 return False
@@ -1918,7 +1964,7 @@ class CoinbaseClient:
         try:
             # Get positions from FCM account
             positions_response = await self._retry_request(
-                self._client.get_fcm_positions
+                self._client.list_futures_positions
             )
 
             # Handle response object format
@@ -1930,32 +1976,42 @@ class CoinbaseClient:
 
             positions = []
             for pos_data in positions_list:
-                product_id = pos_data.get("product_id")
+                # Handle object attributes
+                if hasattr(pos_data, 'product_id'):
+                    product_id = pos_data.product_id
+                    num_contracts = int(pos_data.number_of_contracts)
+                    side = pos_data.side
+                    avg_entry_price = Decimal(str(pos_data.avg_entry_price))
+                    unrealized_pnl = Decimal(str(getattr(pos_data, 'unrealized_pnl', '0')))
+                else:
+                    # Handle dict format
+                    product_id = pos_data.get("product_id")
+                    num_contracts = int(pos_data.get("number_of_contracts", 0))
+                    side = pos_data.get("side", "")
+                    avg_entry_price = Decimal(str(pos_data.get("avg_entry_price", "0")))
+                    unrealized_pnl = Decimal(str(pos_data.get("unrealized_pnl", "0")))
 
                 # Skip if symbol filter provided and doesn't match
                 if symbol and product_id != symbol:
                     continue
 
-                size = Decimal(str(pos_data.get("size", "0")))
-                if abs(size) > 0:
-                    side = "LONG" if size > 0 else "SHORT"
+                if num_contracts > 0:
+                    # Convert contracts to ETH size (1 contract = 0.1 ETH for nano futures)
+                    CONTRACT_SIZE = Decimal("0.1")
+                    size = num_contracts * CONTRACT_SIZE
 
                     position = Position(
                         symbol=product_id,
                         side=side,
-                        size=abs(size),
-                        entry_price=Decimal(str(pos_data.get("avg_entry_price", "0"))),
-                        unrealized_pnl=Decimal(
-                            str(pos_data.get("unrealized_pnl", "0"))
-                        ),
-                        realized_pnl=Decimal(str(pos_data.get("realized_pnl", "0"))),
+                        size=size,
+                        entry_price=avg_entry_price,
+                        unrealized_pnl=unrealized_pnl,
+                        realized_pnl=Decimal("0"),  # Not provided in API
                         timestamp=datetime.utcnow(),
                         is_futures=True,
-                        leverage=pos_data.get("leverage", self.max_futures_leverage),
-                        margin_used=Decimal(str(pos_data.get("margin_used", "0"))),
-                        liquidation_price=Decimal(
-                            str(pos_data.get("liquidation_price", "0"))
-                        ),
+                        leverage=self.max_futures_leverage,  # Actual leverage not in response
+                        margin_used=Decimal("0"),  # Calculate from position if needed
+                        liquidation_price=Decimal("0"),  # Not provided directly
                         margin_health=MarginHealthStatus.HEALTHY,  # Would calculate based on margin
                     )
                     positions.append(position)
