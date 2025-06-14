@@ -360,6 +360,12 @@ class LangChainCallbackHandler(BaseCallbackHandler):
 
     Integrates with the ChatCompletionLogger to provide comprehensive
     tracking of LangChain operations.
+    
+    NOTE: This callback handler is currently disabled for o3 models due to
+    compatibility issues with older LangChain versions (0.1.x) that don't
+    properly handle o3 model token usage response format.
+    
+    TODO: Upgrade to LangChain 0.2+ which properly supports newer OpenAI models
     """
 
     def __init__(self, completion_logger: ChatCompletionLogger):
@@ -399,18 +405,27 @@ class LangChainCallbackHandler(BaseCallbackHandler):
             # Extract model info from serialized data
             model = serialized.get("kwargs", {}).get("model_name", "unknown")
             temperature = serialized.get("kwargs", {}).get("temperature")
+            # Handle both max_tokens and max_completion_tokens parameters
             max_tokens = serialized.get("kwargs", {}).get("max_tokens", 0)
+            if max_tokens == 0:
+                # Try model_kwargs for o3 models which use max_completion_tokens
+                model_kwargs = serialized.get("kwargs", {}).get("model_kwargs", {})
+                max_tokens = model_kwargs.get("max_completion_tokens", 0)
 
             # o3 models don't support temperature - set to None for logging
             if model.startswith("o3") and temperature is not None:
                 temperature = None
 
+            # Extract market context from prompt if available
+            market_context = self._extract_market_context_from_prompt(prompts[0])
+            
             # Log the request
             self._current_request_id = self.completion_logger.log_completion_request(
                 prompt=prompts[0],
                 model=model,
                 temperature=temperature,
                 max_tokens=max_tokens,
+                market_context=market_context,
             )
 
     def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
@@ -419,10 +434,25 @@ class LangChainCallbackHandler(BaseCallbackHandler):
             # Calculate response time (approximation)
             response_time = 1.0  # Default fallback
 
-            # Extract token usage if available
+            # Extract token usage if available - safely handle missing fields
             token_usage = None
-            if hasattr(response, "llm_output") and response.llm_output:
-                token_usage = response.llm_output.get("token_usage")
+            try:
+                if hasattr(response, "llm_output") and response.llm_output:
+                    raw_usage = response.llm_output.get("token_usage", {})
+                    if raw_usage:
+                        # Safely extract token counts, handling missing completion_tokens_details
+                        token_usage = {
+                            "prompt_tokens": raw_usage.get("prompt_tokens", 0),
+                            "completion_tokens": raw_usage.get("completion_tokens", 0),
+                            "total_tokens": raw_usage.get("total_tokens", 0)
+                        }
+                        
+                        # Handle o3-style response format if available
+                        if "completion_tokens_details" in raw_usage:
+                            token_usage["completion_tokens_details"] = raw_usage["completion_tokens_details"]
+            except Exception as e:
+                self.logger.warning(f"Error extracting token usage: {e}")
+                token_usage = None
 
             # Log the response
             self.completion_logger.log_completion_response(
@@ -451,6 +481,81 @@ class LangChainCallbackHandler(BaseCallbackHandler):
             self._current_request_id = None
 
         self.logger.error(f"LLM error: {error}")
+
+    def _extract_market_context_from_prompt(self, prompt: str) -> dict[str, Any] | None:
+        """
+        Extract market context information from the prompt text.
+        
+        This method parses the formatted prompt to extract key market data
+        for logging purposes, avoiding the need for manual logging in the LLM agent.
+        
+        Args:
+            prompt: The formatted prompt text
+            
+        Returns:
+            Dictionary with market context data or None if extraction fails
+        """
+        import re
+        
+        try:
+            context = {}
+            
+            # Extract basic market info
+            symbol_match = re.search(r"Symbol:\s*(\S+)", prompt)
+            if symbol_match:
+                context["symbol"] = symbol_match.group(1)
+                
+            price_match = re.search(r"Current Price:\s*\$?([\d,.]+)", prompt)
+            if price_match:
+                try:
+                    context["current_price"] = float(price_match.group(1).replace(",", ""))
+                except ValueError:
+                    pass
+                    
+            position_match = re.search(r"Current Position:\s*([^\n]+)", prompt)
+            if position_match:
+                context["current_position"] = position_match.group(1).strip()
+            
+            # Extract technical indicators
+            rsi_match = re.search(r"RSI:\s*([\d.]+)", prompt)
+            if rsi_match:
+                try:
+                    context["rsi"] = float(rsi_match.group(1))
+                except ValueError:
+                    pass
+                    
+            cipher_a_match = re.search(r"Cipher A Trend Dot:\s*([\d.-]+)", prompt)
+            if cipher_a_match:
+                try:
+                    context["cipher_a_dot"] = float(cipher_a_match.group(1))
+                except ValueError:
+                    pass
+                    
+            cipher_b_wave_match = re.search(r"Cipher B Wave:\s*([\d.-]+)", prompt)
+            if cipher_b_wave_match:
+                try:
+                    context["cipher_b_wave"] = float(cipher_b_wave_match.group(1))
+                except ValueError:
+                    pass
+            
+            # Extract dominance data
+            dominance_match = re.search(r"Total Stablecoin Dominance:\s*([\d.]+)%", prompt)
+            if dominance_match:
+                try:
+                    context["stablecoin_dominance"] = float(dominance_match.group(1))
+                except ValueError:
+                    pass
+                    
+            sentiment_match = re.search(r"Market Sentiment:\s*(\w+)", prompt)
+            if sentiment_match:
+                context["market_sentiment"] = sentiment_match.group(1)
+            
+            # Only return context if we extracted at least some data
+            return context if context else None
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to extract market context from prompt: {e}")
+            return None
 
 
 def create_llm_logger(

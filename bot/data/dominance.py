@@ -7,6 +7,7 @@ suggests risk-on behavior and potential market recovery.
 """
 
 import asyncio
+import atexit
 import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -60,6 +61,10 @@ class DominanceDataProvider:
     - Caching with configurable TTL
     - High-frequency data collection support (30-second intervals)
     """
+    
+    # Class variable to track all instances for cleanup
+    _instances: list["DominanceDataProvider"] = []
+    _cleanup_registered = False
 
     # API endpoints for different data sources
     COINGECKO_API_URL = "https://api.coingecko.com/api/v3"
@@ -98,13 +103,67 @@ class DominanceDataProvider:
         self._update_task: asyncio.Task | None = None
         self._running = False
 
+        # Register instance for cleanup
+        DominanceDataProvider._instances.append(self)
+        
+        # Register atexit handler once
+        if not DominanceDataProvider._cleanup_registered:
+            DominanceDataProvider._cleanup_registered = True
+            atexit.register(DominanceDataProvider._cleanup_all_instances)
+
         logger.info(f"Initialized DominanceDataProvider with {data_source} source")
+
+    def __del__(self):
+        """Cleanup when object is garbage collected."""
+        if self._session and not self._session.closed:
+            logger.warning(
+                "DominanceDataProvider being garbage collected with open session. "
+                "Consider using async context manager or calling disconnect() explicitly."
+            )
+            # Note: We can't await in __del__, but at least log the issue
+            try:
+                # This will schedule the close but won't block
+                asyncio.create_task(self._session.close())
+            except RuntimeError:
+                # Event loop might be closed already
+                pass
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        await self.connect()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.disconnect()
+        return False
+
+    @classmethod
+    def _cleanup_all_instances(cls):
+        """Cleanup all instances on exit."""
+        for instance in cls._instances:
+            if instance._session and not instance._session.closed:
+                logger.warning(
+                    "Cleaning up unclosed DominanceDataProvider session on exit"
+                )
+                try:
+                    # Force close the connector
+                    instance._session._connector.close()
+                except Exception as e:
+                    logger.error(f"Error during emergency cleanup: {e}")
 
     async def connect(self) -> None:
         """Initialize connection and start data updates."""
         if self._session is None:
             timeout = aiohttp.ClientTimeout(total=30)
-            self._session = aiohttp.ClientSession(timeout=timeout)
+            # Create session with connector that properly closes
+            connector = aiohttp.TCPConnector(force_close=True)
+            self._session = aiohttp.ClientSession(
+                timeout=timeout,
+                connector=connector,
+                # Ensure proper cleanup on exit
+                connector_owner=True
+            )
 
         # Fetch initial data
         await self.fetch_current_dominance()
@@ -125,10 +184,17 @@ class DominanceDataProvider:
                 await self._update_task
             except asyncio.CancelledError:
                 pass
+            self._update_task = None
 
         if self._session:
-            await self._session.close()
-            self._session = None
+            try:
+                await self._session.close()
+                # Give the session time to close gracefully
+                await asyncio.sleep(0)
+            except Exception as e:
+                logger.warning(f"Error closing session: {e}")
+            finally:
+                self._session = None
 
         logger.info("DominanceDataProvider disconnected")
 
@@ -373,33 +439,59 @@ class DominanceDataProvider:
         if len(self._dominance_cache) < 20:
             return
 
-        # Get dominance values as series
-        dominance_values = [d.stablecoin_dominance for d in self._dominance_cache]
-        df = pd.DataFrame({"dominance": dominance_values})
+        try:
+            # Filter out None values and validate data before DataFrame creation
+            valid_data = [
+                (i, d) for i, d in enumerate(self._dominance_cache) 
+                if d.stablecoin_dominance is not None and not pd.isna(d.stablecoin_dominance)
+            ]
+            
+            if len(valid_data) < 20:
+                logger.warning(f"Insufficient valid dominance data for trend calculation: {len(valid_data)} valid points out of {len(self._dominance_cache)} total")
+                return
+            
+            # Extract only valid dominance values
+            dominance_values = [d[1].stablecoin_dominance for d in valid_data]
+            
+            # Ensure all values are numeric
+            dominance_values = [float(val) for val in dominance_values if isinstance(val, (int, float)) and not pd.isna(val)]
+            
+            if len(dominance_values) < 20:
+                logger.warning(f"Insufficient numeric dominance data after cleaning: {len(dominance_values)} values")
+                return
+            
+            # Create DataFrame with clean data
+            df = pd.DataFrame({"dominance": dominance_values})
 
-        # Calculate 20-period SMA
-        df["sma_20"] = df["dominance"].rolling(window=20).mean()
+            # Calculate 20-period SMA
+            df["sma_20"] = df["dominance"].rolling(window=20).mean()
 
-        # Calculate RSI
-        df["change"] = df["dominance"].diff()
-        df["gain"] = df["change"].where(df["change"] > 0, 0)
-        df["loss"] = -df["change"].where(df["change"] < 0, 0)
+            # Calculate RSI
+            df["change"] = df["dominance"].diff()
+            df["gain"] = df["change"].where(df["change"] > 0, 0)
+            df["loss"] = -df["change"].where(df["change"] < 0, 0)
 
-        avg_gain = df["gain"].rolling(window=14).mean()
-        avg_loss = df["loss"].rolling(window=14).mean()
+            avg_gain = df["gain"].rolling(window=14).mean()
+            avg_loss = df["loss"].rolling(window=14).mean()
 
-        rs = avg_gain / avg_loss
-        df["rsi"] = 100 - (100 / (1 + rs))
+            # Prevent division by zero in RSI calculation
+            rs = avg_gain / avg_loss.replace(0, 1e-8)
+            df["rsi"] = 100 - (100 / (1 + rs))
 
-        # Update latest entry with indicators
-        if len(self._dominance_cache) > 0:
-            latest = self._dominance_cache[-1]
-            latest.dominance_sma_20 = (
-                df["sma_20"].iloc[-1] if not pd.isna(df["sma_20"].iloc[-1]) else None
-            )
-            latest.dominance_rsi = (
-                df["rsi"].iloc[-1] if not pd.isna(df["rsi"].iloc[-1]) else None
-            )
+            # Update latest entry with indicators
+            if len(self._dominance_cache) > 0:
+                latest = self._dominance_cache[-1]
+                latest.dominance_sma_20 = (
+                    float(df["sma_20"].iloc[-1]) if not pd.isna(df["sma_20"].iloc[-1]) else None
+                )
+                latest.dominance_rsi = (
+                    float(df["rsi"].iloc[-1]) if not pd.isna(df["rsi"].iloc[-1]) else None
+                )
+                
+        except Exception as e:
+            logger.error(f"Error calculating dominance trend indicators: {e}")
+            # Don't let trend calculation failures break the system
+            return
 
     async def _update_loop(self) -> None:
         """Periodic update loop for dominance data."""

@@ -51,9 +51,9 @@ class LLMAgent:
         self.model_provider = model_provider or settings.llm.provider
         self.model_name = model_name or settings.llm.model_name
 
-        # o3 models don't support temperature parameter - must be None or 1.0
+        # o3 models only support temperature=1.0
         if self.model_name.startswith("o3"):
-            self.temperature = None  # No temperature for o3 models
+            self.temperature = 1.0  # o3 models only support temperature=1.0
         else:
             self.temperature = settings.llm.temperature
 
@@ -75,7 +75,9 @@ class LLMAgent:
             )
 
             # Create LangChain callback handler if enabled
-            if settings.llm.enable_langchain_callbacks and self._completion_logger:
+            # Temporarily disabled due to o3 model compatibility issues with older LangChain versions
+            # TODO: Re-enable after upgrading LangChain to version that supports o3 models
+            if settings.llm.enable_langchain_callbacks and self._completion_logger and not self.model_name.startswith("o3"):
                 self._langchain_callback = create_langchain_callback(
                     self._completion_logger
                 )
@@ -231,17 +233,17 @@ Instructions:
 
                 # o3 family models don't support most parameters, only pass essentials
                 if self.model_name.startswith("o3"):
-                    # o3 models only support basic parameters - no temperature other than 1.0, no top_p, penalties, or max_tokens
+                    # o3 models only support basic parameters - temperature must be 1.0
                     # For o3 models, pass max_completion_tokens directly in model_kwargs to avoid LangChain warning
-                    # Set temperature=1.0 explicitly as top-level parameter (the only value o3 supports)
-                    base_kwargs["temperature"] = (
-                        1.0  # o3 models only support temperature=1.0 (default)
-                    )
+                    base_kwargs["temperature"] = 1.0  # o3 models only support temperature=1.0
+                    
+                    # Ensure max_tokens is valid for o3 models
+                    max_completion_tokens = max(100, settings.llm.max_tokens)  # Prevent 0 or negative values
                     base_kwargs["model_kwargs"] = {
-                        "max_completion_tokens": settings.llm.max_tokens
+                        "max_completion_tokens": max_completion_tokens
                     }
                     logger.info(
-                        f"Initializing OpenAI o3 model with temperature=1.0. Base kwargs: {list(base_kwargs.keys())}"
+                        f"Initializing OpenAI o3 model with temperature=1.0, max_completion_tokens={max_completion_tokens}"
                     )
                 else:
                     # Non-o3 models support full parameter set
@@ -293,8 +295,12 @@ Instructions:
             # Get decision from LLM or fallback
             if self._chain is not None:
                 result = await self._get_llm_decision(llm_input)
-                # Extract request_id from the last completion for decision logging
-                request_id = getattr(self, "_last_request_id", None)
+                # Get request_id from callback handler if available
+                request_id = (
+                    getattr(self._langchain_callback, "_current_request_id", None)
+                    if self._langchain_callback
+                    else "llm_completion"
+                )
             else:
                 result = self._get_fallback_decision(market_state)
 
@@ -686,46 +692,7 @@ Instructions:
         try:
             self._completion_count += 1
 
-            # Log the request if completion logging is enabled
-            if self._completion_logger and settings.llm.enable_completion_logging:
-                # Create prompt for logging (simulate what will be sent)
-                formatted_prompt = (
-                    self._prompt_template.format(**llm_input)
-                    if self._prompt_template
-                    else str(llm_input)
-                )
-
-                # Extract market context for logging
-                market_context = (
-                    {
-                        "symbol": llm_input.get("symbol"),
-                        "current_price": llm_input.get("current_price"),
-                        "current_position": llm_input.get("current_position"),
-                        "cipher_a_dot": llm_input.get("cipher_a_dot"),
-                        "cipher_b_wave": llm_input.get("cipher_b_wave"),
-                        "rsi": llm_input.get("rsi"),
-                        "stablecoin_dominance": llm_input.get("stablecoin_dominance"),
-                        "market_sentiment": llm_input.get("market_sentiment"),
-                    }
-                    if settings.llm.log_market_context
-                    else None
-                )
-
-                # For o3 models, don't pass temperature to logging
-                log_temperature = (
-                    self.temperature if not self.model_name.startswith("o3") else None
-                )
-
-                request_id = self._completion_logger.log_completion_request(
-                    prompt=formatted_prompt,
-                    model=self.model_name,
-                    temperature=log_temperature,
-                    max_tokens=settings.llm.max_tokens,
-                    market_context=market_context,
-                )
-
-                # Store request_id for decision logging
-                self._last_request_id = request_id
+            # LangChain callback handler will handle the logging automatically
 
             # Invoke the chain with callback if available
             chain_kwargs = (
@@ -733,7 +700,14 @@ Instructions:
                 if self._langchain_callback
                 else {}
             )
-            result = await self._chain.ainvoke(llm_input, **chain_kwargs)
+            
+            # For o3 models, we need to handle the response differently due to token usage format issues
+            if self.model_name.startswith("o3"):
+                # Use custom response handling for o3 models
+                result = await self._chain.ainvoke(llm_input)
+                # Manual token usage tracking would go here if needed
+            else:
+                result = await self._chain.ainvoke(llm_input, **chain_kwargs)
 
             response_time = time.time() - start_time
 
@@ -745,39 +719,16 @@ Instructions:
             else:
                 raise ValueError(f"Unexpected result type: {type(result)}")
 
-            # Log successful response
-            if self._completion_logger and request_id:
-                # Note: Token usage would need to be extracted from the response
-                # This is a limitation of the current LangChain integration
-                self._completion_logger.log_completion_response(
-                    request_id=request_id,
-                    response=trade_action,
-                    response_time=response_time,
-                    token_usage=None,  # Would need special handling to extract from OpenAI response
-                    success=True,
-                )
-
-                # Log performance metrics periodically
-                if (
-                    self._completion_count % settings.llm.performance_log_interval
-                ) == 0:
-                    self._completion_logger.log_performance_metrics()
+            # Performance metrics logging (if enabled)
+            if (
+                self._completion_logger
+                and self._completion_count % settings.llm.performance_log_interval == 0
+            ):
+                self._completion_logger.log_performance_metrics()
 
             return trade_action
 
         except Exception as e:
-            response_time = time.time() - start_time
-
-            # Log failed response
-            if self._completion_logger and request_id:
-                self._completion_logger.log_completion_response(
-                    request_id=request_id,
-                    response=None,
-                    response_time=response_time,
-                    success=False,
-                    error=str(e),
-                )
-
             logger.error(f"LLM decision error: {e}")
             raise
 

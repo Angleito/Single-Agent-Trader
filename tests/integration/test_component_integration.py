@@ -5,7 +5,7 @@ Tests integration between major components to ensure they work together
 correctly and data flows properly between them.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import AsyncMock, Mock
 
@@ -198,12 +198,15 @@ class TestComponentIntegration:
         position_manager = PositionManager()
         order_manager = OrderManager()
 
+        # Reset positions to ensure clean state
+        position_manager.reset_positions()
+
         # Test opening a position
         Position(
             symbol="BTC-USD",
             side="FLAT",
             size=Decimal("0"),
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         )
 
         # Create an order
@@ -215,7 +218,7 @@ class TestComponentIntegration:
             quantity=Decimal("0.1"),
             price=Decimal("50000"),
             status=OrderStatus.FILLED,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             filled_quantity=Decimal("0.1"),
         )
 
@@ -224,18 +227,11 @@ class TestComponentIntegration:
 
         # Update position based on filled order
         if buy_order.status == OrderStatus.FILLED:
-            new_position = Position(
-                symbol=buy_order.symbol,
-                side="LONG",
-                size=buy_order.filled_quantity,
-                entry_price=buy_order.price,
-                timestamp=buy_order.timestamp,
-            )
-            position_manager.update_position(new_position)
+            position_manager.update_position_from_order(buy_order, buy_order.price)
 
         # Verify integration
-        current_position = position_manager.get_current_position("BTC-USD")
-        tracked_orders = order_manager.get_orders_by_symbol("BTC-USD")
+        current_position = position_manager.get_position("BTC-USD")
+        tracked_orders = order_manager.get_orders_by_status(OrderStatus.FILLED, "BTC-USD")
 
         assert current_position.side == "LONG"
         assert current_position.size == Decimal("0.1")
@@ -251,7 +247,7 @@ class TestComponentIntegration:
             quantity=Decimal("0.1"),
             price=Decimal("51000"),
             status=OrderStatus.FILLED,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             filled_quantity=Decimal("0.1"),
         )
 
@@ -259,22 +255,11 @@ class TestComponentIntegration:
 
         # Close position
         if sell_order.status == OrderStatus.FILLED:
-            # Calculate realized P&L
-            realized_pnl = (
-                sell_order.price - current_position.entry_price
-            ) * sell_order.filled_quantity
-
-            closed_position = Position(
-                symbol=sell_order.symbol,
-                side="FLAT",
-                size=Decimal("0"),
-                realized_pnl=realized_pnl,
-                timestamp=sell_order.timestamp,
-            )
-            position_manager.update_position(closed_position)
+            # Update position from sell order (will calculate P&L automatically)
+            position_manager.update_position_from_order(sell_order, sell_order.price)
 
         # Verify position closed with P&L
-        final_position = position_manager.get_current_position("BTC-USD")
+        final_position = position_manager.get_position("BTC-USD")
         assert final_position.side == "FLAT"
         assert final_position.size == Decimal("0")
         assert final_position.realized_pnl == Decimal("100")  # (51000 - 50000) * 0.1
@@ -303,7 +288,7 @@ class TestComponentIntegration:
                     symbol="BTC-USD",
                     side="FLAT",
                     size=Decimal("0"),
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(UTC),
                 ),
                 "price": Decimal("50000"),
                 "should_approve": True,
@@ -321,7 +306,7 @@ class TestComponentIntegration:
                     symbol="BTC-USD",
                     side="FLAT",
                     size=Decimal("0"),
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(UTC),
                 ),
                 "price": Decimal("50000"),
                 "should_approve": False,  # Should be modified or rejected
@@ -339,7 +324,7 @@ class TestComponentIntegration:
                     symbol="BTC-USD",
                     side="FLAT",
                     size=Decimal("0"),
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(UTC),
                 ),
                 "price": Decimal("50000"),
                 "should_approve": False,  # Should be rejected due to poor R:R
@@ -358,7 +343,7 @@ class TestComponentIntegration:
                     side="LONG",
                     size=Decimal("0.1"),
                     entry_price=Decimal("49000"),
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(UTC),
                 ),
                 "price": Decimal("50000"),
                 "should_approve": False,  # Should reject adding to position
@@ -409,7 +394,7 @@ class TestComponentIntegration:
             quantity=Decimal("0.1"),
             price=Decimal("50000"),
             status=OrderStatus.FILLED,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             filled_quantity=Decimal("0.1"),
         )
 
@@ -451,17 +436,17 @@ class TestComponentIntegration:
             symbol="BTC-USD",
             side="FLAT",
             size=Decimal("0"),
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         )
 
         market_state = MarketState(
             symbol="BTC-USD",
             interval="1m",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             current_price=current_price,
             ohlcv_data=[],  # Not needed for this test
             indicators=IndicatorData(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
                 **{
                     k: v
                     for k, v in latest_state.items()
@@ -541,7 +526,7 @@ class TestComponentIntegration:
             side="LONG",
             size=Decimal("0.1"),
             entry_price=current_price,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         )
 
         position_manager.update_position(test_position)
@@ -633,7 +618,7 @@ class TestComponentIntegration:
             symbol="BTC-USD",
             side="FLAT",
             size=Decimal("0"),
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         )
 
         # Should handle position manager error gracefully

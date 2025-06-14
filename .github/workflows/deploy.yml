@@ -146,13 +146,16 @@ jobs:
         mkdir -p logs data backups
         chmod 755 logs data backups
     
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
     - name: Deploy with Docker Compose
       run: |
-        # Update image reference in docker-compose.yml
-        sed -i "s|image: ai-trading-bot:latest|image: ${{ needs.build.outputs.image-tag }}|g" docker-compose.yml
+        # Update image reference in docker compose.yml
+        sed -i "s|image: ai-trading-bot:latest|image: ${{ needs.build.outputs.image-tag }}|g" docker compose.yml
         
         # Deploy services
-        docker-compose --env-file .env.deploy up -d --remove-orphans
+        docker compose --env-file .env.deploy up -d --remove-orphans
         
         echo "✅ Deployment started"
     
@@ -163,7 +166,7 @@ jobs:
         # Wait up to 5 minutes for container to be healthy
         timeout 300 bash -c '
           while true; do
-            if docker-compose ps | grep -q "healthy\|Up"; then
+            if docker compose ps | grep -q "healthy\|Up"; then
               echo "✅ Container is healthy"
               break
             fi
@@ -173,20 +176,20 @@ jobs:
         '
         
         # Show final status
-        docker-compose ps
+        docker compose ps
     
     - name: Run post-deployment tests
       run: |
         echo "🧪 Running post-deployment validation..."
         
         # Test container is running
-        if ! docker-compose ps | grep -q "Up"; then
+        if ! docker compose ps | grep -q "Up"; then
           echo "❌ Container is not running"
           exit 1
         fi
         
         # Test configuration validation
-        docker-compose exec -T ai-trading-bot python -c "
+        docker compose exec -T ai-trading-bot python -c "
         from bot.config import Settings
         settings = Settings()
         print('✅ Configuration loaded successfully')
@@ -208,10 +211,10 @@ jobs:
         echo "Deployed by: ${{ github.actor }}"
         echo ""
         echo "Container Status:"
-        docker-compose ps
+        docker compose ps
         echo ""
         echo "Recent Logs:"
-        docker-compose logs --tail=20 ai-trading-bot
+        docker compose logs --tail=20 ai-trading-bot
 
   # Send notifications
   notify:
@@ -259,13 +262,13 @@ jobs:
         echo "🚨 Initiating emergency rollback..."
         
         # Stop current deployment
-        docker-compose down
+        docker compose down
         
         # This could restore from a backup or previous image
         echo "⚠️  Manual intervention required for full rollback"
-        echo "   1. Check logs: docker-compose logs"
+        echo "   1. Check logs: docker compose logs"
         echo "   2. Restore configuration if needed"
-        echo "   3. Restart with: docker-compose up -d"
+        echo "   3. Restart with: docker compose up -d"
     
     - name: Send rollback notification
       run: |

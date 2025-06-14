@@ -81,6 +81,7 @@ import signal
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 # Third-party imports
 import click
@@ -252,6 +253,9 @@ class TradingEngine:
         """
         self.logger.info("Starting trading engine...")
 
+        # Track if we've already started shutdown to prevent double shutdown
+        shutdown_called = False
+
         try:
             # Setup signal handlers for graceful shutdown
             self._setup_signal_handlers()
@@ -269,12 +273,25 @@ class TradingEngine:
             # Start main trading loop
             await self._main_trading_loop()
 
+        except KeyboardInterrupt:
+            self.logger.info("Received keyboard interrupt, shutting down gracefully...")
+            console.print("\n[yellow]Received interrupt signal, shutting down...[/yellow]")
         except Exception as e:
             self.logger.error(f"Critical error in trading engine: {e}")
             console.print(f"[red]Critical error: {e}[/red]")
             raise
         finally:
-            await self._shutdown()
+            # Ensure shutdown is called exactly once
+            if not shutdown_called:
+                shutdown_called = True
+                try:
+                    await self._shutdown()
+                except Exception as e:
+                    self.logger.error(f"Error in shutdown: {e}")
+                    # Force cleanup of dominance provider session as last resort
+                    if hasattr(self, 'dominance_provider') and self.dominance_provider:
+                        if hasattr(self.dominance_provider, '_session'):
+                            self.dominance_provider._session = None
 
     def _setup_signal_handlers(self):
         """Setup signal handlers for graceful shutdown."""
@@ -343,9 +360,16 @@ class TradingEngine:
                 )
 
             # Check for historical data
-            data = self.market_data.get_latest_ohlcv(limit=50)
-            if len(data) >= 50 and not historical_data_loaded:
+            data = self.market_data.get_latest_ohlcv(limit=100)  # Check for indicator minimum
+            if len(data) >= 100 and not historical_data_loaded:
                 self.logger.info(f"Loaded {len(data)} historical candles for analysis")
+                historical_data_loaded = True
+            elif len(data) >= 50 and not historical_data_loaded:
+                # Fallback: proceed with limited data but warn about potential issues
+                self.logger.warning(
+                    f"Limited historical data available: {len(data)} candles. "
+                    f"Indicators may be unreliable until more data is accumulated."
+                )
                 historical_data_loaded = True
 
             # Check for WebSocket data
@@ -510,13 +534,26 @@ class TradingEngine:
                                 None  # Ensure variable is properly reset on error
                             )
 
-                # Calculate indicators with dominance candle support
-                df_with_indicators = self.indicator_calc.calculate_all(
-                    df, dominance_candles=dominance_candles
-                )
-                indicator_state = self.indicator_calc.get_latest_state(
-                    df_with_indicators
-                )
+                # Validate data sufficiency before indicator calculation
+                if len(df) < 100:
+                    self.logger.warning(
+                        f"Insufficient data for reliable indicators: {len(df)} candles. "
+                        f"Using fallback values until more data is available."
+                    )
+                    indicator_state = self._get_fallback_indicator_state()
+                else:
+                    # Calculate indicators with dominance candle support - add error boundary
+                    try:
+                        df_with_indicators = self.indicator_calc.calculate_all(
+                            df, dominance_candles=dominance_candles
+                        )
+                        indicator_state = self.indicator_calc.get_latest_state(
+                            df_with_indicators
+                        )
+                    except Exception as e:
+                        self.logger.warning(f"Indicator calculation failed: {e}, using fallback values")
+                        # Use fallback indicator state
+                        indicator_state = self._get_fallback_indicator_state()
 
                 # Prepare indicator data
                 indicator_dict = {
@@ -559,33 +596,45 @@ class TradingEngine:
                         f"Added dominance analysis indicators: {list(dominance_analysis.keys())}"
                     )
 
-                # Add dominance data to indicators if available
+                # Add dominance data to indicators if available - add error boundary
                 dominance_obj = None
                 if self.dominance_provider:
-                    dominance_data = self.dominance_provider.get_latest_dominance()
-                    if dominance_data:
-                        # Add dominance metrics to indicator dict
-                        indicator_dict.update(
-                            {
-                                "usdt_dominance": dominance_data.usdt_dominance,
-                                "usdc_dominance": dominance_data.usdc_dominance,
-                                "stablecoin_dominance": dominance_data.stablecoin_dominance,
-                                "dominance_trend": dominance_data.dominance_24h_change,
-                                "dominance_rsi": dominance_data.dominance_rsi,
-                                "stablecoin_velocity": dominance_data.stablecoin_velocity,
+                    try:
+                        dominance_data = self.dominance_provider.get_latest_dominance()
+                        if dominance_data:
+                            # Add dominance metrics to indicator dict - validate values
+                            dominance_metrics = {
+                                "usdt_dominance": dominance_data.usdt_dominance if dominance_data.usdt_dominance is not None else 0.0,
+                                "usdc_dominance": dominance_data.usdc_dominance if dominance_data.usdc_dominance is not None else 0.0,
+                                "stablecoin_dominance": dominance_data.stablecoin_dominance if dominance_data.stablecoin_dominance is not None else 0.0,
+                                "dominance_trend": dominance_data.dominance_24h_change if dominance_data.dominance_24h_change is not None else 0.0,
+                                "dominance_rsi": dominance_data.dominance_rsi if dominance_data.dominance_rsi is not None else 50.0,
+                                "stablecoin_velocity": dominance_data.stablecoin_velocity if dominance_data.stablecoin_velocity is not None else 1.0,
                             }
-                        )
+                            indicator_dict.update(dominance_metrics)
 
-                        # Get market sentiment based on dominance
-                        sentiment_analysis = (
-                            self.dominance_provider.get_market_sentiment()
-                        )
-                        indicator_dict["market_sentiment"] = sentiment_analysis.get(
-                            "sentiment", "NEUTRAL"
-                        )
+                            # Get market sentiment based on dominance
+                            try:
+                                sentiment_analysis = self.dominance_provider.get_market_sentiment()
+                                indicator_dict["market_sentiment"] = sentiment_analysis.get("sentiment", "NEUTRAL")
+                            except Exception as e:
+                                self.logger.warning(f"Failed to get market sentiment: {e}")
+                                indicator_dict["market_sentiment"] = "NEUTRAL"
 
-                        # Store dominance object for MarketState
-                        dominance_obj = dominance_data
+                            # Store dominance object for MarketState
+                            dominance_obj = dominance_data
+                    except Exception as e:
+                        self.logger.warning(f"Failed to process dominance data: {e}, using default values")
+                        # Add default dominance values
+                        indicator_dict.update({
+                            "usdt_dominance": 0.0,
+                            "usdc_dominance": 0.0,
+                            "stablecoin_dominance": 0.0,
+                            "dominance_trend": 0.0,
+                            "dominance_rsi": 50.0,
+                            "stablecoin_velocity": 1.0,
+                            "market_sentiment": "NEUTRAL"
+                        })
 
                 # Calculate how many candles represent 24 hours based on interval
                 interval_minutes = self._get_interval_minutes(self.interval)
@@ -876,26 +925,54 @@ class TradingEngine:
         self.logger.info("Initiating graceful shutdown...")
         console.print("[yellow]Shutting down trading engine...[/yellow]")
 
-        try:
-            self._running = False
+        # Set running to False first to stop any loops
+        self._running = False
 
+        # Create a list of cleanup tasks to run concurrently with timeout
+        cleanup_tasks = []
+
+        try:
             # Cancel all open orders
-            if self.exchange_client.is_connected():
+            if hasattr(self, 'exchange_client') and self.exchange_client.is_connected():
                 console.print("  • Cancelling open orders...")
-                await self.exchange_client.cancel_all_orders(self.symbol)
+                cleanup_tasks.append(
+                    asyncio.create_task(self.exchange_client.cancel_all_orders(self.symbol))
+                )
 
             # Close market data connection
-            console.print("  • Disconnecting from market data...")
-            await self.market_data.disconnect()
+            if hasattr(self, 'market_data'):
+                console.print("  • Disconnecting from market data...")
+                cleanup_tasks.append(
+                    asyncio.create_task(self.market_data.disconnect())
+                )
 
             # Close exchange connection
-            console.print("  • Disconnecting from exchange...")
-            await self.exchange_client.disconnect()
+            if hasattr(self, 'exchange_client'):
+                console.print("  • Disconnecting from exchange...")
+                cleanup_tasks.append(
+                    asyncio.create_task(self.exchange_client.disconnect())
+                )
 
-            # Close dominance data connection
-            if self.dominance_provider:
+            # Close dominance data connection - CRITICAL for async session cleanup
+            if hasattr(self, 'dominance_provider') and self.dominance_provider:
                 console.print("  • Disconnecting from dominance data...")
-                await self.dominance_provider.disconnect()
+                cleanup_tasks.append(
+                    asyncio.create_task(self.dominance_provider.disconnect())
+                )
+
+            # Wait for all cleanup tasks with a timeout
+            if cleanup_tasks:
+                done, pending = await asyncio.wait(
+                    cleanup_tasks, timeout=5.0, return_when=asyncio.ALL_COMPLETED
+                )
+
+                # Cancel any tasks that didn't complete in time
+                for task in pending:
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
 
             # Display final summary
             self._display_final_summary()
@@ -905,6 +982,17 @@ class TradingEngine:
         except Exception as e:
             self.logger.error(f"Error during shutdown: {e}")
             console.print(f"[red]Shutdown error: {e}[/red]")
+        finally:
+            # Final cleanup - ensure all async sessions are closed
+            # This is a last resort cleanup
+            if hasattr(self, 'dominance_provider') and self.dominance_provider:
+                if hasattr(self.dominance_provider, '_session') and self.dominance_provider._session:
+                    if not self.dominance_provider._session.closed:
+                        try:
+                            # Force close without await since we might be in cleanup
+                            self.dominance_provider._session._connector.close()
+                        except Exception:
+                            pass
 
     def _display_final_summary(self):
         """Display final trading session summary."""
@@ -1124,6 +1212,40 @@ class TradingEngine:
             self.logger.error(f"Error in Cipher B filtering: {e}")
             # On error, allow the original trade action to prevent system failure
             return trade_action
+
+    def _get_fallback_indicator_state(self) -> dict[str, Any]:
+        """
+        Get fallback indicator state when calculation fails.
+
+        Returns:
+            Dictionary with safe default values for all indicators
+        """
+        return {
+            "cipher_a": {
+                "trend_dot": 0.0,
+                "rsi": 50.0,
+                "ema_fast": 0.0,
+                "ema_slow": 0.0,
+                "signal": 0,
+                "confidence": 0.0
+            },
+            "cipher_b": {
+                "wave": 0.0,
+                "money_flow": 50.0,
+                "vwap": 0.0,
+                "signal": 0,
+                "confidence": 0.0
+            },
+            "dominance_analysis": {
+                "cipher_a_signal": 0,
+                "cipher_b_signal": 0,
+                "sentiment": "NEUTRAL",
+                "price_divergence": "NONE",
+                "trend": "SIDEWAYS",
+                "wt1": 0.0,
+                "wt2": 0.0
+            }
+        }
 
 
 @click.group()

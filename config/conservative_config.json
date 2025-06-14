@@ -41,10 +41,10 @@
     "emergency_stop_loss_pct": 5.0
   },
   "data": {
-    "candle_limit": 200,
+    "candle_limit": 250,
     "real_time_updates": true,
     "data_cache_ttl_seconds": 60,
-    "indicator_warmup": 50,
+    "indicator_warmup": 100,
     "cipher_a_ema_length": 21,
     "cipher_b_vwap_length": 20,
     "enable_cipher_b_filter": true,

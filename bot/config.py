@@ -273,6 +273,85 @@ class LLMSettings(BaseModel):
         return v
 
 
+class MCPSettings(BaseModel):
+    """MCP (Model Context Protocol) configuration for memory and learning."""
+
+    model_config = ConfigDict(frozen=True)
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable MCP memory server for learning"
+    )
+    server_url: str = Field(
+        default="http://localhost:8765",
+        description="MCP memory server URL"
+    )
+    memory_api_key: SecretStr | None = Field(
+        default=None,
+        description="API key for memory server (if required)"
+    )
+    
+    # Memory Configuration
+    max_memories_per_query: int = Field(
+        default=10,
+        ge=1,
+        le=50,
+        description="Maximum similar experiences to retrieve per query"
+    )
+    similarity_threshold: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Minimum similarity score for memory retrieval"
+    )
+    memory_retention_days: int = Field(
+        default=90,
+        ge=7,
+        le=365,
+        description="Days to retain trading memories"
+    )
+    
+    # Learning Configuration
+    enable_pattern_learning: bool = Field(
+        default=True,
+        description="Enable pattern recognition and learning"
+    )
+    learning_rate: float = Field(
+        default=0.1,
+        ge=0.01,
+        le=1.0,
+        description="Learning rate for strategy adjustments"
+    )
+    min_samples_for_pattern: int = Field(
+        default=5,
+        ge=3,
+        le=20,
+        description="Minimum samples needed to identify a pattern"
+    )
+    confidence_decay_rate: float = Field(
+        default=0.95,
+        ge=0.5,
+        le=0.99,
+        description="Decay rate for pattern confidence over time"
+    )
+    
+    # Experience Collection
+    track_trade_lifecycle: bool = Field(
+        default=True,
+        description="Track complete trade lifecycle for learning"
+    )
+    store_market_snapshots: bool = Field(
+        default=True,
+        description="Store market snapshots at key decision points"
+    )
+    reflection_delay_minutes: int = Field(
+        default=30,
+        ge=5,
+        le=1440,
+        description="Minutes to wait before analyzing trade outcome"
+    )
+
+
 class ExchangeSettings(BaseModel):
     """Exchange API configuration."""
 
@@ -432,7 +511,7 @@ class DataSettings(BaseModel):
 
     # Data Fetching
     candle_limit: int = Field(
-        default=200, ge=50, le=2000, description="Number of historical candles to fetch"
+        default=300, ge=100, le=2000, description="Number of historical candles to fetch (minimum 100 for VuManChu indicators)"
     )
     real_time_updates: bool = Field(
         default=True, description="Enable real-time data updates"
@@ -443,7 +522,7 @@ class DataSettings(BaseModel):
 
     # Indicator Configuration
     indicator_warmup: int = Field(
-        default=50, ge=20, le=500, description="Indicator warmup period"
+        default=100, ge=50, le=500, description="Indicator warmup period (minimum 100 for VuManChu indicators)"
     )
 
     # VuManChu Cipher Settings
@@ -702,6 +781,7 @@ class Settings(BaseSettings):
     dominance: DominanceSettings = Field(default_factory=DominanceSettings)
     system: SystemSettings = Field(default_factory=SystemSettings)
     paper_trading: PaperTradingSettings = Field(default_factory=PaperTradingSettings)
+    mcp: MCPSettings = Field(default_factory=MCPSettings)
 
     # Profile Configuration
     profile: TradingProfile = Field(

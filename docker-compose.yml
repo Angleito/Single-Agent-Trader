@@ -13,16 +13,12 @@ services:
     env_file:
       - .env
     
-    # Override specific environment variables for Docker  
+    # Docker-specific environment overrides (minimal set to avoid conflicts with .env)
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONWARNINGS=ignore::UserWarning,ignore::DeprecationWarning,ignore::SyntaxWarning,ignore::FutureWarning
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - DRY_RUN=true
-      - SYMBOL=BTC-USD
-      - ENABLE_PAPER_TRADING=true
-      - ENVIRONMENT=development
+      - CONFIG_FILE=/app/config/docker.json
       # LLM Logging Configuration
       - LLM__ENABLE_COMPLETION_LOGGING=${LLM_ENABLE_COMPLETION_LOGGING:-true}
       - LLM__COMPLETION_LOG_LEVEL=${LLM_COMPLETION_LOG_LEVEL:-INFO}
@@ -31,15 +27,12 @@ services:
       - LLM__ENABLE_LANGCHAIN_CALLBACKS=${LLM_ENABLE_LANGCHAIN_CALLBACKS:-true}
       - LLM__LOG_MARKET_CONTEXT=${LLM_LOG_MARKET_CONTEXT:-true}
       
-    # Volume mounts for persistence and configuration
+    # Volume mounts for persistence and configuration (cleaned up overlapping mounts)
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
       - ./config:/app/config:ro  # Read-only config mount
       - ./bot:/app/bot:ro  # Mount bot code with fixes
-      # Mount separate log directories for different log types
-      - ./logs/llm_completions:/app/logs/llm_completions
-      - ./logs/trading_decisions:/app/logs/trading_decisions
       
     # Health check configuration
     healthcheck:
@@ -67,11 +60,62 @@ services:
         max-file: "3"
         
     # Default command - starts in dry-run mode for safety
-    command: ["python", "-m", "bot.main", "live", "--dry-run", "--symbol", "BTC-USD", "--interval", "3m"]
+    command: ["python", "-m", "bot.main", "live"]
     
     # Connect to shared network for dashboard communication
     networks:
       - trading-network
+    
+    # Depends on MCP memory server if enabled
+    depends_on:
+      - mcp-memory
+
+  # MCP Memory Server for AI Learning
+  mcp-memory:
+    build:
+      context: ./bot/mcp
+      dockerfile: Dockerfile
+    image: mcp-memory-server:latest
+    container_name: mcp-memory-server
+    restart: unless-stopped
+    
+    environment:
+      - MCP_SERVER_PORT=8765
+      - MEM0_API_KEY=${MEM0_API_KEY:-}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MEMORY_RETENTION_DAYS=${MCP_MEMORY_RETENTION_DAYS:-90}
+      
+    volumes:
+      - ./data/mcp_memory:/app/data
+      - ./logs/mcp:/app/logs
+      
+    ports:
+      - "8765:8765"
+      
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8765/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+      
+    networks:
+      - trading-network
+      
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.3'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+          
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Dashboard Backend Service
   dashboard-backend:
@@ -88,8 +132,8 @@ services:
       - ./logs:/app/trading-logs:ro  # Access to trading bot logs
       - ./data:/app/trading-data:ro  # Access to trading bot data
       # Access to LLM completion logs for dashboard analytics
-      - ./logs/llm_completions:/app/llm-logs:ro
-      - ./logs/trading_decisions:/app/decision-logs:ro
+      - ./logs:/app/llm-logs:ro
+      - ./logs:/app/decision-logs:ro
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
@@ -238,20 +282,12 @@ services:
       - DRY_RUN=true
     volumes:
       - .:/app:delegated  # Mount entire project for development
-      - ./logs:/app/logs
-      - ./data:/app/data
     networks:
       - trading-network
     command: ["python", "-m", "bot.main", "live", "--dry-run", "--symbol", "BTC-USD"]
 
 volumes:
-  # Trading bot data persistence
-  logs:
-    name: trading-bot-logs
-  data:
-    name: trading-bot-data
-  
-  # Dashboard data persistence
+  # Dashboard data persistence (trading bot uses bind mounts)
   dashboard-logs:
     name: dashboard-logs
   dashboard-data:

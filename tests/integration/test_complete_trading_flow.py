@@ -5,8 +5,9 @@ This module tests the complete trading flow from market data ingestion
 through LLM decision-making to trade execution and position tracking.
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from typing import List
 from unittest.mock import AsyncMock, Mock, patch
 
 import numpy as np
@@ -32,7 +33,7 @@ class TestCompleteTradingFlow:
         """Create realistic mock market data for testing."""
         base_price = 50000
         timestamps = [
-            datetime.utcnow() - timedelta(minutes=i) for i in range(200, 0, -1)
+            datetime.now(UTC) - timedelta(minutes=i) for i in range(200, 0, -1)
         ]
 
         market_data = []
@@ -105,7 +106,7 @@ class TestCompleteTradingFlow:
                 quantity=Decimal("0.1"),
                 price=Decimal("50000"),
                 status=OrderStatus.FILLED,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
                 filled_quantity=Decimal("0.1"),
             ),
             "successful_short": Order(
@@ -116,7 +117,7 @@ class TestCompleteTradingFlow:
                 quantity=Decimal("0.1"),
                 price=Decimal("50000"),
                 status=OrderStatus.FILLED,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
                 filled_quantity=Decimal("0.1"),
             ),
             "failed": Order(
@@ -127,7 +128,7 @@ class TestCompleteTradingFlow:
                 quantity=Decimal("0.1"),
                 price=Decimal("50000"),
                 status=OrderStatus.REJECTED,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
                 filled_quantity=Decimal("0"),
             ),
         }
@@ -207,7 +208,7 @@ class TestCompleteTradingFlow:
             market_state = MarketState(
                 symbol=engine.symbol,
                 interval=engine.interval,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
                 current_price=current_price,
                 ohlcv_data=latest_data[-10:],
                 indicators=IndicatorData(**indicator_state),
@@ -234,7 +235,7 @@ class TestCompleteTradingFlow:
                 quantity=Decimal("0.1"),
                 price=current_price,  # Use actual current price
                 status=OrderStatus.FILLED,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
                 filled_quantity=Decimal("0.1"),
             )
             engine.paper_account.execute_trade_action = Mock(return_value=first_order)
@@ -268,7 +269,7 @@ class TestCompleteTradingFlow:
                 quantity=engine.current_position.size,  # Close entire position
                 price=current_price,  # Use actual current price
                 status=OrderStatus.FILLED,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
                 filled_quantity=engine.current_position.size,
             )
             engine.paper_account.execute_trade_action = Mock(return_value=second_order)
@@ -388,7 +389,7 @@ class TestCompleteTradingFlow:
             market_state = MarketState(
                 symbol=engine.symbol,
                 interval=engine.interval,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
                 current_price=current_price,
                 ohlcv_data=mock_market_data[-10:],
                 indicators=IndicatorData(**indicator_state),
@@ -510,7 +511,7 @@ class TestCompleteTradingFlow:
             assert final_action.size_pct <= 20  # Should be capped to reasonable level
             assert "risk" in risk_reason.lower() or "size" in risk_reason.lower()
 
-    def _create_mock_dataframe(self, market_data: list[MarketData]) -> pd.DataFrame:
+    def _create_mock_dataframe(self, market_data: List[MarketData]) -> pd.DataFrame:
         """Convert market data to DataFrame for indicator calculations."""
         data = []
         for candle in market_data:
@@ -594,7 +595,7 @@ class TestCompleteTradingFlow:
                 market_state = MarketState(
                     symbol=engine.symbol,
                     interval=engine.interval,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(UTC),
                     current_price=current_price,
                     ohlcv_data=mock_market_data[-10:],
                     indicators=IndicatorData(**indicator_state),

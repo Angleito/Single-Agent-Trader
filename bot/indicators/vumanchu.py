@@ -209,6 +209,18 @@ class CipherA:
             - divergence_bullish, divergence_bearish: Divergence signals
         """
         # Validate input data
+        if df.empty:
+            logger.error("Cannot calculate Cipher A indicators on empty DataFrame")
+            return pd.DataFrame()
+        
+        # Check for required columns
+        required_cols = ['open', 'high', 'low', 'close', 'volume']
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        if missing_cols:
+            logger.error(f"Missing required columns for Cipher A calculation: {missing_cols}")
+            return df.copy()
+        
+        # Check for sufficient data
         min_length = (
             max(
                 self.wt_channel_length,
@@ -225,6 +237,16 @@ class CipherA:
                 f"Insufficient data for Cipher A calculation. Need {min_length}, got {len(df)}"
             )
             return df.copy()
+        
+        # Validate data quality
+        close_prices = df['close']
+        if close_prices.isna().sum() > len(df) * 0.1:  # More than 10% NaN
+            logger.warning(f"High percentage of NaN values in close prices: {close_prices.isna().sum()}/{len(df)}")
+        
+        # Check for zero or negative prices
+        invalid_prices = (close_prices <= 0).sum()
+        if invalid_prices > 0:
+            logger.warning(f"Found {invalid_prices} invalid (zero or negative) prices in close data")
 
         result = df.copy()
 
@@ -2012,11 +2034,11 @@ class VuManChuIndicators:
                     "dominance_cipher_b_confidence": latest_dom_b.get(
                         "cipher_b_confidence", 0.0
                     ),
-                    "dominance_wt1": latest_dom_a.get("wt1"),
-                    "dominance_wt2": latest_dom_a.get("wt2"),
-                    "dominance_rsi": latest_dom_a.get("rsi"),
-                    "dominance_ema_fast": latest_dom_a.get("ema_fast"),
-                    "dominance_ema_slow": latest_dom_a.get("ema_slow"),
+                    "dominance_wt1": latest_dom_a.get("wt1", 0.0),
+                    "dominance_wt2": latest_dom_a.get("wt2", 0.0),
+                    "dominance_rsi": latest_dom_a.get("rsi", 50.0),
+                    "dominance_ema_fast": latest_dom_a.get("ema_fast", 0.0),
+                    "dominance_ema_slow": latest_dom_a.get("ema_slow", 0.0),
                     "dominance_trend": latest_dom_a.get("trend_dot", 0),
                 }
 
@@ -2062,9 +2084,15 @@ class VuManChuIndicators:
                     **dominance_sentiment,
                 }.items():
                     if col not in result.columns:
-                        result[col] = pd.Series(
-                            dtype=type(default_val), index=result.index
-                        )
+                        # Handle None values by using float64 dtype as default
+                        if default_val is None:
+                            result[col] = pd.Series(
+                                dtype="float64", index=result.index
+                            )
+                        else:
+                            result[col] = pd.Series(
+                                dtype=type(default_val), index=result.index
+                            )
 
                 # Set the latest values
                 for col, val in {

@@ -312,7 +312,9 @@ class MarketDataProvider:
         # Calculate start time based on interval and limit
         interval_seconds = self._interval_to_seconds(granularity)
         # Respect Coinbase API limit of 350 candles max
-        max_candles = min(self.candle_limit, 300)  # Use 300 to be safe
+        # Ensure we fetch enough data for indicators (minimum 100, prefer 200+)
+        required_candles = max(self.candle_limit, 200)  # Ensure minimum for indicators
+        max_candles = min(required_candles, 300)  # Use 300 to be safe with API limits
 
         # Calculate the actual number of candles that will be requested
         # This depends on the API granularity, not the requested granularity
@@ -360,6 +362,14 @@ class MarketDataProvider:
         logger.info(
             f"Requesting {expected_candles} candles at {api_granularity} granularity (requested: {granularity})"
         )
+        
+        # Warn if we're not getting enough data for indicators
+        min_required_for_indicators = 100  # VuManChu needs ~80 + buffer
+        if expected_candles < min_required_for_indicators:
+            logger.warning(
+                f"Fetching only {expected_candles} candles, but indicators need at least "
+                f"{min_required_for_indicators} for reliable calculations. Consider increasing candle_limit."
+            )
 
         try:
             # Use public API endpoint for historical candles
@@ -400,6 +410,10 @@ class MarketDataProvider:
                 self._cache_timestamps["ohlcv"] = self._last_update
 
                 logger.info(f"Loaded {len(self._ohlcv_cache)} historical candles")
+                
+                # Validate we have sufficient data for indicators
+                self._validate_data_sufficiency(len(self._ohlcv_cache))
+                
                 return historical_data
 
         except Exception as e:
@@ -1170,6 +1184,35 @@ class MarketDataProvider:
         except Exception as e:
             logger.error(f"Error validating market data: {e}")
             return False
+
+    def _validate_data_sufficiency(self, candle_count: int) -> None:
+        """
+        Validate that we have sufficient data for reliable indicator calculations.
+        
+        Args:
+            candle_count: Number of candles available
+        """
+        # VuManChu indicators need ~80 candles minimum for reliable calculation
+        # RSI+MFI period=60, EMA ribbon max=34, plus buffer
+        min_required = 100  # Conservative estimate with buffer
+        optimal_required = 200  # Optimal for stable calculations
+        
+        if candle_count < min_required:
+            logger.error(
+                f"Insufficient data for reliable indicator calculations! "
+                f"Have {candle_count} candles, need minimum {min_required}. "
+                f"Indicators may produce unreliable signals or errors."
+            )
+        elif candle_count < optimal_required:
+            logger.warning(
+                f"Suboptimal data for indicator calculations. "
+                f"Have {candle_count} candles, recommend {optimal_required} for best accuracy. "
+                f"Early indicator values may be less reliable."
+            )
+        else:
+            logger.info(
+                f"Sufficient data for reliable indicator calculations: {candle_count} candles"
+            )
 
     def clear_cache(self) -> None:
         """

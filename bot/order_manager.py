@@ -10,7 +10,7 @@ import json
 import logging
 import threading
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from decimal import Decimal
 from enum import Enum
 from pathlib import Path
@@ -120,7 +120,7 @@ class OrderManager:
         """
         with self._lock:
             # Generate unique order ID
-            order_id = f"order_{datetime.utcnow().timestamp()}_{symbol}_{side}"
+            order_id = f"order_{datetime.now(UTC).timestamp()}_{symbol}_{side}"
 
             # Create order object
             order = Order(
@@ -132,7 +132,7 @@ class OrderManager:
                 price=price,
                 stop_price=stop_price,
                 status=OrderStatus.PENDING,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
                 filled_quantity=Decimal("0"),
             )
 
@@ -209,7 +209,7 @@ class OrderManager:
 
             # Update order fields
             order.status = status
-            order.timestamp = datetime.utcnow()
+            order.timestamp = datetime.now(UTC)
 
             if filled_quantity is not None:
                 order.filled_quantity = filled_quantity
@@ -328,7 +328,7 @@ class OrderManager:
                 OrderStatus.REJECTED,
                 OrderStatus.FAILED,
             ]:
-                cutoff_time = datetime.utcnow() - timedelta(hours=24)
+                cutoff_time = datetime.now(UTC) - timedelta(hours=24)
                 for order in self._order_history:
                     if order.status == status and order.timestamp >= cutoff_time:
                         if symbol is None or order.symbol == symbol:
@@ -435,7 +435,7 @@ class OrderManager:
             Dictionary with order statistics
         """
         with self._lock:
-            cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+            cutoff_time = datetime.now(UTC) - timedelta(hours=hours)
 
             # Collect orders from history
             recent_orders = []
@@ -683,7 +683,7 @@ class OrderManager:
             days_to_keep: Number of days to keep in history
         """
         with self._lock:
-            cutoff_date = datetime.utcnow() - timedelta(days=days_to_keep)
+            cutoff_date = datetime.now(UTC) - timedelta(days=days_to_keep)
 
             original_count = len(self._order_history)
             self._order_history = [

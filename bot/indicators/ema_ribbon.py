@@ -129,18 +129,32 @@ class EMAribbon:
             raise ValueError("DataFrame must contain 'close' column")
 
         max_length = max(self.lengths)
-        if len(df) < max_length:
+        min_data_points = max_length * 2  # Require 2x the longest EMA for proper convergence
+        
+        if len(df) < min_data_points:
             logger.warning(
-                "Insufficient data for EMA ribbon calculation",
+                "Insufficient data for reliable EMA ribbon calculation",
                 extra={
                     "indicator": "ema_ribbon",
-                    "issue": "insufficient_data",
+                    "issue": "insufficient_data_for_convergence",
+                    "data_points": len(df),
+                    "max_ema_length": max_length,
+                    "recommended_min_points": min_data_points,
+                    "shortage": min_data_points - len(df),
+                },
+            )
+            # Still calculate but with warning
+        elif len(df) < max_length:
+            logger.info(
+                "Limited data for EMA ribbon - calculations may have reduced accuracy",
+                extra={
+                    "indicator": "ema_ribbon",
+                    "issue": "limited_data",
                     "data_points": len(df),
                     "max_ema_length": max_length,
                     "shortage": max_length - len(df),
                 },
             )
-            return df.copy()
 
         result = df.copy()
 
@@ -175,9 +189,18 @@ class EMAribbon:
                     result[f"ema{i}"] = ema_values.astype(float)
                     successful_emas += 1
 
-                    # Validate EMA values
+                    # Validate EMA values with improved thresholds
                     valid_count = (~ema_values.isna()).sum()
-                    if valid_count < len(ema_values) * 0.8:  # Less than 80% valid
+                    total_count = len(ema_values)
+                    valid_percentage = (valid_count / total_count) * 100 if total_count > 0 else 0
+                    
+                    # Calculate expected convergence point for this EMA length
+                    convergence_point = min(length * 3, total_count)  # EMAs typically converge after 3x their period
+                    expected_valid_from_convergence = max(0, total_count - convergence_point)
+                    expected_valid_percentage = (expected_valid_from_convergence / total_count) * 100 if total_count > 0 else 0
+                    
+                    # Only warn if valid percentage is significantly below expected
+                    if valid_percentage < max(50.0, expected_valid_percentage * 0.8):  # At least 50% or 80% of expected
                         logger.warning(
                             f"Low valid data percentage in EMA{i}",
                             extra={
@@ -186,10 +209,21 @@ class EMAribbon:
                                 "ema_number": i,
                                 "ema_length": length,
                                 "valid_count": int(valid_count),
-                                "total_count": len(ema_values),
-                                "valid_percentage": round(
-                                    (valid_count / len(ema_values)) * 100, 2
-                                ),
+                                "total_count": total_count,
+                                "valid_percentage": round(valid_percentage, 2),
+                                "expected_valid_percentage": round(expected_valid_percentage, 2),
+                                "convergence_point": convergence_point,
+                            },
+                        )
+                    else:
+                        logger.debug(
+                            f"EMA{i} validation passed",
+                            extra={
+                                "indicator": "ema_ribbon",
+                                "ema_number": i,
+                                "ema_length": length,
+                                "valid_percentage": round(valid_percentage, 2),
+                                "convergence_point": convergence_point,
                             },
                         )
                 else:
@@ -309,9 +343,24 @@ class EMAribbon:
             # Calculate ribbon trend strength (distance between fastest and slowest EMA)
             if "ema1" in df.columns and "ema8" in df.columns:
                 ema_spread = abs(result["ema1"] - result["ema8"])
+                # Prevent division by very small close prices
+                close_safe = result["close"].where(result["close"] > 1e-8, 1e-8)
                 result["ribbon_strength"] = (
-                    ema_spread / result["close"] * 100
+                    ema_spread / close_safe * 100
                 )  # As percentage
+                
+                # Handle flat market conditions
+                low_variance_mask = ema_spread < (result["close"] * 1e-6)  # Less than 0.0001% of price
+                if low_variance_mask.sum() > 0:
+                    result.loc[low_variance_mask, "ribbon_strength"] = 0.0
+                    logger.debug(
+                        "Flat market conditions detected - setting ribbon strength to zero",
+                        extra={
+                            "indicator": "ema_ribbon",
+                            "flat_periods": int(low_variance_mask.sum()),
+                            "total_periods": len(result),
+                        },
+                    )
 
                 avg_strength = result["ribbon_strength"].mean()
                 max_strength = result["ribbon_strength"].max()
@@ -585,6 +634,7 @@ class EMAribbon:
                     "cross_patterns",
                     "triangle_signals",
                     "overall_signal",
+                    "flat_market_handling",
                 ],
             },
         )
@@ -629,6 +679,13 @@ class EMAribbon:
                 extra={"indicator": "ema_ribbon", "step": "overall_signal"},
             )
             result = self._calculate_overall_signal(result)
+            
+            # Handle flat market conditions
+            logger.debug(
+                "Step 7: Handling flat market conditions",
+                extra={"indicator": "ema_ribbon", "step": "flat_market_handling"},
+            )
+            result = self._handle_flat_market_conditions(result)
 
             # Performance and summary logging
             end_time = time.perf_counter()
@@ -851,10 +908,22 @@ class EMAribbon:
         if "close" not in df.columns:
             return False, "Missing required 'close' column"
 
-        if len(df) < max(self.lengths):
+        max_length = max(self.lengths)
+        min_recommended = max_length * 2  # Recommend 2x for good convergence
+        
+        if len(df) < max_length:
             return (
                 False,
-                f"Insufficient data. Need {max(self.lengths)} rows, got {len(df)}",
+                f"Insufficient data. Need at least {max_length} rows, got {len(df)}",
+            )
+        elif len(df) < min_recommended:
+            logger.info(
+                f"Limited data for optimal EMA convergence. Have {len(df)} rows, recommend {min_recommended} for best results",
+                extra={
+                    "indicator": "ema_ribbon",
+                    "data_points": len(df),
+                    "recommended_minimum": min_recommended,
+                },
             )
 
         # Check for valid close values
@@ -867,6 +936,19 @@ class EMAribbon:
 
             if (df["close"] <= 0).any():
                 return False, "'close' column contains non-positive values"
+
+            # Check for minimum price variance to avoid flat market issues
+            price_variance = df["close"].var()
+            if price_variance < 1e-10:  # Extremely small variance
+                logger.warning(
+                    "Very low price variance detected - EMA calculations may be less meaningful",
+                    extra={
+                        "indicator": "ema_ribbon",
+                        "issue": "low_price_variance",
+                        "variance": float(price_variance),
+                        "price_range": float(df["close"].max() - df["close"].min()),
+                    },
+                )
 
         except Exception as e:
             return False, f"Data validation error: {str(e)}"
@@ -1069,3 +1151,54 @@ class EMAribbon:
         )
 
         return metrics
+
+    def _handle_flat_market_conditions(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Handle flat market conditions by adjusting signals appropriately.
+        
+        Args:
+            df: DataFrame with calculated EMA values
+            
+        Returns:
+            DataFrame with flat market conditions handled
+        """
+        result = df.copy()
+        
+        if "close" not in result.columns:
+            return result
+            
+        # Detect flat market periods
+        price_changes = result["close"].pct_change().abs()
+        flat_threshold = 1e-5  # 0.001% change threshold
+        flat_mask = price_changes < flat_threshold
+        
+        # Count consecutive flat periods
+        consecutive_flat = flat_mask.groupby((~flat_mask).cumsum()).cumsum()
+        long_flat_mask = consecutive_flat > 10  # More than 10 consecutive flat periods
+        
+        if long_flat_mask.sum() > 0:
+            logger.debug(
+                "Long flat market periods detected in EMA ribbon - suppressing signals",
+                extra={
+                    "indicator": "ema_ribbon",
+                    "flat_periods": int(long_flat_mask.sum()),
+                    "total_periods": len(result),
+                },
+            )
+            
+            # Suppress signals during flat periods
+            signal_columns = [
+                "long_ema_signal", "short_ema_signal", "ema_crossover_signal",
+                "red_cross", "green_cross", "cross_pattern_signal",
+                "blue_triangle_up", "blue_triangle_down", "triangle_signal",
+                "ribbon_overall_signal"
+            ]
+            
+            for col in signal_columns:
+                if col in result.columns:
+                    if result[col].dtype == bool:
+                        result.loc[long_flat_mask, col] = False
+                    else:
+                        result.loc[long_flat_mask, col] = 0
+                        
+        return result

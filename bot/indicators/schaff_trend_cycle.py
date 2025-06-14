@@ -200,32 +200,31 @@ class SchaffTrendCycle:
             # beta = highest(macdVal, length) - alpha
             beta = macd_val.rolling(window=length, min_periods=1).max() - alpha
 
-            # Check for zero beta values (division by zero)
-            zero_beta_count = (beta == 0).sum()
+            # Add minimum threshold to prevent zero division
+            min_beta_threshold = 1e-8  # Minimum threshold for beta values
+            zero_beta_mask = beta.abs() < min_beta_threshold
+            zero_beta_count = zero_beta_mask.sum()
+            
             if zero_beta_count > 0:
-                logger.warning(
-                    "Zero beta values detected in STC calculation",
+                logger.debug(
+                    "Small beta values detected in STC calculation - applying threshold",
                     extra={
                         "indicator": "schaff_trend_cycle",
-                        "issue": "zero_beta_values",
-                        "zero_count": int(zero_beta_count),
+                        "issue": "small_beta_values",
+                        "small_count": int(zero_beta_count),
                         "total_points": len(beta),
+                        "threshold_applied": min_beta_threshold,
                     },
                 )
+                # Apply minimum threshold to prevent division by zero
+                beta = beta.where(~zero_beta_mask, min_beta_threshold)
 
             # gamma = (macdVal - alpha) / beta * 100
-            # Handle division by zero
-            gamma = pd.Series(dtype=float, index=src.index)
-            non_zero_beta = beta != 0
-            gamma.loc[non_zero_beta] = (
-                (macd_val.loc[non_zero_beta] - alpha.loc[non_zero_beta])
-                / beta.loc[non_zero_beta]
-                * 100
-            )
+            # All beta values are now guaranteed to be non-zero
+            gamma = (macd_val - alpha) / beta * 100
 
-            # gamma := beta > 0 ? gamma : nz(gamma[1])
-            # Forward fill when beta is zero
-            gamma = gamma.ffill()
+            # Handle any remaining NaN values
+            gamma = gamma.ffill().bfill()
 
             # Step 4: First smoothing (delta calculation)
             logger.debug(
@@ -251,30 +250,31 @@ class SchaffTrendCycle:
             # zeta = highest(delta, length) - epsilon
             zeta = delta.rolling(window=length, min_periods=1).max() - epsilon
 
-            # Check for zero zeta values
-            zero_zeta_count = (zeta == 0).sum()
+            # Add minimum threshold to prevent zero division
+            min_zeta_threshold = 1e-8  # Minimum threshold for zeta values
+            zero_zeta_mask = zeta.abs() < min_zeta_threshold
+            zero_zeta_count = zero_zeta_mask.sum()
+            
             if zero_zeta_count > 0:
-                logger.warning(
-                    "Zero zeta values detected in STC calculation",
+                logger.debug(
+                    "Small zeta values detected in STC calculation - applying threshold",
                     extra={
                         "indicator": "schaff_trend_cycle",
-                        "issue": "zero_zeta_values",
-                        "zero_count": int(zero_zeta_count),
+                        "issue": "small_zeta_values",
+                        "small_count": int(zero_zeta_count),
                         "total_points": len(zeta),
+                        "threshold_applied": min_zeta_threshold,
                     },
                 )
+                # Apply minimum threshold to prevent division by zero
+                zeta = zeta.where(~zero_zeta_mask, min_zeta_threshold)
 
             # eta = (delta - epsilon) / zeta * 100
-            eta = pd.Series(dtype=float, index=src.index)
-            non_zero_zeta = zeta != 0
-            eta.loc[non_zero_zeta] = (
-                (delta.loc[non_zero_zeta] - epsilon.loc[non_zero_zeta])
-                / zeta.loc[non_zero_zeta]
-                * 100
-            )
+            # All zeta values are now guaranteed to be non-zero
+            eta = (delta - epsilon) / zeta * 100
 
-            # eta := zeta > 0 ? eta : nz(eta[1])
-            eta = eta.ffill()
+            # Handle any remaining NaN values
+            eta = eta.ffill().bfill()
 
             # Step 6: Final smoothing (STC calculation)
             logger.debug(
@@ -284,6 +284,9 @@ class SchaffTrendCycle:
             # stcReturn = eta
             # stcReturn := na(stcReturn[1]) ? stcReturn : stcReturn[1] + tcfactor * (eta - stcReturn[1])
             stc_return = self._apply_recursive_smoothing(eta, factor)
+            
+            # Handle flat market conditions
+            stc_return = self._handle_flat_market_conditions(stc_return)
 
             # Performance logging
             end_time = time.perf_counter()
@@ -368,12 +371,26 @@ class SchaffTrendCycle:
         Returns:
             Smoothed series
         """
+        if series.empty:
+            return series.copy()
+            
         result = pd.Series(dtype=float, index=series.index)
+        
+        # Handle flat market conditions by checking for minimal variance
+        series_variance = series.var()
+        if pd.isna(series_variance) or series_variance < 1e-10:
+            # For very flat series, return a smoothed version of the mean
+            series_mean = series.mean()
+            if pd.isna(series_mean):
+                series_mean = 0.0
+            result[:] = series_mean
+            return result
 
         for i in range(len(series)):
             if i == 0 or pd.isna(result.iloc[i - 1]):
                 # First value or previous value is NaN
-                result.iloc[i] = series.iloc[i]
+                current_val = series.iloc[i]
+                result.iloc[i] = current_val if not pd.isna(current_val) else 0.0
             else:
                 # Recursive smoothing formula
                 prev_val = result.iloc[i - 1]
@@ -846,6 +863,21 @@ class SchaffTrendCycle:
                 },
             )
 
+        # Check for flat market conditions (minimal price variance)
+        if len(src) > 1:
+            price_variance = src.var()
+            if pd.isna(price_variance) or price_variance < 1e-10:
+                logger.info(
+                    "Very low price variance detected in STC input - calculations may produce minimal signals",
+                    extra={
+                        "indicator": "schaff_trend_cycle",
+                        "issue": "low_price_variance",
+                        "variance": float(price_variance) if not pd.isna(price_variance) else 0,
+                        "price_range": float(src.max() - src.min()),
+                        "mean_price": float(src.mean()),
+                    },
+                )
+
         # Check for extreme price changes
         if len(src) > 1:
             price_changes = src.pct_change().abs()
@@ -1000,3 +1032,42 @@ class SchaffTrendCycle:
         )
 
         return metrics
+
+    def _handle_flat_market_conditions(self, series: pd.Series, default_value: float = 50.0) -> pd.Series:
+        """
+        Handle flat market conditions by providing appropriate fallback values.
+        
+        Args:
+            series: The calculated STC series
+            default_value: Default value to use for flat market periods
+            
+        Returns:
+            Series with flat market periods handled
+        """
+        if series.empty:
+            return series
+            
+        # Detect flat periods (very small changes)
+        series_changes = series.diff().abs()
+        flat_threshold = 1e-6  # Very small change threshold
+        flat_mask = series_changes < flat_threshold
+        
+        # Count consecutive flat periods
+        consecutive_flat = flat_mask.groupby((~flat_mask).cumsum()).cumsum()
+        long_flat_mask = consecutive_flat > 10  # More than 10 consecutive flat periods
+        
+        if long_flat_mask.sum() > 0:
+            logger.debug(
+                "Long flat market periods detected in STC - applying fallback values",
+                extra={
+                    "indicator": "schaff_trend_cycle",
+                    "flat_periods": int(long_flat_mask.sum()),
+                    "total_periods": len(series),
+                    "fallback_value": default_value,
+                },
+            )
+            # Set long flat periods to the default value (neutral)
+            series = series.copy()
+            series.loc[long_flat_mask] = default_value
+            
+        return series

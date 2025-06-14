@@ -288,19 +288,28 @@ jobs:
             print('Configuration validation: PASSED')
         "
     
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
     - name: Validate Docker Compose files
       run: |
-        docker-compose -f docker-compose.yml config
-        docker-compose -f docker-compose.prod.yml config
+        docker compose -f docker-compose.yml config
+        docker compose -f docker-compose.prod.yml config
     
     - name: Validate Kubernetes manifests
       run: |
-        # Install kubeval for Kubernetes validation
-        curl -L https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz | tar xz
-        sudo mv kubeval /usr/local/bin
-        
-        # Validate all Kubernetes manifests
-        find k8s/ -name "*.yaml" -exec kubeval {} \;
+        # Check if k8s directory exists
+        if [ -d "k8s/" ]; then
+          # Install kubeval for Kubernetes validation
+          curl -L https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz | tar xz
+          sudo mv kubeval /usr/local/bin
+          
+          # Validate all Kubernetes manifests
+          find k8s/ -name "*.yaml" -exec kubeval {} \;
+          echo "✅ Kubernetes manifests validated"
+        else
+          echo "⚠️ No k8s directory found - skipping Kubernetes validation"
+        fi
 
   # Build Docker image
   build-image:
@@ -414,13 +423,13 @@ jobs:
         export AI_TRADING_BOT_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
         
         # Start services
-        docker-compose -f docker-compose.yml --env-file .env.integration up -d
+        docker compose -f docker-compose.yml --env-file .env.integration up -d
         
         # Wait for services to be ready
         sleep 30
         
         # Run health checks
-        docker-compose exec -T ai-trading-bot python -c "
+        docker compose exec -T ai-trading-bot python -c "
         from bot.config import Settings
         from bot.health import create_health_endpoints
         settings = Settings()
@@ -431,12 +440,12 @@ jobs:
         "
         
         # Run integration tests
-        docker-compose exec -T ai-trading-bot python -m pytest tests/integration/ -v
+        docker compose exec -T ai-trading-bot python -m pytest tests/integration/ -v
     
     - name: Collect logs
       if: always()
       run: |
-        docker-compose logs > integration-test-logs.txt
+        docker compose logs > integration-test-logs.txt
     
     - name: Upload logs
       uses: actions/upload-artifact@v4
@@ -448,7 +457,7 @@ jobs:
     - name: Cleanup
       if: always()
       run: |
-        docker-compose down -v
+        docker compose down -v
 
   # Generate and upload reports
   reports:
