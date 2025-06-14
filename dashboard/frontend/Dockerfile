@@ -1,62 +1,51 @@
-# Multi-stage Dockerfile for Vite TypeScript frontend
-
-# Development stage
-FROM --platform=$BUILDPLATFORM node:18-alpine AS development
-
-WORKDIR /app
-
-# Install python3 and build tools for native dependencies
-RUN apk add --no-cache python3 make g++ gcc libc-dev
-
-# Install dependencies
-COPY package*.json ./
-# Clean install with explicit architecture support
-RUN npm cache clean --force && \
-    npm install --force --no-optional && \
-    npm rebuild esbuild --update-binary
-
-# Copy source code
-COPY . .
-
-# Expose port for Vite dev server
-EXPOSE 3000
-
-# Start development server with HMR
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
+# Production-optimized Dockerfile for AI Trading Bot Dashboard
 
 # Build stage
 FROM --platform=$BUILDPLATFORM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Install python3 and build tools for native dependencies
+# Install minimal build dependencies
 RUN apk add --no-cache python3 make g++ gcc libc-dev
 
-# Install dependencies
+# Copy package files and install dependencies
 COPY package*.json ./
-# Clean install with explicit architecture support and rebuild native modules
-RUN npm cache clean --force && \
-    npm install --force --no-optional && \
+RUN npm ci --no-audit --no-fund && \
     npm rebuild esbuild --update-binary
 
-# Copy source code and build
-COPY . .
+# Copy source code and configuration
+COPY src/ ./src/
+COPY public/ ./public/
+COPY index.html vite.config.ts tsconfig.json ./
+
+# Build the application
 RUN npm run build
+
+# Remove development dependencies and source files to reduce size
+RUN rm -rf node_modules src tsconfig.json vite.config.ts
 
 # Production stage
 FROM nginx:alpine AS production
 
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nextjs -u 1001
+
 # Copy built assets from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy custom nginx configuration
+# Copy optimized nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# For production simplicity, we'll run nginx as root
-# Create directories and set permissions
-RUN mkdir -p /var/cache/nginx /var/log/nginx /var/run/nginx
+# Set proper permissions
+RUN chown -R nginx:nginx /usr/share/nginx/html && \
+    chmod -R 755 /usr/share/nginx/html
 
-# Expose port (using non-privileged port for security)
+# Create directories for nginx
+RUN mkdir -p /var/cache/nginx /var/log/nginx /var/run/nginx && \
+    chown -R nginx:nginx /var/cache/nginx /var/log/nginx /var/run/nginx
+
+# Expose port
 EXPOSE 8080
 
 # Health check

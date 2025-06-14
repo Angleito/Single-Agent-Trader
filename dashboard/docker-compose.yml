@@ -45,19 +45,15 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      target: development
+      target: production
     container_name: dashboard-frontend
     ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - "3000:8080"
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
       - DOCKER_ENV=true
-      - VITE_API_URL=http://localhost:8000
-      - VITE_WS_URL=ws://localhost:8000
-      - CHOKIDAR_USEPOLLING=true
+      - VITE_API_URL=http://dashboard-backend:8000
+      - VITE_WS_URL=ws://dashboard-backend:8000
     restart: unless-stopped
     networks:
       - dashboard-network
@@ -86,7 +82,7 @@ services:
       target: production
     container_name: dashboard-frontend-prod
     ports:
-      - "80:80"
+      - "80:8080"
     environment:
       - NODE_ENV=production
       - VITE_API_URL=http://dashboard-backend:8000

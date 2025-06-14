@@ -211,17 +211,39 @@ async def lifespan(app: FastAPI):
 
         # Set up callback to broadcast LLM events to WebSocket clients
         def llm_event_callback(event_data):
-            asyncio.create_task(
-                manager.broadcast(
-                    {
-                        "timestamp": event_data.get("timestamp"),
-                        "type": "llm_event",
-                        "event_type": event_data.get("event_type"),
-                        "data": event_data,
-                        "source": "llm_parser",
-                    }
-                )
-            )
+            # Map event types to WebSocket message types
+            ws_event_type = "llm_decision" if event_data.get("event_type") == "trading_decision" else "llm_event"
+            
+            # Extract key fields for easier frontend consumption
+            formatted_event = {
+                "timestamp": event_data.get("timestamp"),
+                "type": ws_event_type,
+                "event_type": event_data.get("event_type"),
+                "source": "llm_parser",
+            }
+            
+            # Add specific fields based on event type
+            if event_data.get("event_type") == "trading_decision":
+                formatted_event.update({
+                    "action": event_data.get("action"),
+                    "size_pct": event_data.get("size_pct"),
+                    "rationale": event_data.get("rationale"),
+                    "symbol": event_data.get("symbol"),
+                    "current_price": event_data.get("current_price"),
+                    "indicators": event_data.get("indicators", {}),
+                    "session_id": event_data.get("session_id"),
+                })
+            elif event_data.get("event_type") == "performance_metrics":
+                formatted_event.update({
+                    "total_completions": event_data.get("total_completions"),
+                    "avg_response_time_ms": event_data.get("avg_response_time_ms"),
+                    "total_cost_estimate_usd": event_data.get("total_cost_estimate_usd"),
+                })
+            
+            # Always include full data for detailed views
+            formatted_event["data"] = event_data
+            
+            asyncio.create_task(manager.broadcast(formatted_event))
 
         llm_parser.add_callback(llm_event_callback)
 
@@ -480,6 +502,20 @@ async def get_llm_status():
         metrics_24h = llm_parser.get_aggregated_metrics(timedelta(hours=24))
         metrics_all = llm_parser.get_aggregated_metrics()
 
+        # Calculate derived metrics from available data
+        total_decisions = len(llm_parser.decisions)
+        recent_decisions = [
+            d for d in llm_parser.decisions 
+            if d.timestamp >= datetime.now() - timedelta(hours=1)
+        ]
+        
+        # Calculate decision distribution
+        decision_distribution = {}
+        if llm_parser.decisions:
+            for decision in llm_parser.decisions:
+                action = decision.action
+                decision_distribution[action] = decision_distribution.get(action, 0) + 1
+
         return {
             "timestamp": datetime.now().isoformat(),
             "monitoring_active": True,
@@ -489,6 +525,7 @@ async def get_llm_status():
                 "responses": len(llm_parser.responses),
                 "decisions": len(llm_parser.decisions),
                 "alerts": len(llm_parser.alerts),
+                "performance_metrics": len(llm_parser.metrics),
             },
             "metrics": {
                 "1_hour": metrics_1h,
@@ -502,6 +539,11 @@ async def get_llm_status():
                     if a.timestamp >= datetime.now() - timedelta(hours=1)
                 ]
             ),
+            "recent_activity": {
+                "decisions_last_hour": len(recent_decisions),
+                "decision_distribution": decision_distribution,
+                "last_decision": llm_parser.decisions[-1].to_dict() if llm_parser.decisions else None,
+            },
         }
 
     except Exception as e:
@@ -562,6 +604,44 @@ async def get_llm_activity(limit: int = Query(50, ge=1, le=500)):
         logger.error(f"Error getting LLM activity: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error getting LLM activity: {str(e)}"
+        ) from e
+
+
+@app.get("/llm/decisions")
+async def get_llm_decisions(
+    limit: int = Query(50, ge=1, le=500),
+    action_filter: str | None = Query(None, description="Filter by action: LONG, SHORT, CLOSE, HOLD"),
+):
+    """Get recent LLM trading decisions"""
+    try:
+        decisions = llm_parser.decisions
+        
+        # Apply action filter if specified
+        if action_filter:
+            decisions = [d for d in decisions if d.action == action_filter.upper()]
+        
+        # Get most recent decisions
+        recent_decisions = decisions[-limit:] if len(decisions) > limit else decisions
+        recent_decisions.reverse()  # Most recent first
+        
+        # Calculate statistics
+        action_counts = {}
+        for decision in decisions:
+            action = decision.action
+            action_counts[action] = action_counts.get(action, 0) + 1
+        
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "total_decisions": len(decisions),
+            "returned_decisions": len(recent_decisions),
+            "action_distribution": action_counts,
+            "decisions": [d.to_dict() for d in recent_decisions],
+        }
+    
+    except Exception as e:
+        logger.error(f"Error getting LLM decisions: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Error getting LLM decisions: {str(e)}"
         ) from e
 
 

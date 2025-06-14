@@ -2,6 +2,8 @@ import './style.css';
 import { DashboardUI } from './ui.ts';
 import { DashboardWebSocket, type AllWebSocketMessages } from './websocket.ts';
 import { TradingViewChart } from './tradingview.ts';
+import { LLMDecisionCard, type LLMDecisionData } from './components/llm-decision-card.ts';
+import { StatusIndicators, type ConnectionStatus, type BotStatus as IndicatorBotStatus, type MarketStatus, type PositionStatus } from './components/status-indicators.ts';
 import type { 
   DashboardConfig,
   BotStatus,
@@ -13,11 +15,172 @@ import type {
 } from './types.ts';
 
 /**
- * Performance monitoring utility
+ * Debounce utility for performance optimization
+ */
+class Debouncer {
+  private timers = new Map<string, number>();
+  private readonly maxTimers = 20;
+
+  public debounce<T extends (...args: any[]) => any>(
+    key: string,
+    fn: T,
+    delay: number
+  ): (...args: Parameters<T>) => void {
+    return (...args: Parameters<T>) => {
+      const existingTimer = this.timers.get(key);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+      }
+
+      const timer = window.setTimeout(() => {
+        this.timers.delete(key);
+        fn(...args);
+      }, delay);
+
+      this.timers.set(key, timer);
+
+      // Cleanup old timers to prevent memory leaks
+      if (this.timers.size > this.maxTimers) {
+        const oldestKey = this.timers.keys().next().value;
+        const oldTimer = this.timers.get(oldestKey);
+        if (oldTimer) clearTimeout(oldTimer);
+        this.timers.delete(oldestKey);
+      }
+    };
+  }
+
+  public throttle<T extends (...args: any[]) => any>(
+    key: string,
+    fn: T,
+    delay: number
+  ): (...args: Parameters<T>) => void {
+    let lastCall = 0;
+    return (...args: Parameters<T>) => {
+      const now = Date.now();
+      if (now - lastCall >= delay) {
+        lastCall = now;
+        fn(...args);
+      }
+    };
+  }
+
+  public clear(key: string): void {
+    const timer = this.timers.get(key);
+    if (timer) {
+      clearTimeout(timer);
+      this.timers.delete(key);
+    }
+  }
+
+  public destroy(): void {
+    this.timers.forEach((timer) => clearTimeout(timer));
+    this.timers.clear();
+  }
+}
+
+/**
+ * Memory management utility
+ */
+class MemoryManager {
+  private readonly MAX_MEMORY_MB = 100;
+  private readonly CHECK_INTERVAL = 30000; // 30 seconds
+  private checkTimer: number | null = null;
+  private memoryWarningThreshold = 0.8; // 80% of max memory
+
+  constructor() {
+    this.startMemoryMonitoring();
+  }
+
+  private startMemoryMonitoring(): void {
+    if (!this.supportsMemoryAPI()) return;
+
+    this.checkTimer = window.setInterval(() => {
+      this.checkMemoryUsage();
+    }, this.CHECK_INTERVAL);
+  }
+
+  private supportsMemoryAPI(): boolean {
+    return 'memory' in performance && 'usedJSHeapSize' in (performance as any).memory;
+  }
+
+  private checkMemoryUsage(): void {
+    if (!this.supportsMemoryAPI()) return;
+
+    const memoryInfo = (performance as any).memory;
+    const usedMB = memoryInfo.usedJSHeapSize / (1024 * 1024);
+    const totalMB = memoryInfo.totalJSHeapSize / (1024 * 1024);
+
+    if (usedMB > this.MAX_MEMORY_MB * this.memoryWarningThreshold) {
+      if (__DEV__) {
+        console.warn(`Memory usage high: ${usedMB.toFixed(2)}MB / ${totalMB.toFixed(2)}MB`);
+      }
+      this.triggerGarbageCollection();
+    }
+  }
+
+  private triggerGarbageCollection(): void {
+    // Force garbage collection hints
+    if (typeof window !== 'undefined' && 'gc' in window) {
+      (window as any).gc();
+    }
+    
+    // Clear caches that might be holding references
+    if (typeof queueMicrotask !== 'undefined') {
+      queueMicrotask(() => {
+        // This can help trigger GC in some browsers
+      });
+    }
+  }
+
+  public getMemoryUsage(): { used: number; total: number; limit: number } | null {
+    if (!this.supportsMemoryAPI()) return null;
+
+    const memoryInfo = (performance as any).memory;
+    return {
+      used: memoryInfo.usedJSHeapSize / (1024 * 1024),
+      total: memoryInfo.totalJSHeapSize / (1024 * 1024),
+      limit: this.MAX_MEMORY_MB
+    };
+  }
+
+  public destroy(): void {
+    if (this.checkTimer) {
+      clearInterval(this.checkTimer);
+      this.checkTimer = null;
+    }
+  }
+}
+
+/**
+ * Performance monitoring utility with memory optimization
  */
 class PerformanceMonitor {
   private metrics = new Map<string, number>();
-  private readonly maxMetrics = 100;
+  private readonly maxMetrics = 50; // Reduced from 100
+  private cleanupTimer: number | null = null;
+  private readonly CLEANUP_INTERVAL = 60000; // Clean up every minute
+
+  constructor() {
+    this.startPeriodicCleanup();
+  }
+
+  private startPeriodicCleanup(): void {
+    this.cleanupTimer = window.setInterval(() => {
+      this.performCleanup();
+    }, this.CLEANUP_INTERVAL);
+  }
+
+  private performCleanup(): void {
+    if (this.metrics.size > this.maxMetrics) {
+      const entries = Array.from(this.metrics.entries());
+      const toDelete = entries.slice(0, entries.length - this.maxMetrics);
+      toDelete.forEach(([key]) => {
+        if (!key.endsWith('_start')) {
+          this.metrics.delete(key);
+        }
+      });
+    }
+  }
 
   public startTiming(label: string): void {
     this.metrics.set(`${label}_start`, performance.now());
@@ -31,14 +194,6 @@ class PerformanceMonitor {
     this.metrics.set(label, duration);
     this.metrics.delete(`${label}_start`);
     
-    // Clean up old metrics to prevent memory bloat
-    if (this.metrics.size > this.maxMetrics) {
-      const entries = Array.from(this.metrics.entries());
-      entries.slice(0, entries.length - this.maxMetrics).forEach(([key]) => {
-        this.metrics.delete(key);
-      });
-    }
-    
     return duration;
   }
 
@@ -47,13 +202,22 @@ class PerformanceMonitor {
   }
 
   public logMetrics(): void {
-    console.group('Performance Metrics');
-    this.metrics.forEach((value, key) => {
-      if (!key.endsWith('_start')) {
-        console.log(`${key}: ${value.toFixed(2)}ms`);
-      }
-    });
-    console.groupEnd();
+    if (__DEV__) {
+      console.group('Performance Metrics');
+      this.metrics.forEach((value, key) => {
+        if (!key.endsWith('_start')) {
+        }
+      });
+      console.groupEnd();
+    }
+  }
+
+  public destroy(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
+    this.metrics.clear();
   }
 }
 
@@ -82,7 +246,6 @@ class VisibilityHandler {
     this.initializationTimeout = window.setTimeout(() => {
       this.setupVisibilityListeners();
       this.isInitialized = true;
-      console.log(`VisibilityHandler initialized - initial state: ${this.isVisible ? 'visible' : 'hidden'}`);
     }, this.INIT_DELAY); // Longer delay to let TradingView and page fully settle
   }
 
@@ -119,7 +282,6 @@ class VisibilityHandler {
     const processVisibilityChange = (newVisible: boolean, source: string): void => {
       this.lastVisibilityChange = Date.now();
       this.isVisible = newVisible;
-      console.log(`Visibility changed: ${newVisible ? 'visible' : 'hidden'} (source: ${source}, document.hidden: ${document.hidden}, hasFocus: ${document.hasFocus()})`);
       this.callbacks.forEach(callback => callback(newVisible));
     };
     
@@ -224,11 +386,25 @@ class DashboardApp {
   public ui: DashboardUI;
   private websocket: DashboardWebSocket;
   public chart: TradingViewChart | null = null;
+  private llmDecisionCard: LLMDecisionCard | null = null;
   private config: DashboardConfig;
   private isInitialized = false;
   private initializationPromise: Promise<void> | null = null;
   public performanceMonitor: PerformanceMonitor;
   private visibilityHandler: VisibilityHandler;
+  private debouncer: Debouncer;
+  private memoryManager: MemoryManager;
+  private lastMarketData: MarketData | null = null;
+  private lastIndicators: VuManchuIndicators | null = null;
+  private statusIndicators: StatusIndicators | null = null;
+  private systemHealthInterval: number | null = null;
+  private headerElements: any = {};
+  private sidebarElements: any = {};
+  
+  // Debounced methods for performance
+  private debouncedUpdateMarketData: (data: MarketData) => void;
+  private debouncedUpdateIndicators: (indicators: VuManchuIndicators) => void;
+  private throttledLogUpdate: (entry: any) => void;
 
   constructor() {
     // Configuration
@@ -250,10 +426,42 @@ class DashboardApp {
     // Initialize utilities
     this.performanceMonitor = new PerformanceMonitor();
     this.visibilityHandler = new VisibilityHandler();
+    this.debouncer = new Debouncer();
+    this.memoryManager = new MemoryManager();
 
     // Initialize components
     this.ui = new DashboardUI();
     this.websocket = new DashboardWebSocket(this.config.websocket_url);
+
+    // Setup debounced methods for performance
+    this.debouncedUpdateMarketData = this.debouncer.debounce(
+      'market_data_update',
+      (data: MarketData) => {
+        this.ui.updateMarketData(data);
+        this.chart?.updateMarketData(data);
+      },
+      100 // 100ms debounce
+    );
+
+    this.debouncedUpdateIndicators = this.debouncer.debounce(
+      'indicators_update',
+      (indicators: VuManchuIndicators) => {
+        if (this.chart) {
+          this.chart.updateIndicators(indicators);
+        }
+      },
+      150 // 150ms debounce for indicators
+    );
+
+    this.throttledLogUpdate = this.debouncer.throttle(
+      'log_update',
+      (entry: any) => {
+        if (__DEV__) {
+          console.log('Throttled log update:', entry);
+        }
+      },
+      500 // 500ms throttle for logs
+    );
 
     // Setup page visibility handling
     this.setupVisibilityHandling();
@@ -270,7 +478,6 @@ class DashboardApp {
     }
 
     if (this.initializationPromise) {
-      console.log('Initialization already in progress, waiting...');
       return this.initializationPromise;
     }
 
@@ -293,48 +500,61 @@ class DashboardApp {
     this.performanceMonitor.startTiming('total_initialization');
     
     try {
-      console.log('🚀 Initializing AI Trading Bot Dashboard...');
-      this.updateLoadingProgress('Initializing UI components...', 20);
+      this.updateLoadingProgress('Starting dashboard...', 10);
+      
+      // Small delay for smoother progress animation
+      await new Promise(resolve => setTimeout(resolve, 100));
+      this.updateLoadingProgress('Initializing UI components...', 25);
 
-      // Step 1: Initialize UI
+      // Step 1: Initialize UI and Status Indicators
       this.performanceMonitor.startTiming('ui_initialization');
       this.ui.initialize();
+      this.initializeStatusIndicators();
       this.setupUIEventHandlers();
+      
+      // Initialize LLM Decision Card
+      try {
+        this.llmDecisionCard = new LLMDecisionCard('llm-decision-container');
+      } catch (error) {
+        console.warn('Failed to initialize LLM Decision Card:', error);
+        // Continue without the decision card
+      }
+      
       const uiTime = this.performanceMonitor.endTiming('ui_initialization');
-      console.log(`✅ UI initialized in ${uiTime.toFixed(2)}ms`);
-      this.updateLoadingProgress('UI components loaded', 40);
+      this.updateLoadingProgress('UI ready', 40);
 
-      // Step 2: Initialize TradingView chart (truly non-blocking with timeout)
-      this.updateLoadingProgress('Loading TradingView chart...', 60);
+      // Step 2: Initialize TradingView chart (non-blocking)
+      this.updateLoadingProgress('Loading charts...', 50);
       this.performanceMonitor.startTiming('chart_initialization');
       
-      // Start chart initialization in background without blocking main initialization
-      const chartInitPromise = this.initializeChartNonBlocking();
+      // Start chart initialization in background without blocking
+      const chartInitPromise = this.initializeChartNonBlocking().catch(error => {
+        console.warn('Chart initialization failed:', error);
+        return null; // Continue without chart
+      });
       
-      // Don't wait for chart - continue with core dashboard functionality
-      this.updateLoadingProgress('Connecting to trading bot...', 80);
+      // Immediately continue with WebSocket
+      this.updateLoadingProgress('Connecting to bot...', 70);
 
       // Step 3: Set up WebSocket connection
       this.performanceMonitor.startTiming('websocket_setup');
       this.setupWebSocketHandlers();
       
-      // Wait for initial connection or timeout (with reduced timeout)
-      const connectionPromise = new Promise<void>((resolve, reject) => {
+      // WebSocket connection with non-blocking timeout
+      const connectionPromise = new Promise<void>((resolve) => {
+        let connected = false;
         const timeout = setTimeout(() => {
-          reject(new Error('WebSocket connection timeout'));
-        }, 8000); // 8 second timeout (reduced from 10s)
-
-        const cleanup = () => {
-          clearTimeout(timeout);
-        };
+          if (!connected) {
+            console.warn('WebSocket connection timeout - continuing in offline mode');
+            resolve(); // Resolve instead of reject to continue initialization
+          }
+        }, 5000); // 5 second timeout
 
         const handleConnection = (status: string) => {
-          if (status === 'connected') {
-            cleanup();
+          if (status === 'connected' && !connected) {
+            connected = true;
+            clearTimeout(timeout);
             resolve();
-          } else if (status === 'error') {
-            cleanup();
-            reject(new Error('WebSocket connection failed'));
           }
         };
 
@@ -343,28 +563,20 @@ class DashboardApp {
         this.websocket.connect();
       });
 
-      try {
-        await connectionPromise;
-        const wsTime = this.performanceMonitor.endTiming('websocket_setup');
-        console.log(`✅ WebSocket connected in ${wsTime.toFixed(2)}ms`);
-      } catch (wsError) {
-        console.warn('WebSocket connection failed, continuing in offline mode:', wsError);
-        this.performanceMonitor.endTiming('websocket_setup');
-        this.ui.log('warn', 'Connected in offline mode - limited functionality', 'Connection');
-      }
+      await connectionPromise;
+      const wsTime = this.performanceMonitor.endTiming('websocket_setup');
 
       // Step 4: Finalize initialization
-      this.updateLoadingProgress('Finalizing dashboard...', 95);
+      this.updateLoadingProgress('Finalizing...', 90);
       
-      await new Promise(resolve => setTimeout(resolve, 300)); // Brief pause for smooth UX
+      await new Promise(resolve => setTimeout(resolve, 200)); // Brief pause for smooth UX
       
-      this.updateLoadingProgress('Dashboard ready!', 100);
-      await new Promise(resolve => setTimeout(resolve, 200));
+      this.updateLoadingProgress('Ready!', 100);
+      await new Promise(resolve => setTimeout(resolve, 150));
       
       this.hideLoadingScreen();
 
       const totalTime = this.performanceMonitor.endTiming('total_initialization');
-      console.log(`🎉 Dashboard initialized successfully in ${totalTime.toFixed(2)}ms`);
       
       // Log performance metrics in development
       if (window.location.hostname === 'localhost') {
@@ -376,7 +588,6 @@ class DashboardApp {
       // Handle chart initialization result in background
       chartInitPromise.then(() => {
         const chartTime = this.performanceMonitor.endTiming('chart_initialization');
-        console.log(`✅ Chart initialized in background in ${chartTime.toFixed(2)}ms`);
         this.ui.log('info', 'TradingView chart loaded successfully', 'Chart');
       }).catch((chartError) => {
         console.warn('Chart background initialization failed:', chartError);
@@ -394,6 +605,387 @@ class DashboardApp {
     }
   }
 
+  /**
+   * Initialize Status Indicators
+   */
+  private initializeStatusIndicators(): void {
+    // Create status indicators instance
+    this.statusIndicators = new StatusIndicators();
+    
+    // Initialize with default states
+    this.statusIndicators.connectionStatus = { websocket: 'disconnected' };
+    this.statusIndicators.botStatus = { state: 'initializing' };
+    this.statusIndicators.marketStatus = { state: 'closed' };
+    this.statusIndicators.positionStatus = { state: 'flat' };
+    
+    // Render status indicators in designated layout areas
+    this.renderStatusIndicatorsInLayout();
+    
+    // Start system health monitoring
+    this.startSystemHealthMonitoring();
+  }
+  
+  /**
+   * Render status indicators in their designated layout areas
+   */
+  private renderStatusIndicatorsInLayout(): void {
+    if (!this.statusIndicators) return;
+    
+    // Create dedicated status indicator components for different layout areas
+    this.createHeaderStatusIndicators();
+    this.createSidebarHealthIndicators();
+  }
+  
+  /**
+   * Create status indicators for the header
+   */
+  private createHeaderStatusIndicators(): void {
+    const headerContainer = document.getElementById('header-status-indicators');
+    if (!headerContainer) return;
+    
+    // Create individual status elements
+    const connectionBadge = this.createConnectionBadge();
+    const marketStatus = this.createMarketStatus();
+    const positionStatus = this.createPositionStatus();
+    
+    headerContainer.style.cssText = 'display: flex; align-items: center; gap: 12px;';
+    headerContainer.appendChild(connectionBadge);
+    headerContainer.appendChild(marketStatus);
+    headerContainer.appendChild(positionStatus);
+    
+    // Store references for updates
+    this.headerElements = { connectionBadge, marketStatus, positionStatus };
+  }
+  
+  /**
+   * Create health indicators for the sidebar
+   */
+  private createSidebarHealthIndicators(): void {
+    const sidebarContainer = document.getElementById('sidebar-health-indicators');
+    if (!sidebarContainer) return;
+    
+    // Create individual health elements
+    const botHealth = this.createBotHealth();
+    const systemHealth = this.createSystemHealth();
+    const soundToggle = this.createSoundToggle();
+    const alertHistory = this.createAlertHistory();
+    
+    sidebarContainer.style.cssText = 'display: flex; flex-direction: column; gap: 12px;';
+    sidebarContainer.appendChild(botHealth);
+    sidebarContainer.appendChild(systemHealth);
+    sidebarContainer.appendChild(soundToggle);
+    sidebarContainer.appendChild(alertHistory);
+    
+    // Store references for updates
+    this.sidebarElements = { botHealth, systemHealth, soundToggle, alertHistory };
+  }
+  
+  /**
+   * Create connection badge element
+   */
+  private createConnectionBadge(): HTMLElement {
+    const element = document.createElement('div');
+    element.className = 'connection-badge disconnected';
+    element.innerHTML = `
+      <span class="pulse"></span>
+      <span>LIVE</span>
+      <span class="latency-indicator" id="latency-display"></span>
+    `;
+    return element;
+  }
+  
+  /**
+   * Create market status element
+   */
+  private createMarketStatus(): HTMLElement {
+    const element = document.createElement('div');
+    element.className = 'market-status';
+    element.innerHTML = `
+      <span class="market-dot closed"></span>
+      <span>Market closed</span>
+    `;
+    return element;
+  }
+  
+  /**
+   * Create position status element
+   */
+  private createPositionStatus(): HTMLElement {
+    const element = document.createElement('div');
+    element.className = 'position-badge flat';
+    element.innerHTML = `
+      <span>💤</span>
+      <span>flat</span>
+    `;
+    return element;
+  }
+  
+  /**
+   * Create bot health element
+   */
+  private createBotHealth(): HTMLElement {
+    const element = document.createElement('div');
+    element.className = 'bot-health';
+    element.innerHTML = `
+      <div class="health-icon initializing">🔄</div>
+      <div>
+        <div style="font-weight: 500;">Bot initializing</div>
+        <div style="font-size: 12px; color: #9ca3af;" id="bot-status-message"></div>
+      </div>
+    `;
+    return element;
+  }
+  
+  /**
+   * Create system health element
+   */
+  private createSystemHealth(): HTMLElement {
+    const element = document.createElement('div');
+    element.className = 'system-health';
+    element.innerHTML = `
+      <div class="health-meter" id="cpu-meter" style="display: none;">
+        <span class="meter-label">CPU</span>
+        <div class="meter-bar">
+          <div class="meter-fill low" id="cpu-fill"></div>
+        </div>
+        <span class="meter-value" id="cpu-value">0%</span>
+      </div>
+      <div class="health-meter" id="memory-meter" style="display: none;">
+        <span class="meter-label">Memory</span>
+        <div class="meter-bar">
+          <div class="meter-fill low" id="memory-fill"></div>
+        </div>
+        <span class="meter-value" id="memory-value">0%</span>
+      </div>
+    `;
+    return element;
+  }
+  
+  /**
+   * Create sound toggle element
+   */
+  private createSoundToggle(): HTMLElement {
+    const element = document.createElement('button');
+    element.className = 'sound-toggle enabled';
+    element.innerHTML = `
+      <span>🔊</span>
+      <span>Sounds On</span>
+    `;
+    element.addEventListener('click', () => {
+      if (this.statusIndicators) {
+        this.statusIndicators.soundEnabled = !this.statusIndicators.soundEnabled;
+        this.updateSoundToggle();
+      }
+    });
+    return element;
+  }
+  
+  /**
+   * Create alert history element
+   */
+  private createAlertHistory(): HTMLElement {
+    const element = document.createElement('button');
+    element.className = 'sound-toggle';
+    element.innerHTML = `
+      <span>📜</span>
+      <span id="alert-count">History (0)</span>
+    `;
+    element.addEventListener('click', () => {
+      if (this.statusIndicators) {
+        this.statusIndicators.showAlertHistory = !this.statusIndicators.showAlertHistory;
+      }
+    });
+    return element;
+  }
+  
+  /**
+   * Start monitoring system health metrics
+   */
+  private startSystemHealthMonitoring(): void {
+    // Simulate system metrics (in production, these would come from the backend)
+    this.systemHealthInterval = window.setInterval(() => {
+      if (this.statusIndicators && this.isInitialized) {
+        // Get memory usage estimate
+        const memoryUsage = (performance as any).memory ? 
+          Math.round((performance as any).memory.usedJSHeapSize / (performance as any).memory.totalJSHeapSize * 100) : 
+          undefined;
+        
+        // Update system health in status indicators component
+        this.statusIndicators.systemHealth = {
+          memory: memoryUsage,
+          // CPU usage would come from backend
+        };
+        
+        // Update visual display
+        this.updateSystemHealthDisplay(undefined, memoryUsage);
+        
+        // Update alert count
+        this.updateAlertCount(this.statusIndicators.alerts.length);
+      }
+    }, 5000);
+  }
+  
+  /**
+   * Update WebSocket latency
+   */
+  private updateLatency(latency: number): void {
+    if (this.statusIndicators) {
+      this.statusIndicators.connectionStatus = {
+        ...this.statusIndicators.connectionStatus,
+        latency
+      };
+    }
+    
+    // Update latency display in header
+    this.updateLatencyDisplay(latency);
+  }
+  
+  /**
+   * Update latency display in header
+   */
+  private updateLatencyDisplay(latency: number): void {
+    const latencyDisplay = document.getElementById('latency-display');
+    if (!latencyDisplay) return;
+    
+    const latencyClass = latency < 100 ? 'latency-good' : latency < 500 ? 'latency-medium' : 'latency-poor';
+    const latencyText = latency < 1000 ? `${latency}ms` : `${(latency / 1000).toFixed(1)}s`;
+    
+    latencyDisplay.className = `latency-indicator ${latencyClass}`;
+    latencyDisplay.innerHTML = `
+      <span class="latency-bar active"></span>
+      <span class="latency-bar ${latency < 500 ? 'active' : ''}"></span>
+      <span class="latency-bar ${latency < 100 ? 'active' : ''}"></span>
+      <span>${latencyText}</span>
+    `;
+  }
+  
+  /**
+   * Update connection status display
+   */
+  private updateConnectionDisplay(status: ConnectionStatus['websocket']): void {
+    if (this.headerElements.connectionBadge) {
+      this.headerElements.connectionBadge.className = `connection-badge ${status}`;
+    }
+  }
+  
+  /**
+   * Update bot status display
+   */
+  private updateBotStatusDisplay(state: IndicatorBotStatus['state'], message?: string): void {
+    const healthIcon = document.querySelector('.health-icon');
+    const statusMessage = document.getElementById('bot-status-message');
+    
+    if (healthIcon) {
+      const icons = {
+        active: '🟢',
+        paused: '⏸️',
+        error: '🔴',
+        initializing: '🔄'
+      };
+      healthIcon.className = `health-icon ${state}`;
+      healthIcon.textContent = icons[state] || '🔄';
+      const statusText = healthIcon.parentElement?.querySelector('div')?.querySelector('div');
+      if (statusText) statusText.textContent = `Bot ${state}`;
+    }
+    
+    if (statusMessage) {
+      statusMessage.textContent = message || '';
+      statusMessage.style.display = message ? 'block' : 'none';
+    }
+  }
+  
+  /**
+   * Update system health display
+   */
+  private updateSystemHealthDisplay(cpu?: number, memory?: number): void {
+    // Update CPU meter
+    if (cpu !== undefined) {
+      const cpuMeter = document.getElementById('cpu-meter');
+      const cpuFill = document.getElementById('cpu-fill');
+      const cpuValue = document.getElementById('cpu-value');
+      
+      if (cpuMeter && cpuFill && cpuValue) {
+        cpuMeter.style.display = 'flex';
+        cpuFill.style.width = `${cpu}%`;
+        cpuFill.className = `meter-fill ${cpu < 50 ? 'low' : cpu < 80 ? 'medium' : 'high'}`;
+        cpuValue.textContent = `${cpu}%`;
+      }
+    }
+    
+    // Update Memory meter
+    if (memory !== undefined) {
+      const memoryMeter = document.getElementById('memory-meter');
+      const memoryFill = document.getElementById('memory-fill');
+      const memoryValue = document.getElementById('memory-value');
+      
+      if (memoryMeter && memoryFill && memoryValue) {
+        memoryMeter.style.display = 'flex';
+        memoryFill.style.width = `${memory}%`;
+        memoryFill.className = `meter-fill ${memory < 50 ? 'low' : memory < 80 ? 'medium' : 'high'}`;
+        memoryValue.textContent = `${memory}%`;
+      }
+    }
+  }
+  
+  /**
+   * Update sound toggle display
+   */
+  private updateSoundToggle(): void {
+    const soundToggle = this.sidebarElements.soundToggle;
+    if (!soundToggle || !this.statusIndicators) return;
+    
+    const enabled = this.statusIndicators.soundEnabled;
+    soundToggle.className = `sound-toggle ${enabled ? 'enabled' : 'disabled'}`;
+    soundToggle.innerHTML = `
+      <span>${enabled ? '🔊' : '🔇'}</span>
+      <span>Sounds ${enabled ? 'On' : 'Off'}</span>
+    `;
+  }
+  
+  /**
+   * Update alert count display
+   */
+  private updateAlertCount(count: number): void {
+    const alertCount = document.getElementById('alert-count');
+    if (alertCount) {
+      alertCount.textContent = `History (${count})`;
+    }
+  }
+  
+  /**
+   * Update market status display
+   */
+  private updateMarketStatusDisplay(state: MarketStatus['state']): void {
+    if (this.headerElements.marketStatus) {
+      const dot = this.headerElements.marketStatus.querySelector('.market-dot');
+      const text = this.headerElements.marketStatus.querySelector('span:last-child');
+      
+      if (dot) dot.className = `market-dot ${state}`;
+      if (text) text.textContent = `Market ${state}`;
+    }
+  }
+  
+  /**
+   * Update position status display
+   */
+  private updatePositionStatusDisplay(state: PositionStatus['state'], count?: number): void {
+    if (this.headerElements.positionStatus) {
+      const icons = {
+        'in-position': '📊',
+        'pending-entry': '⏳',
+        'pending-exit': '🚪',
+        'flat': '💤'
+      };
+      
+      this.headerElements.positionStatus.className = `position-badge ${state}`;
+      this.headerElements.positionStatus.innerHTML = `
+        <span>${icons[state] || '💤'}</span>
+        <span>${state.replace(/-/g, ' ')}</span>
+        ${count ? `<span>(${count})</span>` : ''}
+      `;
+    }
+  }
+  
   /**
    * Initialize TradingView chart with enhanced error handling
    */
@@ -450,7 +1042,7 @@ class DashboardApp {
         this.chart = null;
         this.showChartError('Chart loading timed out. Dashboard continues with full functionality.');
         reject(new Error('Chart initialization timeout'));
-      }, 12000); // 12 second timeout (reduced from 15s)
+      }, 5000); // 5 second timeout for faster startup
       
       // Start chart initialization
       this.initializeChart()
@@ -538,12 +1130,47 @@ class DashboardApp {
     this.websocket.onConnectionStatusChange((status) => {
       this.ui.updateConnectionStatus(status);
       
+      // Update status indicators
+      if (this.statusIndicators) {
+        const wsStatus: ConnectionStatus['websocket'] = 
+          status === 'connected' ? 'connected' :
+          status === 'connecting' ? 'reconnecting' :
+          'disconnected';
+        
+        this.statusIndicators.connectionStatus = {
+          ...this.statusIndicators.connectionStatus,
+          websocket: wsStatus,
+          lastHeartbeat: new Date()
+        };
+        
+        // Update visual display
+        this.updateConnectionDisplay(wsStatus);
+      }
+      
       if (status === 'connected') {
         this.ui.log('info', 'Connected to trading bot', 'WebSocket');
+        this.statusIndicators?.addAlert({
+          type: 'success',
+          title: 'Connected',
+          message: 'Successfully connected to trading bot',
+          sound: true
+        });
       } else if (status === 'disconnected') {
         this.ui.log('warn', 'Disconnected from trading bot', 'WebSocket');
+        this.statusIndicators?.addAlert({
+          type: 'warning',
+          title: 'Disconnected',
+          message: 'Lost connection to trading bot',
+          sound: true
+        });
       } else if (status === 'error') {
         this.ui.log('error', 'WebSocket connection error', 'WebSocket');
+        this.statusIndicators?.addAlert({
+          type: 'error',
+          title: 'Connection Error',
+          message: 'Failed to connect to trading bot',
+          sound: true
+        });
       }
     });
 
@@ -557,6 +1184,16 @@ class DashboardApp {
       const msg = message as any;
       if (msg.data) {
         this.ui.log('info', `Trading signal: ${msg.data.action} at $${msg.data.price}`, 'Trading');
+        
+        // Add alert for new trading signals
+        if (msg.data.action !== 'HOLD') {
+          this.statusIndicators?.addAlert({
+            type: 'info',
+            title: 'Trading Signal',
+            message: `${msg.data.action} signal at $${msg.data.price}`,
+            sound: true
+          });
+        }
       }
     });
 
@@ -564,6 +1201,30 @@ class DashboardApp {
       const msg = message as any;
       if (msg.data) {
         this.ui.log('info', `AI Decision: ${msg.data.action} - ${msg.data.reasoning}`, 'AI');
+        
+        // Alert for AI decisions
+        if (msg.data.action !== 'HOLD') {
+          this.statusIndicators?.addAlert({
+            type: 'success',
+            title: 'AI Decision',
+            message: `${msg.data.action} - ${msg.data.reasoning}`,
+            sound: false
+          });
+        }
+        
+        // Update LLM Decision Card with AI decision
+        if (msg.data.action && msg.data.reasoning !== undefined) {
+          const tradeAction: TradeAction = {
+            action: msg.data.action,
+            confidence: msg.data.confidence || 0.5,
+            reasoning: msg.data.reasoning,
+            timestamp: msg.data.timestamp || new Date().toISOString(),
+            price: msg.data.price,
+            quantity: msg.data.quantity,
+            leverage: msg.data.leverage
+          };
+          this.updateLLMDecisionCard(tradeAction);
+        }
       }
     });
 
@@ -572,6 +1233,14 @@ class DashboardApp {
       if (msg.data) {
         const level = msg.data.health ? 'info' : 'warn';
         this.ui.log(level, `System status: ${msg.data.status}`, 'System');
+        
+        // Update bot status indicator
+        if (this.statusIndicators) {
+          this.statusIndicators.botStatus = {
+            state: msg.data.health ? 'active' : 'error',
+            message: msg.data.status
+          };
+        }
       }
     });
 
@@ -579,6 +1248,14 @@ class DashboardApp {
       const msg = message as any;
       if (msg.data) {
         this.ui.log('error', msg.data.message, 'System');
+        
+        // Error alert
+        this.statusIndicators?.addAlert({
+          type: 'error',
+          title: 'System Error',
+          message: msg.data.message,
+          sound: true
+        });
       }
     });
 
@@ -591,74 +1268,176 @@ class DashboardApp {
   }
 
   /**
-   * Handle incoming WebSocket messages
+   * Handle incoming WebSocket messages with error boundaries
    */
   private handleWebSocketMessage(message: AllWebSocketMessages): void {
     try {
+      // Validate message structure
+      if (!message || !message.type) {
+        console.warn('Invalid WebSocket message structure:', message);
+        return;
+      }
+
+      // Handle messages that don't have data property (like ping/pong)
+      if (!('data' in message) && message.type !== 'ping' && message.type !== 'pong') {
+        console.warn('WebSocket message missing data property:', message);
+        return;
+      }
+
       switch (message.type) {
         case 'bot_status':
-          this.ui.updateBotStatus(message.data as BotStatus);
+          if ('data' in message && message.data) {
+            const botStatus = message.data as BotStatus;
+            this.ui.updateBotStatus(botStatus);
+            
+            // Update bot status indicator
+            if (this.statusIndicators) {
+              const indicatorState: IndicatorBotStatus['state'] = 
+                botStatus.is_active ? 'active' : 
+                botStatus.is_paused ? 'paused' : 'error';
+              
+              this.statusIndicators.botStatus = {
+                state: indicatorState,
+                message: botStatus.status_message
+              };
+              
+              // Update visual display
+              this.updateBotStatusDisplay(indicatorState, botStatus.status_message);
+            }
+          }
           break;
 
         case 'market_data':
-          const marketData = message.data as MarketData;
-          this.ui.updateMarketData(marketData);
-          this.chart?.updateMarketData(marketData);
+          if ('data' in message && message.data) {
+            const marketData = message.data as MarketData;
+            this.lastMarketData = marketData;
+            // Use debounced method to prevent excessive updates
+            this.debouncedUpdateMarketData(marketData);
+            
+            // Update market status based on time (simplified)
+            if (this.statusIndicators) {
+              const hour = new Date().getHours();
+              const day = new Date().getDay();
+              const isWeekend = day === 0 || day === 6;
+              
+              let marketState: MarketStatus['state'] = 'open';
+              if (isWeekend) {
+                marketState = 'closed';
+              } else if (hour < 9 || hour >= 16) {
+                marketState = hour < 9 ? 'pre-market' : 'after-hours';
+              }
+              
+              this.statusIndicators.marketStatus = { state: marketState };
+              
+              // Update visual display
+              this.updateMarketStatusDisplay(marketState);
+            }
+          }
           break;
 
         case 'trade_action':
-          const tradeAction = message.data as TradeAction;
-          this.ui.updateLatestAction(tradeAction);
-          // Add AI decision marker to chart
-          this.chart?.addAIDecisionMarker(tradeAction);
+          if ('data' in message && message.data) {
+            const tradeAction = message.data as TradeAction;
+            this.ui.updateLatestAction(tradeAction);
+            // Add AI decision marker to chart if available
+            if (this.chart && 'addAIDecisionMarker' in this.chart) {
+              this.chart.addAIDecisionMarker(tradeAction);
+            }
+            // Update LLM Decision Card
+            this.updateLLMDecisionCard(tradeAction);
+            
+            // Alert for executed trades
+            if (tradeAction.action !== 'HOLD' && tradeAction.executed) {
+              this.statusIndicators?.addAlert({
+                type: 'success',
+                title: 'Trade Executed',
+                message: `${tradeAction.action} ${tradeAction.quantity} @ $${tradeAction.price}`,
+                sound: true
+              });
+            }
+          }
           break;
 
         case 'indicators':
-          const indicators = message.data as VuManchuIndicators;
-          this.chart?.updateIndicators(indicators);
-          this.ui.log('debug', 'VuManChu indicators updated', 'Indicators');
+          if ('data' in message && message.data) {
+            const indicators = message.data as VuManchuIndicators;
+            this.lastIndicators = indicators;
+            // Use debounced method to prevent excessive chart updates
+            this.debouncedUpdateIndicators(indicators);
+            this.throttledLogUpdate({ type: 'indicators', message: 'VuManChu indicators updated' });
+          }
           break;
 
         case 'position':
-          // Handle single position update - convert to array for UI
-          this.ui.updatePositions([message.data as Position]);
+          if ('data' in message && message.data) {
+            // Handle single position update - convert to array for UI
+            const position = message.data as Position;
+            this.ui.updatePositions([position]);
+            
+            // Update position status indicator
+            if (this.statusIndicators) {
+              let positionState: PositionStatus['state'] = 'flat';
+              const positionSize = position.quantity || position.size || 0;
+              if (position.side && positionSize > 0) {
+                positionState = 'in-position';
+              }
+              
+              this.statusIndicators.positionStatus = {
+                state: positionState,
+                count: positionSize > 0 ? 1 : 0
+              };
+              
+              // Update visual display
+              this.updatePositionStatusDisplay(positionState, positionSize > 0 ? 1 : 0);
+              
+              // Alert for significant P&L changes
+              if (position.unrealized_pnl !== undefined) {
+                const averagePrice = position.average_price || position.entry_price || 0;
+                const quantity = position.quantity || position.size || 0;
+                if (averagePrice > 0 && quantity > 0) {
+                  const pnlPercent = Math.abs(position.unrealized_pnl / (averagePrice * quantity) * 100);
+                  if (pnlPercent > 5) {
+                    this.statusIndicators.addAlert({
+                      type: position.unrealized_pnl > 0 ? 'success' : 'warning',
+                      title: 'Significant P&L Change',
+                      message: `${position.unrealized_pnl > 0 ? 'Profit' : 'Loss'}: $${position.unrealized_pnl.toFixed(2)} (${pnlPercent.toFixed(1)}%)`,
+                      sound: pnlPercent > 10
+                    });
+                  }
+                }
+              }
+            }
+          }
           break;
 
         case 'risk_metrics':
-          this.ui.updateRiskMetrics(message.data as RiskMetrics);
+          if ('data' in message && message.data) {
+            this.ui.updateRiskMetrics(message.data as RiskMetrics);
+          }
           break;
 
         case 'trading_loop':
-          // Trading loop messages are handled by specific handler above
-          console.debug('Trading loop message processed');
-          break;
-
         case 'ai_decision':
-          // AI decision messages are handled by specific handler above
-          console.debug('AI decision message processed');
-          break;
-
         case 'system_status':
-          // System status messages are handled by specific handler above
-          console.debug('System status message processed');
-          break;
-
         case 'error':
-          // Error messages are handled by specific handler above
-          console.debug('Error message processed');
+          // These are handled by specific handlers
           break;
 
         case 'ping':
         case 'pong':
-          // Ping/pong messages are handled internally by WebSocket client
+          // Ping/pong messages are handled internally
+          // Update latency on pong
+          if (message.type === 'pong' && 'timestamp' in message && typeof message.timestamp === 'number') {
+            const latency = Date.now() - message.timestamp;
+            this.updateLatency(latency);
+          }
           break;
 
         default:
-          console.log('Unknown message type:', (message as any).type);
       }
     } catch (error) {
       console.error('Error handling WebSocket message:', error);
-      this.ui.log('error', `Failed to process ${(message as any).type} message`, 'WebSocket');
+      // Don't log UI errors to prevent infinite loops
     }
   }
 
@@ -669,7 +1448,6 @@ class DashboardApp {
     // Check for environment variable first
     const envWsUrl = (import.meta.env.VITE_WS_URL as string) || (window as any).__WS_URL__;
     if (envWsUrl) {
-      console.log('Using WebSocket URL from environment:', envWsUrl);
       
       // Handle absolute URLs (already include protocol and host)
       if (envWsUrl.startsWith('ws://') || envWsUrl.startsWith('wss://')) {
@@ -687,7 +1465,6 @@ class DashboardApp {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const host = window.location.host;
         const fullUrl = `${protocol}//${host}${envWsUrl}`;
-        console.log('Converted relative WebSocket URL to absolute:', fullUrl);
         return fullUrl;
       }
       
@@ -695,7 +1472,6 @@ class DashboardApp {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const host = window.location.host;
       const fullUrl = `${protocol}//${host}/${envWsUrl.replace(/^\/+/, '')}`;
-      console.log('Constructed WebSocket URL from environment variable:', fullUrl);
       return fullUrl;
     }
 
@@ -705,12 +1481,10 @@ class DashboardApp {
     // In development mode (Vite dev server on port 3000), use proxy to backend
     if (host.includes('localhost:3000') || host.includes('127.0.0.1:3000')) {
       // Vite proxy will forward /ws to the backend automatically
-      console.log('Development mode detected, using Vite proxy for WebSocket');
       return `${protocol}//${host}/ws`;
     }
     
     // In production or other environments, construct URL based on current host
-    console.log('Production mode detected, using current host for WebSocket');
     return `${protocol}//${host}/ws`;
   }
 
@@ -721,7 +1495,6 @@ class DashboardApp {
     // Check for environment variable first
     const envApiUrl = (import.meta.env.VITE_API_BASE_URL as string) || (import.meta.env.VITE_API_URL as string) || (window as any).__API_URL__;
     if (envApiUrl) {
-      console.log('Using API URL from environment:', envApiUrl);
       return envApiUrl.endsWith('/api') ? envApiUrl : `${envApiUrl}/api`;
     }
 
@@ -731,12 +1504,10 @@ class DashboardApp {
     // In development mode (Vite dev server on port 3000), use proxy to backend
     if (host.includes('localhost:3000') || host.includes('127.0.0.1:3000')) {
       // Vite proxy will forward /api to the backend automatically
-      console.log('Development mode detected, using Vite proxy for API');
       return `${protocol}//${host}/api`;
     }
     
     // In production or other environments, construct URL based on current host
-    console.log('Production mode detected, using current host for API');
     return `${protocol}//${host}/api`;
   }
 
@@ -747,9 +1518,9 @@ class DashboardApp {
     const loadingEl = document.getElementById('loading');
     if (!loadingEl) return;
 
-    const progressEl = loadingEl.querySelector('.loading-progress');
     const messageEl = loadingEl.querySelector('.loading-message');
     const barEl = loadingEl.querySelector('.progress-bar');
+    const percentageEl = loadingEl.querySelector('.loading-percentage');
 
     if (messageEl) {
       messageEl.textContent = message;
@@ -758,19 +1529,9 @@ class DashboardApp {
     if (barEl) {
       (barEl as HTMLElement).style.width = `${percentage}%`;
     }
-
-    // Create progress elements if they don't exist
-    if (!progressEl) {
-      const progressHTML = `
-        <div class="loading-progress">
-          <div class="loading-message">${message}</div>
-          <div class="progress-container">
-            <div class="progress-bar" style="width: ${percentage}%"></div>
-          </div>
-          <div class="loading-percentage">${percentage}%</div>
-        </div>
-      `;
-      loadingEl.innerHTML += progressHTML;
+    
+    if (percentageEl) {
+      percentageEl.textContent = `${percentage}%`;
     }
   }
 
@@ -803,12 +1564,19 @@ class DashboardApp {
    */
   private hideLoadingScreen(): void {
     const loadingEl = document.getElementById('loading');
+    const dashboardEl = document.getElementById('dashboard');
+    
     if (loadingEl) {
       loadingEl.style.opacity = '0';
       loadingEl.style.transition = 'opacity 0.3s ease';
       setTimeout(() => {
         loadingEl.style.display = 'none';
       }, 300);
+    }
+    
+    if (dashboardEl) {
+      dashboardEl.style.opacity = '1';
+      dashboardEl.style.visibility = 'visible';
     }
   }
 
@@ -978,6 +1746,44 @@ class DashboardApp {
   }
 
   /**
+   * Update LLM Decision Card with new trade action
+   */
+  private updateLLMDecisionCard(tradeAction: TradeAction): void {
+    if (!this.llmDecisionCard) return;
+
+    try {
+      // Determine risk level based on confidence
+      let riskLevel: 'low' | 'medium' | 'high' = 'medium';
+      if (tradeAction.confidence >= 0.8) {
+        riskLevel = 'low';
+      } else if (tradeAction.confidence <= 0.4) {
+        riskLevel = 'high';
+      }
+
+      // Create decision data
+      const decisionData: LLMDecisionData = {
+        action: tradeAction,
+        marketData: this.lastMarketData || {
+          symbol: this.config.default_symbol,
+          price: tradeAction.price || 0,
+          timestamp: new Date().toISOString()
+        },
+        indicators: this.lastIndicators || undefined,
+        riskLevel,
+        positionSize: tradeAction.quantity
+      };
+
+      // Update the card
+      this.llmDecisionCard.updateDecision(decisionData);
+      
+      this.ui.log('debug', 'LLM Decision Card updated', 'UI');
+    } catch (error) {
+      console.error('Failed to update LLM Decision Card:', error);
+      this.ui.log('error', 'Failed to update AI decision display', 'UI');
+    }
+  }
+
+  /**
    * Cleanup resources
    */
   public destroy(): void {
@@ -995,13 +1801,30 @@ class DashboardApp {
         this.chart = null;
       }
 
-      // Clear visibility handler
+      // Clear all utilities
       this.visibilityHandler.destroy();
+      this.performanceMonitor.destroy();
+      this.debouncer.destroy();
+      this.memoryManager.destroy();
+      this.ui.destroy();
+      
+      // Clear system health monitoring
+      if (this.systemHealthInterval) {
+        clearInterval(this.systemHealthInterval);
+        this.systemHealthInterval = null;
+      }
 
       // Final performance log
-      if (window.location.hostname === 'localhost') {
+      if (__DEV__) {
         this.performanceMonitor.logMetrics();
       }
+
+      // Clear references to prevent memory leaks
+      this.lastMarketData = null;
+      this.lastIndicators = null;
+      this.statusIndicators = null;
+      this.headerElements = {};
+      this.sidebarElements = {};
 
       // Reset state
       this.isInitialized = false;
@@ -1087,7 +1910,6 @@ window.addEventListener('unhandledrejection', (event) => {
 
 // Network connectivity monitoring
 window.addEventListener('online', () => {
-  console.log('📶 Network connection restored');
   if (globalDashboardApp?.ui) {
     globalDashboardApp.ui.log('info', 'Network connection restored', 'Network');
     // Attempt to reconnect services
@@ -1096,7 +1918,6 @@ window.addEventListener('online', () => {
 });
 
 window.addEventListener('offline', () => {
-  console.log('📵 Network connection lost');
   if (globalDashboardApp?.ui) {
     globalDashboardApp.ui.log('warn', 'Network connection lost - dashboard in offline mode', 'Network');
   }
@@ -1109,7 +1930,6 @@ if ('PerformanceObserver' in window) {
       const entries = list.getEntries();
       entries.forEach((entry) => {
         if (entry.entryType === 'navigation') {
-          console.log(`📊 Page load performance: ${(entry as PerformanceNavigationTiming).loadEventEnd}ms`);
         }
       });
     });
@@ -1121,110 +1941,37 @@ if ('PerformanceObserver' in window) {
 }
 
 /**
- * Service Worker cleanup utility
+ * Service Worker cleanup utility - simplified for reliability
  */
 class ServiceWorkerCleaner {
-  private cleanupAttempts = 0;
-  private maxCleanupAttempts = 3;
-
   async performCleanup(): Promise<void> {
     if (!('serviceWorker' in navigator)) {
-      console.log('[SW Cleaner] Service Worker API not available');
       return;
     }
 
     try {
-      this.cleanupAttempts++;
-      console.log(`[SW Cleaner] Cleanup attempt ${this.cleanupAttempts}/${this.maxCleanupAttempts}`);
-
       const registrations = await navigator.serviceWorker.getRegistrations();
       
-      if (registrations.length === 0) {
-        console.log('[SW Cleaner] No service workers found');
-        return;
+      if (registrations.length > 0) {
+        
+        await Promise.all(
+          registrations.map(registration => 
+            registration.unregister().catch(() => {})
+          )
+        );
       }
-
-      console.log(`[SW Cleaner] Found ${registrations.length} service worker(s) to clean up`);
-      
-      const unregisterPromises = registrations.map(async (registration) => {
-        try {
-          console.log(`[SW Cleaner] Unregistering SW from scope: ${registration.scope}`);
-          const success = await registration.unregister();
-          if (success) {
-            console.log(`[SW Cleaner] Successfully unregistered: ${registration.scope}`);
-          } else {
-            console.warn(`[SW Cleaner] Failed to unregister: ${registration.scope}`);
-          }
-          return success;
-        } catch (error) {
-          console.error(`[SW Cleaner] Error unregistering ${registration.scope}:`, error);
-          return false;
-        }
-      });
-
-      const results = await Promise.all(unregisterPromises);
-      const successCount = results.filter(Boolean).length;
-      
-      console.log(`[SW Cleaner] Cleanup complete: ${successCount}/${registrations.length} unregistered`);
-
-      // If we still have registrations and haven't exceeded max attempts, try again
-      if (successCount < registrations.length && this.cleanupAttempts < this.maxCleanupAttempts) {
-        console.log('[SW Cleaner] Some service workers persist, retrying in 1 second...');
-        setTimeout(() => this.performCleanup(), 1000);
-      }
-
     } catch (error) {
-      console.error('[SW Cleaner] Service worker cleanup failed:', error);
+      // Silently fail - not critical for dashboard operation
     }
-  }
-
-  preventNewRegistrations(): void {
-    if (!('serviceWorker' in navigator)) return;
-
-    // Store the original register function for potential future use
-    (window as any).__originalServiceWorkerRegister = navigator.serviceWorker.register;
-    
-    navigator.serviceWorker.register = function(...args) {
-      console.warn('[SW Cleaner] Blocked attempt to register service worker:', args);
-      return Promise.reject(new Error('Service worker registration blocked by AI Trading Dashboard'));
-    };
-
-    console.log('[SW Cleaner] Service worker registration blocking active');
-  }
-
-  monitorServiceWorkers(): void {
-    if (!('serviceWorker' in navigator)) return;
-
-    // Monitor for new registrations every 5 seconds
-    const monitorInterval = setInterval(async () => {
-      try {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        if (registrations.length > 0) {
-          console.warn(`[SW Cleaner] Detected ${registrations.length} service worker(s) during monitoring`);
-          await this.performCleanup();
-        }
-      } catch (error) {
-        console.error('[SW Cleaner] Monitoring error:', error);
-      }
-    }, 5000);
-
-    // Stop monitoring after 60 seconds (12 checks)
-    setTimeout(() => {
-      clearInterval(monitorInterval);
-      console.log('[SW Cleaner] Service worker monitoring stopped');
-    }, 60000);
   }
 }
 
 // Initialize dashboard when DOM is ready
 document.addEventListener('DOMContentLoaded', async () => {
-  console.log('🎯 DOM loaded, initializing dashboard...');
   
-  // Service worker cleanup - run before any other initialization
+  // Quick service worker cleanup - non-blocking
   const swCleaner = new ServiceWorkerCleaner();
-  await swCleaner.performCleanup();
-  swCleaner.preventNewRegistrations();
-  swCleaner.monitorServiceWorkers();
+  swCleaner.performCleanup().catch(() => {}); // Don't wait for cleanup
   
   // Track page load performance
   const pageLoadStart = performance.now();
@@ -1271,13 +2018,12 @@ document.addEventListener('DOMContentLoaded', async () => {
           </div>
         `;
       }
-    }, 20000); // 20 second timeout (reduced from 30s)
+    }, 15000); // 15 second timeout for initialization
     
     await globalDashboardApp.initialize();
     clearTimeout(initTimeout);
     
     const pageLoadTime = performance.now() - pageLoadStart;
-    console.log(`🎉 Dashboard fully loaded in ${pageLoadTime.toFixed(2)}ms`);
     
   } catch (error) {
     console.error('❌ Failed to start dashboard:', error);
@@ -1314,7 +2060,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Cleanup and lifecycle management
 window.addEventListener('beforeunload', () => {
   if (globalDashboardApp) {
-    console.log('🚪 Page unloading, cleaning up...');
     globalDashboardApp.destroy();
   }
 });
@@ -1322,9 +2067,7 @@ window.addEventListener('beforeunload', () => {
 // Detect page refresh vs close
 window.addEventListener('pagehide', (event) => {
   if (event.persisted) {
-    console.log('📄 Page cached (back/forward navigation)');
   } else {
-    console.log('🔄 Page being discarded');
   }
 });
 
@@ -1359,17 +2102,7 @@ window.addEventListener('error', (event) => {
 
 // Development helpers
 if (window.location.hostname === 'localhost') {
-  console.log(`
-🔧 Development Mode Active
-Available debugging commands:
-- dashboard.app() - Get app instance
-- dashboard.health() - Get health status  
-- dashboard.reconnect() - Force reconnection
-- dashboard.performance() - Show performance metrics
-- dashboard.testSchemaCompliance() - Test TradingView schema compliance
-
-Dashboard will be available at: window.dashboard
-  `);
+  // Development mode indicators available in browser console
   
   // Add schema compliance testing to debug interface
   (window as any).dashboard.testSchemaCompliance = () => {

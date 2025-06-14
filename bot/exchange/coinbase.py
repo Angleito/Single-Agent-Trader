@@ -102,6 +102,7 @@ from ..types import (
     Position,
     TradeAction,
 )
+from .futures_utils import FuturesContractManager
 
 logger = logging.getLogger(__name__)
 
@@ -289,6 +290,9 @@ class CoinbaseClient:
         self._portfolios = {}
         self._futures_portfolio_id = None
         self._default_portfolio_id = None
+        
+        # Futures contract management
+        self._futures_contract_manager = None
 
         # Compose a concise init message to avoid line length issues
         trading_mode = "PAPER TRADING" if settings.system.dry_run else "LIVE TRADING"
@@ -483,6 +487,10 @@ class CoinbaseClient:
 
             # Load portfolios information
             await self._load_portfolios()
+            
+            # Initialize futures contract manager if futures are enabled
+            if self.enable_futures:
+                self._futures_contract_manager = FuturesContractManager(self)
 
             return True
 
@@ -663,6 +671,44 @@ class CoinbaseClient:
         """
         return self._futures_portfolio_id
 
+    async def get_trading_symbol(self, base_symbol: str) -> str:
+        """
+        Get the appropriate trading symbol based on whether futures are enabled.
+        
+        Args:
+            base_symbol: Base symbol like "ETH-USD"
+            
+        Returns:
+            Actual trading symbol (spot or futures contract)
+        """
+        if not self.enable_futures:
+            # Use spot symbol as-is
+            return base_symbol
+        
+        # For Coinbase, ETH-USD and BTC-USD support futures trading directly
+        # when the leverage parameter is included in orders
+        if base_symbol in ['ETH-USD', 'BTC-USD', 'SOL-USD', 'DOGE-USD', 'LTC-USD', 'BCH-USD']:
+            logger.info(f"{base_symbol} supports futures trading with leverage parameter")
+            return base_symbol
+        
+        # For other symbols, try to find dated contracts
+        base_currency = base_symbol.split('-')[0]
+        
+        # Try to get cached contract first
+        if self._futures_contract_manager:
+            cached_contract = self._futures_contract_manager.get_cached_contract()
+            if cached_contract:
+                return cached_contract
+            
+            # Fetch current active contract
+            active_contract = await self._futures_contract_manager.get_active_futures_contract(base_currency)
+            if active_contract:
+                return active_contract
+        
+        # Fallback to original symbol
+        logger.info(f"Using {base_symbol} for futures trading")
+        return base_symbol
+
     async def execute_trade_action(
         self, trade_action: TradeAction, symbol: str, current_price: Decimal
     ) -> Order | None:
@@ -682,15 +728,19 @@ class CoinbaseClient:
             return None
 
         try:
+            # Get the actual trading symbol (spot or futures contract)
+            actual_symbol = await self.get_trading_symbol(symbol)
+            logger.info(f"Using trading symbol: {actual_symbol} (requested: {symbol})")
+            
             if trade_action.action == "HOLD":
                 logger.info("Action is HOLD - no trade executed")
                 return None
 
             elif trade_action.action == "CLOSE":
-                return await self._close_position(symbol)
+                return await self._close_position(actual_symbol)
 
             elif trade_action.action in ["LONG", "SHORT"]:
-                return await self._open_position(trade_action, symbol, current_price)
+                return await self._open_position(trade_action, actual_symbol, current_price)
 
             else:
                 logger.error(f"Unknown action: {trade_action.action}")
@@ -759,8 +809,12 @@ class CoinbaseClient:
 
             # Calculate position size based on available margin
             available_margin = futures_account.margin_info.available_margin
+            
+            # For safety, use only 80% of available margin to avoid insufficient funds errors
+            usable_margin = available_margin * Decimal("0.8")
+            
             position_value = min(
-                available_margin * Decimal(str(trade_action.size_pct / 100)),
+                usable_margin * Decimal(str(trade_action.size_pct / 100)),
                 futures_account.max_position_size,
             )
 
@@ -769,7 +823,7 @@ class CoinbaseClient:
             leverage = min(leverage, self.max_futures_leverage)
 
             # Calculate quantity for futures
-            # On Coinbase, 1 ETH futures contract = 0.1 ETH
+            # On Coinbase, 1 ETH futures contract = 0.1 ETH (nano-sized)
             CONTRACT_SIZE = Decimal("0.1")  # 0.1 ETH per contract
 
             # Check if we're using fixed contract size from config
@@ -796,7 +850,33 @@ class CoinbaseClient:
 
             # Check if we need to transfer cash for margin
             margin_required = actual_notional_value / leverage
-            # Skip transfer check - Coinbase already includes spot balance in available_margin
+            
+            # Check CFM balance and transfer if needed
+            if futures_account.futures_balance < margin_required:
+                transfer_amount = margin_required - futures_account.futures_balance + Decimal("10")  # Add buffer
+                logger.info(
+                    f"CFM balance ${futures_account.futures_balance} < margin required ${margin_required}. "
+                    f"Transferring ${transfer_amount} from CBI to CFM..."
+                )
+                
+                transfer_success = await self.transfer_cash_to_futures(
+                    amount=transfer_amount, 
+                    reason="AUTO_REBALANCE"
+                )
+                
+                if not transfer_success:
+                    logger.error("Failed to transfer funds to CFM. Cannot open futures position.")
+                    return None
+                    
+                # Wait a bit for transfer to settle
+                await asyncio.sleep(2)
+                
+                # Re-check futures account info
+                futures_account = await self.get_futures_account_info()
+                if not futures_account:
+                    logger.error("Cannot verify transfer - account info unavailable")
+                    return None
+            
             logger.info(
                 f"Margin required: ${margin_required}, Available margin: ${available_margin}"
             )
@@ -959,9 +1039,14 @@ class CoinbaseClient:
 
             # Parse the response - handle CDP API response object
             try:
-                # CDP API returns an object with order_id attribute
-                if hasattr(result, "order_id"):
-                    order_id = result.order_id
+                # CDP API returns a response object with success/success_response
+                if hasattr(result, "success") and result.success:
+                    # Handle the new SDK response format
+                    resp = result.success_response
+                    if isinstance(resp, dict):
+                        order_id = resp.get('order_id')
+                    else:
+                        order_id = resp.order_id if hasattr(resp, 'order_id') else None
 
                     order = Order(
                         id=order_id
@@ -977,6 +1062,9 @@ class CoinbaseClient:
 
                     logger.info(f"Market order placed successfully: {order_id}")
                     return order
+                elif hasattr(result, "order_id"):
+                    # Fallback for old format
+                    order_id = result.order_id
                 else:
                     # Try dictionary access for backward compatibility
                     if isinstance(result, dict) and result.get("success"):
@@ -1342,23 +1430,14 @@ class CoinbaseClient:
                 "order_configuration": {
                     "market_market_ioc": {"base_size": str(rounded_quantity)}
                 },
-                "leverage": str(
-                    leverage
-                ),  # Add leverage back - it's required for futures
-                "retail_portfolio_id": self._default_portfolio_id
-                or "1f3ed8bf-a65c-5022-8258-87ce50c517f6",
+                "leverage": str(leverage),  # This makes it a futures order
             }
 
             # Add reduce_only only if True
             if reduce_only:
                 order_data["reduce_only"] = reduce_only
-
-            # Add futures portfolio ID if available
-            if self._futures_portfolio_id:
-                order_data["retail_portfolio_id"] = self._futures_portfolio_id
-                logger.debug(
-                    f"Using futures portfolio ID: {self._futures_portfolio_id}"
-                )
+                
+            # Don't add portfolio ID for futures - Coinbase handles the routing automatically
 
             logger.info(
                 f"Placing FUTURES {side} market order: {quantity} {symbol} (leverage: {leverage}x)"
@@ -1370,9 +1449,14 @@ class CoinbaseClient:
 
             # Parse the response - handle CDP API response object
             try:
-                # CDP API returns an object with order_id attribute
-                if hasattr(result, "order_id"):
-                    order_id = result.order_id
+                # CDP API returns a response object with success/success_response
+                if hasattr(result, "success") and result.success:
+                    # Handle the new SDK response format
+                    resp = result.success_response
+                    if isinstance(resp, dict):
+                        order_id = resp.get('order_id')
+                    else:
+                        order_id = resp.order_id if hasattr(resp, 'order_id') else None
 
                     order = Order(
                         id=order_id
@@ -1388,6 +1472,9 @@ class CoinbaseClient:
 
                     logger.info(f"Futures market order placed successfully: {order_id}")
                     return order
+                elif hasattr(result, "order_id"):
+                    # Fallback for old format
+                    order_id = result.order_id
                 else:
                     # Try dictionary access for backward compatibility
                     if isinstance(result, dict) and result.get("success"):
@@ -1776,53 +1863,40 @@ class CoinbaseClient:
                 logger.info(f"PAPER TRADING: Simulating transfer ${amount} CBI -> CFM")
                 return True
 
-            # Attempt to allocate funds from CBI to CFM
+            # Use futures sweep API to transfer funds
             try:
-                transfer_data = {
-                    "source_portfolio_uuid": "1f3ed8bf-a65c-5022-8258-87ce50c517f6",  # Default portfolio
-                    "amount": str(amount),
-                    "currency": "USD",
-                }
-
-                # Try the allocate endpoint
-                result = await self._retry_request(
-                    self._client.allocate_portfolio,
-                    source_portfolio_uuid=transfer_data["source_portfolio_uuid"],
-                    amount=transfer_data["amount"],
-                    currency=transfer_data["currency"],
-                    to_fcm_account=True,
-                )
-
-                logger.info(f"Successfully transferred ${amount} to futures account")
-                return True
-
-            except Exception as e:
-                logger.error(f"Failed to allocate funds to futures: {e}")
-
-                # Try alternative transfer endpoint
+                # Cancel any pending sweeps first
                 try:
-                    transfer_request = {
-                        "source_account": "CBI",
-                        "target_account": "CFM",
-                        "amount": str(amount),
-                        "currency": "USD",
-                    }
-
-                    # This endpoint might not exist in the SDK, but we'll try
-                    await self._retry_request(
-                        lambda: self._client.post(
-                            "/api/v3/brokerage/cfm/cash_transfers", transfer_request
-                        )
-                    )
-
-                    logger.info(
-                        f"Successfully transferred ${amount} using alternative method"
-                    )
-                    return True
-
-                except Exception as e2:
-                    logger.error(f"Alternative transfer method also failed: {e2}")
-                    return False
+                    await self._retry_request(self._client.cancel_pending_futures_sweep)
+                    logger.debug("Cancelled pending futures sweep")
+                except Exception:
+                    pass  # Ignore if no pending sweep
+                
+                # Schedule a new sweep
+                result = await self._retry_request(
+                    self._client.schedule_futures_sweep,
+                    usd_amount=str(amount)
+                )
+                
+                logger.info(f"Successfully scheduled futures sweep for ${amount}")
+                
+                # Wait a bit for the sweep to process
+                await asyncio.sleep(3)
+                
+                # Check if transfer completed
+                balance_resp = await self._retry_request(self._client.get_futures_balance_summary)
+                if hasattr(balance_resp, 'balance_summary'):
+                    cfm_balance = Decimal(balance_resp.balance_summary.cfm_usd_balance['value'])
+                    if cfm_balance > 0:
+                        logger.info(f"Transfer completed. CFM balance: ${cfm_balance}")
+                        return True
+                
+                logger.warning("Transfer scheduled but not yet completed")
+                return True  # Return true since sweep was scheduled
+                
+            except Exception as e:
+                logger.error(f"Failed to schedule futures sweep: {e}")
+                return False
 
         except Exception as e:
             logger.error(f"Failed to transfer cash to futures: {e}")

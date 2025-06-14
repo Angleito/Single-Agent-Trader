@@ -17,6 +17,9 @@ export interface BotStatus {
   dry_run: boolean;
   symbol: string;
   leverage: number;
+  is_active?: boolean;
+  is_paused?: boolean;
+  status_message?: string;
 }
 
 export interface MarketData {
@@ -36,6 +39,7 @@ export interface TradeAction {
   price?: number;
   quantity?: number;
   leverage?: number;
+  executed?: boolean;
 }
 
 export interface VuManchuIndicators {
@@ -57,6 +61,9 @@ export interface Position {
   leverage: number;
   liquidation_price?: number;
   timestamp: string;
+  quantity?: number;
+  unrealized_pnl?: number;
+  average_price?: number;
 }
 
 export interface RiskMetrics {

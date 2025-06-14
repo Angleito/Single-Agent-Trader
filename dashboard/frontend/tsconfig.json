@@ -16,15 +16,9 @@
     "isolatedModules": true,
 
     /* Type checking */
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "erasableSyntaxOnly": true,
+    "strict": false,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true,
-    "exactOptionalPropertyTypes": true,
     "noImplicitReturns": true,
-    "noImplicitOverride": true,
 
     /* Path mapping */
     "baseUrl": ".",

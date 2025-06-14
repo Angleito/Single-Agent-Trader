@@ -159,9 +159,10 @@ class TradingEngine:
                 starting_balance=self.settings.paper_trading.starting_balance
             )
 
-        # Initialize components
-        self.market_data = MarketDataProvider(symbol, interval)
+        # Initialize components (market data will be initialized after exchange connection)
+        self.market_data = None
         self.indicator_calc = VuManChuIndicators()
+        self.actual_trading_symbol = symbol  # Will be updated if futures are enabled
 
         # Initialize MCP memory components if enabled
         self.memory_server = None
@@ -347,15 +348,25 @@ class TradingEngine:
         """Initialize all trading components."""
         console.print("[cyan]Initializing trading components...[/cyan]")
 
-        # Initialize market data provider
-        console.print("  • Connecting to market data feed...")
-        await self.market_data.connect()
-
-        # Initialize exchange client
+        # Initialize exchange client first to determine the correct trading symbol
         console.print("  • Connecting to exchange...")
         connected = await self.exchange_client.connect()
         if not connected:
             raise RuntimeError("Failed to connect to exchange")
+        
+        # Get the actual trading symbol (futures contract if enabled)
+        if self.exchange_client.enable_futures:
+            console.print("  • Determining active futures contract...")
+            self.actual_trading_symbol = await self.exchange_client.get_trading_symbol(self.symbol)
+            console.print(f"    Using futures contract: [green]{self.actual_trading_symbol}[/green]")
+        else:
+            self.actual_trading_symbol = self.symbol
+            console.print(f"    Using spot symbol: [green]{self.actual_trading_symbol}[/green]")
+        
+        # Now initialize market data provider with the correct symbol
+        console.print("  • Connecting to market data feed...")
+        self.market_data = MarketDataProvider(self.actual_trading_symbol, self.interval)
+        await self.market_data.connect()
 
         # Verify LLM agent is available
         console.print("  • Verifying LLM agent...")

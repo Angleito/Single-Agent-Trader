@@ -1,5 +1,8 @@
 /// <reference types="vite/client" />
 
+// Global development flag
+declare const __DEV__: boolean;
+
 interface ImportMetaEnv {
   readonly VITE_APP_TITLE: string
   readonly VITE_API_BASE_URL: string

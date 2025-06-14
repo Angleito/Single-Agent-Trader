@@ -324,9 +324,9 @@
               </div>
             </div>
             <div class="header-right">
-              <div class="connection-status" data-connection="disconnected">
-                <span class="status-indicator" aria-label="Connection status"></span>
-                <span class="status-text">Connecting...</span>
+              <!-- Integrated Status Indicators in Header -->
+              <div id="header-status-indicators" class="header-status-indicators">
+                <!-- Connection status will be rendered by status-indicators component -->
               </div>
               <div class="last-update" data-last-update="">
                 <span class="update-label">Last Update:</span>
@@ -359,6 +359,11 @@
 
         <!-- Main Content Grid -->
         <main class="dashboard-main" role="main">
+          <!-- LLM Decision Card (prominent at top) -->
+          <div id="llm-decision-container" class="llm-decision-section">
+            <!-- LLM Decision Card will be rendered here by JavaScript -->
+          </div>
+          
           <!-- Left Sidebar - Quick Stats & AI Log -->
           <aside class="sidebar-left" role="complementary" aria-label="Trading statistics and AI decisions">
             <!-- Quick Stats Panel -->
@@ -385,6 +390,14 @@
                   <div class="stat-value" data-risk-level="low">Low</div>
                   <div class="risk-indicator" data-risk-color="green"></div>
                 </div>
+              </div>
+            </section>
+
+            <!-- Health Indicators Panel -->
+            <section class="health-indicators-panel" aria-labelledby="health-indicators-title">
+              <h2 id="health-indicators-title" class="panel-title">System Health</h2>
+              <div id="sidebar-health-indicators" class="sidebar-health-indicators">
+                <!-- Bot health and system metrics will be rendered by status-indicators component -->
               </div>
             </section>
 
@@ -446,7 +459,15 @@
           <aside class="sidebar-right" role="complementary" aria-label="Performance metrics and risk management">
             <!-- Performance Panel -->
             <section class="performance-panel" aria-labelledby="performance-title">
-              <h2 id="performance-title" class="panel-title">Performance</h2>
+              <div class="panel-header">
+                <h2 id="performance-title" class="panel-title">Performance</h2>
+                <button class="chart-btn" data-toggle-performance="" aria-label="View performance charts">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                    <path d="M9 17V7l3 3 3-3v10"/>
+                  </svg>
+                </button>
+              </div>
               <div class="performance-metrics">
                 <div class="metric-row">
                   <span class="metric-label">Total Return:</span>

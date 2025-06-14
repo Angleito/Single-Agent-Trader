@@ -41,8 +41,70 @@ export interface ErrorMessage {
   };
 }
 
+// Specific LLM event message types
+export interface LLMRequestMessage {
+  type: 'llm_request';
+  data: {
+    request_id: string;
+    timestamp: string;
+    model: string;
+    prompt_tokens?: number;
+    max_tokens?: number;
+    temperature?: number;
+    context?: {
+      market_data?: any;
+      indicators?: any;
+      positions?: any;
+    };
+  };
+}
+
+export interface LLMResponseMessage {
+  type: 'llm_response';
+  data: {
+    request_id: string;
+    timestamp: string;
+    model: string;
+    response_time_ms: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    cost_estimate_usd?: number;
+    success: boolean;
+    error?: string;
+    raw_response?: string;
+  };
+}
+
+export interface TradingDecisionMessage {
+  type: 'trading_decision';
+  data: {
+    request_id: string;
+    timestamp: string;
+    action: 'BUY' | 'SELL' | 'HOLD';
+    confidence: number;
+    reasoning: string;
+    price: number;
+    quantity?: number;
+    leverage?: number;
+    indicators?: {
+      cipher_a?: number;
+      cipher_b?: number;
+      wave_trend_1?: number;
+      wave_trend_2?: number;
+    };
+    risk_analysis?: {
+      stop_loss?: number;
+      take_profit?: number;
+      risk_reward_ratio?: number;
+    };
+  };
+}
+
 export interface LLMEventMessage {
   type: 'llm_event';
+  event_type: 'llm_request' | 'llm_response' | 'trading_decision' | 'performance_metrics' | 'alert';
+  timestamp: string;
+  source: 'llm_parser';
   data: {
     event_type: 'llm_request' | 'llm_response' | 'trading_decision' | 'performance_metrics' | 'alert';
     timestamp: string;
@@ -105,6 +167,9 @@ export type AllWebSocketMessages =
   | AIDecisionMessage 
   | SystemStatusMessage 
   | ErrorMessage 
+  | LLMRequestMessage
+  | LLMResponseMessage
+  | TradingDecisionMessage
   | LLMEventMessage
   | PerformanceUpdateMessage
   | TradingViewDecisionMessage
@@ -136,6 +201,10 @@ export class DashboardWebSocket {
   private connectionTimeout: number;
   private isManualClose = false;
   private connectionTimeoutId: number | null = null;
+  private messageQueue: any[] = [];
+  private maxQueueSize = 50; // Reduced from 100
+  private lastPongTime: number = Date.now();
+  private pongTimeout = 60000; // 60 seconds
 
   // Event system for message type routing
   private eventHandlers = new Map<string, Set<MessageHandler>>();
@@ -143,6 +212,17 @@ export class DashboardWebSocket {
   // Connection status callbacks
   private connectionStatusCallbacks = new Set<(status: ConnectionStatus) => void>();
   private errorCallbacks = new Set<(error: Event | Error) => void>();
+
+  // Memory management
+  private readonly MAX_EVENT_HANDLERS = 20;
+  private readonly MAX_STATUS_CALLBACKS = 10;
+  private readonly MAX_ERROR_CALLBACKS = 10;
+  private cleanupTimer: number | null = null;
+  private readonly CLEANUP_INTERVAL = 30000; // 30 seconds
+
+  // Message throttling for performance
+  private messageThrottle = new Map<string, number>();
+  private readonly MESSAGE_THROTTLE_MS = 50; // 50ms between same message types
 
   constructor(url?: string, config: WebSocketConfig = {}) {
     // Use dynamic URL detection if no URL provided
@@ -158,11 +238,76 @@ export class DashboardWebSocket {
     finalUrl = this.validateAndCleanUrl(finalUrl);
     
     this.url = finalUrl;
-    this.maxReconnectAttempts = config.maxReconnectAttempts || 10;
+    this.maxReconnectAttempts = config.maxReconnectAttempts || 5;
     this.reconnectDelay = config.initialReconnectDelay || 1000;
     this.maxReconnectDelay = config.maxReconnectDelay || 30000;
     this.pingIntervalMs = config.pingInterval || 30000;
     this.connectionTimeout = config.connectionTimeout || 10000;
+    
+    // Start memory cleanup
+    this.startMemoryCleanup();
+  }
+
+  /**
+   * Start periodic memory cleanup
+   */
+  private startMemoryCleanup(): void {
+    this.cleanupTimer = window.setInterval(() => {
+      this.performMemoryCleanup();
+    }, this.CLEANUP_INTERVAL);
+  }
+
+  /**
+   * Perform memory cleanup operations
+   */
+  private performMemoryCleanup(): void {
+    // Clean up message queue
+    if (this.messageQueue.length > this.maxQueueSize) {
+      this.messageQueue = this.messageQueue.slice(-this.maxQueueSize);
+    }
+
+    // Clean up event handlers if too many
+    if (this.eventHandlers.size > this.MAX_EVENT_HANDLERS) {
+      // Keep only the most recently used handlers
+      const entries = Array.from(this.eventHandlers.entries());
+      const recentEntries = entries.slice(-this.MAX_EVENT_HANDLERS);
+      this.eventHandlers = new Map(recentEntries);
+    }
+
+    // Clean up status callbacks
+    if (this.connectionStatusCallbacks.size > this.MAX_STATUS_CALLBACKS) {
+      const callbacks = Array.from(this.connectionStatusCallbacks);
+      this.connectionStatusCallbacks = new Set(callbacks.slice(-this.MAX_STATUS_CALLBACKS));
+    }
+
+    // Clean up error callbacks
+    if (this.errorCallbacks.size > this.MAX_ERROR_CALLBACKS) {
+      const callbacks = Array.from(this.errorCallbacks);
+      this.errorCallbacks = new Set(callbacks.slice(-this.MAX_ERROR_CALLBACKS));
+    }
+
+    // Clean up old message throttle entries
+    const now = Date.now();
+    for (const [key, timestamp] of this.messageThrottle.entries()) {
+      if (now - timestamp > 10000) { // Remove entries older than 10 seconds
+        this.messageThrottle.delete(key);
+      }
+    }
+  }
+
+  /**
+   * Check if message should be throttled
+   */
+  private shouldThrottleMessage(messageType: string): boolean {
+    const now = Date.now();
+    const lastTime = this.messageThrottle.get(messageType);
+    
+    if (lastTime && now - lastTime < this.MESSAGE_THROTTLE_MS) {
+      return true; // Throttle this message
+    }
+    
+    this.messageThrottle.set(messageType, now);
+    return false;
   }
 
   /**
@@ -207,14 +352,12 @@ export class DashboardWebSocket {
       }
       
       const cleanUrl = urlObj.toString();
-      console.log(`WebSocket URL validated and cleaned: ${url} -> ${cleanUrl}`);
       return cleanUrl;
       
     } catch (error) {
       console.error('WebSocket URL validation failed:', error);
       // Fallback to default URL
       const fallbackUrl = this.getDefaultWebSocketUrl();
-      console.warn(`Using fallback WebSocket URL: ${fallbackUrl}`);
       return fallbackUrl;
     }
   }
@@ -224,7 +367,6 @@ export class DashboardWebSocket {
    */
   public connect(): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      console.log('WebSocket already connected');
       return;
     }
 
@@ -234,8 +376,6 @@ export class DashboardWebSocket {
     // Debug logging (reduced verbosity)
     const isDebugMode = (import.meta.env.VITE_DEBUG === 'true') || (import.meta.env.VITE_LOG_LEVEL === 'debug');
     if (isDebugMode) {
-      console.log(`WebSocket connecting to: ${this.url}`);
-      console.log(`Browser WebSocket support: ${typeof WebSocket !== 'undefined'}`);
     }
 
     try {
@@ -252,12 +392,10 @@ export class DashboardWebSocket {
       // Check if we're in a secure context if needed
       const isSecure = this.url.startsWith('wss://');
       if (isSecure && !window.isSecureContext) {
-        console.warn('Secure WebSocket requested but not in secure context');
       }
 
       this.ws = new WebSocket(this.url);
       if (isDebugMode) {
-        console.log(`WebSocket created, readyState: ${this.ws.readyState} (${this.getReadyStateText(this.ws.readyState)})`);
       }
       
       this.setupEventListeners();
@@ -304,7 +442,7 @@ export class DashboardWebSocket {
   /**
    * Send a message to the server
    */
-  public send(message: any): boolean {
+  public send(message: any, queueIfDisconnected = true): boolean {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       try {
         const jsonMessage = JSON.stringify(message);
@@ -312,13 +450,25 @@ export class DashboardWebSocket {
         
         const isDebugMode = (import.meta.env.VITE_DEBUG === 'true') || (import.meta.env.VITE_LOG_LEVEL === 'debug');
         if (isDebugMode) {
-          console.debug('WebSocket message sent:', message.type || 'unknown');
         }
         return true;
       } catch (error) {
         console.error('Failed to send WebSocket message:', error);
         this.notifyError(error instanceof Error ? error : new Error('Failed to send message'));
         return false;
+      }
+    }
+    
+    // Queue message if disconnected and queueing is enabled
+    if (queueIfDisconnected && !this.isManualClose) {
+      if (this.messageQueue.length < this.maxQueueSize) {
+        this.messageQueue.push(message);
+        const isDebugMode = (import.meta.env.VITE_DEBUG === 'true') || (import.meta.env.VITE_LOG_LEVEL === 'debug');
+        if (isDebugMode) {
+        }
+        return true;
+      } else {
+        console.warn('WebSocket message queue is full, dropping message');
       }
     }
     
@@ -426,13 +576,24 @@ export class DashboardWebSocket {
     this.ws.onopen = () => {
       const isDebugMode = (import.meta.env.VITE_DEBUG === 'true') || (import.meta.env.VITE_LOG_LEVEL === 'debug');
       if (isDebugMode) {
-        console.log('WebSocket connected successfully to', this.url);
       }
       this.clearConnectionTimeout();
       this.reconnectAttempts = 0;
       this.reconnectDelay = 1000;
       this.notifyConnectionStatus('connected');
       this.startPingInterval();
+      
+      // Process queued messages
+      if (this.messageQueue.length > 0) {
+        const queuedCount = this.messageQueue.length;
+        if (isDebugMode) {
+        }
+        
+        while (this.messageQueue.length > 0) {
+          const message = this.messageQueue.shift();
+          this.send(message, false); // Don't re-queue if send fails
+        }
+      }
     };
 
     this.ws.onmessage = (event) => {
@@ -441,11 +602,19 @@ export class DashboardWebSocket {
         
         // Handle pong messages internally
         if (message.type === 'pong') {
-          const isDebugMode = (import.meta.env.VITE_DEBUG === 'true') || (import.meta.env.VITE_LOG_LEVEL === 'debug');
-          if (isDebugMode) {
-            console.debug('Received pong from server');
-          }
+          this.lastPongTime = Date.now();
           return;
+        }
+        
+        // Handle ping messages (server-initiated ping)
+        if (message.type === 'ping') {
+          this.send({ type: 'pong', timestamp: new Date().toISOString() }, false);
+          return;
+        }
+        
+        // Check if message should be throttled
+        if (this.shouldThrottleMessage(message.type)) {
+          return; // Skip processing this message
         }
         
         // Route message to type-specific handlers
@@ -462,7 +631,6 @@ export class DashboardWebSocket {
       
       // Only log close details if it's an unexpected close or in debug mode
       if (event.code !== 1000 || isDebugMode) {
-        console.log(`WebSocket connection closed: code ${event.code}, reason: ${event.reason || 'none'}`);
       }
       
       this.clearPingInterval();
@@ -507,8 +675,20 @@ export class DashboardWebSocket {
           console.error(`Error in message handler for type ${message.type}:`, error);
         }
       });
-    } else {
-      console.debug('No handlers registered for message type:', message.type);
+    }
+    
+    // Special handling for llm_event messages - also route to sub-event handlers
+    if (message.type === 'llm_event' && 'data' in message && message.data?.event_type) {
+      const subEventHandlers = this.eventHandlers.get(`llm_event:${message.data.event_type}`);
+      if (subEventHandlers && subEventHandlers.size > 0) {
+        subEventHandlers.forEach(handler => {
+          try {
+            handler(message);
+          } catch (error) {
+            console.error(`Error in llm_event sub-handler for ${message.data.event_type}:`, error);
+          }
+        });
+      }
     }
 
     // Also emit to generic message handlers
@@ -584,7 +764,6 @@ export class DashboardWebSocket {
     if (this.isManualClose || this.reconnectAttempts >= this.maxReconnectAttempts) {
       const isDebugMode = (import.meta.env.VITE_DEBUG === 'true') || (import.meta.env.VITE_LOG_LEVEL === 'debug');
       if (isDebugMode) {
-        console.log('Max reconnection attempts reached or manual close');
       }
       this.notifyConnectionStatus('error');
       return;
@@ -599,7 +778,6 @@ export class DashboardWebSocket {
     // Only log every few attempts to reduce spam, or in debug mode
     const isDebugMode = (import.meta.env.VITE_DEBUG === 'true') || (import.meta.env.VITE_LOG_LEVEL === 'debug');
     if (isDebugMode || this.reconnectAttempts <= 3 || this.reconnectAttempts % 5 === 0) {
-      console.log(`WebSocket reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${Math.round(delay/1000)}s`);
     }
     
     setTimeout(() => {
@@ -615,12 +793,23 @@ export class DashboardWebSocket {
   private startPingInterval(): void {
     this.clearPingInterval();
     
+    // Reset last pong time on start
+    this.lastPongTime = Date.now();
+    
     this.pingInterval = window.setInterval(() => {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        // Check if we've received a pong recently
+        const timeSinceLastPong = Date.now() - this.lastPongTime;
+        if (timeSinceLastPong > this.pongTimeout) {
+          console.error('WebSocket pong timeout - connection may be dead');
+          this.ws.close();
+          return;
+        }
+        
         this.send({ 
           type: 'ping', 
           timestamp: new Date().toISOString() 
-        });
+        }, false); // Don't queue ping messages
       } else {
         this.clearPingInterval();
       }
@@ -654,10 +843,185 @@ export class DashboardWebSocket {
    * Clean up all resources
    */
   public destroy(): void {
+    // Clear cleanup timer
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
+    
+    // Disconnect WebSocket
     this.disconnect();
+    
+    // Clear all collections
     this.eventHandlers.clear();
     this.connectionStatusCallbacks.clear();
     this.errorCallbacks.clear();
+    this.messageQueue = [];
+    this.messageThrottle.clear();
+    
+    // Clear timeouts
+    if (this.connectionTimeoutId) {
+      clearTimeout(this.connectionTimeoutId);
+      this.connectionTimeoutId = null;
+    }
+  }
+
+  /**
+   * Helper method to validate message structure
+   */
+  public static isValidMessage(message: any): message is AllWebSocketMessages {
+    return message && 
+           typeof message === 'object' && 
+           typeof message.type === 'string' &&
+           message.data !== undefined;
+  }
+
+  /**
+   * Helper to parse LLM-specific messages
+   */
+  public static parseLLMMessage(message: any): LLMRequestMessage | LLMResponseMessage | TradingDecisionMessage | LLMEventMessage | null {
+    if (!this.isValidMessage(message)) return null;
+    
+    switch (message.type) {
+      case 'llm_request':
+        return message as LLMRequestMessage;
+      case 'llm_response':
+        return message as LLMResponseMessage;
+      case 'trading_decision':
+        return message as TradingDecisionMessage;
+      case 'llm_event':
+        return message as LLMEventMessage;
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Type guard for specific message types
+   */
+  public static isLLMRequest(message: any): message is LLMRequestMessage {
+    return message?.type === 'llm_request';
+  }
+
+  public static isLLMResponse(message: any): message is LLMResponseMessage {
+    return message?.type === 'llm_response';
+  }
+
+  public static isTradingDecision(message: any): message is TradingDecisionMessage {
+    return message?.type === 'trading_decision';
+  }
+
+  public static isLLMEvent(message: any): message is LLMEventMessage {
+    return message?.type === 'llm_event';
+  }
+
+  /**
+   * Get current queue size
+   */
+  public getQueueSize(): number {
+    return this.messageQueue.length;
+  }
+
+  /**
+   * Clear message queue
+   */
+  public clearQueue(): void {
+    this.messageQueue = [];
+  }
+
+  /**
+   * Extract LLM event data from llm_event message
+   */
+  public static extractLLMEventData(message: LLMEventMessage): LLMRequestMessage | LLMResponseMessage | TradingDecisionMessage | null {
+    if (!message.data) return null;
+    
+    const eventData = message.data;
+    const baseData = {
+      timestamp: eventData.timestamp || message.timestamp,
+    };
+    
+    switch (eventData.event_type) {
+      case 'llm_request':
+        return {
+          type: 'llm_request',
+          data: {
+            ...baseData,
+            request_id: eventData.request_id || '',
+            model: eventData.model || '',
+            prompt_tokens: eventData.prompt_length,
+            max_tokens: eventData.max_tokens,
+            temperature: eventData.temperature,
+            context: eventData.market_context,
+          }
+        } as LLMRequestMessage;
+        
+      case 'llm_response':
+        return {
+          type: 'llm_response',
+          data: {
+            ...baseData,
+            request_id: eventData.request_id || '',
+            model: eventData.model || '',
+            response_time_ms: eventData.response_time_ms || 0,
+            completion_tokens: eventData.token_usage?.completion_tokens,
+            total_tokens: eventData.token_usage?.total_tokens,
+            cost_estimate_usd: eventData.cost_estimate_usd,
+            success: eventData.success || false,
+            error: eventData.error,
+            raw_response: eventData.response_preview,
+          }
+        } as LLMResponseMessage;
+        
+      case 'trading_decision':
+        return {
+          type: 'trading_decision',
+          data: {
+            ...baseData,
+            request_id: eventData.request_id || '',
+            action: eventData.action as 'BUY' | 'SELL' | 'HOLD',
+            confidence: eventData.size_pct || 0,
+            reasoning: eventData.rationale || '',
+            price: eventData.current_price || 0,
+            indicators: eventData.indicators,
+            risk_analysis: {
+              risk_reward_ratio: eventData.risk_assessment ? 1.5 : undefined,
+            },
+          }
+        } as TradingDecisionMessage;
+        
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Wait for connection to be established
+   */
+  public async waitForConnection(timeout: number = 5000): Promise<boolean> {
+    const startTime = Date.now();
+    
+    while (Date.now() - startTime < timeout) {
+      if (this.isConnected()) {
+        return true;
+      }
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    return false;
+  }
+
+  /**
+   * Subscribe to a specific LLM event sub-type
+   */
+  public onLLMEvent(eventType: 'llm_request' | 'llm_response' | 'trading_decision' | 'performance_metrics' | 'alert', handler: MessageHandler): void {
+    this.on(`llm_event:${eventType}`, handler);
+  }
+
+  /**
+   * Unsubscribe from a specific LLM event sub-type
+   */
+  public offLLMEvent(eventType: 'llm_request' | 'llm_response' | 'trading_decision' | 'performance_metrics' | 'alert', handler: MessageHandler): void {
+    this.off(`llm_event:${eventType}`, handler);
   }
 }
 
@@ -667,4 +1031,29 @@ export const webSocketClient = new DashboardWebSocket();
 // Convenience function to create configured client
 export function createWebSocketClient(config: WebSocketConfig = {}): DashboardWebSocket {
   return new DashboardWebSocket(config.url, config);
+}
+
+// Production-ready client factory with optimized settings
+export function createProductionWebSocketClient(): DashboardWebSocket {
+  return new DashboardWebSocket(undefined, {
+    maxReconnectAttempts: 5,
+    initialReconnectDelay: 1000,
+    maxReconnectDelay: 30000,
+    pingInterval: 30000,
+    connectionTimeout: 10000,
+  });
+}
+
+// Helper to validate and parse WebSocket messages
+export function parseWebSocketMessage(data: string): AllWebSocketMessages | null {
+  try {
+    const message = JSON.parse(data);
+    if (DashboardWebSocket.isValidMessage(message)) {
+      return message as AllWebSocketMessages;
+    }
+    return null;
+  } catch (error) {
+    console.error('Failed to parse WebSocket message:', error);
+    return null;
+  }
 }

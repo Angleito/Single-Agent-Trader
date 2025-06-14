@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite'
+import { resolve } from 'path'
 
 export default defineConfig({
   server: {
@@ -11,8 +12,90 @@ export default defineConfig({
   },
   clearScreen: false,
   logLevel: 'info',
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, 'src')
+    }
+  },
   build: {
     target: 'es2020',
-    outDir: 'dist'
+    outDir: 'dist',
+    // Enable source maps for debugging in production
+    sourcemap: false,
+    // Minimize bundle size
+    minify: 'esbuild',
+    // Enable compression
+    reportCompressedSize: true,
+    // Chunk size warning limit
+    chunkSizeWarningLimit: 1000,
+    // Advanced optimization options
+    rollupOptions: {
+      // Code splitting configuration
+      output: {
+        // Automatic chunk splitting
+        manualChunks: undefined,
+        // Optimized chunk file names
+        chunkFileNames: (chunkInfo) => {
+          const facadeModuleId = chunkInfo.facadeModuleId ? 
+            chunkInfo.facadeModuleId.split('/').pop()?.replace('.ts', '') : 'chunk';
+          return `js/${facadeModuleId}-[hash].js`;
+        },
+        entryFileNames: 'js/[name]-[hash].js',
+        assetFileNames: (assetInfo) => {
+          const info = assetInfo.name?.split('.') ?? [];
+          const ext = info[info.length - 1];
+          if (/png|jpe?g|svg|gif|tiff|bmp|ico/i.test(ext ?? '')) {
+            return `img/[name]-[hash].${ext}`;
+          }
+          if (/css/i.test(ext ?? '')) {
+            return `css/[name]-[hash].${ext}`;
+          }
+          return `assets/[name]-[hash].${ext}`;
+        }
+      },
+      // External dependencies to exclude from bundle
+      external: (id) => {
+        // Don't externalize any dependencies for this dashboard
+        return false;
+      },
+      // Tree-shaking optimization
+      treeshake: {
+        moduleSideEffects: false
+      }
+    },
+    // CSS optimization
+    cssCodeSplit: true,
+    cssMinify: true,
+    // Asset optimization
+    assetsInlineLimit: 4096, // 4kb
+    // Enable gzip compression
+    assetsDir: 'assets'
+  },
+  // Optimization options
+  esbuild: {
+    // Remove console.log in production
+    drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
+    // Minify identifiers
+    minifyIdentifiers: true,
+    // Minify syntax
+    minifySyntax: true,
+    // Minify whitespace
+    minifyWhitespace: true,
+    // Target modern browsers for smaller bundle
+    target: 'es2020',
+    // Enable tree-shaking
+    treeShaking: true
+  },
+  // Performance optimizations
+  optimizeDeps: {
+    // No external dependencies to optimize
+    include: [],
+    force: true
+  },
+  // Define environment variables for optimization
+  define: {
+    // Remove development-only code in production
+    __DEV__: process.env.NODE_ENV !== 'production',
+    __PROD__: process.env.NODE_ENV === 'production'
   }
 })

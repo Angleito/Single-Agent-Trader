@@ -75,6 +75,17 @@ export class TradingViewChart {
   private lastBarTime: Map<string, number> = new Map();
   private dataUpdateQueue: Array<() => void> = [];
   private isProcessingQueue = false;
+  
+  // Memory management
+  private readonly MAX_MARKERS = 100;
+  private readonly MAX_ANNOTATIONS = 50;
+  private readonly MAX_BARS_CACHE = 1000;
+  private cleanupTimer: number | null = null;
+  private readonly CLEANUP_INTERVAL = 60000; // 1 minute
+  
+  // Performance optimization
+  private updateThrottle: number | null = null;
+  private readonly UPDATE_THROTTLE_MS = 100;
 
   constructor(config: ChartConfig, backendBaseUrl: string = 'http://localhost:8000') {
     this.config = config;
@@ -85,6 +96,52 @@ export class TradingViewChart {
     
     // Set up global error handlers for TradingView schema errors
     this.setupGlobalErrorHandlers();
+    
+    // Start memory cleanup
+    this.startMemoryCleanup();
+  }
+
+  /**
+   * Start periodic memory cleanup
+   */
+  private startMemoryCleanup(): void {
+    this.cleanupTimer = window.setInterval(() => {
+      this.performMemoryCleanup();
+    }, this.CLEANUP_INTERVAL);
+  }
+
+  /**
+   * Perform memory cleanup operations
+   */
+  private performMemoryCleanup(): void {
+    // Clean up old AI markers
+    if (this.aiMarkers.length > this.MAX_MARKERS) {
+      this.aiMarkers = this.aiMarkers.slice(-this.MAX_MARKERS);
+    }
+
+    // Clean up old annotations
+    if (this.chartAnnotations.length > this.MAX_ANNOTATIONS) {
+      this.chartAnnotations = this.chartAnnotations.slice(-this.MAX_ANNOTATIONS);
+    }
+
+    // Clean up old bars cache
+    if (this.currentBars.size > this.MAX_BARS_CACHE) {
+      const entries = Array.from(this.currentBars.entries());
+      const recentEntries = entries.slice(-this.MAX_BARS_CACHE);
+      this.currentBars = new Map(recentEntries);
+    }
+
+    // Clean up old lastBarTime cache
+    if (this.lastBarTime.size > 100) {
+      const entries = Array.from(this.lastBarTime.entries());
+      const recentEntries = entries.slice(-100);
+      this.lastBarTime = new Map(recentEntries);
+    }
+
+    // Clear completed queue items
+    if (!this.isProcessingQueue && this.dataUpdateQueue.length === 0) {
+      this.dataUpdateQueue = [];
+    }
   }
 
   /**
@@ -93,7 +150,6 @@ export class TradingViewChart {
   public async initialize(): Promise<boolean> {
     try {
       // Run schema compliance tests first
-      console.log('🔍 Running TradingView schema compliance tests...');
       const complianceResults = this.testSchemaCompliance();
       
       if (!complianceResults.success) {
@@ -116,7 +172,6 @@ export class TradingViewChart {
         throw new Error(`Container element with ID '${this.config.container_id}' not found`);
       }
       
-      console.log(`Creating TradingView widget in container: ${this.config.container_id}`);
       
       // Create the widget with enhanced configuration and error handling
       let widgetConfig: any;
@@ -129,7 +184,6 @@ export class TradingViewChart {
         // Set up comprehensive property interception immediately after widget creation
         this.setupPropertyInterception();
         
-        console.log('✅ TradingView widget created successfully');
         
         // Perform post-creation validation to catch any schema issues
         setTimeout(() => {
@@ -170,7 +224,6 @@ export class TradingViewChart {
       
       this.isInitialized = true;
       this.retryCount = 0; // Reset retry count on success
-      console.log('✅ TradingView chart initialized successfully');
       return true;
 
     } catch (error) {
@@ -179,7 +232,6 @@ export class TradingViewChart {
       if (this.retryCount < this.maxRetries) {
         this.retryCount++;
         const delay = Math.min(2000 * Math.pow(2, this.retryCount - 1), 15000); // Exponential backoff up to 15s
-        console.log(`Retrying TradingView initialization (${this.retryCount}/${this.maxRetries}) in ${delay}ms`);
         
         // Network connectivity check before retry
         if (!navigator.onLine) {
@@ -189,7 +241,6 @@ export class TradingViewChart {
         
         // Try alternative loading strategies on retries
         if (this.retryCount === 2) {
-          console.log('Attempting alternative TradingView loading strategy...');
           await this.tryAlternativeLoading();
         }
         
@@ -222,7 +273,6 @@ export class TradingViewChart {
             window.TradingView.widget && 
             typeof window.TradingView.widget === 'function') {
           const version = window.TradingView.version || 'unknown';
-          console.log(`✅ TradingView library fully initialized (version: ${version})`);
           resolve();
           return;
         }
@@ -281,7 +331,6 @@ export class TradingViewChart {
           const tvWidget = !!(window.TradingView && window.TradingView.widget);
           const tvWidgetType = window.TradingView && window.TradingView.widget ? typeof window.TradingView.widget : 'undefined';
           const tvVersion = window.TradingView && window.TradingView.version ? window.TradingView.version : 'none';
-          console.log(`Waiting for TradingView library... (${Math.round(elapsed/1000)}s, script: ${scriptExists}, object: ${tvObject}, widget: ${tvWidget}, type: ${tvWidgetType}, version: ${tvVersion})`);
         }
         
         // Use adaptive polling interval
@@ -339,7 +388,6 @@ export class TradingViewChart {
     // Check if script already exists and is loading
     const existingScript = document.querySelector('script[src*="tradingview"]') as HTMLScriptElement;
     if (existingScript) {
-      console.log('TradingView script already exists, monitoring load state');
       return;
     }
     
@@ -377,7 +425,6 @@ export class TradingViewChart {
         script.remove();
         
         if (attempt < maxAttempts) {
-          console.log(`Retrying with attempt ${attempt + 1}/${maxAttempts}`);
           this.loadTradingViewScriptWithRetry(attempt + 1, maxAttempts)
             .then(resolve)
             .catch(reject);
@@ -389,7 +436,6 @@ export class TradingViewChart {
       
       script.onload = () => {
         clearTimeout(timeout);
-        console.log(`TradingView script loaded successfully from ${currentSource}`);
         (window as any).tradingViewLoaded = true;
         resolve();
       };
@@ -400,7 +446,6 @@ export class TradingViewChart {
         script.remove();
         
         if (attempt < maxAttempts) {
-          console.log(`Retrying with attempt ${attempt + 1}/${maxAttempts} after delay`);
           // Exponential backoff
           const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
           setTimeout(() => {
@@ -415,7 +460,6 @@ export class TradingViewChart {
       };
       
       // Add script to head
-      console.log(`Loading TradingView script from ${currentSource} (attempt ${attempt}/${maxAttempts})`);
       document.head.appendChild(script);
     });
   }
@@ -529,7 +573,6 @@ export class TradingViewChart {
     // Validate configuration before returning
     this.validateWidgetConfig(config);
     
-    console.log('TradingView widget configuration validated:', config);
     return config;
   }
   
@@ -936,7 +979,6 @@ export class TradingViewChart {
       throw new Error('TradingView config \'favorites\' must be an object');
     }
     
-    console.log('✅ TradingView widget configuration validation passed');
   }
   
   /**
@@ -1291,7 +1333,6 @@ export class TradingViewChart {
       // Use the widget's onChartReady method if available
       if (typeof this.widget.onChartReady === 'function') {
         this.widget.onChartReady(() => {
-          console.log('TradingView chart is ready');
           this.handleChartReady();
         });
       } else {
@@ -1311,7 +1352,6 @@ export class TradingViewChart {
    */
   private handleChartReady(): void {
     try {
-      console.log('TradingView chart is ready');
       
       // Get chart reference if available
       if (this.widget && typeof this.widget.chart === 'function') {
@@ -1861,14 +1901,37 @@ export class TradingViewChart {
    * Destroy the chart widget
    */
   public destroy(): void {
+    // Clear timers
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
+
+    if (this.updateThrottle) {
+      clearTimeout(this.updateThrottle);
+      this.updateThrottle = null;
+    }
+
+    // Clean up TradingView widget
     if (this.widget) {
       this.widget.remove();
       this.widget = null;
     }
     
+    // Clear all caches and collections
+    this.currentBars.clear();
+    this.subscribers.clear();
+    this.aiMarkers = [];
+    this.chartAnnotations = [];
+    this.activeStudies = [];
+    this.lastBarTime.clear();
+    this.dataUpdateQueue = [];
+    
+    // Reset state
     this.isInitialized = false;
     this.realtimeCallback = null;
-    console.log('TradingView chart destroyed');
+    this.isProcessingQueue = false;
+    this.retryCount = 0;
   }
 
   /**
@@ -2450,7 +2513,6 @@ export class TradingViewChart {
    */
   private async tryAlternativeLoading(): Promise<void> {
     try {
-      console.log('Trying alternative TradingView loading strategies...');
       
       // Strategy 1: Clear any cached errors and force reload
       (window as any).tradingViewError = false;
@@ -2544,7 +2606,6 @@ export class TradingViewChart {
    * Retry chart initialization with enhanced error handling
    */
   public async retryChartInitialization(): Promise<void> {
-    console.log('Retrying TradingView chart initialization...');
     
     try {
       this.destroy();
@@ -2696,7 +2757,6 @@ export class TradingViewChart {
    */
   private setupGlobalErrorHandlers(): void {
     // ULTIMATE AGGRESSIVE FIX: Complete TradingView schema error elimination
-    console.log('🛡️ Setting up ultimate TradingView schema error suppression...');
     
     // 1. AGGRESSIVE CONSOLE INTERCEPTION - Completely suppress the specific error
     const originalConsoleError = console.error;
@@ -2761,7 +2821,6 @@ export class TradingViewChart {
     // 8. INTERCEPT SPECIFIC TRADINGVIEW PROPERTY ACCESS
     this.interceptTradingViewPropertyAccess();
     
-    console.log('✅ Ultimate TradingView schema error suppression active');
   }
   
   /**
@@ -2808,7 +2867,6 @@ export class TradingViewChart {
           }
           
           clearInterval(patchInterval);
-          console.log('✅ TradingView internal validation patched');
         } catch (error) {
           // Silently continue if patching fails
           clearInterval(patchInterval);
@@ -2999,7 +3057,6 @@ export class TradingViewChart {
     // Monitor page visibility for pause/resume behavior
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && !this.isInitialized) {
-        console.log('Page became visible, checking TradingView status');
         this.checkTradingViewStatus();
       }
     });
@@ -3013,15 +3070,12 @@ export class TradingViewChart {
       const hasScript = !!document.querySelector('script[src*="tradingview"]');
       const hasLibrary = !!(window.TradingView && window.TradingView.widget);
       
-      console.log(`TradingView status check - Script: ${hasScript}, Library: ${hasLibrary}`);
       
       if (!hasScript && !hasLibrary) {
-        console.log('TradingView not detected, attempting to load...');
         this.ensureTradingViewScript().catch(error => {
           console.error('Failed to load TradingView script during status check:', error);
         });
       } else if (hasLibrary && this.retryCount < this.maxRetries) {
-        console.log('TradingView library available, attempting initialization...');
         this.initialize().catch(error => {
           console.error('Failed to initialize during status check:', error);
         });
@@ -3115,7 +3169,6 @@ export class TradingViewChart {
     const success = issues.length === 0;
     
     if (success) {
-      console.log('🎉 All TradingView schema compliance tests passed!');
     } else {
       console.warn('⚠️ TradingView schema compliance issues found:', issues);
     }
@@ -3220,7 +3273,6 @@ export class TradingViewChart {
    * Enhanced initialization with pre-flight checks
    */
   public async initializeWithPreflightChecks(): Promise<boolean> {
-    console.log('Starting TradingView initialization with preflight checks...');
     
     // Pre-flight check 1: Network connectivity
     if (!navigator.onLine) {
@@ -3241,12 +3293,10 @@ export class TradingViewChart {
       console.warn(`TradingView CDN not accessible: ${connectivityTest.error}`);
       // Continue anyway, might be a CORS issue
     } else {
-      console.log(`TradingView CDN accessible (latency: ${connectivityTest.latency}ms)`);
     }
 
     // Pre-flight check 4: Ensure TradingView script is loaded
     if (!window.TradingView) {
-      console.log('TradingView library not loaded, attempting to load...');
       try {
         await this.ensureTradingViewScript();
         // Wait for library to initialize
@@ -3584,7 +3634,6 @@ export class TradingViewChart {
     Object.defineProperty = <T>(obj: T, prop: string | symbol, descriptor: PropertyDescriptor): T => {
       // Intercept TradingView library loading
       if (prop === 'TradingView' || (typeof prop === 'string' && prop.includes('TradingView'))) {
-        console.log('🛡️ Intercepting TradingView library loading for patching');
         const result = originalDefineProperty.call(Object, obj, prop, descriptor) as T;
         
         // Apply patches immediately after TradingView is defined
@@ -3634,7 +3683,6 @@ export class TradingViewChart {
         }.bind(this);
       }
       
-      console.log('✅ Direct TradingView library patches applied');
     } catch (error) {
       // Silently handle any patching errors
     }

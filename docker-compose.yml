@@ -9,6 +9,9 @@ services:
     container_name: ai-trading-bot
     restart: unless-stopped
     
+    # Override the default command - use --no-dry-run for live trading
+    command: ["sh", "-c", "echo 'y' | python -m bot.main live --no-dry-run --symbol ETH-USD --interval 5m"]
+    
     # Environment variables from .env file
     env_file:
       - .env
@@ -66,8 +69,6 @@ services:
         max-size: "10m"
         max-file: "3"
         
-    # Default command - starts in live mode (respects SYSTEM__DRY_RUN from .env)
-    command: ["sh", "-c", "echo 'y' | python -m bot.main live --symbol ETH-USD --interval 3m"]
     
     # Connect to shared network for dashboard communication
     networks:
@@ -174,23 +175,19 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Dashboard Frontend Service (Development)
+  # Dashboard Frontend Service (Production)
   dashboard-frontend:
     build:
       context: ./dashboard/frontend
       dockerfile: Dockerfile
-      target: development
+      target: production
     container_name: dashboard-frontend
     ports:
-      - "3000:3000"
-    volumes:
-      - ./dashboard/frontend:/app
-      - /app/node_modules
+      - "3000:8080"
     environment:
-      - NODE_ENV=development
-      - VITE_API_URL=http://localhost:8000
-      - VITE_WS_URL=ws://localhost:8000
-      - CHOKIDAR_USEPOLLING=true
+      - NODE_ENV=production
+      - VITE_API_URL=http://dashboard-backend:8000
+      - VITE_WS_URL=ws://dashboard-backend:8000
     restart: unless-stopped
     networks:
       - trading-network

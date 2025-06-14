@@ -508,6 +508,11 @@ class LLMLogParser:
     def _monitor_log_file(self, poll_interval: float):
         """Monitor log file for new entries."""
         try:
+            # Start from end of file if it exists
+            if self.log_file.exists():
+                self._last_position = self.log_file.stat().st_size
+                logger.info(f"Starting log monitoring from position {self._last_position}")
+            
             while not self._stop_event.is_set():
                 if self.log_file.exists():
                     try:
@@ -528,6 +533,8 @@ class LLMLogParser:
 
                     except Exception as e:
                         logger.error(f"Error reading log file: {e}")
+                else:
+                    logger.debug(f"Log file not found: {self.log_file}")
 
                 time.sleep(poll_interval)
 
@@ -543,45 +550,78 @@ class LLMLogParser:
             responses = [r for r in self.responses if r.timestamp >= cutoff]
             requests = [r for r in self.requests if r.timestamp >= cutoff]
             decisions = [d for d in self.decisions if d.timestamp >= cutoff]
+            metrics = [m for m in self.metrics if m.timestamp >= cutoff]
         else:
             responses = self.responses
             requests = self.requests
             decisions = self.decisions
-
-        if not responses:
-            return {"no_data": True}
-
-        # Calculate metrics
-        response_times = [r.response_time_ms for r in responses]
-        success_count = sum(1 for r in responses if r.success)
-        total_cost = sum(r.cost_estimate_usd for r in responses)
+            metrics = self.metrics
 
         # Decision analysis
         action_counts = defaultdict(int)
         for decision in decisions:
             action_counts[decision.action] += 1
 
-        return {
-            "time_window": str(time_window) if time_window else "all_time",
-            "total_requests": len(requests),
-            "total_responses": len(responses),
-            "success_rate": success_count / len(responses) if responses else 0,
-            "avg_response_time_ms": (
-                sum(response_times) / len(response_times) if response_times else 0
-            ),
-            "min_response_time_ms": min(response_times) if response_times else 0,
-            "max_response_time_ms": max(response_times) if response_times else 0,
-            "total_cost_usd": total_cost,
-            "avg_cost_per_request": total_cost / len(responses) if responses else 0,
-            "decision_counts": dict(action_counts),
-            "active_alerts": len(
-                [
-                    a
-                    for a in self.alerts
-                    if a.timestamp >= datetime.now() - timedelta(hours=1)
-                ]
-            ),
-        }
+        # If we have responses, use them for metrics
+        if responses:
+            # Calculate metrics from responses
+            response_times = [r.response_time_ms for r in responses]
+            success_count = sum(1 for r in responses if r.success)
+            total_cost = sum(r.cost_estimate_usd for r in responses)
+
+            return {
+                "time_window": str(time_window) if time_window else "all_time",
+                "total_requests": len(requests),
+                "total_responses": len(responses),
+                "total_decisions": len(decisions),
+                "success_rate": success_count / len(responses) if responses else 0,
+                "avg_response_time_ms": (
+                    sum(response_times) / len(response_times) if response_times else 0
+                ),
+                "min_response_time_ms": min(response_times) if response_times else 0,
+                "max_response_time_ms": max(response_times) if response_times else 0,
+                "total_cost_usd": total_cost,
+                "avg_cost_per_request": total_cost / len(responses) if responses else 0,
+                "decision_counts": dict(action_counts),
+                "active_alerts": len(
+                    [
+                        a
+                        for a in self.alerts
+                        if a.timestamp >= datetime.now() - timedelta(hours=1)
+                    ]
+                ),
+            }
+        
+        # If we only have decisions (no request/response logs), provide decision-based metrics
+        elif decisions:
+            # Calculate decision rate
+            if decisions and len(decisions) >= 2:
+                time_span = (decisions[-1].timestamp - decisions[0].timestamp).total_seconds()
+                decisions_per_hour = len(decisions) / (time_span / 3600) if time_span > 0 else 0
+            else:
+                decisions_per_hour = 0
+            
+            return {
+                "time_window": str(time_window) if time_window else "all_time",
+                "total_requests": 0,
+                "total_responses": 0,
+                "total_decisions": len(decisions),
+                "decisions_per_hour": round(decisions_per_hour, 2),
+                "decision_counts": dict(action_counts),
+                "last_decision": decisions[-1].to_dict() if decisions else None,
+                "active_alerts": len(
+                    [
+                        a
+                        for a in self.alerts
+                        if a.timestamp >= datetime.now() - timedelta(hours=1)
+                    ]
+                ),
+                "no_llm_logs": True,  # Indicate that we only have decision logs
+            }
+        
+        # No data at all
+        else:
+            return {"no_data": True, "total_decisions": 0}
 
     def get_recent_activity(self, limit: int = 50) -> list[dict[str, Any]]:
         """Get recent activity across all event types."""

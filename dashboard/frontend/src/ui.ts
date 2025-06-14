@@ -9,14 +9,16 @@ import type {
   LogEntry,
   VuManchuIndicators
 } from './types';
+import { PerformanceCharts } from './components/performance-charts';
 
 export class DashboardUI {
   private state: DashboardState;
   private logEntries: LogEntry[] = [];
-  private maxLogEntries = 100;
+  private maxLogEntries = 50; // Reduced from 100
   private logPaused = false;
   private animationQueue: Set<string> = new Set();
   private updateThrottles: Map<string, number> = new Map();
+  private readonly maxUpdateThrottles = 50; // Limit throttle map size
   private performanceMetrics = {
     totalReturn: 0,
     winRate: 0,
@@ -25,6 +27,21 @@ export class DashboardUI {
     maxDrawdown: 0,
     sharpeRatio: 0
   };
+  private performanceCharts: PerformanceCharts | null = null;
+  private performanceChartsVisible = false;
+  
+  // DOM cache for performance
+  private domCache = new Map<string, HTMLElement>();
+  private readonly maxDomCacheSize = 30;
+  
+  // Update batching for performance
+  private updateBatch = new Set<() => void>();
+  private batchTimer: number | null = null;
+  private readonly BATCH_DELAY = 16; // ~60fps
+  
+  // Memory cleanup timer
+  private cleanupTimer: number | null = null;
+  private readonly CLEANUP_INTERVAL = 30000; // 30 seconds
 
   constructor() {
     this.state = {
@@ -37,6 +54,99 @@ export class DashboardUI {
       connection_status: 'disconnected',
       error_message: null
     };
+    
+    this.startMemoryCleanup();
+  }
+
+  /**
+   * Start periodic memory cleanup
+   */
+  private startMemoryCleanup(): void {
+    this.cleanupTimer = window.setInterval(() => {
+      this.performMemoryCleanup();
+    }, this.CLEANUP_INTERVAL);
+  }
+
+  /**
+   * Perform memory cleanup operations
+   */
+  private performMemoryCleanup(): void {
+    // Clean up log entries
+    if (this.logEntries.length > this.maxLogEntries) {
+      this.logEntries = this.logEntries.slice(-this.maxLogEntries);
+    }
+
+    // Clean up animation queue
+    this.animationQueue.clear();
+
+    // Clean up update throttles
+    if (this.updateThrottles.size > this.maxUpdateThrottles) {
+      const entries = Array.from(this.updateThrottles.entries());
+      const now = Date.now();
+      const activeThrottles = entries.filter(([_, timestamp]) => now - timestamp < 5000);
+      this.updateThrottles = new Map(activeThrottles.slice(-this.maxUpdateThrottles));
+    }
+
+    // Clean up DOM cache
+    if (this.domCache.size > this.maxDomCacheSize) {
+      const entries = Array.from(this.domCache.entries());
+      this.domCache = new Map(entries.slice(-this.maxDomCacheSize));
+    }
+
+    // Clear update batch if stale
+    if (this.updateBatch.size > 0 && !this.batchTimer) {
+      this.updateBatch.clear();
+    }
+  }
+
+  /**
+   * Get cached DOM element
+   */
+  private getCachedElement(selector: string): HTMLElement | null {
+    if (this.domCache.has(selector)) {
+      return this.domCache.get(selector)!;
+    }
+
+    const element = document.querySelector(selector) as HTMLElement;
+    if (element) {
+      this.domCache.set(selector, element);
+    }
+
+    return element;
+  }
+
+  /**
+   * Batch DOM updates for better performance
+   */
+  private batchDOMUpdate(updateFn: () => void): void {
+    this.updateBatch.add(updateFn);
+
+    if (!this.batchTimer) {
+      this.batchTimer = window.setTimeout(() => {
+        this.flushUpdateBatch();
+      }, this.BATCH_DELAY);
+    }
+  }
+
+  /**
+   * Flush batched updates
+   */
+  private flushUpdateBatch(): void {
+    if (this.updateBatch.size === 0) return;
+
+    // Use requestAnimationFrame for smooth updates
+    requestAnimationFrame(() => {
+      this.updateBatch.forEach(updateFn => {
+        try {
+          updateFn();
+        } catch (error) {
+          console.error('Error in batched update:', error);
+        }
+      });
+
+      this.updateBatch.clear();
+      this.batchTimer = null;
+    });
   }
 
   /**
@@ -143,6 +253,12 @@ export class DashboardUI {
     modalOverlay?.addEventListener('click', () => {
       this.hideError();
     });
+
+    // Performance charts toggle
+    const performanceBtn = document.querySelector('[data-toggle-performance]') as HTMLButtonElement;
+    performanceBtn?.addEventListener('click', () => {
+      this.togglePerformanceCharts();
+    });
   }
 
   // Event callbacks
@@ -176,7 +292,9 @@ export class DashboardUI {
   /**
    * Update bot status with visual feedback
    */
-  public updateBotStatus(status: BotStatus): void {
+  public updateBotStatus(status: BotStatus | null): void {
+    if (!status) return;
+    
     this.state.bot_status = status;
     
     // Update status bar
@@ -186,12 +304,12 @@ export class DashboardUI {
     const tradingSymbolEl = document.querySelector('[data-trading-symbol]') as HTMLElement;
     const leverageEl = document.querySelector('[data-leverage]') as HTMLElement;
     
-    if (botStatusEl) {
+    if (botStatusEl && status.status) {
       this.addAnimation(botStatusEl, 'flash');
       botStatusEl.textContent = status.status.toUpperCase();
     }
     
-    if (botIndicator) {
+    if (botIndicator && status.status) {
       botIndicator.setAttribute('data-bot-indicator', this.getBotIndicatorState(status.status));
     }
     
@@ -200,11 +318,11 @@ export class DashboardUI {
       tradingModeEl.className = status.dry_run ? 'status-value safe' : 'status-value danger';
     }
     
-    if (tradingSymbolEl) {
+    if (tradingSymbolEl && status.symbol) {
       tradingSymbolEl.textContent = status.symbol;
     }
     
-    if (leverageEl) {
+    if (leverageEl && status.leverage != null) {
       leverageEl.textContent = `${status.leverage}x`;
     }
 
@@ -215,15 +333,15 @@ export class DashboardUI {
   /**
    * Update market data with price change animations
    */
-  public updateMarketData(data: MarketData): void {
-    if (this.shouldThrottleUpdate('market_data', 1000)) return;
+  public updateMarketData(data: MarketData | null): void {
+    if (!data || this.shouldThrottleUpdate('market_data', 1000)) return;
     
     this.state.market_data = data;
     
     const priceEl = document.querySelector('[data-current-price]') as HTMLElement;
     const changeEl = document.querySelector('[data-price-change]') as HTMLElement;
     
-    if (priceEl) {
+    if (priceEl && data.price != null) {
       const oldPrice = parseFloat(priceEl.textContent?.replace(/[$,]/g, '') || '0');
       const newPrice = data.price;
       
@@ -236,7 +354,7 @@ export class DashboardUI {
       }
     }
     
-    if (changeEl && data.change_percent_24h !== undefined) {
+    if (changeEl && data.change_percent_24h != null) {
       const change = data.change_percent_24h;
       changeEl.textContent = `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`;
       changeEl.className = `stat-change ${change >= 0 ? 'positive' : 'negative'}`;
@@ -249,13 +367,16 @@ export class DashboardUI {
   /**
    * Update latest trade action with comprehensive display
    */
-  public updateLatestAction(action: TradeAction): void {
+  public updateLatestAction(action: TradeAction | null): void {
+    if (!action) return;
+    
     this.state.latest_action = action;
     
     // Add to AI decision log
     this.addAIDecision(action);
     
-    this.log('info', `Trade action: ${action.action} (${(action.confidence * 100).toFixed(1)}% confidence) - ${action.reasoning}`);
+    const confidence = action.confidence || 0;
+    this.log('info', `Trade action: ${action.action} (${(confidence * 100).toFixed(1)}% confidence) - ${action.reasoning}`);
   }
 
   /**
@@ -311,13 +432,15 @@ export class DashboardUI {
   /**
    * Update positions display
    */
-  public updatePositions(positions: Position[]): void {
+  public updatePositions(positions: Position[] | null): void {
+    if (!positions) return;
+    
     this.state.positions = positions;
     
     // Update position size in quick stats
     const positionSizeEl = document.querySelector('[data-position-size]') as HTMLElement;
     if (positionSizeEl) {
-      const totalSize = positions.reduce((sum, pos) => sum + Math.abs(pos.size), 0);
+      const totalSize = positions.reduce((sum, pos) => sum + Math.abs(pos.size || 0), 0);
       positionSizeEl.textContent = totalSize.toFixed(4);
     }
     
@@ -326,14 +449,19 @@ export class DashboardUI {
     const pnlChangeEl = document.querySelector('[data-pnl-change]') as HTMLElement;
     
     if (pnlEl && pnlChangeEl) {
-      const totalPnl = positions.reduce((sum, pos) => sum + pos.pnl, 0);
+      const totalPnl = positions.reduce((sum, pos) => sum + (pos.pnl || 0), 0);
       const totalPnlPercent = positions.length > 0 ? 
-        positions.reduce((sum, pos) => sum + pos.pnl_percent, 0) / positions.length : 0;
+        positions.reduce((sum, pos) => sum + (pos.pnl_percent || 0), 0) / positions.length : 0;
       
       pnlEl.textContent = this.formatCurrency(totalPnl);
       pnlChangeEl.textContent = `${totalPnlPercent >= 0 ? '+' : ''}${totalPnlPercent.toFixed(2)}%`;
       pnlChangeEl.className = `stat-change ${totalPnlPercent >= 0 ? 'positive' : 'negative'}`;
       pnlChangeEl.setAttribute('data-pnl-change', totalPnlPercent.toString());
+    }
+
+    // Update performance charts if visible
+    if (this.performanceCharts && this.performanceChartsVisible) {
+      this.performanceCharts.updateData(positions, this.state.risk_metrics || undefined);
     }
 
     this.updateLastUpdateTime();
@@ -342,7 +470,9 @@ export class DashboardUI {
   /**
    * Update risk metrics and gauges
    */
-  public updateRiskMetrics(metrics: RiskMetrics): void {
+  public updateRiskMetrics(metrics: RiskMetrics | null): void {
+    if (!metrics) return;
+    
     this.state.risk_metrics = metrics;
     
     // Update risk level gauge
@@ -380,6 +510,11 @@ export class DashboardUI {
     // Update performance metrics
     this.updatePerformanceMetrics(metrics);
 
+    // Update performance charts if visible
+    if (this.performanceCharts && this.performanceChartsVisible) {
+      this.performanceCharts.updateData(this.state.positions, metrics);
+    }
+
     this.updateLastUpdateTime();
   }
 
@@ -390,13 +525,13 @@ export class DashboardUI {
     const positionValueEl = document.querySelector('[data-position-value]') as HTMLElement;
     const riskPerTradeEl = document.querySelector('[data-risk-per-trade]') as HTMLElement;
     
-    if (positionValueEl) {
+    if (positionValueEl && this.state.positions) {
       const totalPositionValue = this.state.positions.reduce((sum, pos) => 
-        sum + Math.abs(pos.size * pos.current_price), 0);
+        sum + Math.abs((pos.size || 0) * (pos.current_price || 0)), 0);
       positionValueEl.textContent = this.formatCurrency(totalPositionValue);
     }
     
-    if (riskPerTradeEl) {
+    if (riskPerTradeEl && metrics.total_portfolio_value > 0) {
       const riskPerTrade = (metrics.margin_used / metrics.total_portfolio_value) * 100;
       riskPerTradeEl.textContent = `${riskPerTrade.toFixed(1)}%`;
     }
@@ -413,13 +548,13 @@ export class DashboardUI {
     const maxDrawdownEl = document.querySelector('[data-max-drawdown]') as HTMLElement;
     const sharpeRatioEl = document.querySelector('[data-sharpe-ratio]') as HTMLElement;
     
-    if (totalReturnEl) {
+    if (totalReturnEl && metrics.total_portfolio_value > 0) {
       const totalReturn = (metrics.total_pnl / metrics.total_portfolio_value) * 100;
       totalReturnEl.textContent = `${totalReturn >= 0 ? '+' : ''}${totalReturn.toFixed(2)}%`;
       totalReturnEl.className = `metric-value ${totalReturn >= 0 ? 'positive' : 'negative'}`;
     }
     
-    if (winRateEl) {
+    if (winRateEl && metrics.win_rate != null) {
       winRateEl.textContent = `${(metrics.win_rate * 100).toFixed(0)}%`;
     }
     
@@ -431,7 +566,7 @@ export class DashboardUI {
       avgLossEl.textContent = this.formatCurrency(this.performanceMetrics.avgLoss);
     }
     
-    if (maxDrawdownEl) {
+    if (maxDrawdownEl && metrics.max_drawdown != null) {
       maxDrawdownEl.textContent = `${(metrics.max_drawdown * 100).toFixed(2)}%`;
       maxDrawdownEl.className = 'metric-value negative';
     }
@@ -649,10 +784,66 @@ export class DashboardUI {
     
     this.logEntries.unshift(entry);
     
-    // Keep only the latest entries
+    // Keep only the latest entries with memory optimization
     if (this.logEntries.length > this.maxLogEntries) {
       this.logEntries = this.logEntries.slice(0, this.maxLogEntries);
     }
+
+    // Batch log UI updates for better performance
+    this.batchDOMUpdate(() => {
+      this.updateLogDisplay();
+    });
+  }
+
+  /**
+   * Update log display in DOM
+   */
+  private updateLogDisplay(): void {
+    const logContent = this.getCachedElement('[data-log-content]');
+    const logEmpty = this.getCachedElement('[data-log-empty]');
+    
+    if (!logContent) return;
+
+    // Only show recent entries for performance
+    const recentEntries = this.logEntries.slice(0, 20);
+    
+    // Use document fragment for efficient DOM updates
+    const fragment = document.createDocumentFragment();
+    
+    recentEntries.forEach((entry, index) => {
+      if (index < 20) { // Limit visible entries
+        const logItem = this.createLogElement(entry);
+        fragment.appendChild(logItem);
+      }
+    });
+    
+    // Clear and update content efficiently
+    if (logContent.children.length !== fragment.children.length) {
+      logContent.innerHTML = '';
+      logContent.appendChild(fragment);
+    }
+    
+    if (logEmpty) {
+      logEmpty.setAttribute('data-log-empty', this.logEntries.length === 0 ? 'true' : 'false');
+    }
+  }
+
+  /**
+   * Create optimized log element
+   */
+  private createLogElement(entry: LogEntry): HTMLElement {
+    const logItem = document.createElement('div');
+    logItem.className = `log-item log-${entry.level}`;
+    
+    // Use efficient innerHTML for simple content
+    logItem.innerHTML = `
+      <span class="log-time">${new Date(entry.timestamp).toLocaleTimeString()}</span>
+      <span class="log-level">${entry.level.toUpperCase()}</span>
+      ${entry.component ? `<span class="log-component">${entry.component}</span>` : ''}
+      <span class="log-message">${entry.message}</span>
+    `;
+    
+    return logItem;
   }
 
   /**
@@ -660,8 +851,8 @@ export class DashboardUI {
    */
   public clearLogs(): void {
     this.logEntries = [];
-    const logContent = document.querySelector('[data-log-content]') as HTMLElement;
-    const logEmpty = document.querySelector('[data-log-empty]') as HTMLElement;
+    const logContent = this.getCachedElement('[data-log-content]');
+    const logEmpty = this.getCachedElement('[data-log-empty]');
     
     if (logContent) {
       logContent.innerHTML = '';
@@ -672,6 +863,47 @@ export class DashboardUI {
     }
     
     this.log('info', 'Logs cleared', 'UI');
+  }
+
+  /**
+   * Destroy UI and cleanup resources
+   */
+  public destroy(): void {
+    // Clear timers
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
+
+    if (this.batchTimer) {
+      clearTimeout(this.batchTimer);
+      this.batchTimer = null;
+    }
+
+    // Clear collections
+    this.logEntries = [];
+    this.animationQueue.clear();
+    this.updateThrottles.clear();
+    this.domCache.clear();
+    this.updateBatch.clear();
+
+    // Destroy performance charts
+    if (this.performanceCharts) {
+      this.performanceCharts.destroy();
+      this.performanceCharts = null;
+    }
+
+    // Reset state
+    this.state = {
+      bot_status: null,
+      market_data: null,
+      latest_action: null,
+      indicators: null,
+      positions: [],
+      risk_metrics: null,
+      connection_status: 'disconnected',
+      error_message: null
+    };
   }
 
   /**
@@ -696,15 +928,19 @@ export class DashboardUI {
   }
 
   private addAnimation(element: HTMLElement, animationClass: string): void {
-    if (this.animationQueue.has(element.id || element.className)) return;
-    
-    this.animationQueue.add(element.id || element.className);
-    element.classList.add(animationClass);
-    
-    setTimeout(() => {
-      element.classList.remove(animationClass);
-      this.animationQueue.delete(element.id || element.className);
-    }, 1000);
+    // Use requestAnimationFrame for better performance
+    requestAnimationFrame(() => {
+      const key = element.id || element.className;
+      if (this.animationQueue.has(key)) return;
+      
+      this.animationQueue.add(key);
+      element.classList.add(animationClass);
+      
+      setTimeout(() => {
+        element.classList.remove(animationClass);
+        this.animationQueue.delete(key);
+      }, 1000);
+    });
   }
 
   private shouldThrottleUpdate(key: string, throttleMs: number): boolean {
@@ -770,6 +1006,7 @@ export class DashboardUI {
   }
 
   private calculateRiskPercentage(metrics: RiskMetrics): number {
+    if (!metrics || metrics.total_portfolio_value <= 0) return 0;
     const riskRatio = metrics.margin_used / metrics.total_portfolio_value;
     return Math.min(riskRatio * 100, 100);
   }
@@ -834,7 +1071,6 @@ export class DashboardUI {
    */
   public onSymbolChanged(callback: (symbol: string) => void): void {
     // This would be implemented if we had symbol selection controls
-    console.log('Symbol change callback set:', callback);
   }
 
   /**
@@ -842,7 +1078,6 @@ export class DashboardUI {
    */
   public onIntervalChanged(callback: (interval: string) => void): void {
     // This would be implemented if we had interval selection controls
-    console.log('Interval change callback set:', callback);
   }
 
   /**
@@ -850,7 +1085,6 @@ export class DashboardUI {
    */
   public onChartFullscreenToggle(callback: () => void): void {
     // This would be implemented if we had additional fullscreen handling
-    console.log('Chart fullscreen callback set:', callback);
   }
 
   /**
@@ -867,6 +1101,100 @@ export class DashboardUI {
     this.state.indicators = indicators;
     // Update any indicator-specific UI elements if needed
     this.updateLastUpdateTime();
+  }
+
+  /**
+   * Toggle performance charts visibility
+   */
+  private togglePerformanceCharts(): void {
+    this.performanceChartsVisible = !this.performanceChartsVisible;
+    
+    const modal = document.getElementById('performance-modal');
+    if (!modal) {
+      this.createPerformanceModal();
+      return;
+    }
+    
+    if (this.performanceChartsVisible) {
+      this.showPerformanceCharts();
+    } else {
+      this.hidePerformanceCharts();
+    }
+  }
+
+  /**
+   * Create performance charts modal
+   */
+  private createPerformanceModal(): void {
+    const modal = document.createElement('div');
+    modal.id = 'performance-modal';
+    modal.className = 'performance-modal';
+    modal.setAttribute('data-modal', 'hidden');
+    modal.innerHTML = `
+      <div class="modal-overlay" data-performance-overlay=""></div>
+      <div class="modal-content performance-content">
+        <div class="modal-header">
+          <h2 class="modal-title">Performance Analytics</h2>
+          <button class="modal-close" data-performance-close="" aria-label="Close performance charts">&times;</button>
+        </div>
+        <div class="modal-body performance-body">
+          <div id="performance-charts-container"></div>
+        </div>
+      </div>
+    `;
+    
+    document.getElementById('app')?.appendChild(modal);
+    
+    // Add event listeners
+    const closeBtn = modal.querySelector('[data-performance-close]');
+    const overlay = modal.querySelector('[data-performance-overlay]');
+    
+    closeBtn?.addEventListener('click', () => this.hidePerformanceCharts());
+    overlay?.addEventListener('click', () => this.hidePerformanceCharts());
+    
+    // Show the modal
+    this.showPerformanceCharts();
+  }
+
+  /**
+   * Show performance charts
+   */
+  private showPerformanceCharts(): void {
+    const modal = document.getElementById('performance-modal');
+    const container = document.getElementById('performance-charts-container');
+    
+    if (!modal || !container) return;
+    
+    modal.setAttribute('data-modal', 'visible');
+    document.body.style.overflow = 'hidden';
+    
+    // Initialize charts if not already done
+    if (!this.performanceCharts) {
+      this.performanceCharts = new PerformanceCharts(container);
+      
+      // Update with current data
+      if (this.state.positions && this.state.risk_metrics) {
+        this.performanceCharts.updateData(this.state.positions, this.state.risk_metrics);
+      }
+    }
+    
+    this.performanceChartsVisible = true;
+    this.log('info', 'Performance charts opened', 'UI');
+  }
+
+  /**
+   * Hide performance charts
+   */
+  private hidePerformanceCharts(): void {
+    const modal = document.getElementById('performance-modal');
+    
+    if (modal) {
+      modal.setAttribute('data-modal', 'hidden');
+      document.body.style.overflow = '';
+    }
+    
+    this.performanceChartsVisible = false;
+    this.log('info', 'Performance charts closed', 'UI');
   }
 
   /**
