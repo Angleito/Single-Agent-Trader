@@ -64,7 +64,7 @@
     "log_file_path": "/app/logs/bot_docker.log",
     "max_log_size_mb": 100,
     "log_retention_days": 30,
-    "update_frequency_seconds": 180.0,
+    "update_frequency_seconds": 30.0,
     "parallel_processing": false,
     "max_worker_threads": 2,
     "enable_monitoring": true,

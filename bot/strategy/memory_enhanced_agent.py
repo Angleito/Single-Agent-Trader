@@ -9,6 +9,7 @@ import logging
 from typing import Any
 
 from ..config import settings
+from ..logging.trade_logger import TradeLogger
 from ..mcp.memory_server import MCPMemoryServer, MemoryQuery, TradingExperience
 from ..types import MarketState, TradeAction
 from .llm_agent import LLMAgent
@@ -46,6 +47,9 @@ class MemoryEnhancedLLMAgent(LLMAgent):
         # Memory components
         self.memory_server = memory_server
         self._memory_available = memory_server is not None and settings.mcp.enabled
+        
+        # Initialize trade logger
+        self.trade_logger = TradeLogger()
 
         # Enhanced prompt template for memory context
         self._memory_prompt_addon = """
@@ -62,8 +66,8 @@ IMPORTANT: Consider these past experiences when making your decision, but adapt 
 """
 
         logger.info(
-            f"Initialized memory-enhanced LLM agent "
-            f"(memory={'enabled' if self._memory_available else 'disabled'})"
+            f"🧠 Memory-Enhanced LLM Agent: Initialized "
+            f"(memory={'✅ enabled' if self._memory_available else '❌ disabled'})"
         )
 
     async def analyze_market(self, market_state: MarketState) -> TradeAction:
@@ -100,9 +104,27 @@ IMPORTANT: Consider these past experiences when making your decision, but adapt 
 
             # Log memory-enhanced decision
             logger.info(
-                f"Memory-enhanced decision: {result.action} "
-                f"(considered {len(similar_experiences)} past experiences)"
+                f"🤖 Memory-Enhanced Decision: {result.action} | "
+                f"Similar experiences: {len(similar_experiences)} | "
+                f"Memory context: {'✅ Applied' if memory_context != 'No similar past experiences found.' else '❌ None'}"
             )
+            
+            # Log detailed memory context used
+            if similar_experiences:
+                logger.debug(
+                    f"Top 3 similar experiences: "
+                    f"{[exp.experience_id for exp in similar_experiences[:3]]}"
+                )
+                
+                # Log success rates of similar trades
+                successful_similar = sum(
+                    1 for exp in similar_experiences 
+                    if exp.outcome and exp.outcome.get("success", False)
+                )
+                logger.debug(
+                    f"Similar trade success rate: {successful_similar}/{len(similar_experiences)} "
+                    f"({successful_similar/len(similar_experiences)*100:.1f}%)"
+                )
 
             return result
 

@@ -19,6 +19,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY main.py .
 COPY tradingview_feed.py .
 COPY log_parser.py .
+COPY llm_log_parser.py .
 COPY start.sh .
 
 # Make startup script executable

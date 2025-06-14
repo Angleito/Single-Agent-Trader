@@ -28,6 +28,11 @@ services:
       - LLM__ENABLE_PERFORMANCE_TRACKING=${LLM_ENABLE_PERFORMANCE_TRACKING:-true}
       - LLM__ENABLE_LANGCHAIN_CALLBACKS=${LLM_ENABLE_LANGCHAIN_CALLBACKS:-true}
       - LLM__LOG_MARKET_CONTEXT=${LLM_LOG_MARKET_CONTEXT:-true}
+      # MCP Memory Configuration
+      - MCP_ENABLED=${MCP_ENABLED:-true}
+      - MCP_SERVER_URL=http://mcp-memory:8765
+      # Logging Level
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       
     # Volume mounts for persistence and configuration (cleaned up overlapping mounts)
     volumes:

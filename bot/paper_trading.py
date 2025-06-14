@@ -262,9 +262,19 @@ class PaperTradingAccount:
                 )
 
                 if order and order.status == OrderStatus.FILLED:
-                    logger.info(
-                        f"Paper trade executed: {action.action} {trade_size} {symbol} @ ${execution_price} (fees: ${fees:.4f})"
-                    )
+                    # Add contract information for futures trades
+                    if settings.trading.enable_futures and symbol == "ETH-USD":
+                        num_contracts = int(trade_size / Decimal("0.1"))
+                        logger.info(
+                            f"💸 Paper Trading FUTURES: Executed {action.action} | "
+                            f"{num_contracts} contracts ({trade_size} ETH) @ ${execution_price} | "
+                            f"Fees: ${fees:.4f} | Value: ${trade_size * execution_price:.2f}"
+                        )
+                    else:
+                        logger.info(
+                            f"💸 Paper Trading: Executed {action.action} | {trade_size} {symbol} @ ${execution_price} | "
+                            f"Fees: ${fees:.4f} | Value: ${trade_size * execution_price:.2f}"
+                        )
 
                 return order
 
@@ -286,10 +296,43 @@ class PaperTradingAccount:
         # Calculate position size based on percentage of equity
         position_value = self.equity * (Decimal(str(action.size_pct)) / 100)
         leveraged_value = position_value * Decimal(str(settings.trading.leverage))
-        trade_size = leveraged_value / current_price
-
-        # Round to reasonable precision
-        return trade_size.quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP)
+        
+        # Check if this is a futures trade for ETH
+        symbol = action.symbol if hasattr(action, "symbol") else settings.trading.symbol
+        if settings.trading.enable_futures and symbol == "ETH-USD":
+            # Apply futures contract size logic for ETH
+            CONTRACT_SIZE = Decimal("0.1")  # 0.1 ETH per contract
+            
+            # Check if we're using fixed contract size from config
+            if settings.trading.fixed_contract_size:
+                # Use fixed number of contracts
+                num_contracts = settings.trading.fixed_contract_size
+                trade_size = CONTRACT_SIZE * num_contracts
+                logger.debug(
+                    f"Using fixed contract size: {num_contracts} contracts = {trade_size} ETH"
+                )
+            else:
+                # Calculate quantity in ETH based on position value
+                quantity_in_eth = leveraged_value / current_price
+                
+                # Convert to number of contracts and round down
+                num_contracts = int(quantity_in_eth / CONTRACT_SIZE)
+                num_contracts = max(1, num_contracts)  # Minimum 1 contract
+                
+                # Return the actual quantity in ETH (multiples of 0.1)
+                trade_size = CONTRACT_SIZE * num_contracts
+                
+                logger.debug(
+                    f"Futures contract calculation: {quantity_in_eth:.6f} ETH -> "
+                    f"{num_contracts} contracts = {trade_size} ETH"
+                )
+        else:
+            # For spot trading or non-ETH futures, use the original calculation
+            trade_size = leveraged_value / current_price
+            # Round to reasonable precision
+            trade_size = trade_size.quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP)
+        
+        return trade_size
 
     def _apply_slippage(self, price: Decimal, action: str) -> Decimal:
         """Apply realistic slippage to trade execution."""
@@ -361,7 +404,15 @@ class PaperTradingAccount:
                 timestamp=current_time,
             )
 
-            logger.info(f"Opened {action.action} position: {size} {symbol} @ ${price}")
+            # Log with contract information for futures
+            if settings.trading.enable_futures and symbol == "ETH-USD":
+                num_contracts = int(size / Decimal("0.1"))
+                logger.info(
+                    f"📈 Paper Trading FUTURES: Opened {action.action} position | "
+                    f"{num_contracts} contracts ({size} ETH) @ ${price} | Trade ID: {trade_id}"
+                )
+            else:
+                logger.info(f"📈 Paper Trading: Opened {action.action} position | {size} {symbol} @ ${price} | Trade ID: {trade_id}")
             return order
 
         return self._create_failed_order(action, symbol, "INVALID_ACTION")
@@ -412,7 +463,9 @@ class PaperTradingAccount:
         )
 
         logger.info(
-            f"Closed {trade_to_close.side} position: {trade_to_close.size} {symbol} @ ${price}, P&L: ${realized_pnl:.2f}"
+            f"📊 Paper Trading: Closed {trade_to_close.side} position | {trade_to_close.size} {symbol} @ ${price} | "
+            f"P&L: ${realized_pnl:.2f} ({'+' if realized_pnl > 0 else ''}{realized_pnl/trade_to_close.entry_price*100:.2f}%) | "
+            f"{'✅ WIN' if realized_pnl > 0 else '❌ LOSS'}"
         )
         return order
 

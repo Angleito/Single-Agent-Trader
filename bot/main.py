@@ -143,6 +143,7 @@ class TradingEngine:
         self.dry_run = dry_run
         self._running = False
         self._shutdown_requested = False
+        self._memory_available = False  # Initialize early to prevent AttributeError
 
         # Load configuration
         self.settings = self._load_configuration(config_file, dry_run)
@@ -165,6 +166,7 @@ class TradingEngine:
         # Initialize MCP memory components if enabled
         self.memory_server = None
         self.experience_manager = None
+        self._memory_available = False
 
         if self.settings.mcp.enabled:
             self.logger.info("MCP memory system enabled, initializing components...")
@@ -182,6 +184,7 @@ class TradingEngine:
                     memory_server=self.memory_server,
                 )
                 self.logger.info("Successfully initialized memory-enhanced agent")
+                self._memory_available = True
             except Exception as e:
                 self.logger.error(f"Failed to initialize MCP components: {e}")
                 self.logger.warning("Falling back to standard LLM agent")
@@ -371,6 +374,33 @@ class TradingEngine:
             try:
                 await self.experience_manager.start()
                 console.print("    [green]✓ Experience tracking started[/green]")
+                
+                # Log memory system status and pattern statistics
+                if self.memory_server and hasattr(self.memory_server, '_connected') and self.memory_server._connected:
+                    self._memory_available = True
+                    memory_count = len(self.memory_server.memory_cache)
+                    console.print(f"    [cyan]📊 {memory_count} stored experiences loaded[/cyan]")
+                    
+                    # Log pattern performance if we have enough data
+                    if memory_count >= 10:
+                        try:
+                            pattern_stats = await self.memory_server.get_pattern_statistics()
+                            if pattern_stats:
+                                self.logger.info("=== Pattern Performance Summary ===")
+                                sorted_patterns = sorted(
+                                    pattern_stats.items(),
+                                    key=lambda x: x[1]["success_rate"] * x[1]["count"],
+                                    reverse=True,
+                                )[:5]
+                                for pattern, stats in sorted_patterns:
+                                    if stats["count"] >= 3:  # Only show patterns with enough samples
+                                        self.logger.info(
+                                            f"  {pattern}: {stats['success_rate']:.1%} win rate "
+                                            f"({stats['count']} trades, avg PnL=${stats['avg_pnl']:.2f})"
+                                        )
+                        except Exception as e:
+                            self.logger.debug(f"Could not retrieve pattern statistics: {e}")
+                            
             except Exception as e:
                 self.logger.warning(f"Failed to start experience manager: {e}")
                 console.print("    [yellow]⚠ Experience tracking unavailable[/yellow]")
@@ -742,6 +772,10 @@ class TradingEngine:
                 )
 
                 # Get LLM trading decision
+                self.logger.debug(
+                    f"🤔 Requesting trading decision from "
+                    f"{'Memory-Enhanced' if self._memory_available else 'Standard'} LLM Agent"
+                )
                 trade_action = await self.llm_agent.analyze_market(market_state)
 
                 # Record trading decision in memory if MCP is enabled
@@ -804,6 +838,26 @@ class TradingEngine:
                 # Display periodic status updates
                 if loop_count % 10 == 0:  # Every 10 loops
                     self._display_status_update(loop_count, current_price, final_action)
+                
+                # Log pattern statistics every 100 loops if memory is enabled
+                if loop_count % 100 == 0 and self.memory_server and self._memory_available:
+                    try:
+                        pattern_stats = await self.memory_server.get_pattern_statistics()
+                        if pattern_stats:
+                            self.logger.info("📊 === MCP Pattern Performance Update ===")
+                            sorted_patterns = sorted(
+                                pattern_stats.items(),
+                                key=lambda x: x[1]["success_rate"] * x[1]["count"],
+                                reverse=True,
+                            )[:5]
+                            for pattern, stats in sorted_patterns:
+                                if stats["count"] >= 2:  # Show patterns with at least 2 samples
+                                    self.logger.info(
+                                        f"  📈 {pattern}: {stats['success_rate']:.1%} win rate | "
+                                        f"{stats['count']} trades | Avg PnL: ${stats['avg_pnl']:.2f}"
+                                    )
+                    except Exception as e:
+                        self.logger.debug(f"Could not retrieve pattern statistics: {e}")
 
                 # Calculate sleep time to maintain update frequency
                 loop_duration = (datetime.now(UTC) - loop_start).total_seconds()
@@ -844,7 +898,8 @@ class TradingEngine:
         """
         try:
             self.logger.info(
-                f"Executing trade: {trade_action.action} {trade_action.size_pct}%"
+                f"📦 Executing trade: {trade_action.action} {trade_action.size_pct}% | "
+                f"Experience ID: {experience_id[:8] if experience_id else 'None'}..."
             )
 
             # Check if we already have an open position and the action is LONG or SHORT
@@ -882,6 +937,7 @@ class TradingEngine:
                         self.experience_manager.link_order_to_experience(
                             order.id, experience_id
                         )
+                        self.logger.debug(f"MCP Integration: Linked order {order.id} to experience {experience_id[:8]}...")
                     except Exception as e:
                         self.logger.warning(f"Failed to link order to experience: {e}")
 
@@ -913,7 +969,7 @@ class TradingEngine:
                                     order, order.price, market_state
                                 )
                                 self.logger.info(
-                                    "Completed trade tracking for closed position"
+                                    "✅ MCP Integration: Completed trade tracking for closed position"
                                 )
                             except Exception as e:
                                 self.logger.warning(
@@ -933,7 +989,7 @@ class TradingEngine:
                                 )
                                 if trade_id:
                                     self.logger.info(
-                                        f"Started tracking trade: {trade_id}"
+                                        f"📡 MCP Integration: Started tracking new trade - ID: {trade_id}"
                                     )
                             except Exception as e:
                                 self.logger.warning(
@@ -1018,6 +1074,16 @@ class TradingEngine:
                     )
                 except Exception as e:
                     self.logger.warning(f"Failed to update trade progress: {e}")
+                    
+            # Log pattern statistics periodically (every 100 loops)
+            if loop_count % 100 == 0 and self.memory_server and self.memory_server._connected:
+                try:
+                    pattern_stats = await self.memory_server.get_pattern_statistics()
+                    if pattern_stats:
+                        self.logger.debug(f"Pattern statistics update (loop {loop_count})")
+                        # Stats will be logged by the memory server's log_pattern_statistics
+                except Exception as e:
+                    self.logger.debug(f"Could not update pattern statistics: {e}")
 
     def _display_status_update(
         self, loop_count: int, current_price: Decimal, last_action: TradeAction

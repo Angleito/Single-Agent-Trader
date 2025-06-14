@@ -91,6 +91,12 @@ class TradingSettings(BaseModel):
     max_futures_leverage: int = Field(
         default=20, ge=1, le=100, description="Maximum leverage for futures positions"
     )
+    fixed_contract_size: int | None = Field(
+        default=None,
+        ge=1,
+        le=100,
+        description="Fixed number of contracts to trade (e.g., 10 for 1 ETH in ETH-USD futures)",
+    )
 
     # Position Tracking Configuration
     use_fifo_accounting: bool = Field(

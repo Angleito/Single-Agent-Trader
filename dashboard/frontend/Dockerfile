@@ -1,13 +1,19 @@
 # Multi-stage Dockerfile for Vite TypeScript frontend
 
 # Development stage
-FROM node:18-alpine AS development
+FROM --platform=$BUILDPLATFORM node:18-alpine AS development
 
 WORKDIR /app
 
+# Install python3 and build tools for native dependencies
+RUN apk add --no-cache python3 make g++ gcc libc-dev
+
 # Install dependencies
 COPY package*.json ./
-RUN npm install
+# Clean install with explicit architecture support
+RUN npm cache clean --force && \
+    npm install --force --no-optional && \
+    npm rebuild esbuild --update-binary
 
 # Copy source code
 COPY . .
@@ -19,13 +25,19 @@ EXPOSE 3000
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
 
 # Build stage
-FROM node:18-alpine AS builder
+FROM --platform=$BUILDPLATFORM node:18-alpine AS builder
 
 WORKDIR /app
 
+# Install python3 and build tools for native dependencies
+RUN apk add --no-cache python3 make g++ gcc libc-dev
+
 # Install dependencies
 COPY package*.json ./
-RUN npm install
+# Clean install with explicit architecture support and rebuild native modules
+RUN npm cache clean --force && \
+    npm install --force --no-optional && \
+    npm rebuild esbuild --update-binary
 
 # Copy source code and build
 COPY . .

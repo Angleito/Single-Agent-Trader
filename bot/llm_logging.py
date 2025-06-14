@@ -31,7 +31,7 @@ except ImportError:
 
     LANGCHAIN_AVAILABLE = False
 
-from .config import settings
+from bot.config import settings
 
 
 class DecimalEncoder(json.JSONEncoder):

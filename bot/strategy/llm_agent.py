@@ -26,7 +26,7 @@ except ImportError:
     RunnablePassthrough = None
 
 from ..config import settings
-from ..logging import create_llm_logger, create_langchain_callback
+from ..llm_logging import create_llm_logger, create_langchain_callback
 from ..types import MarketState, TradeAction
 
 logger = logging.getLogger(__name__)

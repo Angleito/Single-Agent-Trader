@@ -13,6 +13,7 @@ from typing import Any
 from uuid import uuid4
 
 from ..config import settings
+from ..logging.trade_logger import TradeLogger
 from ..mcp.memory_server import MCPMemoryServer
 from ..types import MarketState, Order, Position, TradeAction
 
@@ -74,8 +75,11 @@ class ExperienceManager:
         # Background task for monitoring trades
         self._monitor_task: asyncio.Task | None = None
         self._running = False
+        
+        # Initialize trade logger
+        self.trade_logger = TradeLogger()
 
-        logger.info("Initialized experience manager")
+        logger.info("🎯 Experience Manager: Initialized with enhanced logging and trade tracking")
 
     async def start(self) -> None:
         """Start the experience manager background monitoring."""
@@ -84,7 +88,7 @@ class ExperienceManager:
         # Start trade monitoring task
         self._monitor_task = asyncio.create_task(self._monitor_trades())
 
-        logger.info("Experience manager started")
+        logger.info("✅ Experience Manager: Started background monitoring")
 
     async def stop(self) -> None:
         """Stop the experience manager."""
@@ -106,7 +110,7 @@ class ExperienceManager:
                     "marking as incomplete"
                 )
 
-        logger.info("Experience manager stopped")
+        logger.info("🛑 Experience Manager: Stopped")
 
     async def record_trading_decision(
         self, market_state: MarketState, trade_action: TradeAction
@@ -140,8 +144,18 @@ class ExperienceManager:
         )
 
         logger.info(
-            f"Recorded trading decision: {trade_action.action} "
-            f"(experience_id: {experience_id})"
+            f"📝 Experience Manager: Recorded {trade_action.action} decision | "
+            f"Experience ID: {experience_id[:8]}... | "
+            f"Price: ${market_state.current_price} | "
+            f"Position: {market_state.current_position.side}"
+        )
+        
+        # Log structured trade decision
+        self.trade_logger.log_trade_decision(
+            market_state=market_state,
+            trade_action=trade_action,
+            experience_id=experience_id,
+            memory_context=None  # Will be populated by memory-enhanced agent
         )
 
         return experience_id
@@ -155,7 +169,7 @@ class ExperienceManager:
             experience_id: Experience ID from memory
         """
         self.pending_experiences[order_id] = experience_id
-        logger.debug(f"Linked order {order_id} to experience {experience_id}")
+        logger.info(f"🔗 Experience Manager: Linked order {order_id} to experience {experience_id[:8]}...")
 
     def start_tracking_trade(
         self, order: Order, trade_action: TradeAction, market_state: MarketState
@@ -174,7 +188,7 @@ class ExperienceManager:
         # Check if we have an experience for this order
         experience_id = self.pending_experiences.get(order.id)
         if not experience_id:
-            logger.warning(f"No experience found for order {order.id}")
+            logger.warning(f"⚠️ Experience Manager: No experience found for order {order.id}")
             return None
 
         # Create active trade tracking
@@ -193,8 +207,16 @@ class ExperienceManager:
         del self.pending_experiences[order.id]
 
         logger.info(
-            f"Started tracking trade {trade_id} for {trade_action.action} "
-            f"at ${order.price}"
+            f"🚀 Experience Manager: Started tracking {trade_action.action} trade | "
+            f"Trade ID: {trade_id} | Price: ${order.price} | "
+            f"Size: {order.quantity} | Experience: {experience_id[:8]}..."
+        )
+        
+        # Log detailed trade entry
+        logger.debug(
+            f"Trade entry details: Symbol={order.symbol}, Side={order.side}, "
+            f"Size={order.quantity}, Price=${order.price}, "
+            f"Order Type={order.type}, Status={order.status}"
         )
 
         return trade_id
@@ -257,6 +279,15 @@ class ExperienceManager:
             }
             active_trade.market_snapshots.append(snapshot)
             active_trade.last_snapshot_time = datetime.now(UTC)
+            
+            # Log position update
+            self.trade_logger.log_position_update(
+                trade_id=active_trade.trade_id,
+                current_price=current_price,
+                unrealized_pnl=unrealized_pnl,
+                max_favorable=active_trade.max_favorable_excursion,
+                max_adverse=active_trade.max_adverse_excursion,
+            )
 
     async def complete_trade(
         self,
@@ -317,9 +348,19 @@ class ExperienceManager:
         )
 
         logger.info(
-            f"Completed trade {active_trade.trade_id}: "
-            f"PnL=${realized_pnl:.2f} ({'+' if realized_pnl > 0 else ''}{realized_pnl/entry_price*100:.2f}%), "
-            f"Duration={duration_minutes:.1f}min"
+            f"🏁 Experience Manager: Trade completed | ID: {active_trade.trade_id} | "
+            f"PnL: ${realized_pnl:.2f} ({'+' if realized_pnl > 0 else ''}{realized_pnl/entry_price*100:.2f}%) | "
+            f"Duration: {duration_minutes:.1f}min | {'✅ WIN' if realized_pnl > 0 else '❌ LOSS'}"
+        )
+        
+        # Log structured trade outcome
+        self.trade_logger.log_trade_outcome(
+            experience_id=active_trade.experience_id,
+            entry_price=entry_price,
+            exit_price=exit_price,
+            pnl=realized_pnl,
+            duration_minutes=duration_minutes,
+            insights=None  # Will be populated after reflection
         )
 
         # Archive the trade

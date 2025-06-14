@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -20,6 +21,7 @@ import numpy as np
 from pydantic import BaseModel, Field
 
 from ..config import settings
+from ..logging.trade_logger import TradeLogger
 from ..types import MarketState, TradeAction
 
 logger = logging.getLogger(__name__)
@@ -98,8 +100,11 @@ class MCPMemoryServer:
         # Local persistence
         self.local_storage_path = Path("data/mcp_memory")
         self.local_storage_path.mkdir(parents=True, exist_ok=True)
+        
+        # Initialize trade logger
+        self.trade_logger = TradeLogger()
 
-        logger.info(f"Initialized MCP memory server client for {self.server_url}")
+        logger.info(f"🧠 MCP Memory Server: Initialized client for {self.server_url}")
 
     async def connect(self) -> bool:
         """Connect to the MCP memory server."""
@@ -118,7 +123,7 @@ class MCPMemoryServer:
             ) as response:
                 if response.status == 200:
                     self._connected = True
-                    logger.info("Connected to MCP memory server")
+                    logger.info("✅ MCP Memory Server: Successfully connected")
 
                     # Load any cached memories
                     await self._load_local_cache()
@@ -195,8 +200,31 @@ class MCPMemoryServer:
         await self._save_experience_local(experience)
 
         logger.info(
-            f"Stored trading experience {experience.experience_id} "
-            f"for {trade_action.action} decision at ${market_state.current_price}"
+            f"💾 MCP Memory: Stored experience {experience.experience_id[:8]}... | "
+            f"Action: {trade_action.action} | Price: ${market_state.current_price} | "
+            f"Symbol: {market_state.symbol} | Patterns: {', '.join(experience.pattern_tags)}"
+        )
+        
+        # Log detailed indicators if available
+        if experience.indicators:
+            logger.debug(
+                f"MCP Memory: Indicators - RSI: {experience.indicators.get('rsi', 'N/A'):.1f}, "
+                f"Cipher B: {experience.indicators.get('cipher_b_wave', 'N/A'):.1f}, "
+                f"EMA Trend: {'Bull' if experience.indicators.get('ema_fast', 0) > experience.indicators.get('ema_slow', 0) else 'Bear'}"
+            )
+        
+        if experience.dominance_data:
+            logger.debug(
+                f"MCP Memory: Dominance - Stablecoin: {experience.dominance_data.get('stablecoin_dominance', 'N/A'):.2f}%, "
+                f"USDT: {experience.dominance_data.get('usdt_dominance', 'N/A'):.2f}%"
+            )
+        
+        # Log memory storage
+        self.trade_logger.log_memory_storage(
+            experience_id=experience.experience_id,
+            action=trade_action.action,
+            patterns=experience.pattern_tags,
+            storage_location="local" if not self._connected else "remote",
         )
 
         return experience.experience_id
@@ -269,9 +297,13 @@ class MCPMemoryServer:
         await self._save_experience_local(experience)
 
         logger.info(
-            f"Updated experience {experience_id} with outcome: "
-            f"PnL=${pnl}, Success={experience.outcome['success']}"
+            f"📊 MCP Memory: Updated experience {experience_id[:8]}... with outcome | "
+            f"PnL: ${pnl:.2f} ({'✅ WIN' if experience.outcome['success'] else '❌ LOSS'}) | "
+            f"Duration: {duration_minutes:.1f}min | Price Change: {price_change_pct:+.2f}%"
         )
+        
+        if experience.learned_insights:
+            logger.debug(f"MCP Memory: Insights - {experience.learned_insights}")
 
         return True
 
@@ -290,6 +322,9 @@ class MCPMemoryServer:
         """
         if not query_params:
             query_params = MemoryQuery()
+
+        # Start timing
+        start_time = time.time()
 
         # Extract current features
         current_features = self._extract_features(market_state)
@@ -316,10 +351,50 @@ class MCPMemoryServer:
 
         # Return top results
         results = [exp for _, exp in scored_experiences[: query_params.max_results]]
+        
+        # Calculate execution time
+        execution_time_ms = (time.time() - start_time) * 1000
 
         logger.info(
-            f"Found {len(results)} similar experiences "
-            f"(out of {len(self.memory_cache)} total)"
+            f"🔍 MCP Memory: Query completed | Found {len(results)} similar experiences "
+            f"(from {len(self.memory_cache)} total) | Time: {execution_time_ms:.1f}ms"
+        )
+        
+        # Log top results if any
+        if results:
+            top_result = scored_experiences[0] if scored_experiences else None
+            if top_result:
+                similarity, exp = top_result
+                logger.debug(
+                    f"MCP Memory: Best match - Similarity: {similarity:.3f} | "
+                    f"Action: {exp.decision.get('action')} | "
+                    f"Outcome: {'WIN' if exp.outcome and exp.outcome['success'] else 'LOSS'} | "
+                    f"PnL: ${exp.outcome['pnl']:.2f}" if exp.outcome else "No outcome"
+                )
+        
+        # Log query details
+        query_dict = {
+            "current_price": float(market_state.current_price),
+            "indicators": self._extract_indicators(market_state),
+            "dominance_data": self._extract_dominance_data(market_state),
+            "max_results": query_params.max_results,
+            "min_similarity": query_params.min_similarity,
+        }
+        
+        results_dicts = [
+            {
+                "experience_id": exp.experience_id,
+                "similarity": similarity,
+                "action": exp.decision.get("action"),
+                "outcome": exp.outcome,
+            }
+            for similarity, exp in scored_experiences[:query_params.max_results]
+        ]
+        
+        self.trade_logger.log_memory_query(
+            query_params=query_dict,
+            results=results_dicts,
+            execution_time_ms=execution_time_ms,
         )
 
         return results
@@ -354,6 +429,10 @@ class MCPMemoryServer:
                     "avg_pnl": total_pnl / count,
                     "total_pnl": total_pnl,
                 }
+        
+        # Log pattern statistics
+        if pattern_stats:
+            self.trade_logger.log_pattern_statistics(pattern_stats)
 
         return pattern_stats
 
