@@ -129,7 +129,9 @@ class EMAribbon:
             raise ValueError("DataFrame must contain 'close' column")
 
         max_length = max(self.lengths)
-        min_data_points = max_length * 2  # Require 2x the longest EMA for proper convergence
+        min_data_points = (
+            max_length * 2
+        )  # Require 2x the longest EMA for proper convergence
 
         if len(df) < min_data_points:
             logger.warning(
@@ -192,15 +194,27 @@ class EMAribbon:
                     # Validate EMA values with improved thresholds
                     valid_count = (~ema_values.isna()).sum()
                     total_count = len(ema_values)
-                    valid_percentage = (valid_count / total_count) * 100 if total_count > 0 else 0
+                    valid_percentage = (
+                        (valid_count / total_count) * 100 if total_count > 0 else 0
+                    )
 
                     # Calculate expected convergence point for this EMA length
-                    convergence_point = min(length * 3, total_count)  # EMAs typically converge after 3x their period
-                    expected_valid_from_convergence = max(0, total_count - convergence_point)
-                    expected_valid_percentage = (expected_valid_from_convergence / total_count) * 100 if total_count > 0 else 0
+                    convergence_point = min(
+                        length * 3, total_count
+                    )  # EMAs typically converge after 3x their period
+                    expected_valid_from_convergence = max(
+                        0, total_count - convergence_point
+                    )
+                    expected_valid_percentage = (
+                        (expected_valid_from_convergence / total_count) * 100
+                        if total_count > 0
+                        else 0
+                    )
 
                     # Only warn if valid percentage is significantly below expected
-                    if valid_percentage < max(50.0, expected_valid_percentage * 0.8):  # At least 50% or 80% of expected
+                    if valid_percentage < max(
+                        50.0, expected_valid_percentage * 0.8
+                    ):  # At least 50% or 80% of expected
                         logger.warning(
                             f"Low valid data percentage in EMA{i}",
                             extra={
@@ -211,7 +225,9 @@ class EMAribbon:
                                 "valid_count": int(valid_count),
                                 "total_count": total_count,
                                 "valid_percentage": round(valid_percentage, 2),
-                                "expected_valid_percentage": round(expected_valid_percentage, 2),
+                                "expected_valid_percentage": round(
+                                    expected_valid_percentage, 2
+                                ),
                                 "convergence_point": convergence_point,
                             },
                         )
@@ -350,7 +366,9 @@ class EMAribbon:
                 )  # As percentage
 
                 # Handle flat market conditions
-                low_variance_mask = ema_spread < (result["close"] * 1e-6)  # Less than 0.0001% of price
+                low_variance_mask = ema_spread < (
+                    result["close"] * 1e-6
+                )  # Less than 0.0001% of price
                 if low_variance_mask.sum() > 0:
                     result.loc[low_variance_mask, "ribbon_strength"] = 0.0
                     logger.debug(
@@ -1155,10 +1173,10 @@ class EMAribbon:
     def _handle_flat_market_conditions(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Handle flat market conditions by adjusting signals appropriately.
-        
+
         Args:
             df: DataFrame with calculated EMA values
-            
+
         Returns:
             DataFrame with flat market conditions handled
         """
@@ -1188,10 +1206,16 @@ class EMAribbon:
 
             # Suppress signals during flat periods
             signal_columns = [
-                "long_ema_signal", "short_ema_signal", "ema_crossover_signal",
-                "red_cross", "green_cross", "cross_pattern_signal",
-                "blue_triangle_up", "blue_triangle_down", "triangle_signal",
-                "ribbon_overall_signal"
+                "long_ema_signal",
+                "short_ema_signal",
+                "ema_crossover_signal",
+                "red_cross",
+                "green_cross",
+                "cross_pattern_signal",
+                "blue_triangle_up",
+                "blue_triangle_down",
+                "triangle_signal",
+                "ribbon_overall_signal",
             ]
 
             for col in signal_columns:

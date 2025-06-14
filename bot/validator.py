@@ -12,7 +12,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from .config import settings
-from .types import TradeAction
+from .types import Position, TradeAction
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,11 @@ class TradeValidator:
 
         logger.info("Initialized TradeValidator")
 
-    def validate(self, llm_output: str | dict[str, Any] | TradeAction) -> TradeAction:
+    def validate(
+        self,
+        llm_output: str | dict[str, Any] | TradeAction,
+        current_position: Position | None = None,
+    ) -> TradeAction:
         """
         Validate LLM output and return a valid TradeAction.
 
@@ -49,7 +53,9 @@ class TradeValidator:
             trade_action = self._parse_llm_output(llm_output)
 
             # Validate the trade action
-            validated_action = self._validate_trade_action(trade_action)
+            validated_action = self._validate_trade_action(
+                trade_action, current_position
+            )
 
             logger.info(f"Validated trade action: {validated_action.action}")
             return validated_action
@@ -90,12 +96,15 @@ class TradeValidator:
         else:
             raise ValueError(f"Unsupported LLM output type: {type(llm_output)}")
 
-    def _validate_trade_action(self, action: TradeAction) -> TradeAction:
+    def _validate_trade_action(
+        self, action: TradeAction, current_position: Position | None = None
+    ) -> TradeAction:
         """
         Validate and potentially modify a trade action.
 
         Args:
             action: Trade action to validate
+            current_position: Current position (if any)
 
         Returns:
             Validated trade action
@@ -159,21 +168,36 @@ class TradeValidator:
             logger.warning("Rationale truncated to 200 characters")
 
         # Business rule validations
-        validated = self._apply_business_rules(validated)
+        validated = self._apply_business_rules(validated, current_position)
 
         return validated
 
-    def _apply_business_rules(self, action: TradeAction) -> TradeAction:
+    def _apply_business_rules(
+        self, action: TradeAction, current_position: Position | None = None
+    ) -> TradeAction:
         """
         Apply business rules and risk management constraints.
 
         Args:
             action: Trade action to validate
+            current_position: Current position (if any)
 
         Returns:
             Modified trade action after applying business rules
         """
         validated = action.copy()
+
+        # ENFORCE SINGLE POSITION RULE
+        if current_position and current_position.side != "FLAT":
+            # We have an active position
+            if validated.action in ["LONG", "SHORT"]:
+                logger.warning(
+                    f"Cannot open new {validated.action} position - "
+                    f"existing {current_position.side} position. Changing to HOLD."
+                )
+                return self._get_default_hold_action(
+                    f"Position exists ({current_position.side}) - only CLOSE or HOLD allowed"
+                )
 
         # If action is HOLD or CLOSE, size should be 0
         if validated.action in ["HOLD", "CLOSE"]:

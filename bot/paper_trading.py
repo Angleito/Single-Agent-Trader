@@ -319,6 +319,15 @@ class PaperTradingAccount:
             return self._close_position(symbol, price, current_time, fees)
 
         elif action.action in ["LONG", "SHORT"]:
+            # Check if we already have an open position for this symbol
+            existing_position = self._find_open_position(symbol)
+            if existing_position:
+                logger.warning(
+                    f"Cannot open new {action.action} position - already have "
+                    f"{existing_position.side} position for {symbol}"
+                )
+                return self._create_failed_order(action, symbol, "POSITION_EXISTS")
+
             # Open new position
             trade = PaperTrade(
                 id=trade_id,

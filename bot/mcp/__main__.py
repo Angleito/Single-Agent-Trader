@@ -9,19 +9,36 @@ import logging
 import os
 import sys
 
-# Add parent directory to path for imports
-sys.path.insert(
-    0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-)
 
-from bot.mcp.memory_server import main
-
-if __name__ == "__main__":
+def main():
+    """Main entry point for module execution."""
     # Setup logging
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-    # Run the server
-    asyncio.run(main())
+    logger = logging.getLogger(__name__)
+
+    try:
+        # Try to import the full bot package version first
+        from bot.mcp.memory_server import main as server_main
+
+        logger.info("Running full MCP memory server from bot package")
+        asyncio.run(server_main())
+    except ImportError:
+        # Fall back to standalone version
+        logger.info("Bot package not available, trying standalone server")
+        try:
+            # Import and run standalone version
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            from server_standalone import main as standalone_main
+
+            asyncio.run(standalone_main())
+        except ImportError as e:
+            logger.error(f"Could not import any MCP server version: {e}")
+            sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

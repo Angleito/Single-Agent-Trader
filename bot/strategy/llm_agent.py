@@ -77,7 +77,11 @@ class LLMAgent:
             # Create LangChain callback handler if enabled
             # Temporarily disabled due to o3 model compatibility issues with older LangChain versions
             # TODO: Re-enable after upgrading LangChain to version that supports o3 models
-            if settings.llm.enable_langchain_callbacks and self._completion_logger and not self.model_name.startswith("o3"):
+            if (
+                settings.llm.enable_langchain_callbacks
+                and self._completion_logger
+                and not self.model_name.startswith("o3")
+            ):
                 self._langchain_callback = create_langchain_callback(
                     self._completion_logger
                 )
@@ -235,10 +239,14 @@ Instructions:
                 if self.model_name.startswith("o3"):
                     # o3 models only support basic parameters - temperature must be 1.0
                     # For o3 models, pass max_completion_tokens directly in model_kwargs to avoid LangChain warning
-                    base_kwargs["temperature"] = 1.0  # o3 models only support temperature=1.0
-                    
+                    base_kwargs["temperature"] = (
+                        1.0  # o3 models only support temperature=1.0
+                    )
+
                     # Ensure max_tokens is valid for o3 models
-                    max_completion_tokens = max(100, settings.llm.max_tokens)  # Prevent 0 or negative values
+                    max_completion_tokens = max(
+                        100, settings.llm.max_tokens
+                    )  # Prevent 0 or negative values
                     base_kwargs["model_kwargs"] = {
                         "max_completion_tokens": max_completion_tokens
                     }
@@ -700,7 +708,7 @@ Instructions:
                 if self._langchain_callback
                 else {}
             )
-            
+
             # For o3 models, we need to handle the response differently due to token usage format issues
             if self.model_name.startswith("o3"):
                 # Use custom response handling for o3 models

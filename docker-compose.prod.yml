@@ -18,9 +18,8 @@ services:
       - PYTHONWARNINGS=ignore::UserWarning,ignore::DeprecationWarning,ignore::SyntaxWarning,ignore::FutureWarning
       - ENVIRONMENT=production
       - LOG_LEVEL=${LOG_LEVEL:-WARNING}
-      - DRY_RUN=${DRY_RUN:-true}  # Default to safe mode
-      - SYMBOL=${SYMBOL:-BTC-USD}
-      - ENABLE_PAPER_TRADING=${ENABLE_PAPER_TRADING:-true}
+      - SYSTEM__DRY_RUN=${SYSTEM__DRY_RUN:-true}  # Default to paper trading (safe mode)
+      - TRADING__SYMBOL=${TRADING__SYMBOL:-BTC-USD}
       # LLM Logging Configuration (reduced verbosity for production)
       - LLM__ENABLE_COMPLETION_LOGGING=${LLM_ENABLE_COMPLETION_LOGGING:-false}
       - LLM__COMPLETION_LOG_LEVEL=${LLM_COMPLETION_LOG_LEVEL:-WARNING}

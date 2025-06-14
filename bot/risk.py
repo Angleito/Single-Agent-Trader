@@ -155,6 +155,7 @@ class RiskManager:
     ) -> bool:
         """
         Check if a new position can be opened.
+        ENFORCES SINGLE POSITION RULE: Only one position allowed at a time.
 
         Args:
             trade_action: Proposed action
@@ -167,6 +168,16 @@ class RiskManager:
         if trade_action.action in ["CLOSE", "HOLD"]:
             return True
 
+        # SINGLE POSITION ENFORCEMENT
+        # Check if we already have an active position
+        if current_position.side != "FLAT":
+            # We have a position - cannot open a new one
+            logger.warning(
+                f"Cannot open new {trade_action.action} position - "
+                f"existing {current_position.side} position for {current_position.symbol}"
+            )
+            return False
+
         # Get current position count from position manager if available
         if self.position_manager:
             active_positions = len(
@@ -176,17 +187,21 @@ class RiskManager:
                     if p.side != "FLAT"
                 ]
             )
+
+            # Double-check: ensure no other positions exist
+            if active_positions > 0:
+                logger.warning(
+                    f"Cannot open new position - {active_positions} position(s) already exist"
+                )
+                return False
         else:
             # Fallback to internal tracking
             active_positions = len([p for p in [current_position] if p.side != "FLAT"])
+            if active_positions > 0:
+                return False
 
-        # If already have a position and not closing, check if it's a new position
-        if current_position.side != "FLAT":
-            # Already have a position - can only close or hold unless we allow multiple positions
-            if trade_action.action not in ["CLOSE", "HOLD"]:
-                return active_positions < self.max_concurrent_trades
-
-        return active_positions < self.max_concurrent_trades
+        # No positions exist - can open one
+        return True
 
     def _validate_position_size(self, trade_action: TradeAction) -> TradeAction:
         """

@@ -360,11 +360,11 @@ class LangChainCallbackHandler(BaseCallbackHandler):
 
     Integrates with the ChatCompletionLogger to provide comprehensive
     tracking of LangChain operations.
-    
+
     NOTE: This callback handler is currently disabled for o3 models due to
     compatibility issues with older LangChain versions (0.1.x) that don't
     properly handle o3 model token usage response format.
-    
+
     TODO: Upgrade to LangChain 0.2+ which properly supports newer OpenAI models
     """
 
@@ -444,12 +444,14 @@ class LangChainCallbackHandler(BaseCallbackHandler):
                         token_usage = {
                             "prompt_tokens": raw_usage.get("prompt_tokens", 0),
                             "completion_tokens": raw_usage.get("completion_tokens", 0),
-                            "total_tokens": raw_usage.get("total_tokens", 0)
+                            "total_tokens": raw_usage.get("total_tokens", 0),
                         }
 
                         # Handle o3-style response format if available
                         if "completion_tokens_details" in raw_usage:
-                            token_usage["completion_tokens_details"] = raw_usage["completion_tokens_details"]
+                            token_usage["completion_tokens_details"] = raw_usage[
+                                "completion_tokens_details"
+                            ]
             except Exception as e:
                 self.logger.warning(f"Error extracting token usage: {e}")
                 token_usage = None
@@ -485,13 +487,13 @@ class LangChainCallbackHandler(BaseCallbackHandler):
     def _extract_market_context_from_prompt(self, prompt: str) -> dict[str, Any] | None:
         """
         Extract market context information from the prompt text.
-        
+
         This method parses the formatted prompt to extract key market data
         for logging purposes, avoiding the need for manual logging in the LLM agent.
-        
+
         Args:
             prompt: The formatted prompt text
-            
+
         Returns:
             Dictionary with market context data or None if extraction fails
         """
@@ -508,7 +510,9 @@ class LangChainCallbackHandler(BaseCallbackHandler):
             price_match = re.search(r"Current Price:\s*\$?([\d,.]+)", prompt)
             if price_match:
                 try:
-                    context["current_price"] = float(price_match.group(1).replace(",", ""))
+                    context["current_price"] = float(
+                        price_match.group(1).replace(",", "")
+                    )
                 except ValueError:
                     pass
 
@@ -539,7 +543,9 @@ class LangChainCallbackHandler(BaseCallbackHandler):
                     pass
 
             # Extract dominance data
-            dominance_match = re.search(r"Total Stablecoin Dominance:\s*([\d.]+)%", prompt)
+            dominance_match = re.search(
+                r"Total Stablecoin Dominance:\s*([\d.]+)%", prompt
+            )
             if dominance_match:
                 try:
                     context["stablecoin_dominance"] = float(dominance_match.group(1))

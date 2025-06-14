@@ -231,7 +231,9 @@ class TestComponentIntegration:
 
         # Verify integration
         current_position = position_manager.get_position("BTC-USD")
-        tracked_orders = order_manager.get_orders_by_status(OrderStatus.FILLED, "BTC-USD")
+        tracked_orders = order_manager.get_orders_by_status(
+            OrderStatus.FILLED, "BTC-USD"
+        )
 
         assert current_position.side == "LONG"
         assert current_position.size == Decimal("0.1")

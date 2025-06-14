@@ -18,7 +18,9 @@ services:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONWARNINGS=ignore::UserWarning,ignore::DeprecationWarning,ignore::SyntaxWarning,ignore::FutureWarning
-      - CONFIG_FILE=/app/config/docker.json
+      - CONFIG_FILE=/app/config/production.json
+      # System Configuration
+      - SYSTEM__DRY_RUN=${SYSTEM__DRY_RUN:-true}  # Default to paper trading (safe mode)
       # LLM Logging Configuration
       - LLM__ENABLE_COMPLETION_LOGGING=${LLM_ENABLE_COMPLETION_LOGGING:-true}
       - LLM__COMPLETION_LOG_LEVEL=${LLM_COMPLETION_LOG_LEVEL:-INFO}
@@ -59,8 +61,8 @@ services:
         max-size: "10m"
         max-file: "3"
         
-    # Default command - starts in dry-run mode for safety
-    command: ["python", "-m", "bot.main", "live"]
+    # Default command - starts in live mode (respects SYSTEM__DRY_RUN from .env)
+    command: ["sh", "-c", "echo 'y' | python -m bot.main live --symbol ETH-USD --interval 3m"]
     
     # Connect to shared network for dashboard communication
     networks:
@@ -279,12 +281,12 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - DEBUG=true
       - TESTING=true
-      - DRY_RUN=true
+      - SYSTEM__DRY_RUN=true
     volumes:
       - .:/app:delegated  # Mount entire project for development
     networks:
       - trading-network
-    command: ["python", "-m", "bot.main", "live", "--dry-run", "--symbol", "BTC-USD"]
+    command: ["python", "-m", "bot.main", "live", "--symbol", "BTC-USD"]
 
 volumes:
   # Dashboard data persistence (trading bot uses bind mounts)

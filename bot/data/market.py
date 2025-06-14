@@ -1188,7 +1188,7 @@ class MarketDataProvider:
     def _validate_data_sufficiency(self, candle_count: int) -> None:
         """
         Validate that we have sufficient data for reliable indicator calculations.
-        
+
         Args:
             candle_count: Number of candles available
         """

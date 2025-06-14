@@ -872,7 +872,9 @@ class SchaffTrendCycle:
                     extra={
                         "indicator": "schaff_trend_cycle",
                         "issue": "low_price_variance",
-                        "variance": float(price_variance) if not pd.isna(price_variance) else 0,
+                        "variance": (
+                            float(price_variance) if not pd.isna(price_variance) else 0
+                        ),
                         "price_range": float(src.max() - src.min()),
                         "mean_price": float(src.mean()),
                     },
@@ -1033,14 +1035,16 @@ class SchaffTrendCycle:
 
         return metrics
 
-    def _handle_flat_market_conditions(self, series: pd.Series, default_value: float = 50.0) -> pd.Series:
+    def _handle_flat_market_conditions(
+        self, series: pd.Series, default_value: float = 50.0
+    ) -> pd.Series:
         """
         Handle flat market conditions by providing appropriate fallback values.
-        
+
         Args:
             series: The calculated STC series
             default_value: Default value to use for flat market periods
-            
+
         Returns:
             Series with flat market periods handled
         """

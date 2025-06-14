@@ -67,7 +67,8 @@
     "max_worker_threads": 2,
     "enable_monitoring": true,
     "alert_webhook_url": null,
-    "health_check_interval": 600
+    "health_check_interval": 600,
+    "use_fifo_accounting": true
   },
   "profile": "conservative"
 }

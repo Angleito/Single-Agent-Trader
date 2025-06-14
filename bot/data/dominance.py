@@ -162,7 +162,7 @@ class DominanceDataProvider:
                 timeout=timeout,
                 connector=connector,
                 # Ensure proper cleanup on exit
-                connector_owner=True
+                connector_owner=True,
             )
 
         # Fetch initial data
@@ -442,22 +442,32 @@ class DominanceDataProvider:
         try:
             # Filter out None values and validate data before DataFrame creation
             valid_data = [
-                (i, d) for i, d in enumerate(self._dominance_cache)
-                if d.stablecoin_dominance is not None and not pd.isna(d.stablecoin_dominance)
+                (i, d)
+                for i, d in enumerate(self._dominance_cache)
+                if d.stablecoin_dominance is not None
+                and not pd.isna(d.stablecoin_dominance)
             ]
 
             if len(valid_data) < 20:
-                logger.warning(f"Insufficient valid dominance data for trend calculation: {len(valid_data)} valid points out of {len(self._dominance_cache)} total")
+                logger.warning(
+                    f"Insufficient valid dominance data for trend calculation: {len(valid_data)} valid points out of {len(self._dominance_cache)} total"
+                )
                 return
 
             # Extract only valid dominance values
             dominance_values = [d[1].stablecoin_dominance for d in valid_data]
 
             # Ensure all values are numeric
-            dominance_values = [float(val) for val in dominance_values if isinstance(val, (int, float)) and not pd.isna(val)]
+            dominance_values = [
+                float(val)
+                for val in dominance_values
+                if isinstance(val, int | float) and not pd.isna(val)
+            ]
 
             if len(dominance_values) < 20:
-                logger.warning(f"Insufficient numeric dominance data after cleaning: {len(dominance_values)} values")
+                logger.warning(
+                    f"Insufficient numeric dominance data after cleaning: {len(dominance_values)} values"
+                )
                 return
 
             # Create DataFrame with clean data
@@ -482,10 +492,14 @@ class DominanceDataProvider:
             if len(self._dominance_cache) > 0:
                 latest = self._dominance_cache[-1]
                 latest.dominance_sma_20 = (
-                    float(df["sma_20"].iloc[-1]) if not pd.isna(df["sma_20"].iloc[-1]) else None
+                    float(df["sma_20"].iloc[-1])
+                    if not pd.isna(df["sma_20"].iloc[-1])
+                    else None
                 )
                 latest.dominance_rsi = (
-                    float(df["rsi"].iloc[-1]) if not pd.isna(df["rsi"].iloc[-1]) else None
+                    float(df["rsi"].iloc[-1])
+                    if not pd.isna(df["rsi"].iloc[-1])
+                    else None
                 )
 
         except Exception as e:
@@ -640,15 +654,6 @@ class DominanceDataProvider:
         df = pd.DataFrame(data)
         df.set_index("timestamp", inplace=True)
         return df
-
-    async def __aenter__(self):
-        """Async context manager entry."""
-        await self.connect()
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit."""
-        await self.disconnect()
 
 
 class DominanceCandleData(BaseModel):

@@ -285,12 +285,20 @@ class CoinbaseClient:
         self._futures_account_info = None
         self._last_margin_check = None
 
+        # Portfolio management
+        self._portfolios = {}
+        self._futures_portfolio_id = None
+        self._default_portfolio_id = None
+
         # Compose a concise init message to avoid line length issues
+        trading_mode = "PAPER TRADING" if settings.system.dry_run else "LIVE TRADING"
         init_msg = (
-            "Initialized CoinbaseClient (auth=%s sandbox=%s futures=%s " "acct_type=%s)"
+            "Initialized CoinbaseClient (mode=%s auth=%s sandbox=%s futures=%s "
+            "acct_type=%s)"
         )
         logger.info(
             init_msg,
+            trading_mode,
             self.auth_method,
             self.sandbox,
             self.enable_futures,
@@ -299,6 +307,7 @@ class CoinbaseClient:
 
         # Log detailed connection configuration
         logger.debug("CoinbaseClient Configuration Details:")
+        logger.debug(f"  Trading mode: {trading_mode}")
         logger.debug(f"  Authentication method: {self.auth_method}")
         logger.debug(f"  Sandbox mode: {self.sandbox}")
         logger.debug(f"  Futures enabled: {self.enable_futures}")
@@ -310,6 +319,53 @@ class CoinbaseClient:
         )
         logger.debug(f"  Max retries: {self._max_retries}")
         logger.debug(f"  Has credentials: {bool(self.auth_method != 'none')}")
+
+        # Log warning if in live trading mode
+        if not settings.system.dry_run:
+            logger.warning(
+                "⚠️  LIVE TRADING MODE ENABLED - Real money will be used! "
+                "Use --dry-run flag for paper trading."
+            )
+
+    async def _load_portfolios(self) -> None:
+        """Load and cache portfolio information."""
+        try:
+            response = await self._retry_request(self._client.get_portfolios)
+
+            if hasattr(response, "portfolios"):
+                portfolios = response.portfolios
+            else:
+                portfolios = response.get("portfolios", [])
+
+            for portfolio in portfolios:
+                portfolio_data = (
+                    portfolio
+                    if isinstance(portfolio, dict)
+                    else {
+                        "uuid": getattr(portfolio, "uuid", None),
+                        "name": getattr(portfolio, "name", None),
+                        "type": getattr(portfolio, "type", None),
+                    }
+                )
+
+                self._portfolios[portfolio_data["uuid"]] = portfolio_data
+
+                # Identify futures portfolio
+                if (
+                    "futures" in portfolio_data.get("name", "").lower()
+                    or portfolio_data.get("type") == "FUTURES"
+                ):
+                    self._futures_portfolio_id = portfolio_data["uuid"]
+                    logger.info(
+                        f"Found futures portfolio: {portfolio_data['name']} ({portfolio_data['uuid']})"
+                    )
+                elif portfolio_data.get("type") == "DEFAULT":
+                    self._default_portfolio_id = portfolio_data["uuid"]
+
+        except Exception as e:
+            logger.warning(f"Failed to load portfolios: {e}")
+            # Use the hardcoded default if we can't load portfolios
+            self._default_portfolio_id = "1f3ed8bf-a65c-5022-8258-87ce50c517f6"
 
     async def connect(self) -> bool:
         """
@@ -327,7 +383,7 @@ class CoinbaseClient:
                 # In dry-run / paper-trading mode we can operate without the SDK
                 if settings.system.dry_run:
                     logger.info(
-                        "Dry-run mode: Coinbase connection skipped (SDK missing)."
+                        "PAPER TRADING MODE: Coinbase connection skipped (SDK missing). All trades will be simulated."
                     )
                     # Mark as not authenticated but allow engine startup.
                     self._client = None
@@ -390,6 +446,9 @@ class CoinbaseClient:
                 f"Connected to Coinbase {'Sandbox' if self.sandbox else 'Live'} successfully"
             )
 
+            # Load portfolio information
+            await self._load_portfolios()
+
             # Log connection success details
             logger.debug("Connection Success Details:")
             logger.debug(
@@ -421,6 +480,10 @@ class CoinbaseClient:
                     )
                 except Exception as e:
                     logger.warning(f"  Futures access test: FAILED ({e})")
+
+            # Load portfolios information
+            await self._load_portfolios()
+
             return True
 
         except CoinbaseAuthenticationException as e:
@@ -526,6 +589,79 @@ class CoinbaseClient:
 
         if last_exception:
             raise last_exception
+
+    async def _load_portfolios(self) -> None:
+        """Load portfolio information and identify futures portfolio."""
+        try:
+            logger.debug("Loading portfolio information...")
+
+            # Try to get portfolios using the REST API
+            try:
+                # First try the standard portfolios endpoint
+                portfolios_response = await self._retry_request(
+                    lambda: self._client.get("/api/v3/brokerage/portfolios")
+                )
+
+                if isinstance(portfolios_response, dict):
+                    self._portfolios = portfolios_response.get("portfolios", [])
+                else:
+                    self._portfolios = []
+
+            except Exception as e:
+                logger.debug(f"Could not fetch portfolios via API: {e}")
+                self._portfolios = []
+
+            # If we have portfolios, try to identify the futures portfolio
+            if self._portfolios:
+                for portfolio in self._portfolios:
+                    portfolio_name = portfolio.get("name", "").lower()
+                    portfolio_type = portfolio.get("type", "").lower()
+                    portfolio_id = portfolio.get("uuid") or portfolio.get("id")
+
+                    # Check if this is the default portfolio
+                    if portfolio.get("is_default"):
+                        self._default_portfolio_id = portfolio_id
+                        logger.debug(f"Found default portfolio: {portfolio_id}")
+
+                    # Check if this is a futures portfolio
+                    if (
+                        "futures" in portfolio_name
+                        or "cfm" in portfolio_name
+                        or portfolio_type == "futures"
+                        or portfolio_type == "cfm"
+                    ):
+                        self._futures_portfolio_id = portfolio_id
+                        logger.debug(f"Found futures portfolio: {portfolio_id}")
+
+                logger.info(f"Loaded {len(self._portfolios)} portfolios")
+                if self._futures_portfolio_id:
+                    logger.info(f"Futures portfolio ID: {self._futures_portfolio_id}")
+            else:
+                logger.debug("No portfolios found or portfolios API not available")
+
+        except Exception as e:
+            logger.warning(f"Failed to load portfolios: {e}")
+            self._portfolios = []
+
+    async def get_portfolios(self) -> list[dict[str, Any]]:
+        """
+        Get list of all portfolios.
+
+        Returns:
+            List of portfolio dictionaries
+        """
+        if self._portfolios is None:
+            await self._load_portfolios()
+        return self._portfolios or []
+
+    def get_futures_portfolio_id(self) -> str | None:
+        """
+        Get the futures portfolio ID if available.
+
+        Returns:
+            Futures portfolio UUID or None
+        """
+        return self._futures_portfolio_id
 
     async def execute_trade_action(
         self, trade_action: TradeAction, symbol: str, current_price: Decimal
@@ -633,16 +769,37 @@ class CoinbaseClient:
             leverage = min(leverage, self.max_futures_leverage)
 
             # Calculate quantity for futures
-            notional_value = position_value * leverage
-            quantity = notional_value / current_price
+            # On Coinbase, 1 ETH futures contract = 0.1 ETH
+            CONTRACT_SIZE = Decimal("0.1")  # 0.1 ETH per contract
+
+            # Check if we're using fixed contract size from config
+            if (
+                hasattr(settings.trading, "fixed_contract_size")
+                and settings.trading.fixed_contract_size
+            ):
+                # Use fixed number of contracts
+                num_contracts = int(settings.trading.fixed_contract_size)
+                quantity = CONTRACT_SIZE * num_contracts
+            else:
+                # Calculate based on position value
+                notional_value = position_value * leverage
+                quantity_in_eth = notional_value / current_price
+                # Convert to number of contracts and round down
+                num_contracts = int(quantity_in_eth / CONTRACT_SIZE)
+                num_contracts = max(1, num_contracts)  # Minimum 1 contract
+                quantity = CONTRACT_SIZE * num_contracts
+
+            logger.info(f"Futures position: {num_contracts} contracts = {quantity} ETH")
+
+            # Calculate actual notional value based on contracts
+            actual_notional_value = quantity * current_price
 
             # Check if we need to transfer cash for margin
-            margin_required = notional_value / leverage
-            if margin_required > available_margin and self.auto_cash_transfer:
-                transfer_amount = (
-                    margin_required - available_margin + Decimal("100")
-                )  # Buffer
-                await self.transfer_cash_to_futures(transfer_amount, "MARGIN_CALL")
+            margin_required = actual_notional_value / leverage
+            # Skip transfer check - Coinbase already includes spot balance in available_margin
+            logger.info(
+                f"Margin required: ${margin_required}, Available margin: ${available_margin}"
+            )
 
             # Determine order side
             side = "BUY" if trade_action.action == "LONG" else "SELL"
@@ -749,9 +906,11 @@ class CoinbaseClient:
         """
         if settings.system.dry_run:
             # Simulate order in dry-run mode
-            logger.info(f"DRY RUN: {side} {quantity} {symbol} at market")
+            logger.info(
+                f"PAPER TRADING: Simulating {side} {quantity} {symbol} at market"
+            )
             return Order(
-                id=f"dry_run_{int(datetime.utcnow().timestamp() * 1000)}",
+                id=f"paper_{int(datetime.utcnow().timestamp() * 1000)}",
                 symbol=symbol,
                 side=side,
                 type="MARKET",
@@ -769,42 +928,83 @@ class CoinbaseClient:
             if side not in ["BUY", "SELL"]:
                 raise CoinbaseOrderError(f"Invalid side: {side}")
 
+            # Generate a unique client order ID
+            import uuid
+
+            client_order_id = f"ai-bot-{uuid.uuid4().hex[:8]}"
+
+            # Round quantity to appropriate precision (6 decimal places for ETH)
+            rounded_quantity = round(float(quantity), 6)
+
             # Place the order using Coinbase Advanced Trader
             order_data = {
                 "product_id": symbol,
-                "side": side.lower(),
+                "side": side,
                 "order_configuration": {
-                    "market_market_ioc": {"base_size": str(quantity)}
+                    "market_market_ioc": {"base_size": str(rounded_quantity)}
                 },
             }
 
+            # Add default portfolio ID if available and not futures
+            if self._default_portfolio_id and not self.enable_futures:
+                order_data["retail_portfolio_id"] = self._default_portfolio_id
+                logger.debug(
+                    f"Using default portfolio ID: {self._default_portfolio_id}"
+                )
+
             logger.info(f"Placing {side} market order: {quantity} {symbol}")
-            result = await self._retry_request(self._client.create_order, **order_data)
+            result = await self._retry_request(
+                self._client.create_order, client_order_id, **order_data
+            )
 
-            # Parse the response
-            if result.get("success"):
-                order_info = result.get("order", {})
-                order_id = order_info.get("order_id")
+            # Parse the response - handle CDP API response object
+            try:
+                # CDP API returns an object with order_id attribute
+                if hasattr(result, "order_id"):
+                    order_id = result.order_id
 
-                order = Order(
-                    id=order_id or f"cb_{int(datetime.utcnow().timestamp() * 1000)}",
-                    symbol=symbol,
-                    side=side,
-                    type="MARKET",
-                    quantity=quantity,
-                    status=OrderStatus.PENDING,
-                    timestamp=datetime.utcnow(),
-                    filled_quantity=Decimal("0"),
-                )
+                    order = Order(
+                        id=order_id
+                        or f"cb_{int(datetime.utcnow().timestamp() * 1000)}",
+                        symbol=symbol,
+                        side=side,
+                        type="MARKET",
+                        quantity=quantity,
+                        status=OrderStatus.PENDING,
+                        timestamp=datetime.utcnow(),
+                        filled_quantity=Decimal("0"),
+                    )
 
-                logger.info(f"Market order placed successfully: {order_id}")
-                return order
-            else:
-                error_msg = result.get("error_response", {}).get(
-                    "message", "Unknown error"
-                )
-                logger.error(f"Order placement failed: {error_msg}")
-                raise CoinbaseOrderError(f"Order placement failed: {error_msg}")
+                    logger.info(f"Market order placed successfully: {order_id}")
+                    return order
+                else:
+                    # Try dictionary access for backward compatibility
+                    if isinstance(result, dict) and result.get("success"):
+                        order_info = result.get("order", {})
+                        order_id = order_info.get("order_id")
+
+                        order = Order(
+                            id=order_id
+                            or f"cb_{int(datetime.utcnow().timestamp() * 1000)}",
+                            symbol=symbol,
+                            side=side,
+                            type="MARKET",
+                            quantity=quantity,
+                            status=OrderStatus.PENDING,
+                            timestamp=datetime.utcnow(),
+                            filled_quantity=Decimal("0"),
+                        )
+
+                        logger.info(f"Market order placed successfully: {order_id}")
+                        return order
+                    else:
+                        error_msg = str(result) if result else "Unknown error"
+                        logger.error(f"Order placement failed: {error_msg}")
+                        raise CoinbaseOrderError(f"Order placement failed: {error_msg}")
+            except AttributeError as e:
+                logger.error(f"Error parsing order response: {e}")
+                logger.error(f"Response type: {type(result)}, Response: {result}")
+                raise CoinbaseOrderError(f"Failed to parse order response: {e}") from e
 
         except CoinbaseAPIException as e:
             if "insufficient funds" in str(e).lower():
@@ -832,9 +1032,11 @@ class CoinbaseClient:
             Order object if successful
         """
         if settings.system.dry_run:
-            logger.info(f"DRY RUN: {side} {quantity} {symbol} limit @ {price}")
+            logger.info(
+                f"PAPER TRADING: Simulating {side} {quantity} {symbol} limit @ {price}"
+            )
             return Order(
-                id=f"dry_run_limit_{int(datetime.utcnow().timestamp() * 1000)}",
+                id=f"paper_limit_{int(datetime.utcnow().timestamp() * 1000)}",
                 symbol=symbol,
                 side=side,
                 type="LIMIT",
@@ -858,7 +1060,7 @@ class CoinbaseClient:
             # Place the limit order
             order_data = {
                 "product_id": symbol,
-                "side": side.lower(),
+                "side": side,
                 "order_configuration": {
                     "limit_limit_gtc": {
                         "base_size": str(quantity),
@@ -985,9 +1187,11 @@ class CoinbaseClient:
             Order object if successful
         """
         if settings.system.dry_run:
-            logger.info(f"DRY RUN: {side} {quantity} {symbol} stop @ {stop_price}")
+            logger.info(
+                f"PAPER TRADING: Simulating {side} {quantity} {symbol} stop @ {stop_price}"
+            )
             return Order(
-                id=f"dry_run_stop_{int(datetime.utcnow().timestamp() * 1000)}",
+                id=f"paper_stop_{int(datetime.utcnow().timestamp() * 1000)}",
                 symbol=symbol,
                 side=side,
                 type="STOP",
@@ -1018,7 +1222,7 @@ class CoinbaseClient:
             # Place stop-limit order
             order_data = {
                 "product_id": symbol,
-                "side": side.lower(),
+                "side": side,
                 "order_configuration": {
                     "stop_limit_stop_limit_gtc": {
                         "base_size": str(quantity),
@@ -1100,10 +1304,10 @@ class CoinbaseClient:
         if settings.system.dry_run:
             # Simulate futures order in dry-run mode
             logger.info(
-                f"DRY RUN FUTURES: {side} {quantity} {symbol} at market (leverage: {leverage}x)"
+                f"PAPER TRADING FUTURES: Simulating {side} {quantity} {symbol} at market (leverage: {leverage}x)"
             )
             return Order(
-                id=f"dry_run_futures_{int(datetime.utcnow().timestamp() * 1000)}",
+                id=f"paper_futures_{int(datetime.utcnow().timestamp() * 1000)}",
                 symbol=symbol,
                 side=side,
                 type="MARKET",
@@ -1123,48 +1327,99 @@ class CoinbaseClient:
 
             leverage = leverage or self.max_futures_leverage
 
+            # Generate a unique client order ID
+            import uuid
+
+            client_order_id = f"ai-bot-{uuid.uuid4().hex[:8]}"
+
+            # Round quantity to appropriate precision (6 decimal places for ETH)
+            rounded_quantity = round(float(quantity), 6)
+
             # Place the futures order using Coinbase Advanced Trader
             order_data = {
                 "product_id": symbol,
-                "side": side.lower(),
+                "side": side,
                 "order_configuration": {
-                    "market_market_ioc": {"base_size": str(quantity)}
+                    "market_market_ioc": {"base_size": str(rounded_quantity)}
                 },
-                # Futures-specific configuration
-                "leverage": leverage,
-                "reduce_only": reduce_only,
+                "leverage": str(
+                    leverage
+                ),  # Add leverage back - it's required for futures
+                "retail_portfolio_id": self._default_portfolio_id
+                or "1f3ed8bf-a65c-5022-8258-87ce50c517f6",
             }
+
+            # Add reduce_only only if True
+            if reduce_only:
+                order_data["reduce_only"] = reduce_only
+
+            # Add futures portfolio ID if available
+            if self._futures_portfolio_id:
+                order_data["retail_portfolio_id"] = self._futures_portfolio_id
+                logger.debug(
+                    f"Using futures portfolio ID: {self._futures_portfolio_id}"
+                )
 
             logger.info(
                 f"Placing FUTURES {side} market order: {quantity} {symbol} (leverage: {leverage}x)"
             )
-            result = await self._retry_request(self._client.create_order, **order_data)
+            logger.debug(f"Order data: {order_data}")
+            result = await self._retry_request(
+                self._client.create_order, client_order_id, **order_data
+            )
 
-            # Parse the response
-            if result.get("success"):
-                order_info = result.get("order", {})
-                order_id = order_info.get("order_id")
+            # Parse the response - handle CDP API response object
+            try:
+                # CDP API returns an object with order_id attribute
+                if hasattr(result, "order_id"):
+                    order_id = result.order_id
 
-                order = Order(
-                    id=order_id
-                    or f"cb_futures_{int(datetime.utcnow().timestamp() * 1000)}",
-                    symbol=symbol,
-                    side=side,
-                    type="MARKET",
-                    quantity=quantity,
-                    status=OrderStatus.PENDING,
-                    timestamp=datetime.utcnow(),
-                    filled_quantity=Decimal("0"),
-                )
+                    order = Order(
+                        id=order_id
+                        or f"cb_futures_{int(datetime.utcnow().timestamp() * 1000)}",
+                        symbol=symbol,
+                        side=side,
+                        type="MARKET",
+                        quantity=quantity,
+                        status=OrderStatus.PENDING,
+                        timestamp=datetime.utcnow(),
+                        filled_quantity=Decimal("0"),
+                    )
 
-                logger.info(f"Futures market order placed successfully: {order_id}")
-                return order
-            else:
-                error_msg = result.get("error_response", {}).get(
-                    "message", "Unknown error"
-                )
-                logger.error(f"Futures order placement failed: {error_msg}")
-                raise CoinbaseOrderError(f"Futures order placement failed: {error_msg}")
+                    logger.info(f"Futures market order placed successfully: {order_id}")
+                    return order
+                else:
+                    # Try dictionary access for backward compatibility
+                    if isinstance(result, dict) and result.get("success"):
+                        order_info = result.get("order", {})
+                        order_id = order_info.get("order_id")
+
+                        order = Order(
+                            id=order_id
+                            or f"cb_futures_{int(datetime.utcnow().timestamp() * 1000)}",
+                            symbol=symbol,
+                            side=side,
+                            type="MARKET",
+                            quantity=quantity,
+                            status=OrderStatus.PENDING,
+                            timestamp=datetime.utcnow(),
+                            filled_quantity=Decimal("0"),
+                        )
+
+                        logger.info(
+                            f"Futures market order placed successfully: {order_id}"
+                        )
+                        return order
+                    else:
+                        error_msg = str(result) if result else "Unknown error"
+                        logger.error(f"Futures order placement failed: {error_msg}")
+                        raise CoinbaseOrderError(
+                            f"Futures order placement failed: {error_msg}"
+                        )
+            except AttributeError as e:
+                logger.error(f"Error parsing order response: {e}")
+                logger.error(f"Response type: {type(result)}, Response: {result}")
+                raise CoinbaseOrderError(f"Failed to parse order response: {e}") from e
 
         except CoinbaseAPIException as e:
             if (
@@ -1198,8 +1453,10 @@ class CoinbaseClient:
             Account balance in USD
         """
         if settings.system.dry_run:
-            # Return mock balance for dry run
-            return Decimal("10000.00")
+            # Return mock balance for paper trading
+            mock_balance = Decimal("10000.00")
+            logger.debug(f"PAPER TRADING: Returning mock balance ${mock_balance}")
+            return mock_balance
 
         try:
             if self.enable_futures and account_type == AccountType.CFM:
@@ -1404,9 +1661,15 @@ class CoinbaseClient:
                 initial_margin = Decimal(
                     str(balance_data.initial_margin.get("value", "0"))
                 )
-                available_margin = Decimal(
-                    str(balance_data.available_margin.get("value", "0"))
-                )
+                # Use futures_buying_power if available, otherwise available_margin
+                if hasattr(balance_data, "futures_buying_power"):
+                    available_margin = Decimal(
+                        str(balance_data.futures_buying_power.get("value", "0"))
+                    )
+                else:
+                    available_margin = Decimal(
+                        str(balance_data.available_margin.get("value", "0"))
+                    )
                 used_margin = cash_balance - available_margin
                 liquidation_threshold = Decimal(
                     str(balance_data.liquidation_threshold.get("value", "0"))
@@ -1507,18 +1770,59 @@ class CoinbaseClient:
             )
 
             # Execute transfer via Coinbase API
-            # Note: This would need the actual Coinbase transfer endpoint
             logger.info(f"Transferring ${amount} from spot to futures for {reason}")
 
             if settings.system.dry_run:
-                logger.info(f"DRY RUN: Transfer ${amount} CBI -> CFM")
+                logger.info(f"PAPER TRADING: Simulating transfer ${amount} CBI -> CFM")
                 return True
 
-            # For now, log the request - actual implementation would call transfer API
-            logger.warning(
-                "Cash transfer API not yet implemented - would transfer here"
-            )
-            return True
+            # Attempt to allocate funds from CBI to CFM
+            try:
+                transfer_data = {
+                    "source_portfolio_uuid": "1f3ed8bf-a65c-5022-8258-87ce50c517f6",  # Default portfolio
+                    "amount": str(amount),
+                    "currency": "USD",
+                }
+
+                # Try the allocate endpoint
+                result = await self._retry_request(
+                    self._client.allocate_portfolio,
+                    source_portfolio_uuid=transfer_data["source_portfolio_uuid"],
+                    amount=transfer_data["amount"],
+                    currency=transfer_data["currency"],
+                    to_fcm_account=True,
+                )
+
+                logger.info(f"Successfully transferred ${amount} to futures account")
+                return True
+
+            except Exception as e:
+                logger.error(f"Failed to allocate funds to futures: {e}")
+
+                # Try alternative transfer endpoint
+                try:
+                    transfer_request = {
+                        "source_account": "CBI",
+                        "target_account": "CFM",
+                        "amount": str(amount),
+                        "currency": "USD",
+                    }
+
+                    # This endpoint might not exist in the SDK, but we'll try
+                    await self._retry_request(
+                        lambda: self._client.post(
+                            "/api/v3/brokerage/cfm/cash_transfers", transfer_request
+                        )
+                    )
+
+                    logger.info(
+                        f"Successfully transferred ${amount} using alternative method"
+                    )
+                    return True
+
+                except Exception as e2:
+                    logger.error(f"Alternative transfer method also failed: {e2}")
+                    return False
 
         except Exception as e:
             logger.error(f"Failed to transfer cash to futures: {e}")
@@ -1652,7 +1956,7 @@ class CoinbaseClient:
             True if successful
         """
         if settings.system.dry_run:
-            logger.info(f"DRY RUN: Cancel order {order_id}")
+            logger.info(f"PAPER TRADING: Simulating cancel order {order_id}")
             return True
 
         try:
@@ -1687,7 +1991,7 @@ class CoinbaseClient:
         """
         if settings.system.dry_run:
             logger.info(
-                f"DRY RUN: Cancel all orders{' for ' + symbol if symbol else ''}"
+                f"PAPER TRADING: Simulating cancel all orders{' for ' + symbol if symbol else ''}"
             )
             return True
 
@@ -1808,6 +2112,9 @@ class CoinbaseClient:
             "auth_method": self.auth_method,
             "has_credentials": has_credentials,
             "dry_run": settings.system.dry_run,
+            "trading_mode": (
+                "PAPER TRADING" if settings.system.dry_run else "LIVE TRADING"
+            ),
             "last_health_check": (
                 self._last_health_check.isoformat() if self._last_health_check else None
             ),

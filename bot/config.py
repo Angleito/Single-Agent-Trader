@@ -92,6 +92,12 @@ class TradingSettings(BaseModel):
         default=20, ge=1, le=100, description="Maximum leverage for futures positions"
     )
 
+    # Position Tracking Configuration
+    use_fifo_accounting: bool = Field(
+        default=True,
+        description="Use FIFO (First In First Out) accounting for position tracking",
+    )
+
     # Order Configuration
     order_timeout_seconds: int = Field(
         default=30, ge=5, le=300, description="Order timeout in seconds"
@@ -279,16 +285,13 @@ class MCPSettings(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     enabled: bool = Field(
-        default=False,
-        description="Enable MCP memory server for learning"
+        default=False, description="Enable MCP memory server for learning"
     )
     server_url: str = Field(
-        default="http://localhost:8765",
-        description="MCP memory server URL"
+        default="http://localhost:8765", description="MCP memory server URL"
     )
     memory_api_key: SecretStr | None = Field(
-        default=None,
-        description="API key for memory server (if required)"
+        default=None, description="API key for memory server (if required)"
     )
 
     # Memory Configuration
@@ -296,59 +299,53 @@ class MCPSettings(BaseModel):
         default=10,
         ge=1,
         le=50,
-        description="Maximum similar experiences to retrieve per query"
+        description="Maximum similar experiences to retrieve per query",
     )
     similarity_threshold: float = Field(
         default=0.7,
         ge=0.0,
         le=1.0,
-        description="Minimum similarity score for memory retrieval"
+        description="Minimum similarity score for memory retrieval",
     )
     memory_retention_days: int = Field(
-        default=90,
-        ge=7,
-        le=365,
-        description="Days to retain trading memories"
+        default=90, ge=7, le=365, description="Days to retain trading memories"
     )
 
     # Learning Configuration
     enable_pattern_learning: bool = Field(
-        default=True,
-        description="Enable pattern recognition and learning"
+        default=True, description="Enable pattern recognition and learning"
     )
     learning_rate: float = Field(
         default=0.1,
         ge=0.01,
         le=1.0,
-        description="Learning rate for strategy adjustments"
+        description="Learning rate for strategy adjustments",
     )
     min_samples_for_pattern: int = Field(
         default=5,
         ge=3,
         le=20,
-        description="Minimum samples needed to identify a pattern"
+        description="Minimum samples needed to identify a pattern",
     )
     confidence_decay_rate: float = Field(
         default=0.95,
         ge=0.5,
         le=0.99,
-        description="Decay rate for pattern confidence over time"
+        description="Decay rate for pattern confidence over time",
     )
 
     # Experience Collection
     track_trade_lifecycle: bool = Field(
-        default=True,
-        description="Track complete trade lifecycle for learning"
+        default=True, description="Track complete trade lifecycle for learning"
     )
     store_market_snapshots: bool = Field(
-        default=True,
-        description="Store market snapshots at key decision points"
+        default=True, description="Store market snapshots at key decision points"
     )
     reflection_delay_minutes: int = Field(
         default=30,
         ge=5,
         le=1440,
-        description="Minutes to wait before analyzing trade outcome"
+        description="Minutes to wait before analyzing trade outcome",
     )
 
 
@@ -476,7 +473,10 @@ class RiskSettings(BaseModel):
 
     # Position Limits
     max_concurrent_trades: int = Field(
-        default=3, ge=1, le=20, description="Maximum concurrent positions"
+        default=1,
+        ge=1,
+        le=20,
+        description="Maximum concurrent positions (default: 1 for single position rule)",
     )
     max_position_hold_hours: int = Field(
         default=24,
@@ -511,7 +511,10 @@ class DataSettings(BaseModel):
 
     # Data Fetching
     candle_limit: int = Field(
-        default=300, ge=100, le=2000, description="Number of historical candles to fetch (minimum 100 for VuManChu indicators)"
+        default=300,
+        ge=100,
+        le=2000,
+        description="Number of historical candles to fetch (minimum 100 for VuManChu indicators)",
     )
     real_time_updates: bool = Field(
         default=True, description="Enable real-time data updates"
@@ -522,7 +525,10 @@ class DataSettings(BaseModel):
 
     # Indicator Configuration
     indicator_warmup: int = Field(
-        default=100, ge=50, le=500, description="Indicator warmup period (minimum 100 for VuManChu indicators)"
+        default=100,
+        ge=50,
+        le=500,
+        description="Indicator warmup period (minimum 100 for VuManChu indicators)",
     )
 
     # VuManChu Cipher Settings
@@ -671,7 +677,10 @@ class SystemSettings(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     # Execution Mode
-    dry_run: bool = Field(default=True, description="Run in paper trading mode")
+    dry_run: bool = Field(
+        default=True,
+        description="Single control for paper trading/dry run mode - when True, no real trades are executed",
+    )
     environment: Environment = Field(
         default=Environment.DEVELOPMENT, description="Deployment environment"
     )

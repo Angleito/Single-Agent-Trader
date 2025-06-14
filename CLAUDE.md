@@ -22,12 +22,13 @@ poetry shell
 
 ### Running the Bot
 ```bash
-# Live trading (dry-run mode - safe)
+# Paper trading mode (safe - no real money)
 python -m bot.main live
 poetry run ai-trading-bot live
 
 # Live trading with real money (dangerous)
-poetry run ai-trading-bot live --dry-run false
+# Set SYSTEM__DRY_RUN=false in .env first!
+python -m bot.main live
 
 # Backtesting
 poetry run ai-trading-bot backtest --from 2024-01-01 --to 2024-12-31
@@ -122,7 +123,7 @@ Market Data → Indicators → LLM Agent (with Memory) → Validator → Risk Ma
 - Use `TradeAction` pydantic model for structured output
 
 ### Safety Measures
-- Always test in dry-run mode first
+- Always test in paper trading mode first (SYSTEM__DRY_RUN=true)
 - Validate all trade actions through risk management layer
 - Environment variables for API keys - never commit secrets
 - Default to conservative settings in development
@@ -173,12 +174,12 @@ The memory system includes:
 ## Environment Setup
 
 Required environment variables:
-- `CB_API_KEY` - Coinbase API key
-- `CB_API_SECRET` - Coinbase API secret  
-- `OPENAI_API_KEY` - OpenAI API key
-- `DRY_RUN` - Set to "false" for live trading (default: "true")
-- `SYMBOL` - Trading pair (default: "BTC-USD")
-- `LEVERAGE` - Futures leverage (default: 5)
+- `EXCHANGE__CDP_API_KEY_NAME` - Coinbase CDP API key name
+- `EXCHANGE__CDP_PRIVATE_KEY` - Coinbase CDP private key (PEM format)  
+- `LLM__OPENAI_API_KEY` - OpenAI API key
+- `SYSTEM__DRY_RUN` - Set to "false" for live trading, "true" for paper trading (default: "true")
+- `TRADING__SYMBOL` - Trading pair (default: "BTC-USD")
+- `TRADING__LEVERAGE` - Futures leverage (default: 5)
 
 Optional MCP/Learning environment variables:
 - `MCP_ENABLED` - Enable memory and learning features (default: "false")
@@ -190,5 +191,5 @@ Optional MCP/Learning environment variables:
 
 - API keys are managed through environment variables
 - Container runs as non-root user for security
-- Dry-run mode is the default to prevent accidental live trading
+- Paper trading mode (SYSTEM__DRY_RUN=true) is the default to prevent accidental live trading
 - All trading actions go through risk management validation

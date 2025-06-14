@@ -78,14 +78,16 @@ class WaveTrend:
             },
         )
 
-    def _calculate_adaptive_threshold(self, series: pd.Series, default_threshold: float = 100.0) -> float:
+    def _calculate_adaptive_threshold(
+        self, series: pd.Series, default_threshold: float = 100.0
+    ) -> float:
         """
         Calculate adaptive threshold for clipping extreme values.
-        
+
         Args:
             series: Input series to analyze
             default_threshold: Default threshold if calculation fails
-            
+
         Returns:
             Adaptive threshold value
         """
@@ -126,10 +128,10 @@ class WaveTrend:
     def _get_safe_minimum_threshold(self, series: pd.Series) -> float:
         """
         Calculate a safe minimum threshold for denominator values.
-        
+
         Args:
             series: Input series to analyze
-            
+
         Returns:
             Safe minimum threshold
         """
@@ -153,11 +155,11 @@ class WaveTrend:
     def _calculate_ema_fallback(self, series: pd.Series, length: int) -> pd.Series:
         """
         Fallback EMA calculation using pandas ewm when pandas_ta fails.
-        
+
         Args:
             series: Input series
             length: EMA length
-            
+
         Returns:
             EMA series
         """
@@ -180,11 +182,11 @@ class WaveTrend:
     def _calculate_sma_fallback(self, series: pd.Series, length: int) -> pd.Series:
         """
         Fallback SMA calculation using pandas rolling when pandas_ta fails.
-        
+
         Args:
             series: Input series
             length: SMA length
-            
+
         Returns:
             SMA series
         """
@@ -384,7 +386,9 @@ class WaveTrend:
 
             # Check if pandas_ta returned None or too many NaN values
             nan_threshold = len(src_clean) * 0.8  # If more than 80% NaN, use fallback
-            if esa is None or (hasattr(esa, 'isna') and esa.isna().sum() > nan_threshold):
+            if esa is None or (
+                hasattr(esa, "isna") and esa.isna().sum() > nan_threshold
+            ):
                 logger.warning(
                     "pandas_ta EMA returned None or all NaN, using fallback",
                     extra={
@@ -451,7 +455,7 @@ class WaveTrend:
                 )
 
             # Check if pandas_ta returned None or too many NaN values
-            if de is None or (hasattr(de, 'isna') and de.isna().sum() > nan_threshold):
+            if de is None or (hasattr(de, "isna") and de.isna().sum() > nan_threshold):
                 logger.warning(
                     "pandas_ta EMA returned None or all NaN for DE, using fallback",
                     extra={
@@ -524,7 +528,9 @@ class WaveTrend:
             denominator = 0.015 * de_safe
 
             # Additional safety check for denominator
-            denominator_values = np.where(denominator == 0, 0.015 * min_de_threshold, denominator)
+            denominator_values = np.where(
+                denominator == 0, 0.015 * min_de_threshold, denominator
+            )
             denominator = pd.Series(denominator_values, index=src.index)
 
             ci = numerator / denominator
@@ -536,7 +542,9 @@ class WaveTrend:
             ci = pd.Series(ci_values, index=ci.index, dtype="float64")
 
             # Apply adaptive clipping based on data characteristics
-            clip_threshold = self._calculate_adaptive_threshold(ci, default_threshold=100.0)
+            clip_threshold = self._calculate_adaptive_threshold(
+                ci, default_threshold=100.0
+            )
             ci = ci.clip(-clip_threshold, clip_threshold)
 
             # Final validation
@@ -629,8 +637,12 @@ class WaveTrend:
                 )
 
             # Check if pandas_ta returned None or too many NaN values
-            tci_nan_threshold = len(ci_clean) * 0.8  # If more than 80% NaN, use fallback
-            if tci is None or (hasattr(tci, 'isna') and tci.isna().sum() > tci_nan_threshold):
+            tci_nan_threshold = (
+                len(ci_clean) * 0.8
+            )  # If more than 80% NaN, use fallback
+            if tci is None or (
+                hasattr(tci, "isna") and tci.isna().sum() > tci_nan_threshold
+            ):
                 logger.warning(
                     "pandas_ta EMA returned None or all NaN for TCI, using fallback",
                     extra={
@@ -717,8 +729,12 @@ class WaveTrend:
                 )
 
             # Check if pandas_ta returned None or too many NaN values
-            wt2_nan_threshold = len(wt1_clean) * 0.8  # If more than 80% NaN, use fallback
-            if wt2 is None or (hasattr(wt2, 'isna') and wt2.isna().sum() > wt2_nan_threshold):
+            wt2_nan_threshold = (
+                len(wt1_clean) * 0.8
+            )  # If more than 80% NaN, use fallback
+            if wt2 is None or (
+                hasattr(wt2, "isna") and wt2.isna().sum() > wt2_nan_threshold
+            ):
                 logger.warning(
                     "pandas_ta SMA returned None or all NaN for WT2, using fallback",
                     extra={
@@ -815,6 +831,7 @@ class WaveTrend:
             )
             # Print the full traceback for debugging
             import traceback
+
             logger.error(f"Full traceback: {traceback.format_exc()}")
             return pd.Series(dtype=float, index=src.index), pd.Series(
                 dtype=float, index=src.index
@@ -1113,7 +1130,13 @@ class WaveTrend:
             )
             # Clean any remaining NaN values in close prices
             if result["close"].isna().any():
-                result["close"] = result["close"].ffill().bfill().fillna(result["close"].mean()).fillna(0.0)
+                result["close"] = (
+                    result["close"]
+                    .ffill()
+                    .bfill()
+                    .fillna(result["close"].mean())
+                    .fillna(0.0)
+                )
         else:
             logger.error(
                 "Close column not found in DataFrame",

@@ -95,10 +95,13 @@ from .data.dominance import DominanceCandleBuilder, DominanceDataProvider
 from .data.market import MarketDataProvider
 from .exchange.coinbase import CoinbaseClient
 from .indicators.vumanchu import VuManChuIndicators
+from .learning.experience_manager import ExperienceManager
+from .mcp.memory_server import MCPMemoryServer
 from .paper_trading import PaperTradingAccount
 from .position_manager import PositionManager
 from .risk import RiskManager
 from .strategy.llm_agent import LLMAgent
+from .strategy.memory_enhanced_agent import MemoryEnhancedLLMAgent
 from .types import IndicatorData, MarketState, Position, TradeAction
 from .utils import setup_warnings_suppression
 from .validator import TradeValidator
@@ -158,13 +161,45 @@ class TradingEngine:
         # Initialize components
         self.market_data = MarketDataProvider(symbol, interval)
         self.indicator_calc = VuManChuIndicators()
-        self.llm_agent = LLMAgent(
-            model_provider=self.settings.llm.provider,
-            model_name=self.settings.llm.model_name,
-        )
+
+        # Initialize MCP memory components if enabled
+        self.memory_server = None
+        self.experience_manager = None
+
+        if self.settings.mcp.enabled:
+            self.logger.info("MCP memory system enabled, initializing components...")
+            try:
+                self.memory_server = MCPMemoryServer(
+                    server_url=self.settings.mcp.server_url,
+                    api_key=self.settings.mcp.api_key,
+                )
+                self.experience_manager = ExperienceManager(self.memory_server)
+
+                # Use memory-enhanced agent
+                self.llm_agent = MemoryEnhancedLLMAgent(
+                    model_provider=self.settings.llm.provider,
+                    model_name=self.settings.llm.model_name,
+                    memory_server=self.memory_server,
+                )
+                self.logger.info("Successfully initialized memory-enhanced agent")
+            except Exception as e:
+                self.logger.error(f"Failed to initialize MCP components: {e}")
+                self.logger.warning("Falling back to standard LLM agent")
+                self.llm_agent = LLMAgent(
+                    model_provider=self.settings.llm.provider,
+                    model_name=self.settings.llm.model_name,
+                )
+        else:
+            # Standard LLM agent without memory
+            self.llm_agent = LLMAgent(
+                model_provider=self.settings.llm.provider,
+                model_name=self.settings.llm.model_name,
+            )
+
         self.validator = TradeValidator()
         self.position_manager = PositionManager(
-            paper_trading_account=self.paper_account
+            paper_trading_account=self.paper_account,
+            use_fifo=self.settings.trading.use_fifo_accounting,
         )
         self.risk_manager = RiskManager(position_manager=self.position_manager)
         self.exchange_client = CoinbaseClient()
@@ -275,7 +310,9 @@ class TradingEngine:
 
         except KeyboardInterrupt:
             self.logger.info("Received keyboard interrupt, shutting down gracefully...")
-            console.print("\n[yellow]Received interrupt signal, shutting down...[/yellow]")
+            console.print(
+                "\n[yellow]Received interrupt signal, shutting down...[/yellow]"
+            )
         except Exception as e:
             self.logger.error(f"Critical error in trading engine: {e}")
             console.print(f"[red]Critical error: {e}[/red]")
@@ -289,8 +326,8 @@ class TradingEngine:
                 except Exception as e:
                     self.logger.error(f"Error in shutdown: {e}")
                     # Force cleanup of dominance provider session as last resort
-                    if hasattr(self, 'dominance_provider') and self.dominance_provider:
-                        if hasattr(self.dominance_provider, '_session'):
+                    if hasattr(self, "dominance_provider") and self.dominance_provider:
+                        if hasattr(self.dominance_provider, "_session"):
                             self.dominance_provider._session = None
 
     def _setup_signal_handlers(self):
@@ -328,6 +365,16 @@ class TradingEngine:
         console.print("  • Loading initial market data...")
         await self._wait_for_initial_data()
 
+        # Initialize MCP experience manager if enabled
+        if self.experience_manager:
+            console.print("  • Starting experience tracking...")
+            try:
+                await self.experience_manager.start()
+                console.print("    [green]✓ Experience tracking started[/green]")
+            except Exception as e:
+                self.logger.warning(f"Failed to start experience manager: {e}")
+                console.print("    [yellow]⚠ Experience tracking unavailable[/yellow]")
+
         # Initialize dominance data provider
         if self.dominance_provider:
             console.print("  • Connecting to stablecoin dominance data...")
@@ -360,7 +407,9 @@ class TradingEngine:
                 )
 
             # Check for historical data
-            data = self.market_data.get_latest_ohlcv(limit=100)  # Check for indicator minimum
+            data = self.market_data.get_latest_ohlcv(
+                limit=100
+            )  # Check for indicator minimum
             if len(data) >= 100 and not historical_data_loaded:
                 self.logger.info(f"Loaded {len(data)} historical candles for analysis")
                 historical_data_loaded = True
@@ -551,7 +600,9 @@ class TradingEngine:
                             df_with_indicators
                         )
                     except Exception as e:
-                        self.logger.warning(f"Indicator calculation failed: {e}, using fallback values")
+                        self.logger.warning(
+                            f"Indicator calculation failed: {e}, using fallback values"
+                        )
                         # Use fallback indicator state
                         indicator_state = self._get_fallback_indicator_state()
 
@@ -604,37 +655,71 @@ class TradingEngine:
                         if dominance_data:
                             # Add dominance metrics to indicator dict - validate values
                             dominance_metrics = {
-                                "usdt_dominance": dominance_data.usdt_dominance if dominance_data.usdt_dominance is not None else 0.0,
-                                "usdc_dominance": dominance_data.usdc_dominance if dominance_data.usdc_dominance is not None else 0.0,
-                                "stablecoin_dominance": dominance_data.stablecoin_dominance if dominance_data.stablecoin_dominance is not None else 0.0,
-                                "dominance_trend": dominance_data.dominance_24h_change if dominance_data.dominance_24h_change is not None else 0.0,
-                                "dominance_rsi": dominance_data.dominance_rsi if dominance_data.dominance_rsi is not None else 50.0,
-                                "stablecoin_velocity": dominance_data.stablecoin_velocity if dominance_data.stablecoin_velocity is not None else 1.0,
+                                "usdt_dominance": (
+                                    dominance_data.usdt_dominance
+                                    if dominance_data.usdt_dominance is not None
+                                    else 0.0
+                                ),
+                                "usdc_dominance": (
+                                    dominance_data.usdc_dominance
+                                    if dominance_data.usdc_dominance is not None
+                                    else 0.0
+                                ),
+                                "stablecoin_dominance": (
+                                    dominance_data.stablecoin_dominance
+                                    if dominance_data.stablecoin_dominance is not None
+                                    else 0.0
+                                ),
+                                "dominance_trend": (
+                                    dominance_data.dominance_24h_change
+                                    if dominance_data.dominance_24h_change is not None
+                                    else 0.0
+                                ),
+                                "dominance_rsi": (
+                                    dominance_data.dominance_rsi
+                                    if dominance_data.dominance_rsi is not None
+                                    else 50.0
+                                ),
+                                "stablecoin_velocity": (
+                                    dominance_data.stablecoin_velocity
+                                    if dominance_data.stablecoin_velocity is not None
+                                    else 1.0
+                                ),
                             }
                             indicator_dict.update(dominance_metrics)
 
                             # Get market sentiment based on dominance
                             try:
-                                sentiment_analysis = self.dominance_provider.get_market_sentiment()
-                                indicator_dict["market_sentiment"] = sentiment_analysis.get("sentiment", "NEUTRAL")
+                                sentiment_analysis = (
+                                    self.dominance_provider.get_market_sentiment()
+                                )
+                                indicator_dict["market_sentiment"] = (
+                                    sentiment_analysis.get("sentiment", "NEUTRAL")
+                                )
                             except Exception as e:
-                                self.logger.warning(f"Failed to get market sentiment: {e}")
+                                self.logger.warning(
+                                    f"Failed to get market sentiment: {e}"
+                                )
                                 indicator_dict["market_sentiment"] = "NEUTRAL"
 
                             # Store dominance object for MarketState
                             dominance_obj = dominance_data
                     except Exception as e:
-                        self.logger.warning(f"Failed to process dominance data: {e}, using default values")
+                        self.logger.warning(
+                            f"Failed to process dominance data: {e}, using default values"
+                        )
                         # Add default dominance values
-                        indicator_dict.update({
-                            "usdt_dominance": 0.0,
-                            "usdc_dominance": 0.0,
-                            "stablecoin_dominance": 0.0,
-                            "dominance_trend": 0.0,
-                            "dominance_rsi": 50.0,
-                            "stablecoin_velocity": 1.0,
-                            "market_sentiment": "NEUTRAL"
-                        })
+                        indicator_dict.update(
+                            {
+                                "usdt_dominance": 0.0,
+                                "usdc_dominance": 0.0,
+                                "stablecoin_dominance": 0.0,
+                                "dominance_trend": 0.0,
+                                "dominance_rsi": 50.0,
+                                "stablecoin_velocity": 1.0,
+                                "market_sentiment": "NEUTRAL",
+                            }
+                        )
 
                 # Calculate how many candles represent 24 hours based on interval
                 interval_minutes = self._get_interval_minutes(self.interval)
@@ -659,6 +744,18 @@ class TradingEngine:
                 # Get LLM trading decision
                 trade_action = await self.llm_agent.analyze_market(market_state)
 
+                # Record trading decision in memory if MCP is enabled
+                experience_id = None
+                if self.experience_manager and trade_action.action != "HOLD":
+                    try:
+                        experience_id = (
+                            await self.experience_manager.record_trading_decision(
+                                market_state, trade_action
+                            )
+                        )
+                    except Exception as e:
+                        self.logger.warning(f"Failed to record trading decision: {e}")
+
                 # LLM has final say - if it says LONG/SHORT, execute immediately
                 if trade_action.action in ["LONG", "SHORT"]:
                     # Validate the trade action for basic structure only
@@ -672,7 +769,9 @@ class TradingEngine:
                     )
 
                     # Execute LLM decision immediately without risk management filtering
-                    await self._execute_trade(validated_action, current_price)
+                    await self._execute_trade(
+                        validated_action, current_price, market_state, experience_id
+                    )
                     final_action = validated_action
 
                 else:
@@ -695,7 +794,9 @@ class TradingEngine:
 
                     # Execute trade if approved
                     if risk_approved and final_action.action != "HOLD":
-                        await self._execute_trade(final_action, current_price)
+                        await self._execute_trade(
+                            final_action, current_price, market_state, experience_id
+                        )
 
                 # Update position tracking and risk metrics
                 await self._update_position_tracking(current_price)
@@ -725,18 +826,40 @@ class TradingEngine:
 
         self.logger.info("Trading loop stopped")
 
-    async def _execute_trade(self, trade_action: TradeAction, current_price: Decimal):
+    async def _execute_trade(
+        self,
+        trade_action: TradeAction,
+        current_price: Decimal,
+        market_state: MarketState | None = None,
+        experience_id: str | None = None,
+    ):
         """
         Execute a validated trade action.
 
         Args:
             trade_action: Validated trade action to execute
             current_price: Current market price
+            market_state: Current market state (for experience tracking)
+            experience_id: Experience ID if trade decision was recorded
         """
         try:
             self.logger.info(
                 f"Executing trade: {trade_action.action} {trade_action.size_pct}%"
             )
+
+            # Check if we already have an open position and the action is LONG or SHORT
+            if self.current_position.side != "FLAT" and trade_action.action in [
+                "LONG",
+                "SHORT",
+            ]:
+                self.logger.warning(
+                    f"Cannot open new {trade_action.action} position - already have "
+                    f"{self.current_position.side} position with size {self.current_position.size}"
+                )
+                console.print(
+                    f"[yellow]⚠ Trade rejected: Already have open {self.current_position.side} position[/yellow]"
+                )
+                return
 
             # Execute trade based on mode (paper trading vs live)
             if self.dry_run and self.paper_account:
@@ -753,17 +876,69 @@ class TradingEngine:
             if order:
                 self.trade_count += 1
 
+                # Link order to experience for tracking
+                if self.experience_manager and experience_id:
+                    try:
+                        self.experience_manager.link_order_to_experience(
+                            order.id, experience_id
+                        )
+                    except Exception as e:
+                        self.logger.warning(f"Failed to link order to experience: {e}")
+
                 if order.status in ["FILLED", "PENDING"]:
                     self.successful_trades += 1
 
                     # Update position manager
                     if hasattr(order, "filled_quantity") and order.filled_quantity > 0:
+                        # Store previous position before update
+                        previous_position = self.current_position
+
                         updated_position = (
                             self.position_manager.update_position_from_order(
                                 order, order.price
                             )
                         )
                         self.current_position = updated_position
+
+                        # Check if this order closed a position
+                        if (
+                            previous_position.side != "FLAT"
+                            and updated_position.side == "FLAT"
+                            and self.experience_manager
+                            and market_state
+                        ):
+                            # Trade was closed, complete the experience
+                            try:
+                                await self.experience_manager.complete_trade(
+                                    order, order.price, market_state
+                                )
+                                self.logger.info(
+                                    "Completed trade tracking for closed position"
+                                )
+                            except Exception as e:
+                                self.logger.warning(
+                                    f"Failed to complete trade tracking: {e}"
+                                )
+
+                        # Start tracking new trades (LONG/SHORT entry)
+                        elif (
+                            previous_position.side == "FLAT"
+                            and updated_position.side != "FLAT"
+                            and self.experience_manager
+                            and market_state
+                        ):
+                            try:
+                                trade_id = self.experience_manager.start_tracking_trade(
+                                    order, trade_action, market_state
+                                )
+                                if trade_id:
+                                    self.logger.info(
+                                        f"Started tracking trade: {trade_id}"
+                                    )
+                            except Exception as e:
+                                self.logger.warning(
+                                    f"Failed to start trade tracking: {e}"
+                                )
 
                     console.print(
                         f"[green]✓ Trade executed:[/green] {trade_action.action} "
@@ -834,6 +1009,15 @@ class TradingEngine:
 
             # Update risk manager with P&L
             self.risk_manager.update_daily_pnl(Decimal("0"), pnl)
+
+            # Update experience manager with trade progress
+            if self.experience_manager:
+                try:
+                    await self.experience_manager.update_trade_progress(
+                        self.current_position, current_price
+                    )
+                except Exception as e:
+                    self.logger.warning(f"Failed to update trade progress: {e}")
 
     def _display_status_update(
         self, loop_count: int, current_price: Decimal, last_action: TradeAction
@@ -933,28 +1117,35 @@ class TradingEngine:
 
         try:
             # Cancel all open orders
-            if hasattr(self, 'exchange_client') and self.exchange_client.is_connected():
+            if hasattr(self, "exchange_client") and self.exchange_client.is_connected():
                 console.print("  • Cancelling open orders...")
                 cleanup_tasks.append(
-                    asyncio.create_task(self.exchange_client.cancel_all_orders(self.symbol))
+                    asyncio.create_task(
+                        self.exchange_client.cancel_all_orders(self.symbol)
+                    )
                 )
 
             # Close market data connection
-            if hasattr(self, 'market_data'):
+            if hasattr(self, "market_data"):
                 console.print("  • Disconnecting from market data...")
-                cleanup_tasks.append(
-                    asyncio.create_task(self.market_data.disconnect())
-                )
+                cleanup_tasks.append(asyncio.create_task(self.market_data.disconnect()))
 
             # Close exchange connection
-            if hasattr(self, 'exchange_client'):
+            if hasattr(self, "exchange_client"):
                 console.print("  • Disconnecting from exchange...")
                 cleanup_tasks.append(
                     asyncio.create_task(self.exchange_client.disconnect())
                 )
 
+            # Stop experience manager if enabled
+            if hasattr(self, "experience_manager") and self.experience_manager:
+                console.print("  • Stopping experience tracking...")
+                cleanup_tasks.append(
+                    asyncio.create_task(self.experience_manager.stop())
+                )
+
             # Close dominance data connection - CRITICAL for async session cleanup
-            if hasattr(self, 'dominance_provider') and self.dominance_provider:
+            if hasattr(self, "dominance_provider") and self.dominance_provider:
                 console.print("  • Disconnecting from dominance data...")
                 cleanup_tasks.append(
                     asyncio.create_task(self.dominance_provider.disconnect())
@@ -985,8 +1176,11 @@ class TradingEngine:
         finally:
             # Final cleanup - ensure all async sessions are closed
             # This is a last resort cleanup
-            if hasattr(self, 'dominance_provider') and self.dominance_provider:
-                if hasattr(self.dominance_provider, '_session') and self.dominance_provider._session:
+            if hasattr(self, "dominance_provider") and self.dominance_provider:
+                if (
+                    hasattr(self.dominance_provider, "_session")
+                    and self.dominance_provider._session
+                ):
                     if not self.dominance_provider._session.closed:
                         try:
                             # Force close without await since we might be in cleanup
@@ -1227,14 +1421,14 @@ class TradingEngine:
                 "ema_fast": 0.0,
                 "ema_slow": 0.0,
                 "signal": 0,
-                "confidence": 0.0
+                "confidence": 0.0,
             },
             "cipher_b": {
                 "wave": 0.0,
                 "money_flow": 50.0,
                 "vwap": 0.0,
                 "signal": 0,
-                "confidence": 0.0
+                "confidence": 0.0,
             },
             "dominance_analysis": {
                 "cipher_a_signal": 0,
@@ -1243,8 +1437,8 @@ class TradingEngine:
                 "price_divergence": "NONE",
                 "trend": "SIDEWAYS",
                 "wt1": 0.0,
-                "wt2": 0.0
-            }
+                "wt2": 0.0,
+            },
         }
 
 

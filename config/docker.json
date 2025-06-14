@@ -1,9 +1,11 @@
 {
   "trading": {
-    "symbol": "BTC-USD",
+    "symbol": "ETH-USD",
     "interval": "3m",
     "leverage": 2,
     "max_size_pct": 5.0,
+    "fixed_contract_size": 1.0,
+    "use_fixed_contracts": true,
     "order_timeout_seconds": 30,
     "slippage_tolerance_pct": 0.1,
     "min_profit_pct": 0.5
@@ -24,7 +26,7 @@
     "cb_api_key": null,
     "cb_api_secret": null,
     "cb_passphrase": null,
-    "cb_sandbox": true,
+    "cb_sandbox": false,
     "api_timeout": 10,
     "rate_limit_requests": 10,
     "websocket_reconnect_attempts": 5
@@ -56,8 +58,8 @@
     "keep_historical_days": 30
   },
   "system": {
-    "dry_run": true,
-    "environment": "docker",
+    "dry_run": false,
+    "environment": "production",
     "log_level": "INFO",
     "log_file_path": "/app/logs/bot_docker.log",
     "max_log_size_mb": 100,

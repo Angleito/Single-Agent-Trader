@@ -15,7 +15,8 @@ An AI-powered crypto trading bot for Coinbase with VuManChu Cipher indicators an
 - **Risk Management**: Built-in position sizing, stop-loss, and take-profit mechanisms
 - **Real-time Data**: Live market data via Coinbase WebSocket and REST APIs
 - **Backtesting**: Historical strategy testing capabilities
-- **Dry Run Mode**: Test strategies safely without real money
+- **Paper Trading Mode**: Test strategies safely without real money (single toggle control)
+- **Memory & Learning**: MCP-powered experience tracking for continuous improvement
 
 ## Quick Start (3 Steps)
 
@@ -51,27 +52,29 @@ OPENAI_API_KEY=your_openai_api_key_here
 ### 3. Start Trading
 
 ```bash
-# Start the bot (in safe dry-run mode)
+# Start the bot (in safe paper trading mode)
 docker-compose up
 
 # For development (with live code reloading)
 docker-compose --profile dev up
 ```
 
-**That's it!** The bot starts in `DRY_RUN=true` mode for safety.
+**That's it!** The bot starts in paper trading mode (`SYSTEM__DRY_RUN=true`) for safety. This single environment variable controls all paper trading features - no need for CLI flags or separate settings.
 
 ## Trading Modes
 
-### Dry Run (Recommended First)
+### Paper Trading (Recommended First)
 ```bash
 # Safe paper trading - no real money
+# This is the default mode when SYSTEM__DRY_RUN=true
 docker-compose up
 ```
 
 ### Live Trading (When Ready)
 ```bash
-# 1. Edit .env and set DRY_RUN=false
+# 1. Edit .env and set SYSTEM__DRY_RUN=false
 # 2. Start with small positions
+# 3. WARNING: This uses real money!
 docker-compose up
 ```
 
@@ -86,9 +89,12 @@ docker-compose --profile dev up
 All configuration is done via the `.env` file:
 
 ```bash
+# Trading Mode Control (Single Toggle)
+SYSTEM__DRY_RUN=true       # true = Paper trading (safe, simulated trades)
+                           # false = Live trading (real money!)
+
 # Trading settings
-SYMBOL=BTC-USD              # Trading pair
-DRY_RUN=true               # Safe mode (no real money)
+TRADING__SYMBOL=BTC-USD    # Trading pair
 MAX_POSITION_SIZE=0.1      # 10% of portfolio max
 RISK_PER_TRADE=0.02        # 2% risk per trade
 
@@ -96,6 +102,73 @@ RISK_PER_TRADE=0.02        # 2% risk per trade
 MAX_DAILY_LOSS=0.05        # Stop if 5% daily loss
 STOP_LOSS_ENABLED=true     # Enable stop losses
 TAKE_PROFIT_ENABLED=true   # Enable take profits
+```
+
+**Note:** The `SYSTEM__DRY_RUN` variable is the single master toggle for paper trading. When set to `true`, all trading operations are simulated. There are no additional CLI flags or settings needed - this one variable controls everything.
+
+## Memory & Learning System (MCP)
+
+The bot includes an advanced memory system that learns from every trade to improve future decisions.
+
+### How It Works
+
+**Automatic Memory Collection:**
+- Records every trading decision with full market context
+- Tracks trade outcomes (profit/loss, duration)
+- Monitors market conditions throughout trades
+- Generates insights from completed trades
+
+**Memory-Enhanced Decisions:**
+- Automatically retrieves similar past trades before each decision
+- Shows the LLM what worked (or didn't) in similar conditions
+- Identifies winning and losing patterns over time
+- Adapts strategies based on accumulated experience
+
+### Setup Options
+
+#### Option 1: Local Memory (Default - No API Key Required)
+```bash
+# In your .env file:
+MCP_ENABLED=true
+MCP_SERVER_URL=http://localhost:8765
+
+# Start with memory enabled:
+docker-compose up -d mcp-memory
+docker-compose up ai-trading-bot
+```
+
+All memories stored locally in `./data/mcp_memory/`
+
+#### Option 2: With Cloud Backup (Optional)
+```bash
+# Sign up at https://mem0.ai for an API key
+# In your .env file:
+MCP_ENABLED=true
+MCP_SERVER_URL=http://localhost:8765
+MEM0_API_KEY=your-api-key-here
+```
+
+### What Gets Tracked
+
+Every trade captures:
+- Market conditions at entry (price, indicators, dominance)
+- Trading decision and reasoning
+- Position changes throughout the trade
+- Final outcome and performance metrics
+- Learned insights for future trades
+
+### Memory in Action
+
+The LLM sees past experiences in its prompts:
+```
+PAST TRADING EXPERIENCES:
+1. 2024-01-15: LONG at $45,230 (RSI=62, Cipher B=15)
+   Outcome: Profit +$523 (+1.2% in 45min)
+   Insight: Quick profit when RSI > 60 with positive cipher
+
+2. 2024-01-10: SHORT at $45,500 (RSI=68, Cipher B=-5)
+   Outcome: Loss -$312 (-0.7% in 120min)
+   Insight: Shorting in uptrend was premature
 ```
 
 ## Monitoring
@@ -107,6 +180,9 @@ docker-compose logs -f ai-trading-bot
 
 # View specific logs
 docker-compose logs ai-trading-bot
+
+# View memory server logs
+docker-compose logs -f mcp-memory
 ```
 
 ### Health Check
@@ -116,6 +192,9 @@ docker-compose ps
 
 # Check container health
 docker inspect ai-trading-bot --format='{{.State.Health.Status}}'
+
+# Check memory server health
+curl http://localhost:8765/health
 ```
 
 ## Data Persistence
@@ -123,6 +202,7 @@ docker inspect ai-trading-bot --format='{{.State.Health.Status}}'
 Your data is automatically saved in:
 - `./logs/` - Trading logs and events
 - `./data/` - Market data and trading history
+- `./data/mcp_memory/` - Trading experiences and learned patterns
 - `./config/` - Configuration files
 
 ## Troubleshooting
@@ -140,7 +220,7 @@ docker-compose logs ai-trading-bot
 
 **No trading activity?**
 ```bash
-# Ensure DRY_RUN=true for testing
+# Ensure SYSTEM__DRY_RUN=true for paper trading
 # Check market hours (crypto trades 24/7)
 # Verify API keys are correct
 ```
@@ -168,8 +248,8 @@ poetry install
 # Activate environment
 poetry shell
 
-# Run bot locally
-python -m bot.main live --dry-run
+# Run bot locally (paper trading mode by default)
+python -m bot.main live
 ```
 
 ### Code Quality
@@ -212,7 +292,7 @@ data/                    # Market data (auto-created)
 ## Safety Features
 
 🛡️ **Built-in Safety:**
-- Starts in `DRY_RUN=true` mode by default
+- Starts in paper trading mode (`SYSTEM__DRY_RUN=true`) by default
 - Position size limits
 - Daily loss limits
 - Stop-loss protection
@@ -222,7 +302,8 @@ data/                    # Market data (auto-created)
 
 **Simple & Clean:**
 - **Data Layer**: Real-time Coinbase market data
-- **AI Engine**: OpenAI GPT-powered trading decisions
+- **AI Engine**: OpenAI GPT-powered trading decisions with memory enhancement
+- **Memory System**: MCP server for experience tracking and learning
 - **Risk Manager**: Position sizing and loss protection
 - **Exchange**: Coinbase order execution
 - **Validator**: JSON schema validation with fallback to HOLD
@@ -244,7 +325,7 @@ MIT License - see LICENSE file for details.
 
 ⚠️ **IMPORTANT**: This is experimental trading software. Cryptocurrency trading involves significant risk:
 
-- **Always start with `DRY_RUN=true`**
+- **Always start with paper trading (`SYSTEM__DRY_RUN=true`)**
 - **Use small position sizes initially**
 - **Never risk more than you can afford to lose**
 - **Thoroughly test before live trading**

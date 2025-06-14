@@ -14,6 +14,7 @@ from pathlib import Path
 
 from .config import settings
 from .paper_trading import PaperTradingAccount
+from .trading.fifo_position_manager import FIFOPositionManager
 from .types import Order, Position
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ class PositionManager:
         self,
         data_dir: Path | None = None,
         paper_trading_account: PaperTradingAccount | None = None,
+        use_fifo: bool = True,
     ):
         """
         Initialize the position manager.
@@ -38,14 +40,22 @@ class PositionManager:
         Args:
             data_dir: Directory for state persistence (default: data/positions)
             paper_trading_account: Paper trading account for enhanced simulation
+            use_fifo: Whether to use FIFO accounting (default: True)
         """
         self.data_dir = data_dir or Path("data/positions")
         self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.use_fifo = use_fifo
 
         # Thread-safe position storage
         self._positions: dict[str, Position] = {}
         self._position_history: list[Position] = []
         self._lock = threading.RLock()
+
+        # FIFO position manager
+        if self.use_fifo:
+            fifo_state_file = self.data_dir / "fifo_positions.json"
+            self.fifo_manager = FIFOPositionManager(state_file=fifo_state_file)
+            logger.info("Using FIFO position tracking")
 
         # Paper trading integration
         self.paper_account = paper_trading_account
@@ -81,6 +91,9 @@ class PositionManager:
         Returns:
             Position object (FLAT if no position)
         """
+        if self.use_fifo:
+            return self.fifo_manager.get_position(symbol)
+
         with self._lock:
             if symbol in self._positions:
                 return self._positions[symbol].copy()
@@ -117,6 +130,21 @@ class PositionManager:
         Returns:
             Updated position
         """
+        if self.use_fifo:
+            # Use FIFO manager for position updates
+            position = self.fifo_manager.update_position_from_order(order, fill_price)
+
+            # Update legacy storage for compatibility
+            with self._lock:
+                if position.side == "FLAT":
+                    if order.symbol in self._positions:
+                        self._positions.pop(order.symbol)
+                else:
+                    self._positions[order.symbol] = position
+                self._save_state()
+
+            return position
+
         with self._lock:
             symbol = order.symbol
             current_pos = self.get_position(symbol)
@@ -186,6 +214,18 @@ class PositionManager:
         Returns:
             Tuple of (realized_pnl, unrealized_pnl)
         """
+        if self.use_fifo:
+            # Get realized P&L from FIFO manager
+            realized_total = self.fifo_manager.get_realized_pnl()
+
+            # Calculate unrealized P&L from active positions
+            unrealized_total = Decimal("0")
+            for symbol in self._positions:
+                position = self.get_position(symbol)
+                unrealized_total += position.unrealized_pnl
+
+            return realized_total, unrealized_total
+
         with self._lock:
             realized_total = Decimal("0")
             unrealized_total = Decimal("0")
@@ -656,6 +696,21 @@ class PositionManager:
             ),
             "active_positions": len(self._positions),
         }
+
+    def get_tax_lots_report(self, symbol: str) -> dict | None:
+        """
+        Get FIFO tax lots report for a symbol.
+
+        Args:
+            symbol: Trading symbol
+
+        Returns:
+            Tax lots report or None if not using FIFO
+        """
+        if not self.use_fifo:
+            return None
+
+        return self.fifo_manager.get_tax_lots_report(symbol)
 
     def export_trade_history(self, days: int = 30, format: str = "json") -> str:
         """

@@ -41,4 +41,4 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV MCP_SERVER_PORT=8765
 
 # Run the memory server
-CMD ["python", "-m", "__main__"]
+CMD ["python", "server_standalone.py"]
