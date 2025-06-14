@@ -4,6 +4,7 @@ import { DashboardWebSocket, type AllWebSocketMessages } from './websocket.ts';
 import { TradingViewChart } from './tradingview.ts';
 import { LLMDecisionCard, type LLMDecisionData } from './components/llm-decision-card.ts';
 import { StatusIndicators, type ConnectionStatus, type BotStatus as IndicatorBotStatus, type MarketStatus, type PositionStatus } from './components/status-indicators.ts';
+import { LLMMonitorDashboard } from './llm-monitor.ts';
 import type { 
   DashboardConfig,
   BotStatus,
@@ -387,6 +388,7 @@ class DashboardApp {
   private websocket: DashboardWebSocket;
   public chart: TradingViewChart | null = null;
   private llmDecisionCard: LLMDecisionCard | null = null;
+  private llmMonitorDashboard: LLMMonitorDashboard | null = null;
   private config: DashboardConfig;
   private isInitialized = false;
   private initializationPromise: Promise<void> | null = null;
@@ -1799,6 +1801,18 @@ class DashboardApp {
       if (this.chart) {
         this.chart.destroy();
         this.chart = null;
+      }
+
+      // Destroy LLM Monitor Dashboard
+      if (this.llmMonitorDashboard) {
+        this.llmMonitorDashboard.destroy();
+        this.llmMonitorDashboard = null;
+      }
+
+      // Clear LLM Decision Card (it doesn't have destroy method)
+      if (this.llmDecisionCard) {
+        this.llmDecisionCard.clear();
+        this.llmDecisionCard = null;
       }
 
       // Clear all utilities

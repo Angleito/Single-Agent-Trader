@@ -14,11 +14,11 @@ import { PerformanceCharts } from './components/performance-charts';
 export class DashboardUI {
   private state: DashboardState;
   private logEntries: LogEntry[] = [];
-  private maxLogEntries = 50; // Reduced from 100
+  private maxLogEntries = 50;
   private logPaused = false;
   private animationQueue: Set<string> = new Set();
   private updateThrottles: Map<string, number> = new Map();
-  private readonly maxUpdateThrottles = 50; // Limit throttle map size
+  private readonly maxUpdateThrottles = 50;
   private performanceMetrics = {
     totalReturn: 0,
     winRate: 0,
@@ -29,6 +29,17 @@ export class DashboardUI {
   };
   private performanceCharts: PerformanceCharts | null = null;
   private performanceChartsVisible = false;
+  
+  // Error handling and resilience
+  private errorBoundaries = new Map<string, { count: number; lastError: Date; maxErrors: number }>();
+  private fallbackData = new Map<string, any>();
+  private readonly maxErrorsPerBoundary = 5;
+  private readonly errorResetTime = 5 * 60 * 1000; // 5 minutes
+  private retryTimeouts = new Map<string, number>();
+  private readonly defaultRetryDelays = [1000, 2000, 5000, 10000]; // Exponential backoff
+  private isOfflineMode = false;
+  private lastDataUpdate = new Map<string, Date>();
+  private readonly dataStaleThreshold = 30000; // 30 seconds
   
   // DOM cache for performance
   private domCache = new Map<string, HTMLElement>();
@@ -266,117 +277,205 @@ export class DashboardUI {
   private onErrorRetry: (() => void) | null = null;
 
   /**
-   * Update connection status with animation
+   * Update connection status with animation and offline mode handling
    */
   public updateConnectionStatus(status: ConnectionStatus): void {
-    this.state.connection_status = status;
-    
-    const connectionEl = document.querySelector('[data-connection]') as HTMLElement;
-    const statusText = connectionEl?.querySelector('.status-text') as HTMLElement;
-    const statusIndicator = connectionEl?.querySelector('.status-indicator') as HTMLElement;
-    
-    if (connectionEl && statusText && statusIndicator) {
-      // Add animation class
-      this.addAnimation(connectionEl, 'pulse');
+    this.withErrorBoundary('updateConnectionStatus', () => {
+      this.state.connection_status = status;
       
-      connectionEl.setAttribute('data-connection', status);
-      statusText.textContent = this.getConnectionStatusText(status);
-      statusIndicator.setAttribute('aria-label', `Connection status: ${status}`);
-    }
+      // Handle offline mode
+      const wasOffline = this.isOfflineMode;
+      this.isOfflineMode = status === 'disconnected' || status === 'error';
+      
+      if (this.isOfflineMode && !wasOffline) {
+        this.enterOfflineMode();
+      } else if (!this.isOfflineMode && wasOffline) {
+        this.exitOfflineMode();
+      }
+      
+      const connectionEl = this.getCachedElement('[data-connection]');
+      const statusText = connectionEl?.querySelector('.status-text') as HTMLElement;
+      const statusIndicator = connectionEl?.querySelector('.status-indicator') as HTMLElement;
+      
+      if (connectionEl && statusText && statusIndicator) {
+        // Add animation class
+        this.addAnimation(connectionEl, 'pulse');
+        
+        connectionEl.setAttribute('data-connection', status);
+        statusText.textContent = this.getConnectionStatusText(status);
+        statusIndicator.setAttribute('aria-label', `Connection status: ${status}`);
+        
+        // Show offline indicator if needed
+        this.updateOfflineIndicator();
+      }
 
-    // Update last update time
-    this.updateLastUpdateTime();
-    this.log('info', `Connection status: ${status}`);
+      // Update last update time
+      this.updateLastUpdateTime();
+      this.log('info', `Connection status: ${status}`);
+    }, { status });
   }
 
   /**
-   * Update bot status with visual feedback
+   * Update bot status with visual feedback and error handling
    */
   public updateBotStatus(status: BotStatus | null): void {
-    if (!status) return;
-    
-    this.state.bot_status = status;
-    
-    // Update status bar
-    const botStatusEl = document.querySelector('[data-bot-status]') as HTMLElement;
-    const botIndicator = document.querySelector('[data-bot-indicator]') as HTMLElement;
-    const tradingModeEl = document.querySelector('[data-trading-mode]') as HTMLElement;
-    const tradingSymbolEl = document.querySelector('[data-trading-symbol]') as HTMLElement;
-    const leverageEl = document.querySelector('[data-leverage]') as HTMLElement;
-    
-    if (botStatusEl && status.status) {
-      this.addAnimation(botStatusEl, 'flash');
-      botStatusEl.textContent = status.status.toUpperCase();
-    }
-    
-    if (botIndicator && status.status) {
-      botIndicator.setAttribute('data-bot-indicator', this.getBotIndicatorState(status.status));
-    }
-    
-    if (tradingModeEl) {
-      tradingModeEl.textContent = status.dry_run ? 'Dry Run' : 'Live Trading';
-      tradingModeEl.className = status.dry_run ? 'status-value safe' : 'status-value danger';
-    }
-    
-    if (tradingSymbolEl && status.symbol) {
-      tradingSymbolEl.textContent = status.symbol;
-    }
-    
-    if (leverageEl && status.leverage != null) {
-      leverageEl.textContent = `${status.leverage}x`;
-    }
+    this.withErrorBoundary('updateBotStatus', () => {
+      if (!status) {
+        // Use fallback data if available
+        const fallback = this.fallbackData.get('bot_status') as BotStatus;
+        if (fallback) {
+          status = fallback;
+          this.showDataFallbackIndicator('bot_status');
+        } else {
+          this.showMissingDataWarning('Bot Status');
+          return;
+        }
+      } else {
+        // Cache valid data
+        this.fallbackData.set('bot_status', status);
+        this.lastDataUpdate.set('bot_status', new Date());
+        this.hideMissingDataWarning('Bot Status');
+      }
+      
+      this.state.bot_status = status;
+      
+      // Update status bar with safe access
+      const elements = {
+        botStatusEl: this.getCachedElement('[data-bot-status]'),
+        botIndicator: this.getCachedElement('[data-bot-indicator]'),
+        tradingModeEl: this.getCachedElement('[data-trading-mode]'),
+        tradingSymbolEl: this.getCachedElement('[data-trading-symbol]'),
+        leverageEl: this.getCachedElement('[data-leverage]')
+      };
+      
+      if (elements.botStatusEl && status.status) {
+        this.addAnimation(elements.botStatusEl, 'flash');
+        elements.botStatusEl.textContent = this.safeString(status.status).toUpperCase();
+      }
+      
+      if (elements.botIndicator && status.status) {
+        elements.botIndicator.setAttribute('data-bot-indicator', this.getBotIndicatorState(status.status));
+      }
+      
+      if (elements.tradingModeEl) {
+        const isDryRun = Boolean(status.dry_run);
+        elements.tradingModeEl.textContent = isDryRun ? 'Dry Run' : 'Live Trading';
+        elements.tradingModeEl.className = isDryRun ? 'status-value safe' : 'status-value danger';
+      }
+      
+      if (elements.tradingSymbolEl && status.symbol) {
+        elements.tradingSymbolEl.textContent = this.safeString(status.symbol);
+      }
+      
+      if (elements.leverageEl && status.leverage != null) {
+        elements.leverageEl.textContent = `${this.safeNumber(status.leverage)}x`;
+      }
 
-    this.updateLastUpdateTime();
-    this.log('info', `Bot status: ${status.status} (${status.symbol}, leverage: ${status.leverage}x, dry_run: ${status.dry_run})`);
+      this.updateLastUpdateTime();
+      const logMsg = `Bot status: ${status.status} (${status.symbol}, leverage: ${status.leverage}x, dry_run: ${status.dry_run})`;
+      this.log('info', logMsg);
+    }, status);
   }
 
   /**
-   * Update market data with price change animations
+   * Update market data with price change animations and error handling
    */
   public updateMarketData(data: MarketData | null): void {
-    if (!data || this.shouldThrottleUpdate('market_data', 1000)) return;
-    
-    this.state.market_data = data;
-    
-    const priceEl = document.querySelector('[data-current-price]') as HTMLElement;
-    const changeEl = document.querySelector('[data-price-change]') as HTMLElement;
-    
-    if (priceEl && data.price != null) {
-      const oldPrice = parseFloat(priceEl.textContent?.replace(/[$,]/g, '') || '0');
-      const newPrice = data.price;
-      
-      priceEl.textContent = this.formatPrice(newPrice);
-      
-      // Add price change animation
-      if (oldPrice > 0 && oldPrice !== newPrice) {
-        const changeClass = newPrice > oldPrice ? 'price-up' : 'price-down';
-        this.addAnimation(priceEl, changeClass);
+    this.withErrorBoundary('updateMarketData', () => {
+      if (!data || this.shouldThrottleUpdate('market_data', 1000)) {
+        // Check if we have stale data and should show warning
+        if (!data) {
+          this.checkDataStaleness('market_data');
+        }
+        return;
       }
-    }
-    
-    if (changeEl && data.change_percent_24h != null) {
-      const change = data.change_percent_24h;
-      changeEl.textContent = `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`;
-      changeEl.className = `stat-change ${change >= 0 ? 'positive' : 'negative'}`;
-      changeEl.setAttribute('data-price-change', change.toString());
-    }
+      
+      // Validate data structure
+      if (!this.validateMarketData(data)) {
+        this.log('warn', 'Invalid market data received, using fallback', 'UI');
+        const fallback = this.fallbackData.get('market_data') as MarketData;
+        if (fallback) {
+          data = fallback;
+          this.showDataFallbackIndicator('market_data');
+        } else {
+          this.showMissingDataWarning('Market Data');
+          return;
+        }
+      } else {
+        // Cache valid data
+        this.fallbackData.set('market_data', data);
+        this.lastDataUpdate.set('market_data', new Date());
+        this.hideMissingDataWarning('Market Data');
+      }
+      
+      this.state.market_data = data;
+      
+      const priceEl = this.getCachedElement('[data-current-price]');
+      const changeEl = this.getCachedElement('[data-price-change]');
+      
+      if (priceEl && data.price != null) {
+        const oldPriceText = priceEl.textContent?.replace(/[$,]/g, '') || '0';
+        const oldPrice = this.safeNumber(parseFloat(oldPriceText));
+        const newPrice = this.safeNumber(data.price);
+        
+        priceEl.textContent = this.formatPrice(newPrice);
+        
+        // Add price change animation
+        if (oldPrice > 0 && oldPrice !== newPrice) {
+          const changeClass = newPrice > oldPrice ? 'price-up' : 'price-down';
+          this.addAnimation(priceEl, changeClass);
+        }
+      }
+      
+      if (changeEl && data.change_percent_24h != null) {
+        const change = this.safeNumber(data.change_percent_24h);
+        changeEl.textContent = `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`;
+        changeEl.className = `stat-change ${change >= 0 ? 'positive' : 'negative'}`;
+        changeEl.setAttribute('data-price-change', change.toString());
+      }
 
-    this.updateLastUpdateTime();
+      this.updateLastUpdateTime();
+    }, data);
   }
 
   /**
-   * Update latest trade action with comprehensive display
+   * Update latest trade action with comprehensive display and error handling
    */
   public updateLatestAction(action: TradeAction | null): void {
-    if (!action) return;
-    
-    this.state.latest_action = action;
-    
-    // Add to AI decision log
-    this.addAIDecision(action);
-    
-    const confidence = action.confidence || 0;
-    this.log('info', `Trade action: ${action.action} (${(confidence * 100).toFixed(1)}% confidence) - ${action.reasoning}`);
+    this.withErrorBoundary('updateLatestAction', () => {
+      if (!action) {
+        const fallback = this.fallbackData.get('trade_action') as TradeAction;
+        if (fallback) {
+          action = fallback;
+          this.showDataFallbackIndicator('trade_action');
+        } else {
+          this.log('warn', 'No trade action data available', 'UI');
+          return;
+        }
+      } else {
+        // Validate and cache data
+        if (this.validateTradeAction(action)) {
+          this.fallbackData.set('trade_action', action);
+          this.lastDataUpdate.set('trade_action', new Date());
+        } else {
+          this.log('warn', 'Invalid trade action data received', 'UI');
+          return;
+        }
+      }
+      
+      this.state.latest_action = action;
+      
+      // Add to AI decision log with error handling
+      try {
+        this.addAIDecision(action);
+      } catch (error) {
+        this.log('error', `Failed to add AI decision to log: ${error}`, 'UI');
+      }
+      
+      const confidence = this.safeNumber(action.confidence || 0);
+      const logMsg = `Trade action: ${action.action} (${(confidence * 100).toFixed(1)}% confidence) - ${this.safeString(action.reasoning)}`;
+      this.log('info', logMsg);
+    }, action);
   }
 
   /**
@@ -430,92 +529,160 @@ export class DashboardUI {
   }
 
   /**
-   * Update positions display
+   * Update positions display with error handling
    */
   public updatePositions(positions: Position[] | null): void {
-    if (!positions) return;
-    
-    this.state.positions = positions;
-    
-    // Update position size in quick stats
-    const positionSizeEl = document.querySelector('[data-position-size]') as HTMLElement;
-    if (positionSizeEl) {
-      const totalSize = positions.reduce((sum, pos) => sum + Math.abs(pos.size || 0), 0);
-      positionSizeEl.textContent = totalSize.toFixed(4);
-    }
-    
-    // Update P&L in quick stats
-    const pnlEl = document.querySelector('[data-pnl]') as HTMLElement;
-    const pnlChangeEl = document.querySelector('[data-pnl-change]') as HTMLElement;
-    
-    if (pnlEl && pnlChangeEl) {
-      const totalPnl = positions.reduce((sum, pos) => sum + (pos.pnl || 0), 0);
-      const totalPnlPercent = positions.length > 0 ? 
-        positions.reduce((sum, pos) => sum + (pos.pnl_percent || 0), 0) / positions.length : 0;
+    this.withErrorBoundary('updatePositions', () => {
+      if (!positions || !Array.isArray(positions)) {
+        const fallback = this.fallbackData.get('positions') as Position[];
+        if (fallback) {
+          positions = fallback;
+          this.showDataFallbackIndicator('positions');
+        } else {
+          this.showMissingDataWarning('Positions');
+          return;
+        }
+      } else {
+        // Validate and cache data
+        const validPositions = positions.filter(pos => this.validatePosition(pos));
+        if (validPositions.length !== positions.length) {
+          this.log('warn', `Filtered ${positions.length - validPositions.length} invalid positions`, 'UI');
+        }
+        this.fallbackData.set('positions', validPositions);
+        this.lastDataUpdate.set('positions', new Date());
+        positions = validPositions;
+        this.hideMissingDataWarning('Positions');
+      }
       
-      pnlEl.textContent = this.formatCurrency(totalPnl);
-      pnlChangeEl.textContent = `${totalPnlPercent >= 0 ? '+' : ''}${totalPnlPercent.toFixed(2)}%`;
-      pnlChangeEl.className = `stat-change ${totalPnlPercent >= 0 ? 'positive' : 'negative'}`;
-      pnlChangeEl.setAttribute('data-pnl-change', totalPnlPercent.toString());
-    }
+      this.state.positions = positions;
+      
+      // Update position size in quick stats with safe calculations
+      const positionSizeEl = this.getCachedElement('[data-position-size]');
+      if (positionSizeEl) {
+        const totalSize = positions.reduce((sum, pos) => {
+          const size = this.safeNumber(pos.size || 0);
+          return sum + Math.abs(size);
+        }, 0);
+        positionSizeEl.textContent = totalSize.toFixed(4);
+      }
+      
+      // Update P&L in quick stats with safe calculations
+      const pnlEl = this.getCachedElement('[data-pnl]');
+      const pnlChangeEl = this.getCachedElement('[data-pnl-change]');
+      
+      if (pnlEl && pnlChangeEl) {
+        const totalPnl = positions.reduce((sum, pos) => {
+          return sum + this.safeNumber(pos.pnl || 0);
+        }, 0);
+        
+        const totalPnlPercent = positions.length > 0 ? 
+          positions.reduce((sum, pos) => {
+            return sum + this.safeNumber(pos.pnl_percent || 0);
+          }, 0) / positions.length : 0;
+        
+        pnlEl.textContent = this.formatCurrency(totalPnl);
+        pnlChangeEl.textContent = `${totalPnlPercent >= 0 ? '+' : ''}${totalPnlPercent.toFixed(2)}%`;
+        pnlChangeEl.className = `stat-change ${totalPnlPercent >= 0 ? 'positive' : 'negative'}`;
+        pnlChangeEl.setAttribute('data-pnl-change', totalPnlPercent.toString());
+      }
 
-    // Update performance charts if visible
-    if (this.performanceCharts && this.performanceChartsVisible) {
-      this.performanceCharts.updateData(positions, this.state.risk_metrics || undefined);
-    }
+      // Update performance charts if visible with error handling
+      if (this.performanceCharts && this.performanceChartsVisible) {
+        try {
+          this.performanceCharts.updateData(positions, this.state.risk_metrics || undefined);
+        } catch (error) {
+          this.log('error', `Failed to update performance charts: ${error}`, 'UI');
+        }
+      }
 
-    this.updateLastUpdateTime();
+      this.updateLastUpdateTime();
+    }, positions);
   }
 
   /**
-   * Update risk metrics and gauges
+   * Update risk metrics and gauges with error handling
    */
   public updateRiskMetrics(metrics: RiskMetrics | null): void {
-    if (!metrics) return;
-    
-    this.state.risk_metrics = metrics;
-    
-    // Update risk level gauge
-    const riskFill = document.querySelector('[data-risk-percentage]') as HTMLElement;
-    const riskText = document.querySelector('[data-risk-text]') as HTMLElement;
-    const riskLevelEl = document.querySelector('[data-risk-level]') as HTMLElement;
-    const riskColorEl = document.querySelector('[data-risk-color]') as HTMLElement;
-    
-    const riskPercentage = this.calculateRiskPercentage(metrics);
-    const riskLevel = this.getRiskLevel(riskPercentage);
-    const riskColor = this.getRiskColor(riskLevel);
-    
-    if (riskFill) {
-      riskFill.style.setProperty('--risk-percentage', `${riskPercentage}%`);
-      riskFill.setAttribute('data-risk-percentage', riskPercentage.toString());
-    }
-    
-    if (riskText) {
-      riskText.textContent = riskLevel;
-      riskText.setAttribute('data-risk-text', riskLevel);
-    }
-    
-    if (riskLevelEl) {
-      riskLevelEl.textContent = riskLevel;
-      riskLevelEl.setAttribute('data-risk-level', riskLevel.toLowerCase());
-    }
-    
-    if (riskColorEl) {
-      riskColorEl.setAttribute('data-risk-color', riskColor);
-    }
-    
-    // Update risk details
-    this.updateRiskDetails(metrics);
-    
-    // Update performance metrics
-    this.updatePerformanceMetrics(metrics);
+    this.withErrorBoundary('updateRiskMetrics', () => {
+      if (!metrics) {
+        const fallback = this.fallbackData.get('risk_metrics') as RiskMetrics;
+        if (fallback) {
+          metrics = fallback;
+          this.showDataFallbackIndicator('risk_metrics');
+        } else {
+          this.showMissingDataWarning('Risk Metrics');
+          return;
+        }
+      } else {
+        // Validate and cache data
+        if (this.validateRiskMetrics(metrics)) {
+          this.fallbackData.set('risk_metrics', metrics);
+          this.lastDataUpdate.set('risk_metrics', new Date());
+          this.hideMissingDataWarning('Risk Metrics');
+        } else {
+          this.log('warn', 'Invalid risk metrics data received', 'UI');
+          return;
+        }
+      }
+      
+      this.state.risk_metrics = metrics;
+      
+      // Update risk level gauge with safe calculations
+      const elements = {
+        riskFill: this.getCachedElement('[data-risk-percentage]'),
+        riskText: this.getCachedElement('[data-risk-text]'),
+        riskLevelEl: this.getCachedElement('[data-risk-level]'),
+        riskColorEl: this.getCachedElement('[data-risk-color]')
+      };
+      
+      const riskPercentage = this.calculateRiskPercentage(metrics);
+      const riskLevel = this.getRiskLevel(riskPercentage);
+      const riskColor = this.getRiskColor(riskLevel);
+      
+      if (elements.riskFill) {
+        elements.riskFill.style.setProperty('--risk-percentage', `${riskPercentage}%`);
+        elements.riskFill.setAttribute('data-risk-percentage', riskPercentage.toString());
+      }
+      
+      if (elements.riskText) {
+        elements.riskText.textContent = riskLevel;
+        elements.riskText.setAttribute('data-risk-text', riskLevel);
+      }
+      
+      if (elements.riskLevelEl) {
+        elements.riskLevelEl.textContent = riskLevel;
+        elements.riskLevelEl.setAttribute('data-risk-level', riskLevel.toLowerCase());
+      }
+      
+      if (elements.riskColorEl) {
+        elements.riskColorEl.setAttribute('data-risk-color', riskColor);
+      }
+      
+      // Update risk details with error handling
+      try {
+        this.updateRiskDetails(metrics);
+      } catch (error) {
+        this.log('error', `Failed to update risk details: ${error}`, 'UI');
+      }
+      
+      // Update performance metrics with error handling
+      try {
+        this.updatePerformanceMetrics(metrics);
+      } catch (error) {
+        this.log('error', `Failed to update performance metrics: ${error}`, 'UI');
+      }
 
-    // Update performance charts if visible
-    if (this.performanceCharts && this.performanceChartsVisible) {
-      this.performanceCharts.updateData(this.state.positions, metrics);
-    }
+      // Update performance charts if visible with error handling
+      if (this.performanceCharts && this.performanceChartsVisible) {
+        try {
+          this.performanceCharts.updateData(this.state.positions, metrics);
+        } catch (error) {
+          this.log('error', `Failed to update performance charts: ${error}`, 'UI');
+        }
+      }
 
-    this.updateLastUpdateTime();
+      this.updateLastUpdateTime();
+    }, metrics);
   }
 
   /**
@@ -880,12 +1047,36 @@ export class DashboardUI {
       this.batchTimer = null;
     }
 
+    // Clear retry timeouts
+    for (const timeoutId of this.retryTimeouts.values()) {
+      clearTimeout(timeoutId);
+    }
+    this.retryTimeouts.clear();
+
     // Clear collections
     this.logEntries = [];
     this.animationQueue.clear();
     this.updateThrottles.clear();
     this.domCache.clear();
     this.updateBatch.clear();
+    this.errorBoundaries.clear();
+    this.fallbackData.clear();
+    this.lastDataUpdate.clear();
+
+    // Remove dynamic UI elements
+    const elementsToRemove = [
+      'notification-area',
+      'offline-indicator', 
+      'missing-data-warnings',
+      'performance-modal'
+    ];
+    
+    elementsToRemove.forEach(id => {
+      const element = document.getElementById(id);
+      if (element) {
+        element.remove();
+      }
+    });
 
     // Destroy performance charts
     if (this.performanceCharts) {
@@ -904,6 +1095,10 @@ export class DashboardUI {
       connection_status: 'disconnected',
       error_message: null
     };
+
+    // Reset flags
+    this.isOfflineMode = false;
+    this.performanceChartsVisible = false;
   }
 
   /**
@@ -1217,5 +1412,385 @@ export class DashboardUI {
       if (updates.riskMetrics) this.updateRiskMetrics(updates.riskMetrics);
       if (updates.indicators) this.updateIndicators(updates.indicators);
     });
+  }
+
+  // Error Handling and Resilience Methods
+
+  /**
+   * Execute function within error boundary
+   */
+  private withErrorBoundary<T>(
+    operation: string, 
+    fn: () => T, 
+    fallbackData?: any
+  ): T | undefined {
+    try {
+      const result = fn();
+      this.resetErrorBoundary(operation);
+      return result;
+    } catch (error) {
+      return this.handleBoundaryError(operation, error, fallbackData);
+    }
+  }
+
+  /**
+   * Handle error within boundary
+   */
+  private handleBoundaryError(operation: string, error: any, fallbackData?: any): undefined {
+    const boundary = this.errorBoundaries.get(operation) || {
+      count: 0,
+      lastError: new Date(),
+      maxErrors: this.maxErrorsPerBoundary
+    };
+
+    boundary.count++;
+    boundary.lastError = new Date();
+    this.errorBoundaries.set(operation, boundary);
+
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    this.log('error', `Error in ${operation}: ${errorMsg}`, 'UI');
+
+    // Show user-friendly error if too many failures
+    if (boundary.count >= boundary.maxErrors) {
+      this.showUserFriendlyError(operation, boundary.count);
+    }
+
+    // Attempt recovery with fallback data
+    if (fallbackData && boundary.count < boundary.maxErrors) {
+      this.attemptRecovery(operation, fallbackData);
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Reset error boundary after successful operation
+   */
+  private resetErrorBoundary(operation: string): void {
+    const boundary = this.errorBoundaries.get(operation);
+    if (boundary && boundary.count > 0) {
+      // Only reset if enough time has passed
+      const timeSinceLastError = Date.now() - boundary.lastError.getTime();
+      if (timeSinceLastError > this.errorResetTime) {
+        this.errorBoundaries.delete(operation);
+      }
+    }
+  }
+
+  /**
+   * Show user-friendly error message
+   */
+  private showUserFriendlyError(operation: string, errorCount: number): void {
+    const messages: Record<string, string> = {
+      updateConnectionStatus: 'Connection status updates are experiencing issues',
+      updateBotStatus: 'Bot status information is temporarily unavailable',
+      updateMarketData: 'Market data updates are experiencing delays',
+      updateLatestAction: 'Trade action updates are temporarily unavailable',
+      updatePositions: 'Position data is temporarily unavailable',
+      updateRiskMetrics: 'Risk metrics are temporarily unavailable'
+    };
+
+    const message = messages[operation] || `${operation} is experiencing issues`;
+    this.showNotification('warning', `${message}. Using cached data where possible.`);
+  }
+
+  /**
+   * Attempt recovery with fallback data
+   */
+  private attemptRecovery(operation: string, fallbackData: any): void {
+    this.log('info', `Attempting recovery for ${operation} with fallback data`, 'UI');
+    
+    // Schedule retry with exponential backoff
+    const retryAttempts = this.getRetryAttempts(operation);
+    const delay = this.defaultRetryDelays[Math.min(retryAttempts, this.defaultRetryDelays.length - 1)];
+    
+    const timeoutId = window.setTimeout(() => {
+      this.retryOperation(operation, fallbackData);
+    }, delay);
+    
+    this.retryTimeouts.set(operation, timeoutId);
+  }
+
+  /**
+   * Retry failed operation
+   */
+  private retryOperation(operation: string, data: any): void {
+    this.log('info', `Retrying operation: ${operation}`, 'UI');
+    
+    try {
+      switch (operation) {
+        case 'updateBotStatus':
+          this.updateBotStatus(data);
+          break;
+        case 'updateMarketData':
+          this.updateMarketData(data);
+          break;
+        case 'updateLatestAction':
+          this.updateLatestAction(data);
+          break;
+        case 'updatePositions':
+          this.updatePositions(data);
+          break;
+        case 'updateRiskMetrics':
+          this.updateRiskMetrics(data);
+          break;
+      }
+    } catch (error) {
+      this.log('warn', `Retry failed for ${operation}: ${error}`, 'UI');
+    }
+  }
+
+  /**
+   * Get retry attempts for operation
+   */
+  private getRetryAttempts(operation: string): number {
+    const boundary = this.errorBoundaries.get(operation);
+    return boundary ? boundary.count - 1 : 0;
+  }
+
+  /**
+   * Show notification to user
+   */
+  private showNotification(type: 'info' | 'warning' | 'error', message: string): void {
+    // Create or update notification area
+    let notificationArea = document.getElementById('notification-area');
+    if (!notificationArea) {
+      notificationArea = document.createElement('div');
+      notificationArea.id = 'notification-area';
+      notificationArea.className = 'notification-area';
+      document.body.appendChild(notificationArea);
+    }
+
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.innerHTML = `
+      <span class="notification-message">${message}</span>
+      <button class="notification-close" aria-label="Close notification">&times;</button>
+    `;
+
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.remove();
+      }
+    }, 5000);
+
+    // Close button functionality
+    const closeBtn = notification.querySelector('.notification-close');
+    closeBtn?.addEventListener('click', () => {
+      notification.remove();
+    });
+
+    notificationArea.appendChild(notification);
+  }
+
+  /**
+   * Enter offline mode with fallback UI
+   */
+  private enterOfflineMode(): void {
+    this.log('warn', 'Entering offline mode - using cached data', 'UI');
+    this.showNotification('warning', 'Connection lost. Displaying cached data.');
+    
+    // Show offline indicator
+    this.updateOfflineIndicator();
+    
+    // Use fallback data for all components
+    this.loadFallbackData();
+  }
+
+  /**
+   * Exit offline mode
+   */
+  private exitOfflineMode(): void {
+    this.log('info', 'Exiting offline mode - live data restored', 'UI');
+    this.showNotification('info', 'Connection restored. Live data available.');
+    this.updateOfflineIndicator();
+  }
+
+  /**
+   * Update offline indicator
+   */
+  private updateOfflineIndicator(): void {
+    let indicator = document.getElementById('offline-indicator');
+    if (!indicator) {
+      indicator = document.createElement('div');
+      indicator.id = 'offline-indicator';
+      indicator.className = 'offline-indicator';
+      indicator.innerHTML = '<span>⚠️ Offline Mode - Cached Data</span>';
+      document.body.appendChild(indicator);
+    }
+    
+    indicator.style.display = this.isOfflineMode ? 'block' : 'none';
+  }
+
+  /**
+   * Load fallback data for all components
+   */
+  private loadFallbackData(): void {
+    for (const [key, data] of this.fallbackData.entries()) {
+      switch (key) {
+        case 'bot_status':
+          this.updateBotStatus(data);
+          break;
+        case 'market_data':
+          this.updateMarketData(data);
+          break;
+        case 'trade_action':
+          this.updateLatestAction(data);
+          break;
+        case 'positions':
+          this.updatePositions(data);
+          break;
+        case 'risk_metrics':
+          this.updateRiskMetrics(data);
+          break;
+      }
+    }
+  }
+
+  /**
+   * Check if data is stale and show warnings
+   */
+  private checkDataStaleness(dataType: string): void {
+    const lastUpdate = this.lastDataUpdate.get(dataType);
+    if (lastUpdate) {
+      const age = Date.now() - lastUpdate.getTime();
+      if (age > this.dataStaleThreshold) {
+        this.showStaleDataWarning(dataType, Math.floor(age / 1000));
+      }
+    }
+  }
+
+  /**
+   * Show stale data warning
+   */
+  private showStaleDataWarning(dataType: string, ageSeconds: number): void {
+    const humanReadableType = dataType.replace('_', ' ').toLowerCase();
+    const ageText = ageSeconds < 60 ? `${ageSeconds}s` : `${Math.floor(ageSeconds / 60)}m`;
+    this.showNotification('warning', `${humanReadableType} is ${ageText} old`);
+  }
+
+  /**
+   * Show missing data warning
+   */
+  private showMissingDataWarning(dataType: string): void {
+    let warningArea = document.getElementById('missing-data-warnings');
+    if (!warningArea) {
+      warningArea = document.createElement('div');
+      warningArea.id = 'missing-data-warnings';
+      warningArea.className = 'missing-data-warnings';
+      document.body.appendChild(warningArea);
+    }
+
+    const warningId = `warning-${dataType.toLowerCase().replace(' ', '-')}`;
+    if (!document.getElementById(warningId)) {
+      const warning = document.createElement('div');
+      warning.id = warningId;
+      warning.className = 'missing-data-warning';
+      warning.textContent = `${dataType} unavailable`;
+      warningArea.appendChild(warning);
+    }
+  }
+
+  /**
+   * Hide missing data warning
+   */
+  private hideMissingDataWarning(dataType: string): void {
+    const warningId = `warning-${dataType.toLowerCase().replace(' ', '-')}`;
+    const warning = document.getElementById(warningId);
+    if (warning) {
+      warning.remove();
+    }
+  }
+
+  /**
+   * Show data fallback indicator
+   */
+  private showDataFallbackIndicator(dataType: string): void {
+    this.log('info', `Using fallback data for ${dataType}`, 'UI');
+    // Could add visual indicator in UI if needed
+  }
+
+  // Data Validation Methods
+
+  /**
+   * Validate market data structure
+   */
+  private validateMarketData(data: any): data is MarketData {
+    return data &&
+           typeof data === 'object' &&
+           typeof data.symbol === 'string' &&
+           typeof data.price === 'number' &&
+           !isNaN(data.price) &&
+           data.price > 0;
+  }
+
+  /**
+   * Validate trade action structure
+   */
+  private validateTradeAction(data: any): data is TradeAction {
+    return data &&
+           typeof data === 'object' &&
+           ['BUY', 'SELL', 'HOLD'].includes(data.action) &&
+           typeof data.confidence === 'number' &&
+           !isNaN(data.confidence) &&
+           typeof data.reasoning === 'string';
+  }
+
+  /**
+   * Validate position structure
+   */
+  private validatePosition(data: any): data is Position {
+    return data &&
+           typeof data === 'object' &&
+           typeof data.symbol === 'string' &&
+           ['long', 'short'].includes(data.side) &&
+           typeof data.size === 'number' &&
+           !isNaN(data.size) &&
+           typeof data.entry_price === 'number' &&
+           !isNaN(data.entry_price);
+  }
+
+  /**
+   * Validate risk metrics structure
+   */
+  private validateRiskMetrics(data: any): data is RiskMetrics {
+    return data &&
+           typeof data === 'object' &&
+           typeof data.total_portfolio_value === 'number' &&
+           !isNaN(data.total_portfolio_value) &&
+           typeof data.available_balance === 'number' &&
+           !isNaN(data.available_balance);
+  }
+
+  // Safe Data Access Methods
+
+  /**
+   * Safely convert value to number
+   */
+  private safeNumber(value: any, defaultValue: number = 0): number {
+    if (typeof value === 'number' && !isNaN(value) && isFinite(value)) {
+      return value;
+    }
+    if (typeof value === 'string') {
+      const parsed = parseFloat(value);
+      if (!isNaN(parsed) && isFinite(parsed)) {
+        return parsed;
+      }
+    }
+    return defaultValue;
+  }
+
+  /**
+   * Safely convert value to string
+   */
+  private safeString(value: any, defaultValue: string = ''): string {
+    if (typeof value === 'string') {
+      return value;
+    }
+    if (value != null) {
+      return String(value);
+    }
+    return defaultValue;
   }
 }

@@ -187,11 +187,17 @@ export interface WebSocketConfig {
   maxReconnectDelay?: number;
   pingInterval?: number;
   connectionTimeout?: number;
+  enableResilience?: boolean;
+  fallbackUrls?: string[];
+  maxMessageRetries?: number;
+  messageRetryDelay?: number;
 }
 
 export class DashboardWebSocket {
   private ws: WebSocket | null = null;
   private url: string;
+  private fallbackUrls: string[] = [];
+  private currentUrlIndex = 0;
   private reconnectAttempts = 0;
   private maxReconnectAttempts: number;
   private reconnectDelay: number;
@@ -202,9 +208,13 @@ export class DashboardWebSocket {
   private isManualClose = false;
   private connectionTimeoutId: number | null = null;
   private messageQueue: any[] = [];
-  private maxQueueSize = 50; // Reduced from 100
+  private maxQueueSize = 50;
   private lastPongTime: number = Date.now();
-  private pongTimeout = 60000; // 60 seconds
+  private pongTimeout = 60000;
+  private enableResilience: boolean;
+  private maxMessageRetries: number;
+  private messageRetryDelay: number;
+  private retryQueue = new Map<string, { message: any; attempts: number; maxRetries: number }>();
 
   // Event system for message type routing
   private eventHandlers = new Map<string, Set<MessageHandler>>();
@@ -238,11 +248,15 @@ export class DashboardWebSocket {
     finalUrl = this.validateAndCleanUrl(finalUrl);
     
     this.url = finalUrl;
+    this.fallbackUrls = config.fallbackUrls || [];
     this.maxReconnectAttempts = config.maxReconnectAttempts || 5;
     this.reconnectDelay = config.initialReconnectDelay || 1000;
     this.maxReconnectDelay = config.maxReconnectDelay || 30000;
     this.pingIntervalMs = config.pingInterval || 30000;
     this.connectionTimeout = config.connectionTimeout || 10000;
+    this.enableResilience = config.enableResilience !== false;
+    this.maxMessageRetries = config.maxMessageRetries || 3;
+    this.messageRetryDelay = config.messageRetryDelay || 1000;
     
     // Start memory cleanup
     this.startMemoryCleanup();
@@ -291,6 +305,13 @@ export class DashboardWebSocket {
     for (const [key, timestamp] of this.messageThrottle.entries()) {
       if (now - timestamp > 10000) { // Remove entries older than 10 seconds
         this.messageThrottle.delete(key);
+      }
+    }
+
+    // Clean up old retry queue entries
+    for (const [messageId, queued] of this.retryQueue.entries()) {
+      if (queued.attempts >= queued.maxRetries) {
+        this.retryQueue.delete(messageId);
       }
     }
   }
@@ -440,7 +461,7 @@ export class DashboardWebSocket {
   }
 
   /**
-   * Send a message to the server
+   * Send a message to the server with retry capability
    */
   public send(message: any, queueIfDisconnected = true): boolean {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -450,10 +471,17 @@ export class DashboardWebSocket {
         
         const isDebugMode = (import.meta.env.VITE_DEBUG === 'true') || (import.meta.env.VITE_LOG_LEVEL === 'debug');
         if (isDebugMode) {
+          console.log('Message sent:', message.type);
         }
         return true;
       } catch (error) {
         console.error('Failed to send WebSocket message:', error);
+        
+        // Retry critical messages if resilience is enabled
+        if (this.enableResilience && this.isCriticalMessage(message)) {
+          this.queueForRetry(message);
+        }
+        
         this.notifyError(error instanceof Error ? error : new Error('Failed to send message'));
         return false;
       }
@@ -465,6 +493,7 @@ export class DashboardWebSocket {
         this.messageQueue.push(message);
         const isDebugMode = (import.meta.env.VITE_DEBUG === 'true') || (import.meta.env.VITE_LOG_LEVEL === 'debug');
         if (isDebugMode) {
+          console.log('Message queued:', message.type);
         }
         return true;
       } else {
@@ -598,7 +627,34 @@ export class DashboardWebSocket {
 
     this.ws.onmessage = (event) => {
       try {
-        const message: AllWebSocketMessages = JSON.parse(event.data);
+        // Validate message data before parsing
+        if (!event.data || typeof event.data !== 'string') {
+          console.warn('Received invalid WebSocket message data:', event.data);
+          return;
+        }
+
+        let message: AllWebSocketMessages;
+        try {
+          message = JSON.parse(event.data);
+        } catch (parseError) {
+          console.error('Failed to parse WebSocket message JSON:', parseError);
+          console.warn('Raw message data:', event.data.substring(0, 200) + (event.data.length > 200 ? '...' : ''));
+          
+          // Try to recover from malformed JSON
+          if (this.enableResilience) {
+            this.handleMalformedMessage(event.data);
+          }
+          return;
+        }
+
+        // Validate message structure
+        if (!this.validateMessageStructure(message)) {
+          console.warn('Received message with invalid structure:', message);
+          if (this.enableResilience) {
+            this.handleInvalidMessage(message);
+          }
+          return;
+        }
         
         // Handle pong messages internally
         if (message.type === 'pong') {
@@ -617,12 +673,17 @@ export class DashboardWebSocket {
           return; // Skip processing this message
         }
         
-        // Route message to type-specific handlers
-        this.routeMessage(message);
+        // Route message to type-specific handlers with error boundaries
+        this.routeMessageSafely(message);
         
       } catch (error) {
-        console.error('Failed to parse WebSocket message:', error);
-        this.notifyError(new Error('Failed to parse WebSocket message'));
+        console.error('Critical error in WebSocket message handler:', error);
+        this.notifyError(new Error(`WebSocket message handling failed: ${error instanceof Error ? error.message : 'Unknown error'}`));
+        
+        // Don't disconnect on message handling errors if resilience is enabled
+        if (!this.enableResilience) {
+          this.handleCriticalError(error);
+        }
       }
     };
 
@@ -663,6 +724,18 @@ export class DashboardWebSocket {
   }
 
   /**
+   * Route incoming messages to appropriate handlers with enhanced error boundaries
+   */
+  private routeMessageSafely(message: AllWebSocketMessages): void {
+    try {
+      this.routeMessage(message);
+    } catch (error) {
+      console.error(`Critical error routing message of type ${message.type}:`, error);
+      this.notifyError(new Error(`Message routing failed: ${error instanceof Error ? error.message : 'Unknown error'}`));
+    }
+  }
+
+  /**
    * Route incoming messages to appropriate handlers
    */
   private routeMessage(message: AllWebSocketMessages): void {
@@ -673,6 +746,7 @@ export class DashboardWebSocket {
           handler(message);
         } catch (error) {
           console.error(`Error in message handler for type ${message.type}:`, error);
+          // Continue processing other handlers even if one fails
         }
       });
     }
@@ -758,14 +832,33 @@ export class DashboardWebSocket {
   }
 
   /**
-   * Schedule a reconnection attempt with exponential backoff
+   * Schedule a reconnection attempt with exponential backoff and fallback URLs
    */
   private scheduleReconnect(): void {
-    if (this.isManualClose || this.reconnectAttempts >= this.maxReconnectAttempts) {
+    if (this.isManualClose) {
+      return;
+    }
+
+    // Try fallback URLs if available and primary connection failed
+    if (this.reconnectAttempts >= this.maxReconnectAttempts && this.enableResilience && this.fallbackUrls.length > 0) {
+      this.tryFallbackUrl();
+      return;
+    }
+
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       const isDebugMode = (import.meta.env.VITE_DEBUG === 'true') || (import.meta.env.VITE_LOG_LEVEL === 'debug');
       if (isDebugMode) {
+        console.log('Max reconnection attempts reached');
       }
       this.notifyConnectionStatus('error');
+      
+      // In resilience mode, keep trying with longer delays
+      if (this.enableResilience) {
+        setTimeout(() => {
+          this.reconnectAttempts = 0; // Reset attempts
+          this.scheduleReconnect();
+        }, 60000); // Wait 1 minute before resetting
+      }
       return;
     }
 
@@ -775,16 +868,21 @@ export class DashboardWebSocket {
       this.maxReconnectDelay
     );
     
+    // Add jitter to prevent thundering herd
+    const jitter = Math.random() * 1000;
+    const finalDelay = delay + jitter;
+    
     // Only log every few attempts to reduce spam, or in debug mode
     const isDebugMode = (import.meta.env.VITE_DEBUG === 'true') || (import.meta.env.VITE_LOG_LEVEL === 'debug');
     if (isDebugMode || this.reconnectAttempts <= 3 || this.reconnectAttempts % 5 === 0) {
+      console.log(`Scheduling reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${Math.round(finalDelay)}ms`);
     }
     
     setTimeout(() => {
       if (!this.isManualClose) {
         this.connect();
       }
-    }, delay);
+    }, finalDelay);
   }
 
   /**
@@ -858,6 +956,7 @@ export class DashboardWebSocket {
     this.errorCallbacks.clear();
     this.messageQueue = [];
     this.messageThrottle.clear();
+    this.retryQueue.clear();
     
     // Clear timeouts
     if (this.connectionTimeoutId) {
@@ -1023,6 +1122,280 @@ export class DashboardWebSocket {
   public offLLMEvent(eventType: 'llm_request' | 'llm_response' | 'trading_decision' | 'performance_metrics' | 'alert', handler: MessageHandler): void {
     this.off(`llm_event:${eventType}`, handler);
   }
+
+  /**
+   * Validate message structure for resilience
+   */
+  private validateMessageStructure(message: any): message is AllWebSocketMessages {
+    if (!message || typeof message !== 'object') {
+      return false;
+    }
+
+    if (!message.type || typeof message.type !== 'string') {
+      return false;
+    }
+
+    // Allow undefined data for simple messages like ping/pong
+    if (message.data !== undefined && typeof message.data !== 'object') {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Handle malformed messages gracefully
+   */
+  private handleMalformedMessage(data: string): void {
+    console.warn('Attempting to recover from malformed message');
+    
+    // Try to extract a valid message structure
+    try {
+      // Common malformed patterns to recover from
+      const patterns = [
+        // Truncated JSON - try to find the last complete object
+        { regex: /\{[^}]*\}(?=\s*$)/, name: 'truncated' },
+        // Double-encoded JSON
+        { regex: /"(\{.*\})"/, name: 'double-encoded' },
+        // Concatenated messages
+        { regex: /\}(\{)/g, name: 'concatenated' }
+      ];
+
+      for (const pattern of patterns) {
+        if (pattern.name === 'concatenated') {
+          // Split concatenated messages
+          const messages = data.split(pattern.regex);
+          messages.forEach((msgStr, index, array) => {
+            if (index < array.length - 1) msgStr += '}';
+            if (index > 0) msgStr = '{' + msgStr;
+            
+            try {
+              const msg = JSON.parse(msgStr);
+              if (this.validateMessageStructure(msg)) {
+                this.routeMessageSafely(msg);
+              }
+            } catch (e) {
+              // Ignore individual parse failures
+            }
+          });
+          return;
+        } else {
+          const match = data.match(pattern.regex);
+          if (match) {
+            const recoveredData = pattern.name === 'double-encoded' ? match[1] : match[0];
+            const message = JSON.parse(recoveredData);
+            if (this.validateMessageStructure(message)) {
+              console.log(`Recovered message using ${pattern.name} pattern`);
+              this.routeMessageSafely(message);
+              return;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Could not recover malformed message:', error);
+    }
+
+    // If recovery fails, log and continue
+    console.error('Failed to recover malformed message, data length:', data.length);
+  }
+
+  /**
+   * Handle invalid message structure
+   */
+  private handleInvalidMessage(message: any): void {
+    console.warn('Handling invalid message structure:', message);
+    
+    // Try to create a valid message structure
+    if (message && typeof message === 'object') {
+      // Add missing type if data exists
+      if (!message.type && message.data) {
+        // Try to infer type from data structure
+        const inferredType = this.inferMessageType(message.data);
+        if (inferredType) {
+          message.type = inferredType;
+          console.log(`Inferred message type: ${inferredType}`);
+          this.routeMessageSafely(message);
+          return;
+        }
+      }
+      
+      // Add missing data as empty object
+      if (message.type && !message.data) {
+        message.data = {};
+        this.routeMessageSafely(message);
+        return;
+      }
+    }
+    
+    console.warn('Could not repair invalid message structure');
+  }
+
+  /**
+   * Infer message type from data structure
+   */
+  private inferMessageType(data: any): string | null {
+    if (!data || typeof data !== 'object') return null;
+
+    // Check for common data patterns
+    if (data.status && data.symbol) return 'bot_status';
+    if (data.price && data.symbol) return 'market_data';
+    if (data.action && data.confidence) return 'trade_action';
+    if (data.cipher_a !== undefined || data.cipher_b !== undefined) return 'indicators';
+    if (data.side && data.entry_price) return 'position';
+    if (data.total_portfolio_value !== undefined) return 'risk_metrics';
+    if (data.health !== undefined) return 'system_status';
+    if (data.message && data.level) return 'error';
+
+    return null;
+  }
+
+  /**
+   * Try fallback URLs when primary connection fails
+   */
+  private tryFallbackUrl(): void {
+    if (this.fallbackUrls.length === 0) {
+      console.warn('No fallback URLs available');
+      this.notifyConnectionStatus('error');
+      return;
+    }
+
+    this.currentUrlIndex = (this.currentUrlIndex + 1) % this.fallbackUrls.length;
+    const fallbackUrl = this.fallbackUrls[this.currentUrlIndex];
+    
+    console.log(`Trying fallback URL ${this.currentUrlIndex + 1}/${this.fallbackUrls.length}: ${fallbackUrl}`);
+    
+    // Switch to fallback URL and reset attempts
+    this.url = fallbackUrl;
+    this.reconnectAttempts = 0;
+    this.scheduleReconnect();
+  }
+
+  /**
+   * Handle critical errors that might require connection reset
+   */
+  private handleCriticalError(error: any): void {
+    console.error('Critical WebSocket error, considering connection reset:', error);
+    
+    // Close current connection
+    if (this.ws) {
+      this.ws.close(1006, 'Critical error occurred');
+      this.ws = null;
+    }
+    
+    // Schedule reconnection
+    this.notifyConnectionStatus('error');
+    this.scheduleReconnect();
+  }
+
+  /**
+   * Check if a message is critical and should be retried
+   */
+  private isCriticalMessage(message: any): boolean {
+    if (!message || !message.type) return false;
+    
+    const criticalTypes = ['ping', 'pong', 'subscription', 'authentication'];
+    return criticalTypes.includes(message.type);
+  }
+
+  /**
+   * Queue message for retry
+   */
+  private queueForRetry(message: any): void {
+    const messageId = this.generateMessageId(message);
+    const existing = this.retryQueue.get(messageId);
+    
+    if (existing) {
+      existing.attempts++;
+      if (existing.attempts >= existing.maxRetries) {
+        console.warn(`Message retry limit reached for ${message.type}`);
+        this.retryQueue.delete(messageId);
+        return;
+      }
+    } else {
+      this.retryQueue.set(messageId, {
+        message,
+        attempts: 1,
+        maxRetries: this.maxMessageRetries
+      });
+    }
+    
+    // Schedule retry
+    setTimeout(() => {
+      this.retryQueuedMessage(messageId);
+    }, this.messageRetryDelay);
+  }
+
+  /**
+   * Retry a queued message
+   */
+  private retryQueuedMessage(messageId: string): void {
+    const queued = this.retryQueue.get(messageId);
+    if (!queued) return;
+    
+    console.log(`Retrying message ${queued.message.type} (attempt ${queued.attempts}/${queued.maxRetries})`);
+    
+    if (this.send(queued.message, false)) {
+      // Success - remove from retry queue
+      this.retryQueue.delete(messageId);
+    } else {
+      // Failed - will be handled by queueForRetry if called again
+      console.warn(`Retry failed for message ${queued.message.type}`);
+    }
+  }
+
+  /**
+   * Generate unique ID for message retry tracking
+   */
+  private generateMessageId(message: any): string {
+    const type = message.type || 'unknown';
+    const data = JSON.stringify(message.data || {});
+    const timestamp = message.timestamp || Date.now();
+    return `${type}-${timestamp}-${data.slice(0, 20)}`;
+  }
+
+  /**
+   * Get connection health status
+   */
+  public getConnectionHealth(): {
+    isHealthy: boolean;
+    lastPong: number;
+    queueSize: number;
+    retryQueueSize: number;
+    reconnectAttempts: number;
+    currentUrl: string;
+    issues: string[];
+  } {
+    const now = Date.now();
+    const timeSinceLastPong = now - this.lastPongTime;
+    const issues: string[] = [];
+    
+    if (timeSinceLastPong > this.pongTimeout) {
+      issues.push('Ping timeout');
+    }
+    
+    if (this.messageQueue.length > this.maxQueueSize * 0.8) {
+      issues.push('Message queue almost full');
+    }
+    
+    if (this.retryQueue.size > 5) {
+      issues.push('High retry queue size');
+    }
+    
+    if (this.reconnectAttempts > 2) {
+      issues.push('Multiple reconnection attempts');
+    }
+    
+    return {
+      isHealthy: issues.length === 0 && this.isConnected(),
+      lastPong: this.lastPongTime,
+      queueSize: this.messageQueue.length,
+      retryQueueSize: this.retryQueue.size,
+      reconnectAttempts: this.reconnectAttempts,
+      currentUrl: this.url,
+      issues
+    };
+  }
 }
 
 // Singleton instance with default configuration
@@ -1041,6 +1414,24 @@ export function createProductionWebSocketClient(): DashboardWebSocket {
     maxReconnectDelay: 30000,
     pingInterval: 30000,
     connectionTimeout: 10000,
+    enableResilience: true,
+    maxMessageRetries: 3,
+    messageRetryDelay: 1000,
+  });
+}
+
+// Resilient client factory with fallback URLs
+export function createResilientWebSocketClient(fallbackUrls: string[] = []): DashboardWebSocket {
+  return new DashboardWebSocket(undefined, {
+    maxReconnectAttempts: 10,
+    initialReconnectDelay: 500,
+    maxReconnectDelay: 60000,
+    pingInterval: 15000,
+    connectionTimeout: 15000,
+    enableResilience: true,
+    fallbackUrls,
+    maxMessageRetries: 5,
+    messageRetryDelay: 2000,
   });
 }
 

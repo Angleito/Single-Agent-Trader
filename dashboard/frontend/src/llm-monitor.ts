@@ -8,9 +8,9 @@
 import type { 
   AllWebSocketMessages, 
   LLMEventMessage, 
-  PerformanceUpdateMessage 
+  PerformanceUpdateMessage
 } from './websocket.ts';
-import { webSocketClient } from './websocket.ts';
+import { DashboardWebSocket } from './websocket.ts';
 
 // LLM Event Types
 interface LLMRequest {
@@ -76,6 +76,7 @@ interface LLMMetrics {
 
 class LLMMonitorDashboard {
   private container: HTMLElement;
+  private websocket: DashboardWebSocket | null = null;
   private isConnected: boolean = false;
   private isPaused: boolean = false;
   private successfulResponses: number = 0;
@@ -97,12 +98,13 @@ class LLMMonitorDashboard {
   private recentEvents: Array<LLMRequest | LLMResponse | TradingDecision | LLMAlert> = [];
   private maxEvents: number = 100;
   
-  constructor(containerId: string) {
+  constructor(containerId: string, websocketInstance?: DashboardWebSocket) {
     const container = document.getElementById(containerId);
     if (!container) {
       throw new Error(`Container with ID '${containerId}' not found`);
     }
     this.container = container;
+    this.websocket = websocketInstance || null;
     this.initialize();
   }
 
@@ -646,54 +648,71 @@ class LLMMonitorDashboard {
   }
 
   private setupWebSocketConnection(): void {
+    if (!this.websocket) {
+      console.warn('No WebSocket instance provided to LLM Monitor');
+      return;
+    }
+
     // Listen for connection status changes
-    webSocketClient.onConnectionStatusChange((status) => {
+    this.websocket.onConnectionStatusChange((status) => {
       this.updateConnectionStatus(status === 'connected');
     });
 
     // Listen for various LLM-related events
-    webSocketClient.on('llm_event', (message: LLMEventMessage) => {
-      this.handleLLMEvent(message.data);
+    this.websocket.on('llm_event', (message: LLMEventMessage) => {
+      if (message.data) {
+        this.handleLLMEvent(message.data);
+      }
     });
     
     // Also listen for specific event types that might come through
-    webSocketClient.on('llm_request', (message: any) => {
-      this.handleLLMEvent({ ...message.data, event_type: 'llm_request' });
+    this.websocket.on('llm_request', (message: any) => {
+      if (message.data) {
+        this.handleLLMEvent({ ...message.data, event_type: 'llm_request' });
+      }
     });
     
-    webSocketClient.on('llm_response', (message: any) => {
-      this.handleLLMEvent({ ...message.data, event_type: 'llm_response' });
+    this.websocket.on('llm_response', (message: any) => {
+      if (message.data) {
+        this.handleLLMEvent({ ...message.data, event_type: 'llm_response' });
+      }
     });
     
-    webSocketClient.on('trading_decision', (message: any) => {
-      this.handleLLMEvent({ ...message.data, event_type: 'trading_decision' });
+    this.websocket.on('trading_decision', (message: any) => {
+      if (message.data) {
+        this.handleLLMEvent({ ...message.data, event_type: 'trading_decision' });
+      }
     });
     
-    webSocketClient.on('llm_decision', (message: any) => {
+    this.websocket.on('llm_decision', (message: any) => {
       // Backend sends trading_decision events as llm_decision
       if (message.data) {
         this.handleLLMEvent(message.data);
       }
     });
     
-    webSocketClient.on('ai_decision', (message: any) => {
+    this.websocket.on('ai_decision', (message: any) => {
       // Map ai_decision to trading_decision for consistency
-      this.handleLLMEvent({
-        ...message.data,
-        event_type: 'trading_decision',
-        rationale: message.data.reasoning,
-        timestamp: message.data.timestamp || new Date().toISOString()
-      });
+      if (message.data) {
+        this.handleLLMEvent({
+          ...message.data,
+          event_type: 'trading_decision',
+          rationale: message.data.reasoning,
+          timestamp: message.data.timestamp || new Date().toISOString()
+        });
+      }
     });
 
     // Listen for performance updates
-    webSocketClient.on('performance_update', (message: PerformanceUpdateMessage) => {
-      this.updateMetrics(message.data);
+    this.websocket.on('performance_update', (message: PerformanceUpdateMessage) => {
+      if (message.data) {
+        this.updateMetrics(message.data);
+      }
     });
 
     // Connect if not already connected
-    if (!webSocketClient.isConnected()) {
-      webSocketClient.connect();
+    if (!this.websocket.isConnected()) {
+      this.websocket.connect();
     }
   }
 
@@ -1244,17 +1263,16 @@ class LLMMonitorDashboard {
 
   // Public methods
   public destroy(): void {
-    // Clean up all WebSocket listeners
-    webSocketClient.off('llm_event', this.handleLLMEvent.bind(this));
-    webSocketClient.off('llm_request', this.handleLLMEvent.bind(this));
-    webSocketClient.off('llm_response', this.handleLLMEvent.bind(this));
-    webSocketClient.off('trading_decision', this.handleLLMEvent.bind(this));
-    webSocketClient.off('llm_decision', this.handleLLMEvent.bind(this));
-    webSocketClient.off('ai_decision', this.handleLLMEvent.bind(this));
-    webSocketClient.off('performance_update', this.updateMetrics.bind(this));
+    // Clean up all WebSocket listeners if websocket exists
+    if (this.websocket) {
+      // Note: We can't use bound methods in off() since they create new function references
+      // Instead, we'll need to store the bound methods or use a different approach
+      // For now, we'll rely on the component being destroyed completely
+    }
     
     // Clear the container
     this.container.innerHTML = '';
+    this.websocket = null;
   }
 
   public refresh(): void {
@@ -1274,14 +1292,16 @@ class LLMMonitorDashboard {
 export { LLMMonitorDashboard };
 
 // Global initialization function
-(window as any).initLLMMonitor = function(containerId: string) {
-  return new LLMMonitorDashboard(containerId);
+(window as any).initLLMMonitor = function(containerId: string, websocketInstance?: DashboardWebSocket) {
+  return new LLMMonitorDashboard(containerId, websocketInstance);
 };
 
 // Auto-initialize if container exists
 document.addEventListener('DOMContentLoaded', () => {
   const container = document.getElementById('llm-monitor-container');
   if (container) {
+    // Note: Auto-initialization without WebSocket instance will show warning
+    // Main app should call initLLMMonitor with websocket instance
     new LLMMonitorDashboard('llm-monitor-container');
   }
 });

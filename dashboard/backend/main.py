@@ -15,6 +15,12 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any
 
+# Optional imports for fallback functionality
+try:
+    import psutil
+except ImportError:
+    psutil = None
+
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -67,6 +73,34 @@ class ConnectionManager:
         """Broadcast message to all connected clients"""
         if not self.active_connections:
             return
+
+        # Validate message structure before broadcasting
+        try:
+            # Ensure message has required fields
+            if not isinstance(message, dict):
+                logger.warning(f"Invalid message type for broadcast: {type(message)}")
+                return
+                
+            # Ensure timestamp is present
+            if "timestamp" not in message:
+                message["timestamp"] = datetime.now().isoformat()
+                
+            # Ensure type is present
+            if "type" not in message:
+                message["type"] = "unknown"
+                
+            # Test JSON serialization
+            json.dumps(message)
+            
+        except (TypeError, ValueError) as e:
+            logger.error(f"Invalid message for broadcast: {e}")
+            # Create a safe fallback message
+            message = {
+                "timestamp": datetime.now().isoformat(),
+                "type": "error",
+                "message": "Invalid message format",
+                "source": "dashboard-api"
+            }
 
         # Add to buffer
         self.log_buffer.append(message)
@@ -299,13 +333,35 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_text()
             logger.info(f"Received WebSocket message: {data}")
 
-            # Echo back or handle client commands
-            response = {
-                "timestamp": datetime.now().isoformat(),
-                "type": "echo",
-                "message": f"Server received: {data}",
-            }
-            await websocket.send_text(json.dumps(response))
+            # Parse and validate client message
+            try:
+                parsed_data = json.loads(data) if data.strip().startswith('{') else {"raw": data}
+            except json.JSONDecodeError as e:
+                logger.warning(f"Invalid JSON from client: {e}")
+                parsed_data = {"raw": data, "error": "invalid_json"}
+
+            # Echo back or handle client commands with proper error handling
+            try:
+                response = {
+                    "timestamp": datetime.now().isoformat(),
+                    "type": "echo",
+                    "message": f"Server received: {data}",
+                    "parsed": parsed_data
+                }
+                await websocket.send_text(json.dumps(response))
+            except Exception as e:
+                logger.error(f"Failed to send WebSocket response: {e}")
+                # Try to send a simple error message
+                try:
+                    error_response = {
+                        "timestamp": datetime.now().isoformat(),
+                        "type": "error",
+                        "message": "Failed to process message"
+                    }
+                    await websocket.send_text(json.dumps(error_response))
+                except Exception:
+                    # If we can't send error response, break the connection
+                    break
 
     except WebSocketDisconnect:
         manager.disconnect(websocket)
@@ -332,36 +388,53 @@ async def root():
 async def get_status():
     """Get bot health check and status information"""
     try:
-        # Check if Docker container is running
-        result = subprocess.run(
-            [
-                "docker",
-                "ps",
-                "--filter",
-                "name=ai-trading-bot",
-                "--format",
-                "{{.Status}}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-
+        # Check if Docker container is running with error handling
         container_status = "unknown"
-        if result.returncode == 0 and result.stdout.strip():
-            status_text = result.stdout.strip()
-            if "Up" in status_text:
-                container_status = "running"
-            elif "Exited" in status_text:
-                container_status = "stopped"
-        else:
-            container_status = "not_found"
+        try:
+            result = subprocess.run(
+                [
+                    "docker",
+                    "ps",
+                    "--filter",
+                    "name=ai-trading-bot",
+                    "--format",
+                    "{{.Status}}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
 
-        # Get basic system info
-        uptime_result = subprocess.run(["uptime"], capture_output=True, text=True)
-        system_uptime = (
-            uptime_result.stdout.strip() if uptime_result.returncode == 0 else "unknown"
-        )
+            if result.returncode == 0 and result.stdout.strip():
+                status_text = result.stdout.strip()
+                if "Up" in status_text:
+                    container_status = "running"
+                elif "Exited" in status_text:
+                    container_status = "stopped"
+            else:
+                container_status = "not_found"
+        except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
+            logger.warning(f"Failed to check container status: {e}")
+            container_status = "unavailable"
+
+        # Get basic system info with graceful fallback
+        system_uptime = "unknown"
+        try:
+            uptime_result = subprocess.run(["uptime"], capture_output=True, text=True, timeout=3)
+            if uptime_result.returncode == 0:
+                system_uptime = uptime_result.stdout.strip()
+        except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
+            logger.warning(f"Failed to get system uptime: {e}")
+            # Provide a simple alternative if psutil is available
+            if psutil:
+                try:
+                    boot_time = datetime.fromtimestamp(psutil.boot_time())
+                    uptime_seconds = (datetime.now() - boot_time).total_seconds()
+                    hours = int(uptime_seconds // 3600)
+                    minutes = int((uptime_seconds % 3600) // 60)
+                    system_uptime = f"up {hours}:{minutes:02d}"
+                except Exception:
+                    system_uptime = "unknown"
 
         return {
             "timestamp": datetime.now().isoformat(),
@@ -372,49 +445,60 @@ async def get_status():
             "log_streamer_running": log_streamer.running,
         }
 
-    except subprocess.TimeoutExpired as e:
-        raise HTTPException(
-            status_code=500, detail="Timeout checking container status"
-        ) from e
     except Exception as e:
         logger.error(f"Error getting status: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error getting status: {str(e)}"
-        ) from e
+        # Return a minimal but functional response instead of raising
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "bot_status": "error",
+            "system_uptime": "unknown",
+            "websocket_connections": len(manager.active_connections),
+            "log_buffer_size": len(manager.log_buffer),
+            "log_streamer_running": log_streamer.running,
+            "error": str(e)
+        }
 
 
 @app.get("/trading-data")
 async def get_trading_data():
     """Get current trading information and metrics"""
     try:
-        # This would typically fetch from bot's API or database
-        # For now, return mock data structure
-
-        # Try to get container stats
-        stats_result = subprocess.run(
-            [
-                "docker",
-                "stats",
-                "ai-trading-bot",
-                "--no-stream",
-                "--format",
-                "table {{.CPUPerc}}\t{{.MemUsage}}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-
+        # Try to get container stats with graceful fallback
         cpu_usage = "N/A"
         memory_usage = "N/A"
+        
+        try:
+            stats_result = subprocess.run(
+                [
+                    "docker",
+                    "stats",
+                    "ai-trading-bot",
+                    "--no-stream",
+                    "--format",
+                    "table {{.CPUPerc}}\t{{.MemUsage}}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
 
-        if stats_result.returncode == 0:
-            lines = stats_result.stdout.strip().split("\n")
-            if len(lines) > 1:  # Skip header
-                stats = lines[1].split("\t")
-                if len(stats) >= 2:
-                    cpu_usage = stats[0]
-                    memory_usage = stats[1]
+            if stats_result.returncode == 0:
+                lines = stats_result.stdout.strip().split("\n")
+                if len(lines) > 1:  # Skip header
+                    stats = lines[1].split("\t")
+                    if len(stats) >= 2:
+                        cpu_usage = stats[0]
+                        memory_usage = stats[1]
+        except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
+            logger.warning(f"Failed to get container stats: {e}")
+            # Try to get system stats as fallback
+            if psutil:
+                try:
+                    cpu_usage = f"{psutil.cpu_percent(interval=0.1):.1f}%"
+                    memory = psutil.virtual_memory()
+                    memory_usage = f"{memory.used / (1024**3):.1f}GiB / {memory.total / (1024**3):.1f}GiB"
+                except Exception:
+                    pass  # Keep N/A values
 
         # Mock trading data - in real implementation, this would come from the bot
         trading_data = {
@@ -459,15 +543,40 @@ async def get_trading_data():
 
         return trading_data
 
-    except subprocess.TimeoutExpired as e:
-        raise HTTPException(
-            status_code=500, detail="Timeout getting trading data"
-        ) from e
     except Exception as e:
         logger.error(f"Error getting trading data: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error getting trading data: {str(e)}"
-        ) from e
+        # Return mock data even on error to keep dashboard functional
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "account": {
+                "balance": "0.00",
+                "currency": "USD",
+                "available_balance": "0.00",
+                "unrealized_pnl": "0.00",
+            },
+            "current_position": {
+                "symbol": "BTC-USD",
+                "side": "flat",
+                "size": "0.00",
+                "entry_price": "0.00",
+                "current_price": "0.00",
+                "unrealized_pnl": "0.00",
+            },
+            "recent_trades": [],
+            "performance": {
+                "total_trades": 0,
+                "winning_trades": 0,
+                "losing_trades": 0,
+                "win_rate": "0.00%",
+                "total_pnl": "0.00",
+            },
+            "system": {
+                "cpu_usage": "N/A",
+                "memory_usage": "N/A",
+                "last_update": datetime.now().isoformat(),
+            },
+            "error": str(e)
+        }
 
 
 @app.get("/logs")
@@ -497,60 +606,135 @@ async def get_llm_status():
     try:
         from datetime import timedelta
 
-        # Get aggregated metrics for different time windows
-        metrics_1h = llm_parser.get_aggregated_metrics(timedelta(hours=1))
-        metrics_24h = llm_parser.get_aggregated_metrics(timedelta(hours=24))
-        metrics_all = llm_parser.get_aggregated_metrics()
+        # Gracefully handle missing LLM parser or log files
+        if not llm_parser:
+            logger.warning("LLM parser not available")
+            return {
+                "timestamp": datetime.now().isoformat(),
+                "monitoring_active": False,
+                "log_file": "not_available",
+                "total_parsed": {
+                    "requests": 0,
+                    "responses": 0,
+                    "decisions": 0,
+                    "alerts": 0,
+                    "performance_metrics": 0,
+                },
+                "metrics": {
+                    "1_hour": {},
+                    "24_hours": {},
+                    "all_time": {},
+                },
+                "active_alerts": 0,
+                "recent_activity": {
+                    "decisions_last_hour": 0,
+                    "decision_distribution": {},
+                    "last_decision": None,
+                },
+                "error": "LLM monitoring not available"
+            }
 
-        # Calculate derived metrics from available data
-        total_decisions = len(llm_parser.decisions)
-        recent_decisions = [
-            d for d in llm_parser.decisions 
-            if d.timestamp >= datetime.now() - timedelta(hours=1)
-        ]
-        
-        # Calculate decision distribution
-        decision_distribution = {}
-        if llm_parser.decisions:
-            for decision in llm_parser.decisions:
-                action = decision.action
-                decision_distribution[action] = decision_distribution.get(action, 0) + 1
+        # Get aggregated metrics for different time windows with error handling
+        try:
+            metrics_1h = llm_parser.get_aggregated_metrics(timedelta(hours=1))
+            metrics_24h = llm_parser.get_aggregated_metrics(timedelta(hours=24))
+            metrics_all = llm_parser.get_aggregated_metrics()
+        except Exception as e:
+            logger.warning(f"Failed to get aggregated metrics: {e}")
+            metrics_1h = metrics_24h = metrics_all = {}
+
+        # Calculate derived metrics from available data with safety checks
+        try:
+            total_decisions = len(llm_parser.decisions) if hasattr(llm_parser, 'decisions') else 0
+            recent_decisions = []
+            if hasattr(llm_parser, 'decisions') and llm_parser.decisions:
+                recent_decisions = [
+                    d for d in llm_parser.decisions 
+                    if d.timestamp >= datetime.now() - timedelta(hours=1)
+                ]
+            
+            # Calculate decision distribution
+            decision_distribution = {}
+            if hasattr(llm_parser, 'decisions') and llm_parser.decisions:
+                for decision in llm_parser.decisions:
+                    action = getattr(decision, 'action', 'unknown')
+                    decision_distribution[action] = decision_distribution.get(action, 0) + 1
+        except Exception as e:
+            logger.warning(f"Failed to calculate decision metrics: {e}")
+            total_decisions = 0
+            recent_decisions = []
+            decision_distribution = {}
+
+        # Get last decision safely
+        last_decision = None
+        try:
+            if hasattr(llm_parser, 'decisions') and llm_parser.decisions:
+                last_decision = llm_parser.decisions[-1].to_dict()
+        except Exception as e:
+            logger.warning(f"Failed to get last decision: {e}")
+
+        # Get active alerts safely
+        active_alerts_count = 0
+        try:
+            if hasattr(llm_parser, 'alerts') and llm_parser.alerts:
+                active_alerts_count = len([
+                    a for a in llm_parser.alerts
+                    if a.timestamp >= datetime.now() - timedelta(hours=1)
+                ])
+        except Exception as e:
+            logger.warning(f"Failed to count active alerts: {e}")
 
         return {
             "timestamp": datetime.now().isoformat(),
             "monitoring_active": True,
-            "log_file": str(llm_parser.log_file),
+            "log_file": str(getattr(llm_parser, 'log_file', 'unknown')),
             "total_parsed": {
-                "requests": len(llm_parser.requests),
-                "responses": len(llm_parser.responses),
-                "decisions": len(llm_parser.decisions),
-                "alerts": len(llm_parser.alerts),
-                "performance_metrics": len(llm_parser.metrics),
+                "requests": len(getattr(llm_parser, 'requests', [])),
+                "responses": len(getattr(llm_parser, 'responses', [])),
+                "decisions": len(getattr(llm_parser, 'decisions', [])),
+                "alerts": len(getattr(llm_parser, 'alerts', [])),
+                "performance_metrics": len(getattr(llm_parser, 'metrics', [])),
             },
             "metrics": {
                 "1_hour": metrics_1h,
                 "24_hours": metrics_24h,
                 "all_time": metrics_all,
             },
-            "active_alerts": len(
-                [
-                    a
-                    for a in llm_parser.alerts
-                    if a.timestamp >= datetime.now() - timedelta(hours=1)
-                ]
-            ),
+            "active_alerts": active_alerts_count,
             "recent_activity": {
                 "decisions_last_hour": len(recent_decisions),
                 "decision_distribution": decision_distribution,
-                "last_decision": llm_parser.decisions[-1].to_dict() if llm_parser.decisions else None,
+                "last_decision": last_decision,
             },
         }
 
     except Exception as e:
         logger.error(f"Error getting LLM status: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error getting LLM status: {str(e)}"
-        ) from e
+        # Return a functional response instead of raising an exception
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "monitoring_active": False,
+            "log_file": "error",
+            "total_parsed": {
+                "requests": 0,
+                "responses": 0,
+                "decisions": 0,
+                "alerts": 0,
+                "performance_metrics": 0,
+            },
+            "metrics": {
+                "1_hour": {},
+                "24_hours": {},
+                "all_time": {},
+            },
+            "active_alerts": 0,
+            "recent_activity": {
+                "decisions_last_hour": 0,
+                "decision_distribution": {},
+                "last_decision": None,
+            },
+            "error": str(e)
+        }
 
 
 @app.get("/llm/metrics")
@@ -572,7 +756,31 @@ async def get_llm_metrics(
         }
 
         time_delta = window_map.get(time_window, timedelta(hours=24))
-        metrics = llm_parser.get_aggregated_metrics(time_delta)
+        
+        # Get metrics with error handling
+        metrics = {}
+        if llm_parser:
+            try:
+                metrics = llm_parser.get_aggregated_metrics(time_delta)
+            except Exception as e:
+                logger.warning(f"Failed to get aggregated metrics: {e}")
+                metrics = {
+                    "total_requests": 0,
+                    "total_responses": 0,
+                    "success_rate": 0.0,
+                    "avg_response_time_ms": 0.0,
+                    "total_cost_usd": 0.0,
+                    "error": str(e)
+                }
+        else:
+            metrics = {
+                "total_requests": 0,
+                "total_responses": 0,
+                "success_rate": 0.0,
+                "avg_response_time_ms": 0.0,
+                "total_cost_usd": 0.0,
+                "error": "LLM parser not available"
+            }
 
         return {
             "timestamp": datetime.now().isoformat(),
@@ -582,16 +790,35 @@ async def get_llm_metrics(
 
     except Exception as e:
         logger.error(f"Error getting LLM metrics: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error getting LLM metrics: {str(e)}"
-        ) from e
+        # Return empty metrics instead of raising
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "time_window": time_window or "24h",
+            "metrics": {
+                "total_requests": 0,
+                "total_responses": 0,
+                "success_rate": 0.0,
+                "avg_response_time_ms": 0.0,
+                "total_cost_usd": 0.0,
+                "error": str(e)
+            },
+        }
 
 
 @app.get("/llm/activity")
 async def get_llm_activity(limit: int = Query(50, ge=1, le=500)):
     """Get recent LLM activity across all event types"""
     try:
-        activity = llm_parser.get_recent_activity(limit)
+        activity = []
+        if llm_parser:
+            try:
+                activity = llm_parser.get_recent_activity(limit)
+            except Exception as e:
+                logger.warning(f"Failed to get recent activity: {e}")
+                # Return empty activity list instead of failing
+                activity = []
+        else:
+            logger.warning("LLM parser not available for activity")
 
         return {
             "timestamp": datetime.now().isoformat(),
@@ -602,9 +829,14 @@ async def get_llm_activity(limit: int = Query(50, ge=1, le=500)):
 
     except Exception as e:
         logger.error(f"Error getting LLM activity: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error getting LLM activity: {str(e)}"
-        ) from e
+        # Return empty activity instead of raising
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "limit": limit,
+            "total_events": 0,
+            "activity": [],
+            "error": str(e)
+        }
 
 
 @app.get("/llm/decisions")
@@ -909,6 +1141,30 @@ async def restart_bot():
             status_code=500, detail=f"Error restarting bot: {str(e)}"
         ) from e
 
+
+# Add missing /api/trading-data endpoint
+@app.get("/api/trading-data")
+async def get_api_trading_data():
+    """API endpoint for trading data"""
+    return await get_trading_data()
+
+# Add missing /api/llm/status endpoint
+@app.get("/api/llm/status")
+async def get_api_llm_status():
+    """API endpoint for LLM status"""
+    return await get_llm_status()
+
+# Add missing /api/llm/metrics endpoint
+@app.get("/api/llm/metrics")
+async def get_api_llm_metrics(time_window: str | None = Query(None)):
+    """API endpoint for LLM metrics"""
+    return await get_llm_metrics(time_window)
+
+# Add missing /api/llm/activity endpoint
+@app.get("/api/llm/activity")
+async def get_api_llm_activity(limit: int = Query(50, ge=1, le=500)):
+    """API endpoint for LLM activity"""
+    return await get_llm_activity(limit)
 
 # Health check endpoint
 @app.get("/health")

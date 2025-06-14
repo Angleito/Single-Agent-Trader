@@ -11,7 +11,7 @@ declare global {
 
 // Trading Bot Data Types
 export interface BotStatus {
-  status: 'running' | 'stopped' | 'error' | 'dry_run';
+  status: 'running' | 'stopped' | 'error' | 'dry_run' | 'unknown';
   uptime: number;
   last_update: string;
   dry_run: boolean;
