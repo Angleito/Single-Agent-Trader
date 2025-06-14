@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from threading import Lock
+
+import aiofiles
 
 from bot.trading.lot import FIFOPosition, LotSale, TradeLot
 from bot.types import Order, OrderStatus, Position
@@ -181,8 +184,51 @@ class FIFOPositionManager:
             else:
                 return sum(pos.total_realized_pnl for pos in self._positions.values())
 
-    def _save_state(self) -> None:
-        """Save position state to file."""
+    async def _save_state_async(self) -> None:
+        """Save position state to file asynchronously."""
+        if not self._state_file:
+            return
+
+        try:
+            state = {"positions": {}, "history": self._position_history}
+
+            # Serialize FIFO positions
+            for symbol, fifo_pos in self._positions.items():
+                state["positions"][symbol] = {
+                    "symbol": fifo_pos.symbol,
+                    "side": fifo_pos.side,
+                    "total_realized_pnl": str(fifo_pos.total_realized_pnl),
+                    "lots": [
+                        {
+                            "lot_id": lot.lot_id,
+                            "quantity": str(lot.quantity),
+                            "purchase_price": str(lot.purchase_price),
+                            "purchase_date": lot.purchase_date.isoformat(),
+                            "remaining_quantity": str(lot.remaining_quantity),
+                        }
+                        for lot in fifo_pos.lots
+                    ],
+                    "sale_history": [
+                        {
+                            "lot_id": sale.lot_id,
+                            "quantity_sold": str(sale.quantity_sold),
+                            "sale_price": str(sale.sale_price),
+                            "sale_date": sale.sale_date.isoformat(),
+                            "cost_basis": str(sale.cost_basis),
+                            "realized_pnl": str(sale.realized_pnl),
+                        }
+                        for sale in fifo_pos.sale_history
+                    ],
+                }
+
+            async with aiofiles.open(self._state_file, "w") as f:
+                await f.write(json.dumps(state, indent=2))
+
+        except Exception as e:
+            logger.error(f"Failed to save position state: {e}")
+
+    def _save_state_sync(self) -> None:
+        """Save position state to file synchronously (fallback method)."""
         if not self._state_file:
             return
 
@@ -221,7 +267,33 @@ class FIFOPositionManager:
             self._state_file.write_text(json.dumps(state, indent=2))
 
         except Exception as e:
-            logger.error(f"Failed to save position state: {e}")
+            logger.error(f"Failed to save position state (sync): {e}")
+
+    def _save_state(self) -> None:
+        """Save position state to file (non-blocking when called from async context)."""
+        if not self._state_file:
+            return
+
+        try:
+            # Check if we're in an async context
+            try:
+                loop = asyncio.get_running_loop()
+                # We're in an async context, schedule the save as a fire-and-forget task
+                task = asyncio.create_task(self._save_state_async())
+                # Add error handling callback
+                task.add_done_callback(self._handle_save_error)
+            except RuntimeError:
+                # No event loop running, do synchronous save
+                self._save_state_sync()
+        except Exception as e:
+            logger.error(f"Failed to save state: {e}")
+
+    def _handle_save_error(self, task: asyncio.Task) -> None:
+        """Handle errors from async save task."""
+        try:
+            task.result()
+        except Exception as e:
+            logger.error(f"Async save failed: {e}")
 
     def _load_state(self) -> None:
         """Load position state from file."""

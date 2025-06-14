@@ -5,12 +5,15 @@ This module handles position tracking, P&L calculations, risk metrics,
 and state persistence for the trading bot.
 """
 
+import asyncio
 import json
 import logging
 import threading
 from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+
+import aiofiles
 
 from .config import settings
 from .paper_trading import PaperTradingAccount
@@ -503,8 +506,54 @@ class PositionManager:
 
         return new_position
 
-    def _save_state(self) -> None:
-        """Save current state to files."""
+    async def _save_state_async(self) -> None:
+        """Save current state to files asynchronously."""
+        try:
+            # Save active positions
+            positions_data = {}
+            for symbol, position in self._positions.items():
+                positions_data[symbol] = {
+                    "symbol": position.symbol,
+                    "side": position.side,
+                    "size": str(position.size),
+                    "entry_price": (
+                        str(position.entry_price) if position.entry_price else None
+                    ),
+                    "unrealized_pnl": str(position.unrealized_pnl),
+                    "realized_pnl": str(position.realized_pnl),
+                    "timestamp": position.timestamp.isoformat(),
+                }
+
+            async with aiofiles.open(self.positions_file, "w") as f:
+                await f.write(json.dumps(positions_data, indent=2))
+
+            # Save position history (last 100 entries)
+            history_data = []
+            for position in self._position_history[-100:]:
+                history_data.append(
+                    {
+                        "symbol": position.symbol,
+                        "side": position.side,
+                        "size": str(position.size),
+                        "entry_price": (
+                            str(position.entry_price) if position.entry_price else None
+                        ),
+                        "unrealized_pnl": str(position.unrealized_pnl),
+                        "realized_pnl": str(position.realized_pnl),
+                        "timestamp": position.timestamp.isoformat(),
+                    }
+                )
+
+            async with aiofiles.open(self.history_file, "w") as f:
+                await f.write(json.dumps(history_data, indent=2))
+
+            logger.debug("Position state saved successfully")
+
+        except Exception as e:
+            logger.error(f"Failed to save position state: {e}")
+
+    def _save_state_sync(self) -> None:
+        """Save current state to files synchronously (fallback method)."""
         try:
             # Save active positions
             positions_data = {}
@@ -544,10 +593,33 @@ class PositionManager:
             with open(self.history_file, "w") as f:
                 json.dump(history_data, f, indent=2)
 
-            logger.debug("Position state saved successfully")
+            logger.debug("Position state saved successfully (sync)")
 
         except Exception as e:
-            logger.error(f"Failed to save position state: {e}")
+            logger.error(f"Failed to save position state (sync): {e}")
+
+    def _save_state(self) -> None:
+        """Save current state to files (non-blocking when called from async context)."""
+        try:
+            # Check if we're in an async context
+            try:
+                loop = asyncio.get_running_loop()
+                # We're in an async context, schedule the save as a fire-and-forget task
+                task = asyncio.create_task(self._save_state_async())
+                # Add error handling callback
+                task.add_done_callback(self._handle_save_error)
+            except RuntimeError:
+                # No event loop running, do synchronous save
+                self._save_state_sync()
+        except Exception as e:
+            logger.error(f"Failed to save state: {e}")
+
+    def _handle_save_error(self, task: asyncio.Task) -> None:
+        """Handle errors from async save task."""
+        try:
+            task.result()
+        except Exception as e:
+            logger.error(f"Async save failed: {e}")
 
     def _load_state(self) -> None:
         """Load state from files."""

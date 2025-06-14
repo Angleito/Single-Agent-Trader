@@ -770,6 +770,7 @@ class MCPMemoryServer:
         headers["Content-Type"] = "application/json"
 
         try:
+            logger.debug(f"Updating remote experience {experience.experience_id[:8]}...")
             async with self._session.put(
                 f"{self.server_url}/memories/{experience.experience_id}",
                 headers=headers,
@@ -778,6 +779,12 @@ class MCPMemoryServer:
             ) as response:
                 if response.status not in [200, 204]:
                     logger.warning(f"Failed to update remotely: {response.status}")
+                else:
+                    logger.debug(f"Remote update successful for {experience.experience_id[:8]}")
+        except asyncio.TimeoutError:
+            logger.warning(f"Remote update timed out for {experience.experience_id[:8]}")
+        except aiohttp.ClientError as e:
+            logger.warning(f"Remote update network error: {e}")
         except Exception as e:
             logger.error(f"Remote update error: {e}")
 
@@ -786,8 +793,13 @@ class MCPMemoryServer:
         file_path = self.local_storage_path / f"{experience.experience_id}.json"
 
         try:
-            with open(file_path, "w") as f:
-                f.write(experience.json(indent=2))
+            # Use asyncio to run blocking I/O in thread pool
+            import asyncio
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                lambda: file_path.write_text(experience.json(indent=2))
+            )
         except Exception as e:
             logger.error(f"Failed to save experience locally: {e}")
 
