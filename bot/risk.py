@@ -12,6 +12,7 @@ from decimal import Decimal
 from typing import Any
 
 from .config import settings
+from .fee_calculator import fee_calculator
 from .position_manager import PositionManager
 from .types import Position, RiskMetrics, TradeAction
 
@@ -97,8 +98,33 @@ class RiskManager:
             # Validate position size
             modified_action = self._validate_position_size(trade_action)
 
-            # Calculate risk metrics
-            risk_metrics = self._calculate_position_risk(modified_action, current_price)
+            # Adjust position size for trading fees
+            modified_action, trade_fees = fee_calculator.adjust_position_size_for_fees(
+                modified_action, self._account_balance, current_price
+            )
+            
+            if modified_action.size_pct == 0 and trade_action.action in ["LONG", "SHORT"]:
+                return (
+                    False,
+                    self._get_hold_action("Position too small after fee adjustment"),
+                    "Insufficient funds for fees",
+                )
+
+            # Validate trade profitability after fees
+            position_value = self._account_balance * Decimal(str(modified_action.size_pct / 100))
+            is_profitable, profit_reason = fee_calculator.validate_trade_profitability(
+                modified_action, position_value, current_price
+            )
+            
+            if not is_profitable:
+                return (
+                    False,
+                    self._get_hold_action(f"Trade not profitable: {profit_reason}"),
+                    "Fee profitability",
+                )
+
+            # Calculate risk metrics (now with fees included)
+            risk_metrics = self._calculate_position_risk(modified_action, current_price, trade_fees)
 
             # Check if risk is acceptable
             if risk_metrics["max_loss_usd"] > self._get_max_acceptable_loss():
@@ -119,7 +145,14 @@ class RiskManager:
                     "Risk too high",
                 )
 
-            return True, modified_action, "Risk approved"
+            # Log fee information
+            if trade_fees.total_fee > 0:
+                logger.info(
+                    f"Position adjusted for fees: Original {trade_action.size_pct}% -> "
+                    f"Final {modified_action.size_pct}% (${trade_fees.total_fee:.2f} total fees)"
+                )
+
+            return True, modified_action, "Risk approved (fees included)"
 
         except Exception as e:
             logger.error(f"Risk evaluation error: {e}")
@@ -233,7 +266,7 @@ class RiskManager:
         return modified
 
     def _calculate_position_risk(
-        self, trade_action: TradeAction, current_price: Decimal
+        self, trade_action: TradeAction, current_price: Decimal, trade_fees=None
     ) -> dict[str, Any]:
         """
         Calculate risk metrics for a position.
@@ -241,6 +274,7 @@ class RiskManager:
         Args:
             trade_action: Trade action to evaluate
             current_price: Current market price
+            trade_fees: Optional TradeFees object with fee information
 
         Returns:
             Dictionary with risk metrics
@@ -253,21 +287,37 @@ class RiskManager:
         )
         leveraged_exposure = position_value * Decimal(str(self.leverage))
 
-        # Calculate potential loss (stop loss)
+        # Calculate potential loss (stop loss) + fees
         max_loss_pct = Decimal(str(trade_action.stop_loss_pct)) / Decimal("100")
         max_loss_usd = leveraged_exposure * max_loss_pct
+        
+        # Add trading fees to the max loss
+        if trade_fees and trade_fees.total_fee > 0:
+            max_loss_usd += trade_fees.total_fee
 
-        # Calculate potential gain (take profit)
+        # Calculate potential gain (take profit) - fees
         max_gain_pct = Decimal(str(trade_action.take_profit_pct)) / Decimal("100")
         max_gain_usd = leveraged_exposure * max_gain_pct
+        
+        # Subtract trading fees from the max gain
+        if trade_fees and trade_fees.total_fee > 0:
+            max_gain_usd -= trade_fees.total_fee
+            max_gain_usd = max(Decimal("0"), max_gain_usd)  # Ensure non-negative
+
+        # Recalculate risk/reward ratio with fees
+        risk_reward_ratio = (
+            float(max_gain_usd / max_loss_usd) if max_loss_usd > 0 
+            else trade_action.take_profit_pct / trade_action.stop_loss_pct
+        )
 
         return {
             "position_value": position_value,
             "leveraged_exposure": leveraged_exposure,
             "max_loss_usd": max_loss_usd,
             "max_gain_usd": max_gain_usd,
-            "risk_reward_ratio": trade_action.take_profit_pct
-            / trade_action.stop_loss_pct,
+            "risk_reward_ratio": risk_reward_ratio,
+            "fees_included": trade_fees is not None,
+            "total_fees": trade_fees.total_fee if trade_fees else Decimal("0"),
         }
 
     def _get_max_acceptable_loss(self) -> Decimal:

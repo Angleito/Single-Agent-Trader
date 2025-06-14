@@ -117,6 +117,44 @@ class TradingSettings(BaseModel):
     min_profit_pct: float = Field(
         default=0.5, ge=0.1, le=10.0, description="Minimum profit target percentage"
     )
+    
+    # Trading Fee Configuration
+    maker_fee_rate: float = Field(
+        default=0.004,  # 0.4% for Coinbase Advanced
+        ge=0.0,
+        le=0.01,
+        description="Maker fee rate (for limit orders)"
+    )
+    taker_fee_rate: float = Field(
+        default=0.006,  # 0.6% for Coinbase Advanced
+        ge=0.0,
+        le=0.01,
+        description="Taker fee rate (for market orders)"
+    )
+    futures_fee_rate: float = Field(
+        default=0.0015,  # 0.15% for futures
+        ge=0.0,
+        le=0.01,
+        description="Futures trading fee rate"
+    )
+    
+    # Trading Interval Configuration
+    min_trading_interval_seconds: int = Field(
+        default=60,  # 1 minute minimum
+        ge=10,
+        le=3600,
+        description="Minimum interval between trades in seconds"
+    )
+    require_24h_data_before_trading: bool = Field(
+        default=True,
+        description="Require at least 24 hours of market data before first trade"
+    )
+    min_candles_for_trading: int = Field(
+        default=100,
+        ge=50,
+        le=500,
+        description="Minimum number of candles required before trading"
+    )
 
     @field_validator("interval")
     @classmethod
@@ -1178,6 +1216,12 @@ def get_config_template() -> dict[str, Any]:
             "order_timeout_seconds": 30,
             "slippage_tolerance_pct": 0.1,
             "min_profit_pct": 0.5,
+            "maker_fee_rate": 0.004,
+            "taker_fee_rate": 0.006,
+            "futures_fee_rate": 0.0015,
+            "min_trading_interval_seconds": 60,
+            "require_24h_data_before_trading": True,
+            "min_candles_for_trading": 100,
             "enable_futures": True,
             "futures_account_type": "CFM",
             "auto_cash_transfer": True,

@@ -234,8 +234,46 @@ class TradingEngine:
         self.successful_trades = 0
         self.total_pnl = Decimal("0")
         self.start_time = datetime.now(UTC)
+        
+        # Trading interval control
+        self.last_trade_time = None
+        self.trading_enabled = False  # Will be enabled after data validation
+        self.data_validation_complete = False
 
         self.logger.info(f"Initialized TradingEngine for {symbol} at {interval}")
+        
+    def _can_trade_now(self) -> bool:
+        """
+        Check if trading is currently allowed based on data availability and timing.
+        
+        Returns:
+            True if trading is allowed, False otherwise
+        """
+        # Check if trading is enabled (based on data validation)
+        if not self.trading_enabled:
+            return False
+            
+        # Check if data validation is complete
+        if not self.data_validation_complete:
+            return False
+            
+        # Check minimum interval between trades
+        if self.last_trade_time is not None:
+            min_interval = self.settings.trading.min_trading_interval_seconds
+            time_since_last_trade = (datetime.now(UTC) - self.last_trade_time).total_seconds()
+            
+            if time_since_last_trade < min_interval:
+                self.logger.debug(
+                    f"⏱️ Waiting for trade interval: {time_since_last_trade:.1f}s / {min_interval}s"
+                )
+                return False
+                
+        # Check if we have fresh market data
+        if not self.market_data.is_connected():
+            self.logger.debug("📊 Market data not connected, skipping trade check")
+            return False
+            
+        return True
 
     def _load_configuration(self, config_file: str | None, dry_run: bool) -> Settings:
         """Load and validate configuration."""
@@ -430,10 +468,12 @@ class TradingEngine:
 
     async def _wait_for_initial_data(self):
         """Wait for sufficient market data to begin trading."""
-        max_wait_time = 60  # seconds
+        max_wait_time = 300  # Increased to 5 minutes for 24h data requirement
         wait_start = datetime.now(UTC)
         historical_data_loaded = False
         websocket_data_received = False
+        min_candles_required = self.settings.trading.min_candles_for_trading
+        require_24h_data = self.settings.trading.require_24h_data_before_trading
 
         while True:
             elapsed_time = (datetime.now(UTC) - wait_start).total_seconds()
@@ -448,51 +488,82 @@ class TradingEngine:
                 )
 
             # Check for historical data
-            data = self.market_data.get_latest_ohlcv(
-                limit=100
-            )  # Check for indicator minimum
-            if len(data) >= 100 and not historical_data_loaded:
-                self.logger.info(f"Loaded {len(data)} historical candles for analysis")
-                historical_data_loaded = True
-            elif len(data) >= 50 and not historical_data_loaded:
-                # Fallback: proceed with limited data but warn about potential issues
-                self.logger.warning(
-                    f"Limited historical data available: {len(data)} candles. "
-                    f"Indicators may be unreliable until more data is accumulated."
-                )
-                historical_data_loaded = True
+            data = self.market_data.get_latest_ohlcv(limit=500)  # Get more data for 24h check
+            
+            if not historical_data_loaded:
+                # Calculate how many candles represent 24 hours
+                interval_minutes = self._get_interval_minutes(self.interval)
+                candles_per_24h = (24 * 60) // interval_minutes
+                
+                if require_24h_data:
+                    # Require full 24 hours of data
+                    if len(data) >= candles_per_24h:
+                        self.logger.info(
+                            f"✅ Loaded {len(data)} historical candles ({24} hours at {self.interval} intervals) for analysis"
+                        )
+                        historical_data_loaded = True
+                        self.trading_enabled = True
+                    elif len(data) >= min_candles_required:
+                        hours_available = (len(data) * interval_minutes) / 60
+                        self.logger.warning(
+                            f"⚠️ Only {hours_available:.1f} hours of data available ({len(data)} candles). "
+                            f"Waiting for 24 hours of data before enabling trading..."
+                        )
+                else:
+                    # Just require minimum candles
+                    if len(data) >= min_candles_required:
+                        self.logger.info(
+                            f"✅ Loaded {len(data)} historical candles (minimum {min_candles_required}) for analysis"
+                        )
+                        historical_data_loaded = True
+                        self.trading_enabled = True
+                    elif len(data) >= 50:
+                        # Fallback with warning
+                        self.logger.warning(
+                            f"⚠️ Limited historical data available: {len(data)} candles. "
+                            f"Indicators may be unreliable until more data is accumulated."
+                        )
+                        historical_data_loaded = True
+                        self.trading_enabled = False  # Don't enable trading with limited data
 
             # Check for WebSocket data
             if self.market_data.has_websocket_data() and not websocket_data_received:
-                self.logger.info("WebSocket is receiving real-time market data")
+                self.logger.info("📡 WebSocket is receiving real-time market data")
                 websocket_data_received = True
 
-            # We're ready when we have historical data and either:
+            # We're ready when we have sufficient historical data and either:
             # 1. WebSocket is receiving data, OR
-            # 2. We've waited at least 10 seconds for WebSocket (market might be closed/inactive)
+            # 2. We've waited at least 30 seconds for WebSocket (market might be closed/inactive)
             if historical_data_loaded:
                 if websocket_data_received:
                     self.logger.info(
-                        "Both historical and real-time data available, ready to trade"
+                        "🚀 Both historical and real-time data available, ready to trade"
                     )
+                    self.data_validation_complete = True
                     break
-                elif elapsed_time > 10:
-                    # After 10 seconds, proceed if we have historical data even without WebSocket
+                elif elapsed_time > 30:
+                    # After 30 seconds, proceed if we have historical data even without WebSocket
                     self.logger.warning(
-                        "Proceeding with historical data only. WebSocket data not yet received "
+                        "⚠️ Proceeding with historical data only. WebSocket data not yet received "
                         "(market may be closed or inactive)"
                     )
+                    self.data_validation_complete = True
                     break
 
-            # Log progress every 5 seconds
-            if int(elapsed_time) % 5 == 0 and elapsed_time > 0:
+            # Log progress every 10 seconds
+            if int(elapsed_time) % 10 == 0 and elapsed_time > 0:
                 status = self.market_data.get_data_status()
+                interval_minutes = self._get_interval_minutes(self.interval)
+                candles_per_24h = (24 * 60) // interval_minutes
+                hours_available = (len(data) * interval_minutes) / 60 if data else 0
+                
                 self.logger.info(
-                    f"Waiting for data... Elapsed: {int(elapsed_time)}s, "
-                    f"Historical: {len(data)} candles, "
-                    f"WebSocket connected: {status.get('websocket_connected', False)}, "
-                    f"WebSocket data: {status.get('websocket_data_received', False)}, "
-                    f"Latest price: ${status.get('latest_price', 'N/A')}"
+                    f"⏳ Waiting for data... Elapsed: {int(elapsed_time)}s\n"
+                    f"   📊 Historical: {len(data)}/{candles_per_24h} candles ({hours_available:.1f}/24 hours)\n"
+                    f"   🌐 WebSocket connected: {status.get('websocket_connected', False)}\n"
+                    f"   📈 WebSocket data: {status.get('websocket_data_received', False)}\n"
+                    f"   💰 Latest price: ${status.get('latest_price', 'N/A')}\n"
+                    f"   ⚡ Trading enabled: {self.trading_enabled}"
                 )
 
             await asyncio.sleep(1)
@@ -782,6 +853,11 @@ class TradingEngine:
                     dominance_candles=dominance_candles,
                 )
 
+                # Check if trading is enabled and enough time has passed since last trade
+                if not self._can_trade_now():
+                    await asyncio.sleep(1)
+                    continue
+
                 # Get LLM trading decision
                 self.logger.debug(
                     f"🤔 Requesting trading decision from "
@@ -818,6 +894,9 @@ class TradingEngine:
                         validated_action, current_price, market_state, experience_id
                     )
                     final_action = validated_action
+                    
+                    # Update last trade time for interval control
+                    self.last_trade_time = datetime.now(UTC)
 
                 else:
                     # For HOLD or CLOSE actions, apply normal risk management
@@ -842,6 +921,9 @@ class TradingEngine:
                         await self._execute_trade(
                             final_action, current_price, market_state, experience_id
                         )
+                        
+                        # Update last trade time for interval control
+                        self.last_trade_time = datetime.now(UTC)
 
                 # Update position tracking and risk metrics
                 await self._update_position_tracking(current_price)
@@ -1101,15 +1183,7 @@ class TradingEngine:
                 except Exception as e:
                     self.logger.warning(f"Failed to update trade progress: {e}")
                     
-            # Log pattern statistics periodically (every 100 loops)
-            if loop_count % 100 == 0 and self.memory_server and self.memory_server._connected:
-                try:
-                    pattern_stats = await self.memory_server.get_pattern_statistics()
-                    if pattern_stats:
-                        self.logger.debug(f"Pattern statistics update (loop {loop_count})")
-                        # Stats will be logged by the memory server's log_pattern_statistics
-                except Exception as e:
-                    self.logger.debug(f"Could not update pattern statistics: {e}")
+            # This code was moved to the main trading loop
 
     def _display_status_update(
         self, loop_count: int, current_price: Decimal, last_action: TradeAction

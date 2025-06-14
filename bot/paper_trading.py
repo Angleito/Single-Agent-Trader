@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import settings
+from .fee_calculator import fee_calculator
 from .types import Order, OrderStatus, TradeAction
 
 logger = logging.getLogger(__name__)
@@ -238,9 +239,16 @@ class PaperTradingAccount:
                 # Apply slippage
                 execution_price = self._apply_slippage(current_price, action.action)
 
-                # Calculate fees
+                # Calculate realistic trading fees using the fee calculator
                 trade_value = trade_size * execution_price
-                fees = trade_value * self.fee_rate
+                
+                # Use the proper fee calculator
+                trade_fees = fee_calculator.calculate_trade_fees(
+                    action, trade_value, execution_price, is_market_order=True
+                )
+                
+                # For paper trading, we only charge entry fee for now
+                fees = trade_fees.entry_fee
 
                 # Check available balance
                 if action.action in ["LONG", "SHORT"]:
@@ -268,12 +276,12 @@ class PaperTradingAccount:
                         logger.info(
                             f"💸 Paper Trading FUTURES: Executed {action.action} | "
                             f"{num_contracts} contracts ({trade_size} ETH) @ ${execution_price} | "
-                            f"Fees: ${fees:.4f} | Value: ${trade_size * execution_price:.2f}"
+                            f"Fees: ${fees:.4f} @ {trade_fees.fee_rate:.4%} | Value: ${trade_size * execution_price:.2f}"
                         )
                     else:
                         logger.info(
                             f"💸 Paper Trading: Executed {action.action} | {trade_size} {symbol} @ ${execution_price} | "
-                            f"Fees: ${fees:.4f} | Value: ${trade_size * execution_price:.2f}"
+                            f"Fees: ${fees:.4f} @ {trade_fees.fee_rate:.4%} | Value: ${trade_size * execution_price:.2f}"
                         )
 
                 return order
