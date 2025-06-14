@@ -839,6 +839,10 @@ class TradingEngine:
                 if loop_count % 10 == 0:  # Every 10 loops
                     self._display_status_update(loop_count, current_price, final_action)
                 
+                # Log heartbeat to confirm loop is running
+                if loop_count % 5 == 0:
+                    self.logger.debug(f"Trading loop heartbeat - iteration {loop_count}")
+                
                 # Log pattern statistics every 100 loops if memory is enabled
                 if loop_count % 100 == 0 and self.memory_server and self._memory_available:
                     try:
@@ -901,6 +905,7 @@ class TradingEngine:
                 f"📦 Executing trade: {trade_action.action} {trade_action.size_pct}% | "
                 f"Experience ID: {experience_id[:8] if experience_id else 'None'}..."
             )
+            self.logger.debug(f"Trade execution started at {datetime.now(UTC).isoformat()}")
 
             # Check if we already have an open position and the action is LONG or SHORT
             if self.current_position.side != "FLAT" and trade_action.action in [
@@ -965,11 +970,19 @@ class TradingEngine:
                         ):
                             # Trade was closed, complete the experience
                             try:
-                                await self.experience_manager.complete_trade(
-                                    order, order.price, market_state
+                                # Add timeout to prevent blocking
+                                await asyncio.wait_for(
+                                    self.experience_manager.complete_trade(
+                                        order, order.price, market_state
+                                    ),
+                                    timeout=5.0  # 5 second timeout
                                 )
                                 self.logger.info(
                                     "✅ MCP Integration: Completed trade tracking for closed position"
+                                )
+                            except asyncio.TimeoutError:
+                                self.logger.warning(
+                                    "Trade tracking completion timed out after 5 seconds"
                                 )
                             except Exception as e:
                                 self.logger.warning(
@@ -1009,6 +1022,8 @@ class TradingEngine:
                             f"P&L: ${account_status['total_pnl']:,.2f} "
                             f"({account_status['roi_percent']:.2f}%)"
                         )
+                    
+                    self.logger.debug(f"Trade execution completed at {datetime.now(UTC).isoformat()}")
                 else:
                     console.print(f"[yellow]⚠ Trade failed:[/yellow] {order.status}")
             else:
