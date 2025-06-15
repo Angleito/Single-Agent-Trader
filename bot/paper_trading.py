@@ -241,12 +241,12 @@ class PaperTradingAccount:
 
                 # Calculate realistic trading fees using the fee calculator
                 trade_value = trade_size * execution_price
-                
+
                 # Use the proper fee calculator
                 trade_fees = fee_calculator.calculate_trade_fees(
                     action, trade_value, execution_price, is_market_order=True
                 )
-                
+
                 # For paper trading, we only charge entry fee for now
                 fees = trade_fees.entry_fee
 
@@ -304,13 +304,13 @@ class PaperTradingAccount:
         # Calculate position size based on percentage of equity
         position_value = self.equity * (Decimal(str(action.size_pct)) / 100)
         leveraged_value = position_value * Decimal(str(settings.trading.leverage))
-        
+
         # Check if this is a futures trade for ETH
         symbol = action.symbol if hasattr(action, "symbol") else settings.trading.symbol
         if settings.trading.enable_futures and symbol == "ETH-USD":
             # Apply futures contract size logic for ETH
             CONTRACT_SIZE = Decimal("0.1")  # 0.1 ETH per contract
-            
+
             # Check if we're using fixed contract size from config
             if settings.trading.fixed_contract_size:
                 # Use fixed number of contracts
@@ -322,14 +322,14 @@ class PaperTradingAccount:
             else:
                 # Calculate quantity in ETH based on position value
                 quantity_in_eth = leveraged_value / current_price
-                
+
                 # Convert to number of contracts and round down
                 num_contracts = int(quantity_in_eth / CONTRACT_SIZE)
                 num_contracts = max(1, num_contracts)  # Minimum 1 contract
-                
+
                 # Return the actual quantity in ETH (multiples of 0.1)
                 trade_size = CONTRACT_SIZE * num_contracts
-                
+
                 logger.debug(
                     f"Futures contract calculation: {quantity_in_eth:.6f} ETH -> "
                     f"{num_contracts} contracts = {trade_size} ETH"
@@ -339,7 +339,7 @@ class PaperTradingAccount:
             trade_size = leveraged_value / current_price
             # Round to reasonable precision
             trade_size = trade_size.quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP)
-        
+
         return trade_size
 
     def _apply_slippage(self, price: Decimal, action: str) -> Decimal:

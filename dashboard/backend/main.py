@@ -25,6 +25,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from llm_log_parser import AlertThresholds, create_llm_log_parser
 
 # Import TradingView data feed and LLM log parser
@@ -225,9 +226,9 @@ async def lifespan(app: FastAPI):
 
     # Try to start log streamer, but don't fail if target container doesn't exist
     try:
-        # Start log streamer in background without awaiting
-        asyncio.create_task(log_streamer.start())
-        logger.info("Log streamer initialization scheduled")
+        # Start log streamer in background without awaiting (temporarily disabled)
+        # asyncio.create_task(log_streamer.start())
+        logger.info("Log streamer initialization scheduled (disabled for debugging)")
     except Exception as e:
         logger.warning(
             f"Failed to start log streamer: {e}. Continuing without log streaming."
@@ -277,12 +278,22 @@ async def lifespan(app: FastAPI):
             # Always include full data for detailed views
             formatted_event["data"] = event_data
             
-            asyncio.create_task(manager.broadcast(formatted_event))
+            # Schedule the broadcast in a thread-safe way
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.create_task(manager.broadcast(formatted_event))
+                else:
+                    # If no event loop is running, we'll skip this broadcast
+                    logger.debug("No running event loop for LLM callback, skipping broadcast")
+            except RuntimeError:
+                # No event loop in current thread, skip broadcast
+                logger.debug("No event loop in current thread for LLM callback")
 
         llm_parser.add_callback(llm_event_callback)
 
-        # Start real-time monitoring
-        llm_parser.start_real_time_monitoring(poll_interval=1.0)
+        # Start real-time monitoring (temporarily disabled for debugging)
+        # llm_parser.start_real_time_monitoring(poll_interval=1.0)
         logger.info("Started LLM log real-time monitoring")
 
     except Exception as e:
@@ -315,23 +326,109 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=[
+        "http://localhost:3000",  # Frontend development server
+        "http://127.0.0.1:3000",  # Alternative localhost
+        "http://localhost:8000",  # Backend for self-requests
+        "*"  # Allow all origins for now (configure for production)
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Accept",
+        "Accept-Language", 
+        "Content-Language",
+        "Content-Type",
+        "Authorization",
+        "X-Requested-With",
+        "Origin",
+        "Access-Control-Request-Method",
+        "Access-Control-Request-Headers",
+        "Cache-Control",
+        "Pragma"
+    ],
+    expose_headers=[
+        "Content-Type",
+        "Content-Length", 
+        "Access-Control-Allow-Origin",
+        "Access-Control-Allow-Headers"
+    ],
 )
+
+
+# Add middleware for JSON response handling and security
+@app.middleware("http")
+async def add_json_headers(request, call_next):
+    """Add proper JSON headers and security headers to all responses"""
+    response = await call_next(request)
+    
+    # Add JSON content type for API responses
+    if request.url.path.startswith('/api/') or request.url.path.startswith('/udf/'):
+        response.headers["Content-Type"] = "application/json"
+    
+    # Add security headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    
+    # Add CORS headers for WebSocket upgrades
+    if request.headers.get("connection", "").lower() == "upgrade":
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    
+    return response
+
+
+# OPTIONS handler for CORS preflight requests
+@app.options("/{path:path}")
+async def handle_options(path: str):
+    """Handle CORS preflight requests"""
+    return JSONResponse(
+        content={"message": "OK"},
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
+            "Access-Control-Max-Age": "86400"
+        }
+    )
 
 
 # WebSocket endpoint for real-time log streaming
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket endpoint for real-time log streaming"""
-    await manager.connect(websocket)
+    """WebSocket endpoint for real-time log streaming with enhanced error handling"""
+    # Enhanced connection logging with more details
+    origin = websocket.headers.get("origin")
+    user_agent = websocket.headers.get("user-agent", "Unknown")
+    host = websocket.headers.get("host", "Unknown")
+    
+    logger.info(f"WebSocket connection attempt - Origin: {origin}, Host: {host}, User-Agent: {user_agent}")
+    
     try:
+        # Accept connection with detailed logging
+        await manager.connect(websocket)
+        logger.info(f"WebSocket connection established successfully from {origin}")
+        
+        # Send initial connection confirmation
+        welcome_message = {
+            "timestamp": datetime.now().isoformat(),
+            "type": "connection_established",
+            "message": "WebSocket connection successful",
+            "server_info": {
+                "version": "1.0.0",
+                "endpoints": ["/ws", "/api/ws"],
+                "features": ["real_time_logs", "llm_monitoring", "trading_data"]
+            }
+        }
+        await websocket.send_text(json.dumps(welcome_message))
+        
         while True:
             # Keep connection alive and handle client messages
             data = await websocket.receive_text()
-            logger.info(f"Received WebSocket message: {data}")
+            logger.debug(f"Received WebSocket message: {data[:100]}{'...' if len(data) > 100 else ''}")
 
             # Parse and validate client message
             try:
@@ -340,15 +437,36 @@ async def websocket_endpoint(websocket: WebSocket):
                 logger.warning(f"Invalid JSON from client: {e}")
                 parsed_data = {"raw": data, "error": "invalid_json"}
 
+            # Handle specific message types
+            message_type = parsed_data.get("type", "unknown")
+            
             # Echo back or handle client commands with proper error handling
             try:
-                response = {
-                    "timestamp": datetime.now().isoformat(),
-                    "type": "echo",
-                    "message": f"Server received: {data}",
-                    "parsed": parsed_data
-                }
+                if message_type == "ping":
+                    response = {
+                        "timestamp": datetime.now().isoformat(),
+                        "type": "pong",
+                        "message": "Server is alive"
+                    }
+                elif message_type == "subscribe":
+                    # Handle subscription requests
+                    response = {
+                        "timestamp": datetime.now().isoformat(),
+                        "type": "subscription_confirmed",
+                        "subscriptions": parsed_data.get("channels", []),
+                        "message": f"Subscribed to {len(parsed_data.get('channels', []))} channels"
+                    }
+                else:
+                    # Default echo response
+                    response = {
+                        "timestamp": datetime.now().isoformat(),
+                        "type": "echo",
+                        "message": f"Server received: {message_type}",
+                        "parsed": parsed_data
+                    }
+                
                 await websocket.send_text(json.dumps(response))
+                
             except Exception as e:
                 logger.error(f"Failed to send WebSocket response: {e}")
                 # Try to send a simple error message
@@ -356,18 +474,33 @@ async def websocket_endpoint(websocket: WebSocket):
                     error_response = {
                         "timestamp": datetime.now().isoformat(),
                         "type": "error",
-                        "message": "Failed to process message"
+                        "message": "Failed to process message",
+                        "error_details": str(e)
                     }
                     await websocket.send_text(json.dumps(error_response))
                 except Exception:
                     # If we can't send error response, break the connection
+                    logger.error("Cannot send error response, breaking connection")
                     break
 
     except WebSocketDisconnect:
+        logger.info(f"WebSocket client disconnected gracefully from {origin}")
         manager.disconnect(websocket)
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        logger.error(f"WebSocket error from {origin}: {e}")
         manager.disconnect(websocket)
+        # Try to send error information back to client
+        try:
+            if websocket.client_state == websocket.CONNECTED:
+                error_msg = {
+                    "timestamp": datetime.now().isoformat(),
+                    "type": "connection_error",
+                    "message": "WebSocket connection error occurred",
+                    "error": str(e)
+                }
+                await websocket.send_text(json.dumps(error_msg))
+        except Exception:
+            pass  # Connection already closed
 
 
 # REST API Endpoints
@@ -1142,29 +1275,49 @@ async def restart_bot():
         ) from e
 
 
-# Add missing /api/trading-data endpoint
+# API Routes (prefixed with /api for consistency)
+# These routes provide the same functionality as the root-level routes
+# but with API prefix for better organization and frontend consistency
+
+@app.get("/api/status")
+async def get_api_status():
+    """API endpoint for bot status"""
+    return await get_status()
+
+@app.get("/api/health")
+async def get_api_health():
+    """API endpoint for health check"""
+    return await health_check()
+
 @app.get("/api/trading-data")
 async def get_api_trading_data():
     """API endpoint for trading data"""
     return await get_trading_data()
 
-# Add missing /api/llm/status endpoint
+@app.get("/api/logs")
+async def get_api_logs(limit: int = 100):
+    """API endpoint for logs"""
+    return await get_logs(limit)
+
 @app.get("/api/llm/status")
 async def get_api_llm_status():
     """API endpoint for LLM status"""
     return await get_llm_status()
 
-# Add missing /api/llm/metrics endpoint
 @app.get("/api/llm/metrics")
-async def get_api_llm_metrics(time_window: str | None = Query(None)):
+async def get_api_llm_metrics(time_window: str | None = Query(None, description="Time window: 1h, 24h, 7d, or all")):
     """API endpoint for LLM metrics"""
     return await get_llm_metrics(time_window)
 
-# Add missing /api/llm/activity endpoint
 @app.get("/api/llm/activity")
 async def get_api_llm_activity(limit: int = Query(50, ge=1, le=500)):
     """API endpoint for LLM activity"""
     return await get_llm_activity(limit)
+
+@app.post("/api/control/restart")
+async def get_api_restart_bot():
+    """API endpoint for bot restart"""
+    return await restart_bot()
 
 # Health check endpoint
 @app.get("/health")
@@ -1174,6 +1327,23 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "version": "1.0.0",
+    }
+
+
+@app.get("/ws/test")
+async def websocket_test():
+    """WebSocket connectivity test endpoint"""
+    return {
+        "websocket_available": True,
+        "endpoint": "/ws",
+        "alternative_endpoint": "/api/ws",
+        "connection_manager": {
+            "active_connections": len(manager.active_connections),
+            "log_buffer_size": len(manager.log_buffer),
+        },
+        "protocols": ["ws", "wss"],
+        "cors_enabled": True,
+        "timestamp": datetime.now().isoformat(),
     }
 
 

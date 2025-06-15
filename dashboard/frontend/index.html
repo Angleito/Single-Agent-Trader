@@ -8,150 +8,16 @@
     <meta name="theme-color" content="#1a1a1a" />
     <title>AI Trading Bot Dashboard</title>
     
-    <!-- Service Worker Cleanup -->
+    <!-- Minimal Service Worker Cleanup -->
     <script>
-      // Aggressive service worker cleanup to prevent phantom registrations
+      // Fast service worker cleanup
       (function() {
-        console.log('[SW Cleanup] Starting service worker cleanup...');
-        
-        // Function to unregister all service workers
-        async function unregisterAllServiceWorkers() {
-          if ('serviceWorker' in navigator) {
-            try {
-              const registrations = await navigator.serviceWorker.getRegistrations();
-              console.log(`[SW Cleanup] Found ${registrations.length} service worker registrations`);
-              
-              for (const registration of registrations) {
-                console.log(`[SW Cleanup] Unregistering service worker:`, registration.scope);
-                
-                // Special handling for Advanced Service Worker version 2.0.1
-                if (registration.active && registration.active.scriptURL) {
-                  const scriptURL = registration.active.scriptURL;
-                  if (scriptURL.includes('service-worker.js') || 
-                      scriptURL.includes('sw.js') ||
-                      scriptURL.includes('tradingview') ||
-                      scriptURL.includes('unpkg') ||
-                      scriptURL.includes('advanced-service-worker')) {
-                    console.log(`[SW Cleanup] Targeting problematic service worker: ${scriptURL}`);
-                  }
-                }
-                
-                await registration.unregister();
-              }
-              
-              if (registrations.length > 0) {
-                console.log('[SW Cleanup] All service workers unregistered successfully');
-              }
-            } catch (error) {
-              console.error('[SW Cleanup] Error during service worker cleanup:', error);
-            }
-          }
-        }
-        
-        // Clear service worker cache
-        async function clearServiceWorkerCaches() {
-          if ('caches' in window) {
-            try {
-              const cacheNames = await caches.keys();
-              console.log(`[SW Cleanup] Found ${cacheNames.length} cache(s) to clear`);
-              
-              for (const cacheName of cacheNames) {
-                // Target caches that might be created by service workers
-                if (cacheName.includes('sw-') || 
-                    cacheName.includes('service-worker') ||
-                    cacheName.includes('tradingview') ||
-                    cacheName.includes('advanced-sw') ||
-                    cacheName.includes('v2.0.1')) {
-                  console.log(`[SW Cleanup] Deleting cache: ${cacheName}`);
-                  await caches.delete(cacheName);
-                }
-              }
-            } catch (error) {
-              console.error('[SW Cleanup] Error clearing caches:', error);
-            }
-          }
-        }
-        
-        // Block known problematic script URLs
-        function blockProblematicScripts() {
-          const originalAppendChild = document.head.appendChild;
-          document.head.appendChild = function(child) {
-            if (child.tagName === 'SCRIPT' && child.src) {
-              const src = child.src.toLowerCase();
-              if (src.includes('service-worker.js') ||
-                  src.includes('sw.js') ||
-                  src.includes('advanced-service-worker') ||
-                  (src.includes('unpkg.com') && src.includes('service'))) {
-                console.warn('[SW Cleanup] Blocked problematic script:', child.src);
-                return child;
-              }
-            }
-            return originalAppendChild.call(this, child);
-          };
-        }
-        
-        // Override console messages from service workers to reduce noise
-        function interceptServiceWorkerLogs() {
-          const originalLog = console.log;
-          const originalWarn = console.warn;
-          const originalError = console.error;
-          
-          console.log = function(...args) {
-            const message = args.join(' ');
-            if (message.includes('[SW]') && 
-                (message.includes('Advanced Service Worker') || 
-                 message.includes('version 2.0.1') ||
-                 message.includes('Failed to construct \'Response\''))) {
-              console.warn('[SW Cleanup] Suppressed service worker log:', message);
-              return;
-            }
-            return originalLog.apply(console, args);
-          };
-          
-          console.error = function(...args) {
-            const message = args.join(' ');
-            if (message.includes('service-worker.js') && 
-                message.includes('Failed to construct \'Response\'')) {
-              console.warn('[SW Cleanup] Suppressed service worker error:', message);
-              return;
-            }
-            return originalError.apply(console, args);
-          };
-        }
-        
-        // Run all cleanup functions
-        unregisterAllServiceWorkers();
-        clearServiceWorkerCaches();
-        blockProblematicScripts();
-        interceptServiceWorkerLogs();
-        
-        // Run cleanup again after a short delay (in case any scripts register SWs)
-        setTimeout(() => {
-          unregisterAllServiceWorkers();
-          clearServiceWorkerCaches();
-        }, 2000);
-        
-        // Monitor for new service worker registrations and block them
+        // Quick cleanup without blocking
         if ('serviceWorker' in navigator) {
-          const originalRegister = navigator.serviceWorker.register;
-          navigator.serviceWorker.register = function(...args) {
-            const [scriptURL] = args;
-            console.warn('[SW Cleanup] Blocked service worker registration attempt:', scriptURL);
-            
-            // Log specific blocking for known problematic workers
-            if (scriptURL && typeof scriptURL === 'string') {
-              if (scriptURL.includes('advanced-service-worker') || 
-                  scriptURL.includes('service-worker.js') ||
-                  scriptURL.includes('v2.0.1')) {
-                console.warn('[SW Cleanup] Blocked known problematic service worker:', scriptURL);
-              }
-            }
-            
-            return Promise.reject(new Error('Service worker registration blocked by dashboard'));
-          };
+          navigator.serviceWorker.getRegistrations().then(registrations => {
+            registrations.forEach(registration => registration.unregister());
+          }).catch(() => {}); // Silent fail
         }
-        
-        console.log('[SW Cleanup] Service worker cleanup and monitoring initialized');
       })();
     </script>
 

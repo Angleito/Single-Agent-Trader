@@ -75,7 +75,7 @@ class ExperienceManager:
         # Background task for monitoring trades
         self._monitor_task: asyncio.Task | None = None
         self._running = False
-        
+
         # Initialize trade logger
         self.trade_logger = TradeLogger()
 
@@ -149,7 +149,7 @@ class ExperienceManager:
             f"Price: ${market_state.current_price} | "
             f"Position: {market_state.current_position.side}"
         )
-        
+
         # Log structured trade decision
         self.trade_logger.log_trade_decision(
             market_state=market_state,
@@ -211,7 +211,7 @@ class ExperienceManager:
             f"Trade ID: {trade_id} | Price: ${order.price} | "
             f"Size: {order.quantity} | Experience: {experience_id[:8]}..."
         )
-        
+
         # Log detailed trade entry
         logger.debug(
             f"Trade entry details: Symbol={order.symbol}, Side={order.side}, "
@@ -279,7 +279,7 @@ class ExperienceManager:
             }
             active_trade.market_snapshots.append(snapshot)
             active_trade.last_snapshot_time = datetime.now(UTC)
-            
+
             # Log position update
             self.trade_logger.log_position_update(
                 trade_id=active_trade.trade_id,
@@ -352,7 +352,7 @@ class ExperienceManager:
             f"PnL: ${realized_pnl:.2f} ({'+' if realized_pnl > 0 else ''}{realized_pnl/entry_price*100:.2f}%) | "
             f"Duration: {duration_minutes:.1f}min | {'✅ WIN' if realized_pnl > 0 else '❌ LOSS'}"
         )
-        
+
         # Log structured trade outcome
         self.trade_logger.log_trade_outcome(
             experience_id=active_trade.experience_id,

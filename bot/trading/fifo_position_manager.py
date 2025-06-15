@@ -269,6 +269,50 @@ class FIFOPositionManager:
         except Exception as e:
             logger.error(f"Failed to save position state (sync): {e}")
 
+    def reconcile_position_from_exchange(
+        self, symbol: str, side: str, size: Decimal, entry_price: Decimal
+    ) -> None:
+        """
+        Reconcile FIFO position from exchange position data.
+        
+        This creates a synthetic position based on exchange data without
+        individual lot tracking. Used during startup reconciliation.
+        
+        Args:
+            symbol: Trading symbol
+            side: Position side (LONG/SHORT)
+            size: Position size
+            entry_price: Entry price from exchange
+        """
+        with self._lock:
+            # Create a new FIFO position
+            fifo_pos = FIFOPosition(
+                symbol=symbol,
+                side=side,
+                total_realized_pnl=Decimal("0"),
+            )
+
+            # Create a single synthetic lot representing the entire position
+            synthetic_lot = TradeLot(
+                lot_id=f"exchange_reconcile_{symbol}_{datetime.now().isoformat()}",
+                symbol=symbol,
+                quantity=size,
+                purchase_price=entry_price,
+                purchase_date=datetime.now(),
+                remaining_quantity=size,
+            )
+
+            fifo_pos.lots.append(synthetic_lot)
+            self._positions[symbol] = fifo_pos
+
+            # Save state
+            self._save_state()
+
+            logger.info(
+                f"FIFO position reconciled from exchange for {symbol}: "
+                f"{side} {size} @ {entry_price}"
+            )
+
     def _save_state(self) -> None:
         """Save position state to file (non-blocking when called from async context)."""
         if not self._state_file:

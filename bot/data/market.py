@@ -80,6 +80,9 @@ class MarketDataProvider:
         self.interval = interval or settings.trading.interval
         self.candle_limit = settings.data.candle_limit
 
+        # For historical data, use spot symbol even if trading futures
+        self._data_symbol = self._get_data_symbol(self.symbol)
+
         # Data cache with TTL
         self._ohlcv_cache: list[MarketData] = []
         self._price_cache: dict[str, Any] = {}
@@ -115,6 +118,34 @@ class MarketDataProvider:
         logger.info(
             f"Initialized MarketDataProvider for {self.symbol} at {self.interval}"
         )
+        if self._data_symbol != self.symbol:
+            logger.info(f"Using {self._data_symbol} for historical data (trading: {self.symbol})")
+
+    def _get_data_symbol(self, symbol: str) -> str:
+        """
+        Get the appropriate symbol for fetching historical data.
+        
+        For futures contracts, we need to use the underlying spot symbol
+        since Coinbase provides historical data for spot pairs, not futures.
+        
+        Args:
+            symbol: Trading symbol (could be spot or futures)
+            
+        Returns:
+            Symbol to use for data fetching
+        """
+        # Import here to avoid circular imports
+        from ..exchange.futures_contract_mapper import FuturesContractMapper
+
+        # Check if this looks like a futures contract (contains month/expiry info)
+        if '-' in symbol and len(symbol.split('-')) >= 3:
+            # This is likely a futures contract, convert to spot
+            spot_symbol = FuturesContractMapper.futures_to_spot_symbol(symbol)
+            logger.debug(f"Converted futures symbol {symbol} to spot symbol {spot_symbol} for data fetching")
+            return spot_symbol
+
+        # This is already a spot symbol
+        return symbol
 
     def _build_websocket_jwt(self) -> str | None:
         """
@@ -289,6 +320,133 @@ class MarketDataProvider:
                 "No Coinbase credentials provided, using public endpoints only"
             )
 
+    async def _fetch_historical_data_batched(
+        self,
+        start_time: datetime,
+        end_time: datetime,
+        granularity: str,
+        required_candles: int
+    ) -> list[MarketData]:
+        """
+        Fetch historical data in multiple batches to get around API limits.
+        
+        Args:
+            start_time: Start time for data
+            end_time: End time for data
+            granularity: Candle granularity
+            required_candles: Total number of candles needed
+            
+        Returns:
+            List of MarketData objects covering the full time range
+        """
+        interval_seconds = self._interval_to_seconds(granularity)
+        batch_size = 300  # Safe batch size for API
+        all_data = []
+
+        logger.info(f"Fetching {required_candles} candles in batches of {batch_size}")
+
+        # Calculate the actual start time if not provided
+        if start_time is None:
+            start_time = end_time - timedelta(seconds=interval_seconds * required_candles)
+
+        # Work backwards from end_time in batches
+        current_end = end_time
+        batches_needed = (required_candles + batch_size - 1) // batch_size
+
+        for batch_num in range(batches_needed):
+            # Calculate start time for this batch
+            candles_in_batch = min(batch_size, required_candles - (batch_num * batch_size))
+            batch_start = current_end - timedelta(seconds=interval_seconds * candles_in_batch)
+
+            # Ensure we don't go before the requested start time
+            if batch_start < start_time:
+                batch_start = start_time
+
+            logger.info(f"Fetching batch {batch_num + 1}/{batches_needed}: {batch_start} to {current_end}")
+
+            try:
+                # Fetch this batch
+                batch_data = await self._fetch_single_batch(batch_start, current_end, granularity)
+                if batch_data:
+                    all_data.extend(batch_data)
+                    logger.info(f"Batch {batch_num + 1} completed: {len(batch_data)} candles")
+                else:
+                    logger.warning(f"Batch {batch_num + 1} returned no data")
+
+                # Add small delay between requests to be respectful to API
+                await asyncio.sleep(0.1)
+
+            except Exception as e:
+                logger.error(f"Error fetching batch {batch_num + 1}: {e}")
+                # Continue with other batches even if one fails
+
+            # Move to next batch
+            current_end = batch_start
+
+            # If we've reached the start time, stop
+            if current_end <= start_time:
+                break
+
+        # Sort all data by timestamp and remove duplicates
+        all_data.sort(key=lambda x: x.timestamp)
+        unique_data = []
+        seen_timestamps = set()
+
+        for data_point in all_data:
+            if data_point.timestamp not in seen_timestamps:
+                unique_data.append(data_point)
+                seen_timestamps.add(data_point.timestamp)
+
+        # Update cache with the combined data
+        self._ohlcv_cache = unique_data[-self.candle_limit:]
+        self._last_update = datetime.now(UTC)
+        self._cache_timestamps["ohlcv"] = self._last_update
+
+        logger.info(f"Successfully fetched {len(unique_data)} candles across {batches_needed} batches")
+        self._validate_data_sufficiency(len(unique_data))
+
+        return unique_data
+
+    async def _fetch_single_batch(
+        self,
+        start_time: datetime,
+        end_time: datetime,
+        granularity: str
+    ) -> list[MarketData]:
+        """Fetch a single batch of historical data."""
+        try:
+            url = f"{self.COINBASE_REST_URL}/api/v3/brokerage/market/products/{self._data_symbol}/candles"
+
+            params = {
+                "start": int(start_time.timestamp()),
+                "end": int(end_time.timestamp()),
+                "granularity": self._format_granularity(granularity),
+            }
+
+            async with self._session.get(url, params=params) as response:
+                if response.status != 200:
+                    raise Exception(f"API request failed with status {response.status}: {await response.text()}")
+
+                data = await response.json()
+                candles = data.get("candles", [])
+
+                # Convert to MarketData objects
+                batch_data = []
+                for candle in candles:
+                    try:
+                        market_data = self._parse_candle_data(candle)
+                        if self._validate_market_data(market_data):
+                            batch_data.append(market_data)
+                    except Exception as e:
+                        logger.warning(f"Failed to parse candle data: {e}")
+                        continue
+
+                return batch_data
+
+        except Exception as e:
+            logger.error(f"Failed to fetch batch from {start_time} to {end_time}: {e}")
+            return []
+
     async def fetch_historical_data(
         self,
         start_time: datetime | None = None,
@@ -311,9 +469,15 @@ class MarketDataProvider:
 
         # Calculate start time based on interval and limit
         interval_seconds = self._interval_to_seconds(granularity)
-        # Respect Coinbase API limit of 350 candles max
-        # Ensure we fetch enough data for indicators (minimum 100, prefer 200+)
-        required_candles = max(self.candle_limit, 200)  # Ensure minimum for indicators
+        # For 8 hours of 1-minute data, we need 480 candles
+        # Coinbase API limits us to 300 candles per request
+        # We'll need to make 2 requests to get the full 8 hours
+        required_candles = 480 if granularity == "1m" else max(self.candle_limit, 200)
+
+        # If we need more than 300 candles, we'll fetch in batches
+        if required_candles > 300:
+            return await self._fetch_historical_data_batched(start_time, end_time, granularity, required_candles)
+
         max_candles = min(required_candles, 300)  # Use 300 to be safe with API limits
 
         # Calculate the actual number of candles that will be requested
@@ -357,7 +521,7 @@ class MarketDataProvider:
             )
 
         logger.info(
-            f"Fetching historical data for {self.symbol} from {start_time} to {end_time}"
+            f"Fetching historical data for {self._data_symbol} from {start_time} to {end_time}"
         )
         logger.info(
             f"Requesting {expected_candles} candles at {api_granularity} granularity (requested: {granularity})"
@@ -372,8 +536,8 @@ class MarketDataProvider:
             )
 
         try:
-            # Use public API endpoint for historical candles
-            url = f"{self.COINBASE_REST_URL}/api/v3/brokerage/market/products/{self.symbol}/candles"
+            # Use public API endpoint for historical candles with data symbol
+            url = f"{self.COINBASE_REST_URL}/api/v3/brokerage/market/products/{self._data_symbol}/candles"
 
             params = {
                 "start": int(start_time.timestamp()),
@@ -436,7 +600,7 @@ class MarketDataProvider:
             return self._price_cache.get("price")
 
         try:
-            url = f"{self.COINBASE_REST_URL}/api/v3/brokerage/market/products/{self.symbol}"
+            url = f"{self.COINBASE_REST_URL}/api/v3/brokerage/market/products/{self._data_symbol}"
 
             async with self._session.get(url) as response:
                 if response.status != 200:

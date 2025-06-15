@@ -22,21 +22,21 @@ class TradeLogger:
     Logs trading activities in both human-readable and JSON formats
     for easy analysis and debugging of the memory-enhanced trading system.
     """
-    
+
     def __init__(self, log_dir: Path | None = None):
         """Initialize the trade logger."""
         self.log_dir = log_dir or Path("logs/trades")
         self.log_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Setup loggers
         self.logger = logging.getLogger("bot.trades")
         self.memory_logger = logging.getLogger("bot.memory")
-        
+
         # JSON log files
         self.decisions_file = self.log_dir / f"decisions_{datetime.now(UTC).strftime('%Y%m%d')}.jsonl"
         self.outcomes_file = self.log_dir / f"outcomes_{datetime.now(UTC).strftime('%Y%m%d')}.jsonl"
         self.memory_file = self.log_dir / f"memory_{datetime.now(UTC).strftime('%Y%m%d')}.jsonl"
-        
+
     def log_trade_decision(
         self,
         market_state: MarketState,
@@ -54,7 +54,7 @@ class TradeLogger:
             memory_context: Past experiences used in decision
         """
         timestamp = datetime.now(UTC)
-        
+
         # Extract key metrics
         indicators = {}
         if market_state.indicators:
@@ -63,17 +63,17 @@ class TradeLogger:
                 "cipher_a_dot": float(market_state.indicators.cipher_a_dot) if market_state.indicators.cipher_a_dot else None,
                 "cipher_b_wave": float(market_state.indicators.cipher_b_wave) if market_state.indicators.cipher_b_wave else None,
                 "cipher_b_money_flow": float(market_state.indicators.cipher_b_money_flow) if market_state.indicators.cipher_b_money_flow else None,
-                "ema_trend": "UP" if (market_state.indicators.ema_fast and market_state.indicators.ema_slow and 
+                "ema_trend": "UP" if (market_state.indicators.ema_fast and market_state.indicators.ema_slow and
                                      market_state.indicators.ema_fast > market_state.indicators.ema_slow) else "DOWN",
             }
-        
+
         dominance = {}
         if market_state.dominance_data:
             dominance = {
                 "stablecoin_dominance": float(market_state.dominance_data.stablecoin_dominance),
                 "dominance_24h_change": float(market_state.dominance_data.dominance_24h_change),
             }
-        
+
         # Create structured log entry
         decision_log = {
             "timestamp": timestamp.isoformat(),
@@ -96,10 +96,10 @@ class TradeLogger:
             "memory_used": memory_context is not None,
             "similar_experiences": len(memory_context.get("experiences", [])) if memory_context else 0,
         }
-        
+
         # Log to file
         self._append_json_log(self.decisions_file, decision_log)
-        
+
         # Human-readable log
         self.logger.info(
             f"Trade Decision: {trade_action.action} {market_state.symbol} @ ${market_state.current_price} | "
@@ -108,11 +108,11 @@ class TradeLogger:
             f"Memory={decision_log['similar_experiences']} experiences | "
             f"ID={experience_id}"
         )
-        
+
         # Log detailed rationale if available
         if trade_action.rationale:
             self.logger.info(f"Rationale: {trade_action.rationale[:200]}...")
-            
+
     def log_memory_query(
         self,
         query_params: dict[str, Any],
@@ -135,13 +135,13 @@ class TradeLogger:
             "execution_time_ms": execution_time_ms,
             "top_similarities": [r.get("similarity", 0) for r in results[:3]],
         }
-        
+
         self._append_json_log(self.memory_file, memory_log)
-        
+
         self.memory_logger.debug(
             f"Memory query returned {len(results)} experiences in {execution_time_ms:.1f}ms"
         )
-        
+
     def log_trade_outcome(
         self,
         experience_id: str,
@@ -173,9 +173,9 @@ class TradeLogger:
             "success": pnl > 0,
             "insights": insights,
         }
-        
+
         self._append_json_log(self.outcomes_file, outcome_log)
-        
+
         # Human-readable summary
         pnl_str = f"+${pnl:.2f}" if pnl > 0 else f"-${abs(pnl):.2f}"
         self.logger.info(
@@ -184,10 +184,10 @@ class TradeLogger:
             f"PnL={pnl_str} ({outcome_log['pnl_pct']:.1f}%) | "
             f"Duration={duration_minutes:.0f}min"
         )
-        
+
         if insights:
             self.logger.info(f"Insights: {insights}")
-            
+
     def log_pattern_statistics(self, pattern_stats: dict[str, dict[str, Any]]) -> None:
         """
         Log pattern performance statistics.
@@ -201,22 +201,22 @@ class TradeLogger:
             "patterns": pattern_stats,
             "total_patterns": len(pattern_stats),
         }
-        
+
         self._append_json_log(self.memory_file, stats_log)
-        
+
         # Log top performing patterns
         sorted_patterns = sorted(
             pattern_stats.items(),
             key=lambda x: x[1].get("success_rate", 0) * x[1].get("count", 0),
             reverse=True,
         )
-        
+
         for pattern, stats in sorted_patterns[:5]:
             self.memory_logger.info(
                 f"Pattern '{pattern}': {stats['success_rate']:.1%} win rate "
                 f"({stats['count']} trades, avg PnL=${stats['avg_pnl']:.2f})"
             )
-            
+
     def log_position_update(
         self,
         trade_id: str,
@@ -242,7 +242,7 @@ class TradeLogger:
             f"Max Profit=${max_favorable:.2f} | "
             f"Max Loss=${max_adverse:.2f}"
         )
-        
+
     def log_memory_storage(
         self,
         experience_id: str,
@@ -267,13 +267,13 @@ class TradeLogger:
             "patterns": patterns,
             "location": storage_location,
         }
-        
+
         self._append_json_log(self.memory_file, storage_log)
-        
+
         self.memory_logger.debug(
             f"Stored experience {experience_id} with patterns: {', '.join(patterns)}"
         )
-        
+
     def _append_json_log(self, file_path: Path, data: dict[str, Any]) -> None:
         """Append JSON data to log file."""
         try:

@@ -9,7 +9,7 @@ import asyncio
 import json
 import logging
 import threading
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -109,7 +109,7 @@ class PositionManager:
                 entry_price=None,
                 unrealized_pnl=Decimal("0"),
                 realized_pnl=Decimal("0"),
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
             )
 
     def get_all_positions(self) -> list[Position]:
@@ -160,7 +160,7 @@ class PositionManager:
                 # Position closed - move to history and remove from active
                 if symbol in self._positions:
                     closed_pos = self._positions.pop(symbol)
-                    closed_pos.timestamp = datetime.utcnow()
+                    closed_pos.timestamp = datetime.now(UTC)
                     self._position_history.append(closed_pos)
                     logger.info(
                         f"Position closed for {symbol}: {closed_pos.realized_pnl} PnL"
@@ -174,6 +174,56 @@ class PositionManager:
 
             # Persist state
             self._save_state()
+
+            return new_position.copy()
+
+    def update_position_from_exchange(
+        self, symbol: str, side: str, size: Decimal, entry_price: Decimal
+    ) -> Position:
+        """
+        Update position state based on actual exchange position data.
+        
+        This method is used during startup to reconcile local position state
+        with actual positions found on the exchange.
+        
+        Args:
+            symbol: Trading symbol
+            side: Position side (LONG/SHORT)
+            size: Position size
+            entry_price: Entry price from exchange
+            
+        Returns:
+            Updated position
+        """
+        with self._lock:
+            new_position = Position(
+                symbol=symbol,
+                side=side,
+                size=size,
+                entry_price=entry_price,
+                timestamp=datetime.now(UTC),
+                realized_pnl=Decimal("0"),
+                unrealized_pnl=Decimal("0"),
+            )
+
+            # Update position storage
+            self._positions[symbol] = new_position
+
+            # Update FIFO manager if enabled
+            if self.use_fifo:
+                self.fifo_manager.reconcile_position_from_exchange(
+                    symbol=symbol,
+                    side=side,
+                    size=size,
+                    entry_price=entry_price,
+                )
+
+            # Persist state
+            self._save_state()
+
+            logger.info(
+                f"Position reconciled from exchange for {symbol}: {side} {size} @ {entry_price}"
+            )
 
             return new_position.copy()
 
@@ -445,7 +495,7 @@ class PositionManager:
                 entry_price=fill_price,
                 unrealized_pnl=Decimal("0"),
                 realized_pnl=Decimal("0"),
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
             )
         else:
             # Modifying existing position
@@ -475,7 +525,7 @@ class PositionManager:
                     entry_price=None,
                     unrealized_pnl=Decimal("0"),
                     realized_pnl=current_pos.realized_pnl + realized_pnl,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(UTC),
                 )
             else:
                 # Position continues with new size
@@ -501,7 +551,7 @@ class PositionManager:
                     entry_price=new_entry_price,
                     unrealized_pnl=Decimal("0"),
                     realized_pnl=current_pos.realized_pnl,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(UTC),
                 )
 
         return new_position

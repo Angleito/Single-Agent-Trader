@@ -28,6 +28,7 @@ except ImportError:
 from ..config import settings
 from ..llm_logging import create_llm_logger, create_langchain_callback
 from ..types import MarketState, TradeAction
+from ..mcp.omnisearch_client import OmniSearchClient
 
 logger = logging.getLogger(__name__)
 
@@ -40,13 +41,14 @@ class LLMAgent:
     and current position to generate structured trading actions.
     """
 
-    def __init__(self, model_provider: str = None, model_name: str = None):
+    def __init__(self, model_provider: str = None, model_name: str = None, omnisearch_client: Optional[OmniSearchClient] = None):
         """
         Initialize the LLM agent.
 
         Args:
             model_provider: LLM provider ('openai', 'ollama')
             model_name: Specific model to use
+            omnisearch_client: Optional OmniSearch client for market intelligence
         """
         self.model_provider = model_provider or settings.llm.provider
         self.model_name = model_name or settings.llm.model_name
@@ -66,6 +68,12 @@ class LLMAgent:
         self._completion_logger: Optional[Any] = None
         self._langchain_callback: Optional[Any] = None
         self._completion_count = 0
+        
+        # OmniSearch integration
+        self._omnisearch_client = omnisearch_client
+        self._omnisearch_enabled = (omnisearch_client is not None and 
+                                   settings.omnisearch.enabled and 
+                                   settings.omnisearch.api_key is not None)
 
         # Initialize completion logging if enabled
         if settings.llm.enable_completion_logging:
@@ -94,13 +102,26 @@ class LLMAgent:
             self._initialize_model()
         else:
             logger.warning("LangChain not available - using fallback decision logic")
+            
+        # Log OmniSearch status
+        if self._omnisearch_enabled:
+            logger.info("🔍 OmniSearch integration enabled for enhanced market intelligence")
+        else:
+            logger.info("OmniSearch integration disabled - using standard analysis only")
 
     def _load_prompt_template(self) -> None:
         """Load the prompt template for trading decisions."""
         # Default prompt template
-        default_prompt = """You are an expert cryptocurrency futures trader analyzing market data for leveraged positions.
+        default_prompt = """You are an expert cryptocurrency momentum trader operating on 5-minute timeframes for leveraged futures positions.
 
-Respond ONLY in valid JSON matching this exact schema:
+TRADING PHILOSOPHY: You are a momentum-based trader. You trade ONLY when you detect strong momentum signals that develop within 5-minute candles. If no clear momentum is present, you WAIT for the next 5-minute candle to complete.
+
+Respond with BOTH a detailed analysis AND valid JSON. Format your response as:
+
+MOMENTUM ANALYSIS:
+[Provide a detailed 3-4 paragraph analysis explaining your momentum assessment, what signals you're seeing, why you're making this decision, and how you evaluated the 5-minute timeframe data]
+
+JSON_DECISION:
 {{
   "action": "LONG|SHORT|CLOSE|HOLD",
   "size_pct": 0-100,
@@ -116,6 +137,14 @@ IMPORTANT VALIDATION RULES:
 - stop_loss_pct must be > 0 (e.g., 1.0 for 1.0%)
 - leverage must be >= 1 (e.g., 1, 2, 5, 10)
 - For HOLD actions, use: take_profit_pct=1.0, stop_loss_pct=1.0, leverage=1
+
+MOMENTUM TRADING RULES:
+1. Only trade when you see STRONG momentum building within the current 5-minute period
+2. Look for price acceleration, volume spikes, and indicator alignment
+3. If momentum is weak or unclear, always choose HOLD and wait for next candle
+4. Momentum trades should be quick and decisive - capture the move and exit
+5. Use higher position sizes (15-25%) when momentum is very strong
+6. Use lower position sizes (5-10%) when momentum is moderate
 
 Market Analysis:
 - Symbol: {symbol}
@@ -157,6 +186,9 @@ Dominance Candlestick Analysis (3-minute candles):
 VuManChu Dominance Technical Analysis:
 {dominance_vumanchu_analysis}
 
+Financial Market Intelligence (Web Search Results):
+{financial_context}
+
 Historical Price Data (24h context):
 {ohlcv_tail}
 
@@ -188,25 +220,31 @@ Dominance Candlestick Patterns (TradingView-style analysis):
 - Divergences between dominance and price = Potential reversal signals
 - Compare dominance candlesticks with VuManChu indicators for confluence
 
-Instructions:
-1. Analyze technical indicators and price action
-2. Consider market sentiment from stablecoin dominance
-3. Analyze dominance candlestick patterns for additional confirmation
-4. Look for divergences between price and dominance patterns
-5. Review Cipher B signal alignment but make your own judgment
-6. You have FINAL SAY - you can trade even if Cipher B signals are mixed
-7. Consider signal alignment as one factor, not a hard rule
-8. Assess margin health and position risk
-9. Choose appropriate leverage (1x to {max_leverage}x)
-10. Generate trading action with proper risk parameters
-11. Factor dominance into position sizing (high dominance = smaller positions)
-12. Use dominance candle trends to confirm VuManChu signals
-13. **IMPORTANT: Apply VuManChu analysis to dominance data for enhanced signals**
-14. Use dominance Cipher A/B signals as confirmation (INVERTED: rising dominance = bearish for crypto)
-15. Look for price-dominance divergences as strong reversal signals
-16. Weight VuManChu dominance analysis heavily in decision making
-17. Provide brief rationale (max 120 characters)
-18. Respond ONLY with valid JSON, no other text"""
+MOMENTUM ANALYSIS INSTRUCTIONS:
+1. **PRIMARY**: Analyze the last 5-10 candles for momentum acceleration patterns
+2. **VOLUME**: Look for volume spikes accompanying price moves (strong momentum signal)
+3. **PRICE ACTION**: Identify breakouts, trend accelerations, or momentum shifts
+4. **INDICATOR MOMENTUM**: Check if RSI is trending up/down rapidly, EMA crossovers, momentum in VuManChu
+5. **DOMINANCE CONTEXT**: Use stablecoin dominance as market regime filter (high dominance = risk-off)
+6. **DECISION TIMEFRAME**: You are evaluating THIS 5-minute candle - is momentum building RIGHT NOW?
+7. **HOLD PREFERENCE**: When in doubt, HOLD. Only trade when momentum is unmistakable
+8. **POSITION SIZING**: Scale size based on momentum strength:
+   - Explosive momentum (volume spike + price acceleration): 20-25%
+   - Strong momentum (clear direction + indicator alignment): 15-20%
+   - Moderate momentum (some signals but not all): 5-10%
+   - Weak/unclear momentum: HOLD (0%)
+9. **EXIT STRATEGY**: Momentum trades are quick - target 1-3% moves, stop at 0.5-1% loss
+10. **CIPHER B OVERRIDE**: You can trade even with mixed Cipher B if momentum is very strong
+11. **TIME AWARENESS**: Remember, you trade on 5-minute candle closes - wait for clear signals
+12. **RATIONALE**: Explain momentum reasoning in under 120 characters for the JSON, but provide full detail in the analysis section
+13. Always provide BOTH the detailed momentum analysis AND the JSON decision
+
+FINANCIAL INTELLIGENCE INTEGRATION:
+- Use the Financial Market Intelligence section to validate or challenge your technical analysis
+- Strong sentiment divergence from technicals may indicate potential reversals or false signals
+- Consider market correlations - high positive correlation means crypto may follow stock market moves
+- Factor in recent news impact levels and sentiment when assessing momentum strength
+- NASDAQ sentiment provides broader market context for risk-on/risk-off dynamics"""
 
         self.prompt_text = default_prompt
 
@@ -298,7 +336,7 @@ Instructions:
 
         try:
             # Prepare input data for the LLM
-            llm_input = self._prepare_llm_input(market_state)
+            llm_input = await self._prepare_llm_input(market_state)
 
             # Get decision from LLM or fallback
             if self._chain is not None:
@@ -353,7 +391,7 @@ Instructions:
                 rationale="Error in analysis - holding position",
             )
 
-    def _prepare_llm_input(self, market_state: MarketState) -> dict[str, Any]:
+    async def _prepare_llm_input(self, market_state: MarketState) -> dict[str, Any]:
         """
         Prepare market state data for LLM input.
 
@@ -437,6 +475,9 @@ Instructions:
 
         # Calculate Cipher B signal alignment
         cipher_b_alignment = self._calculate_cipher_b_alignment(market_state.indicators)
+        
+        # Get financial context from OmniSearch if enabled
+        financial_context = await self._get_financial_context(market_state)
 
         return {
             "symbol": market_state.symbol,
@@ -460,6 +501,7 @@ Instructions:
             "max_leverage": settings.trading.max_futures_leverage,
             "futures_enabled": settings.trading.enable_futures,
             "auto_cash_transfer": settings.trading.auto_cash_transfer,
+            "financial_context": financial_context,  # Add OmniSearch financial context
             **dominance_data,  # Add dominance data to the context
         }
 
@@ -684,6 +726,153 @@ Instructions:
             logger.warning(f"Error formatting VuManChu dominance analysis: {e}")
             return f"Error formatting VuManChu dominance analysis: {str(e)}"
 
+    async def _get_financial_context(self, market_state: MarketState) -> str:
+        """
+        Get financial context from OmniSearch for enhanced market intelligence.
+        
+        Args:
+            market_state: Current market state containing symbol and price data
+            
+        Returns:
+            Formatted string with financial context and sentiment analysis
+        """
+        if not self._omnisearch_enabled or not self._omnisearch_client:
+            return "OmniSearch disabled - no external market intelligence available"
+        
+        try:
+            # Extract base symbol for searches
+            base_symbol = market_state.symbol.split("-")[0]  # "BTC-USD" -> "BTC"
+            
+            context_sections = []
+            
+            # 1. Get crypto sentiment for current symbol
+            if settings.omnisearch.enable_crypto_sentiment:
+                try:
+                    crypto_sentiment = await self._omnisearch_client.search_crypto_sentiment(base_symbol)
+                    sentiment_section = [
+                        f"=== {base_symbol} Sentiment Analysis ===",
+                        f"Overall Sentiment: {crypto_sentiment.overall_sentiment.upper()} ({crypto_sentiment.sentiment_score:+.2f})",
+                        f"Confidence: {crypto_sentiment.confidence:.1%}",
+                        f"Sources: {crypto_sentiment.source_count}",
+                    ]
+                    
+                    if crypto_sentiment.news_sentiment is not None:
+                        sentiment_section.append(f"News Sentiment: {crypto_sentiment.news_sentiment:+.2f}")
+                    if crypto_sentiment.social_sentiment is not None:
+                        sentiment_section.append(f"Social Sentiment: {crypto_sentiment.social_sentiment:+.2f}")
+                    if crypto_sentiment.technical_sentiment is not None:
+                        sentiment_section.append(f"Technical Sentiment: {crypto_sentiment.technical_sentiment:+.2f}")
+                    
+                    if crypto_sentiment.key_drivers:
+                        sentiment_section.append(f"Key Drivers: {', '.join(crypto_sentiment.key_drivers[:3])}")
+                    if crypto_sentiment.risk_factors:
+                        sentiment_section.append(f"Risk Factors: {', '.join(crypto_sentiment.risk_factors[:3])}")
+                    
+                    context_sections.append("\n".join(sentiment_section))
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to get crypto sentiment for {base_symbol}: {e}")
+                    context_sections.append(f"=== {base_symbol} Sentiment Analysis ===\nUnavailable - API error")
+            
+            # 2. Get NASDAQ sentiment for market context
+            if settings.omnisearch.enable_nasdaq_sentiment:
+                try:
+                    nasdaq_sentiment = await self._omnisearch_client.search_nasdaq_sentiment()
+                    nasdaq_section = [
+                        "=== NASDAQ Market Sentiment ===",
+                        f"Overall Sentiment: {nasdaq_sentiment.overall_sentiment.upper()} ({nasdaq_sentiment.sentiment_score:+.2f})",
+                        f"Confidence: {nasdaq_sentiment.confidence:.1%}",
+                    ]
+                    
+                    if nasdaq_sentiment.key_drivers:
+                        nasdaq_section.append(f"Key Market Drivers: {', '.join(nasdaq_sentiment.key_drivers[:2])}")
+                    if nasdaq_sentiment.risk_factors:
+                        nasdaq_section.append(f"Market Risks: {', '.join(nasdaq_sentiment.risk_factors[:2])}")
+                    
+                    context_sections.append("\n".join(nasdaq_section))
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to get NASDAQ sentiment: {e}")
+                    context_sections.append("=== NASDAQ Market Sentiment ===\nUnavailable - API error")
+            
+            # 3. Get correlation analysis between crypto and traditional markets
+            if settings.omnisearch.enable_correlation_analysis:
+                try:
+                    correlation = await self._omnisearch_client.search_market_correlation(base_symbol, "QQQ")
+                    correlation_section = [
+                        f"=== {base_symbol}-NASDAQ Correlation ===",
+                        f"Correlation: {correlation.direction.upper()} {correlation.strength.upper()} ({correlation.correlation_coefficient:+.3f})",
+                        f"Timeframe: {correlation.timeframe}",
+                    ]
+                    
+                    if correlation.beta is not None:
+                        correlation_section.append(f"Beta: {correlation.beta:.2f}")
+                    
+                    # Interpret correlation for trading context
+                    if abs(correlation.correlation_coefficient) > 0.5:
+                        if correlation.correlation_coefficient > 0:
+                            correlation_section.append("⚠️ Strong positive correlation - crypto may follow stock market moves")
+                        else:
+                            correlation_section.append("📈 Strong negative correlation - crypto may move opposite to stocks")
+                    else:
+                        correlation_section.append("➡️ Weak correlation - crypto moving independently from stocks")
+                    
+                    context_sections.append("\n".join(correlation_section))
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to get market correlation for {base_symbol}: {e}")
+                    context_sections.append(f"=== {base_symbol}-NASDAQ Correlation ===\nUnavailable - API error")
+            
+            # 4. Get recent financial news
+            try:
+                # Search for crypto-specific news
+                crypto_news = await self._omnisearch_client.search_financial_news(
+                    f"{base_symbol} cryptocurrency", 
+                    limit=3, 
+                    timeframe="24h"
+                )
+                
+                if crypto_news:
+                    news_section = [f"=== Recent {base_symbol} News (24h) ==="]
+                    for news in crypto_news[:3]:
+                        sentiment_emoji = {
+                            "positive": "🟢",
+                            "negative": "🔴", 
+                            "neutral": "⚪"
+                        }.get(news.sentiment, "❓")
+                        
+                        news_line = f"{sentiment_emoji} {news.base_result.title[:80]}..."
+                        if news.impact_level:
+                            news_line += f" [{news.impact_level.upper()} IMPACT]"
+                        news_section.append(news_line)
+                    
+                    context_sections.append("\n".join(news_section))
+                else:
+                    context_sections.append(f"=== Recent {base_symbol} News (24h) ===\nNo recent news found")
+                    
+            except Exception as e:
+                logger.warning(f"Failed to get financial news for {base_symbol}: {e}")
+                context_sections.append(f"=== Recent {base_symbol} News (24h) ===\nUnavailable - API error")
+            
+            # Combine all sections
+            if context_sections:
+                full_context = "\n\n".join(context_sections)
+                
+                # Add interpretation guidance
+                full_context += "\n\n=== Market Intelligence Summary ===\n"
+                full_context += "Use this external intelligence to validate or challenge your technical analysis.\n"
+                full_context += "Strong sentiment divergence from technicals may indicate potential reversals.\n"
+                full_context += "High market correlations suggest macro risk-on/risk-off dynamics."
+                
+                logger.info(f"🔍 OmniSearch: Retrieved financial context for {base_symbol}")
+                return full_context
+            else:
+                return "No financial context available from OmniSearch"
+                
+        except Exception as e:
+            logger.error(f"Error getting financial context: {e}")
+            return f"Error retrieving financial context: {str(e)}"
+
     async def _get_llm_decision(self, llm_input: dict[str, Any]) -> TradeAction:
         """
         Get decision from LLM using LangChain with enhanced logging.
@@ -711,9 +900,22 @@ Instructions:
 
             # For o3 models, we need to handle the response differently due to token usage format issues
             if self.model_name.startswith("o3"):
-                # Use custom response handling for o3 models
-                result = await self._chain.ainvoke(llm_input)
-                # Manual token usage tracking would go here if needed
+                # Use custom response handling for o3 models - bypass the chain and parse manually
+                from langchain_core.messages import HumanMessage
+                
+                # Format the prompt manually
+                formatted_prompt = self._prompt_template.format(**llm_input)
+                message = HumanMessage(content=formatted_prompt)
+                
+                # Get raw response from model
+                raw_response = await self._model.ainvoke([message])
+                response_content = raw_response.content
+                
+                # Log the full response for debugging
+                logger.info(f"Full LLM Response:\n{response_content}")
+                
+                # Extract JSON from the response
+                result = self._extract_json_from_response(response_content)
             else:
                 result = await self._chain.ainvoke(llm_input, **chain_kwargs)
 
@@ -858,6 +1060,8 @@ Instructions:
             ):
                 reduce_only = True
 
+        omnisearch_status = " (OmniSearch enabled)" if self._omnisearch_enabled else " (OmniSearch disabled)"
+        
         return TradeAction(
             action=action,
             size_pct=size_pct,
@@ -865,7 +1069,7 @@ Instructions:
             stop_loss_pct=1.5,
             leverage=leverage,
             reduce_only=reduce_only,
-            rationale="Fallback logic - simple trend following",
+            rationale=f"Fallback logic - simple trend following{omnisearch_status}",
         )
 
     def is_available(self) -> bool:
@@ -894,6 +1098,8 @@ Instructions:
             "prompt_loaded": self._prompt_template is not None,
             "completion_logging_enabled": settings.llm.enable_completion_logging,
             "completion_count": self._completion_count,
+            "omnisearch_enabled": self._omnisearch_enabled,
+            "omnisearch_client_available": self._omnisearch_client is not None,
         }
 
         # Add performance metrics if completion logger is available
@@ -915,6 +1121,86 @@ Instructions:
                 logger.warning(f"Could not retrieve performance metrics: {e}")
 
         return status
+
+    def _extract_json_from_response(self, response_content: str) -> dict[str, Any]:
+        """
+        Extract JSON from a verbose response that contains both analysis and JSON.
+        
+        Args:
+            response_content: Full response content from LLM
+            
+        Returns:
+            Dictionary containing the JSON decision
+        """
+        import json
+        import re
+        
+        try:
+            # Look for JSON_DECISION: followed by JSON
+            json_pattern = r'JSON_DECISION:\s*(\{.*?\})'
+            match = re.search(json_pattern, response_content, re.DOTALL)
+            
+            if match:
+                json_str = match.group(1)
+                # Clean up the JSON string
+                json_str = json_str.strip()
+                return json.loads(json_str)
+            
+            # Fallback: look for any JSON-like structure
+            json_pattern = r'\{[^{}]*"action"[^{}]*\}'
+            match = re.search(json_pattern, response_content, re.DOTALL)
+            
+            if match:
+                json_str = match.group(0)
+                return json.loads(json_str)
+                
+            # Last resort: try to find just the values and construct JSON
+            logger.warning("Could not find JSON in response, attempting to parse manually")
+            
+            # Extract individual fields
+            action_match = re.search(r'"action":\s*"([^"]+)"', response_content)
+            size_match = re.search(r'"size_pct":\s*(\d+(?:\.\d+)?)', response_content)
+            tp_match = re.search(r'"take_profit_pct":\s*(\d+(?:\.\d+)?)', response_content)
+            sl_match = re.search(r'"stop_loss_pct":\s*(\d+(?:\.\d+)?)', response_content)
+            leverage_match = re.search(r'"leverage":\s*(\d+)', response_content)
+            reduce_match = re.search(r'"reduce_only":\s*(true|false)', response_content)
+            rationale_match = re.search(r'"rationale":\s*"([^"]+)"', response_content)
+            
+            if action_match:
+                return {
+                    "action": action_match.group(1),
+                    "size_pct": float(size_match.group(1)) if size_match else 0,
+                    "take_profit_pct": float(tp_match.group(1)) if tp_match else 2.0,
+                    "stop_loss_pct": float(sl_match.group(1)) if sl_match else 1.0,
+                    "leverage": int(leverage_match.group(1)) if leverage_match else 1,
+                    "reduce_only": reduce_match.group(1) == "true" if reduce_match else False,
+                    "rationale": rationale_match.group(1) if rationale_match else "Parsed from verbose response"
+                }
+            
+            # Final fallback - return HOLD
+            logger.error("Could not parse any decision from response, defaulting to HOLD")
+            return {
+                "action": "HOLD",
+                "size_pct": 0,
+                "take_profit_pct": 1.0,
+                "stop_loss_pct": 1.0,
+                "leverage": 1,
+                "reduce_only": False,
+                "rationale": "Failed to parse response"
+            }
+            
+        except Exception as e:
+            logger.error(f"Error parsing JSON from response: {e}")
+            # Return safe default
+            return {
+                "action": "HOLD",
+                "size_pct": 0,
+                "take_profit_pct": 1.0,
+                "stop_loss_pct": 1.0,
+                "leverage": 1,
+                "reduce_only": False,
+                "rationale": "JSON parsing error"
+            }
 
     def log_decision_with_validation(
         self,

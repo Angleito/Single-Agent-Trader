@@ -102,7 +102,7 @@ class RiskManager:
             modified_action, trade_fees = fee_calculator.adjust_position_size_for_fees(
                 modified_action, self._account_balance, current_price
             )
-            
+
             if modified_action.size_pct == 0 and trade_action.action in ["LONG", "SHORT"]:
                 return (
                     False,
@@ -115,7 +115,7 @@ class RiskManager:
             is_profitable, profit_reason = fee_calculator.validate_trade_profitability(
                 modified_action, position_value, current_price
             )
-            
+
             if not is_profitable:
                 return (
                     False,
@@ -290,7 +290,7 @@ class RiskManager:
         # Calculate potential loss (stop loss) + fees
         max_loss_pct = Decimal(str(trade_action.stop_loss_pct)) / Decimal("100")
         max_loss_usd = leveraged_exposure * max_loss_pct
-        
+
         # Add trading fees to the max loss
         if trade_fees and trade_fees.total_fee > 0:
             max_loss_usd += trade_fees.total_fee
@@ -298,7 +298,7 @@ class RiskManager:
         # Calculate potential gain (take profit) - fees
         max_gain_pct = Decimal(str(trade_action.take_profit_pct)) / Decimal("100")
         max_gain_usd = leveraged_exposure * max_gain_pct
-        
+
         # Subtract trading fees from the max gain
         if trade_fees and trade_fees.total_fee > 0:
             max_gain_usd -= trade_fees.total_fee
@@ -306,7 +306,7 @@ class RiskManager:
 
         # Recalculate risk/reward ratio with fees
         risk_reward_ratio = (
-            float(max_gain_usd / max_loss_usd) if max_loss_usd > 0 
+            float(max_gain_usd / max_loss_usd) if max_loss_usd > 0
             else trade_action.take_profit_pct / trade_action.stop_loss_pct
         )
 

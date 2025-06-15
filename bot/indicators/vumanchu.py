@@ -2151,10 +2151,24 @@ class VuManChuIndicators:
                         # Handle None values by using float64 dtype as default
                         if default_val is None:
                             result[col] = pd.Series(dtype="float64", index=result.index)
+                        elif isinstance(default_val, list):
+                            # Handle list values by using object dtype
+                            result[col] = pd.Series(dtype="object", index=result.index)
                         else:
-                            result[col] = pd.Series(
-                                dtype=type(default_val), index=result.index
-                            )
+                            # Handle other types safely
+                            val_type = type(default_val)
+                            if val_type in [int, float, bool, str]:
+                                # Use numpy dtypes for basic types
+                                dtype_map = {
+                                    int: "int64",
+                                    float: "float64",
+                                    bool: "bool",
+                                    str: "object"
+                                }
+                                result[col] = pd.Series(dtype=dtype_map[val_type], index=result.index)
+                            else:
+                                # For complex types, use object dtype
+                                result[col] = pd.Series(dtype="object", index=result.index)
 
                 # Set the latest values
                 for col, val in {

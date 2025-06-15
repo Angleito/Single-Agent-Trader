@@ -233,7 +233,7 @@ class VisibilityHandler {
   private debounceTimer: number | null = null;
   private lastVisibilityChange = 0;
   private readonly DEBOUNCE_DELAY = 500; // 500ms minimum between visibility changes
-  private readonly INIT_DELAY = 2000; // 2s delay to prevent false triggers during page load
+  private readonly INIT_DELAY = 100; // Minimal delay to prevent false triggers during page load
   private processVisibilityChange!: (newVisible: boolean, source: string) => void;
 
   constructor() {
@@ -993,9 +993,23 @@ class DashboardApp {
    */
   private async initializeChart(): Promise<void> {
     try {
-      const baseUrl = this.config.api_base_url.endsWith('/api') 
-        ? this.config.api_base_url.slice(0, -4) 
-        : this.config.api_base_url;
+      // Chart URL Construction: Ensure proper /api prefix for TradingView UDF calls
+      // Chart makes calls to: /udf/config, /udf/symbols, /udf/history, /udf/marks
+      // These need to go through /api/* for nginx proxy or direct to backend/api/*
+      let baseUrl = this.config.api_base_url;
+      
+      // If running through nginx proxy (localhost), append /api since getApiBaseUrl returns just the base
+      const host = window.location.host;
+      if (baseUrl === `${window.location.protocol}//${host}` && 
+          (host.includes('localhost:8080') || host.includes('localhost:3000') || 
+           host.includes('127.0.0.1:8080') || host.includes('127.0.0.1:3000'))) {
+        baseUrl = `${baseUrl}/api`;
+      }
+      
+      // Ensure the base URL ends with /api for proper chart API calls
+      if (!baseUrl.endsWith('/api')) {
+        baseUrl = `${baseUrl}/api`;
+      }
       
       // Check network connectivity before initialization
       if (!navigator.onLine) {
@@ -1445,12 +1459,28 @@ class DashboardApp {
 
   /**
    * Get WebSocket URL from environment or default
+   * 
+   * WebSocket URL Construction Logic:
+   * 1. For nginx proxy (localhost:3000/8080): Uses /api/ws through proxy
+   *    - nginx /api/ location includes WebSocket upgrade support
+   * 2. For direct backend: Uses environment variables or constructs WebSocket URL
+   * 3. Handles various URL formats: absolute, protocol-relative, relative paths
    */
   private getWebSocketUrl(): string {
-    // Check for environment variable first
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    
+    // In development mode (localhost with nginx proxy), always use proxy
+    if (host.includes('localhost:8080') || host.includes('localhost:3000') || 
+        host.includes('127.0.0.1:8080') || host.includes('127.0.0.1:3000')) {
+      // Nginx proxy will forward /api/ws to the backend automatically
+      // WebSocket upgrade is configured within the /api/ location block
+      return `${protocol}//${host}/api/ws`;
+    }
+    
+    // Check for environment variable for non-proxy scenarios
     const envWsUrl = (import.meta.env.VITE_WS_URL as string) || (window as any).__WS_URL__;
     if (envWsUrl) {
-      
       // Handle absolute URLs (already include protocol and host)
       if (envWsUrl.startsWith('ws://') || envWsUrl.startsWith('wss://')) {
         return envWsUrl;
@@ -1458,32 +1488,16 @@ class DashboardApp {
       
       // Handle protocol-relative URLs
       if (envWsUrl.startsWith('//')) {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         return `${protocol}${envWsUrl}`;
       }
       
       // Handle relative paths from environment variables
       if (envWsUrl.startsWith('/')) {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const host = window.location.host;
-        const fullUrl = `${protocol}//${host}${envWsUrl}`;
-        return fullUrl;
+        return `${protocol}//${host}${envWsUrl}`;
       }
       
       // Fallback: treat as relative path
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.host;
-      const fullUrl = `${protocol}//${host}/${envWsUrl.replace(/^\/+/, '')}`;
-      return fullUrl;
-    }
-
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    
-    // In development mode (Vite dev server on port 3000), use proxy to backend
-    if (host.includes('localhost:3000') || host.includes('127.0.0.1:3000')) {
-      // Vite proxy will forward /ws to the backend automatically
-      return `${protocol}//${host}/ws`;
+      return `${protocol}//${host}/${envWsUrl.replace(/^\/+/, '')}`;
     }
     
     // In production or other environments, construct URL based on current host
@@ -1492,21 +1506,30 @@ class DashboardApp {
 
   /**
    * Get API base URL from environment or default
+   * 
+   * URL Construction Logic:
+   * 1. For nginx proxy (localhost:3000/8080): Returns base URL (http://localhost:3000)
+   *    - Frontend calls /api/* which nginx forwards to dashboard-backend:8000/api/*
+   * 2. For direct backend: Uses environment variables with /api suffix
+   * 3. For production: Uses environment variables or constructs from current host
    */
   private getApiBaseUrl(): string {
-    // Check for environment variable first
-    const envApiUrl = (import.meta.env.VITE_API_BASE_URL as string) || (import.meta.env.VITE_API_URL as string) || (window as any).__API_URL__;
-    if (envApiUrl) {
-      return envApiUrl.endsWith('/api') ? envApiUrl : `${envApiUrl}/api`;
-    }
-
     const protocol = window.location.protocol;
     const host = window.location.host;
     
-    // In development mode (Vite dev server on port 3000), use proxy to backend
-    if (host.includes('localhost:3000') || host.includes('127.0.0.1:3000')) {
-      // Vite proxy will forward /api to the backend automatically
-      return `${protocol}//${host}/api`;
+    // In development mode (localhost with nginx proxy), always use proxy
+    if (host.includes('localhost:8080') || host.includes('localhost:3000') || 
+        host.includes('127.0.0.1:8080') || host.includes('127.0.0.1:3000')) {
+      // Nginx proxy will forward /api/* to the backend automatically
+      // Return base URL without /api suffix to avoid double /api appending
+      return `${protocol}//${host}`;
+    }
+    
+    // Check for environment variable for non-proxy scenarios
+    const envApiUrl = (import.meta.env.VITE_API_BASE_URL as string) || (import.meta.env.VITE_API_URL as string) || (window as any).__API_URL__;
+    if (envApiUrl) {
+      // For direct backend URLs (non-proxy), ensure /api suffix
+      return envApiUrl.endsWith('/api') ? envApiUrl : `${envApiUrl}/api`;
     }
     
     // In production or other environments, construct URL based on current host
@@ -2032,7 +2055,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           </div>
         `;
       }
-    }, 15000); // 15 second timeout for initialization
+    }, 8000); // 8 second timeout for initialization
     
     await globalDashboardApp.initialize();
     clearTimeout(initTimeout);
