@@ -97,8 +97,8 @@ COPY --chown=botuser:botuser docs/ ./docs/
 RUN mkdir -p /app/config /app/logs /app/data /app/prompts \
     && chown -R botuser:botuser /app
 
-# Copy prompt files if they exist
-COPY --chown=botuser:botuser prompts/*.md ./prompts/ || true
+# Copy prompt files
+COPY --chown=botuser:botuser prompts/*.txt ./prompts/
 
 # Copy health check script
 COPY --chown=botuser:botuser healthcheck.sh /app/healthcheck.sh
