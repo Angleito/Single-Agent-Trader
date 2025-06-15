@@ -1,5 +1,5 @@
-# Simple AI Trading Bot Dockerfile
-# Optimized for macOS with OrbStack
+# AI Trading Bot Dockerfile with Multi-Exchange Support
+# Optimized for VPS deployment with Bluefin integration
 
 # Build stage
 FROM python:3.12-slim AS builder
@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     ca-certificates \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Poetry
@@ -37,12 +38,9 @@ WORKDIR /app
 # Copy poetry files
 COPY pyproject.toml poetry.lock* ./
 
-# Install dependencies and ensure venv is in project
+# Install main dependencies with Poetry
 RUN poetry config virtualenvs.in-project true \
     && poetry install --only=main --no-root \
-    && poetry run pip list \
-    && ls -la /app/ \
-    && find /app -name ".venv" -type d \
     && rm -rf $POETRY_CACHE_DIR
 
 # Production stage
@@ -52,18 +50,21 @@ FROM python:3.12-slim AS production
 ARG BUILD_DATE
 ARG VCS_REF
 ARG VERSION=0.1.0
+ARG EXCHANGE_TYPE=coinbase
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app" \
-    APP_VERSION=${VERSION}
+    APP_VERSION=${VERSION} \
+    EXCHANGE__EXCHANGE_TYPE=${EXCHANGE_TYPE}
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
@@ -76,20 +77,32 @@ WORKDIR /app
 # Copy virtual environment from builder
 COPY --from=builder --chown=botuser:botuser /app/.venv /app/.venv
 
+# Install exchange-specific dependencies
+# This handles Bluefin's conflicting dependencies by installing them separately
+RUN if [ "${EXCHANGE_TYPE}" = "bluefin" ]; then \
+        echo "Installing Bluefin dependencies..." && \
+        /app/.venv/bin/pip install --no-cache-dir \
+            bluefin-v2-client==3.2.4 \
+            aiohttp==3.8.6 \
+            websocket-client==1.6.4; \
+    fi
+
 # Copy application code
 COPY --chown=botuser:botuser bot/ ./bot/
 COPY --chown=botuser:botuser pyproject.toml ./
-# Create config directory (config files can be mounted or environment-based)
-RUN mkdir -p /app/config
+COPY --chown=botuser:botuser scripts/ ./scripts/
+COPY --chown=botuser:botuser docs/ ./docs/
 
-# Create directories for logs and data
-RUN mkdir -p /app/logs /app/data \
+# Create required directories
+RUN mkdir -p /app/config /app/logs /app/data /app/prompts \
     && chown -R botuser:botuser /app
 
-# Create simple health check script
-RUN echo '#!/bin/bash\nset -e\ncd /app\npython -c "import bot; print(\"Bot module OK\")" || exit 1\necho "Health check passed"' > /app/healthcheck.sh \
-    && chmod +x /app/healthcheck.sh \
-    && chown botuser:botuser /app/healthcheck.sh
+# Copy prompt files if they exist
+COPY --chown=botuser:botuser prompts/*.md ./prompts/ || true
+
+# Copy health check script
+COPY --chown=botuser:botuser healthcheck.sh /app/healthcheck.sh
+RUN chmod +x /app/healthcheck.sh
 
 # Switch to non-root user
 USER botuser
@@ -98,7 +111,7 @@ USER botuser
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD ["/app/healthcheck.sh"]
 
-# Expose port for health checks
+# Expose port for health checks and monitoring
 EXPOSE 8080
 
 # Default command - starts in safe dry-run mode
@@ -106,9 +119,10 @@ CMD ["python", "-m", "bot.main", "live", "--dry-run"]
 
 # Labels
 LABEL org.opencontainers.image.title="AI Trading Bot" \
-      org.opencontainers.image.description="Simple AI-powered crypto trading bot for macOS" \
+      org.opencontainers.image.description="Multi-exchange crypto trading bot with Coinbase and Bluefin support" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.revision="${VCS_REF}" \
       org.opencontainers.image.vendor="AI Trading Bot" \
+      org.opencontainers.image.exchange="${EXCHANGE_TYPE}" \
       maintainer="ai-trading-bot"

@@ -1,0 +1,49 @@
+# MCP Memory Server Dockerfile
+FROM python:3.12-slim
+
+# Environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN groupadd --gid 1000 mcpuser \
+    && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash mcpuser
+
+# Set work directory
+WORKDIR /app
+
+# Install Python dependencies for MCP
+RUN pip install --no-cache-dir \
+    fastapi==0.104.1 \
+    uvicorn==0.24.0 \
+    pydantic==2.6.0 \
+    aiofiles==24.0.0 \
+    httpx==0.25.2
+
+# Copy MCP server code
+COPY --chown=mcpuser:mcpuser bot/mcp/ ./bot/mcp/
+COPY --chown=mcpuser:mcpuser bot/types.py ./bot/types.py
+COPY --chown=mcpuser:mcpuser bot/__init__.py ./bot/__init__.py
+
+# Create memory store directory
+RUN mkdir -p /app/memory_store \
+    && chown -R mcpuser:mcpuser /app
+
+# Switch to non-root user
+USER mcpuser
+
+# Expose MCP server port
+EXPOSE 8765
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8765/health || exit 1
+
+# Run MCP server
+CMD ["uvicorn", "bot.mcp.memory_server:app", "--host", "0.0.0.0", "--port", "8765"]

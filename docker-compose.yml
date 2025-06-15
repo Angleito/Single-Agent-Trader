@@ -5,12 +5,17 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ai-trading-bot:latest
+      args:
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
+        VCS_REF: ${VCS_REF:-$(git rev-parse --short HEAD)}
+        VERSION: ${VERSION:-0.1.0}
+        EXCHANGE_TYPE: ${EXCHANGE_TYPE:-coinbase}
+    image: ai-trading-bot:${EXCHANGE_TYPE:-coinbase}-${VERSION:-latest}
     container_name: ai-trading-bot
     restart: unless-stopped
     
-    # Override the default command - use --no-dry-run for live trading
-    command: ["sh", "-c", "echo 'y' | python -m bot.main live --no-dry-run --symbol ETH-USD --interval 5m"]
+    # Override the default command - MOMENTUM TRADING MODE WITH 5-MINUTE CANDLES
+    command: ["python", "-m", "bot.main", "live", "--no-dry-run", "--force", "--symbol", "ETH-USD", "--interval", "5m"]
     
     # Environment variables from .env file
     env_file:
@@ -23,7 +28,10 @@ services:
       - PYTHONWARNINGS=ignore::UserWarning,ignore::DeprecationWarning,ignore::SyntaxWarning,ignore::FutureWarning
       - CONFIG_FILE=/app/config/production.json
       # System Configuration
-      - SYSTEM__DRY_RUN=${SYSTEM__DRY_RUN:-true}  # Default to paper trading (safe mode)
+      - SYSTEM__DRY_RUN=false  # LIVE TRADING MODE - REAL MONEY
+      - SYSTEM__ENVIRONMENT=production  # Production environment for live trading
+      # Exchange Configuration
+      - EXCHANGE__EXCHANGE_TYPE=${EXCHANGE_TYPE:-coinbase}
       # LLM Logging Configuration
       - LLM__ENABLE_COMPLETION_LOGGING=${LLM_ENABLE_COMPLETION_LOGGING:-true}
       - LLM__COMPLETION_LOG_LEVEL=${LLM_COMPLETION_LOG_LEVEL:-INFO}
@@ -31,9 +39,9 @@ services:
       - LLM__ENABLE_PERFORMANCE_TRACKING=${LLM_ENABLE_PERFORMANCE_TRACKING:-true}
       - LLM__ENABLE_LANGCHAIN_CALLBACKS=${LLM_ENABLE_LANGCHAIN_CALLBACKS:-true}
       - LLM__LOG_MARKET_CONTEXT=${LLM_LOG_MARKET_CONTEXT:-true}
-      # MCP Memory Configuration
-      - MCP_ENABLED=${MCP_ENABLED:-true}
-      - MCP_SERVER_URL=http://mcp-memory:8765
+      # MCP Memory Configuration (disabled for testing)
+      - MCP_ENABLED=false
+      # - MCP_SERVER_URL=http://mcp-memory:8765
       # Logging Level
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       
@@ -48,9 +56,9 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "/app/healthcheck.sh"]
       interval: 30s
-      timeout: 10s
+      timeout: 15s
       retries: 3
-      start_period: 10s
+      start_period: 30s
       
     # Resource limits for safety
     deploy:
@@ -74,9 +82,9 @@ services:
     networks:
       - trading-network
     
-    # Depends on MCP memory server if enabled
-    depends_on:
-      - mcp-memory
+    # Temporarily disabled MCP dependency for testing
+    # depends_on:
+    #   - mcp-memory
 
   # MCP Memory Server for AI Learning
   mcp-memory:
@@ -146,10 +154,14 @@ services:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - ENVIRONMENT=production
       - API_HOST=0.0.0.0
       - API_PORT=8000
       - TRADING_BOT_CONTAINER=ai-trading-bot
+      - DOCKER_ENV=true
+      # Enable CORS for frontend communication
+      - CORS_ORIGINS=*
+      - CORS_ALLOW_CREDENTIALS=true
     restart: unless-stopped
     depends_on:
       - ai-trading-bot
@@ -186,8 +198,9 @@ services:
       - "3000:8080"
     environment:
       - NODE_ENV=production
-      - VITE_API_URL=http://dashboard-backend:8000
-      - VITE_WS_URL=ws://dashboard-backend:8000
+      # Use relative URLs for API calls - nginx proxy will handle routing
+      - VITE_API_URL=/api
+      - VITE_WS_URL=/api
     restart: unless-stopped
     networks:
       - trading-network
@@ -218,8 +231,9 @@ services:
       - "3001:8080"
     environment:
       - NODE_ENV=production
-      - VITE_API_URL=http://dashboard-backend:8000
-      - VITE_WS_URL=ws://dashboard-backend:8000
+      # Use relative URLs for API calls - nginx proxy will handle routing
+      - VITE_API_URL=/api
+      - VITE_WS_URL=/api
     restart: unless-stopped
     networks:
       - trading-network
@@ -256,6 +270,12 @@ services:
     depends_on:
       - dashboard-backend
       - dashboard-frontend-prod
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     profiles:
       - production
     deploy:
