@@ -97,6 +97,7 @@ from .exchange.coinbase import CoinbaseClient
 from .indicators.vumanchu import VuManChuIndicators
 from .learning.experience_manager import ExperienceManager
 from .mcp.memory_server import MCPMemoryServer
+from .mcp.omnisearch_client import OmniSearchClient
 from .paper_trading import PaperTradingAccount
 from .position_manager import PositionManager
 from .risk import RiskManager
@@ -169,6 +170,25 @@ class TradingEngine:
         self.experience_manager = None
         self._memory_available = False
 
+        # Initialize OmniSearch client if enabled
+        self.omnisearch_client = None
+        if self.settings.omnisearch.enabled:
+            self.logger.info("OmniSearch integration enabled, initializing client...")
+            try:
+                self.omnisearch_client = OmniSearchClient(
+                    server_url=self.settings.omnisearch.server_url,
+                    api_key=self.settings.omnisearch.api_key.get_secret_value() if self.settings.omnisearch.api_key else None,
+                    enable_cache=True,
+                    cache_ttl=self.settings.omnisearch.cache_ttl_seconds,
+                    rate_limit_requests=self.settings.omnisearch.rate_limit_requests_per_minute,
+                    rate_limit_window=60
+                )
+                self.logger.info("Successfully initialized OmniSearch client")
+            except Exception as e:
+                self.logger.error(f"Failed to initialize OmniSearch client: {e}")
+                self.logger.warning("Continuing without OmniSearch integration")
+                self.omnisearch_client = None
+
         if self.settings.mcp.enabled:
             self.logger.info("MCP memory system enabled, initializing components...")
             try:
@@ -183,6 +203,7 @@ class TradingEngine:
                     model_provider=self.settings.llm.provider,
                     model_name=self.settings.llm.model_name,
                     memory_server=self.memory_server,
+                    omnisearch_client=self.omnisearch_client,
                 )
                 self.logger.info("Successfully initialized memory-enhanced agent")
                 self._memory_available = True
@@ -192,12 +213,14 @@ class TradingEngine:
                 self.llm_agent = LLMAgent(
                     model_provider=self.settings.llm.provider,
                     model_name=self.settings.llm.model_name,
+                    omnisearch_client=self.omnisearch_client,
                 )
         else:
             # Standard LLM agent without memory
             self.llm_agent = LLMAgent(
                 model_provider=self.settings.llm.provider,
                 model_name=self.settings.llm.model_name,
+                omnisearch_client=self.omnisearch_client,
             )
 
         self.validator = TradeValidator()
@@ -234,17 +257,19 @@ class TradingEngine:
         self.successful_trades = 0
         self.total_pnl = Decimal("0")
         self.start_time = datetime.now(UTC)
-        
+
         # Trading interval control
         self.last_trade_time = None
+        self.last_candle_analysis_time = None  # Track when we last analyzed a candle
         self.trading_enabled = False  # Will be enabled after data validation
         self.data_validation_complete = False
 
         self.logger.info(f"Initialized TradingEngine for {symbol} at {interval}")
-        
+
     def _can_trade_now(self) -> bool:
         """
         Check if trading is currently allowed based on data availability and timing.
+        For momentum trading, we only trade when a new 5-minute candle completes.
         
         Returns:
             True if trading is allowed, False otherwise
@@ -252,27 +277,72 @@ class TradingEngine:
         # Check if trading is enabled (based on data validation)
         if not self.trading_enabled:
             return False
-            
+
         # Check if data validation is complete
         if not self.data_validation_complete:
             return False
-            
-        # Check minimum interval between trades
+
+        # Check if we have fresh market data
+        if not self.market_data.is_connected():
+            self.logger.debug("📊 Market data not connected, skipping trade check")
+            return False
+
+        # Get latest candle to check if a new one has completed
+        latest_data = self.market_data.get_latest_ohlcv(limit=1)
+        if not latest_data:
+            self.logger.debug("📊 No market data available")
+            return False
+
+        latest_candle = latest_data[-1]
+
+        # Check if this is a new candle we haven't analyzed yet
+        if self.last_candle_analysis_time is not None:
+            # Ensure both timestamps have timezone info for comparison
+            candle_time = latest_candle.timestamp
+            if candle_time.tzinfo is None:
+                candle_time = candle_time.replace(tzinfo=UTC)
+
+            last_analysis_time = self.last_candle_analysis_time
+            if last_analysis_time.tzinfo is None:
+                last_analysis_time = last_analysis_time.replace(tzinfo=UTC)
+
+            if candle_time <= last_analysis_time:
+                # This is the same candle we already analyzed
+                return False
+
+        # For momentum trading: only analyze on candle completion
+        # A 5-minute candle completes every 5 minutes (e.g., 10:00, 10:05, 10:10)
+        current_time = datetime.now(UTC)
+        candle_interval_seconds = self._get_interval_minutes(self.interval) * 60
+
+        # Check if enough time has passed since last analysis (at least candle interval)
+        if self.last_candle_analysis_time is not None:
+            # Ensure both timestamps have timezone info for comparison
+            last_analysis_time = self.last_candle_analysis_time
+            if last_analysis_time.tzinfo is None:
+                last_analysis_time = last_analysis_time.replace(tzinfo=UTC)
+
+            time_since_last_analysis = (current_time - last_analysis_time).total_seconds()
+            if time_since_last_analysis < candle_interval_seconds:
+                return False
+
+        # Check minimum interval between actual trades (can be different from analysis)
         if self.last_trade_time is not None:
             min_interval = self.settings.trading.min_trading_interval_seconds
-            time_since_last_trade = (datetime.now(UTC) - self.last_trade_time).total_seconds()
-            
+
+            # Ensure both timestamps have timezone info for comparison
+            last_trade_time = self.last_trade_time
+            if last_trade_time.tzinfo is None:
+                last_trade_time = last_trade_time.replace(tzinfo=UTC)
+
+            time_since_last_trade = (current_time - last_trade_time).total_seconds()
+
             if time_since_last_trade < min_interval:
                 self.logger.debug(
                     f"⏱️ Waiting for trade interval: {time_since_last_trade:.1f}s / {min_interval}s"
                 )
                 return False
-                
-        # Check if we have fresh market data
-        if not self.market_data.is_connected():
-            self.logger.debug("📊 Market data not connected, skipping trade check")
-            return False
-            
+
         return True
 
     def _load_configuration(self, config_file: str | None, dry_run: bool) -> Settings:
@@ -391,7 +461,7 @@ class TradingEngine:
         connected = await self.exchange_client.connect()
         if not connected:
             raise RuntimeError("Failed to connect to exchange")
-        
+
         # Get the actual trading symbol (futures contract if enabled)
         if self.exchange_client.enable_futures:
             console.print("  • Determining active futures contract...")
@@ -400,7 +470,7 @@ class TradingEngine:
         else:
             self.actual_trading_symbol = self.symbol
             console.print(f"    Using spot symbol: [green]{self.actual_trading_symbol}[/green]")
-        
+
         # Now initialize market data provider with the correct symbol
         console.print("  • Connecting to market data feed...")
         self.market_data = MarketDataProvider(self.actual_trading_symbol, self.interval)
@@ -413,6 +483,19 @@ class TradingEngine:
                 "[yellow]    Warning: LLM not available, using fallback logic[/yellow]"
             )
 
+        # Connect to OmniSearch if available
+        if self.omnisearch_client:
+            console.print("  • Connecting to OmniSearch service...")
+            try:
+                connected = await self.omnisearch_client.connect()
+                if connected:
+                    console.print("    [green]✓ OmniSearch connected[/green]")
+                else:
+                    console.print("    [yellow]⚠ OmniSearch service unavailable[/yellow]")
+            except Exception as e:
+                self.logger.warning(f"Failed to connect to OmniSearch: {e}")
+                console.print("    [yellow]⚠ OmniSearch connection failed[/yellow]")
+
         # Load initial market data
         console.print("  • Loading initial market data...")
         await self._wait_for_initial_data()
@@ -423,13 +506,13 @@ class TradingEngine:
             try:
                 await self.experience_manager.start()
                 console.print("    [green]✓ Experience tracking started[/green]")
-                
+
                 # Log memory system status and pattern statistics
                 if self.memory_server and hasattr(self.memory_server, '_connected') and self.memory_server._connected:
                     self._memory_available = True
                     memory_count = len(self.memory_server.memory_cache)
                     console.print(f"    [cyan]📊 {memory_count} stored experiences loaded[/cyan]")
-                    
+
                     # Log pattern performance if we have enough data
                     if memory_count >= 10:
                         try:
@@ -449,7 +532,7 @@ class TradingEngine:
                                         )
                         except Exception as e:
                             self.logger.debug(f"Could not retrieve pattern statistics: {e}")
-                            
+
             except Exception as e:
                 self.logger.warning(f"Failed to start experience manager: {e}")
                 console.print("    [yellow]⚠ Experience tracking unavailable[/yellow]")
@@ -463,6 +546,10 @@ class TradingEngine:
             except Exception as e:
                 self.logger.warning(f"Failed to connect dominance data: {e}")
                 console.print("    [yellow]⚠ Dominance data unavailable[/yellow]")
+
+        # Check for existing positions on exchange
+        console.print("  • Checking for existing positions...")
+        await self._reconcile_positions()
 
         console.print("[green]✓ All components initialized successfully[/green]")
 
@@ -489,12 +576,12 @@ class TradingEngine:
 
             # Check for historical data
             data = self.market_data.get_latest_ohlcv(limit=500)  # Get more data for 24h check
-            
+
             if not historical_data_loaded:
                 # Calculate how many candles represent 24 hours
                 interval_minutes = self._get_interval_minutes(self.interval)
                 candles_per_24h = (24 * 60) // interval_minutes
-                
+
                 if require_24h_data:
                     # Require full 24 hours of data
                     if len(data) >= candles_per_24h:
@@ -556,7 +643,7 @@ class TradingEngine:
                 interval_minutes = self._get_interval_minutes(self.interval)
                 candles_per_24h = (24 * 60) // interval_minutes
                 hours_available = (len(data) * interval_minutes) / 60 if data else 0
-                
+
                 self.logger.info(
                     f"⏳ Waiting for data... Elapsed: {int(elapsed_time)}s\n"
                     f"   📊 Historical: {len(data)}/{candles_per_24h} candles ({hours_available:.1f}/24 hours)\n"
@@ -602,6 +689,15 @@ class TradingEngine:
             "LLM Agent",
             "✓ Available" if llm_status["llm_available"] else "⚠ Fallback",
             f"{llm_status['model_provider']}:{llm_status['model_name']}",
+        )
+
+        # OmniSearch status
+        omnisearch_status = "✓ Enabled" if llm_status.get("omnisearch_enabled", False) else "✗ Disabled"
+        omnisearch_details = "Market intelligence active" if llm_status.get("omnisearch_enabled", False) else "Standard analysis only"
+        table.add_row(
+            "OmniSearch",
+            omnisearch_status,
+            omnisearch_details,
         )
 
         # Risk manager
@@ -858,6 +954,18 @@ class TradingEngine:
                     await asyncio.sleep(1)
                     continue
 
+                # Mark that we're analyzing this candle (momentum trading: analyze on candle close)
+                latest_candle = latest_data[-1]
+                # Ensure the timestamp has timezone info
+                candle_timestamp = latest_candle.timestamp
+                if candle_timestamp.tzinfo is None:
+                    candle_timestamp = candle_timestamp.replace(tzinfo=UTC)
+                self.last_candle_analysis_time = candle_timestamp
+
+                self.logger.info(
+                    f"🕐 Analyzing new {self.interval} candle completed at {latest_candle.timestamp.strftime('%H:%M:%S')} - Price: ${current_price}"
+                )
+
                 # Get LLM trading decision
                 self.logger.debug(
                     f"🤔 Requesting trading decision from "
@@ -894,7 +1002,7 @@ class TradingEngine:
                         validated_action, current_price, market_state, experience_id
                     )
                     final_action = validated_action
-                    
+
                     # Update last trade time for interval control
                     self.last_trade_time = datetime.now(UTC)
 
@@ -921,7 +1029,7 @@ class TradingEngine:
                         await self._execute_trade(
                             final_action, current_price, market_state, experience_id
                         )
-                        
+
                         # Update last trade time for interval control
                         self.last_trade_time = datetime.now(UTC)
 
@@ -931,11 +1039,11 @@ class TradingEngine:
                 # Display periodic status updates
                 if loop_count % 10 == 0:  # Every 10 loops
                     self._display_status_update(loop_count, current_price, final_action)
-                
+
                 # Log heartbeat to confirm loop is running
                 if loop_count % 5 == 0:
                     self.logger.debug(f"Trading loop heartbeat - iteration {loop_count}")
-                
+
                 # Log pattern statistics every 100 loops if memory is enabled
                 if loop_count % 100 == 0 and self.memory_server and self._memory_available:
                     try:
@@ -1073,7 +1181,7 @@ class TradingEngine:
                                 self.logger.info(
                                     "✅ MCP Integration: Completed trade tracking for closed position"
                                 )
-                            except asyncio.TimeoutError:
+                            except TimeoutError:
                                 self.logger.warning(
                                     "Trade tracking completion timed out after 5 seconds"
                                 )
@@ -1115,7 +1223,7 @@ class TradingEngine:
                             f"P&L: ${account_status['total_pnl']:,.2f} "
                             f"({account_status['roi_percent']:.2f}%)"
                         )
-                    
+
                     self.logger.debug(f"Trade execution completed at {datetime.now(UTC).isoformat()}")
                 else:
                     console.print(f"[yellow]⚠ Trade failed:[/yellow] {order.status}")
@@ -1182,7 +1290,7 @@ class TradingEngine:
                     )
                 except Exception as e:
                     self.logger.warning(f"Failed to update trade progress: {e}")
-                    
+
             # This code was moved to the main trading loop
 
     def _display_status_update(
@@ -1303,6 +1411,13 @@ class TradingEngine:
                     asyncio.create_task(self.exchange_client.disconnect())
                 )
 
+            # Close OmniSearch connection
+            if hasattr(self, "omnisearch_client") and self.omnisearch_client:
+                console.print("  • Disconnecting from OmniSearch...")
+                cleanup_tasks.append(
+                    asyncio.create_task(self.omnisearch_client.disconnect())
+                )
+
             # Stop experience manager if enabled
             if hasattr(self, "experience_manager") and self.experience_manager:
                 console.print("  • Stopping experience tracking...")
@@ -1353,6 +1468,93 @@ class TradingEngine:
                             self.dominance_provider._session._connector.close()
                         except Exception:
                             pass
+
+    async def _reconcile_positions(self):
+        """
+        Reconcile local position state with actual exchange positions.
+        
+        This method checks for existing positions on the exchange and updates
+        the local position state to match, preventing conflicts when the bot
+        restarts with open positions.
+        """
+        try:
+            # Get current positions from exchange
+            if self.exchange_client.enable_futures:
+                # For futures trading, check CFM positions
+                positions = await self.exchange_client.get_futures_positions(self.actual_trading_symbol)
+            else:
+                # For spot trading, check regular positions
+                positions = await self.exchange_client.get_positions(self.actual_trading_symbol)
+
+            if not positions:
+                self.logger.info("No existing positions found on exchange")
+                console.print("    [green]✓ No existing positions detected[/green]")
+                return
+
+            # Process the first position found for our symbol
+            for position in positions:
+                # Handle both dict and object formats
+                if hasattr(position, 'get'):
+                    # Dictionary format
+                    symbol = position.get('symbol') or position.get('product_id')
+                    size = Decimal(str(position.get('size', 0)))
+                    side = position.get('side', 'FLAT')
+                    entry_price = Decimal(str(position.get('entry_price', 0)))
+                    unrealized_pnl = Decimal(str(position.get('unrealized_pnl', 0)))
+                else:
+                    # Object format
+                    symbol = getattr(position, 'symbol', None) or getattr(position, 'product_id', None)
+                    size = Decimal(str(getattr(position, 'size', 0)))
+                    side = getattr(position, 'side', 'FLAT')
+                    entry_price = Decimal(str(getattr(position, 'entry_price', 0)))
+                    unrealized_pnl = Decimal(str(getattr(position, 'unrealized_pnl', 0)))
+
+                if symbol == self.actual_trading_symbol:
+                    # Convert position data to our format
+                    if size > 0:
+                        if side.upper() in ['LONG', 'BUY']:
+                            position_side = "LONG"
+                        elif side.upper() in ['SHORT', 'SELL']:
+                            position_side = "SHORT"
+                        else:
+                            position_side = "LONG" if size > 0 else "SHORT"
+
+                        # Update current position
+                        self.current_position = Position(
+                            symbol=self.actual_trading_symbol,
+                            side=position_side,
+                            size=abs(size),
+                            timestamp=datetime.now(UTC),
+                            entry_price=entry_price,
+                            unrealized_pnl=unrealized_pnl,
+                        )
+
+                        # Update position manager state
+                        self.position_manager.update_position_from_exchange(
+                            symbol=self.actual_trading_symbol,
+                            side=position_side,
+                            size=abs(size),
+                            entry_price=self.current_position.entry_price,
+                        )
+
+                        self.logger.info(
+                            f"Reconciled position: {position_side} {size} {self.actual_trading_symbol} "
+                            f"at ${self.current_position.entry_price}"
+                        )
+                        console.print(
+                            f"    [yellow]⚠ Found existing {position_side} position: "
+                            f"{size} {self.actual_trading_symbol} at ${self.current_position.entry_price}[/yellow]"
+                        )
+                        return
+
+            # If we get here, no matching position was found
+            self.logger.info("No matching positions found for trading symbol")
+            console.print("    [green]✓ No existing positions detected[/green]")
+
+        except Exception as e:
+            self.logger.error(f"Failed to reconcile positions: {e}")
+            console.print(f"    [red]✗ Position reconciliation failed: {e}[/red]")
+            # Continue with FLAT position assumption on error
 
     def _display_final_summary(self):
         """Display final trading session summary."""
@@ -1624,7 +1826,8 @@ def cli() -> None:
 @click.option("--symbol", default="BTC-USD", help="Trading symbol")
 @click.option("--interval", default="1m", help="Candle interval")
 @click.option("--config", default=None, help="Configuration file path")
-def live(dry_run: bool, symbol: str, interval: str, config: str | None) -> None:
+@click.option("--force", is_flag=True, help="Skip confirmation prompt for live trading")
+def live(dry_run: bool, symbol: str, interval: str, config: str | None, force: bool) -> None:
     """Start live trading bot."""
     if dry_run:
         console.print(
@@ -1649,8 +1852,8 @@ def live(dry_run: bool, symbol: str, interval: str, config: str | None) -> None:
             )
         )
 
-        # Confirmation for live trading
-        if not click.confirm("Are you sure you want to trade with real money?"):
+        # Confirmation for live trading (skip if --force flag is used)
+        if not force and not click.confirm("Are you sure you want to trade with real money?"):
             console.print("Cancelled live trading.")
             sys.exit(0)
 

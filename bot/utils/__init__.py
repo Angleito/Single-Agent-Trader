@@ -25,6 +25,21 @@ except ImportError:
     ta = None
     _ta_available = False
 
+# Import web search formatter
+try:
+    from .web_search_formatter import (
+        ContentPriority,
+        FormattedContent,
+        WebSearchFormatter,
+    )
+
+    _web_search_formatter_available = True
+except ImportError:
+    WebSearchFormatter = None
+    ContentPriority = None
+    FormattedContent = None
+    _web_search_formatter_available = False
+
 __all__ = [
     "init_all_suppressions",
     "initialize_early_warning_suppression",
@@ -38,3 +53,7 @@ __all__ = [
 # Only add ta to __all__ if it's available
 if _ta_available:
     __all__.append("ta")
+
+# Only add web search formatter to __all__ if it's available
+if _web_search_formatter_available:
+    __all__.extend(["WebSearchFormatter", "ContentPriority", "FormattedContent"])
