@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an AI-assisted crypto futures trading bot for Coinbase that uses LangChain-powered decision making with custom VuManChu Cipher indicators. The bot is built with Python 3.12+ using Poetry for dependency management.
+This is an AI-assisted crypto futures trading bot that supports both Coinbase (CEX) and Bluefin (DEX on Sui) exchanges. It uses LangChain-powered decision making with custom VuManChu Cipher indicators. The bot is built with Python 3.12+ using Poetry for dependency management.
 
 ## Development Commands
 
@@ -81,7 +81,7 @@ docker-compose down
 ## Architecture
 
 ### Core Components
-- **Data Layer** (`bot/data/market.py`): Real-time market data from Coinbase WebSocket/REST
+- **Data Layer** (`bot/data/market.py`): Real-time market data from exchange WebSocket/REST
 - **Indicators** (`bot/indicators/vumanchu.py`): VuManChu Cipher A & B indicators
 - **LLM Agent** (`bot/strategy/llm_agent.py`): LangChain-powered trading decisions  
 - **Memory-Enhanced Agent** (`bot/strategy/memory_enhanced_agent.py`): LLM with learning from past trades
@@ -90,7 +90,11 @@ docker-compose down
 - **Self-Improvement Engine** (`bot/learning/self_improvement.py`): Pattern analysis and strategy optimization
 - **Validator** (`bot/validator.py`): JSON schema validation with fallback to HOLD
 - **Risk Manager** (`bot/risk.py`): Position sizing, leverage control, loss limits
-- **Exchange** (`bot/exchange/coinbase.py`): Coinbase order execution
+- **Exchange Layer** (`bot/exchange/`): Multi-exchange support
+  - **Base Interface** (`base.py`): Abstract exchange interface
+  - **Coinbase** (`coinbase.py`): Centralized exchange implementation
+  - **Bluefin** (`bluefin.py`): Decentralized exchange on Sui
+  - **Factory** (`factory.py`): Exchange instantiation based on config
 - **CLI** (`bot/main.py`): Command-line interface and orchestration
 
 ### Data Flow
@@ -170,12 +174,24 @@ The memory system includes:
 - `pyproject.toml` - Poetry dependencies and tool configuration
 - `docker-compose.yml` - Container orchestration (includes MCP memory server)
 - `docs/AI_Trading_Bot_Architecture.md` - Detailed architecture guide
+- `docs/bluefin_integration.md` - Bluefin DEX setup and usage guide
 
 ## Environment Setup
 
 Required environment variables:
+
+### Exchange Selection
+- `EXCHANGE__EXCHANGE_TYPE` - Exchange to use: "coinbase" or "bluefin" (default: "coinbase")
+
+### Coinbase Configuration
 - `EXCHANGE__CDP_API_KEY_NAME` - Coinbase CDP API key name
 - `EXCHANGE__CDP_PRIVATE_KEY` - Coinbase CDP private key (PEM format)  
+
+### Bluefin Configuration
+- `EXCHANGE__BLUEFIN_PRIVATE_KEY` - Sui wallet private key (hex format)
+- `EXCHANGE__BLUEFIN_NETWORK` - Network: "mainnet" or "testnet" (default: "mainnet")
+
+### Trading Configuration
 - `LLM__OPENAI_API_KEY` - OpenAI API key
 - `SYSTEM__DRY_RUN` - Set to "false" for live trading, "true" for paper trading (default: "true")
 - `TRADING__SYMBOL` - Trading pair (default: "BTC-USD")

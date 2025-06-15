@@ -1,6 +1,7 @@
 """Configuration settings for the AI Trading Bot."""
 
 import json
+import logging
 import os
 import re
 import secrets
@@ -21,6 +22,8 @@ from pydantic import (
     model_validator,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Environment(str, Enum):
@@ -52,7 +55,7 @@ class TradingSettings(BaseModel):
         pattern=r"^[A-Z]+-[A-Z]+$",
     )
     interval: str = Field(
-        default="3m",
+        default="5m",
         description="Candle interval for analysis",
     )
     leverage: int = Field(
@@ -117,7 +120,7 @@ class TradingSettings(BaseModel):
     min_profit_pct: float = Field(
         default=0.5, ge=0.1, le=10.0, description="Minimum profit target percentage"
     )
-    
+
     # Trading Fee Configuration
     maker_fee_rate: float = Field(
         default=0.004,  # 0.4% for Coinbase Advanced
@@ -137,23 +140,23 @@ class TradingSettings(BaseModel):
         le=0.01,
         description="Futures trading fee rate"
     )
-    
+
     # Trading Interval Configuration
     min_trading_interval_seconds: int = Field(
-        default=60,  # 1 minute minimum
+        default=300,  # 5 minutes minimum to match candle timeframe
         ge=10,
         le=3600,
-        description="Minimum interval between trades in seconds"
+        description="Minimum interval between trades in seconds (300s = 5 minutes)"
     )
     require_24h_data_before_trading: bool = Field(
-        default=True,
-        description="Require at least 24 hours of market data before first trade"
+        default=False,
+        description="Require at least 24 hours of market data before first trade (disabled for 8h trading)"
     )
     min_candles_for_trading: int = Field(
-        default=100,
+        default=120,
         ge=50,
-        le=500,
-        description="Minimum number of candles required before trading"
+        le=2000,
+        description="Minimum number of candles required before trading (120 = 10 hours for 5m intervals)"
     )
 
     @field_validator("interval")
@@ -393,10 +396,87 @@ class MCPSettings(BaseModel):
     )
 
 
+class OmniSearchSettings(BaseModel):
+    """OmniSearch MCP configuration for enhanced market intelligence and sentiment analysis."""
+
+    model_config = ConfigDict(frozen=True)
+
+    enabled: bool = Field(
+        default=False, description="Enable OmniSearch MCP server for market intelligence"
+    )
+    api_key: SecretStr | None = Field(
+        default=None, description="API key for OmniSearch service"
+    )
+    server_url: str = Field(
+        default="http://localhost:8766", description="OmniSearch MCP server URL"
+    )
+
+    # Search Configuration
+    max_results: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Maximum number of search results to retrieve per query",
+    )
+    cache_ttl_seconds: int = Field(
+        default=300,
+        ge=60,
+        le=3600,
+        description="Cache TTL for search results in seconds",
+    )
+
+    # Rate Limiting
+    rate_limit_requests_per_minute: int = Field(
+        default=10,
+        ge=1,
+        le=60,
+        description="Maximum requests per minute to prevent API throttling",
+    )
+    timeout_seconds: int = Field(
+        default=30,
+        ge=5,
+        le=120,
+        description="Request timeout in seconds",
+    )
+
+    # Feature Toggles
+    enable_crypto_sentiment: bool = Field(
+        default=True, description="Enable cryptocurrency sentiment analysis"
+    )
+    enable_nasdaq_sentiment: bool = Field(
+        default=True, description="Enable NASDAQ/traditional market sentiment analysis"
+    )
+    enable_correlation_analysis: bool = Field(
+        default=True, description="Enable cross-market correlation analysis"
+    )
+
+    @field_validator("api_key")
+    @classmethod
+    def validate_api_key_format(cls, v: SecretStr | None) -> SecretStr | None:
+        """Validate OmniSearch API key format."""
+        if v is None:
+            return v
+
+        key = v.get_secret_value()
+        if not key.strip():
+            raise ValueError("OmniSearch API key cannot be empty")
+
+        # Basic format validation
+        if len(key) < 10:
+            raise ValueError("OmniSearch API key seems too short")
+
+        return v
+
+
 class ExchangeSettings(BaseModel):
     """Exchange API configuration."""
 
     model_config = ConfigDict(frozen=True)
+
+    # Exchange Selection
+    exchange_type: Literal["coinbase", "bluefin"] = Field(
+        default="coinbase", description="Exchange to use for trading"
+    )
 
     # Coinbase Configuration - Legacy Advanced Trade API
     cb_api_key: SecretStr | None = Field(
@@ -446,12 +526,24 @@ class ExchangeSettings(BaseModel):
         default=300, ge=60, le=3600, description="API health check interval in seconds"
     )
 
+    # Bluefin Configuration
+    bluefin_private_key: SecretStr | None = Field(
+        default=None, description="Bluefin Sui wallet private key"
+    )
+    bluefin_network: Literal["mainnet", "testnet"] = Field(
+        default="mainnet", description="Bluefin network to connect to"
+    )
+    bluefin_rpc_url: str | None = Field(
+        default=None, description="Custom Sui RPC endpoint for Bluefin"
+    )
+
     @field_validator(
         "cb_api_key",
         "cb_api_secret",
         "cb_passphrase",
         "cdp_api_key_name",
         "cdp_private_key",
+        "bluefin_private_key",
     )
     @classmethod
     def validate_api_credentials(cls, v: SecretStr | None) -> SecretStr | None:
@@ -461,40 +553,55 @@ class ExchangeSettings(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def validate_coinbase_credentials(self) -> "ExchangeSettings":
-        """Validate that either legacy or CDP credentials are provided, not both."""
-        has_legacy = all(
-            [
-                self.cb_api_key and self.cb_api_key.get_secret_value().strip(),
-                self.cb_api_secret and self.cb_api_secret.get_secret_value().strip(),
-                self.cb_passphrase and self.cb_passphrase.get_secret_value().strip(),
-            ]
-        )
-
-        has_cdp = all(
-            [
-                self.cdp_api_key_name
-                and self.cdp_api_key_name.get_secret_value().strip(),
-                self.cdp_private_key
-                and self.cdp_private_key.get_secret_value().strip(),
-            ]
-        )
-
-        # Allow neither (for dry run mode), but not both
-        if has_legacy and has_cdp:
-            raise ValueError(
-                "Cannot use both legacy and CDP credentials. Choose one method."
+    def validate_exchange_credentials(self) -> "ExchangeSettings":
+        """Validate exchange-specific credentials based on exchange type."""
+        if self.exchange_type == "coinbase":
+            # Validate Coinbase credentials
+            has_legacy = all(
+                [
+                    self.cb_api_key and self.cb_api_key.get_secret_value().strip(),
+                    self.cb_api_secret and self.cb_api_secret.get_secret_value().strip(),
+                    self.cb_passphrase and self.cb_passphrase.get_secret_value().strip(),
+                ]
             )
 
-        # Validate CDP private key format if provided
-        if self.cdp_private_key:
-            private_key = self.cdp_private_key.get_secret_value()
-            if private_key and not private_key.startswith(
-                "-----BEGIN EC PRIVATE KEY-----"
-            ):
+            has_cdp = all(
+                [
+                    self.cdp_api_key_name
+                    and self.cdp_api_key_name.get_secret_value().strip(),
+                    self.cdp_private_key
+                    and self.cdp_private_key.get_secret_value().strip(),
+                ]
+            )
+
+            # Allow neither (for dry run mode), but not both
+            if has_legacy and has_cdp:
                 raise ValueError(
-                    "CDP private key must be in PEM format starting with '-----BEGIN EC PRIVATE KEY-----'"
+                    "Cannot use both legacy and CDP credentials. Choose one method."
                 )
+
+            # Validate CDP private key format if provided
+            if self.cdp_private_key:
+                private_key = self.cdp_private_key.get_secret_value()
+                if private_key and not private_key.startswith(
+                    "-----BEGIN EC PRIVATE KEY-----"
+                ):
+                    raise ValueError(
+                        "CDP private key must be in PEM format starting with '-----BEGIN EC PRIVATE KEY-----'"
+                    )
+                    
+        elif self.exchange_type == "bluefin":
+            # Validate Bluefin credentials
+            if (
+                self.bluefin_private_key 
+                and self.bluefin_private_key.get_secret_value().strip()
+            ):
+                # Basic validation for Sui private key (should be hex string)
+                private_key = self.bluefin_private_key.get_secret_value().strip()
+                if not all(c in "0123456789abcdefABCDEF" for c in private_key):
+                    raise ValueError(
+                        "Bluefin private key must be a valid hexadecimal string"
+                    )
 
         return self
 
@@ -555,10 +662,10 @@ class DataSettings(BaseModel):
 
     # Data Fetching
     candle_limit: int = Field(
-        default=300,
+        default=150,
         ge=100,
         le=2000,
-        description="Number of historical candles to fetch (minimum 100 for VuManChu indicators)",
+        description="Number of historical candles to fetch (150 = 12.5 hours for 5m intervals, minimum 100 for VuManChu indicators)",
     )
     real_time_updates: bool = Field(
         default=True, description="Enable real-time data updates"
@@ -758,7 +865,7 @@ class SystemSettings(BaseModel):
 
     # Performance
     update_frequency_seconds: float = Field(
-        default=60.0, ge=1.0, le=3600.0, description="Main loop update frequency"
+        default=30.0, ge=1.0, le=3600.0, description="Main loop update frequency (30s for responsive momentum analysis)"
     )
     parallel_processing: bool = Field(
         default=True, description="Enable parallel processing where possible"
@@ -835,6 +942,7 @@ class Settings(BaseSettings):
     system: SystemSettings = Field(default_factory=SystemSettings)
     paper_trading: PaperTradingSettings = Field(default_factory=PaperTradingSettings)
     mcp: MCPSettings = Field(default_factory=MCPSettings)
+    omnisearch: OmniSearchSettings = Field(default_factory=OmniSearchSettings)
 
     # Profile Configuration
     profile: TradingProfile = Field(
@@ -867,25 +975,31 @@ class Settings(BaseSettings):
 
             # Validate exchange API keys
             if not self.system.dry_run:
-                has_legacy = all(
-                    [
-                        self.exchange.cb_api_key,
-                        self.exchange.cb_api_secret,
-                        self.exchange.cb_passphrase,
-                    ]
-                )
-
-                has_cdp = all(
-                    [
-                        self.exchange.cdp_api_key_name,
-                        self.exchange.cdp_private_key,
-                    ]
-                )
-
-                if not (has_legacy or has_cdp):
-                    raise ValueError(
-                        "Coinbase API credentials required for live trading (either legacy or CDP keys)"
+                if self.exchange.exchange_type == "coinbase":
+                    has_legacy = all(
+                        [
+                            self.exchange.cb_api_key,
+                            self.exchange.cb_api_secret,
+                            self.exchange.cb_passphrase,
+                        ]
                     )
+
+                    has_cdp = all(
+                        [
+                            self.exchange.cdp_api_key_name,
+                            self.exchange.cdp_private_key,
+                        ]
+                    )
+
+                    if not (has_legacy or has_cdp):
+                        raise ValueError(
+                            "Coinbase API credentials required for live trading (either legacy or CDP keys)"
+                        )
+                elif self.exchange.exchange_type == "bluefin":
+                    if not self.exchange.bluefin_private_key:
+                        raise ValueError(
+                            "Bluefin private key required for live trading"
+                        )
 
         return self
 
@@ -896,8 +1010,9 @@ class Settings(BaseSettings):
 
         # Production environment validations
         if env == Environment.PRODUCTION:
+            # Allow dry-run override for testing purposes
             if self.system.dry_run:
-                raise ValueError("Production environment cannot use dry-run mode")
+                logger.warning("Production environment running in dry-run mode - this should only be for testing")
 
             if self.exchange.cb_sandbox:
                 raise ValueError("Production environment cannot use sandbox exchange")
@@ -1019,8 +1134,11 @@ class Settings(BaseSettings):
                         "cb_passphrase",
                         "cdp_api_key_name",
                         "cdp_private_key",
+                        "bluefin_private_key",
                     },
                     "system": {"api_secret_key"},
+                    "mcp": {"memory_api_key"},
+                    "omnisearch": {"api_key"},
                 },
             )
 
@@ -1104,7 +1222,7 @@ class Settings(BaseSettings):
             config["system"]["log_level"] = "INFO"
             config["exchange"]["cb_sandbox"] = False
             # Remove sensitive data
-            for section in ["llm", "exchange", "system"]:
+            for section in ["llm", "exchange", "system", "mcp", "omnisearch"]:
                 if section in config:
                     for key in list(config[section].keys()):
                         if (
@@ -1163,8 +1281,11 @@ class Settings(BaseSettings):
                     "cb_passphrase",
                     "cdp_api_key_name",
                     "cdp_private_key",
+                    "bluefin_private_key",
                 },
                 "system": {"api_secret_key", "instance_id"},
+                "mcp": {"memory_api_key"},
+                "omnisearch": {"api_key"},
             }
         )
 
@@ -1210,7 +1331,7 @@ def get_config_template() -> dict[str, Any]:
     return {
         "trading": {
             "symbol": "BTC-USD",
-            "interval": "3m",
+            "interval": "5m",
             "leverage": 5,
             "max_size_pct": 20.0,
             "order_timeout_seconds": 30,
@@ -1236,9 +1357,11 @@ def get_config_template() -> dict[str, Any]:
             "max_retries": 3,
         },
         "exchange": {
+            "exchange_type": "coinbase",
             "cb_sandbox": True,
             "api_timeout": 10,
             "rate_limit_requests": 10,
+            "bluefin_network": "mainnet",
         },
         "risk": {
             "max_daily_loss_pct": 5.0,
@@ -1250,7 +1373,7 @@ def get_config_template() -> dict[str, Any]:
             "dry_run": True,
             "environment": "development",
             "log_level": "INFO",
-            "update_frequency_seconds": 60.0,
+            "update_frequency_seconds": 30.0,
         },
         "paper_trading": {
             "starting_balance": 10000.0,
@@ -1263,5 +1386,16 @@ def get_config_template() -> dict[str, Any]:
             "export_trade_data": False,
             "report_time_utc": "23:59",
             "include_unrealized_pnl": True,
+        },
+        "omnisearch": {
+            "enabled": False,
+            "server_url": "http://localhost:8766",
+            "max_results": 5,
+            "cache_ttl_seconds": 300,
+            "rate_limit_requests_per_minute": 10,
+            "timeout_seconds": 30,
+            "enable_crypto_sentiment": True,
+            "enable_nasdaq_sentiment": True,
+            "enable_correlation_analysis": True,
         },
     }

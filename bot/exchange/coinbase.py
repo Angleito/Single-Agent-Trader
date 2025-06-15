@@ -102,6 +102,13 @@ from ..types import (
     Position,
     TradeAction,
 )
+from .base import (
+    BaseExchange,
+    ExchangeAuthError,
+    ExchangeConnectionError,
+    ExchangeInsufficientFundsError,
+    ExchangeOrderError,
+)
 from .futures_utils import FuturesContractManager
 
 logger = logging.getLogger(__name__)
@@ -139,37 +146,7 @@ class CoinbaseRateLimiter:
             self.requests.append(now)
 
 
-class CoinbaseExchangeError(Exception):
-    """Base exception for Coinbase exchange errors."""
-
-    pass
-
-
-class CoinbaseConnectionError(CoinbaseExchangeError):
-    """Connection-related errors."""
-
-    pass
-
-
-class CoinbaseAuthError(CoinbaseExchangeError):
-    """Authentication-related errors."""
-
-    pass
-
-
-class CoinbaseOrderError(CoinbaseExchangeError):
-    """Order execution errors."""
-
-    pass
-
-
-class CoinbaseInsufficientFundsError(CoinbaseExchangeError):
-    """Insufficient funds errors."""
-
-    pass
-
-
-class CoinbaseClient:
+class CoinbaseClient(BaseExchange):
     """
     Coinbase exchange client for trading operations.
 
@@ -185,6 +162,7 @@ class CoinbaseClient:
         passphrase: str = None,
         cdp_api_key_name: str = None,
         cdp_private_key: str = None,
+        dry_run: bool = None,
     ):
         """
         Initialize the Coinbase client.
@@ -195,7 +173,12 @@ class CoinbaseClient:
             passphrase: Coinbase passphrase (legacy)
             cdp_api_key_name: CDP API key name
             cdp_private_key: CDP private key (PEM format)
+            dry_run: Override dry run setting
         """
+        # Initialize parent class
+        if dry_run is None:
+            dry_run = self.dry_run
+        super().__init__(dry_run)
         # Determine authentication method by checking provided credentials
         # First check for explicitly provided credentials
         provided_legacy = all([api_key, api_secret, passphrase])
@@ -262,7 +245,7 @@ class CoinbaseClient:
 
         # Client will be initialized when needed
         self._client = None
-        self._authenticated = False
+        self._connected = False  # Use _connected from parent class
         self._last_health_check = None
 
         # Rate limiting
@@ -295,7 +278,7 @@ class CoinbaseClient:
         self._futures_contract_manager = None
 
         # Compose a concise init message to avoid line length issues
-        trading_mode = "PAPER TRADING" if settings.system.dry_run else "LIVE TRADING"
+        trading_mode = "PAPER TRADING" if self.dry_run else "LIVE TRADING"
         init_msg = (
             "Initialized CoinbaseClient (mode=%s auth=%s sandbox=%s futures=%s "
             "acct_type=%s)"
@@ -325,7 +308,7 @@ class CoinbaseClient:
         logger.debug(f"  Has credentials: {bool(self.auth_method != 'none')}")
 
         # Log warning if in live trading mode
-        if not settings.system.dry_run:
+        if not self.dry_run:
             logger.warning(
                 "⚠️  LIVE TRADING MODE ENABLED - Real money will be used! "
                 "Use --dry-run flag for paper trading."
@@ -385,17 +368,17 @@ class CoinbaseClient:
                     "Install it with: pip install coinbase-advanced-py"
                 )
                 # In dry-run / paper-trading mode we can operate without the SDK
-                if settings.system.dry_run:
+                if self.dry_run:
                     logger.info(
                         "PAPER TRADING MODE: Coinbase connection skipped (SDK missing). All trades will be simulated."
                     )
                     # Mark as not authenticated but allow engine startup.
                     self._client = None
-                    self._authenticated = False
+                    self._connected = False
                     self._last_health_check = datetime.utcnow()
                     return True
-                if not settings.system.dry_run:
-                    raise CoinbaseConnectionError(
+                if not self.dry_run:
+                    raise ExchangeConnectionError(
                         "coinbase-advanced-py is required for live trading"
                     )
 
@@ -406,7 +389,7 @@ class CoinbaseClient:
                         "Missing legacy Coinbase credentials. Please set CB_API_KEY, "
                         "CB_API_SECRET, and CB_PASSPHRASE environment variables."
                     )
-                    raise CoinbaseAuthError("Missing legacy API credentials")
+                    raise ExchangeAuthError("Missing legacy API credentials")
 
                 # Initialize with legacy credentials
                 self._client = CoinbaseAdvancedTrader(
@@ -422,7 +405,7 @@ class CoinbaseClient:
                         "Missing CDP credentials. Please set CDP_API_KEY_NAME "
                         "and CDP_PRIVATE_KEY environment variables."
                     )
-                    raise CoinbaseAuthError("Missing CDP API credentials")
+                    raise ExchangeAuthError("Missing CDP API credentials")
 
                 # Initialize RESTClient with CDP credentials directly
                 # Based on official docs: api_key should be the CDP key name, api_secret should be the private key
@@ -438,12 +421,12 @@ class CoinbaseClient:
                     "either legacy (CB_API_KEY, CB_API_SECRET, CB_PASSPHRASE) or "
                     "CDP (CDP_API_KEY_NAME, CDP_PRIVATE_KEY) credentials."
                 )
-                raise CoinbaseAuthError("No authentication credentials provided")
+                raise ExchangeAuthError("No authentication credentials provided")
 
             # Test connection with a simple API call
             await self._test_connection()
 
-            self._authenticated = True
+            self._connected = True
             self._last_health_check = datetime.utcnow()
 
             logger.info(
@@ -496,14 +479,14 @@ class CoinbaseClient:
 
         except CoinbaseAuthenticationException as e:
             logger.error(f"Coinbase authentication failed: {e}")
-            raise CoinbaseAuthError(f"Authentication failed: {e}") from e
+            raise ExchangeAuthError(f"Authentication failed: {e}") from e
         except CoinbaseConnectionException as e:
             logger.error(f"Coinbase connection failed: {e}")
-            raise CoinbaseConnectionError(f"Connection failed: {e}") from e
+            raise ExchangeConnectionError(f"Connection failed: {e}") from e
         except Exception as e:
             logger.error(f"Failed to connect to Coinbase: {e}")
             logger.debug(f"Connection error traceback: {traceback.format_exc()}")
-            raise CoinbaseConnectionError(f"Unexpected error: {e}") from e
+            raise ExchangeConnectionError(f"Unexpected error: {e}") from e
 
     async def _test_connection(self) -> None:
         """Test the connection with a simple API call."""
@@ -522,20 +505,20 @@ class CoinbaseClient:
         if self._client:
             # Cancel any pending orders if needed
             try:
-                if self._authenticated:
+                if self._connected:
                     logger.info("Cleaning up before disconnect...")
                     # Could add cleanup logic here
             except Exception as e:
                 logger.warning(f"Error during cleanup: {e}")
 
         self._client = None
-        self._authenticated = False
+        self._connected = False
         self._last_health_check = None
         logger.info("Disconnected from Coinbase")
 
     async def _health_check(self) -> bool:
         """Perform a health check on the connection."""
-        if not self._authenticated:
+        if not self._connected:
             return False
 
         try:
@@ -554,7 +537,7 @@ class CoinbaseClient:
 
         except Exception as e:
             logger.warning(f"Health check failed: {e}")
-            self._authenticated = False
+            self._connected = False
             return False
 
     async def _retry_request(self, func, *args, **kwargs):
@@ -567,7 +550,7 @@ class CoinbaseClient:
                 if not await self._health_check():
                     logger.warning("Connection unhealthy, attempting to reconnect...")
                     if not await self.connect():
-                        raise CoinbaseConnectionError("Failed to reconnect")
+                        raise ExchangeConnectionError("Failed to reconnect")
 
                 await self._rate_limiter.acquire()
                 return func(*args, **kwargs)
@@ -729,7 +712,7 @@ class CoinbaseClient:
         Returns:
             Order object if successful, None otherwise
         """
-        if not self._authenticated:
+        if not self._connected:
             logger.error("Not authenticated with Coinbase")
             return None
 
@@ -978,7 +961,7 @@ class CoinbaseClient:
         Returns:
             Order object if successful
         """
-        if settings.system.dry_run:
+        if self.dry_run:
             # Simulate order in dry-run mode
             logger.info(
                 f"PAPER TRADING: Simulating {side} {quantity} {symbol} at market"
@@ -997,10 +980,10 @@ class CoinbaseClient:
         try:
             # Validate inputs
             if quantity <= 0:
-                raise CoinbaseOrderError("Quantity must be positive")
+                raise ExchangeOrderError("Quantity must be positive")
 
             if side not in ["BUY", "SELL"]:
-                raise CoinbaseOrderError(f"Invalid side: {side}")
+                raise ExchangeOrderError(f"Invalid side: {side}")
 
             # Generate a unique client order ID
             import uuid
@@ -1097,21 +1080,21 @@ class CoinbaseClient:
                     else:
                         error_msg = str(result) if result else "Unknown error"
                         logger.error(f"Order placement failed: {error_msg}")
-                        raise CoinbaseOrderError(f"Order placement failed: {error_msg}")
+                        raise ExchangeOrderError(f"Order placement failed: {error_msg}")
             except AttributeError as e:
                 logger.error(f"Error parsing order response: {e}")
                 logger.error(f"Response type: {type(result)}, Response: {result}")
-                raise CoinbaseOrderError(f"Failed to parse order response: {e}") from e
+                raise ExchangeOrderError(f"Failed to parse order response: {e}") from e
 
         except CoinbaseAPIException as e:
             if "insufficient funds" in str(e).lower():
-                raise CoinbaseInsufficientFundsError(f"Insufficient funds: {e}") from e
+                raise ExchangeInsufficientFundsError(f"Insufficient funds: {e}") from e
             else:
-                raise CoinbaseOrderError(f"API error: {e}") from e
+                raise ExchangeOrderError(f"API error: {e}") from e
         except Exception as e:
             logger.error(f"Failed to place market order: {e}")
             logger.debug(f"Market order error traceback: {traceback.format_exc()}")
-            raise CoinbaseOrderError(f"Failed to place market order: {e}") from e
+            raise ExchangeOrderError(f"Failed to place market order: {e}") from e
 
     async def place_limit_order(
         self, symbol: str, side: str, quantity: Decimal, price: Decimal
@@ -1128,7 +1111,7 @@ class CoinbaseClient:
         Returns:
             Order object if successful
         """
-        if settings.system.dry_run:
+        if self.dry_run:
             logger.info(
                 f"PAPER TRADING: Simulating {side} {quantity} {symbol} limit @ {price}"
             )
@@ -1146,13 +1129,13 @@ class CoinbaseClient:
         try:
             # Validate inputs
             if quantity <= 0:
-                raise CoinbaseOrderError("Quantity must be positive")
+                raise ExchangeOrderError("Quantity must be positive")
 
             if price <= 0:
-                raise CoinbaseOrderError("Price must be positive")
+                raise ExchangeOrderError("Price must be positive")
 
             if side not in ["BUY", "SELL"]:
-                raise CoinbaseOrderError(f"Invalid side: {side}")
+                raise ExchangeOrderError(f"Invalid side: {side}")
 
             # Generate a unique client order ID
             import uuid
@@ -1201,17 +1184,17 @@ class CoinbaseClient:
                     "message", "Unknown error"
                 )
                 logger.error(f"Limit order placement failed: {error_msg}")
-                raise CoinbaseOrderError(f"Limit order placement failed: {error_msg}")
+                raise ExchangeOrderError(f"Limit order placement failed: {error_msg}")
 
         except CoinbaseAPIException as e:
             if "insufficient funds" in str(e).lower():
-                raise CoinbaseInsufficientFundsError(f"Insufficient funds: {e}") from e
+                raise ExchangeInsufficientFundsError(f"Insufficient funds: {e}") from e
             else:
-                raise CoinbaseOrderError(f"API error: {e}") from e
+                raise ExchangeOrderError(f"API error: {e}") from e
         except Exception as e:
             logger.error(f"Failed to place limit order: {e}")
             logger.debug(f"Limit order error traceback: {traceback.format_exc()}")
-            raise CoinbaseOrderError(f"Failed to place limit order: {e}") from e
+            raise ExchangeOrderError(f"Failed to place limit order: {e}") from e
 
     async def _place_stop_loss(
         self, base_order: Order, trade_action: TradeAction, current_price: Decimal
@@ -1290,7 +1273,7 @@ class CoinbaseClient:
         Returns:
             Order object if successful
         """
-        if settings.system.dry_run:
+        if self.dry_run:
             logger.info(
                 f"PAPER TRADING: Simulating {side} {quantity} {symbol} stop @ {stop_price}"
             )
@@ -1308,13 +1291,13 @@ class CoinbaseClient:
         try:
             # Validate inputs
             if quantity <= 0:
-                raise CoinbaseOrderError("Quantity must be positive")
+                raise ExchangeOrderError("Quantity must be positive")
 
             if stop_price <= 0:
-                raise CoinbaseOrderError("Stop price must be positive")
+                raise ExchangeOrderError("Stop price must be positive")
 
             if side not in ["BUY", "SELL"]:
-                raise CoinbaseOrderError(f"Invalid side: {side}")
+                raise ExchangeOrderError(f"Invalid side: {side}")
 
             # Calculate limit price with small buffer
             slippage_pct = settings.trading.slippage_tolerance_pct / 100
@@ -1322,6 +1305,10 @@ class CoinbaseClient:
                 limit_price = stop_price * (1 + Decimal(str(slippage_pct)))
             else:
                 limit_price = stop_price * (1 - Decimal(str(slippage_pct)))
+
+            # Round prices to 2 decimal places for Coinbase futures
+            stop_price = round(float(stop_price), 2)
+            limit_price = round(float(limit_price), 2)
 
             # Generate a unique client order ID
             import uuid
@@ -1379,17 +1366,17 @@ class CoinbaseClient:
                     "message", "Unknown error"
                 )
                 logger.error(f"Stop order placement failed: {error_msg}")
-                raise CoinbaseOrderError(f"Stop order placement failed: {error_msg}")
+                raise ExchangeOrderError(f"Stop order placement failed: {error_msg}")
 
         except CoinbaseAPIException as e:
             if "insufficient funds" in str(e).lower():
-                raise CoinbaseInsufficientFundsError(f"Insufficient funds: {e}") from e
+                raise ExchangeInsufficientFundsError(f"Insufficient funds: {e}") from e
             else:
-                raise CoinbaseOrderError(f"API error: {e}") from e
+                raise ExchangeOrderError(f"API error: {e}") from e
         except Exception as e:
             logger.error(f"Failed to place stop order: {e}")
             logger.debug(f"Stop order error traceback: {traceback.format_exc()}")
-            raise CoinbaseOrderError(f"Failed to place stop order: {e}") from e
+            raise ExchangeOrderError(f"Failed to place stop order: {e}") from e
 
     async def place_futures_market_order(
         self,
@@ -1412,7 +1399,7 @@ class CoinbaseClient:
         Returns:
             Order object if successful
         """
-        if settings.system.dry_run:
+        if self.dry_run:
             # Simulate futures order in dry-run mode
             logger.info(
                 f"PAPER TRADING FUTURES: Simulating {side} {quantity} {symbol} at market (leverage: {leverage}x)"
@@ -1431,10 +1418,10 @@ class CoinbaseClient:
         try:
             # Validate inputs
             if quantity <= 0:
-                raise CoinbaseOrderError("Quantity must be positive")
+                raise ExchangeOrderError("Quantity must be positive")
 
             if side not in ["BUY", "SELL"]:
-                raise CoinbaseOrderError(f"Invalid side: {side}")
+                raise ExchangeOrderError(f"Invalid side: {side}")
 
             leverage = leverage or self.max_futures_leverage
 
@@ -1546,30 +1533,30 @@ class CoinbaseClient:
                     else:
                         error_msg = str(result) if result else "Unknown error"
                         logger.error(f"Futures order placement failed: {error_msg}")
-                        raise CoinbaseOrderError(
+                        raise ExchangeOrderError(
                             f"Futures order placement failed: {error_msg}"
                         )
             except AttributeError as e:
                 logger.error(f"Error parsing order response: {e}")
                 logger.error(f"Response type: {type(result)}, Response: {result}")
-                raise CoinbaseOrderError(f"Failed to parse order response: {e}") from e
+                raise ExchangeOrderError(f"Failed to parse order response: {e}") from e
 
         except CoinbaseAPIException as e:
             if (
                 "insufficient funds" in str(e).lower()
                 or "insufficient margin" in str(e).lower()
             ):
-                raise CoinbaseInsufficientFundsError(
+                raise ExchangeInsufficientFundsError(
                     f"Insufficient margin for futures order: {e}"
                 ) from e
             else:
-                raise CoinbaseOrderError(f"Futures API error: {e}") from e
+                raise ExchangeOrderError(f"Futures API error: {e}") from e
         except Exception as e:
             logger.error(f"Failed to place futures market order: {e}")
             logger.debug(
                 f"Futures market order error traceback: {traceback.format_exc()}"
             )
-            raise CoinbaseOrderError(
+            raise ExchangeOrderError(
                 f"Failed to place futures market order: {e}"
             ) from e
 
@@ -1585,7 +1572,7 @@ class CoinbaseClient:
         Returns:
             Account balance in USD
         """
-        if settings.system.dry_run:
+        if self.dry_run:
             # Return mock balance for paper trading
             mock_balance = Decimal("10000.00")
             logger.debug(f"PAPER TRADING: Returning mock balance ${mock_balance}")
@@ -1606,7 +1593,7 @@ class CoinbaseClient:
 
         except Exception as e:
             logger.error(f"Failed to get account balance: {e}")
-            raise CoinbaseExchangeError(f"Failed to get account balance: {e}") from e
+            raise ExchangeConnectionError(f"Failed to get account balance: {e}") from e
 
     async def get_spot_balance(self) -> Decimal:
         """
@@ -1635,7 +1622,7 @@ class CoinbaseClient:
 
         except Exception as e:
             logger.error(f"Failed to get spot balance: {e}")
-            raise CoinbaseExchangeError(f"Failed to get spot balance: {e}") from e
+            raise ExchangeConnectionError(f"Failed to get spot balance: {e}") from e
 
     async def get_futures_balance(self) -> Decimal:
         """
@@ -1905,7 +1892,7 @@ class CoinbaseClient:
             # Execute transfer via Coinbase API
             logger.info(f"Transferring ${amount} from spot to futures for {reason}")
 
-            if settings.system.dry_run:
+            if self.dry_run:
                 logger.info(f"PAPER TRADING: Simulating transfer ${amount} CBI -> CFM")
                 return True
 
@@ -2034,7 +2021,7 @@ class CoinbaseClient:
         Returns:
             List of Position objects
         """
-        if settings.system.dry_run:
+        if self.dry_run:
             # Return empty positions for dry run
             return []
 
@@ -2073,7 +2060,7 @@ class CoinbaseClient:
 
         except Exception as e:
             logger.error(f"Failed to get positions: {e}")
-            raise CoinbaseExchangeError(f"Failed to get positions: {e}") from e
+            raise ExchangeConnectionError(f"Failed to get positions: {e}") from e
 
     async def cancel_order(self, order_id: str) -> bool:
         """
@@ -2085,7 +2072,7 @@ class CoinbaseClient:
         Returns:
             True if successful
         """
-        if settings.system.dry_run:
+        if self.dry_run:
             logger.info(f"PAPER TRADING: Simulating cancel order {order_id}")
             return True
 
@@ -2119,7 +2106,7 @@ class CoinbaseClient:
         Returns:
             True if successful
         """
-        if settings.system.dry_run:
+        if self.dry_run:
             logger.info(
                 f"PAPER TRADING: Simulating cancel all orders{' for ' + symbol if symbol else ''}"
             )
@@ -2181,7 +2168,7 @@ class CoinbaseClient:
         Returns:
             OrderStatus or None
         """
-        if settings.system.dry_run:
+        if self.dry_run:
             # Return mock status for dry run
             return OrderStatus.FILLED
 
@@ -2220,7 +2207,7 @@ class CoinbaseClient:
         Returns:
             True if connected
         """
-        return self._authenticated
+        return self._connected
 
     def get_connection_status(self) -> dict[str, Any]:
         """
@@ -2237,13 +2224,13 @@ class CoinbaseClient:
             has_credentials = bool(self.cdp_api_key_name and self.cdp_private_key)
 
         status = {
-            "connected": self._authenticated,
+            "connected": self._connected,
             "sandbox": self.sandbox,
             "auth_method": self.auth_method,
             "has_credentials": has_credentials,
-            "dry_run": settings.system.dry_run,
+            "dry_run": self.dry_run,
             "trading_mode": (
-                "PAPER TRADING" if settings.system.dry_run else "LIVE TRADING"
+                "PAPER TRADING" if self.dry_run else "LIVE TRADING"
             ),
             "last_health_check": (
                 self._last_health_check.isoformat() if self._last_health_check else None
@@ -2303,3 +2290,13 @@ class CoinbaseClient:
     ) -> Order | None:
         """Legacy method for backward compatibility."""
         return await self.place_limit_order(symbol, side, quantity, price)
+    
+    @property
+    def supports_futures(self) -> bool:
+        """Check if exchange supports futures trading."""
+        return self.enable_futures
+    
+    @property
+    def is_decentralized(self) -> bool:
+        """Coinbase is a centralized exchange."""
+        return False

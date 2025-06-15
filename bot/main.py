@@ -93,7 +93,7 @@ from rich.table import Table
 from .config import Settings, create_settings
 from .data.dominance import DominanceCandleBuilder, DominanceDataProvider
 from .data.market import MarketDataProvider
-from .exchange.coinbase import CoinbaseClient
+from .exchange.factory import ExchangeFactory
 from .indicators.vumanchu import VuManChuIndicators
 from .learning.experience_manager import ExperienceManager
 from .mcp.memory_server import MCPMemoryServer
@@ -229,7 +229,10 @@ class TradingEngine:
             use_fifo=self.settings.trading.use_fifo_accounting,
         )
         self.risk_manager = RiskManager(position_manager=self.position_manager)
-        self.exchange_client = CoinbaseClient()
+        self.exchange_client = ExchangeFactory.create_exchange(
+            exchange_type=self.settings.exchange.exchange_type,
+            dry_run=self.dry_run,
+        )
 
         # Initialize dominance data provider if enabled
         self.dominance_provider = None
@@ -677,10 +680,20 @@ class TradingEngine:
 
         # Exchange status
         exchange_status = self.exchange_client.get_connection_status()
+        exchange_name = exchange_status.get("exchange", self.exchange_client.exchange_name)
+        exchange_details = []
+        
+        if exchange_status.get("is_decentralized", False):
+            exchange_details.append(f"{exchange_status.get('network', 'mainnet')} network")
+            if exchange_status.get("blockchain"):
+                exchange_details.append(f"({exchange_status['blockchain']})")
+        else:
+            exchange_details.append(f"{'Sandbox' if exchange_status.get('sandbox', False) else 'Live'} mode")
+        
         table.add_row(
-            "Exchange",
+            f"Exchange ({exchange_name})",
             "✓ Connected" if exchange_status["connected"] else "✗ Disconnected",
-            f"{'Sandbox' if exchange_status['sandbox'] else 'Live'} mode",
+            " ".join(exchange_details),
         )
 
         # LLM status
