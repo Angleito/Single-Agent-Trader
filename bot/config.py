@@ -1082,9 +1082,10 @@ class Settings(BaseSettings):
         return self.system.environment == Environment.PRODUCTION
 
     @computed_field
+    @property
     def requires_api_keys(self) -> bool:
         """Check if API keys are required for current configuration."""
-        return bool(
+        return (
             not self.system.dry_run or self.system.environment == Environment.PRODUCTION
         )
 

@@ -394,7 +394,7 @@ class LLMPerformanceMonitor:
         cache_hit_times = [m.response_time_ms for m in cache_hits]
         cache_miss_times = [m.response_time_ms for m in cache_misses]
 
-        analysis = {
+        analysis: dict[str, Any] = {
             "cache_hit_rate": len(cache_hits) / len(recent_metrics) * 100,
             "avg_cache_hit_time_ms": mean(cache_hit_times) if cache_hit_times else 0,
             "avg_cache_miss_time_ms": mean(cache_miss_times) if cache_miss_times else 0,
@@ -410,12 +410,13 @@ class LLMPerformanceMonitor:
             ) * 100
 
         # Generate recommendations
+        recommendations: list[str] = analysis["recommendations"]  # type: ignore
         if analysis["cache_hit_rate"] < 50:
-            analysis["recommendations"].append("Increase cache TTL")
+            recommendations.append("Increase cache TTL")
         if analysis["cache_hit_rate"] < 30:
-            analysis["recommendations"].append("Improve cache key similarity algorithm")
+            recommendations.append("Improve cache key similarity algorithm")
         if analysis["cache_speed_improvement"] < 70:
-            analysis["recommendations"].append("Optimize cache lookup performance")
+            recommendations.append("Optimize cache lookup performance")
 
         return analysis
 

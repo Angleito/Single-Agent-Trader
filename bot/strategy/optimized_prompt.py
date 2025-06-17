@@ -6,7 +6,7 @@ LLM processing time while maintaining decision quality.
 """
 
 import logging
-from typing import Any
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -350,7 +350,7 @@ class PromptOptimizer:
 
 
 # Global optimizer instance
-_global_optimizer: OptimizedPromptTemplate = None
+_global_optimizer: Optional[OptimizedPromptTemplate] = None
 
 
 def get_optimized_prompt_template() -> OptimizedPromptTemplate:

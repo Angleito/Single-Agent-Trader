@@ -381,7 +381,7 @@ class RAGReader:
         Returns:
             Summary dictionary
         """
-        doc_types = {}
+        doc_types: dict[str, int] = {}
         total_docs = len(self.documents)
 
         for doc in self.documents:

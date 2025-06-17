@@ -6,7 +6,7 @@ to evaluate trading strategies against historical data.
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 
@@ -58,11 +58,7 @@ class BacktestResults:
     avg_trade_duration: int = 0
     largest_win: Decimal = Decimal("0")
     largest_loss: Decimal = Decimal("0")
-    trades: list[BacktestTrade] = None
-
-    def __post_init__(self):
-        if self.trades is None:
-            self.trades = []
+    trades: list[BacktestTrade] = field(default_factory=list)
 
 
 class BacktestEngine:
@@ -529,6 +525,7 @@ class BacktestEngine:
             total_return_pct=total_return_pct,
             max_drawdown=max_drawdown,
             max_drawdown_pct=max_drawdown_pct,
+            sharpe_ratio=0.0,  # TODO: Calculate actual Sharpe ratio
             profit_factor=profit_factor,
             avg_trade_duration=avg_trade_duration,
             largest_win=largest_win,

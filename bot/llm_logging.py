@@ -16,19 +16,47 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from langchain_core.callbacks import BaseCallbackHandler
-    from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
-    from langchain_core.outputs import LLMResult
+    from langchain_core.callbacks import BaseCallbackHandler as _BaseCallbackHandler
+    from langchain_core.messages import AIMessage as _AIMessage, BaseMessage as _BaseMessage, HumanMessage as _HumanMessage
+    from langchain_core.outputs import LLMResult as _LLMResult
 
+    # Type aliases for when LangChain is available
+    BaseCallbackHandler = _BaseCallbackHandler
+    AIMessage = _AIMessage
+    BaseMessage = _BaseMessage
+    HumanMessage = _HumanMessage
+    LLMResult = _LLMResult
+    
     LANGCHAIN_AVAILABLE = True
 except ImportError:
     # Graceful degradation when LangChain is not available
-    BaseCallbackHandler = object
-    AIMessage = object
-    BaseMessage = object
-    HumanMessage = object
-    LLMResult = object
+    # Create dummy base classes for type checking
+    class _DummyBaseCallbackHandler:
+        """Dummy BaseCallbackHandler for when LangChain is unavailable."""
+        pass
 
+    class _DummyAIMessage:
+        """Dummy AIMessage for when LangChain is unavailable."""
+        pass
+
+    class _DummyBaseMessage:
+        """Dummy BaseMessage for when LangChain is unavailable."""
+        pass
+
+    class _DummyHumanMessage:
+        """Dummy HumanMessage for when LangChain is unavailable."""
+        pass
+
+    class _DummyLLMResult:
+        """Dummy LLMResult for when LangChain is unavailable."""
+        pass
+
+    BaseCallbackHandler = _DummyBaseCallbackHandler
+    AIMessage = _DummyAIMessage
+    BaseMessage = _DummyBaseMessage
+    HumanMessage = _DummyHumanMessage
+    LLMResult = _DummyLLMResult
+    
     LANGCHAIN_AVAILABLE = False
 
 from bot.config import settings
@@ -471,7 +499,7 @@ class LangChainCallbackHandler(BaseCallbackHandler):
 
             self._current_request_id = None
 
-    def on_llm_error(self, error: Exception | KeyboardInterrupt, **kwargs: Any) -> None:
+    def on_llm_error(self, error: BaseException, **kwargs: Any) -> None:
         """Called when an LLM encounters an error."""
         if self._current_request_id and self.completion_logger:
             self.completion_logger.log_completion_response(

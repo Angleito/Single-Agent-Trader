@@ -2327,7 +2327,7 @@ class CoinbaseClient(BaseExchange):
             if self._client is None:
                 logger.error("Client not initialized")
                 return Decimal("0")
-                
+
             # Get FCM balance summary
             balance_response = await self._retry_request(
                 self._client.get_fcm_balance_summary
@@ -2362,6 +2362,10 @@ class CoinbaseClient(BaseExchange):
             Futures account balance in USD
         """
         try:
+            if self._client is None:
+                logger.error("Client not initialized")
+                return Decimal("0")
+
             accounts_data = await self._retry_request(self._client.get_accounts)
 
             total_balance = Decimal("0")
@@ -2400,6 +2404,9 @@ class CoinbaseClient(BaseExchange):
             return self._futures_account_info
 
         try:
+            if self._client is None:
+                return None
+
             # Get FCM balance summary
             balance_response = await self._retry_request(
                 self._client.get_fcm_balance_summary

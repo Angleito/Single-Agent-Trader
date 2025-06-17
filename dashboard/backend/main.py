@@ -24,7 +24,14 @@ except ImportError:
 
 import aiohttp
 import uvicorn
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import (
+    FastAPI,
+    HTTPException,
+    Query,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from llm_log_parser import AlertThresholds, create_llm_log_parser
@@ -807,11 +814,35 @@ app = FastAPI(
 )
 
 # Add CORS middleware
-# Get allowed origins from environment or use defaults
-allowed_origins = os.getenv(
-    "CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
-).split(",")
-allow_credentials = os.getenv("CORS_ALLOW_CREDENTIALS", "false").lower() == "true"
+# Get allowed origins from environment or use comprehensive defaults
+default_origins = ",".join(
+    [
+        # Development frontend
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        # Production frontend
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        # Nginx proxy
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+        # Production port 80
+        "http://localhost:80",
+        "http://127.0.0.1:80",
+        # Docker internal network
+        "http://dashboard-frontend:8080",
+        "http://dashboard-frontend-prod:8080",
+        # Alternative localhost variations
+        "http://0.0.0.0:3000",
+        "http://0.0.0.0:3001",
+        "http://0.0.0.0:8080",
+    ]
+)
+
+allowed_origins = os.getenv("CORS_ORIGINS", default_origins).split(",")
+# Strip whitespace from origins
+allowed_origins = [origin.strip() for origin in allowed_origins if origin.strip()]
+allow_credentials = os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower() == "true"
 
 app.add_middleware(
     CORSMiddleware,
@@ -839,6 +870,12 @@ app.add_middleware(
     ],
 )
 
+# Log CORS configuration for debugging
+logger.info(f"CORS configured with {len(allowed_origins)} allowed origins:")
+for i, origin in enumerate(allowed_origins, 1):
+    logger.info(f"  {i}. {origin}")
+logger.info(f"CORS credentials allowed: {allow_credentials}")
+
 
 # Add rate limiting middleware
 @app.middleware("http")
@@ -864,26 +901,47 @@ async def add_json_headers(request, call_next):
 
     # Add CORS headers for WebSocket upgrades
     if request.headers.get("connection", "").lower() == "upgrade":
-        response.headers["Access-Control-Allow-Origin"] = "*"
+        origin = request.headers.get("origin")
+        if origin and origin in allowed_origins:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+        else:
+            # Fallback for development
+            response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        response.headers["Access-Control-Allow-Headers"] = (
+            "Content-Type, Authorization, X-Requested-With"
+        )
 
     return response
 
 
 # OPTIONS handler for CORS preflight requests
 @app.options("/{path:path}")
-async def handle_options(path: str):
+async def handle_options(path: str, request: Request):
     """Handle CORS preflight requests"""
+    origin = request.headers.get("origin")
+
+    # Determine the appropriate origin to allow
+    allow_origin = "http://localhost:3000"  # Default fallback
+    if origin and origin in allowed_origins:
+        allow_origin = origin
+
+    headers = {
+        "Access-Control-Allow-Origin": allow_origin,
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Origin, Accept, Accept-Language, Cache-Control, Pragma",
+        "Access-Control-Max-Age": "86400",
+    }
+
+    # Add credentials header if credentials are allowed
+    if allow_credentials:
+        headers["Access-Control-Allow-Credentials"] = "true"
+
     return JSONResponse(
         content={"message": "OK"},
         status_code=200,
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
-            "Access-Control-Max-Age": "86400",
-        },
+        headers=headers,
     )
 
 
@@ -899,6 +957,20 @@ async def websocket_endpoint(websocket: WebSocket):
     logger.info(
         f"WebSocket connection attempt - Origin: {origin}, Host: {host}, User-Agent: {user_agent}"
     )
+
+    # Log CORS validation for WebSocket connections
+    if origin:
+        if origin in allowed_origins:
+            logger.info(f"WebSocket origin '{origin}' is allowed by CORS policy")
+        else:
+            logger.warning(
+                f"WebSocket origin '{origin}' is NOT in allowed origins list"
+            )
+            logger.warning(f"Allowed origins: {', '.join(allowed_origins)}")
+    else:
+        logger.info(
+            "WebSocket connection has no origin header (this might be normal for some clients)"
+        )
 
     try:
         # Accept connection with detailed logging
@@ -2500,6 +2572,11 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "version": "1.0.0",
+        "cors": {
+            "enabled": True,
+            "allowed_origins_count": len(allowed_origins),
+            "credentials_allowed": allow_credentials,
+        },
     }
 
 

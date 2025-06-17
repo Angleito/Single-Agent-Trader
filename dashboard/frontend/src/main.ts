@@ -728,7 +728,7 @@ class DashboardApp {
 
       // Initialize Notification System
       this.notificationSystem = new NotificationSystem(
-        this.config.api_url || window.location.origin,
+        this.config.api_base_url || window.location.origin,
         ''
       )
 
@@ -1170,22 +1170,10 @@ class DashboardApp {
    */
   private async initializeChart(): Promise<void> {
     try {
-      // Chart URL Construction: Ensure proper /api prefix for TradingView UDF calls
+      // Chart URL Construction: Use the configured API base URL
       // Chart makes calls to: /udf/config, /udf/symbols, /udf/history, /udf/marks
-      // These need to go through /api/* for nginx proxy or direct to backend/api/*
+      // The getApiBaseUrl() method already handles environment variables and proxy routing
       let baseUrl = this.config.api_base_url
-
-      // If running through nginx proxy (localhost), append /api since getApiBaseUrl returns just the base
-      const host = window.location.host
-      if (
-        baseUrl === `${window.location.protocol}//${host}` &&
-        (host.includes('localhost:8080') ||
-          host.includes('localhost:3000') ||
-          host.includes('127.0.0.1:8080') ||
-          host.includes('127.0.0.1:3000'))
-      ) {
-        baseUrl = `${baseUrl}/api`
-      }
 
       // Ensure the base URL ends with /api for proper chart API calls
       if (!baseUrl.endsWith('/api')) {
@@ -1656,29 +1644,16 @@ class DashboardApp {
   /**
    * Get WebSocket URL from environment or default
    *
-   * WebSocket URL Construction Logic:
-   * 1. For nginx proxy (localhost:3000/8080): Uses /api/ws through proxy
-   *    - nginx /api/ location includes WebSocket upgrade support
-   * 2. For direct backend: Uses environment variables or constructs WebSocket URL
-   * 3. Handles various URL formats: absolute, protocol-relative, relative paths
+   * Simplified URL Construction Logic:
+   * 1. Use VITE_WS_URL environment variable if available
+   * 2. Fallback to relative '/ws' path for nginx proxy compatibility
+   * 3. Automatically handle protocol (ws/wss) based on current page protocol
    */
   private getWebSocketUrl(): string {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
 
-    // In development mode on port 3000, connect directly to backend on port 8000
-    if (host.includes('localhost:3000') || host.includes('127.0.0.1:3000')) {
-      return `${protocol}//localhost:8000/ws`
-    }
-
-    // In development mode with nginx proxy on port 8080, use proxy
-    if (host.includes('localhost:8080') || host.includes('127.0.0.1:8080')) {
-      // Nginx proxy will forward /api/ws to the backend automatically
-      // WebSocket upgrade is configured within the /api/ location block
-      return `${protocol}//${host}/api/ws`
-    }
-
-    // Check for environment variable for non-proxy scenarios
+    // Check for environment variable first
     const envWsUrl = import.meta.env.VITE_WS_URL ?? (window as any).__WS_URL__
     if (envWsUrl) {
       // Handle absolute URLs (already include protocol and host)
@@ -1700,46 +1675,48 @@ class DashboardApp {
       return `${protocol}//${host}/${envWsUrl.replace(/^\/+/, '')}`
     }
 
-    // In production or other environments, construct URL based on current host
+    // Default fallback - use relative '/ws' path for nginx proxy compatibility
     return `${protocol}//${host}/ws`
   }
 
   /**
    * Get API base URL from environment or default
    *
-   * URL Construction Logic:
-   * 1. For nginx proxy (localhost:3000/8080): Returns base URL (http://localhost:3000)
-   *    - Frontend calls /api/* which nginx forwards to dashboard-backend:8000/api/*
-   * 2. For direct backend: Uses environment variables with /api suffix
-   * 3. For production: Uses environment variables or constructs from current host
+   * Simplified URL Construction Logic:
+   * 1. Use VITE_API_URL or VITE_API_BASE_URL environment variable if available
+   * 2. Fallback to relative '/api' path for nginx proxy compatibility
+   * 3. No hardcoded host detection - let environment variables or proxy handle routing
    */
   private getApiBaseUrl(): string {
     const protocol = window.location.protocol
     const host = window.location.host
 
-    // In development mode (localhost with nginx proxy), always use proxy
-    if (
-      host.includes('localhost:8080') ||
-      host.includes('localhost:3000') ||
-      host.includes('127.0.0.1:8080') ||
-      host.includes('127.0.0.1:3000')
-    ) {
-      // Nginx proxy will forward /api/* to the backend automatically
-      // Return base URL without /api suffix to avoid double /api appending
-      return `${protocol}//${host}`
-    }
-
-    // Check for environment variable for non-proxy scenarios
+    // Check for environment variable first
     const envApiUrl =
-      import.meta.env.VITE_API_BASE_URL ||
       import.meta.env.VITE_API_URL ||
+      import.meta.env.VITE_API_BASE_URL ||
       (window as any).__API_URL__
     if (envApiUrl) {
-      // For direct backend URLs (non-proxy), ensure /api suffix
-      return envApiUrl.endsWith('/api') ? envApiUrl : `${envApiUrl}/api`
+      // Handle absolute URLs (already include protocol and host)
+      if (envApiUrl.startsWith('http://') || envApiUrl.startsWith('https://')) {
+        return envApiUrl
+      }
+
+      // Handle protocol-relative URLs
+      if (envApiUrl.startsWith('//')) {
+        return `${protocol}${envApiUrl}`
+      }
+
+      // Handle relative paths from environment variables
+      if (envApiUrl.startsWith('/')) {
+        return `${protocol}//${host}${envApiUrl}`
+      }
+
+      // Fallback: treat as relative path
+      return `${protocol}//${host}/${envApiUrl.replace(/^\/+/, '')}`
     }
 
-    // In production or other environments, construct URL based on current host
+    // Default fallback - use relative '/api' path for nginx proxy compatibility
     return `${protocol}//${host}/api`
   }
 

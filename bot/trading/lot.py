@@ -90,7 +90,7 @@ class FIFOPosition(BaseModel):
     @property
     def total_quantity(self) -> Decimal:
         """Total remaining quantity across all lots."""
-        return sum(lot.remaining_quantity for lot in self.lots)
+        return sum(lot.remaining_quantity for lot in self.lots) or Decimal("0")
 
     @property
     def average_price(self) -> Decimal:
@@ -104,7 +104,7 @@ class FIFOPosition(BaseModel):
     @property
     def total_cost_basis(self) -> Decimal:
         """Total cost basis of remaining shares."""
-        return sum(lot.remaining_cost_basis for lot in self.lots)
+        return sum(lot.remaining_cost_basis for lot in self.lots) or Decimal("0")
 
     def add_lot(
         self,

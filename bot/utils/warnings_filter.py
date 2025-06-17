@@ -7,7 +7,9 @@ particularly pandas_ta, LangChain, and their dependencies.
 """
 
 import sys
+import types
 import warnings
+from typing import Any
 
 
 class WarningsFilter:
@@ -73,9 +75,9 @@ class WarningsFilter:
         r".*asyncio.*deprecated.*",
     ]
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the warnings filter."""
-        self._original_warnings_state = warnings.filters.copy()
+        self._original_warnings_state = list(warnings.filters)
         self._suppressed_patterns: list[str] = []
 
     def suppress_pandas_ta_warnings(self) -> None:
@@ -234,8 +236,9 @@ class WarningsFilter:
 
         This method can be used to restore warnings if needed for debugging.
         """
-        # Reset to original state by recreating the list
-        warnings.filters[:] = list(self._original_warnings_state)  # type: ignore[index]
+        # Reset to original state by clearing and extending
+        warnings.filters.clear()
+        warnings.filters.extend(self._original_warnings_state)
         self._suppressed_patterns.clear()
 
     def get_suppressed_patterns(self) -> list[str]:
@@ -333,8 +336,9 @@ def initialize_early_warning_suppression() -> None:
     This is specifically designed to work in Docker environments.
     """
     # Set warning registry to capture import-time warnings
-    if not hasattr(sys.modules[__name__], "__warningregistry__"):
-        sys.modules[__name__].__warningregistry__ = {}
+    current_module = sys.modules[__name__]
+    if not hasattr(current_module, "__warningregistry__"):
+        setattr(current_module, "__warningregistry__", {})
 
     # Comprehensive message-based filtering including LangChain
     message_patterns = [

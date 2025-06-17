@@ -7,11 +7,13 @@ Designed to work in Docker environments where warnings may persist.
 """
 
 import sys
+import types
 import warnings
 
 # Set up warning registry for this module
-if not hasattr(sys.modules[__name__], "__warningregistry__"):
-    sys.modules[__name__].__warningregistry__ = {}
+current_module = sys.modules[__name__]
+if not hasattr(current_module, "__warningregistry__"):
+    setattr(current_module, "__warningregistry__", {})
 
 # Comprehensive pandas_ta import with maximum warning suppression
 with warnings.catch_warnings():

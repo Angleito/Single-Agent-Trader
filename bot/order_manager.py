@@ -17,6 +17,7 @@ from pathlib import Path
 
 from .config import settings
 from .types import Order, OrderStatus
+from typing import Any, Literal
 
 logger = logging.getLogger(__name__)
 
@@ -96,8 +97,8 @@ class OrderManager:
     def create_order(
         self,
         symbol: str,
-        side: str,
-        order_type: str,
+        side: Literal["BUY", "SELL"],
+        order_type: Literal["MARKET", "LIMIT", "STOP", "STOP_LIMIT"],
         quantity: Decimal,
         price: Decimal | None = None,
         stop_price: Decimal | None = None,
@@ -426,7 +427,7 @@ class OrderManager:
 
     def get_order_statistics(
         self, symbol: str | None = None, hours: int = 24
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         Get order statistics.
 

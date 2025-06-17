@@ -75,8 +75,8 @@ services:
     environment:
       - NODE_ENV=production
       - DOCKER_ENV=true
-      - VITE_API_URL=http://dashboard-backend:8000
-      - VITE_WS_URL=ws://dashboard-backend:8000
+      - VITE_API_URL=/api
+      - VITE_WS_URL=/ws
     restart: unless-stopped
     networks:
       - dashboard-network
@@ -118,8 +118,8 @@ services:
       - /tmp:noexec,nosuid,size=50m  # Secure temporary filesystem
     environment:
       - NODE_ENV=production
-      - VITE_API_URL=http://dashboard-backend:8000
-      - VITE_WS_URL=ws://dashboard-backend:8000
+      - VITE_API_URL=/api
+      - VITE_WS_URL=/ws
     restart: unless-stopped
     networks:
       - dashboard-network

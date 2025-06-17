@@ -97,7 +97,7 @@ services:
       - NET_BIND_SERVICE  # Only add required capabilities
 
     ports:
-      - "127.0.0.1:8000:8000"  # Bind to localhost only for security
+      - "8000:8000"  # Allow external access for frontend connectivity
 
     volumes:
       # SECURITY FIX: Docker socket exposure removed - CRITICAL VULNERABILITY FIXED
@@ -165,8 +165,8 @@ services:
 
     environment:
       - NODE_ENV=production
-      - VITE_API_URL=http://dashboard-backend:8000
-      - VITE_WS_URL=ws://dashboard-backend:8000
+      - VITE_API_URL=/api
+      - VITE_WS_URL=/ws
 
     depends_on:
       dashboard-backend:

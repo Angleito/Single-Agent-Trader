@@ -23,17 +23,22 @@ try:
     _BACKTEST_AVAILABLE = True
 except ImportError:
     # Create dummy classes if pandas not available
-    class BacktestEngine:
+    class _BacktestEngine:
         def __init__(self, *args, **kwargs):
             raise ImportError(
                 "Backtesting requires pandas. Install with: pip install pandas"
             )
 
-    class BacktestResults:
+    class _BacktestResults:
         pass
 
-    class BacktestTrade:
+    class _BacktestTrade:
         pass
+
+    # Assign dummy classes to expected names
+    BacktestEngine = _BacktestEngine
+    BacktestResults = _BacktestResults
+    BacktestTrade = _BacktestTrade
 
     _BACKTEST_AVAILABLE = False
 

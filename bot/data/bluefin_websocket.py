@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -40,7 +40,7 @@ class BluefinWebSocketClient:
         symbol: str,
         interval: str = "1m",
         candle_limit: int = 500,
-        on_candle_update: Callable[[MarketData], None] | None = None,
+        on_candle_update: Callable[[MarketData], None | Awaitable[None]] | None = None,
     ):
         """
         Initialize the Bluefin WebSocket client.
@@ -64,12 +64,14 @@ class BluefinWebSocketClient:
         self._reconnect_delay = 5  # seconds
 
         # Candle building state
-        self._candle_buffer = deque(maxlen=candle_limit)
+        self._candle_buffer: deque[MarketData] = deque(maxlen=candle_limit)
         self._current_candle: MarketData | None = None
-        self._tick_buffer = deque(maxlen=1000)  # Store recent ticks
+        self._tick_buffer: deque[dict[str, Any]] = deque(
+            maxlen=1000
+        )  # Store recent ticks
 
         # Subscription tracking
-        self._subscribed_channels = set()
+        self._subscribed_channels: set[str] = set()
         self._subscription_id = 1
 
         # Tasks
@@ -221,6 +223,9 @@ class BluefinWebSocketClient:
 
     async def _message_handler(self) -> None:
         """Handle incoming WebSocket messages."""
+        if not self._ws:
+            raise RuntimeError("WebSocket connection is not available")
+
         async for message in self._ws:
             try:
                 data = json.loads(message)
@@ -490,15 +495,16 @@ class BluefinWebSocketClient:
             await self._create_new_candle(timestamp, price)
 
         # Update current candle
-        self._current_candle = MarketData(
-            symbol=self._current_candle.symbol,
-            timestamp=self._current_candle.timestamp,
-            open=self._current_candle.open,
-            high=max(self._current_candle.high, price),
-            low=min(self._current_candle.low, price),
-            close=price,
-            volume=self._current_candle.volume + size,
-        )
+        if self._current_candle is not None:
+            self._current_candle = MarketData(
+                symbol=self._current_candle.symbol,
+                timestamp=self._current_candle.timestamp,
+                open=self._current_candle.open,
+                high=max(self._current_candle.high, price),
+                low=min(self._current_candle.low, price),
+                close=price,
+                volume=self._current_candle.volume + size,
+            )
 
     async def _create_new_candle(self, timestamp: datetime, price: Decimal) -> None:
         """

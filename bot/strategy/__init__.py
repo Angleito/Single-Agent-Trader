@@ -5,15 +5,15 @@ from .llm_agent import LLMAgent
 
 # Optional imports for memory-enhanced features
 try:
-    from .memory_enhanced_agent import MemoryEnhancedAgent
+    from .memory_enhanced_agent import MemoryEnhancedLLMAgent
 except ImportError:
-    MemoryEnhancedAgent = None
+    MemoryEnhancedLLMAgent = None
 
 __all__ = [
     "LLMAgent",
     "CoreStrategy",
 ]
 
-# Add MemoryEnhancedAgent to __all__ if available
-if MemoryEnhancedAgent is not None:
-    __all__.append("MemoryEnhancedAgent")
+# Add MemoryEnhancedLLMAgent to __all__ if available
+if MemoryEnhancedLLMAgent is not None:
+    __all__.append("MemoryEnhancedLLMAgent")

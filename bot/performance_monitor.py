@@ -17,7 +17,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, NamedTuple
+from typing import Any, Dict, List, Optional, Callable, Union, NamedTuple
 
 import numpy as np
 import psutil
@@ -54,7 +54,19 @@ class PerformanceAlert:
     current_value: float
     threshold: float
     timestamp: datetime
-    tags: dict[str, str] = field(default_factory=dict)
+    tags: Dict[str, str] = field(default_factory=dict)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert alert to dictionary format."""
+        return {
+            "level": self.level.value,
+            "message": self.message,
+            "metric_name": self.metric_name,
+            "current_value": self.current_value,
+            "threshold": self.threshold,
+            "timestamp": self.timestamp.isoformat(),
+            "tags": self.tags
+        }
 
 
 class TimingContext(NamedTuple):
@@ -100,13 +112,13 @@ class MetricsCollector:
             max_history_size: Maximum number of metrics to keep in memory
         """
         self.max_history_size = max_history_size
-        self._metrics_history = defaultdict(lambda: deque(maxlen=max_history_size))
+        self._metrics_history: Dict[str, deque[PerformanceMetric]] = defaultdict(lambda: deque(maxlen=max_history_size))
         self._lock = threading.Lock()
 
         # Running statistics
-        self._metric_stats = defaultdict(
+        self._metric_stats: Dict[str, Dict[str, float]] = defaultdict(
             lambda: {
-                "count": 0,
+                "count": 0.0,
                 "sum": 0.0,
                 "sum_squares": 0.0,
                 "min": float("inf"),
@@ -121,7 +133,7 @@ class MetricsCollector:
 
             # Update running statistics
             stats = self._metric_stats[metric.name]
-            stats["count"] += 1
+            stats["count"] += 1.0
             stats["sum"] += metric.value
             stats["sum_squares"] += metric.value**2
             stats["min"] = min(stats["min"], metric.value)
@@ -158,8 +170,8 @@ class MetricsCollector:
             "std_dev": statistics.stdev(values) if len(values) > 1 else 0,
             "min": min(values),
             "max": max(values),
-            "p95": np.percentile(values, 95) if values else 0,
-            "p99": np.percentile(values, 99) if values else 0,
+            "p95": float(np.percentile(values, 95)) if values else 0.0,
+            "p99": float(np.percentile(values, 99)) if values else 0.0,
         }
 
     def get_all_metrics(self) -> dict[str, list[PerformanceMetric]]:
@@ -176,7 +188,7 @@ class LatencyTracker:
     def __init__(self, metrics_collector: MetricsCollector):
         """Initialize the latency tracker."""
         self.metrics_collector = metrics_collector
-        self._active_timings = {}
+        self._active_timings: Dict[str, TimingContext] = {}
         self._lock = threading.Lock()
 
     @contextmanager
@@ -193,7 +205,7 @@ class LatencyTracker:
                 calculate_indicators()
         """
         start_time = time.perf_counter()
-        timing_id = id(threading.current_thread())
+        timing_id = str(id(threading.current_thread()))
 
         with self._lock:
             self._active_timings[timing_id] = TimingContext(
@@ -270,8 +282,8 @@ class ResourceMonitor:
         self.metrics_collector = metrics_collector
         self.process = psutil.Process()
         self._monitoring = False
-        self._monitor_task = None
-        self._baseline_memory = None
+        self._monitor_task: Optional[asyncio.Task[None]] = None
+        self._baseline_memory: Optional[float] = None
 
     async def start_monitoring(self, interval_seconds: float = 5.0):
         """
@@ -398,9 +410,9 @@ class AlertManager:
     def __init__(self, thresholds: PerformanceThresholds):
         """Initialize the alert manager."""
         self.thresholds = thresholds
-        self.alerts = deque(maxlen=1000)
-        self._alert_callbacks = []
-        self._last_alert_times = defaultdict(lambda: datetime.min)
+        self.alerts: deque[PerformanceAlert] = deque(maxlen=1000)
+        self._alert_callbacks: List[Callable[[PerformanceAlert], None]] = []
+        self._last_alert_times: Dict[str, datetime] = defaultdict(lambda: datetime.min)
         self._alert_cooldown = timedelta(minutes=5)
 
     def add_alert_callback(self, callback: Callable[[PerformanceAlert], None]):
@@ -553,7 +565,7 @@ class BottleneckAnalyzer:
 
     def analyze_bottlenecks(
         self, duration: timedelta = timedelta(minutes=10)
-    ) -> dict[str, Any]:
+    ) -> Dict[str, Any]:
         """
         Analyze performance bottlenecks over a time period.
 
@@ -563,7 +575,7 @@ class BottleneckAnalyzer:
         Returns:
             Dictionary with bottleneck analysis
         """
-        analysis = {
+        analysis: Dict[str, Any] = {
             "analysis_period": duration.total_seconds(),
             "timestamp": datetime.utcnow(),
             "bottlenecks": [],
@@ -651,7 +663,7 @@ class BottleneckAnalyzer:
 
         return analysis
 
-    def _generate_recommendations(self, bottlenecks: list[dict[str, Any]]) -> list[str]:
+    def _generate_recommendations(self, bottlenecks: List[Dict[str, Any]]) -> List[str]:
         """Generate optimization recommendations based on bottlenecks."""
         recommendations = []
 
@@ -708,14 +720,15 @@ class PerformanceMonitor:
 
         # Connect metrics to alert checking
         self._original_add_metric = self.metrics_collector.add_metric
-        self.metrics_collector.add_metric = self._add_metric_with_alerting
+        # Note: We'll override the add_metric method by monkey patching
+        original_method = self.metrics_collector.add_metric
+        def add_metric_with_alerting(metric: PerformanceMetric) -> None:
+            original_method(metric)
+            self.alert_manager.check_metric_thresholds(metric)
+        self.metrics_collector.add_metric = add_metric_with_alerting
 
         self._monitoring = False
 
-    def _add_metric_with_alerting(self, metric: PerformanceMetric):
-        """Add metric with automatic alert checking."""
-        self._original_add_metric(metric)
-        self.alert_manager.check_metric_thresholds(metric)
 
     async def start_monitoring(self, resource_monitor_interval: float = 5.0):
         """
@@ -739,7 +752,7 @@ class PerformanceMonitor:
 
     def get_performance_summary(
         self, duration: timedelta = timedelta(minutes=10)
-    ) -> dict[str, Any]:
+    ) -> Dict[str, Any]:
         """
         Get comprehensive performance summary.
 
@@ -749,7 +762,7 @@ class PerformanceMonitor:
         Returns:
             Performance summary dictionary
         """
-        summary = {
+        summary: Dict[str, Any] = {
             "timestamp": datetime.utcnow(),
             "period_minutes": duration.total_seconds() / 60,
             "latency_summary": {},
@@ -783,9 +796,19 @@ class PerformanceMonitor:
             if stats:
                 summary["resource_summary"][metric] = stats
 
-        # Recent alerts
+        # Recent alerts - convert to dict format
+        recent_alerts = self.alert_manager.get_recent_alerts(duration)
         summary["recent_alerts"] = [
-            alert.to_dict() for alert in self.alert_manager.get_recent_alerts(duration)
+            {
+                "level": alert.level.value,
+                "message": alert.message,
+                "metric_name": alert.metric_name,
+                "current_value": alert.current_value,
+                "threshold": alert.threshold,
+                "timestamp": alert.timestamp.isoformat(),
+                "tags": alert.tags
+            }
+            for alert in recent_alerts
         ]
 
         # Bottleneck analysis
@@ -798,7 +821,7 @@ class PerformanceMonitor:
 
         return summary
 
-    def _calculate_health_score(self, summary: dict[str, Any]) -> float:
+    def _calculate_health_score(self, summary: Dict[str, Any]) -> float:
         """
         Calculate overall system health score (0-100).
 

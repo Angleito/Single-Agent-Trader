@@ -479,6 +479,7 @@ class MarketContextAnalyzer:
                 regime_type=MarketRegimeType.UNKNOWN,
                 confidence=0.0,
                 key_drivers=[f"Analysis error: {str(e)}"],
+                regime_change_probability=0.1,
             )
 
     async def assess_risk_sentiment(
