@@ -856,9 +856,12 @@ class TradingEngine:
                     else:
                         data = method(limit=500)  # Get more data for 24h check
                     
-                    # Safety check - ensure data is not a coroutine
+                    # Safety check - ensure data is not a coroutine or Task
                     if inspect.iscoroutine(data):
                         self.logger.warning("Detected coroutine data, awaiting...")
+                        data = await data
+                    elif isinstance(data, asyncio.Task):
+                        self.logger.warning("Detected asyncio.Task data, awaiting...")
                         data = await data
                         
                 except Exception as e:
@@ -866,7 +869,13 @@ class TradingEngine:
                     data = []
             
             # Ensure data is a list/sequence before using len()
-            if not isinstance(data, (list, tuple)):
+            if isinstance(data, asyncio.Task):
+                self.logger.error(f"Data is still an asyncio.Task: {data}. This should have been awaited.")
+                data = []
+            elif inspect.iscoroutine(data):
+                self.logger.error(f"Data is still a coroutine: {data}. This should have been awaited.")
+                data = []
+            elif not isinstance(data, (list, tuple)):
                 self.logger.warning(f"Unexpected data type: {type(data)}, converting to list")
                 data = list(data) if data else []
 
@@ -1111,13 +1120,36 @@ class TradingEngine:
                         
                 elif hasattr(self.market_data, 'get_latest_ohlcv'):
                     method = getattr(self.market_data, 'get_latest_ohlcv')
-                    if inspect.iscoroutinefunction(method):
-                        latest_data = await method(limit=200)
-                    else:
-                        latest_data = method(limit=200)
+                    try:
+                        if inspect.iscoroutinefunction(method):
+                            latest_data = await method(limit=200)
+                        else:
+                            latest_data = method(limit=200)
+                        
+                        # Safety check - ensure data is not a coroutine or Task
+                        if inspect.iscoroutine(latest_data):
+                            self.logger.warning("Detected coroutine data in main loop, awaiting...")
+                            latest_data = await latest_data
+                        elif isinstance(latest_data, asyncio.Task):
+                            self.logger.warning("Detected asyncio.Task data in main loop, awaiting...")
+                            latest_data = await latest_data
+                    except Exception as e:
+                        self.logger.warning(f"Error getting market data in main loop: {e}")
+                        latest_data = []
                 else:
                     latest_data = []
                     
+                # Ensure latest_data is a list/sequence before using it
+                if isinstance(latest_data, asyncio.Task):
+                    self.logger.error(f"latest_data is still an asyncio.Task: {latest_data}. This should have been awaited.")
+                    latest_data = []
+                elif inspect.iscoroutine(latest_data):
+                    self.logger.error(f"latest_data is still a coroutine: {latest_data}. This should have been awaited.")
+                    latest_data = []
+                elif not isinstance(latest_data, (list, tuple)):
+                    self.logger.warning(f"Unexpected latest_data type: {type(latest_data)}, converting to list")
+                    latest_data = list(latest_data) if latest_data else []
+                
                 if not latest_data:
                     self.logger.warning("No market data available, waiting...")
                     await asyncio.sleep(5)

@@ -63,13 +63,11 @@ class UnifiedMarketDataInterface:
                 try:
                     # Try to get the current event loop
                     loop = asyncio.get_running_loop()
-                    # We're in an async context but called sync method
-                    # Create a task to run the async method
-                    return asyncio.create_task(
-                        self.provider.get_latest_ohlcv(limit=limit)
-                    )
+                    # We're in an async context - this should not be called from sync context
+                    logger.error("Sync method called from async context - use get_latest_ohlcv_async instead")
+                    return []
                 except RuntimeError:
-                    # No event loop running - create one
+                    # No event loop running - create one and run the async method
                     return asyncio.run(self.provider.get_latest_ohlcv(limit=limit))
             else:
                 # Provider has sync method - call directly
@@ -171,21 +169,26 @@ async def safe_get_market_data(provider, limit: Optional[int] = None) -> List[Ma
     return []
 
 
-def safe_get_market_data_sync(provider, limit: Optional[int] = None) -> Union[List[MarketData], asyncio.Task]:
+def safe_get_market_data_sync(provider, limit: Optional[int] = None) -> List[MarketData]:
     """Safely get market data from any provider in sync context."""
     import inspect
     
     if hasattr(provider, 'get_latest_ohlcv'):
         method = getattr(provider, 'get_latest_ohlcv')
         if inspect.iscoroutinefunction(method):
-            # Return a task that can be awaited later
+            # Async provider called from sync context - run with asyncio.run
             try:
                 loop = asyncio.get_running_loop()
-                return asyncio.create_task(method(limit=limit))
-            except RuntimeError:
-                # No event loop - this is a problem that needs fixing
-                logger.error("Async provider called from sync context without event loop")
+                # We're in an async context - this should not happen
+                logger.error("Sync function called from async context - use async version instead")
                 return []
+            except RuntimeError:
+                # No event loop - create one and run the async method
+                try:
+                    return asyncio.run(method(limit=limit))
+                except Exception as e:
+                    logger.error(f"Failed to run async method in new event loop: {e}")
+                    return []
         else:
             return method(limit=limit)
     return []
