@@ -56,13 +56,14 @@ services:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
         VCS_REF: ${VCS_REF:-$(git rev-parse --short HEAD)}
         VERSION: ${VERSION:-0.1.0}
-        EXCHANGE_TYPE: bluefin
-    image: ai-trading-bot:bluefin-${VERSION:-latest}
+        EXCHANGE_TYPE: coinbase
+    image: ai-trading-bot:coinbase-${VERSION:-latest}
     container_name: ai-trading-bot
     restart: unless-stopped
     
-    # Override the default command - ULTRA-ADAPTIVE TRADING MODE WITH 15-SECOND SCALPING (PAPER TRADING)
-    command: ["python", "-m", "bot.main", "live", "--dry-run", "--symbol", "SUI-PERP", "--interval", "15s"]
+    # Override the default command - TRADING MODE WITH 1-MINUTE INTERVALS
+    # Note: dry-run mode is controlled by SYSTEM__DRY_RUN environment variable
+    command: ["python", "-m", "bot.main", "live", "--symbol", "SUI-PERP", "--interval", "1m", "--force"]
     
     # Environment variables from .env file
     env_file:
@@ -78,7 +79,7 @@ services:
       - SYSTEM__DRY_RUN=${SYSTEM__DRY_RUN:-true}   # Use .env setting, default to safe mode
       - SYSTEM__ENVIRONMENT=production  # Production environment for live trading
       # Exchange Configuration
-      - EXCHANGE__EXCHANGE_TYPE=bluefin
+      - EXCHANGE__EXCHANGE_TYPE=${EXCHANGE__EXCHANGE_TYPE:-coinbase}
       # LLM Logging Configuration
       - LLM__ENABLE_COMPLETION_LOGGING=${LLM_ENABLE_COMPLETION_LOGGING:-true}
       - LLM__COMPLETION_LOG_LEVEL=${LLM_COMPLETION_LOG_LEVEL:-INFO}

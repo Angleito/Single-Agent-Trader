@@ -488,7 +488,7 @@ FINANCIAL INTELLIGENCE INTEGRATION:
         financial_context = await self._get_financial_context(market_state)
         
         # Get scalping signals analysis if enabled
-        scalping_analysis = {"enabled": False, "message": "Scalping analysis disabled"}
+        scalping_analysis = await self._get_scalping_analysis(market_state)
 
         return {
             "symbol": market_state.symbol,

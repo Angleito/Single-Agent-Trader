@@ -694,17 +694,22 @@ class TradingEngine:
         
         if self.settings.exchange.exchange_type == "bluefin":
             if is_high_frequency:
-                # Use real-time WebSocket data provider for high-frequency trading
-                from .data.realtime_market import RealtimeMarketDataProvider
-                self.logger.info(f"Using real-time WebSocket market data provider for HF trading: {self.symbol}")
-                # Convert interval to seconds for real-time provider
-                realtime_intervals = [interval_seconds]
-                if interval_seconds > 1:
-                    realtime_intervals.append(1)  # Always include 1-second candles for scalping
-                if 5 not in realtime_intervals and interval_seconds != 5:
-                    realtime_intervals.append(5)  # Include 5-second candles
-                self.market_data = RealtimeMarketDataProvider(self.symbol, realtime_intervals)
-                console.print(f"    Using real-time WebSocket data for HF trading ({realtime_intervals}s intervals)")
+                # Try to use real-time WebSocket data provider for high-frequency trading
+                try:
+                    from .data.realtime_market import RealtimeMarketDataProvider
+                    self.logger.info(f"Using real-time WebSocket market data provider for HF trading: {self.symbol}")
+                    # Convert interval to seconds for real-time provider
+                    realtime_intervals = [interval_seconds]
+                    if interval_seconds > 1:
+                        realtime_intervals.append(1)  # Always include 1-second candles for scalping
+                    if 5 not in realtime_intervals and interval_seconds != 5:
+                        realtime_intervals.append(5)  # Include 5-second candles
+                    self.market_data = RealtimeMarketDataProvider(self.symbol, realtime_intervals)
+                    console.print(f"    Using real-time WebSocket data for HF trading ({realtime_intervals}s intervals)")
+                except ImportError:
+                    self.logger.warning("RealtimeMarketDataProvider not available, falling back to standard provider")
+                    self.market_data = MarketDataProvider(self.exchange, self.symbol)
+                    console.print(f"    Using standard market data provider (real-time module not available)")
             else:
                 # Use Bluefin-native market data for extended historical data (500+ candles)
                 try:
@@ -956,35 +961,43 @@ class TradingEngine:
 
             # Log progress every 10 seconds
             if int(elapsed_time) % 10 == 0 and elapsed_time > 0:
-                from .data.realtime_market import RealtimeMarketDataProvider
-                
-                if isinstance(self.market_data, RealtimeMarketDataProvider):
-                    # Real-time provider status
-                    status = self.market_data.get_status()
-                    tick_rate = status.get('tick_rate_per_second', 0)
-                    current_price = status.get('current_price', 'N/A')
+                try:
+                    from .data.realtime_market import RealtimeMarketDataProvider
                     
-                    self.logger.info(
-                        f"⏳ Waiting for real-time data... Elapsed: {int(elapsed_time)}s\n"
-                        f"   📊 Current candles: {len(data)} available\n"
-                        f"   🌐 WebSocket connected: {status.get('websocket_connected', False)}\n"
-                        f"   📈 Tick rate: {tick_rate:.1f} ticks/sec\n"
-                        f"   💰 Current price: ${current_price}\n"
-                        f"   ⚡ Trading enabled: {self.trading_enabled}"
-                    )
-                else:
-                    # Standard provider status
-                    status = self.market_data.get_data_status()
-                    interval_seconds = self._get_interval_seconds(self.interval)
-                    candles_per_24h = (24 * 60 * 60) // interval_seconds
-                    hours_available = (len(data) * interval_seconds) / 3600 if data else 0
+                    if RealtimeMarketDataProvider and isinstance(self.market_data, RealtimeMarketDataProvider):
+                        # Real-time provider status
+                        status = self.market_data.get_status()
+                        tick_rate = status.get('tick_rate_per_second', 0)
+                        current_price = status.get('current_price', 'N/A')
+                        
+                        self.logger.info(
+                            f"⏳ Waiting for real-time data... Elapsed: {int(elapsed_time)}s\n"
+                            f"   📊 Current candles: {len(data)} available\n"
+                            f"   🌐 WebSocket connected: {status.get('websocket_connected', False)}\n"
+                            f"   📈 Tick rate: {tick_rate:.1f} ticks/sec\n"
+                            f"   💰 Current price: ${current_price}\n"
+                            f"   ⚡ Trading enabled: {self.trading_enabled}"
+                        )
+                    else:
+                        # Standard provider status
+                        status = self.market_data.get_data_status()
+                        interval_seconds = self._get_interval_seconds(self.interval)
+                        candles_per_24h = (24 * 60 * 60) // interval_seconds
+                        hours_available = (len(data) * interval_seconds) / 3600 if data else 0
 
+                        self.logger.info(
+                            f"⏳ Waiting for data... Elapsed: {int(elapsed_time)}s\n"
+                            f"   📊 Historical: {len(data)}/{candles_per_24h} candles ({hours_available:.1f}/24 hours)\n"
+                            f"   🌐 WebSocket connected: {status.get('websocket_connected', False)}\n"
+                            f"   📈 WebSocket data: {status.get('websocket_data_received', False)}\n"
+                            f"   💰 Latest price: ${status.get('latest_price', 'N/A')}\n"
+                            f"   ⚡ Trading enabled: {self.trading_enabled}"
+                        )
+                except ImportError:
+                    # RealtimeMarketDataProvider not available, just log basic info
                     self.logger.info(
                         f"⏳ Waiting for data... Elapsed: {int(elapsed_time)}s\n"
-                        f"   📊 Historical: {len(data)}/{candles_per_24h} candles ({hours_available:.1f}/24 hours)\n"
-                        f"   🌐 WebSocket connected: {status.get('websocket_connected', False)}\n"
-                        f"   📈 WebSocket data: {status.get('websocket_data_received', False)}\n"
-                        f"   💰 Latest price: ${status.get('latest_price', 'N/A')}\n"
+                        f"   📊 Current candles: {len(data)} available\n"
                         f"   ⚡ Trading enabled: {self.trading_enabled}"
                     )
 
@@ -998,28 +1011,33 @@ class TradingEngine:
         table.add_column("Details", style="dim")
 
         # Market data status
-        from .data.realtime_market import RealtimeMarketDataProvider
-        
-        if isinstance(self.market_data, RealtimeMarketDataProvider):
-            # Real-time provider status
-            data_status = self.market_data.get_status()
-            ws_status = (
-                "✓ Real-time data"
-                if data_status.get("websocket_connected", False)
-                else "⚠ Waiting for data"
-            )
+        try:
+            from .data.realtime_market import RealtimeMarketDataProvider
             
-            # Show tick rate and current candles
-            tick_rate = data_status.get("tick_rate_per_second", 0)
-            tick_info = f"{tick_rate:.1f} ticks/sec" if tick_rate else "No ticks"
-            details = f"{tick_info}, WebSocket: {ws_status}"
+            if RealtimeMarketDataProvider and isinstance(self.market_data, RealtimeMarketDataProvider):
+                # Real-time provider status
+                data_status = self.market_data.get_status()
+                ws_status = (
+                    "✓ Real-time data"
+                    if data_status.get("websocket_connected", False)
+                    else "⚠ Waiting for data"
+                )
+                
+                # Show tick rate and current candles
+                tick_rate = data_status.get("tick_rate_per_second", 0)
+                tick_info = f"{tick_rate:.1f} ticks/sec" if tick_rate else "No ticks"
+                details = f"{tick_info}, WebSocket: {ws_status}"
+                
+                table.add_row(
+                    "Market Data (RT)",
+                    "✓ Connected" if data_status["connected"] else "✗ Disconnected",
+                    details,
+                )
+        except ImportError:
+            # RealtimeMarketDataProvider not available
+            RealtimeMarketDataProvider = None
             
-            table.add_row(
-                "Market Data (RT)",
-                "✓ Connected" if data_status["connected"] else "✗ Disconnected",
-                details,
-            )
-        else:
+        if not RealtimeMarketDataProvider or not isinstance(self.market_data, RealtimeMarketDataProvider):
             # Standard provider status
             data_status = self.market_data.get_data_status()
             ws_status = (
@@ -1117,9 +1135,14 @@ class TradingEngine:
 
                 # Get latest market data - handle different provider types
                 import inspect
-                from .data.realtime_market import RealtimeMarketDataProvider
+                try:
+                    from .data.realtime_market import RealtimeMarketDataProvider
+                    is_realtime_provider = RealtimeMarketDataProvider and isinstance(self.market_data, RealtimeMarketDataProvider)
+                except ImportError:
+                    RealtimeMarketDataProvider = None
+                    is_realtime_provider = False
                 
-                if isinstance(self.market_data, RealtimeMarketDataProvider):
+                if is_realtime_provider:
                     # Real-time provider - get candles for the current trading interval
                     interval_seconds = self._get_interval_seconds(self.interval)
                     latest_data = self.market_data.get_candle_history(interval_seconds, limit=200)
@@ -1181,7 +1204,7 @@ class TradingEngine:
                     )
 
                 # Calculate technical indicators - handle different provider types
-                if isinstance(self.market_data, RealtimeMarketDataProvider):
+                if is_realtime_provider:
                     # Real-time provider - use specific interval
                     interval_seconds = self._get_interval_seconds(self.interval)
                     df = self.market_data.to_dataframe(interval_seconds, limit=200)
