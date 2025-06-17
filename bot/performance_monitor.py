@@ -65,7 +65,7 @@ class PerformanceAlert:
             "current_value": self.current_value,
             "threshold": self.threshold,
             "timestamp": self.timestamp.isoformat(),
-            "tags": self.tags
+            "tags": self.tags,
         }
 
 
@@ -112,7 +112,9 @@ class MetricsCollector:
             max_history_size: Maximum number of metrics to keep in memory
         """
         self.max_history_size = max_history_size
-        self._metrics_history: dict[str, deque[PerformanceMetric]] = defaultdict(lambda: deque(maxlen=max_history_size))
+        self._metrics_history: dict[str, deque[PerformanceMetric]] = defaultdict(
+            lambda: deque(maxlen=max_history_size)
+        )
         self._lock = threading.Lock()
 
         # Running statistics
@@ -728,7 +730,6 @@ class PerformanceMonitor:
         self._original_add_metric(metric)
         self.alert_manager.check_metric_thresholds(metric)
 
-
     async def start_monitoring(self, resource_monitor_interval: float = 5.0):
         """
         Start comprehensive performance monitoring.
@@ -805,7 +806,7 @@ class PerformanceMonitor:
                 "current_value": alert.current_value,
                 "threshold": alert.threshold,
                 "timestamp": alert.timestamp.isoformat(),
-                "tags": alert.tags
+                "tags": alert.tags,
             }
             for alert in recent_alerts
         ]

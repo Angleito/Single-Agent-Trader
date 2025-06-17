@@ -9,8 +9,14 @@ import warnings
 
 # Clear any existing warning registry and set up fresh
 warnings.resetwarnings()
-if not hasattr(sys.modules[__name__], "__warningregistry__"):
-    sys.modules[__name__].__warningregistry__ = {}
+try:
+    current_module = sys.modules[__name__]
+    if not hasattr(current_module, "__warningregistry__"):
+        current_module.__warningregistry__ = {}
+except (AttributeError, TypeError):
+    # Some modules don't support setting attributes
+    # This is fine, warnings will still be filtered
+    pass
 
 # Set environment variable to suppress warnings at the Python level
 os.environ["PYTHONWARNINGS"] = (
@@ -82,7 +88,7 @@ import time
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 # Third-party imports
 import click
@@ -244,7 +250,11 @@ class TradingEngine:
             try:
                 self.memory_server = MCPMemoryServer(
                     server_url=self.settings.mcp.server_url,
-                    api_key=self.settings.mcp.memory_api_key,
+                    api_key=(
+                        self.settings.mcp.memory_api_key.get_secret_value()
+                        if self.settings.mcp.memory_api_key
+                        else None
+                    ),
                 )
                 self.experience_manager = ExperienceManager(self.memory_server)
 
@@ -655,11 +665,13 @@ class TradingEngine:
             self.settings.system.log_file_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Configure logging
-        handlers = []
+        handlers: list[logging.Handler] = []
         if self.settings.system.log_to_console:
             handlers.append(logging.StreamHandler())
         if self.settings.system.log_to_file:
-            handlers.append(logging.FileHandler(str(self.settings.system.log_file_path)))
+            handlers.append(
+                logging.FileHandler(str(self.settings.system.log_file_path))
+            )
 
         logging.basicConfig(
             level=log_level,
@@ -1004,7 +1016,7 @@ class TradingEngine:
                         data = await data
                     elif hasattr(data, "__await__"):
                         self.logger.warning("Detected awaitable object, awaiting...")
-                        data = await data
+                        data = await data  # type: ignore[misc]
 
                 except Exception as e:
                     self.logger.warning(f"Error getting market data: {e}")
@@ -1859,11 +1871,14 @@ class TradingEngine:
         """
         try:
             # Get current price from market data
-            if not self.market_data or not self.market_data.current_price:
+            if not self.market_data:
                 self.logger.error("Market data not available for trade execution")
                 return False
-
-            current_price = self.market_data.current_price
+            # Both MarketDataProvider and BluefinMarketDataProvider have get_current_price method
+            current_price = await self.market_data.get_current_price()  # type: ignore[union-attr]
+            if not current_price:
+                self.logger.error("Current price not available for trade execution")
+                return False
 
             # Execute trade with current price and no experience tracking
             await self._execute_trade(trade_action, current_price)
@@ -2250,23 +2265,22 @@ class TradingEngine:
                 and self.exchange_client.is_connected()
             ):
                 console.print("  • Cancelling open orders...")
-                cleanup_tasks.append(
-                    asyncio.create_task(
-                        self.exchange_client.cancel_all_orders(self.symbol)
-                    )
+                task = asyncio.create_task(
+                    self.exchange_client.cancel_all_orders(self.symbol)
                 )
+                cleanup_tasks.append(task)
 
             # Close market data connection
             if hasattr(self, "market_data") and self.market_data is not None:
                 console.print("  • Disconnecting from market data...")
-                cleanup_tasks.append(asyncio.create_task(self.market_data.disconnect()))
+                task = asyncio.create_task(self.market_data.disconnect())  # type: ignore[arg-type]
+                cleanup_tasks.append(task)
 
             # Close exchange connection
             if hasattr(self, "exchange_client") and self.exchange_client is not None:
                 console.print("  • Disconnecting from exchange...")
-                cleanup_tasks.append(
-                    asyncio.create_task(self.exchange_client.disconnect())
-                )
+                task = asyncio.create_task(self.exchange_client.disconnect())  # type: ignore[arg-type]
+                cleanup_tasks.append(task)
 
             # Close OmniSearch connection
             if (
@@ -2274,9 +2288,8 @@ class TradingEngine:
                 and self.omnisearch_client is not None
             ):
                 console.print("  • Disconnecting from OmniSearch...")
-                cleanup_tasks.append(
-                    asyncio.create_task(self.omnisearch_client.disconnect())
-                )
+                task = asyncio.create_task(self.omnisearch_client.disconnect())  # type: ignore[arg-type]
+                cleanup_tasks.append(task)
 
             # Close WebSocket publisher connection
             if (
@@ -2291,10 +2304,10 @@ class TradingEngine:
             # Stop command consumer
             if hasattr(self, "command_consumer") and self.command_consumer is not None:
                 console.print("  • Stopping dashboard command consumer...")
-                cleanup_tasks.append(
-                    asyncio.create_task(self.command_consumer.stop_polling())
-                )
-                cleanup_tasks.append(asyncio.create_task(self.command_consumer.close()))
+                task1 = asyncio.create_task(self.command_consumer.stop_polling())
+                task2 = asyncio.create_task(self.command_consumer.close())
+                cleanup_tasks.append(task1)
+                cleanup_tasks.append(task2)
 
             # Stop experience manager if enabled
             if (
@@ -2302,9 +2315,8 @@ class TradingEngine:
                 and self.experience_manager is not None
             ):
                 console.print("  • Stopping experience tracking...")
-                cleanup_tasks.append(
-                    asyncio.create_task(self.experience_manager.stop())
-                )
+                task = asyncio.create_task(self.experience_manager.stop())  # type: ignore[arg-type]
+                cleanup_tasks.append(task)
 
             # Close dominance data connection - CRITICAL for async session cleanup
             if (
@@ -2312,9 +2324,8 @@ class TradingEngine:
                 and self.dominance_provider is not None
             ):
                 console.print("  • Disconnecting from dominance data...")
-                cleanup_tasks.append(
-                    asyncio.create_task(self.dominance_provider.disconnect())
-                )
+                task = asyncio.create_task(self.dominance_provider.disconnect())  # type: ignore[arg-type]
+                cleanup_tasks.append(task)
 
             # Wait for all cleanup tasks with a timeout
             if cleanup_tasks:
@@ -2349,7 +2360,11 @@ class TradingEngine:
                     if not self.dominance_provider._session.closed:
                         try:
                             # Force close without await since we might be in cleanup
-                            if hasattr(self.dominance_provider._session, '_connector') and self.dominance_provider._session._connector is not None:
+                            if (
+                                hasattr(self.dominance_provider._session, "_connector")
+                                and self.dominance_provider._session._connector
+                                is not None
+                            ):
                                 self.dominance_provider._session._connector.close()
                         except Exception:
                             pass
@@ -2406,7 +2421,7 @@ class TradingEngine:
                     # Convert position data to our format
                     if size > 0:
                         if side.upper() in ["LONG", "BUY"]:
-                            position_side = "LONG"
+                            position_side: Literal["LONG", "SHORT", "FLAT"] = "LONG"
                         elif side.upper() in ["SHORT", "SELL"]:
                             position_side = "SHORT"
                         else:
@@ -2427,7 +2442,8 @@ class TradingEngine:
                             symbol=self.actual_trading_symbol,
                             side=position_side,
                             size=abs(size),
-                            entry_price=self.current_position.entry_price,
+                            entry_price=self.current_position.entry_price
+                            or Decimal("0"),
                         )
 
                         self.logger.info(

@@ -9,10 +9,15 @@ Designed to work in Docker environments where warnings may persist.
 import sys
 import warnings
 
-# Set up warning registry for this module
+# Set up warning registry for this module safely
 current_module = sys.modules[__name__]
-if not hasattr(current_module, "__warningregistry__"):
-    current_module.__warningregistry__ = {}
+try:
+    if not hasattr(current_module, "__warningregistry__"):
+        current_module.__warningregistry__ = {}
+except (AttributeError, TypeError):
+    # Some modules don't support setting attributes
+    # This is fine, warnings will still be filtered
+    pass
 
 # Comprehensive pandas_ta import with maximum warning suppression
 with warnings.catch_warnings():

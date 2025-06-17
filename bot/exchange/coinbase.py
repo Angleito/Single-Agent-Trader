@@ -2470,6 +2470,10 @@ class CoinbaseClient(BaseExchange):
             MarginInfo object with current margin status
         """
         try:
+            # Check if client is available
+            if self._client is None:
+                raise ExchangeConnectionError("Exchange client not initialized")
+
             # Get margin data from FCM balance summary
             balance_response = await self._retry_request(
                 self._client.get_fcm_balance_summary
@@ -2601,6 +2605,10 @@ class CoinbaseClient(BaseExchange):
                 logger.info(f"PAPER TRADING: Simulating transfer ${amount} CBI -> CFM")
                 return True
 
+            # Check if client is available
+            if self._client is None:
+                raise ExchangeConnectionError("Exchange client not initialized")
+
             # Use futures sweep API to transfer funds
             try:
                 # Cancel any pending sweeps first
@@ -2657,6 +2665,10 @@ class CoinbaseClient(BaseExchange):
             return []
 
         try:
+            # Check if client is available
+            if self._client is None:
+                raise ExchangeConnectionError("Exchange client not initialized")
+
             # Get positions from FCM account
             positions_response = await self._retry_request(
                 self._client.list_futures_positions
@@ -2736,6 +2748,10 @@ class CoinbaseClient(BaseExchange):
             return []
 
         try:
+            # Check if client is available
+            if self._client is None:
+                raise ExchangeConnectionError("Exchange client not initialized")
+
             accounts_data = await self._retry_request(self._client.get_accounts)
             positions = []
 
@@ -2787,6 +2803,10 @@ class CoinbaseClient(BaseExchange):
             return True
 
         try:
+            # Check if client is available
+            if self._client is None:
+                raise ExchangeConnectionError("Exchange client not initialized")
+
             logger.info(f"Cancelling order: {order_id}")
             result = await self._retry_request(
                 self._client.cancel_orders, order_ids=[order_id]
@@ -2833,6 +2853,10 @@ class CoinbaseClient(BaseExchange):
             return True
 
         try:
+            # Check if client is available
+            if self._client is None:
+                raise ExchangeConnectionError("Exchange client not initialized")
+
             # Get all open orders
             orders_data = await self._retry_request(
                 self._client.list_orders, order_status="OPEN"
@@ -2893,6 +2917,10 @@ class CoinbaseClient(BaseExchange):
             return OrderStatus.FILLED
 
         try:
+            # Check if client is available
+            if self._client is None:
+                raise ExchangeConnectionError("Exchange client not initialized")
+
             result = await self._retry_request(
                 self._client.get_order, order_id=order_id
             )
@@ -3057,6 +3085,10 @@ class CoinbaseClient(BaseExchange):
             volume = Decimal("0")
 
             try:
+                # Check if client is available
+                if self._client is None:
+                    raise ExchangeConnectionError("Exchange client not initialized")
+
                 # Try to get fills from the API
                 fills_response = await self._retry_request(
                     self._client.get_fills,
