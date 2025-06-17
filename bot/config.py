@@ -122,23 +122,53 @@ class TradingSettings(BaseModel):
     )
 
     # Trading Fee Configuration
-    maker_fee_rate: float = Field(
-        default=0.004,  # 0.4% for Coinbase Advanced
+    # Spot trading fees - default to basic tier (< $10K volume)
+    spot_maker_fee_rate: float = Field(
+        default=0.006,  # 0.6% maker fee (basic tier)
         ge=0.0,
-        le=0.01,
+        le=0.02,
+        description="Spot maker fee rate (for limit orders)"
+    )
+    spot_taker_fee_rate: float = Field(
+        default=0.012,  # 1.2% taker fee (basic tier)
+        ge=0.0,
+        le=0.02,
+        description="Spot taker fee rate (for market orders)"
+    )
+    # Legacy fee names for backward compatibility
+    maker_fee_rate: float = Field(
+        default=0.006,  # Default to spot maker fee
+        ge=0.0,
+        le=0.02,
         description="Maker fee rate (for limit orders)"
     )
     taker_fee_rate: float = Field(
-        default=0.006,  # 0.6% for Coinbase Advanced
+        default=0.012,  # Default to spot taker fee
         ge=0.0,
-        le=0.01,
+        le=0.02,
         description="Taker fee rate (for market orders)"
     )
+    # Futures trading fees
     futures_fee_rate: float = Field(
         default=0.0015,  # 0.15% for futures
         ge=0.0,
         le=0.01,
         description="Futures trading fee rate"
+    )
+    
+    # Volume-based fee tiers for Coinbase (monthly USD volume)
+    fee_tier_thresholds: list[dict[str, Any]] = Field(
+        default_factory=lambda: [
+            {"volume": 0, "maker": 0.006, "taker": 0.012},  # < $10K
+            {"volume": 10000, "maker": 0.0025, "taker": 0.004},  # $10K+
+            {"volume": 50000, "maker": 0.0015, "taker": 0.0025},  # $50K+
+            {"volume": 100000, "maker": 0.001, "taker": 0.002},  # $100K+
+            {"volume": 1000000, "maker": 0.0007, "taker": 0.0012},  # $1M+
+            {"volume": 15000000, "maker": 0.0004, "taker": 0.0008},  # $15M+
+            {"volume": 75000000, "maker": 0.0002, "taker": 0.0005},  # $75M+
+            {"volume": 250000000, "maker": 0.0, "taker": 0.0005},  # $250M+
+        ],
+        description="Volume-based fee tiers for Coinbase spot trading"
     )
 
     # Trading Interval Configuration - Scalping Mode

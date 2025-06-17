@@ -298,6 +298,11 @@ class TradingEngine:
 
         self.logger.info(f"Initialized TradingEngine for {symbol} at {interval}")
 
+    @property
+    def exchange(self):
+        """Backward compatibility property - maps to exchange_client."""
+        return self.exchange_client
+
     def _register_command_callbacks(self):
         """Register callback functions for dashboard commands."""
         if not self.command_consumer:
@@ -693,34 +698,34 @@ class TradingEngine:
         is_high_frequency = interval_seconds <= 60  # 1 minute or less
         
         if self.settings.exchange.exchange_type == "bluefin":
-            if is_high_frequency:
-                # Try to use real-time WebSocket data provider for high-frequency trading
-                try:
-                    from .data.realtime_market import RealtimeMarketDataProvider
-                    self.logger.info(f"Using real-time WebSocket market data provider for HF trading: {self.symbol}")
-                    # Convert interval to seconds for real-time provider
-                    realtime_intervals = [interval_seconds]
-                    if interval_seconds > 1:
-                        realtime_intervals.append(1)  # Always include 1-second candles for scalping
-                    if 5 not in realtime_intervals and interval_seconds != 5:
-                        realtime_intervals.append(5)  # Include 5-second candles
-                    self.market_data = RealtimeMarketDataProvider(self.symbol, realtime_intervals)
-                    console.print(f"    Using real-time WebSocket data for HF trading ({realtime_intervals}s intervals)")
-                except ImportError:
-                    self.logger.warning("RealtimeMarketDataProvider not available, falling back to standard provider")
-                    self.market_data = MarketDataProvider(self.exchange, self.symbol)
-                    console.print(f"    Using standard market data provider (real-time module not available)")
-            else:
-                # Use Bluefin-native market data for extended historical data (500+ candles)
-                try:
-                    from .data.bluefin_market import BluefinMarketDataProvider
-                    self.logger.info(f"Using Bluefin native market data provider for {self.symbol}")
-                    self.market_data = BluefinMarketDataProvider(self.symbol, self.interval)
-                    console.print("    Using Bluefin DEX native market data (500+ candles)")
-                except ImportError as e:
-                    self.logger.warning(f"BluefinMarketDataProvider not available: {e}")
-                    self.logger.info(f"Falling back to standard MarketDataProvider for {self.symbol}")
+            # Always try BluefinMarketDataProvider first for Bluefin exchange
+            try:
+                from .data.bluefin_market import BluefinMarketDataProvider
+                self.logger.info(f"Using Bluefin native market data provider for {self.symbol}")
+                self.market_data = BluefinMarketDataProvider(self.symbol, self.interval)
+                console.print("    Using Bluefin DEX native market data")
+            except ImportError as e:
+                self.logger.warning(f"BluefinMarketDataProvider not available: {e}")
+                # Try real-time provider for high-frequency trading
+                if is_high_frequency:
+                    try:
+                        from .data.realtime_market import RealtimeMarketDataProvider
+                        self.logger.info(f"Using real-time WebSocket market data provider for HF trading: {self.symbol}")
+                        # Convert interval to seconds for real-time provider
+                        realtime_intervals = [interval_seconds]
+                        if interval_seconds > 1:
+                            realtime_intervals.append(1)  # Always include 1-second candles for scalping
+                        if 5 not in realtime_intervals and interval_seconds != 5:
+                            realtime_intervals.append(5)  # Include 5-second candles
+                        self.market_data = RealtimeMarketDataProvider(self.symbol, realtime_intervals)
+                        console.print(f"    Using real-time WebSocket data for HF trading ({realtime_intervals}s intervals)")
+                    except ImportError:
+                        self.logger.warning("RealtimeMarketDataProvider not available, falling back to standard provider")
+                        self.market_data = MarketDataProvider(self.symbol, self.interval)
+                        console.print(f"    Using standard market data provider (real-time module not available)")
+                else:
                     # Fallback to standard market data provider
+                    self.logger.info(f"Falling back to standard MarketDataProvider for {self.symbol}")
                     self.market_data = MarketDataProvider(self.symbol, self.interval)
                     console.print("    Using fallback market data provider for Bluefin")
         else:
@@ -1966,7 +1971,7 @@ class TradingEngine:
 
         try:
             # Cancel all open orders
-            if hasattr(self, "exchange_client") and self.exchange_client.is_connected():
+            if hasattr(self, "exchange_client") and self.exchange_client is not None and self.exchange_client.is_connected():
                 console.print("  • Cancelling open orders...")
                 cleanup_tasks.append(
                     asyncio.create_task(
@@ -1975,33 +1980,33 @@ class TradingEngine:
                 )
 
             # Close market data connection
-            if hasattr(self, "market_data"):
+            if hasattr(self, "market_data") and self.market_data is not None:
                 console.print("  • Disconnecting from market data...")
                 cleanup_tasks.append(asyncio.create_task(self.market_data.disconnect()))
 
             # Close exchange connection
-            if hasattr(self, "exchange_client"):
+            if hasattr(self, "exchange_client") and self.exchange_client is not None:
                 console.print("  • Disconnecting from exchange...")
                 cleanup_tasks.append(
                     asyncio.create_task(self.exchange_client.disconnect())
                 )
 
             # Close OmniSearch connection
-            if hasattr(self, "omnisearch_client") and self.omnisearch_client:
+            if hasattr(self, "omnisearch_client") and self.omnisearch_client is not None:
                 console.print("  • Disconnecting from OmniSearch...")
                 cleanup_tasks.append(
                     asyncio.create_task(self.omnisearch_client.disconnect())
                 )
 
             # Close WebSocket publisher connection
-            if hasattr(self, "websocket_publisher") and self.websocket_publisher:
+            if hasattr(self, "websocket_publisher") and self.websocket_publisher is not None:
                 console.print("  • Disconnecting from dashboard WebSocket...")
                 cleanup_tasks.append(
                     asyncio.create_task(self.websocket_publisher.close())
                 )
 
             # Stop command consumer
-            if hasattr(self, "command_consumer") and self.command_consumer:
+            if hasattr(self, "command_consumer") and self.command_consumer is not None:
                 console.print("  • Stopping dashboard command consumer...")
                 cleanup_tasks.append(
                     asyncio.create_task(self.command_consumer.stop_polling())
@@ -2011,14 +2016,14 @@ class TradingEngine:
                 )
 
             # Stop experience manager if enabled
-            if hasattr(self, "experience_manager") and self.experience_manager:
+            if hasattr(self, "experience_manager") and self.experience_manager is not None:
                 console.print("  • Stopping experience tracking...")
                 cleanup_tasks.append(
                     asyncio.create_task(self.experience_manager.stop())
                 )
 
             # Close dominance data connection - CRITICAL for async session cleanup
-            if hasattr(self, "dominance_provider") and self.dominance_provider:
+            if hasattr(self, "dominance_provider") and self.dominance_provider is not None:
                 console.print("  • Disconnecting from dominance data...")
                 cleanup_tasks.append(
                     asyncio.create_task(self.dominance_provider.disconnect())

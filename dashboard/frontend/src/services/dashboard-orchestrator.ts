@@ -27,7 +27,9 @@ import type {
   Position, 
   RiskMetrics, 
   ConnectionStatus,
-  TradeAction 
+  TradeAction,
+  TradingModeConfig,
+  TradingMode 
 } from '../types';
 
 export interface ComponentConfig {
@@ -135,7 +137,8 @@ export class DashboardOrchestrator {
       positions: [],
       risk_metrics: null,
       connection_status: 'disconnected',
-      error_message: null
+      error_message: null,
+      trading_mode_config: undefined
     };
 
     this.performanceMetrics = {
@@ -178,6 +181,9 @@ export class DashboardOrchestrator {
       await this.initializeWebSocket();
       await this.initializeNotifications();
       
+      // Fetch trading mode configuration
+      await this.fetchTradingModeConfig();
+      
       // Initialize components
       await this.initializeComponents();
       
@@ -199,6 +205,44 @@ export class DashboardOrchestrator {
     } catch (error) {
       this.handleError('initialization', error as Error);
       throw error;
+    }
+  }
+
+  /**
+   * Fetch trading mode configuration
+   */
+  private async fetchTradingModeConfig(): Promise<void> {
+    try {
+      const response = await fetch(`${this.config.apiBaseUrl}/api/trading-mode`);
+      if (response.ok) {
+        const config = await response.json();
+        this.state.trading_mode_config = config;
+        this.emit('trading_mode:updated', config);
+        this.log(`Trading mode configured: ${config.trading_mode} (futures: ${config.futures_enabled})`);
+      } else {
+        this.log('Failed to fetch trading mode configuration');
+      }
+    } catch (error) {
+      this.log(`Error fetching trading mode config: ${error}`);
+      // Set default config
+      this.state.trading_mode_config = {
+        trading_mode: 'spot' as TradingMode,
+        futures_enabled: false,
+        exchange_type: 'coinbase',
+        account_type: 'CBI',
+        leverage_available: false,
+        features: {
+          margin_trading: false,
+          stop_loss: true,
+          take_profit: true,
+          contracts: false,
+          liquidation_price: false
+        },
+        supported_symbols: {
+          spot: ['BTC-USD', 'ETH-USD'],
+          futures: []
+        }
+      };
     }
   }
 
@@ -394,6 +438,11 @@ export class DashboardOrchestrator {
     
     this.addEventListener('data:bot_status', (data) => {
       this.updateComponents('bot_status', data);
+    });
+    
+    // Setup trading mode updates
+    this.addEventListener('trading_mode:updated', (config) => {
+      this.updateComponentsTradingMode(config);
     });
     
     // Setup cross-component communication
@@ -702,6 +751,21 @@ export class DashboardOrchestrator {
   }
 
   /**
+   * Update components with trading mode configuration
+   */
+  private updateComponentsTradingMode(config: TradingModeConfig): void {
+    this.components.forEach((component, id) => {
+      try {
+        if (component.setTradingModeConfig) {
+          component.setTradingModeConfig(config);
+        }
+      } catch (error) {
+        this.log(`Error updating trading mode for component ${id}: ${error}`);
+      }
+    });
+  }
+
+  /**
    * Propagate state updates to all components
    */
   private propagateStateUpdate(data: any): void {
@@ -812,6 +876,14 @@ export class DashboardOrchestrator {
    */
   private async refreshData(): Promise<void> {
     try {
+      // Refresh trading mode
+      const modeResponse = await fetch(`${this.config.apiBaseUrl}/api/trading-mode`);
+      if (modeResponse.ok) {
+        const modeConfig = await modeResponse.json();
+        this.state.trading_mode_config = modeConfig;
+        this.emit('trading_mode:updated', modeConfig);
+      }
+      
       // Refresh market data
       const marketResponse = await fetch(`${this.config.apiBaseUrl}/api/bot/market-data`);
       if (marketResponse.ok) {
@@ -1224,6 +1296,18 @@ export class DashboardOrchestrator {
 
   public getAnalytics(): DashboardAnalytics {
     return { ...this.analytics };
+  }
+
+  public getTradingModeConfig(): TradingModeConfig | undefined {
+    return this.state.trading_mode_config;
+  }
+
+  public getTradingMode(): TradingMode {
+    return this.state.trading_mode_config?.trading_mode || 'spot';
+  }
+
+  public isFuturesEnabled(): boolean {
+    return this.state.trading_mode_config?.futures_enabled || false;
   }
 
   public getComponent(id: string): any {

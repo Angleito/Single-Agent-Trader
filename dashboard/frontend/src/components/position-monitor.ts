@@ -10,7 +10,7 @@
  * - Position entry/exit visualization
  */
 
-import type { Position, MarketData, RiskMetrics } from '../types';
+import type { Position, MarketData, RiskMetrics, TradingModeConfig, TradingMode } from '../types';
 
 export interface PositionMetrics {
   unrealized_pnl: number;
@@ -59,6 +59,7 @@ export class PositionMonitor {
   private onPositionAlert?: (alert: PositionAlert) => void;
   private chartCanvas: HTMLCanvasElement | null = null;
   private lastUpdate = 0;
+  private tradingModeConfig: TradingModeConfig | null = null;
 
   // Chart configuration
   private readonly chartConfig = {
@@ -109,6 +110,14 @@ export class PositionMonitor {
     this.updatePositionMetrics();
     this.updateCharts();
     this.updateRealTimeMetrics();
+  }
+
+  /**
+   * Set trading mode configuration
+   */
+  public setTradingModeConfig(config: TradingModeConfig): void {
+    this.tradingModeConfig = config;
+    this.render(); // Re-render to update UI based on trading mode
   }
 
   /**

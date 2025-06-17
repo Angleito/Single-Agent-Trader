@@ -9,7 +9,7 @@
  * - Trading history
  */
 
-import type { Position, MarketData, RiskMetrics } from '../types';
+import type { Position, MarketData, RiskMetrics, TradingModeConfig, TradingMode } from '../types';
 
 export interface TradeRequest {
   action: 'buy' | 'sell' | 'close';
@@ -43,6 +43,7 @@ export class ManualTradingInterface {
   private onError?: (error: string) => void;
   private isEmergencyMode = false;
   private connectionStatus: 'connected' | 'disconnected' | 'error' = 'disconnected';
+  private tradingModeConfig: TradingModeConfig | null = null;
 
   constructor(containerId: string, apiBaseUrl: string) {
     const container = document.getElementById(containerId);
@@ -91,6 +92,14 @@ export class ManualTradingInterface {
   }
 
   /**
+   * Set trading mode configuration
+   */
+  public setTradingModeConfig(config: TradingModeConfig): void {
+    this.tradingModeConfig = config;
+    this.render(); // Re-render to update UI based on trading mode
+  }
+
+  /**
    * Set emergency mode
    */
   public setEmergencyMode(emergency: boolean): void {
@@ -113,12 +122,16 @@ export class ManualTradingInterface {
    * Render the main interface
    */
   private render(): void {
+    const isSpot = this.tradingModeConfig?.trading_mode === 'spot';
+    const isFutures = this.tradingModeConfig?.futures_enabled || false;
+    
     this.container.innerHTML = `
       <div class="manual-trading-interface">
         <!-- Header with Status -->
         <div class="trading-header">
           <div class="header-title">
             <h3>Manual Trading Control</h3>
+            <div class="trading-mode-badge">${isSpot ? '💰 Spot Trading' : '📊 Futures Trading'}</div>
             <div class="connection-status disconnected" id="connection-indicator">
               <span class="status-dot"></span>
               <span class="status-text">Disconnected</span>
@@ -197,11 +210,31 @@ export class ManualTradingInterface {
                     <button class="preset-btn" data-size="50">50%</button>
                   </div>
                 </div>
+                ${isFutures ? `
+                <div class="form-group">
+                  <label for="leverage">Leverage</label>
+                  <div class="leverage-input-group">
+                    <input type="range" id="leverage-slider" min="1" max="${this.tradingModeConfig?.max_leverage || 20}" value="${this.tradingModeConfig?.default_leverage || 5}" class="leverage-slider">
+                    <input type="number" id="leverage" min="1" max="${this.tradingModeConfig?.max_leverage || 20}" step="1" value="${this.tradingModeConfig?.default_leverage || 5}" class="form-control leverage-input">
+                    <span class="leverage-unit">x</span>
+                  </div>
+                </div>
+                ` : `
                 <div class="form-group">
                   <label for="trade-reason">Reason (Optional)</label>
                   <input type="text" id="trade-reason" placeholder="Manual trade reason..." class="form-control">
                 </div>
+                `}
               </div>
+              
+              ${isFutures ? `
+              <div class="form-row">
+                <div class="form-group full-width">
+                  <label for="trade-reason">Reason (Optional)</label>
+                  <input type="text" id="trade-reason" placeholder="Manual trade reason..." class="form-control">
+                </div>
+              </div>
+              ` : ''}
 
               <!-- Risk Validation Display -->
               <div class="risk-validation" id="risk-validation">
@@ -209,6 +242,29 @@ export class ManualTradingInterface {
                   <span class="validation-label">Estimated Cost:</span>
                   <span class="validation-value" id="estimated-cost">$0.00</span>
                 </div>
+                <div class="validation-item">
+                  <span class="validation-label">Trading Fee:</span>
+                  <span class="validation-value" id="trading-fee">$0.00 (0.00%)</span>
+                </div>
+                ${isFutures ? `
+                <div class="validation-item">
+                  <span class="validation-label">Margin Required:</span>
+                  <span class="validation-value" id="margin-required">$0.00</span>
+                </div>
+                <div class="validation-item">
+                  <span class="validation-label">Liquidation Price:</span>
+                  <span class="validation-value" id="liquidation-price">--</span>
+                </div>
+                ` : `
+                <div class="validation-item">
+                  <span class="validation-label">Fee Tier:</span>
+                  <span class="validation-value" id="fee-tier">Basic</span>
+                </div>
+                <div class="validation-item">
+                  <span class="validation-label">Min Profit Move:</span>
+                  <span class="validation-value" id="min-profit-move">0.00%</span>
+                </div>
+                `}
                 <div class="validation-item">
                   <span class="validation-label">Risk Level:</span>
                   <span class="validation-value risk-low" id="risk-level">Low</span>
@@ -386,6 +442,33 @@ export class ManualTradingInterface {
     const currentPrice = this.currentMarketData?.price || 0;
     const estimatedCost = currentPrice * (size / 100) * 1000; // Assuming $1000 portfolio
 
+    // Calculate fees based on trading mode
+    let feeRate = 0.012; // Default to spot taker fee (1.2%)
+    let feeAmount = 0;
+    let feeTier = 'Basic';
+    let minProfitMove = 0;
+
+    if (this.tradingModeConfig) {
+      if (this.tradingModeConfig.mode === 'spot') {
+        // Spot trading fees (market orders use taker rate)
+        feeRate = this.tradingModeConfig.taker_fee_rate || 0.012;
+        feeAmount = estimatedCost * feeRate * 2; // Round trip (entry + exit)
+        minProfitMove = feeRate * 2 * 100; // As percentage
+        
+        // Determine fee tier based on rate
+        if (feeRate >= 0.012) feeTier = 'Basic';
+        else if (feeRate >= 0.004) feeTier = 'Standard';
+        else if (feeRate >= 0.002) feeTier = 'Pro';
+        else feeTier = 'VIP';
+      } else {
+        // Futures trading
+        feeRate = this.tradingModeConfig.futures_fee_rate || 0.0015;
+        const leverage = parseFloat((document.getElementById('leverage') as HTMLInputElement)?.value || '5');
+        feeAmount = estimatedCost * feeRate * 2; // Round trip
+        minProfitMove = (feeRate * 2 * 100) / leverage; // Adjusted for leverage
+      }
+    }
+
     // Determine risk level
     let riskLevel = 'low';
     let riskClass = 'risk-low';
@@ -400,10 +483,16 @@ export class ManualTradingInterface {
 
     // Update display
     const estimatedCostEl = document.getElementById('estimated-cost');
+    const tradingFeeEl = document.getElementById('trading-fee');
+    const feeTierEl = document.getElementById('fee-tier');
+    const minProfitMoveEl = document.getElementById('min-profit-move');
     const riskLevelEl = document.getElementById('risk-level');
     const portfolioImpactEl = document.getElementById('portfolio-impact');
 
     if (estimatedCostEl) estimatedCostEl.textContent = `$${estimatedCost.toFixed(2)}`;
+    if (tradingFeeEl) tradingFeeEl.textContent = `$${feeAmount.toFixed(2)} (${(feeRate * 100).toFixed(2)}%)`;
+    if (feeTierEl) feeTierEl.textContent = feeTier;
+    if (minProfitMoveEl) minProfitMoveEl.textContent = `${minProfitMove.toFixed(3)}%`;
     if (riskLevelEl) {
       riskLevelEl.textContent = riskLevel.charAt(0).toUpperCase() + riskLevel.slice(1);
       riskLevelEl.className = `validation-value ${riskClass}`;

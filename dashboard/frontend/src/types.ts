@@ -9,6 +9,11 @@ declare global {
   }
 }
 
+// Trading Mode Types
+export type TradingMode = 'spot' | 'futures';
+export type AccountType = 'CBI' | 'CFM';
+export type ExchangeType = 'coinbase' | 'bluefin';
+
 // Trading Bot Data Types
 export interface BotStatus {
   status: 'running' | 'stopped' | 'error' | 'dry_run' | 'unknown';
@@ -20,6 +25,9 @@ export interface BotStatus {
   is_active?: boolean;
   is_paused?: boolean;
   status_message?: string;
+  trading_mode?: TradingMode;
+  futures_enabled?: boolean;
+  account_type?: AccountType;
 }
 
 export interface MarketData {
@@ -40,6 +48,9 @@ export interface TradeAction {
   quantity?: number;
   leverage?: number;
   executed?: boolean;
+  trade_type?: TradingMode;
+  symbol?: string;
+  size_percentage?: number;
 }
 
 export interface VuManchuIndicators {
@@ -58,24 +69,32 @@ export interface Position {
   current_price: number;
   pnl: number;
   pnl_percent: number;
-  leverage: number;
-  liquidation_price?: number;
+  leverage?: number;  // Optional for spot
+  liquidation_price?: number;  // Only for futures
   timestamp: string;
   quantity?: number;
   unrealized_pnl?: number;
   average_price?: number;
+  // Futures-specific fields
+  contracts?: number;
+  margin_used?: number;
+  trade_type?: TradingMode;
 }
 
 export interface RiskMetrics {
   total_portfolio_value: number;
   available_balance: number;
-  margin_used: number;
-  margin_available: number;
+  margin_used?: number;  // Only for futures
+  margin_available?: number;  // Only for futures
   total_pnl: number;
   daily_pnl: number;
   max_drawdown: number;
   win_rate: number;
   total_trades: number;
+  // Futures-specific fields
+  margin_ratio?: number;
+  margin_health?: 'healthy' | 'warning' | 'critical';
+  liquidation_risk?: boolean;
 }
 
 // WebSocket Message Types
@@ -83,6 +102,38 @@ export interface WebSocketMessage {
   type: 'bot_status' | 'market_data' | 'trade_action' | 'indicators' | 'position' | 'risk_metrics' | 'trading_loop' | 'ai_decision' | 'system_status' | 'error';
   data: BotStatus | MarketData | TradeAction | VuManchuIndicators | Position | RiskMetrics | any;
   timestamp: string;
+}
+
+// Trading Mode Configuration
+export interface TradingModeConfig {
+  trading_mode: TradingMode;
+  futures_enabled: boolean;
+  exchange_type: ExchangeType;
+  account_type: AccountType;
+  leverage_available: boolean;
+  default_leverage?: number;
+  max_leverage?: number;
+  features: {
+    margin_trading: boolean;
+    stop_loss: boolean;
+    take_profit: boolean;
+    contracts: boolean;
+    liquidation_price: boolean;
+  };
+  supported_symbols: {
+    spot: string[];
+    futures: string[];
+  };
+  // Fee information
+  spot_maker_fee_rate?: number;
+  spot_taker_fee_rate?: number;
+  futures_fee_rate?: number;
+  current_volume?: number;
+  fee_tier?: string;
+  // Legacy names for compatibility
+  mode?: TradingMode;
+  maker_fee_rate?: number;
+  taker_fee_rate?: number;
 }
 
 // Dashboard UI State
@@ -95,6 +146,7 @@ export interface DashboardState {
   risk_metrics: RiskMetrics | null;
   connection_status: ConnectionStatus;
   error_message: string | null;
+  trading_mode_config?: TradingModeConfig;
 }
 
 // TradingView Chart Configuration

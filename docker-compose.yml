@@ -4,16 +4,15 @@ services:
   # Bluefin SDK Service - Isolated container for Bluefin DEX operations
   bluefin-service:
     build:
-      context: .
-      dockerfile: Dockerfile
-    image: bluefin-service:latest
+      context: ./services
+      dockerfile: Dockerfile.bluefin
+    image: bluefin-sdk-service:latest
     container_name: bluefin-service
     restart: unless-stopped
     
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
-      - DRY_RUN=${SYSTEM__DRY_RUN:-true}
       - BLUEFIN_PRIVATE_KEY=${EXCHANGE__BLUEFIN_PRIVATE_KEY:-}
       - BLUEFIN_NETWORK=${EXCHANGE__BLUEFIN_NETWORK:-mainnet}
       - HOST=0.0.0.0
@@ -23,15 +22,19 @@ services:
     ports:
       - "8081:8080"  # External access for debugging
     
+    # Volume mounts for logs
+    volumes:
+      - ./logs/bluefin:/app/logs
+    
+    networks:
+      - trading-network
+    
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 15s
-    
-    networks:
-      - trading-network
     
     deploy:
       resources:
@@ -63,7 +66,8 @@ services:
     
     # Override the default command - TRADING MODE WITH 1-MINUTE INTERVALS
     # Note: dry-run mode is controlled by SYSTEM__DRY_RUN environment variable
-    command: ["python", "-m", "bot.main", "live", "--symbol", "SUI-PERP", "--interval", "1m", "--force"]
+    # Note: Symbol should match the exchange type (BTC-USD for Coinbase, SUI-PERP for Bluefin)
+    command: ["python", "-m", "bot.main", "live", "--symbol", "${TRADING__SYMBOL:-BTC-USD}", "--interval", "1m", "--force"]
     
     # Environment variables from .env file
     env_file:
@@ -78,8 +82,10 @@ services:
       # System Configuration
       - SYSTEM__DRY_RUN=${SYSTEM__DRY_RUN:-true}   # Use .env setting, default to safe mode
       - SYSTEM__ENVIRONMENT=production  # Production environment for live trading
-      # Exchange Configuration
-      - EXCHANGE__EXCHANGE_TYPE=${EXCHANGE__EXCHANGE_TYPE:-coinbase}
+      # Exchange Configuration - Force Bluefin
+      - EXCHANGE__EXCHANGE_TYPE=bluefin
+      - BLUEFIN_USE_REAL_DATA=true
+      - BLUEFIN_SERVICE_URL=http://bluefin-service:8080
       # LLM Logging Configuration
       - LLM__ENABLE_COMPLETION_LOGGING=${LLM_ENABLE_COMPLETION_LOGGING:-true}
       - LLM__COMPLETION_LOG_LEVEL=${LLM_COMPLETION_LOG_LEVEL:-INFO}

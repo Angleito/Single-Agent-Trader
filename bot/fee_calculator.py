@@ -37,15 +37,25 @@ class FeeCalculator:
 
     def __init__(self):
         """Initialize the fee calculator with current settings."""
-        self.maker_fee_rate = settings.trading.maker_fee_rate
-        self.taker_fee_rate = settings.trading.taker_fee_rate
+        # Use spot-specific fees if available, otherwise fall back to legacy names
+        self.spot_maker_fee_rate = getattr(settings.trading, 'spot_maker_fee_rate', settings.trading.maker_fee_rate)
+        self.spot_taker_fee_rate = getattr(settings.trading, 'spot_taker_fee_rate', settings.trading.taker_fee_rate)
         self.futures_fee_rate = settings.trading.futures_fee_rate
         self.enable_futures = settings.trading.enable_futures
+        self.fee_tier_thresholds = getattr(settings.trading, 'fee_tier_thresholds', [])
+        
+        # Legacy support
+        self.maker_fee_rate = self.spot_maker_fee_rate
+        self.taker_fee_rate = self.spot_taker_fee_rate
+        
+        # Track current volume tier
+        self.current_volume = 0
+        self.current_tier = self._get_fee_tier(0)
 
         logger.info(
             f"Initialized FeeCalculator with rates: "
-            f"Maker: {self.maker_fee_rate:.4f}, "
-            f"Taker: {self.taker_fee_rate:.4f}, "
+            f"Spot Maker: {self.spot_maker_fee_rate:.4f}, "
+            f"Spot Taker: {self.spot_taker_fee_rate:.4f}, "
             f"Futures: {self.futures_fee_rate:.4f}"
         )
 
@@ -74,8 +84,9 @@ class FeeCalculator:
                 fee_rate = self.futures_fee_rate
                 logger.debug(f"Using futures fee rate: {fee_rate:.4f}")
             else:
+                # Use current tier rates for spot trading
                 fee_rate = self.taker_fee_rate if is_market_order else self.maker_fee_rate
-                logger.debug(f"Using {'taker' if is_market_order else 'maker'} fee rate: {fee_rate:.4f}")
+                logger.debug(f"Using spot {'taker' if is_market_order else 'maker'} fee rate: {fee_rate:.4f} (Volume: ${self.current_volume:,.2f})")
 
             # Calculate entry fee
             entry_fee = position_value * Decimal(str(fee_rate))
@@ -317,6 +328,49 @@ class FeeCalculator:
         except Exception as e:
             logger.error(f"Error validating trade profitability: {e}")
             return True, "Validation error - allowing trade"
+    
+    def _get_fee_tier(self, volume: float) -> dict[str, float]:
+        """
+        Get the fee tier based on trading volume.
+        
+        Args:
+            volume: Monthly trading volume in USD
+            
+        Returns:
+            Fee tier dictionary with maker and taker rates
+        """
+        if not self.fee_tier_thresholds:
+            return {"maker": self.spot_maker_fee_rate, "taker": self.spot_taker_fee_rate}
+        
+        # Find the appropriate tier
+        tier = self.fee_tier_thresholds[0]
+        for threshold in self.fee_tier_thresholds:
+            if volume >= threshold["volume"]:
+                tier = threshold
+            else:
+                break
+        
+        return tier
+    
+    def update_volume_tier(self, monthly_volume: float):
+        """
+        Update the fee calculator with current monthly trading volume.
+        
+        Args:
+            monthly_volume: Monthly trading volume in USD
+        """
+        self.current_volume = monthly_volume
+        self.current_tier = self._get_fee_tier(monthly_volume)
+        
+        # Update fee rates based on current tier
+        if not self.enable_futures:
+            self.maker_fee_rate = self.current_tier["maker"]
+            self.taker_fee_rate = self.current_tier["taker"]
+            
+            logger.info(
+                f"Updated fee tier based on ${monthly_volume:,.2f} volume: "
+                f"Maker: {self.maker_fee_rate:.4%}, Taker: {self.taker_fee_rate:.4%}"
+            )
 
     def get_fee_summary(self) -> dict[str, float]:
         """
@@ -326,13 +380,17 @@ class FeeCalculator:
             Dictionary with fee rate information
         """
         return {
-            "maker_fee_rate": self.maker_fee_rate,
-            "taker_fee_rate": self.taker_fee_rate,
+            "spot_maker_fee_rate": self.spot_maker_fee_rate,
+            "spot_taker_fee_rate": self.spot_taker_fee_rate,
+            "current_maker_fee_rate": self.maker_fee_rate,
+            "current_taker_fee_rate": self.taker_fee_rate,
             "futures_fee_rate": self.futures_fee_rate,
             "active_fee_rate": (
                 self.futures_fee_rate if self.enable_futures
                 else self.taker_fee_rate
-            )
+            ),
+            "current_volume": self.current_volume,
+            "current_tier": self.current_tier
         }
 
 

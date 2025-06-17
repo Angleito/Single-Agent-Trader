@@ -10,7 +10,7 @@
  * - Automated risk controls
  */
 
-import type { Position, MarketData, RiskMetrics } from '../types';
+import type { Position, MarketData, RiskMetrics, TradingModeConfig, TradingMode } from '../types';
 
 export interface RiskConfiguration {
   max_position_size: number;
@@ -71,6 +71,7 @@ export class RiskManagementDashboard {
   private updateInterval: number | null = null;
   private onRiskAlert?: (alert: RiskAlert) => void;
   private onConfigUpdate?: (config: RiskConfiguration) => void;
+  private tradingModeConfig: TradingModeConfig | null = null;
 
   constructor(containerId: string, apiBaseUrl: string) {
     const container = document.getElementById(containerId);
@@ -103,6 +104,14 @@ export class RiskManagementDashboard {
     this.currentRiskMetrics = riskMetrics;
     this.updateRiskMetricsDisplay();
     this.checkRiskThresholds();
+  }
+
+  /**
+   * Set trading mode configuration
+   */
+  public setTradingModeConfig(config: TradingModeConfig): void {
+    this.tradingModeConfig = config;
+    this.render(); // Re-render to update UI based on trading mode
   }
 
   /**

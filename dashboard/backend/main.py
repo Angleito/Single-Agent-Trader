@@ -830,14 +830,28 @@ async def get_trading_data():
                 except Exception:
                     pass  # Keep N/A values
 
+        # Determine trading mode from environment or config
+        # In real implementation, this would come from the bot's config
+        futures_enabled = os.getenv("TRADING__ENABLE_FUTURES", "true").lower() == "true"
+        trading_mode = "futures" if futures_enabled else "spot"
+        account_type = "CFM" if futures_enabled else "CBI"
+        
         # Mock trading data - in real implementation, this would come from the bot
         trading_data = {
             "timestamp": datetime.now().isoformat(),
+            "trading_mode": trading_mode,
+            "futures_enabled": futures_enabled,
+            "account_type": account_type,
+            "leverage_available": futures_enabled,
             "account": {
                 "balance": "10000.00",
                 "currency": "USD",
                 "available_balance": "8500.00",
                 "unrealized_pnl": "150.00",
+                # Futures-specific fields
+                "margin_balance": "10000.00" if futures_enabled else None,
+                "margin_ratio": "15.0%" if futures_enabled else None,
+                "available_margin": "8500.00" if futures_enabled else None,
             },
             "current_position": {
                 "symbol": "BTC-USD",
@@ -846,6 +860,11 @@ async def get_trading_data():
                 "entry_price": "65000.00",
                 "current_price": "65500.00",
                 "unrealized_pnl": "25.00",
+                # Futures-specific fields
+                "leverage": 5 if futures_enabled else None,
+                "contracts": 1 if futures_enabled else None,
+                "liquidation_price": "58500.00" if futures_enabled else None,
+                "margin_used": "650.00" if futures_enabled else None,
             },
             "recent_trades": [
                 {
@@ -855,6 +874,8 @@ async def get_trading_data():
                     "quantity": "0.05",
                     "price": "65000.00",
                     "status": "filled",
+                    "trade_type": trading_mode,
+                    "leverage": 5 if futures_enabled else None,
                 }
             ],
             "performance": {
@@ -878,6 +899,10 @@ async def get_trading_data():
         # Return mock data even on error to keep dashboard functional
         return {
             "timestamp": datetime.now().isoformat(),
+            "trading_mode": "spot",  # Default to spot mode on error
+            "futures_enabled": False,
+            "account_type": "CBI",
+            "leverage_available": False,
             "account": {
                 "balance": "0.00",
                 "currency": "USD",
@@ -907,6 +932,63 @@ async def get_trading_data():
             },
             "error": str(e)
         }
+
+
+@app.get("/trading-mode")
+async def get_trading_mode():
+    """Get current trading mode configuration"""
+    try:
+        # Read from environment or config
+        futures_enabled = os.getenv("TRADING__ENABLE_FUTURES", "true").lower() == "true"
+        exchange_type = os.getenv("EXCHANGE__EXCHANGE_TYPE", "coinbase").lower()
+        leverage = int(os.getenv("TRADING__LEVERAGE", "5"))
+        max_futures_leverage = int(os.getenv("TRADING__MAX_FUTURES_LEVERAGE", "20"))
+        
+        # Get fee rates
+        spot_maker_fee = float(os.getenv("TRADING__SPOT_MAKER_FEE_RATE", "0.006"))
+        spot_taker_fee = float(os.getenv("TRADING__SPOT_TAKER_FEE_RATE", "0.012"))
+        futures_fee = float(os.getenv("TRADING__FUTURES_FEE_RATE", "0.0015"))
+        
+        # Default to basic tier for spot trading
+        current_volume = 0  # In real implementation, this would come from exchange API
+        fee_tier = "Basic"
+        
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "trading_mode": "futures" if futures_enabled else "spot",
+            "futures_enabled": futures_enabled,
+            "exchange_type": exchange_type,
+            "account_type": "CFM" if futures_enabled else "CBI",
+            "leverage_available": futures_enabled,
+            "default_leverage": leverage if futures_enabled else None,
+            "max_leverage": max_futures_leverage if futures_enabled else None,
+            "features": {
+                "margin_trading": futures_enabled,
+                "stop_loss": True,
+                "take_profit": True,
+                "contracts": futures_enabled,
+                "liquidation_price": futures_enabled,
+            },
+            "supported_symbols": {
+                "spot": ["BTC-USD", "ETH-USD", "SOL-USD"] if not futures_enabled else [],
+                "futures": ["BTC-USD", "ETH-USD"] if futures_enabled else [],
+            },
+            # Fee information
+            "spot_maker_fee_rate": spot_maker_fee,
+            "spot_taker_fee_rate": spot_taker_fee,
+            "futures_fee_rate": futures_fee,
+            "current_volume": current_volume,
+            "fee_tier": fee_tier,
+            # Legacy names for compatibility
+            "mode": "futures" if futures_enabled else "spot",
+            "maker_fee_rate": spot_maker_fee if not futures_enabled else futures_fee,
+            "taker_fee_rate": spot_taker_fee if not futures_enabled else futures_fee,
+        }
+    except Exception as e:
+        logger.error(f"Error getting trading mode: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Error getting trading mode: {str(e)}"
+        ) from e
 
 
 @app.get("/logs")
@@ -1843,6 +1925,11 @@ async def get_api_health():
 async def get_api_trading_data():
     """API endpoint for trading data"""
     return await get_trading_data()
+
+@app.get("/api/trading-mode")
+async def get_api_trading_mode():
+    """API endpoint for trading mode"""
+    return await get_trading_mode()
 
 @app.get("/api/logs")
 async def get_api_logs(limit: int = 100):

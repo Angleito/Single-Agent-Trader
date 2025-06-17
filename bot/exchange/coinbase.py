@@ -276,6 +276,11 @@ class CoinbaseClient(BaseExchange):
 
         # Futures contract management
         self._futures_contract_manager = None
+        
+        # Volume tracking for fee tiers
+        self._monthly_volume = Decimal("0")
+        self._last_volume_check = None
+        self._volume_check_interval = timedelta(hours=1)
 
         # Compose a concise init message to avoid line length issues
         trading_mode = "PAPER TRADING" if self.dry_run else "LIVE TRADING"
@@ -314,45 +319,6 @@ class CoinbaseClient(BaseExchange):
                 "Use --dry-run flag for paper trading."
             )
 
-    async def _load_portfolios(self) -> None:
-        """Load and cache portfolio information."""
-        try:
-            response = await self._retry_request(self._client.get_portfolios)
-
-            if hasattr(response, "portfolios"):
-                portfolios = response.portfolios
-            else:
-                portfolios = response.get("portfolios", [])
-
-            for portfolio in portfolios:
-                portfolio_data = (
-                    portfolio
-                    if isinstance(portfolio, dict)
-                    else {
-                        "uuid": getattr(portfolio, "uuid", None),
-                        "name": getattr(portfolio, "name", None),
-                        "type": getattr(portfolio, "type", None),
-                    }
-                )
-
-                self._portfolios[portfolio_data["uuid"]] = portfolio_data
-
-                # Identify futures portfolio
-                if (
-                    "futures" in portfolio_data.get("name", "").lower()
-                    or portfolio_data.get("type") == "FUTURES"
-                ):
-                    self._futures_portfolio_id = portfolio_data["uuid"]
-                    logger.info(
-                        f"Found futures portfolio: {portfolio_data['name']} ({portfolio_data['uuid']})"
-                    )
-                elif portfolio_data.get("type") == "DEFAULT":
-                    self._default_portfolio_id = portfolio_data["uuid"]
-
-        except Exception as e:
-            logger.warning(f"Failed to load portfolios: {e}")
-            # Use the hardcoded default if we can't load portfolios
-            self._default_portfolio_id = "1f3ed8bf-a65c-5022-8258-87ce50c517f6"
 
     async def connect(self) -> bool:
         """
@@ -362,25 +328,37 @@ class CoinbaseClient(BaseExchange):
             True if connection successful
         """
         try:
+            # In paper trading mode, skip all authentication
+            if self.dry_run:
+                logger.info(
+                    "PAPER TRADING MODE: Skipping Coinbase authentication. All trades will be simulated."
+                )
+                self._client = None
+                self._connected = True  # Set to True for paper trading
+                self._last_health_check = datetime.utcnow()
+                
+                # Initialize mock portfolios for paper trading
+                self._portfolios = {}
+                self._default_portfolio_id = "paper-trading-portfolio"
+                if self.enable_futures:
+                    self._futures_portfolio_id = "paper-trading-futures-portfolio"
+                
+                # Initialize futures contract manager if futures are enabled
+                if self.enable_futures:
+                    self._futures_contract_manager = FuturesContractManager(self)
+                
+                logger.info("Paper trading mode initialized successfully")
+                return True
+
+            # Live trading mode requires SDK and credentials
             if not COINBASE_AVAILABLE:
-                logger.warning(
+                logger.error(
                     "coinbase-advanced-py is not installed. "
                     "Install it with: pip install coinbase-advanced-py"
                 )
-                # In dry-run / paper-trading mode we can operate without the SDK
-                if self.dry_run:
-                    logger.info(
-                        "PAPER TRADING MODE: Coinbase connection skipped (SDK missing). All trades will be simulated."
-                    )
-                    # Mark as not authenticated but allow engine startup.
-                    self._client = None
-                    self._connected = False
-                    self._last_health_check = datetime.utcnow()
-                    return True
-                if not self.dry_run:
-                    raise ExchangeConnectionError(
-                        "coinbase-advanced-py is required for live trading"
-                    )
+                raise ExchangeConnectionError(
+                    "coinbase-advanced-py is required for live trading"
+                )
 
             # Check credentials based on authentication method
             if self.auth_method == "legacy":
@@ -474,6 +452,12 @@ class CoinbaseClient(BaseExchange):
             # Initialize futures contract manager if futures are enabled
             if self.enable_futures:
                 self._futures_contract_manager = FuturesContractManager(self)
+            else:
+                # For spot trading, get monthly volume to determine fee tier
+                try:
+                    await self.get_monthly_volume()
+                except Exception as e:
+                    logger.warning(f"Failed to get monthly volume during initialization: {e}")
 
             return True
 
@@ -521,6 +505,11 @@ class CoinbaseClient(BaseExchange):
         if not self._connected:
             return False
 
+        # In paper trading mode, always return healthy
+        if self.dry_run:
+            self._last_health_check = datetime.utcnow()
+            return True
+
         try:
             # Only perform health check if enough time has passed
             if (
@@ -542,6 +531,51 @@ class CoinbaseClient(BaseExchange):
 
     async def _retry_request(self, func, *args, **kwargs):
         """Execute a request with retry logic."""
+        # In paper trading mode, don't make any real API calls
+        if self.dry_run:
+            logger.debug(f"PAPER TRADING: Skipping API call to {func.__name__}")
+            # Return mock responses for common methods
+            if "get_accounts" in func.__name__:
+                return {"accounts": []}
+            elif "get_portfolios" in func.__name__:
+                return {"portfolios": []}
+            elif "get_fcm_balance_summary" in func.__name__:
+                return {
+                    "balance_summary": {
+                        "cbi_usd_balance": {"value": "10000.00"},
+                        "cfm_usd_balance": {"value": "10000.00"},
+                        "total_usd_balance": {"value": "20000.00"},
+                        "initial_margin": {"value": "0"},
+                        "available_margin": {"value": "10000.00"},
+                        "liquidation_threshold": {"value": "0"},
+                        "futures_buying_power": {"value": "10000.00"},
+                    }
+                }
+            elif "list_futures_positions" in func.__name__:
+                return {"positions": []}
+            elif "get_products" in func.__name__:
+                # Mock futures contracts for paper trading
+                return {
+                    "products": [
+                        {
+                            "product_id": "ET-27JUN25-CDE",
+                            "base_currency": "ETH",
+                            "quote_currency": "USD",
+                            "trading_disabled": False,
+                            "display_name": "ETH Futures - Jun 2025",
+                        },
+                        {
+                            "product_id": "BT-27JUN25-CDE",
+                            "base_currency": "BTC",
+                            "quote_currency": "USD", 
+                            "trading_disabled": False,
+                            "display_name": "BTC Futures - Jun 2025",
+                        }
+                    ]
+                }
+            else:
+                return {}
+
         last_exception = None
 
         for attempt in range(self._max_retries + 1):
@@ -889,7 +923,7 @@ class CoinbaseClient(BaseExchange):
         self, trade_action: TradeAction, symbol: str, current_price: Decimal
     ) -> Order | None:
         """
-        Open a spot position (original logic).
+        Open a spot position.
 
         Args:
             trade_action: Trade action with position details
@@ -903,11 +937,17 @@ class CoinbaseClient(BaseExchange):
         account_balance = await self.get_account_balance(AccountType.CBI)
         position_value = account_balance * Decimal(str(trade_action.size_pct / 100))
 
-        # Calculate quantity based on leverage
-        leverage = settings.trading.leverage
-        quantity = (position_value * leverage) / current_price
+        # For spot trading, leverage is always 1
+        quantity = position_value / current_price
 
-        # Determine order side
+        # Log fee information
+        fee_rates = self.get_current_fee_rates()
+        logger.info(
+            f"Spot order fees - Maker: {fee_rates['maker']:.4%}, Taker: {fee_rates['taker']:.4%}, "
+            f"Volume: ${fee_rates['volume']:,.2f}"
+        )
+
+        # Determine order side (BUY/SELL for spot)
         side = "BUY" if trade_action.action == "LONG" else "SELL"
 
         # Place market order
@@ -2301,3 +2341,105 @@ class CoinbaseClient(BaseExchange):
     def is_decentralized(self) -> bool:
         """Coinbase is a centralized exchange."""
         return False
+    
+    async def get_monthly_volume(self, force_refresh: bool = False) -> Decimal:
+        """
+        Get 30-day trading volume for fee tier calculation.
+        
+        Args:
+            force_refresh: Force refresh of volume data
+            
+        Returns:
+            Monthly trading volume in USD
+        """
+        if self.dry_run:
+            # Return mock volume for paper trading
+            return Decimal("0")  # Basic tier
+        
+        # Check if we need to refresh volume
+        now = datetime.utcnow()
+        if (
+            not force_refresh 
+            and self._last_volume_check 
+            and now - self._last_volume_check < self._volume_check_interval
+        ):
+            return self._monthly_volume
+        
+        try:
+            # Calculate date range for 30 days
+            end_date = now
+            start_date = end_date - timedelta(days=30)
+            
+            # Get fills/trades for the period
+            # Note: This is a simplified implementation. The actual Coinbase API
+            # may require pagination for large trade histories
+            volume = Decimal("0")
+            
+            try:
+                # Try to get fills from the API
+                fills_response = await self._retry_request(
+                    self._client.get_fills,
+                    start_sequence_timestamp=start_date.isoformat(),
+                    end_sequence_timestamp=end_date.isoformat()
+                )
+                
+                if isinstance(fills_response, dict) and "fills" in fills_response:
+                    for fill in fills_response["fills"]:
+                        # Calculate volume from each fill
+                        if fill.get("liquidity_indicator") in ["MAKER", "TAKER"]:
+                            size = Decimal(str(fill.get("size", "0")))
+                            price = Decimal(str(fill.get("price", "0")))
+                            volume += size * price
+                
+            except Exception as e:
+                logger.warning(f"Failed to get fills for volume calculation: {e}")
+                # Fallback to basic tier
+                volume = Decimal("0")
+            
+            self._monthly_volume = volume
+            self._last_volume_check = now
+            
+            # Update fee calculator with current volume
+            from ..fee_calculator import fee_calculator
+            fee_calculator.update_volume_tier(float(volume))
+            
+            # Determine fee tier
+            tier = "Basic"
+            if volume >= 250000000:
+                tier = "VIP Ultra"
+            elif volume >= 75000000:
+                tier = "VIP"
+            elif volume >= 15000000:
+                tier = "Advanced"
+            elif volume >= 1000000:
+                tier = "Pro"
+            elif volume >= 100000:
+                tier = "Plus"
+            elif volume >= 50000:
+                tier = "Standard"
+            elif volume >= 10000:
+                tier = "Active"
+            
+            logger.info(f"Updated monthly trading volume: ${volume:,.2f} (Tier: {tier})")
+            return volume
+            
+        except Exception as e:
+            logger.error(f"Failed to get monthly volume: {e}")
+            return self._monthly_volume
+    
+    def get_current_fee_rates(self) -> dict[str, float]:
+        """
+        Get current fee rates based on volume tier.
+        
+        Returns:
+            Dictionary with maker and taker fee rates
+        """
+        from ..fee_calculator import fee_calculator
+        
+        return {
+            "maker": fee_calculator.maker_fee_rate,
+            "taker": fee_calculator.taker_fee_rate,
+            "futures": fee_calculator.futures_fee_rate,
+            "volume": float(self._monthly_volume),
+            "tier": fee_calculator.current_tier
+        }

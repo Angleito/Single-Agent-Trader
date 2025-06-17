@@ -26,6 +26,7 @@
   display: flex;
   align-items: center;
   gap: 16px;
+  flex-wrap: wrap;
 }
 
 .header-title h3 {
@@ -33,6 +34,23 @@
   font-size: 20px;
   font-weight: 600;
   color: #ffffff;
+}
+
+/* Trading Mode Badge */
+.trading-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: linear-gradient(135deg, #1e293b, #334155);
+  border: 1px solid #475569;
+  color: #e2e8f0;
+  white-space: nowrap;
 }
 
 .connection-status {
@@ -289,6 +307,56 @@
   gap: 8px;
 }
 
+/* Leverage Controls (Futures) */
+.leverage-input-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.leverage-slider {
+  flex: 1;
+  height: 6px;
+  background: #404040;
+  border-radius: 3px;
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.leverage-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  background: #f59e0b;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3);
+}
+
+.leverage-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background: #f59e0b;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3);
+}
+
+.leverage-input {
+  width: 60px;
+}
+
+.leverage-unit {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+/* Full Width Form Group */
+.form-group.full-width {
+  grid-column: 1 / -1;
+}
+
 .preset-btn {
   background: #374151;
   color: #d1d5db;
@@ -348,6 +416,21 @@
 
 .validation-value.risk-high {
   color: #ef4444;
+}
+
+/* Fee Information Styling */
+.validation-item .validation-value#fee-tier {
+  color: #60a5fa;
+  font-weight: 600;
+}
+
+.validation-item .validation-value#trading-fee {
+  color: #fbbf24;
+}
+
+.validation-item .validation-value#min-profit-move {
+  color: #a78bfa;
+  font-style: italic;
 }
 
 /* Execute Section */

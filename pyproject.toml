@@ -7,7 +7,7 @@ readme = "README.md"
 packages = [{include = "bot"}]
 
 [tool.poetry.dependencies]
-python = ">=3.12,<3.13"
+python = ">=3.12,<3.14"
 pip = "^24.0.0"
 setuptools = "^69.0.0"
 pandas = "^2.2.0"

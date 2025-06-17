@@ -35,6 +35,22 @@
   color: #ffffff;
 }
 
+/* Trading Mode Badge */
+.trading-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: linear-gradient(135deg, #1e293b, #334155);
+  border: 1px solid #475569;
+  color: #e2e8f0;
+}
+
 .risk-status-indicator {
   display: flex;
   align-items: center;
@@ -357,6 +373,37 @@
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Futures-specific configuration */
+.futures-config {
+  background: linear-gradient(135deg, #1e293b, #0f172a);
+  border-color: #334155;
+}
+
+.futures-config h5 {
+  color: #e2e8f0;
+}
+
+.leverage-limit-input {
+  border-color: #f59e0b;
+}
+
+.leverage-limit-input:focus {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+}
+
+.margin-config-group {
+  background: rgba(245, 158, 11, 0.05);
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.margin-config-group .form-group label {
+  color: #fbbf24;
 }
 
 .config-actions {

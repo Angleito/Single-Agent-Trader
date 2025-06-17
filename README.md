@@ -18,6 +18,38 @@ An AI-powered crypto trading bot for Coinbase with VuManChu Cipher indicators an
 - **Paper Trading Mode**: Test strategies safely without real money (single toggle control)
 - **Memory & Learning**: MCP-powered experience tracking for continuous improvement
 
+## 📊 Trading Features
+
+### Spot Trading Support
+- **Optimized for Coinbase Spot Markets**: Full support for spot trading with accurate fee calculations
+- **Volume-Based Fee Tiers**: Automatically detects your 30-day trading volume and applies correct fees
+- **Fee-Adjusted Position Sizing**: Positions are automatically sized to account for trading fees
+- **Real-Time Fee Display**: Dashboard shows current fee tier, rates, and minimum profitable moves
+
+### Fee Structure (Coinbase Spot)
+- **Basic Tier** (< $10K): 0.6% maker, 1.2% taker
+- **Active Tier** ($10K+): 0.25% maker, 0.40% taker
+- **Standard Tier** ($50K+): 0.15% maker, 0.25% taker
+- **Plus Tier** ($100K+): 0.10% maker, 0.20% taker
+- **Pro Tier** ($1M+): 0.07% maker, 0.12% taker
+- **Advanced Tier** ($15M+): 0.04% maker, 0.08% taker
+- **VIP Tier** ($75M+): 0.02% maker, 0.05% taker
+- **VIP Ultra** ($250M+): 0.00% maker, 0.05% taker
+
+### Spot Trading Configuration
+To use spot trading mode:
+```bash
+# In your .env file
+TRADING__ENABLE_FUTURES=false  # Enable spot trading mode
+TRADING__SYMBOL=ETH-USD       # Spot trading pair
+```
+
+Use the optimized spot trading config:
+```bash
+# Copy spot trading configuration
+cp config/spot_trading_config.json config/development.json
+```
+
 ## Quick Start (3 Steps)
 
 ### 1. Setup Your Environment
