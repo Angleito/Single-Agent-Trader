@@ -240,9 +240,10 @@ app.all('/financial-news', async (req, res) => {
 });
 
 // Crypto sentiment endpoint
-app.post('/crypto-sentiment', async (req, res) => {
+app.all('/crypto-sentiment', async (req, res) => {
     try {
-        const { symbol, include_social = true, include_news = true, include_technical = true } = req.body;
+        const params = req.method === 'GET' ? req.query : req.body;
+        const { symbol, include_social = true, include_news = true, include_technical = true } = params;
 
         if (!symbol) {
             return res.status(400).json({ error: 'Symbol parameter is required' });
@@ -307,9 +308,10 @@ app.post('/crypto-sentiment', async (req, res) => {
 });
 
 // Market sentiment endpoint
-app.post('/market-sentiment', async (req, res) => {
+app.all('/market-sentiment', async (req, res) => {
     try {
-        const { market = 'nasdaq', include_indices = true, include_sectors = true } = req.body;
+        const params = req.method === 'GET' ? req.query : req.body;
+        const { market = 'nasdaq', include_indices = true, include_sectors = true } = params;
 
         // Use Perplexity AI for market sentiment
         const result = await callMCPTool('perplexity_search', {
@@ -370,9 +372,10 @@ app.post('/market-sentiment', async (req, res) => {
 });
 
 // Market correlation endpoint
-app.post('/market-correlation', async (req, res) => {
+app.all('/market-correlation', async (req, res) => {
     try {
-        const { symbol1, symbol2, timeframe = '30d', include_beta = true } = req.body;
+        const params = req.method === 'GET' ? req.query : req.body;
+        const { symbol1, symbol2, timeframe = '30d', include_beta = true } = params;
 
         if (!symbol1 || !symbol2) {
             return res.status(400).json({ error: 'Both symbol1 and symbol2 are required' });

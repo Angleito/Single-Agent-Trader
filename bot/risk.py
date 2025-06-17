@@ -79,6 +79,14 @@ class RiskManager:
             Tuple of (approved, modified_action, reason)
         """
         try:
+            # MANDATORY: Validate stop loss for LONG/SHORT actions
+            if not self._validate_mandatory_stop_loss(trade_action):
+                return (
+                    False,
+                    self._get_hold_action("Stop loss is mandatory for all trades"),
+                    "Missing stop loss",
+                )
+
             # Check daily loss limit
             if self._is_daily_loss_limit_reached():
                 return (
@@ -403,6 +411,42 @@ class RiskManager:
         max_size = available_margin
         return int(min(float(max_size), self.max_size_pct))
 
+    def _validate_mandatory_stop_loss(self, trade_action: TradeAction) -> bool:
+        """
+        Validate that stop loss is mandatory for LONG/SHORT actions.
+        
+        Args:
+            trade_action: Trade action to validate
+            
+        Returns:
+            True if stop loss requirements are met
+        """
+        # Allow HOLD and CLOSE actions without stop loss validation
+        if trade_action.action in ["HOLD", "CLOSE"]:
+            return True
+
+        # For LONG/SHORT actions, stop loss MUST be > 0
+        if trade_action.action in ["LONG", "SHORT"]:
+            if trade_action.stop_loss_pct <= 0:
+                logger.error(
+                    f"❌ MANDATORY STOP LOSS MISSING: {trade_action.action} action "
+                    f"requires stop_loss_pct > 0, got {trade_action.stop_loss_pct}"
+                )
+                return False
+
+            # Ensure stop loss is reasonable (between 0.1% and 10%)
+            if trade_action.stop_loss_pct < 0.1 or trade_action.stop_loss_pct > 10.0:
+                logger.error(
+                    f"❌ INVALID STOP LOSS: {trade_action.stop_loss_pct}% is outside "
+                    f"acceptable range (0.1% - 10.0%)"
+                )
+                return False
+
+            logger.info(f"✅ Stop loss validation passed: {trade_action.stop_loss_pct}%")
+            return True
+
+        return True
+
     def _get_hold_action(self, reason: str) -> TradeAction:
         """
         Get a safe HOLD action with reason.
@@ -497,7 +541,7 @@ class RiskManager:
             max_daily_loss_reached=self._is_daily_loss_limit_reached(),
         )
 
-    def get_daily_summary(self, target_date: date = None) -> dict[str, Any]:
+    def get_daily_summary(self, target_date: date | None = None) -> dict[str, Any]:
         """
         Get daily trading summary.
 

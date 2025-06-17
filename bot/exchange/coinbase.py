@@ -276,7 +276,7 @@ class CoinbaseClient(BaseExchange):
 
         # Futures contract management
         self._futures_contract_manager = None
-        
+
         # Volume tracking for fee tiers
         self._monthly_volume = Decimal("0")
         self._last_volume_check = None
@@ -336,17 +336,17 @@ class CoinbaseClient(BaseExchange):
                 self._client = None
                 self._connected = True  # Set to True for paper trading
                 self._last_health_check = datetime.utcnow()
-                
+
                 # Initialize mock portfolios for paper trading
                 self._portfolios = {}
                 self._default_portfolio_id = "paper-trading-portfolio"
                 if self.enable_futures:
                     self._futures_portfolio_id = "paper-trading-futures-portfolio"
-                
+
                 # Initialize futures contract manager if futures are enabled
                 if self.enable_futures:
                     self._futures_contract_manager = FuturesContractManager(self)
-                
+
                 logger.info("Paper trading mode initialized successfully")
                 return True
 
@@ -567,7 +567,7 @@ class CoinbaseClient(BaseExchange):
                         {
                             "product_id": "BT-27JUN25-CDE",
                             "base_currency": "BTC",
-                            "quote_currency": "USD", 
+                            "quote_currency": "USD",
                             "trading_disabled": False,
                             "display_name": "BTC Futures - Jun 2025",
                         }
@@ -909,9 +909,26 @@ class CoinbaseClient(BaseExchange):
             )
 
             if order:
-                # Place stop loss and take profit orders
-                await self._place_stop_loss(order, trade_action, current_price)
-                await self._place_take_profit(order, trade_action, current_price)
+                # Place stop loss and take profit orders - CRITICAL for risk management
+                logger.info(f"Placing protective orders: SL={trade_action.stop_loss_pct}%, TP={trade_action.take_profit_pct}%")
+
+                try:
+                    stop_loss_order = await self._place_stop_loss(order, trade_action, current_price)
+                    if stop_loss_order:
+                        logger.info(f"✅ Stop loss order placed successfully: {stop_loss_order.id}")
+                    else:
+                        logger.error(f"❌ CRITICAL: Stop loss order failed for position {order.id}")
+                        # Consider canceling the main order if stop loss fails
+
+                    take_profit_order = await self._place_take_profit(order, trade_action, current_price)
+                    if take_profit_order:
+                        logger.info(f"✅ Take profit order placed successfully: {take_profit_order.id}")
+                    else:
+                        logger.warning(f"⚠️ Take profit order failed for position {order.id}")
+
+                except Exception as e:
+                    logger.error(f"❌ CRITICAL ERROR placing protective orders: {e}")
+                    # Continue with trade but log the critical failure
 
             return order
 
@@ -956,9 +973,26 @@ class CoinbaseClient(BaseExchange):
         )
 
         if order:
-            # Place stop loss and take profit orders
-            await self._place_stop_loss(order, trade_action, current_price)
-            await self._place_take_profit(order, trade_action, current_price)
+            # Place stop loss and take profit orders - CRITICAL for risk management
+            logger.info(f"Placing protective orders: SL={trade_action.stop_loss_pct}%, TP={trade_action.take_profit_pct}%")
+
+            try:
+                stop_loss_order = await self._place_stop_loss(order, trade_action, current_price)
+                if stop_loss_order:
+                    logger.info(f"✅ Stop loss order placed successfully: {stop_loss_order.id}")
+                else:
+                    logger.error(f"❌ CRITICAL: Stop loss order failed for position {order.id}")
+                    # Consider canceling the main order if stop loss fails
+
+                take_profit_order = await self._place_take_profit(order, trade_action, current_price)
+                if take_profit_order:
+                    logger.info(f"✅ Take profit order placed successfully: {take_profit_order.id}")
+                else:
+                    logger.warning(f"⚠️ Take profit order failed for position {order.id}")
+
+            except Exception as e:
+                logger.error(f"❌ CRITICAL ERROR placing protective orders: {e}")
+                # Continue with trade but log the critical failure
 
         return order
 
@@ -2331,17 +2365,17 @@ class CoinbaseClient(BaseExchange):
     ) -> Order | None:
         """Legacy method for backward compatibility."""
         return await self.place_limit_order(symbol, side, quantity, price)
-    
+
     @property
     def supports_futures(self) -> bool:
         """Check if exchange supports futures trading."""
         return self.enable_futures
-    
+
     @property
     def is_decentralized(self) -> bool:
         """Coinbase is a centralized exchange."""
         return False
-    
+
     async def get_monthly_volume(self, force_refresh: bool = False) -> Decimal:
         """
         Get 30-day trading volume for fee tier calculation.
@@ -2355,26 +2389,26 @@ class CoinbaseClient(BaseExchange):
         if self.dry_run:
             # Return mock volume for paper trading
             return Decimal("0")  # Basic tier
-        
+
         # Check if we need to refresh volume
         now = datetime.utcnow()
         if (
-            not force_refresh 
-            and self._last_volume_check 
+            not force_refresh
+            and self._last_volume_check
             and now - self._last_volume_check < self._volume_check_interval
         ):
             return self._monthly_volume
-        
+
         try:
             # Calculate date range for 30 days
             end_date = now
             start_date = end_date - timedelta(days=30)
-            
+
             # Get fills/trades for the period
             # Note: This is a simplified implementation. The actual Coinbase API
             # may require pagination for large trade histories
             volume = Decimal("0")
-            
+
             try:
                 # Try to get fills from the API
                 fills_response = await self._retry_request(
@@ -2382,7 +2416,7 @@ class CoinbaseClient(BaseExchange):
                     start_sequence_timestamp=start_date.isoformat(),
                     end_sequence_timestamp=end_date.isoformat()
                 )
-                
+
                 if isinstance(fills_response, dict) and "fills" in fills_response:
                     for fill in fills_response["fills"]:
                         # Calculate volume from each fill
@@ -2390,19 +2424,19 @@ class CoinbaseClient(BaseExchange):
                             size = Decimal(str(fill.get("size", "0")))
                             price = Decimal(str(fill.get("price", "0")))
                             volume += size * price
-                
+
             except Exception as e:
                 logger.warning(f"Failed to get fills for volume calculation: {e}")
                 # Fallback to basic tier
                 volume = Decimal("0")
-            
+
             self._monthly_volume = volume
             self._last_volume_check = now
-            
+
             # Update fee calculator with current volume
             from ..fee_calculator import fee_calculator
             fee_calculator.update_volume_tier(float(volume))
-            
+
             # Determine fee tier
             tier = "Basic"
             if volume >= 250000000:
@@ -2419,14 +2453,14 @@ class CoinbaseClient(BaseExchange):
                 tier = "Standard"
             elif volume >= 10000:
                 tier = "Active"
-            
+
             logger.info(f"Updated monthly trading volume: ${volume:,.2f} (Tier: {tier})")
             return volume
-            
+
         except Exception as e:
             logger.error(f"Failed to get monthly volume: {e}")
             return self._monthly_volume
-    
+
     def get_current_fee_rates(self) -> dict[str, float]:
         """
         Get current fee rates based on volume tier.
@@ -2435,7 +2469,7 @@ class CoinbaseClient(BaseExchange):
             Dictionary with maker and taker fee rates
         """
         from ..fee_calculator import fee_calculator
-        
+
         return {
             "maker": fee_calculator.maker_fee_rate,
             "taker": fee_calculator.taker_fee_rate,
