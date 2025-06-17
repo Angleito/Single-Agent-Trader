@@ -16,7 +16,7 @@ def test_type_annotations():
     # Simulate the class without initialization
     class MockTradingEngine:
         def __init__(self):
-            self.market_data: "MarketDataProvider | None" = None
+            self.market_data: MarketDataProvider | None = None
 
         def _ensure_market_data_available(self) -> bool:
             if self.market_data is None:

@@ -29,8 +29,14 @@ class FIFOPositionManager:
         self._lock = Lock()
         self._state_file = state_file
 
+        # Flag to avoid async operations during initialization
+        self._initializing = True
+
         if state_file and state_file.exists():
             self._load_state()
+
+        # Initialization complete
+        self._initializing = False
 
     def get_position(self, symbol: str) -> Position:
         """Get current position for a symbol in the legacy format."""
@@ -325,6 +331,11 @@ class FIFOPositionManager:
     def _save_state(self) -> None:
         """Save position state to file (non-blocking when called from async context)."""
         if not self._state_file:
+            return
+
+        # During initialization, always save synchronously to avoid event loop issues
+        if getattr(self, '_initializing', False):
+            self._save_state_sync()
             return
 
         try:

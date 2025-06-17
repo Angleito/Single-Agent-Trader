@@ -2,7 +2,7 @@
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -60,38 +60,24 @@ class CorrelationAnalysis(BaseModel):
     is_significant: bool = Field(
         description="Whether correlation is statistically significant (p < 0.05)"
     )
-    sample_size: int = Field(
-        ge=0, description="Number of data points used in analysis"
-    )
+    sample_size: int = Field(ge=0, description="Number of data points used in analysis")
     rolling_correlation_24h: float | None = Field(
-        default=None,
-        ge=-1.0,
-        le=1.0,
-        description="24-hour rolling correlation"
+        default=None, ge=-1.0, le=1.0, description="24-hour rolling correlation"
     )
     rolling_correlation_7d: float | None = Field(
-        default=None,
-        ge=-1.0,
-        le=1.0,
-        description="7-day rolling correlation"
+        default=None, ge=-1.0, le=1.0, description="7-day rolling correlation"
     )
     correlation_stability: float = Field(
-        ge=0.0,
-        le=1.0,
-        description="Stability of correlation over time"
+        ge=0.0, le=1.0, description="Stability of correlation over time"
     )
     regime_dependent_correlation: dict[str, float] = Field(
-        default_factory=dict,
-        description="Correlation by market regime"
+        default_factory=dict, description="Correlation by market regime"
     )
     reliability_score: float = Field(
-        ge=0.0,
-        le=1.0,
-        description="Overall reliability of correlation analysis"
+        ge=0.0, le=1.0, description="Overall reliability of correlation analysis"
     )
     timestamp: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
-        description="Analysis timestamp"
+        default_factory=lambda: datetime.now(UTC), description="Analysis timestamp"
     )
 
 
@@ -107,16 +93,13 @@ class MarketRegime(BaseModel):
         ge=0.0, le=1.0, description="Confidence in regime classification"
     )
     key_drivers: list[str] = Field(
-        default_factory=list,
-        description="Primary factors driving current regime"
+        default_factory=list, description="Primary factors driving current regime"
     )
     fed_policy_stance: str = Field(
-        default="NEUTRAL",
-        description="Federal Reserve policy stance"
+        default="NEUTRAL", description="Federal Reserve policy stance"
     )
     inflation_environment: str = Field(
-        default="STABLE",
-        description="Current inflation environment"
+        default="STABLE", description="Current inflation environment"
     )
     interest_rate_trend: str = Field(
         default="STABLE", description="Interest rate trend direction"
@@ -140,18 +123,13 @@ class MarketRegime(BaseModel):
         default="NORMAL", description="Market liquidity conditions"
     )
     duration_days: int | None = Field(
-        default=None,
-        ge=0,
-        description="Days in current regime"
+        default=None, ge=0, description="Days in current regime"
     )
     regime_change_probability: float = Field(
-        ge=0.0,
-        le=1.0,
-        description="Probability of regime change in next 30 days"
+        ge=0.0, le=1.0, description="Probability of regime change in next 30 days"
     )
     timestamp: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
-        description="Analysis timestamp"
+        default_factory=lambda: datetime.now(UTC), description="Analysis timestamp"
     )
 
 
@@ -165,49 +143,33 @@ class RiskSentiment(BaseModel):
         le=100.0,
         description="Fear & Greed index (0=extreme fear, 100=extreme greed)",
     )
-    sentiment_level: SentimentLevel = Field(
-        description="Categorical sentiment level"
-    )
+    sentiment_level: SentimentLevel = Field(description="Categorical sentiment level")
     volatility_expectation: float = Field(
         ge=0.0, description="Expected volatility percentage"
     )
     market_stress_indicator: float = Field(
-        ge=0.0,
-        le=1.0,
-        description="Market stress level (0=calm, 1=extreme stress)"
+        ge=0.0, le=1.0, description="Market stress level (0=calm, 1=extreme stress)"
     )
     vix_level: float | None = Field(
         default=None, ge=0.0, description="VIX volatility index level"
     )
     crypto_fear_greed: float | None = Field(
-        default=None,
-        ge=0.0,
-        le=100.0,
-        description="Crypto-specific fear & greed index"
+        default=None, ge=0.0, le=100.0, description="Crypto-specific fear & greed index"
     )
     social_sentiment_score: float | None = Field(
-        default=None,
-        ge=-1.0,
-        le=1.0,
-        description="Social media sentiment score"
+        default=None, ge=-1.0, le=1.0, description="Social media sentiment score"
     )
     news_sentiment_score: float | None = Field(
-        default=None,
-        ge=-1.0,
-        le=1.0,
-        description="News sentiment score"
+        default=None, ge=-1.0, le=1.0, description="News sentiment score"
     )
     funding_rates_sentiment: float | None = Field(
-        default=None,
-        description="Funding rates sentiment indicator"
+        default=None, description="Funding rates sentiment indicator"
     )
     options_flow_sentiment: str | None = Field(
-        default=None,
-        description="Options flow sentiment (BULLISH/BEARISH/NEUTRAL)"
+        default=None, description="Options flow sentiment (BULLISH/BEARISH/NEUTRAL)"
     )
     insider_activity: str | None = Field(
-        default=None,
-        description="Insider/institutional activity sentiment"
+        default=None, description="Insider/institutional activity sentiment"
     )
     retail_sentiment: str | None = Field(
         default=None, description="Retail investor sentiment"
@@ -216,8 +178,7 @@ class RiskSentiment(BaseModel):
         default=False, description="Whether sentiment diverges from price action"
     )
     timestamp: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
-        description="Analysis timestamp"
+        default_factory=lambda: datetime.now(UTC), description="Analysis timestamp"
     )
 
 
@@ -263,8 +224,7 @@ class MomentumAlignment(BaseModel):
         default="NEUTRAL", description="Cross-asset momentum flow direction"
     )
     timestamp: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
-        description="Analysis timestamp"
+        default_factory=lambda: datetime.now(UTC), description="Analysis timestamp"
     )
 
 
@@ -285,20 +245,10 @@ class MarketContextAnalyzer:
                 "rate hike",
                 "tightening",
                 "inflation fight",
-                "aggressive policy"
+                "aggressive policy",
             ],
-            "dovish": [
-                "rate cut",
-                "easing",
-                "accommodative",
-                "stimulus"
-            ],
-            "neutral": [
-                "data dependent",
-                "wait and see",
-                "monitoring",
-                "balanced"
-            ],
+            "dovish": ["rate cut", "easing", "accommodative", "stimulus"],
+            "neutral": ["data dependent", "wait and see", "monitoring", "balanced"],
         }
 
         self._inflation_keywords = {
@@ -306,19 +256,10 @@ class MarketContextAnalyzer:
                 "inflation surge",
                 "price pressures",
                 "cpi spike",
-                "inflation concern"
+                "inflation concern",
             ],
-            "low": [
-                "disinflation",
-                "price stability",
-                "low inflation",
-                "deflationary"
-            ],
-            "stable": [
-                "inflation target",
-                "price stability",
-                "contained inflation"
-            ],
+            "low": ["disinflation", "price stability", "low inflation", "deflationary"],
+            "stable": ["inflation target", "price stability", "contained inflation"],
         }
 
         self._geopolitical_keywords = {
@@ -327,47 +268,22 @@ class MarketContextAnalyzer:
                 "conflict",
                 "sanctions",
                 "trade war",
-                "geopolitical tension"
+                "geopolitical tension",
             ],
-            "medium": [
-                "uncertainty",
-                "diplomatic",
-                "negotiation",
-                "tension"
-            ],
-            "low": [
-                "peace",
-                "stability",
-                "cooperation",
-                "resolution"
-            ],
+            "medium": ["uncertainty", "diplomatic", "negotiation", "tension"],
+            "low": ["peace", "stability", "cooperation", "resolution"],
         }
 
         self._crypto_adoption_keywords = {
-            "high": [
-                "institutional adoption",
-                "mainstream acceptance",
-                "etf approval"
-            ],
-            "medium": [
-                "growing adoption",
-                "increased interest",
-                "pilot programs"
-            ],
-            "low": [
-                "skepticism",
-                "barriers",
-                "resistance",
-                "regulatory concerns"
-            ],
+            "high": ["institutional adoption", "mainstream acceptance", "etf approval"],
+            "medium": ["growing adoption", "increased interest", "pilot programs"],
+            "low": ["skepticism", "barriers", "resistance", "regulatory concerns"],
         }
 
         logger.info("Market context analyzer initialized")
 
     async def analyze_crypto_nasdaq_correlation(
-        self,
-        crypto_data: dict[str, Any],
-        nasdaq_data: dict[str, Any]
+        self, crypto_data: dict[str, Any], nasdaq_data: dict[str, Any]
     ) -> CorrelationAnalysis:
         """
         Analyze correlation between crypto and NASDAQ data.
@@ -865,8 +781,8 @@ class MarketContextAnalyzer:
             # Calculate correlation for different windows
             correlations = []
             for i in range(30, len(series1), 10):
-                window_series1 = series1[i - 30:i]
-                window_series2 = series2[i - 30:i]
+                window_series1 = series1[i - 30 : i]
+                window_series2 = series2[i - 30 : i]
 
                 if len(window_series1) >= 30:
                     corr, _ = pearsonr(window_series1, window_series2)
@@ -1826,7 +1742,8 @@ class MarketContextAnalyzer:
                 nasdaq_volume_trend,
             ]:
                 divergences.append(
-                    f"Volume divergence: Crypto {crypto_volume_trend}, NASDAQ {nasdaq_volume_trend}"
+                    f"Volume divergence: Crypto {crypto_volume_trend}, "
+                    f"NASDAQ {nasdaq_volume_trend}"
                 )
 
             return divergences

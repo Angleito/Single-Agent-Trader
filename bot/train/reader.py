@@ -68,7 +68,10 @@ class RAGReader:
             # Create default strategies file
             default_strategies = {
                 "trend_following": {
-                    "description": "Follow the primary trend direction using EMAs and momentum indicators",
+                    "description": (
+                        "Follow the primary trend direction using EMAs and "
+                        "momentum indicators"
+                    ),
                     "entry_criteria": [
                         "EMA fast > EMA slow for uptrend",
                         "RSI between 40-60 for momentum",
@@ -82,7 +85,10 @@ class RAGReader:
                     "risk_management": "Use 1.5% stop loss, 2-3% take profit",
                 },
                 "mean_reversion": {
-                    "description": "Trade against extreme price movements expecting return to mean",
+                    "description": (
+                        "Trade against extreme price movements expecting "
+                        "return to mean"
+                    ),
                     "entry_criteria": [
                         "RSI < 30 for oversold bounce",
                         "RSI > 70 for overbought pullback",
@@ -93,7 +99,9 @@ class RAGReader:
                         "Price reaches opposite Bollinger Band",
                         "Time-based exit (4-8 hours)",
                     ],
-                    "risk_management": "Use tight stops (0.5-1%), quick profits (1-2%)",
+                    "risk_management": (
+                        "Use tight stops (0.5-1%), quick profits (1-2%)"
+                    ),
                 },
             }
 
@@ -142,7 +150,9 @@ class RAGReader:
                 ],
             },
             "support_resistance": {
-                "identification": "Previous swing highs/lows, round numbers, VWAP levels",
+                "identification": (
+                    "Previous swing highs/lows, round numbers, VWAP levels"
+                ),
                 "trading_rules": "Buy near support, sell near resistance",
                 "breakout_confirmation": "Volume increase + follow-through",
             },
@@ -193,8 +203,10 @@ class RAGReader:
                 "cipher_a": {
                     "purpose": "Trend identification and momentum",
                     "signals": {
-                        "bullish": "Trend dot above zero, RSI recovery from oversold",
-                        "bearish": "Trend dot below zero, RSI decline from overbought",
+                        "bullish": ("Trend dot above zero, RSI recovery from oversold"),
+                        "bearish": (
+                            "Trend dot below zero, RSI decline from overbought"
+                        ),
                     },
                     "best_timeframes": ["5m", "15m", "1h"],
                 },
@@ -213,7 +225,11 @@ class RAGReader:
                     "overbought": 70,
                     "trend_zones": "40-60 in trending markets",
                 },
-                "ema": {"fast": 9, "slow": 21, "trend": "Fast above slow = uptrend"},
+                "ema": {
+                    "fast": 9,
+                    "slow": 21,
+                    "trend": "Fast above slow = uptrend",
+                },
                 "vwap": {
                     "purpose": "Average price weighted by volume",
                     "usage": "Support/resistance, institutional levels",
@@ -248,7 +264,7 @@ class RAGReader:
 
         # Simple text-based search (could be enhanced with embeddings)
         query_lower = query.lower()
-        scored_docs = []
+        scored_docs: list[tuple[int, dict[str, Any]]] = []
 
         for doc in self.documents:
             score = 0
@@ -284,7 +300,7 @@ class RAGReader:
         Returns:
             Formatted context string for LLM
         """
-        context_parts = []
+        context_parts: list[str] = []
 
         # Determine market condition
         trend_direction = self._analyze_trend(market_conditions)
@@ -314,19 +330,18 @@ class RAGReader:
         if risk_docs:
             context_parts.append("\\nRisk Management:")
             risk_content = risk_docs[0]["content"]
-            context_parts.append(
-                f"- Max risk per trade: {risk_content.get('position_sizing', {}).get('max_risk_per_trade', '2%')}"
+            max_risk = risk_content.get("position_sizing", {}).get(
+                "max_risk_per_trade", "2%"
             )
+            context_parts.append(f"- Max risk per trade: {max_risk}")
 
         if indicator_docs:
             context_parts.append("\\nIndicator Interpretation:")
             cipher_content = indicator_docs[0]["content"].get("cipher_indicators", {})
-            context_parts.append(
-                f"- Cipher A: {cipher_content.get('cipher_a', {}).get('purpose', '')}"
-            )
-            context_parts.append(
-                f"- Cipher B: {cipher_content.get('cipher_b', {}).get('purpose', '')}"
-            )
+            cipher_a_purpose = cipher_content.get("cipher_a", {}).get("purpose", "")
+            context_parts.append(f"- Cipher A: {cipher_a_purpose}")
+            cipher_b_purpose = cipher_content.get("cipher_b", {}).get("purpose", "")
+            context_parts.append(f"- Cipher B: {cipher_b_purpose}")
 
         return "\\n".join(context_parts)
 
@@ -353,7 +368,11 @@ class RAGReader:
         return "sideways"
 
     def add_knowledge_document(
-        self, doc_type: str, title: str, content: dict[str, Any], tags: list[str] = None
+        self,
+        doc_type: str,
+        title: str,
+        content: dict[str, Any],
+        tags: list[str] | None = None,
     ) -> None:
         """
         Add a new knowledge document to the knowledge base.

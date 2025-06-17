@@ -89,9 +89,9 @@ services:
     environment:
       - NODE_ENV=production
       - DOCKER_ENV=true
-      # Use localhost URLs for browser-based frontend communication
+      # Use localhost URLs for browser-based frontend communication (direct backend access)
       - VITE_API_URL=http://localhost:8000
-      - VITE_WS_URL=ws://localhost:8000
+      - VITE_WS_URL=ws://localhost:8000/ws
     restart: unless-stopped
     networks:
       - dashboard-network
@@ -136,7 +136,7 @@ services:
       - NODE_ENV=production
       # Use relative URLs for API calls - nginx proxy will handle routing
       - VITE_API_URL=/api
-      - VITE_WS_URL=/api
+      - VITE_WS_URL=/api/ws
     restart: unless-stopped
     networks:
       - dashboard-network
@@ -227,7 +227,7 @@ networks:
     ipam:
       config:
         - subnet: 172.20.0.0/16
-  
+
   # Trading network for compatibility with main compose
   # Creates the network if it doesn't exist, uses existing if it does
   trading-network:

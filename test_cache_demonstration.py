@@ -20,12 +20,11 @@ async def demonstrate_cache_performance():
     logger.info("🧠 Demonstrating LLM Cache Performance...")
 
     try:
-        from bot.strategy.llm_cache import LLMResponseCache, MarketStateHasher
+        from bot.strategy.llm_cache import LLMResponseCache
         from bot.types import TradeAction
 
         # Initialize cache
         cache = LLMResponseCache(ttl_seconds=60, max_entries=100)
-        hasher = MarketStateHasher()
 
         # Mock LLM computation function
         async def mock_expensive_llm_call(*args, **kwargs):
@@ -73,7 +72,7 @@ async def demonstrate_cache_performance():
 
         for i, scenario in enumerate(market_scenarios[:10]):
             start_time = time.time()
-            response = await cache.get_or_compute(scenario, mock_expensive_llm_call)
+            await cache.get_or_compute(scenario, mock_expensive_llm_call)
             response_time = (time.time() - start_time) * 1000
             fresh_times.append(response_time)
 
@@ -85,7 +84,7 @@ async def demonstrate_cache_performance():
 
         for i, scenario in enumerate(market_scenarios[:10]):  # Same scenarios
             start_time = time.time()
-            response = await cache.get_or_compute(scenario, mock_expensive_llm_call)
+            await cache.get_or_compute(scenario, mock_expensive_llm_call)
             response_time = (time.time() - start_time) * 1000
             cached_times.append(response_time)
 
@@ -120,9 +119,7 @@ async def demonstrate_cache_performance():
             )()
 
             start_time = time.time()
-            response = await cache.get_or_compute(
-                similar_state, mock_expensive_llm_call
-            )
+            await cache.get_or_compute(similar_state, mock_expensive_llm_call)
             response_time = (time.time() - start_time) * 1000
             similar_times.append(response_time)
 

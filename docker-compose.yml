@@ -404,7 +404,7 @@ services:
 
     # SECURITY HARDENING - Container Security (Temporarily relaxed for debugging)
     # user: "1000:1000"  # Run as non-root user - temporarily disabled
-    # read_only: true     # Read-only root filesystem - temporarily disabled  
+    # read_only: true     # Read-only root filesystem - temporarily disabled
     security_opt:
       - no-new-privileges:true  # Prevent privilege escalation
     # cap_drop:
@@ -413,7 +413,7 @@ services:
     #   - /tmp:noexec,nosuid,size=50m  # Secure temporary filesystem
     environment:
       - NODE_ENV=production
-      # Use localhost URLs for browser-based frontend communication
+      # Use localhost URLs for browser-based frontend communication (direct backend access)
       # Frontend runs in browser and needs to access containerized backend via host
       - VITE_API_URL=http://localhost:8000
       - VITE_WS_URL=ws://localhost:8000/ws

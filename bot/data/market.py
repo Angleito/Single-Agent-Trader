@@ -1562,7 +1562,12 @@ class MarketDataProvider:
         """Safely execute sync callback in thread pool."""
         try:
             # Run sync callback in thread pool to avoid blocking event loop
-            loop = asyncio.get_event_loop()
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                # If no event loop is running, call synchronously
+                callback(data)
+                return
             await loop.run_in_executor(None, callback, data)
         except Exception as e:
             logger.error(f"Error in sync subscriber callback {callback.__name__}: {e}")

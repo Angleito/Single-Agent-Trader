@@ -155,7 +155,7 @@ All services include health checks:
    ```bash
    # Check if trading-network exists
    docker network inspect trading-network
-   
+
    # If not, start main compose first
    cd .. && docker-compose up -d
    cd dashboard && docker-compose up
@@ -167,7 +167,7 @@ All services include health checks:
    ```bash
    # Check what's using the port
    lsof -i :8000
-   
+
    # Stop conflicting services or use different ports in compose
    ```
 
@@ -176,7 +176,7 @@ All services include health checks:
    # Stop all dashboard containers
    docker-compose down
    cd .. && docker-compose down
-   
+
    # Start only one instance
    ```
 

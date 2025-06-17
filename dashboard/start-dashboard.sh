@@ -29,13 +29,13 @@ check_trading_system() {
 check_port_conflicts() {
     local ports=("3000" "8000" "8080")
     local conflicts=()
-    
+
     for port in "${ports[@]}"; do
         if lsof -i :$port >/dev/null 2>&1; then
             conflicts+=($port)
         fi
     done
-    
+
     if [ ${#conflicts[@]} -gt 0 ]; then
         echo "⚠️  Port conflicts detected on: ${conflicts[*]}"
         echo "   Please stop services using these ports or choose a different mode"
@@ -100,21 +100,21 @@ start_production() {
 check_status() {
     echo "📊 System Status Check"
     echo "====================="
-    
+
     # Check Docker
     if ! command -v docker &> /dev/null; then
         echo "❌ Docker not installed"
         return 1
     fi
     echo "✅ Docker is available"
-    
+
     # Check Docker Compose
     if ! command -v docker-compose &> /dev/null; then
         echo "❌ Docker Compose not installed"
         return 1
     fi
     echo "✅ Docker Compose is available"
-    
+
     # Check networks
     echo ""
     echo "Docker Networks:"
@@ -123,18 +123,18 @@ check_status() {
     else
         echo "⚠️  dashboard-network not found"
     fi
-    
+
     if check_trading_system; then
         echo "✅ trading-network exists (main system running)"
     else
         echo "⚠️  trading-network not found (main system not running)"
     fi
-    
+
     # Check running containers
     echo ""
     echo "Running Dashboard Containers:"
     docker ps --filter "name=dashboard" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" || echo "No dashboard containers running"
-    
+
     # Check ports
     echo ""
     echo "Port Status:"
@@ -150,23 +150,23 @@ check_status() {
 # Function to stop all services
 stop_services() {
     echo "🛑 Stopping all dashboard services..."
-    
+
     # Stop main compose
     if [ -f "docker-compose.yml" ]; then
         docker-compose down
     fi
-    
+
     # Stop standalone compose
     if [ -f "docker-compose.standalone.yml" ]; then
         docker-compose -f docker-compose.yml -f docker-compose.standalone.yml down 2>/dev/null || true
     fi
-    
+
     # Stop production services
     docker-compose --profile production down 2>/dev/null || true
-    
+
     # Clean up any orphaned containers
     docker container prune -f
-    
+
     echo "✅ All dashboard services stopped"
 }
 
@@ -175,7 +175,7 @@ main() {
     while true; do
         show_menu
         read -p "Enter your choice (1-7): " choice
-        
+
         case $choice in
             1)
                 if check_port_conflicts; then

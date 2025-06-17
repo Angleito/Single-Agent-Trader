@@ -79,8 +79,14 @@ class PositionManager:
         self._position_consistency_errors: list[dict[str, Any]] = []
         self._max_position_value = Decimal("50000")  # Maximum position value in USD
 
+        # Flag to avoid async operations during initialization
+        self._initializing = True
+
         # Load persisted state
         self._load_state()
+
+        # Initialization complete
+        self._initializing = False
 
         logger.info(
             f"Initialized Enhanced PositionManager with {len(self._positions)} active positions\n"
@@ -672,6 +678,11 @@ class PositionManager:
 
     def _save_state(self) -> None:
         """Save current state to files (non-blocking when called from async context)."""
+        # During initialization, always save synchronously to avoid event loop issues
+        if getattr(self, '_initializing', False):
+            self._save_state_sync()
+            return
+            
         try:
             # Check if we're in an async context
             try:

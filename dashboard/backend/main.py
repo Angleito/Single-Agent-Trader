@@ -284,7 +284,12 @@ class ConnectionManager:
         # Default to log category
         return "log"
 
-    async def connect(self, websocket: WebSocket, replay_categories: list[str] = None, connection_info: dict = None):
+    async def connect(
+        self,
+        websocket: WebSocket,
+        replay_categories: list[str] = None,
+        connection_info: dict = None,
+    ):
         """
         Accept WebSocket connection and send buffered messages by category.
 
@@ -304,9 +309,21 @@ class ConnectionManager:
             "messages_received": 0,
             "last_activity": datetime.now().isoformat(),
             "connection_info": connection_info or {},
-            "client_ip": connection_info.get("client_ip", "unknown") if connection_info else "unknown",
-            "origin": connection_info.get("origin", "unknown") if connection_info else "unknown",
-            "user_agent": connection_info.get("user_agent", "unknown") if connection_info else "unknown",
+            "client_ip": (
+                connection_info.get("client_ip", "unknown")
+                if connection_info
+                else "unknown"
+            ),
+            "origin": (
+                connection_info.get("origin", "unknown")
+                if connection_info
+                else "unknown"
+            ),
+            "user_agent": (
+                connection_info.get("user_agent", "unknown")
+                if connection_info
+                else "unknown"
+            ),
             "is_healthy": True,
             "error_count": 0,
         }
@@ -926,7 +943,7 @@ async def add_json_headers(request, call_next):
     # Add CORS headers for WebSocket upgrades
     if request.headers.get("connection", "").lower() == "upgrade":
         origin = request.headers.get("origin")
-        
+
         # Enhanced WebSocket CORS handling
         allow_origin = None
         if origin:
@@ -934,23 +951,37 @@ async def add_json_headers(request, call_next):
             if origin in allowed_origins:
                 allow_origin = origin
             # Check for localhost variations (more permissive for development)
-            elif any(origin.startswith(prefix) for prefix in ["http://localhost:", "http://127.0.0.1:", "ws://localhost:", "ws://127.0.0.1:"]):
+            elif any(
+                origin.startswith(prefix)
+                for prefix in [
+                    "http://localhost:",
+                    "http://127.0.0.1:",
+                    "ws://localhost:",
+                    "ws://127.0.0.1:",
+                ]
+            ):
                 allow_origin = origin
             # Check for docker internal network origins
-            elif origin.startswith("http://dashboard-frontend") or origin.startswith("http://dashboard-backend"):
+            elif origin.startswith("http://dashboard-frontend") or origin.startswith(
+                "http://dashboard-backend"
+            ):
                 allow_origin = origin
-        
+
         # Set appropriate CORS headers
         if allow_origin:
             response.headers["Access-Control-Allow-Origin"] = allow_origin
-            response.headers["Access-Control-Allow-Credentials"] = str(allow_credentials).lower()
+            response.headers["Access-Control-Allow-Credentials"] = str(
+                allow_credentials
+            ).lower()
         else:
             # Fallback for development - be more permissive
             if os.getenv("ENVIRONMENT", "development") == "development":
                 response.headers["Access-Control-Allow-Origin"] = "*"
             else:
-                response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
-        
+                response.headers["Access-Control-Allow-Origin"] = (
+                    "http://localhost:3000"
+                )
+
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, UPGRADE"
         response.headers["Access-Control-Allow-Headers"] = (
             "Content-Type, Authorization, X-Requested-With, Upgrade, Connection, Sec-WebSocket-Key, Sec-WebSocket-Version, Sec-WebSocket-Protocol"
@@ -1008,31 +1039,51 @@ async def websocket_endpoint(websocket: WebSocket):
             logger.info(f"WebSocket origin '{origin}' is allowed by CORS policy")
             cors_validation_passed = True
         # More permissive localhost checking for development
-        elif any(origin.startswith(prefix) for prefix in ["http://localhost:", "http://127.0.0.1:", "ws://localhost:", "ws://127.0.0.1:"]):
-            logger.info(f"WebSocket origin '{origin}' allowed as localhost development connection")
+        elif any(
+            origin.startswith(prefix)
+            for prefix in [
+                "http://localhost:",
+                "http://127.0.0.1:",
+                "ws://localhost:",
+                "ws://127.0.0.1:",
+            ]
+        ):
+            logger.info(
+                f"WebSocket origin '{origin}' allowed as localhost development connection"
+            )
             cors_validation_passed = True
         # Docker internal network origins
-        elif origin.startswith("http://dashboard-frontend") or origin.startswith("http://dashboard-backend"):
-            logger.info(f"WebSocket origin '{origin}' allowed as container network connection")
+        elif origin.startswith("http://dashboard-frontend") or origin.startswith(
+            "http://dashboard-backend"
+        ):
+            logger.info(
+                f"WebSocket origin '{origin}' allowed as container network connection"
+            )
             cors_validation_passed = True
         else:
             logger.warning(
                 f"WebSocket origin '{origin}' is NOT in allowed origins list"
             )
-            logger.warning(f"Allowed origins: {', '.join(allowed_origins[:5])}... (showing first 5)")
-            
+            logger.warning(
+                f"Allowed origins: {', '.join(allowed_origins[:5])}... (showing first 5)"
+            )
+
             # In development, still allow connection but log warning
             if os.getenv("ENVIRONMENT", "development") == "development":
-                logger.warning("Allowing connection in development mode despite CORS mismatch")
+                logger.warning(
+                    "Allowing connection in development mode despite CORS mismatch"
+                )
                 cors_validation_passed = True
     else:
         logger.info(
             "WebSocket connection has no origin header (direct client connection or curl/test tool)"
         )
         cors_validation_passed = True  # Allow connections without origin header
-    
+
     # Log connection details for debugging
-    logger.info(f"WebSocket connection details: Host={host}, User-Agent={user_agent[:50] if user_agent else 'Unknown'}, CORS={'PASS' if cors_validation_passed else 'FAIL'}")
+    logger.info(
+        f"WebSocket connection details: Host={host}, User-Agent={user_agent[:50] if user_agent else 'Unknown'}, CORS={'PASS' if cors_validation_passed else 'FAIL'}"
+    )
 
     try:
         # Accept connection with detailed logging
@@ -1045,7 +1096,7 @@ async def websocket_endpoint(websocket: WebSocket):
             "cors_validated": cors_validation_passed,
             "connection_time": datetime.now().isoformat(),
         }
-        
+
         await manager.connect(websocket, connection_info=connection_info)
         logger.info(f"WebSocket connection established successfully from {origin}")
 
@@ -1058,7 +1109,13 @@ async def websocket_endpoint(websocket: WebSocket):
             "server_info": {
                 "version": "1.0.0",
                 "endpoints": ["/ws", "/api/ws"],
-                "features": ["real_time_logs", "llm_monitoring", "trading_data", "ai_decisions", "system_status"],
+                "features": [
+                    "real_time_logs",
+                    "llm_monitoring",
+                    "trading_data",
+                    "ai_decisions",
+                    "system_status",
+                ],
                 "active_connections": len(manager.active_connections),
                 "cors_status": "validated" if cors_validation_passed else "warning",
             },
@@ -1066,7 +1123,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 "ip": connection_info["client_ip"],
                 "origin": connection_info["origin"],
                 "connected_at": connection_info["connection_time"],
-            }
+            },
         }
         await websocket.send_text(json.dumps(welcome_message))
 
@@ -2690,14 +2747,16 @@ async def connectivity_test(request: Request):
     client_host = request.client.host if request.client else "unknown"
     origin = request.headers.get("origin", "no-origin")
     user_agent = request.headers.get("user-agent", "unknown")
-    
+
     # Check CORS status
     cors_status = "allowed" if origin in allowed_origins else "not-in-list"
-    if origin.startswith(("http://localhost:", "http://127.0.0.1:", "ws://localhost:", "ws://127.0.0.1:")):
+    if origin.startswith(
+        ("http://localhost:", "http://127.0.0.1:", "ws://localhost:", "ws://127.0.0.1:")
+    ):
         cors_status = "localhost-allowed"
     elif origin.startswith(("http://dashboard-frontend", "http://dashboard-backend")):
         cors_status = "container-network-allowed"
-    
+
     # Network information
     network_info = {
         "client_ip": client_host,
@@ -2707,7 +2766,7 @@ async def connectivity_test(request: Request):
         "x_forwarded_for": request.headers.get("x-forwarded-for"),
         "x_real_ip": request.headers.get("x-real-ip"),
     }
-    
+
     # CORS configuration
     cors_info = {
         "status": cors_status,
@@ -2715,14 +2774,14 @@ async def connectivity_test(request: Request):
         "credentials_allowed": allow_credentials,
         "sample_allowed_origins": allowed_origins[:10],  # Show first 10 for debugging
     }
-    
+
     # WebSocket status
     websocket_info = {
         "endpoint": "/ws",
         "active_connections": len(manager.active_connections),
         "suggested_url": f"ws://{request.headers.get('host', 'localhost:8000')}/ws",
     }
-    
+
     # Backend health
     backend_health = {
         "server_time": datetime.now().isoformat(),
@@ -2730,13 +2789,13 @@ async def connectivity_test(request: Request):
         "docker_env": bool(os.getenv("DOCKER_ENV")),
         "container": bool(os.getenv("CONTAINER")),
     }
-    
+
     return {
         "status": "ok",
         "message": "Backend connectivity test successful",
         "network": network_info,
         "cors": cors_info,
-        "websocket": websocket_info, 
+        "websocket": websocket_info,
         "backend": backend_health,
         "timestamp": datetime.now().isoformat(),
     }
@@ -2749,12 +2808,12 @@ async def websocket_connections():
     environment = os.getenv("ENVIRONMENT", "development")
     if environment == "production":
         raise HTTPException(status_code=404, detail="Not found")
-    
+
     connections_info = []
     for websocket, metadata in manager.connection_metadata.items():
         # Check if connection is still active
         is_active = websocket in manager.active_connections
-        
+
         connection_data = {
             "connection_id": str(id(websocket)),
             "is_active": is_active,
@@ -2764,13 +2823,17 @@ async def websocket_connections():
             "messages_received": metadata.get("messages_received", 0),
             "client_ip": metadata.get("client_ip", "unknown"),
             "origin": metadata.get("origin", "unknown"),
-            "user_agent": metadata.get("user_agent", "unknown")[:100] if metadata.get("user_agent") else "unknown",
+            "user_agent": (
+                metadata.get("user_agent", "unknown")[:100]
+                if metadata.get("user_agent")
+                else "unknown"
+            ),
             "is_healthy": metadata.get("is_healthy", True),
             "error_count": metadata.get("error_count", 0),
             "categories": metadata.get("categories", []),
         }
         connections_info.append(connection_data)
-    
+
     return {
         "active_connections": len(manager.active_connections),
         "total_connections_served": manager.stats["connections_served"],
@@ -2780,7 +2843,7 @@ async def websocket_connections():
             category: {
                 "current_size": len(buffer),
                 "max_size": manager.buffer_limits[category],
-                "utilization": f"{len(buffer) / manager.buffer_limits[category] * 100:.1f}%"
+                "utilization": f"{len(buffer) / manager.buffer_limits[category] * 100:.1f}%",
             }
             for category, buffer in manager.message_buffers.items()
         },

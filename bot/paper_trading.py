@@ -546,12 +546,12 @@ class PaperTradingAccount:
                 t.realized_pnl
                 for t in self.closed_trades
                 if t.exit_time and t.exit_time.date().isoformat() == today
-            )
+            ) or Decimal("0")
             today_fees = sum(
                 t.fees
                 for t in self.closed_trades
                 if t.exit_time and t.exit_time.date().isoformat() == today
-            )
+            ) or Decimal("0")
 
             # Win rate calculation
             today_closed_trades = [
