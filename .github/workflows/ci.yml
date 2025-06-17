@@ -45,52 +45,21 @@ jobs:
         virtualenvs-in-project: true
         installer-parallel: true
     
-    # Temporarily disable cache to debug Black installation issue
-    # - name: Cache dependencies
-    #   uses: actions/cache@v4
-    #   with:
-    #     path: .venv
-    #     key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
-    #     restore-keys: |
-    #       venv-${{ runner.os }}-
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+        restore-keys: |
+          venv-${{ runner.os }}-
     
     - name: Install dependencies
       run: |
-        # Clear any cached Poetry lock issues
-        poetry lock --check || poetry lock --no-update
-        poetry install --with dev --no-interaction --verbose
-        # Force reinstall dev tools if they're missing
-        if ! poetry run black --version 2>/dev/null; then
-          echo "Black not found, forcing reinstall of dev dependencies..."
-          poetry install --with dev --no-interaction --sync
-        fi
-    
-    - name: Debug Poetry environment
-      run: |
-        poetry --version
-        poetry env info
-        poetry show --only dev | grep -E "(black|ruff|mypy)"
-        echo "--- Virtual environment location ---"
-        poetry env info --path
-        VENV_PATH=$(poetry env info --path)
-        echo "Virtual env path: $VENV_PATH"
-        echo "--- Virtual environment contents ---"
-        ls -la "$VENV_PATH/bin/" | grep -E "(black|ruff|mypy)" || echo "No dev tools found in venv/bin/"
-        echo "--- Python path in Poetry ---"
-        poetry run python -c "import sys; print('\\n'.join(sys.path))"
-        echo "--- Direct pip list in venv ---"
-        "$VENV_PATH/bin/pip" list | grep -E "(black|ruff|mypy)" || echo "No dev tools in pip list"
+        poetry install --with dev --no-interaction
     
     - name: Verify Black installation
       run: |
-        if ! poetry run black --version 2>/dev/null; then
-          echo "Still can't find Black, trying direct pip install..."
-          VENV_PATH=$(poetry env info --path)
-          "$VENV_PATH/bin/pip" install black==24.10.0
-          poetry run black --version
-        else
-          poetry run black --version
-        fi
+        poetry run black --version
     
     - name: Run Black formatting check
       run: |
