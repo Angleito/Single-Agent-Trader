@@ -1,0 +1,115 @@
+# Development Docker Compose for Local Dashboard Testing with Bluefin
+# Usage: docker-compose -f docker-compose.dev.yml up
+
+services:
+  # Bluefin SDK Service (same as production but with debug logging)
+  bluefin-service:
+    build:
+      context: ./services
+      dockerfile: Dockerfile.bluefin
+    container_name: bluefin-service-dev
+    restart: unless-stopped
+    
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - BLUEFIN_PRIVATE_KEY=${EXCHANGE__BLUEFIN_PRIVATE_KEY:-}
+      - BLUEFIN_NETWORK=${EXCHANGE__BLUEFIN_NETWORK:-testnet}
+      - BLUEFIN_SERVICE_API_KEY=${BLUEFIN_SERVICE_API_KEY:-}
+      - BLUEFIN_SERVICE_RATE_LIMIT=${BLUEFIN_SERVICE_RATE_LIMIT:-100}
+      - HOST=0.0.0.0
+      - PORT=8080
+      - LOG_LEVEL=debug
+      - DEBUG=true
+    
+    ports:
+      - "8080:8080"  # Direct access for local development
+    
+    volumes:
+      - ./logs/bluefin:/app/logs
+      - ./services:/app:delegated  # Mount source code for development
+    
+    networks:
+      - trading-network
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Dashboard Backend (development mode)
+  dashboard-backend:
+    build: 
+      context: ./dashboard/backend
+      dockerfile: Dockerfile
+    container_name: dashboard-backend-dev
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./dashboard/backend:/app:delegated  # Mount source for live reloading
+      - ./logs:/app/trading-logs:ro
+      - ./data:/app/trading-data:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - LOG_LEVEL=debug
+      - ENVIRONMENT=development
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - DOCKER_ENV=true
+      # Enable CORS for local frontend development
+      - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080
+      - CORS_ALLOW_CREDENTIALS=true
+      # Bluefin service configuration
+      - BLUEFIN_SERVICE_URL=http://bluefin-service:8080
+      - BLUEFIN_SERVICE_API_KEY=${BLUEFIN_SERVICE_API_KEY:-}
+      # Exchange type for dashboard configuration
+      - EXCHANGE__EXCHANGE_TYPE=${EXCHANGE__EXCHANGE_TYPE:-bluefin}
+      # Development-specific settings
+      - DEBUG=true
+      - RELOAD=true
+    restart: unless-stopped
+    depends_on:
+      - bluefin-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - trading-network
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  # Dashboard Frontend (development mode with live reloading)
+  dashboard-frontend:
+    build:
+      context: ./dashboard/frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: dashboard-frontend-dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./dashboard/frontend:/app:delegated
+      - /app/node_modules  # Anonymous volume for node_modules
+    environment:
+      - NODE_ENV=development
+      - VITE_API_BASE_URL=http://localhost:8000
+      - VITE_API_URL=http://localhost:8000
+      - VITE_WS_URL=ws://localhost:8000
+      - CHOKIDAR_USEPOLLING=true  # For file watching in Docker
+      - FAST_REFRESH=true
+    restart: unless-stopped
+    networks:
+      - trading-network
+    depends_on:
+      - dashboard-backend
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
+
+networks:
+  trading-network:
+    name: trading-network-dev
+    driver: bridge

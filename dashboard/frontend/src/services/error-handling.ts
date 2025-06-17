@@ -165,7 +165,7 @@ export class ErrorHandlingManager {
   private recoveryStrategies = new Map<string, RecoveryStrategy>()
   private circuitBreakers = new Map<string, CircuitBreakerState>()
   private sessionId: string
-  private eventListeners = new Map<string, Set<Function>>()
+  private eventListeners = new Map<string, Set<(...args: any[]) => void>>()
   private isInitialized = false
 
   // Performance monitoring
@@ -200,7 +200,7 @@ export class ErrorHandlingManager {
   /**
    * Initialize the error handling system
    */
-  public async initialize(): Promise<void> {
+  public initialize(): void {
     if (this.isInitialized) return
 
     try {
@@ -427,7 +427,7 @@ export class ErrorHandlingManager {
       sessionId: this.sessionId,
       component: options.component || 'unknown',
       action: options.action || 'unknown',
-      environment: (process.env.NODE_ENV as any) || 'development',
+      environment: (process.env.NODE_ENV as any) ?? 'development',
       version: process.env.REACT_APP_VERSION || '1.0.0',
       userAgent: navigator.userAgent,
       url: window.location.href,
@@ -437,7 +437,7 @@ export class ErrorHandlingManager {
 
     const errorDetails: ErrorDetails = {
       id: this.generateId(),
-      type: options.type || this.inferErrorType(errorMessage, originalError),
+      type: options.type ?? this.inferErrorType(errorMessage, originalError),
       severity: options.severity || this.inferErrorSeverity(errorMessage, originalError),
       message: errorMessage,
       code: (originalError as any)?.code,
@@ -530,9 +530,9 @@ export class ErrorHandlingManager {
       this.recordCircuitBreakerFailure(error.type)
 
       if (result.shouldRetry && error.recoveryAttempts < strategy.maxAttempts) {
-        const retryDelay = result.delay || this.calculateDelay(strategy, error.recoveryAttempts + 1)
+        const retryDelay = result.delay ?? this.calculateDelay(strategy, error.recoveryAttempts + 1)
         setTimeout(() => {
-          this.executeRecoveryStrategy(error, strategy)
+          void this.executeRecoveryStrategy(error, strategy)
         }, retryDelay)
       }
 
@@ -568,7 +568,7 @@ export class ErrorHandlingManager {
     return true
   }
 
-  private async notifyUser(error: ErrorDetails): Promise<void> {
+  private notifyUser(error: ErrorDetails): void {
     try {
       const notification = this.createUserNotification(error)
 
@@ -816,7 +816,7 @@ export class ErrorHandlingManager {
       name: 'Page Refresh',
       description: 'Refresh the page to recover from critical errors',
       applicable: (error) => error.severity === 'critical' && error.type === 'runtime',
-      execute: async (error) => {
+      execute: async (_error) => {
         if (confirm('A critical error occurred. Would you like to refresh the page?')) {
           window.location.reload()
           return { success: true, message: 'Page refresh initiated', shouldRetry: false }
@@ -836,7 +836,7 @@ export class ErrorHandlingManager {
       name: 'Authentication Retry',
       description: 'Attempt to refresh authentication tokens',
       applicable: (error) => error.type === 'authentication',
-      execute: async (error) => {
+      execute: async (_error) => {
         try {
           // Attempt to refresh auth tokens
           const refreshResult = await this.attemptAuthRefresh()
@@ -860,7 +860,7 @@ export class ErrorHandlingManager {
     })
   }
 
-  private async attemptAuthRefresh(): Promise<boolean> {
+  private attemptAuthRefresh(): Promise<boolean> {
     // Implementation would depend on your auth system
     // This is a placeholder
     return false
@@ -869,8 +869,8 @@ export class ErrorHandlingManager {
   private setupGlobalHandlers(): void {
     // Global error handler
     window.addEventListener('error', (event) => {
-      this.handleError(
-        event.error || event.message,
+      void this.handleError(
+        event.error ?? event.message,
         {
           component: 'global',
           action: 'runtime-error',
@@ -889,7 +889,7 @@ export class ErrorHandlingManager {
 
     // Promise rejection handler
     window.addEventListener('unhandledrejection', (event) => {
-      this.handleError(
+      void this.handleError(
         event.reason,
         {
           component: 'global',
@@ -923,7 +923,7 @@ export class ErrorHandlingManager {
           if (entry.entryType === 'navigation') {
             const navigation = entry as PerformanceNavigationTiming
             if (navigation.loadEventEnd - navigation.loadEventStart > 10000) {
-              this.handleError(
+              void this.handleError(
                 'Slow page load detected',
                 {
                   component: 'performance',
@@ -956,11 +956,11 @@ export class ErrorHandlingManager {
   private setupHealthChecks(): void {
     // Regular health checks
     setInterval(() => {
-      this.performHealthCheck()
+      void this.performHealthCheck()
     }, 60000) // Every minute
   }
 
-  private async performHealthCheck(): Promise<void> {
+  private performHealthCheck(): void {
     const checks = {
       memory: this.checkMemoryUsage(),
       errors: this.checkErrorRate(),
@@ -969,7 +969,7 @@ export class ErrorHandlingManager {
 
     for (const [check, result] of Object.entries(checks)) {
       if (!result.healthy) {
-        this.handleError(
+        void this.handleError(
           `Health check failed: ${check}`,
           {
             component: 'health-monitor',
@@ -1062,7 +1062,7 @@ export class ErrorHandlingManager {
     return 'system'
   }
 
-  private inferErrorSeverity(message: string, error?: Error): ErrorSeverity {
+  private inferErrorSeverity(message: string, _error?: Error): ErrorSeverity {
     const lowerMessage = message.toLowerCase()
 
     if (lowerMessage.includes('critical') || lowerMessage.includes('fatal')) return 'critical'
@@ -1132,14 +1132,14 @@ export class ErrorHandlingManager {
   /**
    * Event handling
    */
-  public addEventListener(event: string, callback: Function): void {
+  public addEventListener(event: string, callback: (...args: any[]) => void): void {
     if (!this.eventListeners.has(event)) {
       this.eventListeners.set(event, new Set())
     }
     this.eventListeners.get(event)!.add(callback)
   }
 
-  public removeEventListener(event: string, callback: Function): void {
+  public removeEventListener(event: string, callback: (...args: any[]) => void): void {
     const listeners = this.eventListeners.get(event)
     if (listeners) {
       listeners.delete(callback)

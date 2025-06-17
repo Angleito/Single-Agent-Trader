@@ -234,7 +234,7 @@ export class VirtualLogViewer {
     )
   }
 
-  private renderLogItem(entry: any, index: number): HTMLElement {
+  private renderLogItem(entry: any, _index: number): HTMLElement {
     const element = document.createElement('div')
     element.className = `log-item log-${entry.level}`
 

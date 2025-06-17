@@ -4,17 +4,21 @@ FROM node:18-alpine
 # Set working directory
 WORKDIR /app
 
+# Install pnpm and wget
+RUN apk add --no-cache wget
+RUN npm install -g pnpm
+
 # Copy package files
 COPY package*.json ./
 COPY pnpm-lock.yaml ./
 
-# Install pnpm, wget and dependencies
-RUN apk add --no-cache wget
-RUN npm install -g pnpm
+# Install dependencies
 RUN pnpm install
 
-# Copy source code
-COPY . .
+# Copy only source files (not node_modules)
+COPY tsconfig.json ./
+COPY src ./src
+COPY http_wrapper.js ./
 
 # Build the TypeScript project
 RUN pnpm run build

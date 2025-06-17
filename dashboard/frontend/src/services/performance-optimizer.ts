@@ -143,7 +143,7 @@ export interface ResourceOptimization {
 
 export interface CacheEntry {
   key: string
-  data: any
+  data: unknown
   metadata: {
     size: number
     created: Date
@@ -245,9 +245,9 @@ export class PerformanceOptimizer {
   private budget: PerformanceBudget
   private observer: PerformanceObserver | null = null
   private mutationObserver: MutationObserver | null = null
-  private networkObserver: any = null
-  private memoryObserver: any = null
-  private eventListeners = new Map<string, Set<Function>>()
+  private networkObserver: unknown = null
+  private memoryObserver: unknown = null
+  private eventListeners = new Map<string, Set<(...args: unknown[]) => void>>()
   private isMonitoring = false
 
   // Resource management
@@ -316,7 +316,7 @@ export class PerformanceOptimizer {
   /**
    * Multi-level caching system
    */
-  public async get(key: string, level?: string): Promise<any> {
+  public get(key: string, level?: string): unknown {
     const startTime = performance.now()
 
     try {
@@ -334,10 +334,10 @@ export class PerformanceOptimizer {
           entry.metadata.hits++
 
           // Decompress if needed
-          const data = entry.metadata.compressed ? await this.decompress(entry.data) : entry.data
+          const data = entry.metadata.compressed ? this.decompress(entry.data) : entry.data
 
           // Decrypt if needed
-          const result = entry.metadata.encrypted ? await this.decrypt(data) : data
+          const result = entry.metadata.encrypted ? this.decrypt(data) : data
 
           this.updateCacheStats(levelId, 'hit', performance.now() - startTime)
           return result
@@ -352,9 +352,9 @@ export class PerformanceOptimizer {
     }
   }
 
-  public async set(
+  public set(
     key: string,
-    data: any,
+    data: unknown,
     options: {
       level?: string
       ttl?: number
@@ -362,9 +362,9 @@ export class PerformanceOptimizer {
       compress?: boolean
       encrypt?: boolean
     } = {}
-  ): Promise<void> {
+  ): void {
     try {
-      const level = options.level || this.getOptimalCacheLevel(data)
+      const level = options.level ?? this.getOptimalCacheLevel(data)
       const cache = this.caches.get(level)
       if (!cache) return
 
@@ -373,13 +373,13 @@ export class PerformanceOptimizer {
       let compressed = false
       let encrypted = false
 
-      if (options.compress || this.config.caching.compression) {
-        processedData = await this.compress(processedData)
+      if (options.compress ?? this.config.caching.compression) {
+        processedData = this.compress(processedData)
         compressed = true
       }
 
-      if (options.encrypt || this.config.caching.encryption) {
-        processedData = await this.encrypt(processedData)
+      if (options.encrypt ?? this.config.caching.encryption) {
+        processedData = this.encrypt(processedData)
         encrypted = true
       }
 
@@ -391,17 +391,17 @@ export class PerformanceOptimizer {
           size: this.calculateSize(processedData),
           created: new Date(),
           accessed: new Date(),
-          expires: new Date(Date.now() + (options.ttl || this.config.caching.ttl) * 1000),
+          expires: new Date(Date.now() + (options.ttl ?? this.config.caching.ttl) * 1000),
           hits: 0,
           compressed,
           encrypted,
           version: 1,
         },
-        priority: options.priority || 1,
+        priority: options.priority ?? 1,
       }
 
       // Check cache size limits
-      await this.ensureCacheSpace(level, entry.metadata.size)
+      this.ensureCacheSpace(level, entry.metadata.size)
 
       // Store entry
       cache.set(key, entry)
@@ -411,7 +411,7 @@ export class PerformanceOptimizer {
     }
   }
 
-  public async invalidate(key: string, level?: string): Promise<void> {
+  public invalidate(key: string, level?: string): void {
     const levels = level ? [level] : Array.from(this.caches.keys())
 
     for (const levelId of levels) {
@@ -423,7 +423,7 @@ export class PerformanceOptimizer {
     }
   }
 
-  public async clear(level?: string): Promise<void> {
+  public clear(level?: string): void {
     const levels = level ? [level] : Array.from(this.caches.keys())
 
     for (const levelId of levels) {
@@ -580,7 +580,11 @@ export class PerformanceOptimizer {
 
     // Monitor network changes
     if ('connection' in navigator) {
-      (navigator as any).connection.addEventListener('change', () => {
+      ;(
+        navigator as unknown as {
+          connection: { addEventListener: (event: string, callback: () => void) => void }
+        }
+      ).connection.addEventListener('change', () => {
         this.updateNetworkQuality()
         this.adaptToNetworkConditions()
       })
@@ -699,7 +703,7 @@ export class PerformanceOptimizer {
     }
   }
 
-  private async setupCompressionWorker(): Promise<void> {
+  private setupCompressionWorker(): void {
     const workerCode = `
       self.onmessage = function(e) {
         const { id, action, data } = e.data;
@@ -723,6 +727,7 @@ export class PerformanceOptimizer {
       const blob = new Blob([workerCode], { type: 'application/javascript' })
       this.compressionWorker = new Worker(URL.createObjectURL(blob))
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.warn('Compression worker setup failed:', error)
     }
   }
@@ -735,6 +740,7 @@ export class PerformanceOptimizer {
         ['encrypt', 'decrypt']
       )
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.warn('Encryption setup failed:', error)
     }
   }
@@ -773,12 +779,12 @@ export class PerformanceOptimizer {
       .map((level) => level.id)
   }
 
-  private getOptimalCacheLevel(data: any): string {
+  private getOptimalCacheLevel(data: unknown): string {
     const size = this.calculateSize(data)
-    return this.config.caching.levels.find((level) => level.maxSize >= size)?.id || 'memory'
+    return this.config.caching.levels.find((level) => level.maxSize >= size)?.id ?? 'memory'
   }
 
-  private calculateSize(data: any): number {
+  private calculateSize(data: unknown): number {
     return JSON.stringify(data).length
   }
 
@@ -786,7 +792,7 @@ export class PerformanceOptimizer {
     return entry.metadata.expires < new Date()
   }
 
-  private async ensureCacheSpace(levelId: string, requiredSize: number): Promise<void> {
+  private ensureCacheSpace(levelId: string, _requiredSize: number): void {
     const cache = this.caches.get(levelId)
     if (!cache) return
 
@@ -794,43 +800,43 @@ export class PerformanceOptimizer {
     // This is a simplified version
   }
 
-  private async compress(data: any): Promise<any> {
+  private compress(data: unknown): unknown {
     // Implementation would use compression worker
     return data
   }
 
-  private async decompress(data: any): Promise<any> {
+  private decompress(data: unknown): unknown {
     // Implementation would use compression worker
     return data
   }
 
-  private async encrypt(data: any): Promise<any> {
+  private encrypt(data: unknown): unknown {
     // Implementation would use Web Crypto API
     return data
   }
 
-  private async decrypt(data: any): Promise<any> {
+  private decrypt(data: unknown): unknown {
     // Implementation would use Web Crypto API
     return data
   }
 
   // Placeholder implementations for other methods...
-  private updateCacheStats(level: string, operation: string, responseTime?: number): void {}
-  private handlePerformanceEntries(entries: PerformanceEntry[]): void {}
-  private handleDOMMutations(mutations: MutationRecord[]): void {}
+  private updateCacheStats(_level: string, _operation: string, _responseTime?: number): void {}
+  private handlePerformanceEntries(_entries: PerformanceEntry[]): void {}
+  private handleDOMMutations(_mutations: MutationRecord[]): void {}
   private setupNetworkQualityMonitoring(): void {}
   private setupMemoryMonitoring(): void {}
   private setupInteractionMonitoring(): void {}
   private updateNetworkQuality(): void {}
-  private setupImageOptimization(img: HTMLImageElement): void {}
+  private setupImageOptimization(_img: HTMLImageElement): void {}
   private setupIntersectionObserver(): void {}
-  private analyzeBundleSize(): Promise<any> {
+  private analyzeBundleSize(): Promise<unknown> {
     return Promise.resolve({})
   }
-  private generateBundleOptimizations(analysis: any): any[] {
+  private generateBundleOptimizations(_analysis: unknown): unknown[] {
     return []
   }
-  private applyBundleOptimization(recommendation: any): Promise<void> {
+  private applyBundleOptimization(_recommendation: unknown): Promise<void> {
     return Promise.resolve()
   }
   private setupComponentLazyLoading(): void {}
@@ -839,8 +845,8 @@ export class PerformanceOptimizer {
   private setupPagePrefetching(): void {}
   private setupResourcePrefetching(): void {}
   private setupIntelligentPrefetching(): void {}
-  private inlineCriticalCSS(css: string): void {}
-  private inlineCriticalJS(js: string): void {}
+  private inlineCriticalCSS(_css: string): void {}
+  private inlineCriticalJS(_js: string): void {}
   private preloadCriticalResources(): void {}
   private cleanupExpiredEntries(): void {}
   private monitorMemoryPressure(): void {}
@@ -871,27 +877,28 @@ export class PerformanceOptimizer {
   /**
    * Event handling
    */
-  public addEventListener(event: string, callback: Function): void {
+  public addEventListener(event: string, callback: (...args: unknown[]) => void): void {
     if (!this.eventListeners.has(event)) {
       this.eventListeners.set(event, new Set())
     }
     this.eventListeners.get(event)!.add(callback)
   }
 
-  public removeEventListener(event: string, callback: Function): void {
+  public removeEventListener(event: string, callback: (...args: unknown[]) => void): void {
     const listeners = this.eventListeners.get(event)
     if (listeners) {
       listeners.delete(callback)
     }
   }
 
-  private emit(event: string, data?: any): void {
+  private emit(event: string, data?: unknown): void {
     const listeners = this.eventListeners.get(event)
     if (listeners) {
       listeners.forEach((callback) => {
         try {
           callback(data)
         } catch (error) {
+          // eslint-disable-next-line no-console
           console.error(`Error in performance event listener for ${event}:`, error)
         }
       })

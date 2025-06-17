@@ -87,8 +87,8 @@ export class MobileOptimizationManager {
   private config: MobileConfig
   private deviceInfo: DeviceInfo
   private layoutState: LayoutState
-  private eventListeners = new Map<string, Set<Function>>()
-  private gestureHandlers = new Map<string, Function>()
+  private eventListeners = new Map<string, Set<(...args: any[]) => void>>()
+  private gestureHandlers = new Map<string, (...args: any[]) => void>()
   private resizeObserver: ResizeObserver | null = null
   private intersectionObserver: IntersectionObserver | null = null
   private performanceMonitor: PerformanceObserver | null = null
@@ -135,13 +135,13 @@ export class MobileOptimizationManager {
     this.deviceInfo = this.detectDevice()
     this.layoutState = this.initializeLayoutState()
 
-    this.init()
+    void this.init()
   }
 
   /**
    * Initialize the mobile optimization manager
    */
-  private async init(): Promise<void> {
+  private init(): void {
     if (this.isInitialized) return
 
     try {
@@ -171,6 +171,7 @@ export class MobileOptimizationManager {
       this.isInitialized = true
       this.emit('initialized', { deviceInfo: this.deviceInfo, layoutState: this.layoutState })
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('[MobileOptimization] Initialization failed:', error)
       throw error
     }
@@ -247,7 +248,7 @@ export class MobileOptimizationManager {
 
     // Get battery info if available
     if ('getBattery' in navigator) {
-      (navigator as any).getBattery().then((battery: any) => {
+      void (navigator as any).getBattery().then((battery: any) => {
         deviceInfo.battery = {
           level: battery.level,
           charging: battery.charging,
@@ -307,7 +308,7 @@ export class MobileOptimizationManager {
 
     // Battery status change
     if ('getBattery' in navigator) {
-      (navigator as any).getBattery().then((battery: any) => {
+      void (navigator as any).getBattery().then((battery: any) => {
         battery.addEventListener('levelchange', () => {
           this.updateBatteryInfo()
         })
@@ -474,7 +475,6 @@ export class MobileOptimizationManager {
    */
   private applyMobileOptimizations(): void {
     const body = document.body
-    const html = document.documentElement
 
     // Add device-specific classes
     body.classList.add(`device-${this.deviceInfo.type}`)
@@ -633,7 +633,7 @@ export class MobileOptimizationManager {
     }
   }
 
-  private handleTouchCancel(event: TouchEvent): void {
+  private handleTouchCancel(_event: TouchEvent): void {
     // Reset touch state
     this.touchStartTime = 0
     this.touchCount = 0
@@ -715,8 +715,8 @@ export class MobileOptimizationManager {
 
   private isFullscreen(): boolean {
     return !!(
-      document.fullscreenElement ||
-      (document as any).webkitFullscreenElement ||
+      document.fullscreenElement ??
+      (document as any).webkitFullscreenElement ??
       (document as any).mozFullScreenElement
     )
   }
@@ -764,7 +764,7 @@ export class MobileOptimizationManager {
 
   private optimizeScrolling(): void {
     // Enable momentum scrolling on iOS
-    (document.body.style as any).webkitOverflowScrolling = 'touch'
+    ;(document.body.style as any).webkitOverflowScrolling = 'touch'
 
     // Optimize scroll performance
     document.addEventListener(
@@ -958,7 +958,7 @@ export class MobileOptimizationManager {
     return false
   }
 
-  private throttle(func: Function, delay: number): Function {
+  private throttle(func: (...args: any[]) => void, delay: number): (...args: any[]) => void {
     let timeoutId: number
     let lastExecTime = 0
 
@@ -994,6 +994,7 @@ export class MobileOptimizationManager {
         try {
           callback(data)
         } catch (error) {
+          // eslint-disable-next-line no-console
           console.error(`[MobileOptimization] Error in event listener for ${event}:`, error)
         }
       })
@@ -1066,7 +1067,7 @@ export class MobileOptimizationManager {
 
   private updateBatteryInfo(): void {
     if ('getBattery' in navigator) {
-      (navigator as any).getBattery().then((battery: any) => {
+      void (navigator as any).getBattery().then((battery: any) => {
         this.deviceInfo.battery = {
           level: battery.level,
           charging: battery.charging,
@@ -1115,29 +1116,29 @@ export class MobileOptimizationManager {
   /**
    * Pointer event handlers for advanced gesture recognition
    */
-  private handlePointerDown(event: PointerEvent): void {
+  private handlePointerDown(_event: PointerEvent): void {
     // Enhanced gesture recognition with pointer events
   }
 
-  private handlePointerMove(event: PointerEvent): void {
+  private handlePointerMove(_event: PointerEvent): void {
     // Track pointer movements for gestures
   }
 
-  private handlePointerUp(event: PointerEvent): void {
+  private handlePointerUp(_event: PointerEvent): void {
     // Complete gesture recognition
   }
 
   /**
    * Public API methods
    */
-  public addEventListener(event: string, callback: Function): void {
+  public addEventListener(event: string, callback: (...args: any[]) => void): void {
     if (!this.eventListeners.has(event)) {
       this.eventListeners.set(event, new Set())
     }
     this.eventListeners.get(event)!.add(callback)
   }
 
-  public removeEventListener(event: string, callback: Function): void {
+  public removeEventListener(event: string, callback: (...args: any[]) => void): void {
     const listeners = this.eventListeners.get(event)
     if (listeners) {
       listeners.delete(callback)
@@ -1147,7 +1148,7 @@ export class MobileOptimizationManager {
     }
   }
 
-  public registerGestureHandler(gestureType: string, handler: Function): void {
+  public registerGestureHandler(gestureType: string, handler: (...args: any[]) => void): void {
     this.gestureHandlers.set(gestureType, handler)
   }
 

@@ -429,7 +429,7 @@ export class DashboardUI {
         const changeEl = this.getCachedElement('[data-price-change]')
 
         if (priceEl && data.price != null) {
-          const oldPriceText = priceEl.textContent?.replace(/[$,]/g, '') || '0'
+          const oldPriceText = priceEl.textContent?.replace(/[$,]/g, '') ?? '0'
           const oldPrice = this.safeNumber(parseFloat(oldPriceText))
           const newPrice = this.safeNumber(data.price)
 
@@ -491,7 +491,7 @@ export class DashboardUI {
           this.log('error', `Failed to add AI decision to log: ${error}`, 'UI')
         }
 
-        const confidence = this.safeNumber(action.confidence || 0)
+        const confidence = this.safeNumber(action.confidence ?? 0)
         const logMsg = `Trade action: ${action.action} (${(confidence * 100).toFixed(1)}% confidence) - ${this.safeString(action.reasoning)}`
         this.log('info', logMsg)
       },
@@ -587,7 +587,7 @@ export class DashboardUI {
         const positionSizeEl = this.getCachedElement('[data-position-size]')
         if (positionSizeEl) {
           const totalSize = positions.reduce((sum, pos) => {
-            const size = this.safeNumber(pos.size || 0)
+            const size = this.safeNumber(pos.size ?? 0)
             return sum + Math.abs(size)
           }, 0)
           positionSizeEl.textContent = totalSize.toFixed(4)
@@ -599,13 +599,13 @@ export class DashboardUI {
 
         if (pnlEl && pnlChangeEl) {
           const totalPnl = positions.reduce((sum, pos) => {
-            return sum + this.safeNumber(pos.pnl || 0)
+            return sum + this.safeNumber(pos.pnl ?? 0)
           }, 0)
 
           const totalPnlPercent =
             positions.length > 0
               ? positions.reduce((sum, pos) => {
-                  return sum + this.safeNumber(pos.pnl_percent || 0)
+                  return sum + this.safeNumber(pos.pnl_percent ?? 0)
                 }, 0) / positions.length
               : 0
 
@@ -618,7 +618,7 @@ export class DashboardUI {
         // Update performance charts if visible with error handling
         if (this.performanceCharts && this.performanceChartsVisible) {
           try {
-            this.performanceCharts.updateData(positions, this.state.risk_metrics || undefined)
+            this.performanceCharts.updateData(positions, this.state.risk_metrics ?? undefined)
           } catch (error) {
             this.log('error', `Failed to update performance charts: ${error}`, 'UI')
           }
@@ -729,7 +729,7 @@ export class DashboardUI {
 
     if (positionValueEl && this.state.positions) {
       const totalPositionValue = this.state.positions.reduce(
-        (sum, pos) => sum + Math.abs((pos.size || 0) * (pos.current_price || 0)),
+        (sum, pos) => sum + Math.abs((pos.size ?? 0) * (pos.current_price ?? 0)),
         0
       )
       positionValueEl.textContent = this.formatCurrency(totalPositionValue)
@@ -1179,7 +1179,7 @@ export class DashboardUI {
   private addAnimation(element: HTMLElement, animationClass: string): void {
     // Use requestAnimationFrame for better performance
     requestAnimationFrame(() => {
-      const key = element.id || element.className
+      const key = element.id ?? element.className
       if (this.animationQueue.has(key)) return
 
       this.animationQueue.add(key)
@@ -1194,7 +1194,7 @@ export class DashboardUI {
 
   private shouldThrottleUpdate(key: string, throttleMs: number): boolean {
     const now = Date.now()
-    const lastUpdate = this.updateThrottles.get(key) || 0
+    const lastUpdate = this.updateThrottles.get(key) ?? 0
 
     if (now - lastUpdate < throttleMs) {
       return true
@@ -1313,7 +1313,7 @@ export class DashboardUI {
     setInterval(() => {
       this.updateSystemInfo({
         serverTime: new Date(),
-        memoryUsage: (performance as any).memory?.usedJSHeapSize / 1024 / 1024 || 0,
+        memoryUsage: (performance as any).memory?.usedJSHeapSize / 1024 / 1024 ?? 0,
       })
     }, 1000)
   }
@@ -1506,7 +1506,7 @@ export class DashboardUI {
    * Handle error within boundary
    */
   private handleBoundaryError(operation: string, error: any, fallbackData?: any): undefined {
-    const boundary = this.errorBoundaries.get(operation) || {
+    const boundary = this.errorBoundaries.get(operation) ?? {
       count: 0,
       lastError: new Date(),
       maxErrors: this.maxErrorsPerBoundary,
@@ -1559,7 +1559,7 @@ export class DashboardUI {
       updateRiskMetrics: 'Risk metrics are temporarily unavailable',
     }
 
-    const message = messages[operation] || `${operation} is experiencing issues`
+    const message = messages[operation] ?? `${operation} is experiencing issues`
     this.showNotification('warning', `${message}. Using cached data where possible.`)
   }
 

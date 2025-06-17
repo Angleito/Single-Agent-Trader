@@ -103,7 +103,7 @@ class LLMMonitorDashboard {
       throw new Error(`Container with ID '${containerId}' not found`)
     }
     this.container = container
-    this.websocket = websocketInstance || null
+    this.websocket = websocketInstance ?? null
     this.initialize()
   }
 
@@ -697,7 +697,7 @@ class LLMMonitorDashboard {
           ...message.data,
           event_type: 'trading_decision',
           rationale: message.data.reasoning,
-          timestamp: message.data.timestamp || new Date().toISOString(),
+          timestamp: message.data.timestamp ?? new Date().toISOString(),
         })
       }
     })
@@ -816,10 +816,10 @@ class LLMMonitorDashboard {
         content += `
           <div class="activity-details">
             <div class="activity-detail">
-              <strong>Model:</strong> ${eventData.model || 'N/A'}
+              <strong>Model:</strong> ${eventData.model ?? 'N/A'}
             </div>
             <div class="activity-detail">
-              <strong>Tokens:</strong> ${eventData.prompt_tokens || eventData.prompt_length || 'N/A'}
+              <strong>Tokens:</strong> ${eventData.prompt_tokens ?? eventData.prompt_length ?? 'N/A'}
             </div>
             ${
               eventData.temperature !== undefined
@@ -881,7 +881,7 @@ class LLMMonitorDashboard {
         content += `
           <div class="activity-details">
             <div class="activity-detail">
-              <strong>Action:</strong> <span class="action ${actionClass}">${eventData.action?.toUpperCase() || 'N/A'}</span>
+              <strong>Action:</strong> <span class="action ${actionClass}">${eventData.action?.toUpperCase() ?? 'N/A'}</span>
             </div>
             ${
               eventData.confidence !== undefined
@@ -893,20 +893,20 @@ class LLMMonitorDashboard {
                 : ''
             }
             ${
-              eventData.price || eventData.current_price
+              eventData.price ?? eventData.current_price
                 ? `
               <div class="activity-detail">
-                <strong>Price:</strong> $${(eventData.price || eventData.current_price).toFixed(2)}
+                <strong>Price:</strong> $${(eventData.price ?? eventData.current_price).toFixed(2)}
               </div>
             `
                 : ''
             }
           </div>
           ${
-            eventData.reasoning || eventData.rationale
+            eventData.reasoning ?? eventData.rationale
               ? `
             <div class="activity-reasoning">
-              <strong>Reasoning:</strong> ${eventData.reasoning || eventData.rationale}
+              <strong>Reasoning:</strong> ${eventData.reasoning ?? eventData.rationale}
             </div>
           `
               : ''
@@ -922,7 +922,7 @@ class LLMMonitorDashboard {
               <strong>Level:</strong> <span class="alert-level ${eventData.alert_level}">${eventData.alert_level?.toUpperCase()}</span>
             </div>
             <div class="activity-detail">
-              <strong>Category:</strong> ${eventData.alert_category || 'General'}
+              <strong>Category:</strong> ${eventData.alert_category ?? 'General'}
             </div>
           </div>
           <div class="alert-message">
@@ -1031,17 +1031,17 @@ class LLMMonitorDashboard {
         <span class="timestamp">${new Date(data.timestamp).toLocaleTimeString()}</span>
       </div>
       ${
-        data.reasoning || data.rationale
+        data.reasoning ?? data.rationale
           ? `
         <div class="decision-reasoning">
-          ${data.reasoning || data.rationale}
+          ${data.reasoning ?? data.rationale}
         </div>
       `
           : ''
       }
       <div class="decision-details">
         ${data.symbol ? `<span><strong>Symbol:</strong> ${data.symbol}</span>` : ''}
-        ${data.price || data.current_price ? `<span><strong>Price:</strong> $${(data.price || data.current_price).toFixed(2)}</span>` : ''}
+        ${data.price ?? data.current_price ? `<span><strong>Price:</strong> $${(data.price ?? data.current_price).toFixed(2)}</span>` : ''}
         ${data.confidence !== undefined ? `<span><strong>Confidence:</strong> ${(data.confidence * 100).toFixed(1)}%</span>` : ''}
         ${data.leverage ? `<span><strong>Leverage:</strong> ${data.leverage}x</span>` : ''}
       </div>
@@ -1095,19 +1095,19 @@ class LLMMonitorDashboard {
     const activeAlertsEl = document.getElementById('active-alerts')
 
     if (totalRequestsEl) {
-      const prevValue = parseInt(totalRequestsEl.textContent || '0')
+      const prevValue = parseInt(totalRequestsEl.textContent ?? '0')
       totalRequestsEl.textContent = this.metrics.total_requests.toString()
       this.updateMetricChange('requests-change', this.metrics.total_requests - prevValue)
     }
 
     if (successRateEl) {
-      const prevValue = parseFloat(successRateEl.textContent || '0')
+      const prevValue = parseFloat(successRateEl.textContent ?? '0')
       successRateEl.textContent = `${this.metrics.success_rate.toFixed(1)}%`
       this.updateMetricChange('success-change', this.metrics.success_rate - prevValue, '%')
     }
 
     if (avgResponseTimeEl) {
-      const prevValue = parseInt(avgResponseTimeEl.textContent || '0')
+      const prevValue = parseInt(avgResponseTimeEl.textContent ?? '0')
       avgResponseTimeEl.textContent = `${Math.round(this.metrics.avg_response_time_ms)}ms`
       this.updateMetricChange(
         'response-time-change',
@@ -1118,13 +1118,13 @@ class LLMMonitorDashboard {
     }
 
     if (totalCostEl) {
-      const prevValue = parseFloat(totalCostEl.textContent?.replace('$', '') || '0')
+      const prevValue = parseFloat(totalCostEl.textContent?.replace('$', '') ?? '0')
       totalCostEl.textContent = `$${this.metrics.total_cost_usd.toFixed(4)}`
       this.updateMetricChange('cost-change', this.metrics.total_cost_usd - prevValue, '$')
     }
 
     if (activeAlertsEl) {
-      const prevValue = parseInt(activeAlertsEl.textContent || '0')
+      const prevValue = parseInt(activeAlertsEl.textContent ?? '0')
       activeAlertsEl.textContent = this.metrics.active_alerts.toString()
       this.updateMetricChange('alerts-change', this.metrics.active_alerts - prevValue)
     }
@@ -1195,17 +1195,17 @@ class LLMMonitorDashboard {
         if (data.metrics?.['24_hours']) {
           const metrics = data.metrics['24_hours']
           this.metrics = {
-            total_requests: metrics.total_requests || 0,
-            total_responses: metrics.total_responses || 0,
-            success_rate: (metrics.success_rate || 0) * 100,
-            avg_response_time_ms: metrics.avg_response_time_ms || 0,
-            total_cost_usd: metrics.total_cost_usd || 0,
-            active_alerts: data.active_alerts || 0,
+            total_requests: metrics.total_requests ?? 0,
+            total_responses: metrics.total_responses ?? 0,
+            success_rate: (metrics.success_rate ?? 0) * 100,
+            avg_response_time_ms: metrics.avg_response_time_ms ?? 0,
+            total_cost_usd: metrics.total_cost_usd ?? 0,
+            active_alerts: data.active_alerts ?? 0,
           }
 
           // Initialize counters for accurate tracking
           this.successfulResponses = Math.round(
-            (metrics.total_responses || 0) * (metrics.success_rate || 0)
+            (metrics.total_responses ?? 0) * (metrics.success_rate ?? 0)
           )
 
           this.updateMetricsDisplay()
@@ -1216,7 +1216,7 @@ class LLMMonitorDashboard {
       const activityResponse = await fetch('/api/llm/activity?limit=50')
       if (activityResponse.ok) {
         const activityData = await activityResponse.json()
-        this.recentEvents = activityData.activity || []
+        this.recentEvents = activityData.activity ?? []
 
         // Process recent events to update counters
         this.recentEvents.forEach((event) => {

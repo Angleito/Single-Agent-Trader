@@ -12,9 +12,13 @@ import { spawn } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { readFileSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Environment variables are now loaded from docker-compose.yml env_file
+// No need to manually load .env file in container
 
 const app = express();
 app.use(express.json());
@@ -34,7 +38,8 @@ async function startMCPServer() {
         console.log('Starting MCP OmniSearch server...');
         
         mcpProcess = spawn('node', [MCP_SERVER_PATH], {
-            stdio: ['pipe', 'pipe', 'pipe']
+            stdio: ['pipe', 'pipe', 'pipe'],
+            env: { ...process.env }  // Pass all environment variables to the child process
         });
 
         mcpProcess.stdout.on('data', (data) => {
@@ -149,39 +154,79 @@ async function callMCPTool(toolName, args) {
 }
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+    let availableTools = [];
+    
+    if (isConnected) {
+        try {
+            // Query available tools from MCP server
+            const toolsMessage = {
+                jsonrpc: "2.0",
+                id: ++requestId,
+                method: "tools/list"
+            };
+            
+            const toolsResult = await sendMCPRequest(toolsMessage);
+            availableTools = toolsResult.tools || [];
+        } catch (error) {
+            console.error('Error getting tools:', error);
+        }
+    }
+    
     res.json({
         status: isConnected ? 'healthy' : 'unhealthy',
         connected: isConnected,
         uptime: process.uptime(),
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        available_tools: availableTools.map(tool => tool.name),
+        total_tools: availableTools.length
     });
 });
 
 // Financial news search endpoint
-app.post('/financial-news', async (req, res) => {
+app.all('/financial-news', async (req, res) => {
     try {
-        const { q, limit = 5, timeframe = '24h', include_sentiment = true } = req.body;
+        const params = req.method === 'GET' ? req.query : req.body;
+        const { q, limit = 5, timeframe = '24h', include_sentiment = true } = params;
 
         if (!q) {
             return res.status(400).json({ error: 'Query parameter "q" is required' });
         }
 
         // Use Tavily search through MCP
-        const result = await callMCPTool('search_tavily', {
+        const result = await callMCPTool('tavily_search', {
             query: `${q} financial news ${timeframe}`
         });
 
-        // Transform results to match expected format
+        // Parse the MCP result and transform to expected format
+        let searchResults = [];
+        try {
+            // Handle MCP response format which wraps content in an array
+            if (result && result.content && Array.isArray(result.content)) {
+                // Extract JSON from the text content
+                const textContent = result.content[0]?.text;
+                if (textContent) {
+                    const parsedContent = JSON.parse(textContent);
+                    searchResults = Array.isArray(parsedContent) ? parsedContent : [parsedContent];
+                }
+            } else {
+                const mcpData = typeof result === 'string' ? JSON.parse(result) : result;
+                searchResults = mcpData.results || mcpData || [];
+            }
+        } catch (err) {
+            console.error('Error parsing MCP search results:', err);
+            searchResults = [];
+        }
+
         const results = {
-            results: (result.content || []).slice(0, limit).map(item => ({
+            results: searchResults.slice(0, limit).map(item => ({
                 title: item.title || '',
                 url: item.url || '',
-                snippet: item.content || '',
+                snippet: item.content || item.snippet || '',
                 source: item.url ? new URL(item.url).hostname : '',
                 relevance_score: item.score || 0.5,
-                sentiment: include_sentiment ? analyzeSentiment(item.content || '') : null,
-                mentioned_symbols: extractSymbols(item.content || ''),
+                sentiment: include_sentiment ? analyzeSentiment(item.content || item.snippet || '') : null,
+                mentioned_symbols: extractSymbols(item.content || item.snippet || ''),
                 category: 'market_news',
                 impact_level: 'medium'
             }))
@@ -204,12 +249,43 @@ app.post('/crypto-sentiment', async (req, res) => {
         }
 
         // Use Perplexity AI through MCP for sentiment analysis
-        const result = await callMCPTool('ai_perplexity', {
+        const result = await callMCPTool('perplexity_search', {
             query: `What is the current market sentiment for ${symbol} cryptocurrency? Include bullish/bearish indicators, news sentiment, and technical analysis sentiment. Provide a numerical sentiment score from -1 (very bearish) to 1 (very bullish).`
         });
 
         // Parse AI response and extract sentiment data
-        const sentiment = parseSentimentFromAI(result.content || '');
+        let responseContent = '';
+        try {
+            // Handle MCP response format which wraps content in an array
+            if (result && result.content && Array.isArray(result.content)) {
+                // Extract content from the first text item
+                const textContent = result.content[0]?.text;
+                if (textContent) {
+                    // For Perplexity, the response might be JSON-wrapped
+                    try {
+                        const parsedContent = JSON.parse(textContent);
+                        // Extract the snippet from the first result if it's an array
+                        if (Array.isArray(parsedContent) && parsedContent[0]?.snippet) {
+                            responseContent = parsedContent[0].snippet;
+                        } else {
+                            responseContent = textContent;
+                        }
+                    } catch {
+                        responseContent = textContent;
+                    }
+                } else {
+                    responseContent = JSON.stringify(result.content);
+                }
+            } else {
+                const mcpData = typeof result === 'string' ? JSON.parse(result) : result;
+                responseContent = mcpData.content || mcpData.response || mcpData.answer || JSON.stringify(mcpData);
+            }
+        } catch (err) {
+            console.error('Error parsing MCP response:', err);
+            responseContent = typeof result === 'string' ? result : JSON.stringify(result);
+        }
+        
+        const sentiment = parseSentimentFromAI(responseContent);
 
         res.json({
             sentiment: {
@@ -236,11 +312,43 @@ app.post('/market-sentiment', async (req, res) => {
         const { market = 'nasdaq', include_indices = true, include_sectors = true } = req.body;
 
         // Use Perplexity AI for market sentiment
-        const result = await callMCPTool('ai_perplexity', {
+        const result = await callMCPTool('perplexity_search', {
             query: `What is the current ${market} market sentiment? Include overall market mood, sector performance, and key indices. Provide a sentiment score from -1 (very bearish) to 1 (very bullish).`
         });
 
-        const sentiment = parseSentimentFromAI(result.content || '');
+        // Parse AI response and extract sentiment data
+        let responseContent = '';
+        try {
+            // Handle MCP response format which wraps content in an array
+            if (result && result.content && Array.isArray(result.content)) {
+                // Extract content from the first text item
+                const textContent = result.content[0]?.text;
+                if (textContent) {
+                    // For Perplexity, the response might be JSON-wrapped
+                    try {
+                        const parsedContent = JSON.parse(textContent);
+                        // Extract the snippet from the first result if it's an array
+                        if (Array.isArray(parsedContent) && parsedContent[0]?.snippet) {
+                            responseContent = parsedContent[0].snippet;
+                        } else {
+                            responseContent = textContent;
+                        }
+                    } catch {
+                        responseContent = textContent;
+                    }
+                } else {
+                    responseContent = JSON.stringify(result.content);
+                }
+            } else {
+                const mcpData = typeof result === 'string' ? JSON.parse(result) : result;
+                responseContent = mcpData.content || mcpData.response || mcpData.answer || JSON.stringify(mcpData);
+            }
+        } catch (err) {
+            console.error('Error parsing MCP response:', err);
+            responseContent = typeof result === 'string' ? result : JSON.stringify(result);
+        }
+        
+        const sentiment = parseSentimentFromAI(responseContent);
 
         res.json({
             sentiment: {
@@ -271,11 +379,43 @@ app.post('/market-correlation', async (req, res) => {
         }
 
         // Use AI to analyze correlation
-        const result = await callMCPTool('ai_perplexity', {
+        const result = await callMCPTool('perplexity_search', {
             query: `Analyze the correlation between ${symbol1} and ${symbol2} over the past ${timeframe}. Provide correlation coefficient, beta, and direction of correlation.`
         });
 
-        const correlation = parseCorrelationFromAI(result.content || '');
+        // Parse AI response and extract correlation data
+        let responseContent = '';
+        try {
+            // Handle MCP response format which wraps content in an array
+            if (result && result.content && Array.isArray(result.content)) {
+                // Extract content from the first text item
+                const textContent = result.content[0]?.text;
+                if (textContent) {
+                    // For Perplexity, the response might be JSON-wrapped
+                    try {
+                        const parsedContent = JSON.parse(textContent);
+                        // Extract the snippet from the first result if it's an array
+                        if (Array.isArray(parsedContent) && parsedContent[0]?.snippet) {
+                            responseContent = parsedContent[0].snippet;
+                        } else {
+                            responseContent = textContent;
+                        }
+                    } catch {
+                        responseContent = textContent;
+                    }
+                } else {
+                    responseContent = JSON.stringify(result.content);
+                }
+            } else {
+                const mcpData = typeof result === 'string' ? JSON.parse(result) : result;
+                responseContent = mcpData.content || mcpData.response || mcpData.answer || JSON.stringify(mcpData);
+            }
+        } catch (err) {
+            console.error('Error parsing MCP response:', err);
+            responseContent = typeof result === 'string' ? result : JSON.stringify(result);
+        }
+        
+        const correlation = parseCorrelationFromAI(responseContent);
 
         res.json({
             correlation: {
@@ -314,47 +454,119 @@ function extractSymbols(text) {
 }
 
 function parseSentimentFromAI(content) {
-    // Simple parsing logic - in production, use more sophisticated NLP
-    const contentLower = content.toLowerCase();
-    
-    let score = 0;
-    let overall = 'neutral';
-    
-    if (contentLower.includes('very bullish')) {
-        score = 0.8;
-        overall = 'bullish';
-    } else if (contentLower.includes('bullish')) {
-        score = 0.5;
-        overall = 'bullish';
-    } else if (contentLower.includes('very bearish')) {
-        score = -0.8;
-        overall = 'bearish';
-    } else if (contentLower.includes('bearish')) {
-        score = -0.5;
-        overall = 'bearish';
+    try {
+        // Simple parsing logic - in production, use more sophisticated NLP
+        let contentString = '';
+        
+        
+        if (typeof content === 'string') {
+            contentString = content;
+        } else if (content === null || content === undefined) {
+            contentString = '';
+        } else if (typeof content === 'object') {
+            contentString = JSON.stringify(content);
+        } else {
+            contentString = String(content);
+        }
+        
+        if (typeof contentString !== 'string') {
+            console.error('contentString is not a string:', typeof contentString, contentString);
+            return {
+                overall: 'neutral',
+                score: 0,
+                confidence: 0.5,
+                news_sentiment: 0,
+                social_sentiment: 0,
+                technical_sentiment: 0,
+                key_drivers: ['Content type error'],
+                risk_factors: ['Analysis unavailable']
+            };
+        }
+        
+        const contentLower = contentString.toLowerCase();
+        
+        let score = 0;
+        let overall = 'neutral';
+        
+        if (contentLower.includes('very bullish')) {
+            score = 0.8;
+            overall = 'bullish';
+        } else if (contentLower.includes('bullish')) {
+            score = 0.5;
+            overall = 'bullish';
+        } else if (contentLower.includes('very bearish')) {
+            score = -0.8;
+            overall = 'bearish';
+        } else if (contentLower.includes('bearish')) {
+            score = -0.5;
+            overall = 'bearish';
+        }
+        
+        return {
+            overall,
+            score,
+            confidence: 0.7,
+            news_sentiment: score * 0.8,
+            social_sentiment: score * 0.9,
+            technical_sentiment: score * 0.7,
+            key_drivers: ['Market analysis from AI'],
+            risk_factors: ['AI-based analysis']
+        };
+    } catch (error) {
+        console.error('Error in parseSentimentFromAI:', error, 'Content:', content);
+        return {
+            overall: 'neutral',
+            score: 0,
+            confidence: 0.5,
+            news_sentiment: 0,
+            social_sentiment: 0,
+            technical_sentiment: 0,
+            key_drivers: ['Error parsing AI response'],
+            risk_factors: ['Analysis unavailable']
+        };
     }
-    
-    return {
-        overall,
-        score,
-        confidence: 0.7,
-        news_sentiment: score * 0.8,
-        social_sentiment: score * 0.9,
-        technical_sentiment: score * 0.7,
-        key_drivers: ['Market analysis from AI'],
-        risk_factors: ['AI-based analysis']
-    };
 }
 
 function parseCorrelationFromAI(content) {
-    // Simple parsing - extract numbers from AI response
-    const numbers = content.match(/-?\d+\.?\d*/g) || [];
-    
-    return {
-        coefficient: parseFloat(numbers[0]) || 0,
-        beta: parseFloat(numbers[1]) || 1,
-        r_squared: parseFloat(numbers[2]) || 0
-    };
+    try {
+        // Simple parsing - extract numbers from AI response
+        let contentString = '';
+        
+        
+        if (typeof content === 'string') {
+            contentString = content;
+        } else if (content === null || content === undefined) {
+            contentString = '';
+        } else if (typeof content === 'object') {
+            contentString = JSON.stringify(content);
+        } else {
+            contentString = String(content);
+        }
+        
+        if (typeof contentString !== 'string') {
+            console.error('contentString is not a string:', typeof contentString, contentString);
+            return {
+                coefficient: 0,
+                beta: 1,
+                r_squared: 0
+            };
+        }
+        
+        const numbers = contentString.match(/-?\d+\.?\d*/g) || [];
+        
+        return {
+            coefficient: parseFloat(numbers[0]) || 0,
+            beta: parseFloat(numbers[1]) || 1,
+            r_squared: parseFloat(numbers[2]) || 0
+        };
+    } catch (error) {
+        console.error('Error in parseCorrelationFromAI:', error, 'Content:', content);
+        return {
+            coefficient: 0,
+            beta: 1,
+            r_squared: 0
+        };
+    }
 }
 
 // Start server

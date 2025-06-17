@@ -123,7 +123,7 @@ export class ManualTradingInterface {
    */
   private render(): void {
     const isSpot = this.tradingModeConfig?.trading_mode === 'spot'
-    const isFutures = this.tradingModeConfig?.futures_enabled || false
+    const isFutures = this.tradingModeConfig?.futures_enabled ?? false
 
     this.container.innerHTML = `
       <div class="manual-trading-interface">
@@ -216,8 +216,8 @@ export class ManualTradingInterface {
                 <div class="form-group">
                   <label for="leverage">Leverage</label>
                   <div class="leverage-input-group">
-                    <input type="range" id="leverage-slider" min="1" max="${this.tradingModeConfig?.max_leverage || 20}" value="${this.tradingModeConfig?.default_leverage || 5}" class="leverage-slider">
-                    <input type="number" id="leverage" min="1" max="${this.tradingModeConfig?.max_leverage || 20}" step="1" value="${this.tradingModeConfig?.default_leverage || 5}" class="form-control leverage-input">
+                    <input type="range" id="leverage-slider" min="1" max="${this.tradingModeConfig?.max_leverage ?? 20}" value="${this.tradingModeConfig?.default_leverage ?? 5}" class="leverage-slider">
+                    <input type="number" id="leverage" min="1" max="${this.tradingModeConfig?.max_leverage ?? 20}" step="1" value="${this.tradingModeConfig?.default_leverage ?? 5}" class="form-control leverage-input">
                     <span class="leverage-unit">x</span>
                   </div>
                 </div>
@@ -451,7 +451,7 @@ export class ManualTradingInterface {
     const _symbol = symbolSelect.value
 
     // Calculate estimated cost
-    const currentPrice = this.currentMarketData?.price || 0
+    const currentPrice = this.currentMarketData?.price ?? 0
     const estimatedCost = currentPrice * (size / 100) * 1000 // Assuming $1000 portfolio
 
     // Calculate fees based on trading mode
@@ -463,7 +463,7 @@ export class ManualTradingInterface {
     if (this.tradingModeConfig) {
       if (this.tradingModeConfig.mode === 'spot') {
         // Spot trading fees (market orders use taker rate)
-        feeRate = this.tradingModeConfig.taker_fee_rate || 0.012
+        feeRate = this.tradingModeConfig.taker_fee_rate ?? 0.012
         feeAmount = estimatedCost * feeRate * 2 // Round trip (entry + exit)
         minProfitMove = feeRate * 2 * 100 // As percentage
 
@@ -474,9 +474,9 @@ export class ManualTradingInterface {
         else feeTier = 'VIP'
       } else {
         // Futures trading
-        feeRate = this.tradingModeConfig.futures_fee_rate || 0.0015
+        feeRate = this.tradingModeConfig.futures_fee_rate ?? 0.0015
         const leverage = parseFloat(
-          (document.getElementById('leverage') as HTMLInputElement)?.value || '5'
+          (document.getElementById('leverage') as HTMLInputElement)?.value ?? '5'
         )
         feeAmount = estimatedCost * feeRate * 2 // Round trip
         minProfitMove = (feeRate * 2 * 100) / leverage // Adjusted for leverage
@@ -547,7 +547,7 @@ export class ManualTradingInterface {
       action: actionSelect.value as 'buy' | 'sell' | 'close',
       symbol: symbolSelect.value,
       size_percentage: parseFloat(sizeInput.value),
-      reason: reasonInput?.value || 'Manual trade from dashboard',
+      reason: reasonInput?.value ?? 'Manual trade from dashboard',
     }
 
     // Show confirmation dialog
@@ -567,7 +567,7 @@ export class ManualTradingInterface {
           action: tradeRequest.action,
           symbol: tradeRequest.symbol,
           size_percentage: tradeRequest.size_percentage.toString(),
-          reason: tradeRequest.reason || '',
+          reason: tradeRequest.reason ?? '',
         }),
       })
 
@@ -581,7 +581,7 @@ export class ManualTradingInterface {
         // Reset form
         if (reasonInput) reasonInput.value = ''
       } else {
-        throw new Error(result.detail || 'Trade execution failed')
+        throw new Error(result.detail ?? 'Trade execution failed')
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -617,7 +617,7 @@ export class ManualTradingInterface {
                 <strong>Size:</strong> ${trade.size_percentage}% of portfolio
               </div>
               <div class="summary-item">
-                <strong>Reason:</strong> ${trade.reason || 'Manual trade'}
+                <strong>Reason:</strong> ${trade.reason ?? 'Manual trade'}
               </div>
             </div>
             <div class="warning-message">
@@ -680,7 +680,7 @@ export class ManualTradingInterface {
         this.setEmergencyMode(true)
         this.showSuccessMessage('Emergency stop executed successfully')
       } else {
-        throw new Error(result.detail || 'Emergency stop failed')
+        throw new Error(result.detail ?? 'Emergency stop failed')
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -703,7 +703,7 @@ export class ManualTradingInterface {
         this.showSuccessMessage('Trading paused successfully')
         this.updateTradingControlsState('paused')
       } else {
-        throw new Error(result.detail || 'Pause trading failed')
+        throw new Error(result.detail ?? 'Pause trading failed')
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -727,7 +727,7 @@ export class ManualTradingInterface {
         this.showSuccessMessage('Trading resumed successfully')
         this.updateTradingControlsState('active')
       } else {
-        throw new Error(result.detail || 'Resume trading failed')
+        throw new Error(result.detail ?? 'Resume trading failed')
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -770,7 +770,7 @@ export class ManualTradingInterface {
       if (response.ok) {
         this.showSuccessMessage('Risk limits updated successfully')
       } else {
-        throw new Error(result.detail || 'Risk limit update failed')
+        throw new Error(result.detail ?? 'Risk limit update failed')
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -786,7 +786,7 @@ export class ManualTradingInterface {
     if (!positionEl || !this.currentPosition) return
 
     const position = this.currentPosition
-    const size = position.quantity || position.size || 0
+    const size = position.quantity ?? position.size ?? 0
 
     if (size === 0) {
       positionEl.textContent = 'No Position'
@@ -808,7 +808,7 @@ export class ManualTradingInterface {
     const pnlEl = document.getElementById('unrealized-pnl')
     if (!pnlEl || !this.currentPosition) return
 
-    const unrealizedPnL = this.currentPosition.unrealized_pnl || 0
+    const unrealizedPnL = this.currentPosition.unrealized_pnl ?? 0
     pnlEl.textContent = `$${unrealizedPnL.toFixed(2)}`
     pnlEl.className = `stat-value ${unrealizedPnL >= 0 ? 'positive' : 'negative'}`
   }
@@ -817,7 +817,7 @@ export class ManualTradingInterface {
     const dailyPnLEl = document.getElementById('daily-pnl')
     if (!dailyPnLEl || !this.currentRiskMetrics) return
 
-    const dailyPnL = this.currentRiskMetrics.daily_pnl || 0
+    const dailyPnL = this.currentRiskMetrics.daily_pnl ?? 0
     dailyPnLEl.textContent = `$${dailyPnL.toFixed(2)}`
     dailyPnLEl.className = `stat-value ${dailyPnL >= 0 ? 'positive' : 'negative'}`
   }
@@ -877,7 +877,7 @@ export class ManualTradingInterface {
         const response = await fetch(`${this.apiBaseUrl}/api/bot/commands/queue`)
         if (response.ok) {
           const data = await response.json()
-          this.pendingCommands = data.pending_commands || []
+          this.pendingCommands = data.pending_commands ?? []
           this.updateCommandQueueDisplay()
         }
       } catch (error) {
@@ -938,7 +938,7 @@ export class ManualTradingInterface {
         this.refreshCommandQueue()
       } else {
         const result = await response.json()
-        throw new Error(result.detail || 'Failed to cancel command')
+        throw new Error(result.detail ?? 'Failed to cancel command')
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -957,7 +957,7 @@ export class ManualTradingInterface {
       const response = await fetch(`${this.apiBaseUrl}/api/bot/commands/queue`)
       if (response.ok) {
         const data = await response.json()
-        this.pendingCommands = data.pending_commands || []
+        this.pendingCommands = data.pending_commands ?? []
         this.updateCommandQueueDisplay()
       }
     } catch (error) {
@@ -970,7 +970,7 @@ export class ManualTradingInterface {
       const response = await fetch(`${this.apiBaseUrl}/api/bot/commands/history`)
       if (response.ok) {
         const data = await response.json()
-        this.updateTradeHistoryDisplay(data.history || [])
+        this.updateTradeHistoryDisplay(data.history ?? [])
       }
     } catch (error) {
       console.warn('Failed to refresh trade history:', error)

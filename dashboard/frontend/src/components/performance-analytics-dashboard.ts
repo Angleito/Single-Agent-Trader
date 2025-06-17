@@ -509,7 +509,7 @@ export class PerformanceAnalyticsDashboard {
     if (!container) return
 
     const rect = container.getBoundingClientRect()
-    const dpr = window.devicePixelRatio || 1
+    const dpr = window.devicePixelRatio ?? 1
 
     this.chartCanvas.width = rect.width * dpr
     this.chartCanvas.height = 400 * dpr
@@ -535,10 +535,10 @@ export class PerformanceAnalyticsDashboard {
       if (response.ok) {
         const data = await response.json()
         this.performanceMetrics = data.metrics
-        this.tradeAnalytics = data.trades || []
-        this.performancePeriods = data.periods || []
-        this.benchmarkComparisons = data.benchmarks || []
-        this.drawdownPeriods = data.drawdowns || []
+        this.tradeAnalytics = data.trades ?? []
+        this.performancePeriods = data.periods ?? []
+        this.benchmarkComparisons = data.benchmarks ?? []
+        this.drawdownPeriods = data.drawdowns ?? []
 
         this.updateMetricsDisplay()
         this.updateTradeAnalyticsDisplay()
@@ -733,8 +733,8 @@ export class PerformanceAnalyticsDashboard {
    * Draw equity curve chart
    */
   private drawEquityCurve(ctx: CanvasRenderingContext2D): void {
-    const _width = ctx.canvas.width / (window.devicePixelRatio || 1)
-    const _height = ctx.canvas.height / (window.devicePixelRatio || 1)
+    const _width = ctx.canvas.width / (window.devicePixelRatio ?? 1)
+    const _height = ctx.canvas.height / (window.devicePixelRatio ?? 1)
     const padding = { top: 20, right: 60, bottom: 40, left: 60 }
 
     // Generate sample equity curve data
@@ -779,8 +779,8 @@ export class PerformanceAnalyticsDashboard {
    * Draw drawdown chart
    */
   private drawDrawdownChart(ctx: CanvasRenderingContext2D): void {
-    const _width = ctx.canvas.width / (window.devicePixelRatio || 1)
-    const _height = ctx.canvas.height / (window.devicePixelRatio || 1)
+    const _width = ctx.canvas.width / (window.devicePixelRatio ?? 1)
+    const _height = ctx.canvas.height / (window.devicePixelRatio ?? 1)
     const padding = { top: 20, right: 60, bottom: 40, left: 60 }
 
     // Generate sample drawdown data

@@ -3,7 +3,17 @@
 // TradingView Charting Library types
 declare global {
   interface Window {
-    TradingView: any
+    TradingView: {
+      widget: new (config: Record<string, unknown>) => {
+        onChartReady: (callback: () => void) => void
+        remove: () => void
+        chart: () => {
+          onSymbolChanged: () => void
+          onIntervalChanged: () => void
+          setSymbol: (symbol: string, interval: string, callback?: () => void) => void
+        }
+      }
+    }
     tradingViewLoaded?: boolean
     tradingViewError?: boolean
   }
@@ -119,7 +129,7 @@ export interface WebSocketMessage {
     | 'ai_decision'
     | 'system_status'
     | 'error'
-  data: BotStatus | MarketData | TradeAction | VuManchuIndicators | Position | RiskMetrics | any
+  data: BotStatus | MarketData | TradeAction | VuManchuIndicators | Position | RiskMetrics | Record<string, unknown>
   timestamp: string
 }
 
@@ -180,12 +190,12 @@ export interface ChartConfig {
   user_id?: string
   fullscreen?: boolean
   autosize?: boolean
-  studies_overrides?: Record<string, any>
+  studies_overrides?: Record<string, unknown>
   theme?: 'light' | 'dark'
 }
 
 // API Response Types
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean
   data?: T
   error?: string

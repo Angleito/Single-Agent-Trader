@@ -166,7 +166,7 @@ export class NotificationSystem {
   private messageQueue: NotificationMessage[] = []
   private processingQueue = false
   private retryQueue: DeliveryAttempt[] = []
-  private eventListeners = new Map<string, Set<Function>>()
+  private eventListeners = new Map<string, Set<(...args: any[]) => void>>()
   private apiBaseUrl: string
   private apiKey: string
   private isOnline = navigator.onLine
@@ -177,7 +177,7 @@ export class NotificationSystem {
     this.setupOnlineHandlers()
     this.startQueueProcessor()
     this.startRetryProcessor()
-    this.setupBrowserNotifications()
+    void this.setupBrowserNotifications()
   }
 
   /**
@@ -235,15 +235,15 @@ export class NotificationSystem {
     if (fullMessage.templateId) {
       const template = this.templates.get(fullMessage.templateId)
       if (template) {
-        fullMessage.body = this.processTemplate(template.body, fullMessage.variables || {})
+        fullMessage.body = this.processTemplate(template.body, fullMessage.variables ?? {})
         if (template.htmlBody) {
           fullMessage.htmlBody = this.processTemplate(
             template.htmlBody,
-            fullMessage.variables || {}
+            fullMessage.variables ?? {}
           )
         }
         if (template.subject && !fullMessage.title) {
-          fullMessage.title = this.processTemplate(template.subject, fullMessage.variables || {})
+          fullMessage.title = this.processTemplate(template.subject, fullMessage.variables ?? {})
         }
       }
     }
@@ -260,7 +260,7 @@ export class NotificationSystem {
     // Schedule or queue for immediate sending
     if (fullMessage.scheduledAt && fullMessage.scheduledAt > new Date()) {
       this.scheduleMessage(fullMessage)
-    } else if (options.immediate || fullMessage.priority === 'critical') {
+    } else if (options.immediate ?? fullMessage.priority === 'critical') {
       await this.processMessage(fullMessage, options.dryRun)
     } else {
       this.queueMessage(fullMessage)
@@ -284,7 +284,7 @@ export class NotificationSystem {
       title,
       body,
       priority,
-      channels: channels || this.getDefaultChannelsForPriority(priority),
+      channels: channels ?? this.getDefaultChannelsForPriority(priority),
       recipients: ['default'],
     })
   }
@@ -368,7 +368,7 @@ export class NotificationSystem {
       id: this.generateId('test'),
       type: 'test',
       title: 'Test Notification',
-      body: testMessage || 'This is a test notification from the trading bot dashboard.',
+      body: testMessage ?? 'This is a test notification from the trading bot dashboard.',
       priority: 'normal',
       channels: [channelId],
       recipients: ['test'],
@@ -520,10 +520,10 @@ export class NotificationSystem {
   /**
    * Deliver browser notification
    */
-  private async deliverBrowserNotification(
+  private deliverBrowserNotification(
     message: NotificationMessage,
     channel: NotificationChannel,
-    recipient: string
+    _recipient: string
   ): Promise<any> {
     if (!('Notification' in window)) {
       throw new Error('Browser notifications not supported')
@@ -535,7 +535,7 @@ export class NotificationSystem {
 
     const options: NotificationOptions = {
       body: message.body,
-      icon: channel.config?.icon || '/favicon.ico',
+      icon: channel.config?.icon ?? '/favicon.ico',
       badge: channel.config?.badge,
       image: message.media?.find((m) => m.type === 'image')?.url,
       tag: message.id,
@@ -581,14 +581,14 @@ export class NotificationSystem {
       to: recipient,
       subject: message.title,
       text: message.body,
-      html: message.htmlBody || this.generateHTMLFromText(message.body),
+      html: message.htmlBody ?? this.generateHTMLFromText(message.body),
       priority: message.priority,
       messageId: message.id,
       attachments: message.media
         ?.filter((m) => m.type === 'file')
         .map((m) => ({
           url: m.url,
-          filename: m.alt || 'attachment',
+          filename: m.alt ?? 'attachment',
         })),
     }
 
@@ -674,9 +674,9 @@ export class NotificationSystem {
    * Deliver push notification
    */
   private async deliverPushNotification(
-    message: NotificationMessage,
-    channel: NotificationChannel,
-    recipient: string
+    _message: NotificationMessage,
+    _channel: NotificationChannel,
+    _recipient: string
   ): Promise<any> {
     // Implementation for push notifications (Firebase, etc.)
     throw new Error('Push notifications not implemented')
@@ -797,7 +797,6 @@ export class NotificationSystem {
   private checkRateLimit(channel: NotificationChannel, recipient: string): boolean {
     if (!channel.rateLimit) return true
 
-    const key = `${channel.id}_${recipient}`
     const now = Date.now()
 
     if (!this.rateLimiters.has(channel.id)) {
@@ -805,7 +804,7 @@ export class NotificationSystem {
     }
 
     const channelLimiters = this.rateLimiters.get(channel.id)!
-    const timestamps = channelLimiters.get(recipient) || []
+    const timestamps = channelLimiters.get(recipient) ?? []
 
     // Remove old timestamps
     const cutoff = now - channel.rateLimit.windowMs
@@ -976,7 +975,7 @@ export class NotificationSystem {
 
   private queueMessage(message: NotificationMessage): void {
     this.messageQueue.push(message)
-    this.processQueue()
+    void this.processQueue()
   }
 
   private scheduleMessage(message: NotificationMessage): void {
@@ -985,7 +984,7 @@ export class NotificationSystem {
     const delay = message.scheduledAt.getTime() - Date.now()
     if (delay > 0) {
       setTimeout(() => {
-        this.processMessage(message)
+        void this.processMessage(message)
       }, delay)
     }
   }
@@ -1031,13 +1030,13 @@ export class NotificationSystem {
 
   private startQueueProcessor(): void {
     setInterval(() => {
-      this.processQueue()
+      void this.processQueue()
     }, 1000)
   }
 
   private startRetryProcessor(): void {
     setInterval(() => {
-      this.processRetryQueue()
+      void this.processRetryQueue()
     }, 5000)
   }
 
@@ -1061,7 +1060,7 @@ export class NotificationSystem {
   private setupOnlineHandlers(): void {
     window.addEventListener('online', () => {
       this.isOnline = true
-      this.processQueue()
+      void this.processQueue()
       this.emit('online')
     })
 
@@ -1097,6 +1096,7 @@ export class NotificationSystem {
         try {
           callback(data)
         } catch (error) {
+          // eslint-disable-next-line no-console
           console.error(`Error in notification event listener for ${event}:`, error)
         }
       })
@@ -1106,7 +1106,7 @@ export class NotificationSystem {
   /**
    * Add event listener
    */
-  public addEventListener(event: string, callback: Function): void {
+  public addEventListener(event: string, callback: (...args: any[]) => void): void {
     if (!this.eventListeners.has(event)) {
       this.eventListeners.set(event, new Set())
     }
@@ -1116,7 +1116,7 @@ export class NotificationSystem {
   /**
    * Remove event listener
    */
-  public removeEventListener(event: string, callback: Function): void {
+  public removeEventListener(event: string, callback: (...args: any[]) => void): void {
     const listeners = this.eventListeners.get(event)
     if (listeners) {
       listeners.delete(callback)

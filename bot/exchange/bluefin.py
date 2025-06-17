@@ -375,30 +375,48 @@ class BluefinClient(BaseExchange):
         try:
             # Get account balance
             account_balance = await self.get_account_balance()
+            logger.info(f"Account balance: ${account_balance}")
+            
+            # If balance is too low, log error and return None
+            if account_balance <= Decimal("10"):
+                logger.error(f"Account balance ${account_balance} is too low for trading (minimum $10)")
+                return None
             
             # Calculate position size
             position_value = account_balance * Decimal(str(trade_action.size_pct / 100))
+            logger.info(f"Position value (${account_balance} * {trade_action.size_pct}%): ${position_value}")
             
             # Apply leverage
             leverage = trade_action.leverage or settings.trading.leverage
             notional_value = position_value * leverage
+            logger.info(f"Notional value (${position_value} * {leverage}x leverage): ${notional_value}")
             
             # Calculate quantity
             quantity = notional_value / current_price
+            logger.info(f"Calculated quantity (${notional_value} / ${current_price}): {quantity}")
             
             # Round to contract specifications
             contract_info = self._contract_info.get(symbol, {})
             tick_size = contract_info.get("tick_size", Decimal("0.001"))
             quantity = self._round_to_tick(quantity, tick_size)
+            logger.info(f"Rounded quantity to tick size {tick_size}: {quantity}")
             
             # Validate quantity
             min_qty = contract_info.get("min_quantity", Decimal("0.001"))
             if quantity < min_qty:
-                logger.warning(f"Quantity {quantity} below minimum {min_qty}")
+                logger.warning(f"Quantity {quantity} below minimum {min_qty}, adjusting to minimum")
                 quantity = min_qty
+                
+            # Final validation - ensure quantity is not zero
+            if quantity <= Decimal("0"):
+                logger.error(f"Final quantity {quantity} is zero or negative, cannot place order")
+                return None
             
             # Determine order side
             side = ORDER_SIDE.BUY if trade_action.action == "LONG" else ORDER_SIDE.SELL
+            
+            # Final logging before order placement
+            logger.info(f"Placing {side} order for {quantity} {symbol} at market price ${current_price}")
             
             # Place market order
             order = await self.place_market_order(symbol, side, quantity)

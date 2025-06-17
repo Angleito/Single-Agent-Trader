@@ -304,7 +304,7 @@ export class PositionMonitor {
 
     const container = this.chartCanvas.parentElement
     if (container) {
-      this.chartCanvas.width = container.clientWidth || this.chartConfig.width
+      this.chartCanvas.width = container.clientWidth ?? this.chartConfig.width
       this.chartCanvas.height = this.chartConfig.height
     }
 
@@ -844,8 +844,8 @@ export class PositionMonitor {
 
     const position = this.currentPosition
     const currentPrice = this.currentMarketData.price
-    const quantity = position.quantity || position.size || 0
-    const entryPrice = position.average_price || position.entry_price || 0
+    const quantity = position.quantity ?? position.size ?? 0
+    const entryPrice = position.average_price ?? position.entry_price ?? 0
 
     if (quantity === 0) {
       this.positionMetrics = null
@@ -861,14 +861,14 @@ export class PositionMonitor {
     }
 
     // Calculate other metrics
-    const leverage = position.leverage || 1
+    const leverage = position.leverage ?? 1
     const marginUsed = (entryPrice * Math.abs(quantity)) / leverage
     const liquidationPrice = this.calculateLiquidationPrice(position, leverage)
 
     this.positionMetrics = {
       unrealized_pnl: unrealizedPnL,
-      realized_pnl: position.unrealized_pnl || 0,
-      total_pnl: unrealizedPnL + (position.unrealized_pnl || 0),
+      realized_pnl: position.unrealized_pnl ?? 0,
+      total_pnl: unrealizedPnL + (position.unrealized_pnl ?? 0),
       daily_pnl: 0, // Would need daily tracking
       weekly_pnl: 0, // Would need weekly tracking
       monthly_pnl: 0, // Would need monthly tracking
@@ -893,7 +893,7 @@ export class PositionMonitor {
   private calculateLiquidationPrice(position: Position, leverage: number): number | undefined {
     // Simplified liquidation calculation
     // In practice, this would depend on exchange-specific formulas
-    const entryPrice = position.average_price || position.entry_price || 0
+    const entryPrice = position.average_price ?? position.entry_price ?? 0
     const liquidationThreshold = 0.8 // 80% of margin
 
     if (position.side?.toLowerCase() === 'long') {
@@ -1180,7 +1180,7 @@ export class PositionMonitor {
     const dismissBtns = alertsList.querySelectorAll('.alert-dismiss')
     dismissBtns.forEach((btn) => {
       btn.addEventListener('click', (e) => {
-        const index = parseInt((e.target as HTMLElement).dataset.index || '0')
+        const index = parseInt((e.target as HTMLElement).dataset.index ?? '0')
         this.dismissAlert(index)
       })
     })
@@ -1196,7 +1196,7 @@ export class PositionMonitor {
       liquidation_warning: '🚨',
       margin_call: '📢',
     }
-    return icons[type as keyof typeof icons] || '⚠️'
+    return icons[type as keyof typeof icons] ?? '⚠️'
   }
 
   /**

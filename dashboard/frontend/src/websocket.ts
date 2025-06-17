@@ -247,21 +247,21 @@ export class DashboardWebSocket {
     }
 
     // Set the URL with proper validation
-    let finalUrl = config.url || url || this.getDefaultWebSocketUrl()
+    let finalUrl = config.url ?? url ?? this.getDefaultWebSocketUrl()
 
     // Validate and clean up the URL
     finalUrl = this.validateAndCleanUrl(finalUrl)
 
     this.url = finalUrl
-    this.fallbackUrls = config.fallbackUrls || []
-    this.maxReconnectAttempts = config.maxReconnectAttempts || 5
-    this.reconnectDelay = config.initialReconnectDelay || 1000
-    this.maxReconnectDelay = config.maxReconnectDelay || 30000
-    this.pingIntervalMs = config.pingInterval || 30000
-    this.connectionTimeout = config.connectionTimeout || 10000
+    this.fallbackUrls = config.fallbackUrls ?? []
+    this.maxReconnectAttempts = config.maxReconnectAttempts ?? 5
+    this.reconnectDelay = config.initialReconnectDelay ?? 1000
+    this.maxReconnectDelay = config.maxReconnectDelay ?? 30000
+    this.pingIntervalMs = config.pingInterval ?? 30000
+    this.connectionTimeout = config.connectionTimeout ?? 10000
     this.enableResilience = config.enableResilience !== false
-    this.maxMessageRetries = config.maxMessageRetries || 3
-    this.messageRetryDelay = config.messageRetryDelay || 1000
+    this.maxMessageRetries = config.maxMessageRetries ?? 3
+    this.messageRetryDelay = config.messageRetryDelay ?? 1000
 
     // Start memory cleanup
     this.startMemoryCleanup()

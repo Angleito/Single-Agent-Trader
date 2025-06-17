@@ -22,6 +22,7 @@ try:
 except ImportError:
     psutil = None
 
+import aiohttp
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -38,6 +39,155 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+# Bluefin Service Configuration
+BLUEFIN_SERVICE_URL = os.getenv("BLUEFIN_SERVICE_URL", "http://localhost:8080")
+BLUEFIN_SERVICE_API_KEY = os.getenv("BLUEFIN_SERVICE_API_KEY", "")
+
+
+class BluefinServiceClient:
+    """HTTP client for communicating with the Bluefin SDK service."""
+    
+    def __init__(self, base_url: str = BLUEFIN_SERVICE_URL, api_key: str = BLUEFIN_SERVICE_API_KEY):
+        self.base_url = base_url.rstrip("/")
+        self.api_key = api_key
+        self.session = None
+        
+    async def _get_session(self):
+        """Get or create aiohttp session."""
+        if self.session is None or self.session.closed:
+            headers = {}
+            if self.api_key:
+                headers["Authorization"] = f"Bearer {self.api_key}"
+            headers["Content-Type"] = "application/json"
+            
+            timeout = aiohttp.ClientTimeout(total=10)  # 10 second timeout
+            self.session = aiohttp.ClientSession(headers=headers, timeout=timeout)
+        return self.session
+    
+    async def close(self):
+        """Close the HTTP session."""
+        if self.session and not self.session.closed:
+            await self.session.close()
+    
+    async def health_check(self) -> dict:
+        """Check if Bluefin service is healthy."""
+        try:
+            session = await self._get_session()
+            async with session.get(f"{self.base_url}/health") as response:
+                if response.status == 200:
+                    return await response.json()
+                else:
+                    return {
+                        "status": "unhealthy",
+                        "error": f"HTTP {response.status}",
+                        "message": await response.text()
+                    }
+        except Exception as e:
+            logger.error(f"Bluefin health check failed: {e}")
+            return {
+                "status": "unreachable",
+                "error": str(e),
+                "service_url": self.base_url
+            }
+    
+    async def get_account_info(self) -> dict:
+        """Get account information from Bluefin service."""
+        try:
+            session = await self._get_session()
+            async with session.get(f"{self.base_url}/account") as response:
+                if response.status == 200:
+                    return await response.json()
+                else:
+                    raise HTTPException(
+                        status_code=response.status,
+                        detail=f"Bluefin service error: {await response.text()}"
+                    )
+        except aiohttp.ClientError as e:
+            logger.error(f"Failed to get Bluefin account info: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail=f"Bluefin service unavailable: {str(e)}"
+            )
+    
+    async def get_positions(self) -> dict:
+        """Get current positions from Bluefin service."""
+        try:
+            session = await self._get_session()
+            async with session.get(f"{self.base_url}/positions") as response:
+                if response.status == 200:
+                    return await response.json()
+                else:
+                    raise HTTPException(
+                        status_code=response.status,
+                        detail=f"Bluefin service error: {await response.text()}"
+                    )
+        except aiohttp.ClientError as e:
+            logger.error(f"Failed to get Bluefin positions: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail=f"Bluefin service unavailable: {str(e)}"
+            )
+    
+    async def get_orders(self) -> dict:
+        """Get current orders from Bluefin service."""
+        try:
+            session = await self._get_session()
+            async with session.get(f"{self.base_url}/orders") as response:
+                if response.status == 200:
+                    return await response.json()
+                else:
+                    raise HTTPException(
+                        status_code=response.status,
+                        detail=f"Bluefin service error: {await response.text()}"
+                    )
+        except aiohttp.ClientError as e:
+            logger.error(f"Failed to get Bluefin orders: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail=f"Bluefin service unavailable: {str(e)}"
+            )
+    
+    async def get_market_ticker(self, symbol: str) -> dict:
+        """Get market ticker data from Bluefin service."""
+        try:
+            session = await self._get_session()
+            async with session.get(f"{self.base_url}/market/ticker", params={"symbol": symbol}) as response:
+                if response.status == 200:
+                    return await response.json()
+                else:
+                    raise HTTPException(
+                        status_code=response.status,
+                        detail=f"Bluefin service error: {await response.text()}"
+                    )
+        except aiohttp.ClientError as e:
+            logger.error(f"Failed to get Bluefin market ticker: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail=f"Bluefin service unavailable: {str(e)}"
+            )
+    
+    async def place_order(self, order_data: dict) -> dict:
+        """Place an order via Bluefin service."""
+        try:
+            session = await self._get_session()
+            async with session.post(f"{self.base_url}/orders", json=order_data) as response:
+                if response.status in [200, 201]:
+                    return await response.json()
+                else:
+                    raise HTTPException(
+                        status_code=response.status,
+                        detail=f"Bluefin order error: {await response.text()}"
+                    )
+        except aiohttp.ClientError as e:
+            logger.error(f"Failed to place Bluefin order: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail=f"Bluefin service unavailable: {str(e)}"
+            )
+
+# Global Bluefin service client
+bluefin_client = BluefinServiceClient()
 
 
 # Enhanced connection manager for WebSocket connections with message persistence
@@ -338,6 +488,8 @@ class LogStreamer:
         self.container_name = container_name
         self.process: subprocess.Popen | None = None
         self.running = False
+        self.file_watchers = []
+        self.use_file_based = os.getenv("USE_FILE_BASED_LOGS", "false").lower() == "true"
 
     async def start(self):
         """Start log streaming in background"""
@@ -347,7 +499,21 @@ class LogStreamer:
         self.running = True
         logger.info(f"Starting log streamer for container: {self.container_name}")
 
+        if self.use_file_based:
+            # Use file-based log streaming (more secure)
+            await self._start_file_based_streaming()
+        else:
+            # Use Docker socket-based streaming (requires Docker socket access)
+            await self._start_docker_streaming()
+
+    async def _start_docker_streaming(self):
+        """Start Docker socket-based log streaming"""
         try:
+            # Check if docker command is available
+            result = subprocess.run(["docker", "--version"], capture_output=True, text=True, timeout=5)
+            if result.returncode != 0:
+                raise Exception("Docker command not available")
+                
             # Start docker logs process
             self.process = subprocess.Popen(
                 ["docker", "logs", "-f", "--tail", "100", self.container_name],
@@ -359,10 +525,76 @@ class LogStreamer:
 
             # Stream logs in background
             asyncio.create_task(self._stream_logs())
+            logger.info(f"Started Docker-based log streaming for {self.container_name}")
 
         except Exception as e:
-            logger.error(f"Failed to start log streaming: {e}")
+            logger.error(f"Failed to start Docker log streaming: {e}")
+            logger.info("Falling back to file-based log streaming")
+            await self._start_file_based_streaming()
+
+    async def _start_file_based_streaming(self):
+        """Start file-based log streaming (doesn't require Docker socket)"""
+        try:
+            # Watch trading bot log files
+            log_paths = [
+                "/app/trading-logs/trading.log",
+                "/app/trading-logs/llm_completions.log",
+                "/app/llm-logs/llm_completions.log",
+            ]
+            
+            for log_path in log_paths:
+                if os.path.exists(log_path):
+                    asyncio.create_task(self._watch_log_file(log_path))
+                    self.file_watchers.append(log_path)
+                    logger.info(f"Started watching log file: {log_path}")
+            
+            if not self.file_watchers:
+                logger.warning("No log files found to watch")
+            else:
+                logger.info(f"Started file-based log streaming for {len(self.file_watchers)} files")
+
+        except Exception as e:
+            logger.error(f"Failed to start file-based log streaming: {e}")
             self.running = False
+
+    async def _watch_log_file(self, file_path: str):
+        """Watch a log file for new lines"""
+        try:
+            # Get initial file size
+            if not os.path.exists(file_path):
+                logger.warning(f"Log file not found: {file_path}")
+                return
+                
+            with open(file_path, 'r') as f:
+                # Go to end of file
+                f.seek(0, 2)
+                
+                while self.running:
+                    line = f.readline()
+                    if line:
+                        # Broadcast new log line
+                        log_entry = {
+                            "timestamp": datetime.now().isoformat(),
+                            "level": "INFO",
+                            "message": line.strip(),
+                            "source": f"file-{os.path.basename(file_path)}",
+                            "file_path": file_path,
+                        }
+                        
+                        # Extract log level if present
+                        line_upper = line.upper()
+                        for level in ["ERROR", "WARN", "INFO", "DEBUG"]:
+                            if level in line_upper:
+                                log_entry["level"] = level
+                                break
+                        
+                        await manager.broadcast(log_entry)
+                    else:
+                        # No new data, sleep briefly
+                        await asyncio.sleep(0.5)
+                        
+        except Exception as e:
+            logger.error(f"Error watching log file {file_path}: {e}")
 
     async def _stream_logs(self):
         """Stream logs from Docker container"""
@@ -404,6 +636,8 @@ class LogStreamer:
         self.running = False
         if self.process:
             self.process.terminate()
+        self.file_watchers.clear()
+        logger.info("Log streaming stopped")
 
 
 # Global log streamer
@@ -419,9 +653,19 @@ async def lifespan(app: FastAPI):
 
     # Try to start log streamer, but don't fail if target container doesn't exist
     try:
-        # Start log streamer in background without awaiting (temporarily disabled)
-        # asyncio.create_task(log_streamer.start())
-        logger.info("Log streamer initialization scheduled (disabled for debugging)")
+        # Use file-based log streaming for better reliability
+        log_streamer.use_file_based = True
+        # Start log streamer in background with delay to avoid startup blocking
+        async def start_log_streaming_delayed():
+            await asyncio.sleep(2)  # Wait 2 seconds before starting
+            try:
+                await log_streamer.start()
+                logger.info("File-based log streaming started successfully")
+            except Exception as e:
+                logger.warning(f"Failed to start file-based log streaming: {e}")
+        
+        asyncio.create_task(start_log_streaming_delayed())
+        logger.info("Log streamer initialization scheduled (file-based)")
     except Exception as e:
         logger.warning(
             f"Failed to start log streamer: {e}. Continuing without log streaming."
@@ -485,8 +729,8 @@ async def lifespan(app: FastAPI):
 
         llm_parser.add_callback(llm_event_callback)
 
-        # Start real-time monitoring (temporarily disabled for debugging)
-        # llm_parser.start_real_time_monitoring(poll_interval=1.0)
+        # Start real-time monitoring
+        llm_parser.start_real_time_monitoring(poll_interval=1.0)
         logger.info("Started LLM log real-time monitoring")
 
     except Exception as e:
@@ -499,6 +743,13 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down FastAPI dashboard server...")
     log_streamer.stop()
+
+    # Close Bluefin service client
+    try:
+        await bluefin_client.close()
+        logger.info("Closed Bluefin service client")
+    except Exception as e:
+        logger.warning(f"Error closing Bluefin client: {e}")
 
     # Stop LLM log monitoring
     try:
@@ -771,7 +1022,7 @@ async def get_status():
             "bot_status": container_status,
             "system_uptime": system_uptime,
             "websocket_connections": len(manager.active_connections),
-            "log_buffer_size": len(manager.log_buffer),
+            "log_buffer_size": len(manager.message_buffers.get("log", [])),
             "log_streamer_running": log_streamer.running,
         }
 
@@ -783,7 +1034,7 @@ async def get_status():
             "bot_status": "error",
             "system_uptime": "unknown",
             "websocket_connections": len(manager.active_connections),
-            "log_buffer_size": len(manager.log_buffer),
+            "log_buffer_size": len(manager.message_buffers.get("log", [])),
             "log_streamer_running": log_streamer.running,
             "error": str(e)
         }
@@ -833,43 +1084,142 @@ async def get_trading_data():
         # Determine trading mode from environment or config
         # In real implementation, this would come from the bot's config
         futures_enabled = os.getenv("TRADING__ENABLE_FUTURES", "true").lower() == "true"
+        exchange_type = os.getenv("EXCHANGE__EXCHANGE_TYPE", "coinbase").lower()
         trading_mode = "futures" if futures_enabled else "spot"
         account_type = "CFM" if futures_enabled else "CBI"
         
-        # Mock trading data - in real implementation, this would come from the bot
-        trading_data = {
-            "timestamp": datetime.now().isoformat(),
-            "trading_mode": trading_mode,
-            "futures_enabled": futures_enabled,
-            "account_type": account_type,
-            "leverage_available": futures_enabled,
-            "account": {
-                "balance": "10000.00",
-                "currency": "USD",
-                "available_balance": "8500.00",
-                "unrealized_pnl": "150.00",
-                # Futures-specific fields
-                "margin_balance": "10000.00" if futures_enabled else None,
-                "margin_ratio": "15.0%" if futures_enabled else None,
-                "available_margin": "8500.00" if futures_enabled else None,
-            },
-            "current_position": {
-                "symbol": "BTC-USD",
+        # Try to get real Bluefin data if using Bluefin exchange
+        bluefin_data = {}
+        if exchange_type == "bluefin":
+            try:
+                # Check Bluefin service health first
+                health = await bluefin_client.health_check()
+                if health.get("status") == "healthy":
+                    # Get real account data
+                    try:
+                        account_info = await bluefin_client.get_account_info()
+                        positions = await bluefin_client.get_positions()
+                        orders = await bluefin_client.get_orders()
+                        
+                        bluefin_data = {
+                            "account_info": account_info,
+                            "positions": positions.get("positions", []),
+                            "orders": orders.get("orders", []),
+                            "service_status": "connected"
+                        }
+                    except Exception as e:
+                        logger.warning(f"Could not fetch Bluefin data: {e}")
+                        bluefin_data = {
+                            "service_status": "data_fetch_failed",
+                            "error": str(e)
+                        }
+                else:
+                    bluefin_data = {
+                        "service_status": "unhealthy",
+                        "error": health.get("error", "Service unhealthy")
+                    }
+            except Exception as e:
+                logger.error(f"Bluefin service error: {e}")
+                bluefin_data = {
+                    "service_status": "unreachable",
+                    "error": str(e)
+                }
+        
+        # Use real Bluefin data if available, otherwise use mock data
+        if exchange_type == "bluefin" and bluefin_data.get("service_status") == "connected":
+            account_info = bluefin_data.get("account_info", {})
+            positions = bluefin_data.get("positions", [])
+            orders = bluefin_data.get("orders", [])
+            
+            # Extract real position data
+            current_position = {}
+            if positions:
+                # Get the first position as current (in real app, might need to filter)
+                pos = positions[0] if isinstance(positions, list) else positions
+                current_position = {
+                    "symbol": pos.get("symbol", "BTC-PERP"),
+                    "side": pos.get("side", "flat"),
+                    "size": str(pos.get("size", "0.0")),
+                    "entry_price": str(pos.get("entry_price", "0.0")),
+                    "current_price": str(pos.get("mark_price", "0.0")),
+                    "unrealized_pnl": str(pos.get("unrealized_pnl", "0.0")),
+                    "leverage": pos.get("leverage", 1),
+                    "liquidation_price": str(pos.get("liquidation_price", "0.0")),
+                    "margin_used": str(pos.get("margin", "0.0")),
+                }
+            else:
+                current_position = {
+                    "symbol": "BTC-PERP",
+                    "side": "flat",
+                    "size": "0.0",
+                    "entry_price": "0.0",
+                    "current_price": "0.0",
+                    "unrealized_pnl": "0.0",
+                    "leverage": 1,
+                    "liquidation_price": "0.0",
+                    "margin_used": "0.0",
+                }
+            
+            # Extract account data
+            account_data = {
+                "balance": str(account_info.get("balance", "0.0")),
+                "currency": "USDC",  # Bluefin uses USDC
+                "available_balance": str(account_info.get("available_balance", "0.0")),
+                "unrealized_pnl": str(account_info.get("unrealized_pnl", "0.0")),
+                "margin_balance": str(account_info.get("margin_balance", "0.0")),
+                "margin_ratio": f"{account_info.get('margin_ratio', 0):.1f}%",
+                "available_margin": str(account_info.get("available_margin", "0.0")),
+                "network": account_info.get("network", "mainnet"),
+                "address": account_info.get("address", "unknown"),
+            }
+            
+            # Recent trades from orders
+            recent_trades = []
+            for order in orders[:5]:  # Last 5 orders
+                if order.get("status") == "filled":
+                    recent_trades.append({
+                        "timestamp": order.get("created_at", datetime.now().isoformat()),
+                        "symbol": order.get("symbol", "BTC-PERP"),
+                        "side": order.get("side", "buy"),
+                        "quantity": str(order.get("size", "0.0")),
+                        "price": str(order.get("price", "0.0")),
+                        "status": "filled",
+                        "trade_type": "futures",
+                        "leverage": order.get("leverage", 1),
+                        "order_id": order.get("id", "unknown"),
+                    })
+            
+        else:
+            # Mock trading data - fallback when Bluefin not available or using Coinbase
+            symbol_suffix = "-PERP" if exchange_type == "bluefin" else "-USD"
+            current_position = {
+                "symbol": f"BTC{symbol_suffix}",
                 "side": "long",
                 "size": "0.05",
                 "entry_price": "65000.00",
                 "current_price": "65500.00",
                 "unrealized_pnl": "25.00",
-                # Futures-specific fields
                 "leverage": 5 if futures_enabled else None,
                 "contracts": 1 if futures_enabled else None,
                 "liquidation_price": "58500.00" if futures_enabled else None,
                 "margin_used": "650.00" if futures_enabled else None,
-            },
-            "recent_trades": [
+            }
+            
+            account_currency = "USDC" if exchange_type == "bluefin" else "USD"
+            account_data = {
+                "balance": "10000.00",
+                "currency": account_currency,
+                "available_balance": "8500.00",
+                "unrealized_pnl": "150.00",
+                "margin_balance": "10000.00" if futures_enabled else None,
+                "margin_ratio": "15.0%" if futures_enabled else None,
+                "available_margin": "8500.00" if futures_enabled else None,
+            }
+            
+            recent_trades = [
                 {
                     "timestamp": datetime.now().isoformat(),
-                    "symbol": "BTC-USD",
+                    "symbol": f"BTC{symbol_suffix}",
                     "side": "buy",
                     "quantity": "0.05",
                     "price": "65000.00",
@@ -877,7 +1227,19 @@ async def get_trading_data():
                     "trade_type": trading_mode,
                     "leverage": 5 if futures_enabled else None,
                 }
-            ],
+            ]
+        
+        # Mock trading data - in real implementation, this would come from the bot
+        trading_data = {
+            "timestamp": datetime.now().isoformat(),
+            "trading_mode": trading_mode,
+            "futures_enabled": futures_enabled,
+            "exchange_type": exchange_type,
+            "account_type": account_type,
+            "leverage_available": futures_enabled,
+            "account": account_data,
+            "current_position": current_position,
+            "recent_trades": recent_trades,
             "performance": {
                 "total_trades": 42,
                 "winning_trades": 28,
@@ -890,6 +1252,7 @@ async def get_trading_data():
                 "memory_usage": memory_usage,
                 "last_update": datetime.now().isoformat(),
             },
+            "bluefin_data": bluefin_data if exchange_type == "bluefin" else None,
         }
 
         return trading_data
@@ -953,6 +1316,57 @@ async def get_trading_mode():
         current_volume = 0  # In real implementation, this would come from exchange API
         fee_tier = "Basic"
         
+        # Exchange-specific configuration
+        exchange_config = {}
+        bluefin_health = None
+        
+        if exchange_type == "bluefin":
+            # Get Bluefin service health and configuration
+            try:
+                bluefin_health = await bluefin_client.health_check()
+                if bluefin_health.get("status") == "healthy":
+                    # Get additional Bluefin-specific info if service is healthy
+                    try:
+                        account_info = await bluefin_client.get_account_info()
+                        exchange_config = {
+                            "service_url": bluefin_client.base_url,
+                            "service_status": "connected",
+                            "network": account_info.get("network", "mainnet"),
+                            "account_address": account_info.get("address", "unknown")
+                        }
+                    except Exception as e:
+                        logger.warning(f"Could not get Bluefin account info: {e}")
+                        exchange_config = {
+                            "service_url": bluefin_client.base_url,
+                            "service_status": "service_healthy_but_no_account",
+                            "error": str(e)
+                        }
+                else:
+                    exchange_config = {
+                        "service_url": bluefin_client.base_url,
+                        "service_status": "unhealthy",
+                        "error": bluefin_health.get("error", "Unknown error")
+                    }
+            except Exception as e:
+                logger.error(f"Error checking Bluefin service: {e}")
+                exchange_config = {
+                    "service_url": bluefin_client.base_url,
+                    "service_status": "unreachable",
+                    "error": str(e)
+                }
+        
+        # Bluefin-specific trading features
+        if exchange_type == "bluefin":
+            supported_symbols = {
+                "spot": [],  # Bluefin is DEX focused on perpetuals
+                "futures": ["BTC-PERP", "ETH-PERP", "SOL-PERP", "SUI-PERP"]
+            }
+        else:
+            supported_symbols = {
+                "spot": ["BTC-USD", "ETH-USD", "SOL-USD"] if not futures_enabled else [],
+                "futures": ["BTC-USD", "ETH-USD"] if futures_enabled else [],
+            }
+        
         return {
             "timestamp": datetime.now().isoformat(),
             "trading_mode": "futures" if futures_enabled else "spot",
@@ -968,17 +1382,19 @@ async def get_trading_mode():
                 "take_profit": True,
                 "contracts": futures_enabled,
                 "liquidation_price": futures_enabled,
+                "dex_trading": exchange_type == "bluefin",
+                "sui_blockchain": exchange_type == "bluefin",
             },
-            "supported_symbols": {
-                "spot": ["BTC-USD", "ETH-USD", "SOL-USD"] if not futures_enabled else [],
-                "futures": ["BTC-USD", "ETH-USD"] if futures_enabled else [],
-            },
+            "supported_symbols": supported_symbols,
             # Fee information
             "spot_maker_fee_rate": spot_maker_fee,
             "spot_taker_fee_rate": spot_taker_fee,
             "futures_fee_rate": futures_fee,
             "current_volume": current_volume,
             "fee_tier": fee_tier,
+            # Exchange-specific configuration
+            "exchange_config": exchange_config,
+            "bluefin_health": bluefin_health,
             # Legacy names for compatibility
             "mode": "futures" if futures_enabled else "spot",
             "maker_fee_rate": spot_maker_fee if not futures_enabled else futures_fee,
@@ -995,10 +1411,10 @@ async def get_trading_mode():
 async def get_logs(limit: int = 100):
     """Get recent logs from buffer"""
     try:
-        logs = manager.log_buffer[-limit:] if manager.log_buffer else []
+        logs = manager.message_buffers.get("log", [])[-limit:] if manager.message_buffers.get("log") else []
         return {
             "timestamp": datetime.now().isoformat(),
-            "total_logs": len(manager.log_buffer),
+            "total_logs": len(manager.message_buffers.get("log", [])),
             "returned_logs": len(logs),
             "logs": logs,
         }
@@ -1789,7 +2205,7 @@ async def update_risk_limits(
 
 @app.post("/api/bot/commands/manual-trade")
 async def manual_trade_command(
-    action: str = Query(..., regex="^(buy|sell|close)$"),
+    action: str = Query(..., pattern="^(buy|sell|close)$"),
     symbol: str = Query(..., min_length=3, max_length=20),
     size_percentage: float = Query(..., ge=0.1, le=100.0),
     reason: str = Query(default="Manual trade from dashboard")
@@ -1800,13 +2216,33 @@ async def manual_trade_command(
     WARNING: This will execute real trades if bot is in live mode!
     """
     try:
+        # Get current exchange type to customize parameters
+        exchange_type = os.getenv("EXCHANGE__EXCHANGE_TYPE", "coinbase").lower()
+        
         parameters = {
             "action": action,
             "symbol": symbol,
             "size_percentage": size_percentage,
             "reason": reason,
-            "manual_trade": True
+            "manual_trade": True,
+            "exchange_type": exchange_type
         }
+        
+        # Add Bluefin-specific parameters if using Bluefin
+        if exchange_type == "bluefin":
+            # Check if Bluefin service is available
+            try:
+                health = await bluefin_client.health_check()
+                if health.get("status") != "healthy":
+                    raise HTTPException(
+                        status_code=503,
+                        detail=f"Bluefin service is not healthy: {health.get('error', 'Unknown error')}"
+                    )
+                parameters["bluefin_service_available"] = True
+            except Exception as e:
+                logger.error(f"Bluefin service check failed: {e}")
+                parameters["bluefin_service_available"] = False
+                parameters["bluefin_error"] = str(e)
         
         command = BotCommand("manual_trade", parameters, priority=4)
         bot_command_queue.append(command)
@@ -1815,7 +2251,7 @@ async def manual_trade_command(
             "type": "manual_trade_command",
             "command_id": command.id,
             "parameters": parameters,
-            "message": f"Manual trade command issued: {action} {size_percentage}% {symbol}",
+            "message": f"Manual trade command issued: {action} {size_percentage}% {symbol} on {exchange_type}",
             "source": "dashboard-api",
             "warning": "This may execute real trades!",
             "timestamp": datetime.now().isoformat()
@@ -1824,7 +2260,7 @@ async def manual_trade_command(
         return {
             "status": "success",
             "command_id": command.id,
-            "message": f"Manual trade command queued: {action} {size_percentage}% {symbol}",
+            "message": f"Manual trade command queued: {action} {size_percentage}% {symbol} on {exchange_type}",
             "parameters": parameters,
             "queue_size": len(bot_command_queue),
             "warning": "This command may execute real trades if bot is in live mode!",
@@ -1981,7 +2417,7 @@ async def websocket_test():
         "alternative_endpoint": "/api/ws",
         "connection_manager": {
             "active_connections": len(manager.active_connections),
-            "log_buffer_size": len(manager.log_buffer),
+            "log_buffer_size": len(manager.message_buffers.get("log", [])),
         },
         "protocols": ["ws", "wss"],
         "cors_enabled": True,
@@ -2218,10 +2654,131 @@ async def websocket_status():
     """Get WebSocket connection status and statistics"""
     return {
         "active_connections": len(manager.active_connections),
-        "buffer_size": len(manager.log_buffer),
+        "buffer_size": len(manager.message_buffers.get("log", [])),
         "log_streamer_running": log_streamer.running if log_streamer else False,
         "timestamp": datetime.now().isoformat()
     }
+
+
+# Bluefin-specific API endpoints
+@app.get("/api/bluefin/health")
+async def get_bluefin_health():
+    """Get Bluefin service health status"""
+    try:
+        health = await bluefin_client.health_check()
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "service_url": bluefin_client.base_url,
+            "health": health
+        }
+    except Exception as e:
+        logger.error(f"Error checking Bluefin health: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/bluefin/account")
+async def get_bluefin_account():
+    """Get Bluefin account information"""
+    try:
+        account_info = await bluefin_client.get_account_info()
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "account": account_info
+        }
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions from the client
+    except Exception as e:
+        logger.error(f"Error getting Bluefin account: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/bluefin/positions")
+async def get_bluefin_positions():
+    """Get current Bluefin positions"""
+    try:
+        positions = await bluefin_client.get_positions()
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "positions": positions
+        }
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions from the client
+    except Exception as e:
+        logger.error(f"Error getting Bluefin positions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/bluefin/orders")
+async def get_bluefin_orders():
+    """Get current Bluefin orders"""
+    try:
+        orders = await bluefin_client.get_orders()
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "orders": orders
+        }
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions from the client
+    except Exception as e:
+        logger.error(f"Error getting Bluefin orders: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/bluefin/market/{symbol}")
+async def get_bluefin_market_ticker(symbol: str):
+    """Get Bluefin market ticker for specific symbol"""
+    try:
+        ticker = await bluefin_client.get_market_ticker(symbol)
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "symbol": symbol,
+            "ticker": ticker
+        }
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions from the client
+    except Exception as e:
+        logger.error(f"Error getting Bluefin market ticker: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/bluefin/orders")
+async def place_bluefin_order(order_data: dict):
+    """Place an order via Bluefin service"""
+    try:
+        # Validate required fields
+        required_fields = ["symbol", "side", "size", "order_type"]
+        for field in required_fields:
+            if field not in order_data:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Missing required field: {field}"
+                )
+        
+        # Add source information
+        order_data["source"] = "dashboard-api"
+        order_data["timestamp"] = datetime.now().isoformat()
+        
+        result = await bluefin_client.place_order(order_data)
+        
+        # Broadcast order placement
+        await manager.broadcast({
+            "type": "bluefin_order_placed",
+            "order_data": order_data,
+            "result": result,
+            "source": "dashboard-api",
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "status": "success",
+            "order": result
+        }
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions from the client
+    except Exception as e:
+        logger.error(f"Error placing Bluefin order: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Error handlers

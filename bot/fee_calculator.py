@@ -79,6 +79,28 @@ class FeeCalculator:
             TradeFees object with detailed fee breakdown
         """
         try:
+            # Check for zero or negative position value
+            if position_value <= 0:
+                logger.warning("Position value must be positive for fee calculation")
+                return TradeFees(
+                    entry_fee=Decimal("0"),
+                    exit_fee=Decimal("0"),
+                    total_fee=Decimal("0"),
+                    fee_rate=0.0,
+                    net_position_value=Decimal("0")
+                )
+
+            # Check for zero or negative current price
+            if current_price <= 0:
+                logger.warning("Current price must be positive for fee calculation")
+                return TradeFees(
+                    entry_fee=Decimal("0"),
+                    exit_fee=Decimal("0"),
+                    total_fee=Decimal("0"),
+                    fee_rate=0.0,
+                    net_position_value=Decimal("0")
+                )
+
             # Determine the appropriate fee rate
             if self.enable_futures:
                 fee_rate = self.futures_fee_rate
@@ -160,6 +182,45 @@ class FeeCalculator:
                     net_position_value=Decimal("0")
                 )
 
+            # Check for zero or negative account balance
+            if account_balance <= 0:
+                logger.warning("Account balance must be positive for position sizing")
+                adjusted_action = trade_action.copy()
+                adjusted_action.size_pct = 0
+                return adjusted_action, TradeFees(
+                    entry_fee=Decimal("0"),
+                    exit_fee=Decimal("0"),
+                    total_fee=Decimal("0"),
+                    fee_rate=0.0,
+                    net_position_value=Decimal("0")
+                )
+
+            # Check for zero or negative size percentage
+            if trade_action.size_pct <= 0:
+                logger.warning("Position size percentage must be positive")
+                adjusted_action = trade_action.copy()
+                adjusted_action.size_pct = 0
+                return adjusted_action, TradeFees(
+                    entry_fee=Decimal("0"),
+                    exit_fee=Decimal("0"),
+                    total_fee=Decimal("0"),
+                    fee_rate=0.0,
+                    net_position_value=Decimal("0")
+                )
+
+            # Check for zero or negative current price
+            if current_price <= 0:
+                logger.warning("Current price must be positive")
+                adjusted_action = trade_action.copy()
+                adjusted_action.size_pct = 0
+                return adjusted_action, TradeFees(
+                    entry_fee=Decimal("0"),
+                    exit_fee=Decimal("0"),
+                    total_fee=Decimal("0"),
+                    fee_rate=0.0,
+                    net_position_value=Decimal("0")
+                )
+
             # Calculate intended position value
             intended_position_value = account_balance * Decimal(str(trade_action.size_pct / 100))
 
@@ -178,6 +239,13 @@ class FeeCalculator:
 
             # For futures, the fee is on the notional value, but we pay from margin
             if self.enable_futures:
+                # Check for zero leverage to prevent division by zero
+                if leverage == 0:
+                    logger.warning("Leverage cannot be zero for futures trading")
+                    adjusted_action = trade_action.copy()
+                    adjusted_action.size_pct = 0
+                    return adjusted_action, initial_fees
+                
                 # Fees are deducted from margin, so we need to ensure we have enough margin
                 required_margin = leveraged_position_value / Decimal(str(leverage))
                 available_for_position = intended_position_value - initial_fees.total_fee
@@ -185,6 +253,13 @@ class FeeCalculator:
                 if available_for_position <= 0:
                     logger.warning("Insufficient funds after accounting for fees")
                     # Return zero position
+                    adjusted_action = trade_action.copy()
+                    adjusted_action.size_pct = 0
+                    return adjusted_action, initial_fees
+
+                # Check for zero intended position value to prevent division by zero
+                if intended_position_value == 0:
+                    logger.warning("Intended position value cannot be zero")
                     adjusted_action = trade_action.copy()
                     adjusted_action.size_pct = 0
                     return adjusted_action, initial_fees
@@ -200,6 +275,13 @@ class FeeCalculator:
                 if available_for_position <= 0:
                     logger.warning("Insufficient funds after accounting for fees")
                     # Return zero position
+                    adjusted_action = trade_action.copy()
+                    adjusted_action.size_pct = 0
+                    return adjusted_action, initial_fees
+
+                # Check for zero intended position value to prevent division by zero
+                if intended_position_value == 0:
+                    logger.warning("Intended position value cannot be zero")
                     adjusted_action = trade_action.copy()
                     adjusted_action.size_pct = 0
                     return adjusted_action, initial_fees
@@ -273,6 +355,16 @@ class FeeCalculator:
                 is_market_order
             )
 
+            # Check for zero position value to prevent division by zero
+            if position_value == 0:
+                logger.warning("Position value cannot be zero for minimum profitable move calculation")
+                return Decimal("0.001")  # 0.1% fallback
+            
+            # Check for zero leverage to prevent division by zero
+            if leverage == 0:
+                logger.warning("Leverage cannot be zero for minimum profitable move calculation")
+                return Decimal("0.001")  # 0.1% fallback
+            
             # The minimum move needed is the fee percentage times 2 (round trip)
             # divided by leverage (since leverage amplifies the move)
             fee_percentage = float(fees.total_fee / position_value)
@@ -325,6 +417,10 @@ class FeeCalculator:
                 return False, f"Take profit {trade_action.take_profit_pct:.2f}% too low to cover fees (min: {float(min_move * 2):.4%})"
 
             # Check if stop loss gives reasonable risk/reward
+            if stop_loss_decimal == 0:
+                logger.warning("Stop loss percentage cannot be zero")
+                return False, "Stop loss percentage cannot be zero for risk/reward calculation"
+            
             risk_reward_ratio = float(take_profit_decimal / stop_loss_decimal)
             if risk_reward_ratio < 1.5:  # Minimum 1.5:1 ratio after fees
                 return False, f"Risk/reward ratio {risk_reward_ratio:.2f} too low after accounting for fees"

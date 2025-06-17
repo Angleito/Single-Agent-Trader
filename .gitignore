@@ -322,3 +322,52 @@ logs/**/*.log
 *.env.local
 *.env.production  
 *.env.development
+
+# Dashboard and Integration Reports (contains sensitive data)
+dashboard_status_report.md
+*_status_report.md
+test_bluefin_integration.py
+BLUEFIN_DASHBOARD_SETUP.md
+
+# Additional API Keys and Private Keys
+*.private_key
+*_private_key
+*_api_key*
+wallet.json
+keystore/
+credentials/
+
+# Blockchain/Crypto specific
+*.seed
+*.mnemonic
+wallet_*.json
+private_keys/
+sui_keystore/
+.sui/
+
+# Additional log patterns for dashboard
+dashboard/backend/*.log
+dashboard/logs/
+websocket_logs/
+trading_logs/
+
+# MCP Server logs and data
+bot/mcp/*/logs/
+bot/mcp/*/data/
+mcp_*.log
+
+# Integration test outputs
+integration_test_*.log
+test_output/
+test_reports/
+
+# Performance monitoring data
+performance_*.json
+metrics_*.json
+monitoring/
+
+# Additional development artifacts  
+scratch_*.py
+debug_*.py
+test_*.md
+development_notes.md

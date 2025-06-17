@@ -430,6 +430,7 @@ export class SecurityManager {
         }),
       })
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.warn('Failed to notify server of logout:', error)
     }
 
@@ -603,6 +604,7 @@ export class SecurityManager {
    */
   public async setupBiometricAuth(): Promise<void> {
     if (!window.PublicKeyCredential) {
+      // eslint-disable-next-line no-console
       console.warn('WebAuthn not supported')
       return
     }
@@ -615,6 +617,7 @@ export class SecurityManager {
         this.emit('biometricAvailable')
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.warn('Biometric setup failed:', error)
     }
   }
@@ -791,7 +794,10 @@ export class SecurityManager {
   /**
    * Session management
    */
-  private async createSession(authResponse: AuthResponse, metadata: SessionMetadata): Promise<UserSession> {
+  private async createSession(
+    authResponse: AuthResponse,
+    metadata: SessionMetadata
+  ): Promise<UserSession> {
     const session: UserSession = {
       id: this.generateId(),
       userId: authResponse.userId,
@@ -897,6 +903,7 @@ export class SecurityManager {
         sessionStorage.setItem('trading_session', encryptedData)
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to save session to storage:', error)
     }
   }
@@ -919,6 +926,7 @@ export class SecurityManager {
 
       return session
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to load session from storage:', error)
       this.clearSessionFromStorage()
       return null
@@ -946,6 +954,7 @@ export class SecurityManager {
         ['encrypt', 'decrypt']
       )
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Encryption setup failed:', error)
     }
   }
@@ -1023,6 +1032,7 @@ export class SecurityManager {
       // Set CSRF cookie
       document.cookie = `${this.securityConfig.csrf.cookieName}=${this.csrfToken}; Secure; SameSite=Strict`
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('CSRF setup failed:', error)
     }
   }
@@ -1108,6 +1118,7 @@ export class SecurityManager {
         try {
           callback(data)
         } catch (error) {
+          // eslint-disable-next-line no-console
           console.error(`Error in security event listener for ${event}:`, error)
         }
       })

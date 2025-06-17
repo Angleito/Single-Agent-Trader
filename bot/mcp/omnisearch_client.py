@@ -266,7 +266,7 @@ class OmniSearchClient:
                     "q": query,
                     "limit": limit,
                     "timeframe": timeframe,
-                    "include_sentiment": include_sentiment
+                    "include_sentiment": str(include_sentiment).lower()
                 }
             )
 
@@ -335,9 +335,9 @@ class OmniSearchClient:
                 endpoint="crypto-sentiment",
                 params={
                     "symbol": base_symbol,
-                    "include_social": True,
-                    "include_news": True,
-                    "include_technical": True
+                    "include_social": "true",
+                    "include_news": "true",
+                    "include_technical": "true"
                 }
             )
 
@@ -395,8 +395,8 @@ class OmniSearchClient:
                 endpoint="market-sentiment",
                 params={
                     "market": "nasdaq",
-                    "include_indices": True,
-                    "include_sectors": True
+                    "include_indices": "true",
+                    "include_sectors": "true"
                 }
             )
 
@@ -470,7 +470,7 @@ class OmniSearchClient:
                     "symbol1": crypto_base,
                     "symbol2": nasdaq_base,
                     "timeframe": timeframe,
-                    "include_beta": True
+                    "include_beta": "true"
                 }
             )
 

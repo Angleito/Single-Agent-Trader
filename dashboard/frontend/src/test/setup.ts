@@ -20,7 +20,7 @@ global.navigator = {
       },
     }),
   },
-} as any
+} as Partial<Navigator>
 
 global.window = {
   ...global.window,
@@ -31,7 +31,7 @@ global.window = {
     hostname: 'localhost',
   },
   crypto: {
-    getRandomValues: (arr: any) => {
+    getRandomValues: (arr: Uint8Array) => {
       for (let i = 0; i < arr.length; i++) {
         arr[i] = Math.floor(Math.random() * 256)
       }
@@ -58,13 +58,43 @@ global.window = {
   },
   addEventListener: vi.fn(),
   removeEventListener: vi.fn(),
-} as any
+} as Partial<Window> & {
+  location: {
+    href: string
+    protocol: string
+    host: string
+    hostname: string
+  }
+  crypto: {
+    getRandomValues: (arr: Uint8Array) => Uint8Array
+    subtle: {
+      generateKey: () => void
+      encrypt: () => void
+      decrypt: () => void
+      digest: () => void
+    }
+  }
+  performance: {
+    now: () => number
+    memory: {
+      usedJSHeapSize: number
+      totalJSHeapSize: number
+      jsHeapSizeLimit: number
+    }
+  }
+  Notification: {
+    permission: NotificationPermission
+    requestPermission: () => Promise<NotificationPermission>
+  }
+  addEventListener: (type: string, listener: EventListener) => void
+  removeEventListener: (type: string, listener: EventListener) => void
+}
 
 // Mock IndexedDB
 global.indexedDB = {
   open: vi.fn(),
   deleteDatabase: vi.fn(),
-} as any
+} as Partial<IDBFactory>
 
 // Mock WebSocket
 global.WebSocket = vi.fn(() => ({
@@ -73,7 +103,7 @@ global.WebSocket = vi.fn(() => ({
   addEventListener: vi.fn(),
   removeEventListener: vi.fn(),
   readyState: 1,
-})) as any
+})) as unknown as typeof WebSocket
 
 // Mock fetch
 global.fetch = vi.fn()
@@ -94,16 +124,16 @@ global.IntersectionObserver = vi.fn(() => ({
   rootMargin: '0px',
   thresholds: [0],
   takeRecords: vi.fn().mockReturnValue([]),
-})) as any
+})) as unknown as typeof IntersectionObserver
 
 // Mock PerformanceObserver
 global.PerformanceObserver = vi.fn(() => ({
   observe: vi.fn(),
   disconnect: vi.fn(),
-})) as any
+})) as unknown as typeof PerformanceObserver
 
 // Add supportedEntryTypes as a static property
-;(global.PerformanceObserver as any).supportedEntryTypes = [
+;(global.PerformanceObserver as unknown as { supportedEntryTypes: string[] }).supportedEntryTypes = [
   'measure',
   'mark',
   'resource',
@@ -115,4 +145,4 @@ global.MutationObserver = vi.fn(() => ({
   observe: vi.fn(),
   disconnect: vi.fn(),
   takeRecords: vi.fn().mockReturnValue([]),
-})) as any
+})) as unknown as typeof MutationObserver

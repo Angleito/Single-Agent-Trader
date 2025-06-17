@@ -174,6 +174,9 @@ services:
       - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY:-}
       - MCP_SERVER_PORT=8767
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    
+    env_file:
+      - .env
       
     volumes:
       - ./logs/mcp:/app/logs
@@ -262,8 +265,8 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # Removed Docker socket mount for security - use Docker API if needed
-      # - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Docker socket for log streaming (development only - remove in production)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./dashboard/backend/logs:/app/logs
       - ./dashboard/backend/data:/app/data
       - ./logs:/app/trading-logs:ro  # Access to trading bot logs
@@ -283,9 +286,15 @@ services:
       # Enable CORS for frontend communication
       - CORS_ORIGINS=*
       - CORS_ALLOW_CREDENTIALS=true
+      # Bluefin service configuration
+      - BLUEFIN_SERVICE_URL=http://bluefin-service:8080
+      - BLUEFIN_SERVICE_API_KEY=${BLUEFIN_SERVICE_API_KEY:-}
+      # Exchange type for dashboard configuration
+      - EXCHANGE__EXCHANGE_TYPE=${EXCHANGE__EXCHANGE_TYPE:-coinbase}
     restart: unless-stopped
     depends_on:
       - ai-trading-bot
+      - bluefin-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

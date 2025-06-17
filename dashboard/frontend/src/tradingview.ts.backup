@@ -191,8 +191,6 @@ export class TradingViewChart {
         }, 1000)
       } catch (widgetError) {
         // eslint-disable-next-line no-console
-        // eslint-disable-next-line no-console
-        // eslint-disable-next-line no-console
         console.error('Failed to create TradingView widget:', widgetError)
         const errorMessage =
           widgetError instanceof Error ? widgetError.message : String(widgetError)
@@ -204,33 +202,22 @@ export class TradingViewChart {
           errorMessage.includes('data type')
         ) {
           // eslint-disable-next-line no-console
+          console.error('❌ Schema validation error detected. This may be caused by:')
           // eslint-disable-next-line no-console
+          console.error('  - Unexpected data types in widget configuration')
           // eslint-disable-next-line no-console
-        console.error('❌ Schema validation error detected. This may be caused by:')
+          console.error('  - Invalid property values in datafeed or overrides')
           // eslint-disable-next-line no-console
+          console.error('  - Missing required properties for TradingView API')
           // eslint-disable-next-line no-console
-          // eslint-disable-next-line no-console
-        console.error('  - Unexpected data types in widget configuration')
-          // eslint-disable-next-line no-console
-          // eslint-disable-next-line no-console
-          // eslint-disable-next-line no-console
-        console.error('  - Invalid property values in datafeed or overrides')
-          // eslint-disable-next-line no-console
-          // eslint-disable-next-line no-console
-          // eslint-disable-next-line no-console
-        console.error('  - Missing required properties for TradingView API')
-          // eslint-disable-next-line no-console
-          // eslint-disable-next-line no-console
-          // eslint-disable-next-line no-console
-        console.error('  - Function properties in non-datafeed objects')
+          console.error('  - Function properties in non-datafeed objects')
 
           // Analyze the configuration for potential issues if it was created
           if (widgetConfig) {
             this.analyzeConfigurationForSchemaIssues(widgetConfig)
 
             // Log the configuration that caused the issue for debugging
-            // eslint-disable-next-line no-console
-        console.error(
+            console.error(
               'Widget configuration that caused error:',
               JSON.stringify(
                 widgetConfig,
@@ -257,9 +244,7 @@ export class TradingViewChart {
       return true
     } catch (error) {
       // eslint-disable-next-line no-console
-      // eslint-disable-next-line no-console
-      // eslint-disable-next-line no-console
-        console.error('Failed to initialize TradingView chart:', error)
+      console.error('Failed to initialize TradingView chart:', error)
 
       if (this.retryCount < this.maxRetries) {
         this.retryCount++
@@ -268,9 +253,7 @@ export class TradingViewChart {
         // Network connectivity check before retry
         if (!navigator.onLine) {
           // eslint-disable-next-line no-console
-          // eslint-disable-next-line no-console
-          // eslint-disable-next-line no-console
-        console.error('No network connection available for retry')
+          console.error('No network connection available for retry')
           return false
         }
 
@@ -290,8 +273,7 @@ export class TradingViewChart {
       }
 
       // eslint-disable-next-line no-console
-      // eslint-disable-next-line no-console
-        console.error('TradingView initialization failed after all retries')
+      console.error('TradingView initialization failed after all retries')
       return false
     }
   }
@@ -345,8 +327,7 @@ export class TradingViewChart {
             }
           }
 
-          // eslint-disable-next-line no-console
-        console.error(errorMsg)
+          console.error(errorMsg)
           reject(new Error(errorMsg))
           return
         }
@@ -398,7 +379,7 @@ export class TradingViewChart {
         if (document.readyState === 'complete' || document.readyState === 'interactive') {
           const container = document.getElementById(this.config.container_id)
           if (container) {
-            // DEBUG: DOM ready and container found
+            console.log(`✅ DOM ready and container '${this.config.container_id}' found`)
             resolve()
             return
           }
@@ -408,8 +389,7 @@ export class TradingViewChart {
         if (elapsed > timeout) {
           const container = document.getElementById(this.config.container_id)
           const errorMsg = `DOM/container timeout after ${timeout}ms. DOM state: ${document.readyState}, Container exists: ${!!container}`
-          // eslint-disable-next-line no-console
-        console.error(errorMsg)
+          console.error(errorMsg)
           reject(new Error(errorMsg))
           return
         }
@@ -484,7 +464,6 @@ export class TradingViewChart {
 
       script.onerror = (error) => {
         clearTimeout(timeout)
-        // eslint-disable-next-line no-console
         console.error(`Failed to load TradingView script from ${currentSource}:`, error)
         script.remove()
 
@@ -638,7 +617,7 @@ export class TradingViewChart {
    * Perform comprehensive type validation to prevent "unknown data type" errors
    */
   private performComprehensiveTypeValidation(config: any): void {
-    // DEBUG: Performing comprehensive type validation
+    console.log('🔍 Performing comprehensive type validation...')
 
     // Define expected data types for each property
     const expectedTypes: Record<string, string> = {
@@ -691,8 +670,7 @@ export class TradingViewChart {
             }
             console.log(`✅ Successfully coerced '${key}' to ${expectedType}`)
           } catch (error) {
-            // eslint-disable-next-line no-console
-        console.error(`❌ Failed to coerce '${key}' to ${expectedType}:`, error)
+            console.error(`❌ Failed to coerce '${key}' to ${expectedType}:`, error)
             throw new Error(
               `Invalid data type for property '${key}': cannot convert ${actualType} to ${expectedType}`
             )
@@ -704,7 +682,7 @@ export class TradingViewChart {
     // Special validation for nested objects that might contain unknown types
     this.validateNestedObjectTypes(config)
 
-    // DEBUG: Comprehensive type validation completed
+    console.log('✅ Comprehensive type validation completed')
   }
 
   /**
@@ -871,7 +849,7 @@ export class TradingViewChart {
    * Analyze configuration for potential schema issues
    */
   private analyzeConfigurationForSchemaIssues(config: any): void {
-    // DEBUG: Analyzing configuration for schema issues
+    console.log('🔍 Analyzing configuration for schema issues...')
 
     const issues: string[] = []
 
@@ -905,12 +883,10 @@ export class TradingViewChart {
 
     // Report issues
     if (issues.length > 0) {
-      // eslint-disable-next-line no-console
-        console.error('❌ Configuration issues that may cause schema errors:')
-      issues.forEach((issue) => // eslint-disable-next-line no-console
-        console.error(`  - ${issue}`))
+      console.error('❌ Configuration issues that may cause schema errors:')
+      issues.forEach((issue) => console.error(`  - ${issue}`))
     } else {
-      // DEBUG: No obvious configuration issues found
+      console.log('✅ No obvious configuration issues found')
     }
   }
 
@@ -965,8 +941,7 @@ export class TradingViewChart {
           console.warn('⚠️ TradingView widget validation errors found:', errors)
           errors.forEach((error: any) => {
             if (error.includes?.('unknown')) {
-              // eslint-disable-next-line no-console
-        console.error(`❌ Unknown data type error: ${error}`)
+              console.error(`❌ Unknown data type error: ${error}`)
             }
           })
         }
@@ -990,8 +965,7 @@ export class TradingViewChart {
         console.warn('⚠️ Global TradingView errors detected:', globalErrors)
         globalErrors.forEach((error: any) => {
           if (error.includes?.('schema')) {
-            // eslint-disable-next-line no-console
-        console.error(`❌ Schema error: ${error}`)
+            console.error(`❌ Schema error: ${error}`)
           }
         })
       }
@@ -999,11 +973,9 @@ export class TradingViewChart {
       // Check for captured schema errors
       const schemaErrors = (window as any).TradingViewSchemaErrors || []
       if (schemaErrors.length > 0) {
-        // eslint-disable-next-line no-console
         console.error('🚨 Captured TradingView schema errors:')
         schemaErrors.forEach((errorInfo: any, index: number) => {
-          // eslint-disable-next-line no-console
-        console.error(`Schema Error ${index + 1}:`, errorInfo)
+          console.error(`Schema Error ${index + 1}:`, errorInfo)
         })
 
         // Clear the errors after reporting
@@ -1012,8 +984,7 @@ export class TradingViewChart {
 
       console.log('✅ Post-creation validation completed')
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Failed to perform post-creation validation:', error)
+      console.error('Failed to perform post-creation validation:', error)
     }
   }
 
@@ -1203,8 +1174,7 @@ export class TradingViewChart {
 
         // Validate callback function before using it
         if (typeof callback !== 'function') {
-          // eslint-disable-next-line no-console
-        console.error('[UDF onReady]: Invalid callback provided - not a function')
+          console.error('[UDF onReady]: Invalid callback provided - not a function')
           return
         }
 
@@ -1314,8 +1284,7 @@ export class TradingViewChart {
 
           onSymbolResolvedCallback(validatedSymbolInfo)
         } catch (error) {
-          // eslint-disable-next-line no-console
-        console.error('[UDF resolveSymbol]: Error resolving symbol', error)
+          console.error('[UDF resolveSymbol]: Error resolving symbol', error)
           onResolveErrorCallback('Symbol resolution failed')
         }
       },
@@ -1383,8 +1352,7 @@ export class TradingViewChart {
           console.log(`[UDF getBars]: Loaded ${bars.length} bars`)
           onHistoryCallback(bars, { noData: false })
         } catch (error) {
-          // eslint-disable-next-line no-console
-        console.error('[UDF getBars]: Error fetching bars', error)
+          console.error('[UDF getBars]: Error fetching bars', error)
           onErrorCallback('Failed to fetch historical data')
         }
       },
@@ -1457,8 +1425,7 @@ export class TradingViewChart {
             onDataCallback([])
           }
         } catch (error) {
-          // eslint-disable-next-line no-console
-        console.error('[UDF getMarks]: Error fetching marks', error)
+          console.error('[UDF getMarks]: Error fetching marks', error)
           onDataCallback([])
         }
       },
@@ -1485,8 +1452,7 @@ export class TradingViewChart {
         }, 2000)
       }
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Error setting up chart event listeners:', error)
+      console.error('Error setting up chart event listeners:', error)
     }
   }
 
@@ -1509,8 +1475,7 @@ export class TradingViewChart {
         this.loadAIMarkers()
       }
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Error in chart ready handler:', error)
+      console.error('Error in chart ready handler:', error)
     }
   }
 
@@ -1532,8 +1497,7 @@ export class TradingViewChart {
                 console.log(`Chart interval changed to: ${validatedInterval}`)
                 this.config.interval = validatedInterval
               } catch (error) {
-                // eslint-disable-next-line no-console
-        console.error('Error in interval change handler:', error)
+                console.error('Error in interval change handler:', error)
                 // Use current config as fallback
                 console.log(`Falling back to current interval: ${this.config.interval}`)
               }
@@ -1555,8 +1519,7 @@ export class TradingViewChart {
                 console.log(`Chart symbol changed to: ${validatedSymbolData.name}`)
                 this.config.symbol = validatedSymbolData.name
               } catch (error) {
-                // eslint-disable-next-line no-console
-        console.error('Error in symbol change handler:', error)
+                console.error('Error in symbol change handler:', error)
                 // Use current config as fallback
                 console.log(`Falling back to current symbol: ${this.config.symbol}`)
               }
@@ -1567,8 +1530,7 @@ export class TradingViewChart {
 
       console.log('Chart event listeners setup completed')
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Error setting up chart event listeners:', error)
+      console.error('Error setting up chart event listeners:', error)
     }
   }
 
@@ -1837,20 +1799,17 @@ export class TradingViewChart {
 
               console.log(`✅ Successfully added study: ${study.name} (ID: ${studyId})`)
             } catch (studyError) {
-              // eslint-disable-next-line no-console
-        console.error(`❌ Failed to add study '${study.name}':`, studyError)
+              console.error(`❌ Failed to add study '${study.name}':`, studyError)
 
               // Provide helpful error information
               if (!this.validateStudyName(study.name)) {
-                // eslint-disable-next-line no-console
-        console.error(
+                console.error(
                   `Study name '${study.name}' is not in the known valid study names list`
                 )
               }
 
               // Log the full error details for debugging
-              // eslint-disable-next-line no-console
-        console.error('Study creation error details:', {
+              console.error('Study creation error details:', {
                 studyName: study.name,
                 inputs: study.inputs,
                 styles: study.styles,
@@ -1872,8 +1831,7 @@ export class TradingViewChart {
         console.warn('chart method not available on widget')
       }
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Failed to add technical indicators:', error)
+      console.error('Failed to add technical indicators:', error)
     }
   }
 
@@ -1933,15 +1891,13 @@ export class TradingViewChart {
         try {
           callback(bar)
         } catch (error) {
-          // eslint-disable-next-line no-console
-        console.error(`Error in realtime callback for ${uid}:`, error)
+          console.error(`Error in realtime callback for ${uid}:`, error)
           // Remove failing subscriber
           this.subscribers.delete(uid)
         }
       })
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Failed to process market data update:', error)
+      console.error('Failed to process market data update:', error)
     }
   }
 
@@ -1959,7 +1915,6 @@ export class TradingViewChart {
       try {
         update()
       } catch (error) {
-        // eslint-disable-next-line no-console
         console.error('Error processing queued update:', error)
       }
     })
@@ -1985,8 +1940,7 @@ export class TradingViewChart {
       // Could add custom indicator overlays here if needed
       // For now, we rely on the built-in technical indicators
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Failed to update indicators:', error)
+      console.error('Failed to update indicators:', error)
     }
   }
 
@@ -2012,8 +1966,7 @@ export class TradingViewChart {
         console.warn('setSymbol method not available on widget')
       }
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Failed to change chart symbol:', error)
+      console.error('Failed to change chart symbol:', error)
     }
   }
 
@@ -2042,8 +1995,7 @@ export class TradingViewChart {
         console.warn('chart method not available on widget')
       }
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Failed to change chart interval:', error)
+      console.error('Failed to change chart interval:', error)
     }
   }
 
@@ -2056,8 +2008,7 @@ export class TradingViewChart {
     try {
       return await this.widget.takeScreenshot()
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Failed to take chart screenshot:', error)
+      console.error('Failed to take chart screenshot:', error)
       return null
     }
   }
@@ -2162,8 +2113,7 @@ export class TradingViewChart {
 
       console.log('Enhanced AI decision marker added:', marker)
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Failed to add AI decision marker:', error)
+      console.error('Failed to add AI decision marker:', error)
     }
   }
 
@@ -2214,8 +2164,7 @@ export class TradingViewChart {
         console.warn('Chart.createShape method not available for trend annotation')
       }
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Failed to add trend annotation:', error)
+      console.error('Failed to add trend annotation:', error)
     }
   }
 
@@ -2252,8 +2201,7 @@ export class TradingViewChart {
         }
       }
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Failed to load AI markers:', error)
+      console.error('Failed to load AI markers:', error)
     }
   }
 
@@ -2548,8 +2496,7 @@ export class TradingViewChart {
       chart.createStudy(name, false, false, [], script)
       console.log(`Custom indicator '${name}' added`)
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Failed to add custom indicator:', error)
+      console.error('Failed to add custom indicator:', error)
     }
   }
 
@@ -2564,8 +2511,7 @@ export class TradingViewChart {
       this.chartAnnotations = []
       console.log('All markers and annotations removed')
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Failed to remove markers:', error)
+      console.error('Failed to remove markers:', error)
     }
   }
 
@@ -2575,8 +2521,7 @@ export class TradingViewChart {
     try {
       return this.widget.save()
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Failed to save chart layout:', error)
+      console.error('Failed to save chart layout:', error)
       return null
     }
   }
@@ -2588,8 +2533,7 @@ export class TradingViewChart {
       this.widget.load(layout)
       console.log('Chart layout loaded')
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Failed to load chart layout:', error)
+      console.error('Failed to load chart layout:', error)
     }
   }
 
@@ -2603,8 +2547,7 @@ export class TradingViewChart {
       )
       console.log(`Chart type changed to: ${type}`)
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Failed to change chart type:', error)
+      console.error('Failed to change chart type:', error)
     }
   }
 
@@ -2640,8 +2583,7 @@ export class TradingViewChart {
       chart.createMultipointShape([drawingPoint], multipointOptions)
       console.log(`Drawing tool '${tool}' activated`)
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Failed to add drawing tool:', error)
+      console.error('Failed to add drawing tool:', error)
     }
   }
 
@@ -2694,8 +2636,7 @@ export class TradingViewChart {
     try {
       this.widget.chart().executeActionById('chartProperties')
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Failed to toggle fullscreen:', error)
+      console.error('Failed to toggle fullscreen:', error)
     }
   }
 
@@ -2708,8 +2649,7 @@ export class TradingViewChart {
     try {
       return await this.widget.takeScreenshot()
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Failed to export chart:', error)
+      console.error('Failed to export chart:', error)
       return null
     }
   }
@@ -2800,8 +2740,7 @@ export class TradingViewChart {
       // Extended wait for library initialization
       await new Promise((resolve) => setTimeout(resolve, 5000))
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Comprehensive fallback loading failed:', error)
+      console.error('Comprehensive fallback loading failed:', error)
       throw error
     }
   }
@@ -2834,8 +2773,7 @@ export class TradingViewChart {
         throw new Error('Chart initialization returned false')
       }
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Chart retry failed:', error)
+      console.error('Chart retry failed:', error)
       throw error
     }
   }
@@ -2956,7 +2894,6 @@ export class TradingViewChart {
         const chart = this.widget.chart()
         chart.resetData()
       } catch (error) {
-        // eslint-disable-next-line no-console
         console.error('Failed to reset chart:', error)
       }
     }
@@ -3299,13 +3236,11 @@ export class TradingViewChart {
 
       if (!hasScript && !hasLibrary) {
         this.ensureTradingViewScript().catch((error) => {
-          // eslint-disable-next-line no-console
-        console.error('Failed to load TradingView script during status check:', error)
+          console.error('Failed to load TradingView script during status check:', error)
         })
       } else if (hasLibrary && this.retryCount < this.maxRetries) {
         this.initialize().catch((error) => {
-          // eslint-disable-next-line no-console
-        console.error('Failed to initialize during status check:', error)
+          console.error('Failed to initialize during status check:', error)
         })
       }
     }
@@ -3507,16 +3442,14 @@ export class TradingViewChart {
   public async initializeWithPreflightChecks(): Promise<boolean> {
     // Pre-flight check 1: Network connectivity
     if (!navigator.onLine) {
-      // eslint-disable-next-line no-console
-        console.error('No network connection available')
+      console.error('No network connection available')
       return false
     }
 
     // Pre-flight check 2: Container element
     const container = document.getElementById(this.config.container_id)
     if (!container) {
-      // eslint-disable-next-line no-console
-        console.error(`Chart container element '${this.config.container_id}' not found`)
+      console.error(`Chart container element '${this.config.container_id}' not found`)
       return false
     }
 
@@ -3535,7 +3468,6 @@ export class TradingViewChart {
         // Wait for library to initialize
         await this.waitForTradingView(45000) // Extended timeout after manual loading
       } catch (error) {
-        // eslint-disable-next-line no-console
         console.error('Failed to load TradingView library:', error)
         return false
       }
@@ -3638,8 +3570,7 @@ export class TradingViewChart {
 
       console.log('Property interception setup completed')
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error('Error setting up property interception:', error)
+      console.error('Error setting up property interception:', error)
     }
   }
 
@@ -3664,8 +3595,7 @@ export class TradingViewChart {
             console.log(`[${objectName}] setProperty intercepted:`, validatedArgs)
             return originalSetProperty.apply(obj, validatedArgs)
           } catch (error) {
-            // eslint-disable-next-line no-console
-        console.error(`[${objectName}] setProperty error:`, error)
+            console.error(`[${objectName}] setProperty error:`, error)
             throw error
           }
         }
@@ -3679,8 +3609,7 @@ export class TradingViewChart {
             console.log(`[${objectName}] setOptions intercepted:`, validatedArgs)
             return originalSetOptions.apply(obj, validatedArgs)
           } catch (error) {
-            // eslint-disable-next-line no-console
-        console.error(`[${objectName}] setOptions error:`, error)
+            console.error(`[${objectName}] setOptions error:`, error)
             throw error
           }
         }
@@ -3694,8 +3623,7 @@ export class TradingViewChart {
             console.log(`[${objectName}] createStudy intercepted:`, validatedArgs)
             return originalCreateStudy.apply(obj, validatedArgs)
           } catch (error) {
-            // eslint-disable-next-line no-console
-        console.error(`[${objectName}] createStudy error:`, error)
+            console.error(`[${objectName}] createStudy error:`, error)
             throw error
           }
         }
@@ -3709,8 +3637,7 @@ export class TradingViewChart {
             console.log(`[${objectName}] createShape intercepted:`, validatedArgs)
             return originalCreateShape.apply(obj, validatedArgs)
           } catch (error) {
-            // eslint-disable-next-line no-console
-        console.error(`[${objectName}] createShape error:`, error)
+            console.error(`[${objectName}] createShape error:`, error)
             throw error
           }
         }
@@ -3718,8 +3645,7 @@ export class TradingViewChart {
 
       console.log(`Property interception set up for ${objectName}`)
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error(`Failed to set up property interception for ${objectName}:`, error)
+      console.error(`Failed to set up property interception for ${objectName}:`, error)
     }
   }
 
@@ -3826,8 +3752,7 @@ export class TradingViewChart {
 
       console.log(`[UDF ${context}]: Argument validation passed`)
     } catch (error) {
-      // eslint-disable-next-line no-console
-        console.error(`[UDF ${context}]: Validation error:`, error)
+      console.error(`[UDF ${context}]: Validation error:`, error)
     }
   }
 

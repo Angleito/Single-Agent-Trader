@@ -250,6 +250,7 @@ export class DataPersistenceManager {
         ['encrypt', 'decrypt']
       )
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.warn('Encryption setup failed:', error)
     }
   }
@@ -284,6 +285,7 @@ export class DataPersistenceManager {
       const blob = new Blob([workerCode], { type: 'application/javascript' })
       this.compressionWorker = new Worker(URL.createObjectURL(blob))
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.warn('Compression worker setup failed:', error)
     }
   }
@@ -646,7 +648,7 @@ export class DataPersistenceManager {
     const merged = { ...local }
 
     for (const key in remote) {
-      if (remote.hasOwnProperty(key)) {
+      if (Object.prototype.hasOwnProperty.call(remote, key)) {
         if (typeof remote[key] === 'object' && typeof local[key] === 'object') {
           merged[key] = this.mergeData(local[key], remote[key])
         } else {
@@ -1003,7 +1005,7 @@ export class DataPersistenceManager {
       this.isOnline = true
       this.emit('online')
       if (this.syncConfig.enabled) {
-        this.sync()
+        void this.sync()
       }
     })
 
@@ -1149,6 +1151,7 @@ export class DataPersistenceManager {
         try {
           callback(data)
         } catch (error) {
+          // eslint-disable-next-line no-console
           console.error(`Error in data persistence event listener for ${event}:`, error)
         }
       })

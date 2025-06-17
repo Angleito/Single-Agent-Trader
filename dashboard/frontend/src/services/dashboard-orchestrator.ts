@@ -1129,7 +1129,7 @@ export class DashboardOrchestrator {
 
     // Force garbage collection if available
     if ('gc' in window) {
-      (window as any).gc()
+      ;(window as any).gc()
     }
   }
 
@@ -1252,7 +1252,8 @@ export class DashboardOrchestrator {
 
   private log(message: string): void {
     if (this.config.debugMode) {
-      console.log(`[DashboardOrchestrator] ${message}`)
+      // DEBUG: Dashboard orchestrator debug logging
+      // console.log(`[DashboardOrchestrator] ${message}`)
     }
   }
 

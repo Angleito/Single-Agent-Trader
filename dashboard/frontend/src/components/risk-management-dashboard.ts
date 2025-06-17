@@ -545,7 +545,7 @@ export class RiskManagementDashboard {
         this.showSuccessMessage('Risk configuration saved successfully')
       } else {
         const result = await response.json()
-        throw new Error(result.detail || 'Failed to save configuration')
+        throw new Error(result.detail ?? 'Failed to save configuration')
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -560,7 +560,7 @@ export class RiskManagementDashboard {
     try {
       const getValue = (id: string): number => {
         const input = document.getElementById(id) as HTMLInputElement
-        return parseFloat(input?.value || '0')
+        return parseFloat(input?.value ?? '0')
       }
 
       return {
@@ -667,22 +667,22 @@ export class RiskManagementDashboard {
     // Update overview cards
     const portfolioRiskScore = this.calculatePortfolioRiskScore(metrics)
     this.updateElement('portfolio-risk-score', this.formatRiskScore(portfolioRiskScore))
-    this.updateElement('var-95', `$${(metrics.value_at_risk_95 || 0).toFixed(2)}`)
-    this.updateElement('max-drawdown', `${(metrics.max_drawdown || 0).toFixed(1)}%`)
-    this.updateElement('sharpe-ratio', (metrics.sharpe_ratio || 0).toFixed(2))
+    this.updateElement('var-95', `$${(metrics.value_at_risk_95 ?? 0).toFixed(2)}`)
+    this.updateElement('max-drawdown', `${(metrics.max_drawdown ?? 0).toFixed(1)}%`)
+    this.updateElement('sharpe-ratio', (metrics.sharpe_ratio ?? 0).toFixed(2))
 
-    this.updateElement('total-exposure', `$${(metrics.total_exposure || 0).toFixed(2)}`)
-    this.updateElement('concentration-ratio', `${(metrics.concentration_ratio || 0).toFixed(1)}%`)
-    this.updateElement('avg-correlation', (metrics.avg_correlation || 0).toFixed(2))
+    this.updateElement('total-exposure', `$${(metrics.total_exposure ?? 0).toFixed(2)}`)
+    this.updateElement('concentration-ratio', `${(metrics.concentration_ratio ?? 0).toFixed(1)}%`)
+    this.updateElement('avg-correlation', (metrics.avg_correlation ?? 0).toFixed(2))
 
-    this.updateElement('daily-pnl-limit', `$${(metrics.daily_pnl || 0).toFixed(2)}`)
-    this.updateElement('weekly-pnl-limit', `$${(metrics.weekly_pnl || 0).toFixed(2)}`)
-    this.updateElement('monthly-pnl-limit', `$${(metrics.monthly_pnl || 0).toFixed(2)}`)
+    this.updateElement('daily-pnl-limit', `$${(metrics.daily_pnl ?? 0).toFixed(2)}`)
+    this.updateElement('weekly-pnl-limit', `$${(metrics.weekly_pnl ?? 0).toFixed(2)}`)
+    this.updateElement('monthly-pnl-limit', `$${(metrics.monthly_pnl ?? 0).toFixed(2)}`)
 
     // Update status indicators
     this.updateRiskStatusIndicator(portfolioRiskScore)
-    this.updateExposureLevelIndicator(metrics.total_exposure || 0)
-    this.updatePnLStatusIndicator(metrics.daily_pnl || 0)
+    this.updateExposureLevelIndicator(metrics.total_exposure ?? 0)
+    this.updatePnLStatusIndicator(metrics.daily_pnl ?? 0)
   }
 
   /**
@@ -692,10 +692,10 @@ export class RiskManagementDashboard {
     // Simplified risk scoring algorithm
     let score = 0
 
-    score += Math.min((metrics.max_drawdown || 0) * 2, 40) // Max 40 points
-    score += Math.min(metrics.volatility || 0, 30) // Max 30 points
-    score += Math.min(metrics.concentration_ratio || 0, 20) // Max 20 points
-    score += Math.min(Math.abs(metrics.daily_pnl || 0) / 100, 10) // Max 10 points
+    score += Math.min((metrics.max_drawdown ?? 0) * 2, 40) // Max 40 points
+    score += Math.min(metrics.volatility ?? 0, 30) // Max 30 points
+    score += Math.min(metrics.concentration_ratio ?? 0, 20) // Max 20 points
+    score += Math.min(Math.abs(metrics.daily_pnl ?? 0) / 100, 10) // Max 10 points
 
     return Math.min(score, 100)
   }
@@ -777,45 +777,45 @@ export class RiskManagementDashboard {
     const config = this.currentRiskConfig
 
     // Check daily loss limit
-    if (Math.abs(metrics.daily_pnl || 0) > config.max_daily_loss) {
+    if (Math.abs(metrics.daily_pnl ?? 0) > config.max_daily_loss) {
       newAlerts.push({
         id: `daily-loss-${Date.now()}`,
         type: 'loss',
         severity: 'critical',
         title: 'Daily Loss Limit Exceeded',
-        message: `Daily loss of $${Math.abs(metrics.daily_pnl || 0).toFixed(2)} exceeds limit of $${config.max_daily_loss}`,
+        message: `Daily loss of $${Math.abs(metrics.daily_pnl ?? 0).toFixed(2)} exceeds limit of $${config.max_daily_loss}`,
         threshold: config.max_daily_loss,
-        current_value: Math.abs(metrics.daily_pnl || 0),
+        current_value: Math.abs(metrics.daily_pnl ?? 0),
         timestamp: new Date().toISOString(),
         acknowledged: false,
       })
     }
 
     // Check drawdown limit
-    if ((metrics.max_drawdown || 0) > config.max_drawdown) {
+    if ((metrics.max_drawdown ?? 0) > config.max_drawdown) {
       newAlerts.push({
         id: `drawdown-${Date.now()}`,
         type: 'drawdown',
         severity: 'high',
         title: 'Max Drawdown Exceeded',
-        message: `Current drawdown of ${(metrics.max_drawdown || 0).toFixed(1)}% exceeds limit of ${config.max_drawdown}%`,
+        message: `Current drawdown of ${(metrics.max_drawdown ?? 0).toFixed(1)}% exceeds limit of ${config.max_drawdown}%`,
         threshold: config.max_drawdown,
-        current_value: metrics.max_drawdown || 0,
+        current_value: metrics.max_drawdown ?? 0,
         timestamp: new Date().toISOString(),
         acknowledged: false,
       })
     }
 
     // Check concentration limit
-    if ((metrics.concentration_ratio || 0) > config.concentration_limit) {
+    if ((metrics.concentration_ratio ?? 0) > config.concentration_limit) {
       newAlerts.push({
         id: `concentration-${Date.now()}`,
         type: 'concentration',
         severity: 'medium',
         title: 'Concentration Limit Exceeded',
-        message: `Portfolio concentration of ${(metrics.concentration_ratio || 0).toFixed(1)}% exceeds limit of ${config.concentration_limit}%`,
+        message: `Portfolio concentration of ${(metrics.concentration_ratio ?? 0).toFixed(1)}% exceeds limit of ${config.concentration_limit}%`,
         threshold: config.concentration_limit,
-        current_value: metrics.concentration_ratio || 0,
+        current_value: metrics.concentration_ratio ?? 0,
         timestamp: new Date().toISOString(),
         acknowledged: false,
       })
@@ -894,7 +894,7 @@ export class RiskManagementDashboard {
       correlation: '🔗',
       concentration: '🎯',
     }
-    return icons[type as keyof typeof icons] || '⚠️'
+    return icons[type as keyof typeof icons] ?? '⚠️'
   }
 
   /**
@@ -1096,7 +1096,7 @@ export class RiskManagementDashboard {
 
   private filterAlerts(): void {
     const filterSelect = document.getElementById('alert-filter') as HTMLSelectElement
-    const _filter = filterSelect?.value || 'all'
+    const _filter = filterSelect?.value ?? 'all'
 
     // Implementation for filtering alerts
     this.updateAlertsDisplay()
@@ -1108,7 +1108,7 @@ export class RiskManagementDashboard {
   private async refreshExposureAnalysis(): Promise<void> {
     try {
       const timeframe =
-        (document.getElementById('exposure-timeframe') as HTMLSelectElement)?.value || '1d'
+        (document.getElementById('exposure-timeframe') as HTMLSelectElement)?.value ?? '1d'
       const response = await fetch(
         `${this.apiBaseUrl}/api/bot/risk/exposure?timeframe=${timeframe}`
       )

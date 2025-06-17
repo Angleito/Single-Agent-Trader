@@ -123,9 +123,28 @@ const NOTIFICATION_CONFIG = {
   AUTO_CLOSE_DELAY: 10000,
 }
 
+// Types for background sync and notifications
+interface BackgroundSyncItem {
+  id: string
+  data: {
+    url: string
+    method: string
+    headers: Record<string, string>
+    body: string | null
+  }
+  timestamp: number
+  attempts: number
+}
+
+interface NotificationQueueItem {
+  title: string
+  options: NotificationOptions
+  timestamp: number
+}
+
 // Global variables for tracking
-const backgroundSyncQueue: any[] = []
-const notificationQueue: any[] = []
+const backgroundSyncQueue: BackgroundSyncItem[] = []
+const notificationQueue: NotificationQueueItem[] = []
 const performanceMetrics = {
   cacheHits: 0,
   cacheMisses: 0,
@@ -172,7 +191,7 @@ self.addEventListener('fetch', (event: FetchEvent) => {
 /**
  * Background Sync Event Handler
  */
-self.addEventListener('sync', (event: any) => {
+self.addEventListener('sync', (event: ExtendableEvent & { tag: string }) => {
   console.log('[SW] Background sync triggered:', event.tag)
 
   if (event.tag === SYNC_CONFIG.QUEUE_NAME) {
@@ -274,14 +293,22 @@ async function cleanupOldCaches(): Promise<void> {
 /**
  * Find matching route configuration
  */
-function findMatchingRoute(url: string): any {
+interface RouteConfig {
+  pattern: RegExp
+  strategy: string
+  cache: string | null
+  maxAge: number
+  networkTimeout?: number
+}
+
+function findMatchingRoute(url: string): RouteConfig | undefined {
   return ROUTES_CONFIG.find((route) => route.pattern.test(url))
 }
 
 /**
  * Handle fetch requests based on route configuration
  */
-async function handleRequest(request: Request, route: any): Promise<Response> {
+async function handleRequest(request: Request, route: RouteConfig): Promise<Response> {
   performanceMetrics.networkRequests++
 
   switch (route.strategy) {
@@ -303,7 +330,7 @@ async function handleRequest(request: Request, route: any): Promise<Response> {
 /**
  * Cache First Strategy
  */
-async function handleCacheFirst(request: Request, route: any): Promise<Response> {
+async function handleCacheFirst(request: Request, route: RouteConfig): Promise<Response> {
   const cache = await caches.open(route.cache)
   const cachedResponse = await cache.match(request)
 
@@ -333,7 +360,7 @@ async function handleCacheFirst(request: Request, route: any): Promise<Response>
 /**
  * Network First Strategy
  */
-async function handleNetworkFirst(request: Request, route: any): Promise<Response> {
+async function handleNetworkFirst(request: Request, route: RouteConfig): Promise<Response> {
   try {
     const networkResponse = await fetchWithTimeout(request, route.networkTimeout)
 
@@ -366,7 +393,7 @@ async function handleNetworkFirst(request: Request, route: any): Promise<Respons
 /**
  * Stale While Revalidate Strategy
  */
-async function handleStaleWhileRevalidate(request: Request, route: any): Promise<Response> {
+async function handleStaleWhileRevalidate(request: Request, route: RouteConfig): Promise<Response> {
   const cache = await caches.open(route.cache)
   const cachedResponse = await cache.match(request)
 
@@ -417,7 +444,7 @@ async function handleStaleWhileRevalidate(request: Request, route: any): Promise
 /**
  * Network Only Strategy
  */
-async function handleNetworkOnly(request: Request, route: any): Promise<Response> {
+async function handleNetworkOnly(request: Request, route: RouteConfig): Promise<Response> {
   try {
     return await fetchWithTimeout(request, route.networkTimeout)
   } catch (error) {
@@ -438,7 +465,7 @@ async function handleNetworkOnly(request: Request, route: any): Promise<Response
 /**
  * Cache Only Strategy
  */
-async function handleCacheOnly(request: Request, route: any): Promise<Response> {
+async function handleCacheOnly(request: Request, route: RouteConfig): Promise<Response> {
   const cache = await caches.open(route.cache)
   const cachedResponse = await cache.match(request)
 
@@ -500,7 +527,7 @@ function createOfflineApiResponse(request: Request): Response {
   const pathSegments = url.pathname.split('/')
   const endpoint = pathSegments[pathSegments.length - 1]
 
-  let offlineData: any = {
+  let offlineData: Record<string, unknown> = {
     error: 'Offline',
     message: 'This data is not available offline',
     timestamp: new Date().toISOString(),
@@ -559,7 +586,7 @@ async function setupBackgroundSync(): Promise<void> {
 /**
  * Queue item for background sync
  */
-async function queueBackgroundSync(data: any): Promise<void> {
+async function queueBackgroundSync(data: BackgroundSyncItem['data']): Promise<void> {
   backgroundSyncQueue.push({
     id: Date.now().toString(),
     data,
@@ -610,7 +637,7 @@ async function processBackgroundSync(): Promise<void> {
 /**
  * Process individual background sync item
  */
-async function processBackgroundSyncItem(item: any): Promise<void> {
+async function processBackgroundSyncItem(item: BackgroundSyncItem): Promise<void> {
   const { data } = item
 
   const request = new Request(data.url, {
@@ -631,7 +658,19 @@ async function processBackgroundSyncItem(item: any): Promise<void> {
 /**
  * Handle push notifications
  */
-async function handlePushNotification(data: any): Promise<void> {
+interface PushNotificationData {
+  title?: string
+  body?: string
+  icon?: string
+  badge?: string
+  tag?: string
+  data?: Record<string, unknown>
+  priority?: 'normal' | 'critical'
+  actions?: NotificationAction[]
+  timestamp?: number
+}
+
+async function handlePushNotification(data: PushNotificationData): Promise<void> {
   console.log('[SW] Handling push notification:', data)
   performanceMetrics.pushNotifications++
 
@@ -682,8 +721,8 @@ async function handlePushNotification(data: any): Promise<void> {
  */
 async function handleNotificationClick(event: NotificationEvent): Promise<void> {
   const notification = event.notification
-  const _action = event.action
-  const data = notification.data
+  const action = event.action
+  const data = notification.data as Record<string, unknown>
 
   console.log('[SW] Notification clicked:', { action, data })
 
@@ -736,7 +775,13 @@ async function handleNotificationClick(event: NotificationEvent): Promise<void> 
 /**
  * Update cache with new data
  */
-async function updateCache(payload: any): Promise<void> {
+interface CacheUpdatePayload {
+  cacheName: string
+  url: string
+  data: Record<string, unknown>
+}
+
+async function updateCache(payload: CacheUpdatePayload): Promise<void> {
   const { cacheName, url, data } = payload
 
   if (!cacheName || !url || !data) return

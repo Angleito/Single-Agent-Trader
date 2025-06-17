@@ -301,7 +301,7 @@ class VisibilityHandler {
       this.processVisibilityChange(newVisible, source)
     }
 
-    const processVisibilityChange = (newVisible: boolean, source: string): void => {
+    const processVisibilityChange = (newVisible: boolean, _source: string): void => {
       this.lastVisibilityChange = Date.now()
       this.isVisible = newVisible
       this.callbacks.forEach((callback) => callback(newVisible))
@@ -1679,7 +1679,7 @@ class DashboardApp {
     }
 
     // Check for environment variable for non-proxy scenarios
-    const envWsUrl = import.meta.env.VITE_WS_URL || (window as any).__WS_URL__
+    const envWsUrl = import.meta.env.VITE_WS_URL ?? (window as any).__WS_URL__
     if (envWsUrl) {
       // Handle absolute URLs (already include protocol and host)
       if (envWsUrl.startsWith('ws://') || envWsUrl.startsWith('wss://')) {
@@ -2311,7 +2311,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await globalDashboardApp.initialize()
     clearTimeout(initTimeout)
 
-    const pageLoadTime = performance.now() - pageLoadStart
+    const _pageLoadTime = performance.now() - pageLoadStart
   } catch (error) {
     console.error('❌ Failed to start dashboard:', error)
 
