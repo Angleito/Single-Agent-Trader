@@ -242,7 +242,7 @@ export class DashboardWebSocket {
   constructor(url?: string, config: WebSocketConfig = {}) {
     // Check for runtime configuration first
     const runtimeWsUrl = (window as any).__WS_URL__ || (window as any).__RUNTIME_CONFIG__?.WS_URL
-    
+
     // Use dynamic URL detection if no URL provided
     if (!url && !config.url && !runtimeWsUrl) {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -353,7 +353,7 @@ export class DashboardWebSocket {
     const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1'
     const isDevPort = port === '3000' || port === '3001' || port === '5173'
     const isNginxPort = port === '8080'
-    
+
     // Production nginx proxy scenario (port 8080)
     if (isNginxPort) {
       // Use relative /api/ws path for nginx proxy routing

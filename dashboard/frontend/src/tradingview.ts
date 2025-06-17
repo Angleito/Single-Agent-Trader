@@ -2,21 +2,21 @@ import type { ChartConfig, MarketData, VuManchuIndicators, TradeAction } from '.
 
 /**
  * TELEMETRY BLOCKING IMPLEMENTATION
- * 
+ *
  * This TradingView integration includes comprehensive telemetry and analytics blocking
  * to prevent "Failed to load resource: net::ERR_NAME_NOT_RESOLVED" errors for:
  * - telemetry.tradingview.com
- * - analytics.tradingview.com  
+ * - analytics.tradingview.com
  * - metrics.tradingview.com
  * - tracking.tradingview.com
- * 
+ *
  * Features implemented:
  * 1. Widget configuration: Disabled telemetry/analytics features in disabled_features array
  * 2. Network interception: fetch() and XMLHttpRequest patching to block telemetry requests
  * 3. Error suppression: Console error filtering for telemetry-related network failures
  * 4. CSP headers: Content Security Policy prevents external telemetry connections
  * 5. Monitoring: Telemetry blocking statistics and logging
- * 
+ *
  * Usage: Call chart.getTelemetryBlockingStats() to see blocking statistics
  */
 
@@ -3058,9 +3058,9 @@ export class TradingViewChart {
         errorMessage.includes('stats.tradingview.com') ||
         errorMessage.includes('tracking.tradingview.com') ||
         errorMessage.includes('net::ERR_NAME_NOT_RESOLVED') ||
-        (errorMessage.includes('Failed to load resource') && 
+        (errorMessage.includes('Failed to load resource') &&
          (errorMessage.includes('telemetry') || errorMessage.includes('analytics'))) ||
-        (errorMessage.includes('TradingView') && 
+        (errorMessage.includes('TradingView') &&
          (errorMessage.includes('network') || errorMessage.includes('fetch')))
       ) {
         // SILENTLY IGNORE telemetry connection failures - they're not critical
@@ -3415,7 +3415,7 @@ export class TradingViewChart {
     const originalFetch = window.fetch
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
-      
+
       // Check if this is a telemetry or analytics request
       if (url && (
         url.includes('telemetry.tradingview.com') ||
@@ -3438,7 +3438,7 @@ export class TradingViewChart {
         return await originalFetch(input, init)
       } catch (error) {
         // If it's a network error for TradingView-related requests, handle gracefully
-        if (url && url.includes('tradingview.com') && 
+        if (url && url.includes('tradingview.com') &&
             error instanceof Error && error.message.includes('ERR_NAME_NOT_RESOLVED')) {
           console.log('🌐 Network error for TradingView request intercepted:', url)
           return new Response('{"status":"error","message":"offline"}', {
@@ -3458,7 +3458,7 @@ export class TradingViewChart {
 
       open(method: string, url: string | URL, async?: boolean, user?: string | null, password?: string | null): void {
         this._url = typeof url === 'string' ? url : url.href
-        
+
         // Check for telemetry endpoints
         if (this._url && (
           this._url.includes('telemetry.tradingview.com') ||
@@ -3486,7 +3486,7 @@ export class TradingViewChart {
       this.blockedTelemetryRequests.add(url)
       this.telemetryBlockCount++
       console.log(`🚫 Blocked TradingView telemetry request #${this.telemetryBlockCount}:`, url)
-      
+
       // Log summary every 5 blocked requests
       if (this.telemetryBlockCount % 5 === 0) {
         console.log(`📊 Telemetry Summary: ${this.telemetryBlockCount} total requests blocked from ${this.blockedTelemetryRequests.size} unique endpoints`)
@@ -4035,13 +4035,13 @@ export class TradingViewChart {
 
     if (typeof obj === 'object') {
       const normalized: any = {}
-      
+
       for (const [key, value] of Object.entries(obj)) {
         if (value === undefined) {
           // Skip undefined values - they cause "unknown" type errors
           continue
         }
-        
+
         if (value === null) {
           normalized[key] = null
         } else if (typeof value === 'string') {
@@ -4067,7 +4067,7 @@ export class TradingViewChart {
           normalized[key] = String(value)
         }
       }
-      
+
       return normalized
     }
 

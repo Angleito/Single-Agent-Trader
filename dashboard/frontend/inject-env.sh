@@ -36,12 +36,12 @@ window.__RUNTIME_CONFIG__ = {
 if [ -f "/usr/share/nginx/html/index.html" ]; then
   # Create the environment script
   echo "${ENV_JS}" > /usr/share/nginx/html/runtime-env.js
-  
+
   # Inject script tag into index.html if not already present
   if ! grep -q "runtime-env.js" /usr/share/nginx/html/index.html; then
     sed -i 's|<head>|<head><script src="/runtime-env.js"></script>|' /usr/share/nginx/html/index.html
   fi
-  
+
   echo "✅ Environment variables injected successfully"
 else
   echo "❌ index.html not found, skipping injection"

@@ -9,7 +9,7 @@
  * - Trading history
  */
 
-import type { RiskMetrics, TradingModeConfig } from '../types'
+import type { RiskMetrics, TradingModeConfig, Position, MarketData } from '../types'
 
 export interface TradeRequest {
   action: 'buy' | 'sell' | 'close'

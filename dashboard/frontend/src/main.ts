@@ -465,7 +465,7 @@ class DashboardApp {
 
     // Initialize components
     this.ui = new DashboardUI()
-    
+
     // Create WebSocket with fallback URLs for better resilience
     const fallbackUrls = this.generateWebSocketFallbackUrls()
     this.websocket = new DashboardWebSocket(this.config.websocket_url, {
@@ -1670,13 +1670,13 @@ class DashboardApp {
       if (port === '3000' || port === '3001' || port === '5173') {
         fallbacks.push(`${protocol}//${hostname}:8000/ws`)
       }
-      
+
       // Nginx proxy scenarios
       if (port === '8080') {
         fallbacks.push(`${protocol}//${hostname}:8080/api/ws`)
         fallbacks.push(`${protocol}//${hostname}:8000/ws`)
       }
-      
+
       // Additional localhost variations
       fallbacks.push(`${protocol}//localhost:8000/ws`)
       fallbacks.push(`${protocol}//127.0.0.1:8000/ws`)
@@ -1688,7 +1688,7 @@ class DashboardApp {
 
     // Remove duplicates and filter out the primary URL
     const uniqueFallbacks = [...new Set(fallbacks)].filter(url => url !== this.config.websocket_url)
-    
+
     return uniqueFallbacks
   }
 
@@ -1740,7 +1740,7 @@ class DashboardApp {
     const isStandardWebPort = port === '80' || port === '443' || port === ''
     const isDevPort = port === '3000' || port === '3001' || port === '5173'
     const isNginxPort = port === '8080'
-    
+
     // Container environment detection
     const isLikelyContainerized = (
       // Docker Compose frontend scenarios
@@ -1834,7 +1834,7 @@ class DashboardApp {
     const isStandardWebPort = port === '80' || port === '443' || port === ''
     const isDevPort = port === '3000' || port === '3001' || port === '5173'
     const isNginxPort = port === '8080'
-    
+
     // Container environment detection
     const isLikelyContainerized = (
       // Docker Compose frontend scenarios
