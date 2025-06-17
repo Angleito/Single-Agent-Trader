@@ -22,6 +22,7 @@ import { ErrorHandlingManager } from './services/error-handling.ts'
 import { SecurityManager } from './services/security-manager.ts'
 import { PerformanceOptimizer } from './services/performance-optimizer.ts'
 import { TestSuiteManager } from './tests/test-suite-manager.ts'
+import { ModalManager } from './utils/modal-manager.ts'
 
 import type {
   DashboardConfig,
@@ -434,6 +435,7 @@ class DashboardApp {
   private securityManager: SecurityManager | null = null
   private performanceOptimizer: PerformanceOptimizer | null = null
   private testManager: TestSuiteManager | null = null
+  private modalManager = ModalManager.getInstance()
 
   // Debounced methods for performance
   private debouncedUpdateMarketData: (data: MarketData) => void
@@ -443,7 +445,7 @@ class DashboardApp {
   constructor() {
     // Configuration
     this.config = {
-      websocket_url: this.getWebSocketUrl(),
+      websocket_url: this.getWebSocketUrl(), // Use the comprehensive URL detection logic
       api_base_url: this.getApiBaseUrl(),
       default_symbol: 'BTC-USD',
       refresh_interval: 1000,
@@ -588,6 +590,10 @@ class DashboardApp {
       this.updateLoadingProgress('Connecting to bot...', 75)
       this.performanceMonitor.startTiming('websocket_setup')
       this.setupWebSocketHandlers()
+
+      // Setup error recovery and health monitoring after WebSocket is configured
+      this.setupErrorRecovery()
+      this.startConnectionHealthCheck()
 
       // WebSocket connection with non-blocking timeout
       const connectionPromise = new Promise<void>((resolve) => {
@@ -1365,6 +1371,36 @@ class DashboardApp {
         })
       } else if (status === 'error') {
         this.ui.log('error', 'WebSocket connection error', 'WebSocket')
+        
+        // Use modal manager for connection errors
+        this.modalManager.showErrorModal(
+          `connection-error-${Date.now()}`,
+          'Failed to connect to trading bot. Please check your connection and try again.',
+          true,
+          {
+            title: 'Connection Error',
+            autoCloseDelay: 7000,
+            actions: [
+              {
+                id: 'retry',
+                label: 'Retry Connection',
+                type: 'primary',
+                callback: () => {
+                  if (this.websocket) {
+                    this.websocket.connect()
+                  }
+                }
+              },
+              {
+                id: 'dismiss',
+                label: 'Dismiss',
+                type: 'secondary',
+                callback: () => {} // Auto-close handles dismissal
+              }
+            ]
+          }
+        )
+        
         this.statusIndicators?.addAlert({
           type: 'error',
           title: 'Connection Error',
@@ -1449,7 +1485,18 @@ class DashboardApp {
       if (msg.data) {
         this.ui.log('error', msg.data.message, 'System')
 
-        // Error alert
+        // Use modal manager for system errors
+        this.modalManager.showErrorModal(
+          `system-error-${Date.now()}`,
+          msg.data.message,
+          true,
+          {
+            title: 'System Error',
+            autoCloseDelay: 6000
+          }
+        )
+
+        // Also add status indicator alert
         this.statusIndicators?.addAlert({
           type: 'error',
           title: 'System Error',
@@ -1463,7 +1510,35 @@ class DashboardApp {
     this.websocket.onError((error: Event | Error) => {
       console.error('WebSocket error:', error)
       const errorMessage = error instanceof Error ? error.message : 'WebSocket connection error'
-      this.ui.showError(errorMessage)
+      
+      // Use modal manager for WebSocket errors with auto-close
+      this.modalManager.showErrorModal(
+        `websocket-error-${Date.now()}`,
+        errorMessage,
+        true,
+        {
+          title: 'Connection Error',
+          autoCloseDelay: 8000,
+          actions: [
+            {
+              id: 'retry',
+              label: 'Retry Connection',
+              type: 'primary',
+              callback: () => {
+                if (this.websocket) {
+                  this.websocket.connect()
+                }
+              }
+            },
+            {
+              id: 'dismiss',
+              label: 'Dismiss',
+              type: 'secondary',
+              callback: () => {} // Auto-close handles dismissal
+            }
+          ]
+        }
+      )
     })
   }
 
@@ -1988,6 +2063,42 @@ class DashboardApp {
   }
 
   /**
+   * Setup error recovery logic
+   */
+  private setupErrorRecovery(): void {
+    // Auto-retry WebSocket connections
+    this.websocket.onError((error) => {
+      console.warn('WebSocket error, will retry:', error.message || error.toString());
+      setTimeout(() => {
+        if (!this.websocket.isConnected()) {
+          this.websocket.connect();
+        }
+      }, 5000);
+    });
+
+    // Handle TradingView loading failures - only retry if chart actually failed
+    if (!this.chart) {
+      this.retryChartInitialization().catch((error) => {
+        console.warn('Chart retry failed during error recovery setup:', error);
+      });
+    }
+  }
+
+  /**
+   * Start connection health monitoring
+   */
+  private startConnectionHealthCheck(): void {
+    setInterval(() => {
+      const health = this.websocket.getConnectionHealth();
+      if (!health.isHealthy && !health.isOffline) {
+        console.log('Connection unhealthy, attempting recovery...');
+        this.websocket.disconnect();
+        setTimeout(() => this.websocket.connect(), 1000);
+      }
+    }, 30000); // Check every 30 seconds
+  }
+
+  /**
    * Retry chart initialization with enhanced recovery
    */
   private async retryChartInitialization(): Promise<void> {
@@ -2237,6 +2348,7 @@ class DashboardApp {
       this.performanceMonitor.destroy()
       this.debouncer.destroy()
       this.memoryManager.destroy()
+      this.modalManager.destroy()
       this.ui.destroy()
 
       // Clear system health monitoring
