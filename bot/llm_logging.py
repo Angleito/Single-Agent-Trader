@@ -13,51 +13,54 @@ import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+# Check LangChain availability first
 try:
-    from langchain_core.callbacks import BaseCallbackHandler as _BaseCallbackHandler
-    from langchain_core.messages import AIMessage as _AIMessage, BaseMessage as _BaseMessage, HumanMessage as _HumanMessage
-    from langchain_core.outputs import LLMResult as _LLMResult
+    import importlib.util
 
-    # Type aliases for when LangChain is available
-    BaseCallbackHandler = _BaseCallbackHandler
-    AIMessage = _AIMessage
-    BaseMessage = _BaseMessage
-    HumanMessage = _HumanMessage
-    LLMResult = _LLMResult
-    
-    LANGCHAIN_AVAILABLE = True
+    LANGCHAIN_AVAILABLE = importlib.util.find_spec("langchain_core") is not None
 except ImportError:
-    # Graceful degradation when LangChain is not available
-    # Create dummy base classes for type checking
-    class _DummyBaseCallbackHandler:
-        """Dummy BaseCallbackHandler for when LangChain is unavailable."""
-        pass
-
-    class _DummyAIMessage:
-        """Dummy AIMessage for when LangChain is unavailable."""
-        pass
-
-    class _DummyBaseMessage:
-        """Dummy BaseMessage for when LangChain is unavailable."""
-        pass
-
-    class _DummyHumanMessage:
-        """Dummy HumanMessage for when LangChain is unavailable."""
-        pass
-
-    class _DummyLLMResult:
-        """Dummy LLMResult for when LangChain is unavailable."""
-        pass
-
-    BaseCallbackHandler = _DummyBaseCallbackHandler
-    AIMessage = _DummyAIMessage
-    BaseMessage = _DummyBaseMessage
-    HumanMessage = _DummyHumanMessage
-    LLMResult = _DummyLLMResult
-    
     LANGCHAIN_AVAILABLE = False
+
+if TYPE_CHECKING:
+    # Type hints only - import for static analysis
+    from langchain_core.callbacks import BaseCallbackHandler
+    from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+    from langchain_core.outputs import LLMResult
+else:
+    # Runtime imports with fallback
+    if LANGCHAIN_AVAILABLE:
+        from langchain_core.callbacks import BaseCallbackHandler
+        from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+        from langchain_core.outputs import LLMResult
+    else:
+        # Graceful degradation when LangChain is not available
+        class BaseCallbackHandler:
+            """Dummy BaseCallbackHandler for when LangChain is unavailable."""
+
+            pass
+
+        class AIMessage:
+            """Dummy AIMessage for when LangChain is unavailable."""
+
+            pass
+
+        class BaseMessage:
+            """Dummy BaseMessage for when LangChain is unavailable."""
+
+            pass
+
+        class HumanMessage:
+            """Dummy HumanMessage for when LangChain is unavailable."""
+
+            pass
+
+        class LLMResult:
+            """Dummy LLMResult for when LangChain is unavailable."""
+
+            pass
+
 
 from bot.config import settings
 

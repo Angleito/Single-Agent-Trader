@@ -543,6 +543,32 @@ export class TradingViewChart {
         'header_indicators',
         'header_compare',
         'compare_symbol',
+        // Disable telemetry and analytics features to prevent external connections
+        'telemetry',
+        'analytics',
+        'performance_analytics',
+        'usage_analytics',
+        'error_reporting',
+        'crash_reporting',
+        'user_tracking',
+        'feature_usage_tracking',
+        'performance_tracking',
+        'session_tracking',
+        'external_analytics',
+        'third_party_analytics',
+        // Disable other external connections
+        'news_feed',
+        'social_trading',
+        'social_media_sharing',
+        'external_news',
+        'external_feed',
+        'market_news',
+        'broker_integration',
+        'external_broker',
+        // Disable data collection features
+        'widget_events_reporting',
+        'metrics_collection',
+        'user_behavior_tracking',
       ],
 
       enabled_features: [

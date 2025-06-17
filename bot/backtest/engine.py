@@ -9,6 +9,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
 import pandas as pd
 
@@ -29,7 +30,7 @@ class BacktestTrade:
     entry_time: datetime
     exit_time: datetime | None = None
     symbol: str = ""
-    side: str = ""  # LONG/SHORT
+    side: Literal["LONG", "SHORT"] = "LONG"  # LONG/SHORT
     entry_price: Decimal = Decimal("0")
     exit_price: Decimal | None = None
     size: Decimal = Decimal("0")
@@ -276,9 +277,13 @@ class BacktestEngine:
         )
 
         # Current position
+        if not self.current_position:
+            position_side: Literal["LONG", "SHORT", "FLAT"] = "FLAT"
+        else:
+            position_side = self.current_position.side  # type: ignore
         current_position = Position(
             symbol="BTC-USD",
-            side="FLAT" if not self.current_position else self.current_position.side,
+            side=position_side,
             size=(
                 Decimal("0")
                 if not self.current_position
@@ -342,10 +347,12 @@ class BacktestEngine:
         leverage = Decimal("5")  # Default leverage
         position_size = position_value * leverage / price
 
+        # Ensure side is a valid Literal type
+        trade_side: Literal["LONG", "SHORT"] = action.action  # type: ignore
         self.current_position = BacktestTrade(
             entry_time=timestamp,
             symbol="BTC-USD",
-            side=action.action,
+            side=trade_side,
             entry_price=price,
             size=position_size,
         )
@@ -478,7 +485,8 @@ class BacktestEngine:
         win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
 
         # P&L metrics
-        total_pnl = sum(trade.pnl for trade in self.trades)
+        pnl_values = [trade.pnl for trade in self.trades]
+        total_pnl = Decimal(sum(pnl_values)) if pnl_values else Decimal("0")
         total_return_pct = float(total_pnl / self.initial_balance * 100)
 
         # Drawdown calculation
@@ -501,7 +509,7 @@ class BacktestEngine:
         winning_pnls = [trade.pnl for trade in self.trades if trade.pnl > 0]
         losing_pnls = [abs(trade.pnl) for trade in self.trades if trade.pnl < 0]
 
-        profit_factor = (
+        profit_factor = float(
             sum(winning_pnls) / sum(losing_pnls) if losing_pnls else float("inf")
         )
 

@@ -236,12 +236,15 @@ class TradingEngine:
                 self.logger.warning("Continuing without dashboard control")
                 self.command_consumer = None
 
+        # Initialize LLM agent (will be either LLMAgent or MemoryEnhancedLLMAgent)
+        self.llm_agent: LLMAgent | MemoryEnhancedLLMAgent
+
         if self.settings.mcp.enabled:
             self.logger.info("MCP memory system enabled, initializing components...")
             try:
                 self.memory_server = MCPMemoryServer(
                     server_url=self.settings.mcp.server_url,
-                    api_key=self.settings.mcp.api_key,
+                    api_key=self.settings.mcp.memory_api_key,
                 )
                 self.experience_manager = ExperienceManager(self.memory_server)
 
@@ -656,7 +659,7 @@ class TradingEngine:
         if self.settings.system.log_to_console:
             handlers.append(logging.StreamHandler())
         if self.settings.system.log_to_file:
-            handlers.append(logging.FileHandler(self.settings.system.log_file_path))
+            handlers.append(logging.FileHandler(str(self.settings.system.log_file_path)))
 
         logging.basicConfig(
             level=log_level,
@@ -1856,11 +1859,11 @@ class TradingEngine:
         """
         try:
             # Get current price from market data
-            if not self.data_manager or not self.data_manager.current_price:
+            if not self.market_data or not self.market_data.current_price:
                 self.logger.error("Market data not available for trade execution")
                 return False
 
-            current_price = self.data_manager.current_price
+            current_price = self.market_data.current_price
 
             # Execute trade with current price and no experience tracking
             await self._execute_trade(trade_action, current_price)
@@ -2346,7 +2349,8 @@ class TradingEngine:
                     if not self.dominance_provider._session.closed:
                         try:
                             # Force close without await since we might be in cleanup
-                            self.dominance_provider._session._connector.close()
+                            if hasattr(self.dominance_provider._session, '_connector') and self.dominance_provider._session._connector is not None:
+                                self.dominance_provider._session._connector.close()
                         except Exception:
                             pass
 

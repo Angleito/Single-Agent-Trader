@@ -7,9 +7,7 @@ particularly pandas_ta, LangChain, and their dependencies.
 """
 
 import sys
-import types
 import warnings
-from typing import Any
 
 
 class WarningsFilter:
@@ -236,9 +234,10 @@ class WarningsFilter:
 
         This method can be used to restore warnings if needed for debugging.
         """
-        # Reset to original state by clearing and extending
-        warnings.filters.clear()
-        warnings.filters.extend(self._original_warnings_state)
+        # Reset to original state using resetwarnings and then re-adding filters
+        warnings.resetwarnings()
+        for filter_item in self._original_warnings_state:
+            warnings.filters.append(filter_item)  # type: ignore[attr-defined]
         self._suppressed_patterns.clear()
 
     def get_suppressed_patterns(self) -> list[str]:
@@ -338,7 +337,7 @@ def initialize_early_warning_suppression() -> None:
     # Set warning registry to capture import-time warnings
     current_module = sys.modules[__name__]
     if not hasattr(current_module, "__warningregistry__"):
-        setattr(current_module, "__warningregistry__", {})
+        current_module.__warningregistry__ = {}
 
     # Comprehensive message-based filtering including LangChain
     message_patterns = [

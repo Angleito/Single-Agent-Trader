@@ -1,0 +1,64 @@
+{
+  "system": {
+    "dry_run": false,
+    "environment": "production",
+    "log_level": "INFO",
+    "emergency_stop_enabled": true,
+    "live_trading_confirmation": "REQUIRED"
+  },
+  "trading": {
+    "symbol": "ETH-USD",
+    "enable_futures": true,
+    "leverage": 2,
+    "max_size_pct": 1.0,
+    "interval": "1m",
+    "force_trade": false,
+    "auto_cash_transfer": true,
+    "futures_account_type": "CFM",
+    "max_futures_leverage": 2,
+    "slippage_tolerance_pct": 0.1,
+    "order_timeout_seconds": 30.0,
+    "intraday_margin_multiplier": 1.0,
+    "overnight_margin_multiplier": 1.2
+  },
+  "risk": {
+    "max_daily_loss_pct": 0.5,
+    "max_weekly_loss_pct": 2.0,
+    "max_monthly_loss_pct": 5.0,
+    "default_stop_loss_pct": 0.8,
+    "default_take_profit_pct": 1.5,
+    "emergency_stop_loss_pct": 2.0,
+    "max_concurrent_trades": 1,
+    "position_monitoring": true,
+    "risk_check_interval": 30
+  },
+  "llm": {
+    "provider": "openai",
+    "model_name": "gpt-4o",
+    "temperature": 0.1,
+    "max_tokens": 800,
+    "timeout": 30.0,
+    "retry_attempts": 2
+  },
+  "exchange": {
+    "exchange_type": "coinbase",
+    "cb_sandbox": false,
+    "rate_limit_requests": 10,
+    "rate_limit_window_seconds": 60,
+    "health_check_interval": 30,
+    "websocket_reconnect_attempts": 5
+  },
+  "mcp": {
+    "enabled": true,
+    "track_trade_lifecycle": true,
+    "memory_retention_days": 90,
+    "reflection_delay_minutes": 5,
+    "learning_rate": 0.1
+  },
+  "performance": {
+    "enable_monitoring": true,
+    "log_performance_metrics": true,
+    "alert_on_slow_operations": true,
+    "max_acceptable_latency_ms": 2000
+  }
+}
