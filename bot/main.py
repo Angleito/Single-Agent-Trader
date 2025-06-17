@@ -107,6 +107,7 @@ from .types import IndicatorData, MarketState, Position, TradeAction
 from .utils import setup_warnings_suppression
 from .validator import TradeValidator
 from .websocket_publisher import WebSocketPublisher
+from .command_consumer import CommandConsumer
 
 console = Console()
 
@@ -202,6 +203,19 @@ class TradingEngine:
                 self.logger.warning("Continuing without WebSocket publishing")
                 self.websocket_publisher = None
 
+        # Initialize Command Consumer for bidirectional dashboard control
+        self.command_consumer = None
+        if self.settings.system.enable_websocket_publishing:  # Use same setting for now
+            self.logger.info("Dashboard control enabled, initializing command consumer...")
+            try:
+                self.command_consumer = CommandConsumer()
+                self._register_command_callbacks()
+                self.logger.info("Successfully initialized command consumer")
+            except Exception as e:
+                self.logger.error(f"Failed to initialize command consumer: {e}")
+                self.logger.warning("Continuing without dashboard control")
+                self.command_consumer = None
+
         if self.settings.mcp.enabled:
             self.logger.info("MCP memory system enabled, initializing components...")
             try:
@@ -281,6 +295,171 @@ class TradingEngine:
         self.data_validation_complete = False
 
         self.logger.info(f"Initialized TradingEngine for {symbol} at {interval}")
+
+    def _register_command_callbacks(self):
+        """Register callback functions for dashboard commands."""
+        if not self.command_consumer:
+            return
+        
+        # Register emergency stop callback
+        self.command_consumer.register_callback(
+            "emergency_stop", 
+            self._handle_emergency_stop
+        )
+        
+        # Register pause/resume trading callbacks
+        self.command_consumer.register_callback(
+            "pause_trading", 
+            self._handle_pause_trading
+        )
+        self.command_consumer.register_callback(
+            "resume_trading", 
+            self._handle_resume_trading
+        )
+        
+        # Register risk limit update callback
+        self.command_consumer.register_callback(
+            "update_risk_limits", 
+            self._handle_update_risk_limits
+        )
+        
+        # Register manual trade callback
+        self.command_consumer.register_callback(
+            "manual_trade", 
+            self._handle_manual_trade
+        )
+        
+        self.logger.info("Registered all command callbacks for dashboard integration")
+
+    async def _handle_emergency_stop(self):
+        """Handle emergency stop command from dashboard."""
+        self.logger.critical("🚨 EMERGENCY STOP ACTIVATED FROM DASHBOARD")
+        self._shutdown_requested = True
+        self.trading_enabled = False
+        
+        # Close all positions if possible
+        try:
+            if self.current_position.side != "FLAT":
+                self.logger.info("Emergency stop: Closing all positions")
+                await self._close_all_positions()
+        except Exception as e:
+            self.logger.error(f"Error closing positions during emergency stop: {e}")
+        
+        # Publish emergency stop status
+        if self.websocket_publisher:
+            await self.websocket_publisher.publish_system_status(
+                status="emergency_stopped",
+                health=False,
+                message="Emergency stop activated from dashboard"
+            )
+
+    async def _handle_pause_trading(self):
+        """Handle pause trading command from dashboard."""
+        self.logger.warning("📍 Trading paused from dashboard")
+        self.trading_enabled = False
+        
+        if self.websocket_publisher:
+            await self.websocket_publisher.publish_system_status(
+                status="trading_paused",
+                health=True,
+                message="Trading paused from dashboard"
+            )
+
+    async def _handle_resume_trading(self):
+        """Handle resume trading command from dashboard."""
+        self.logger.info("▶️ Trading resumed from dashboard")
+        self.trading_enabled = True
+        self._shutdown_requested = False
+        
+        if self.websocket_publisher:
+            await self.websocket_publisher.publish_system_status(
+                status="trading_active",
+                health=True,
+                message="Trading resumed from dashboard"
+            )
+
+    async def _handle_update_risk_limits(self, parameters: dict):
+        """Handle risk limit update command from dashboard."""
+        self.logger.info(f"Updating risk limits from dashboard: {parameters}")
+        
+        try:
+            # Update risk manager settings
+            if "max_position_size" in parameters:
+                self.risk_manager.max_position_size = parameters["max_position_size"]
+            
+            if "stop_loss_percentage" in parameters:
+                self.risk_manager.stop_loss_percentage = parameters["stop_loss_percentage"] / 100.0
+            
+            if "max_daily_loss" in parameters:
+                self.risk_manager.max_daily_loss = parameters["max_daily_loss"]
+            
+            self.logger.info("Risk limits updated successfully")
+            
+            if self.websocket_publisher:
+                await self.websocket_publisher.publish_system_status(
+                    status="risk_limits_updated",
+                    health=True,
+                    message=f"Risk limits updated: {parameters}"
+                )
+                
+        except Exception as e:
+            self.logger.error(f"Error updating risk limits: {e}")
+            raise
+
+    async def _handle_manual_trade(self, parameters: dict) -> bool:
+        """Handle manual trade command from dashboard."""
+        self.logger.info(f"Executing manual trade from dashboard: {parameters}")
+        
+        try:
+            # Create trade action from parameters
+            trade_action = TradeAction(
+                action=parameters["action"].upper(),
+                symbol=parameters["symbol"],
+                size_pct=parameters["size_percentage"] / 100.0,
+                reasoning=parameters.get("reason", "Manual trade from dashboard"),
+                confidence=1.0,  # Manual trades have full confidence
+                manual_trade=True
+            )
+            
+            # Execute the trade
+            success = await self._execute_trade_action(trade_action)
+            
+            if success:
+                self.logger.info("Manual trade executed successfully")
+                if self.websocket_publisher:
+                    await self.websocket_publisher.publish_trade_execution(
+                        order_id=f"manual_{int(time.time())}",
+                        symbol=trade_action.symbol,
+                        side=trade_action.action,
+                        size=str(trade_action.size_pct),
+                        price="market",
+                        status="filled",
+                        manual=True
+                    )
+            else:
+                self.logger.warning("Manual trade execution failed")
+            
+            return success
+            
+        except Exception as e:
+            self.logger.error(f"Error executing manual trade: {e}")
+            return False
+
+    async def _close_all_positions(self):
+        """Close all open positions (used for emergency stop)."""
+        try:
+            if self.current_position.side != "FLAT":
+                close_action = TradeAction(
+                    action="CLOSE",
+                    symbol=self.current_position.symbol,
+                    size_pct=1.0,  # Close 100%
+                    reasoning="Emergency position closure",
+                    confidence=1.0,
+                    emergency_close=True
+                )
+                await self._execute_trade_action(close_action)
+        except Exception as e:
+            self.logger.error(f"Error closing positions: {e}")
 
     def _can_trade_now(self) -> bool:
         """
@@ -630,6 +809,18 @@ class TradingEngine:
             except Exception as e:
                 self.logger.warning(f"Failed to connect to dashboard WebSocket: {e}")
                 console.print("    [yellow]⚠ Dashboard WebSocket connection failed[/yellow]")
+
+        # Initialize Command Consumer if enabled
+        if self.command_consumer:
+            console.print("  • Starting dashboard command consumer...")
+            try:
+                await self.command_consumer.initialize()
+                # Start polling in background
+                asyncio.create_task(self.command_consumer.start_polling())
+                console.print("    [green]✓ Dashboard command consumer started[/green]")
+            except Exception as e:
+                self.logger.warning(f"Failed to start command consumer: {e}")
+                console.print("    [yellow]⚠ Dashboard command consumer unavailable[/yellow]")
 
         console.print("[green]✓ All components initialized successfully[/green]")
 
@@ -1737,6 +1928,16 @@ class TradingEngine:
                 console.print("  • Disconnecting from dashboard WebSocket...")
                 cleanup_tasks.append(
                     asyncio.create_task(self.websocket_publisher.close())
+                )
+
+            # Stop command consumer
+            if hasattr(self, "command_consumer") and self.command_consumer:
+                console.print("  • Stopping dashboard command consumer...")
+                cleanup_tasks.append(
+                    asyncio.create_task(self.command_consumer.stop_polling())
+                )
+                cleanup_tasks.append(
+                    asyncio.create_task(self.command_consumer.close())
                 )
 
             # Stop experience manager if enabled

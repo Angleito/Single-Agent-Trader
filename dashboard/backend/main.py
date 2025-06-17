@@ -38,57 +38,220 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# Global connection manager for WebSocket connections
+# Enhanced connection manager for WebSocket connections with message persistence
 class ConnectionManager:
-    """Manages WebSocket connections and broadcasting"""
+    """
+    Enhanced WebSocket connection manager with message persistence and replay capabilities.
+    
+    Features:
+    - Message categorization (trading, indicator, system, log)
+    - Configurable replay buffer sizes per category
+    - Message filtering and querying
+    - Performance metrics tracking
+    - Connection-specific message state
+    """
 
     def __init__(self):
         self.active_connections: set[WebSocket] = set()
-        self.log_buffer: list[dict] = []
-        self.max_buffer_size = 1000
+        
+        # Enhanced message storage with categorization
+        self.message_buffers = {
+            "trading": [],      # Trading decisions and executions
+            "indicator": [],    # Technical indicator data
+            "system": [],       # System status and health
+            "log": [],         # General log messages
+            "ai": [],          # AI/LLM decision messages
+        }
+        
+        # Buffer size limits per category
+        self.buffer_limits = {
+            "trading": 500,     # Keep more trading history
+            "indicator": 1000,  # Keep recent indicator data
+            "system": 200,      # System status messages
+            "log": 1000,        # General logs
+            "ai": 300,         # AI decision history
+        }
+        
+        # Connection tracking for personalized replay
+        self.connection_metadata = {}  # websocket -> {connected_at, last_message_id, categories}
+        
+        # Performance tracking
+        self.stats = {
+            "total_messages": 0,
+            "messages_by_category": {cat: 0 for cat in self.message_buffers.keys()},
+            "connections_served": 0,
+            "total_replay_messages": 0,
+        }
 
-    async def connect(self, websocket: WebSocket):
-        """Accept WebSocket connection and send buffered logs"""
+    def _categorize_message(self, message: dict) -> str:
+        """Categorize message based on type and content."""
+        msg_type = message.get("type", "").lower()
+        source = message.get("source", "").lower()
+        
+        # Trading-related messages
+        if any(keyword in msg_type for keyword in ["trade", "order", "position", "execution"]):
+            return "trading"
+        if any(keyword in source for keyword in ["trading", "exchange", "order"]):
+            return "trading"
+            
+        # AI/LLM messages
+        if any(keyword in msg_type for keyword in ["ai", "llm", "decision"]):
+            return "ai"
+        if "llm" in source or "agent" in source:
+            return "ai"
+            
+        # Indicator messages
+        if any(keyword in msg_type for keyword in ["indicator", "signal", "technical"]):
+            return "indicator"
+        if "indicator" in source or "signal" in source:
+            return "indicator"
+            
+        # System messages
+        if any(keyword in msg_type for keyword in ["system", "health", "status", "error"]):
+            return "system"
+        if "system" in source or "health" in source:
+            return "system"
+            
+        # Default to log category
+        return "log"
+
+    async def connect(self, websocket: WebSocket, replay_categories: list[str] = None):
+        """
+        Accept WebSocket connection and send buffered messages by category.
+        
+        Args:
+            websocket: WebSocket connection
+            replay_categories: List of categories to replay (default: all)
+        """
         await websocket.accept()
         self.active_connections.add(websocket)
+        
+        # Initialize connection metadata
+        self.connection_metadata[websocket] = {
+            "connected_at": datetime.now().isoformat(),
+            "categories": replay_categories or list(self.message_buffers.keys()),
+            "messages_sent": 0,
+        }
+        
         logger.info(
             f"WebSocket connection established. Total connections: {len(self.active_connections)}"
         )
+        
+        # Send replay messages by category
+        await self._send_replay_messages(websocket, replay_categories)
+        
+        # Update stats
+        self.stats["connections_served"] += 1
 
-        # Send buffered logs to new connection
-        for log_entry in self.log_buffer[-50:]:  # Send last 50 entries
-            try:
-                await websocket.send_text(json.dumps(log_entry))
-            except Exception as e:
-                logger.error(f"Error sending buffered log to new connection: {e}")
-                break
+    async def _send_replay_messages(self, websocket: WebSocket, categories: list[str] = None):
+        """Send buffered messages to new connection, organized by category."""
+        categories = categories or list(self.message_buffers.keys())
+        total_sent = 0
+        
+        # Send a connection status message first
+        status_message = {
+            "timestamp": datetime.now().isoformat(),
+            "type": "connection_status",
+            "source": "dashboard-backend",
+            "message": "Connection established - replaying recent messages",
+            "categories_available": list(self.message_buffers.keys()),
+            "categories_requested": categories,
+        }
+        
+        try:
+            await websocket.send_text(json.dumps(status_message))
+            total_sent += 1
+        except Exception as e:
+            logger.error(f"Error sending connection status: {e}")
+            return
+        
+        # Send messages by category with limits
+        replay_limits = {
+            "trading": 50,      # Last 50 trading events
+            "indicator": 20,    # Last 20 indicator updates
+            "system": 10,       # Last 10 system messages
+            "log": 30,         # Last 30 log entries
+            "ai": 25,          # Last 25 AI decisions
+        }
+        
+        for category in categories:
+            if category in self.message_buffers:
+                buffer = self.message_buffers[category]
+                limit = replay_limits.get(category, 20)
+                messages_to_send = buffer[-limit:] if buffer else []
+                
+                for message in messages_to_send:
+                    try:
+                        # Add replay marker
+                        replay_message = message.copy()
+                        replay_message["is_replay"] = True
+                        replay_message["replay_category"] = category
+                        
+                        await websocket.send_text(json.dumps(replay_message))
+                        total_sent += 1
+                    except Exception as e:
+                        logger.error(f"Error sending replay message from {category}: {e}")
+                        break
+        
+        # Send replay completion message
+        completion_message = {
+            "timestamp": datetime.now().isoformat(),
+            "type": "replay_complete",
+            "source": "dashboard-backend",
+            "message": f"Replay complete - {total_sent} messages sent",
+            "total_messages": total_sent,
+            "categories": categories,
+        }
+        
+        try:
+            await websocket.send_text(json.dumps(completion_message))
+        except Exception as e:
+            logger.error(f"Error sending replay completion: {e}")
+        
+        # Update connection metadata
+        if websocket in self.connection_metadata:
+            self.connection_metadata[websocket]["messages_sent"] = total_sent
+        
+        # Update stats
+        self.stats["total_replay_messages"] += total_sent
 
     def disconnect(self, websocket: WebSocket):
-        """Remove WebSocket connection"""
+        """Remove WebSocket connection and cleanup metadata."""
         self.active_connections.discard(websocket)
+        
+        # Clean up connection metadata
+        if websocket in self.connection_metadata:
+            del self.connection_metadata[websocket]
+        
         logger.info(
             f"WebSocket connection closed. Total connections: {len(self.active_connections)}"
         )
 
     async def broadcast(self, message: dict):
-        """Broadcast message to all connected clients"""
-        if not self.active_connections:
+        """
+        Enhanced broadcast with message categorization and persistence.
+        
+        Args:
+            message: Message dictionary to broadcast
+        """
+        if not self.active_connections and not message.get("persist_when_no_connections", True):
             return
 
-        # Validate message structure before broadcasting
+        # Validate and enhance message structure
         try:
-            # Ensure message has required fields
             if not isinstance(message, dict):
                 logger.warning(f"Invalid message type for broadcast: {type(message)}")
                 return
                 
-            # Ensure timestamp is present
+            # Ensure required fields
             if "timestamp" not in message:
                 message["timestamp"] = datetime.now().isoformat()
                 
-            # Ensure type is present
             if "type" not in message:
                 message["type"] = "unknown"
+            
+            # Add message ID for tracking
+            message["message_id"] = f"{int(time.time() * 1000000)}"  # Microsecond timestamp
                 
             # Test JSON serialization
             json.dumps(message)
@@ -100,26 +263,54 @@ class ConnectionManager:
                 "timestamp": datetime.now().isoformat(),
                 "type": "error",
                 "message": "Invalid message format",
-                "source": "dashboard-api"
+                "source": "dashboard-api",
+                "message_id": f"{int(time.time() * 1000000)}"
             }
 
-        # Add to buffer
-        self.log_buffer.append(message)
-        if len(self.log_buffer) > self.max_buffer_size:
-            self.log_buffer.pop(0)
+        # Categorize and store message
+        category = self._categorize_message(message)
+        buffer = self.message_buffers[category]
+        limit = self.buffer_limits[category]
+        
+        # Add to appropriate buffer
+        buffer.append(message)
+        if len(buffer) > limit:
+            buffer.pop(0)  # Remove oldest message
+        
+        # Update statistics
+        self.stats["total_messages"] += 1
+        self.stats["messages_by_category"][category] += 1
 
-        # Broadcast to all connections
-        disconnected = set()
-        for connection in self.active_connections:
-            try:
-                await connection.send_text(json.dumps(message))
-            except Exception as e:
-                logger.error(f"Error broadcasting to connection: {e}")
-                disconnected.add(connection)
+        # Broadcast to all active connections
+        if self.active_connections:
+            disconnected = set()
+            for connection in self.active_connections:
+                try:
+                    await connection.send_text(json.dumps(message))
+                except Exception as e:
+                    logger.error(f"Error broadcasting to connection: {e}")
+                    disconnected.add(connection)
 
-        # Remove disconnected connections
-        for conn in disconnected:
-            self.active_connections.discard(conn)
+            # Remove disconnected connections
+            for conn in disconnected:
+                self.disconnect(conn)
+
+    def get_messages_by_category(self, category: str, limit: int = 100) -> list[dict]:
+        """Get recent messages from a specific category."""
+        if category not in self.message_buffers:
+            return []
+        
+        buffer = self.message_buffers[category]
+        return buffer[-limit:] if buffer else []
+
+    def get_message_stats(self) -> dict:
+        """Get comprehensive message statistics."""
+        return {
+            **self.stats,
+            "active_connections": len(self.active_connections),
+            "buffer_sizes": {cat: len(buf) for cat, buf in self.message_buffers.items()},
+            "buffer_limits": self.buffer_limits,
+        }
 
 
 # Global connection manager instance
@@ -1273,6 +1464,359 @@ async def restart_bot():
         raise HTTPException(
             status_code=500, detail=f"Error restarting bot: {str(e)}"
         ) from e
+
+
+# Enhanced Message Management and Bot Control APIs
+
+@app.get("/api/messages/{category}")
+async def get_messages_by_category(
+    category: str,
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0)
+):
+    """
+    Get messages from a specific category with pagination.
+    
+    Categories: trading, indicator, system, log, ai
+    """
+    if category not in manager.message_buffers:
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Category '{category}' not found. Available: {list(manager.message_buffers.keys())}"
+        )
+    
+    messages = manager.get_messages_by_category(category, limit + offset)
+    paginated_messages = messages[offset:offset + limit] if messages else []
+    
+    return {
+        "category": category,
+        "messages": paginated_messages,
+        "total_available": len(messages),
+        "returned": len(paginated_messages),
+        "offset": offset,
+        "limit": limit,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/api/messages/stats")
+async def get_message_statistics():
+    """Get comprehensive message buffer statistics."""
+    stats = manager.get_message_stats()
+    return {
+        **stats,
+        "timestamp": datetime.now().isoformat(),
+        "uptime_seconds": time.time() - (stats.get("start_time", time.time()))
+    }
+
+
+@app.post("/api/messages/broadcast")
+async def broadcast_message(message: dict):
+    """
+    Broadcast a custom message to all connected WebSocket clients.
+    
+    Useful for testing and manual notifications.
+    """
+    try:
+        # Validate message structure
+        if not isinstance(message, dict):
+            raise HTTPException(status_code=400, detail="Message must be a JSON object")
+        
+        # Add source and validation
+        enhanced_message = {
+            **message,
+            "source": "dashboard-api",
+            "manual_broadcast": True,
+            "api_timestamp": datetime.now().isoformat()
+        }
+        
+        await manager.broadcast(enhanced_message)
+        
+        return {
+            "status": "success",
+            "message": "Message broadcasted successfully",
+            "active_connections": len(manager.active_connections),
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    except Exception as e:
+        logger.error(f"Error broadcasting message: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Bot Control Command Queue System
+
+class BotCommand:
+    """Represents a command to be sent to the trading bot."""
+    def __init__(self, command_type: str, parameters: dict = None, priority: int = 5):
+        self.id = f"cmd_{int(time.time() * 1000000)}"
+        self.command_type = command_type
+        self.parameters = parameters or {}
+        self.priority = priority  # 1=highest, 10=lowest
+        self.created_at = datetime.now().isoformat()
+        self.status = "pending"  # pending, sent, acknowledged, failed
+        self.attempts = 0
+        self.max_attempts = 3
+
+# Global command queue
+bot_command_queue = []
+command_history = []
+
+
+@app.post("/api/bot/commands/emergency-stop")
+async def emergency_stop_bot():
+    """
+    Send emergency stop command to trading bot.
+    Highest priority command that should halt all trading immediately.
+    """
+    try:
+        command = BotCommand("emergency_stop", priority=1)
+        bot_command_queue.insert(0, command)  # Insert at front for highest priority
+        
+        # Broadcast emergency notification
+        emergency_message = {
+            "type": "emergency_stop",
+            "command_id": command.id,
+            "message": "Emergency stop command issued",
+            "source": "dashboard-api",
+            "priority": "critical",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        await manager.broadcast(emergency_message)
+        
+        return {
+            "status": "success",
+            "command_id": command.id,
+            "message": "Emergency stop command queued",
+            "queue_position": 0,
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    except Exception as e:
+        logger.error(f"Error issuing emergency stop: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/bot/commands/pause-trading")
+async def pause_trading():
+    """Pause trading operations without stopping the bot."""
+    try:
+        command = BotCommand("pause_trading", priority=2)
+        bot_command_queue.append(command)
+        
+        await manager.broadcast({
+            "type": "trading_pause",
+            "command_id": command.id,
+            "message": "Trading pause command issued",
+            "source": "dashboard-api",
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        return {
+            "status": "success",
+            "command_id": command.id,
+            "message": "Trading pause command queued",
+            "queue_size": len(bot_command_queue),
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    except Exception as e:
+        logger.error(f"Error pausing trading: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/bot/commands/resume-trading")
+async def resume_trading():
+    """Resume trading operations."""
+    try:
+        command = BotCommand("resume_trading", priority=2)
+        bot_command_queue.append(command)
+        
+        await manager.broadcast({
+            "type": "trading_resume",
+            "command_id": command.id,
+            "message": "Trading resume command issued",
+            "source": "dashboard-api",
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        return {
+            "status": "success",
+            "command_id": command.id,
+            "message": "Trading resume command queued",
+            "queue_size": len(bot_command_queue),
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    except Exception as e:
+        logger.error(f"Error resuming trading: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/bot/commands/update-risk-limits")
+async def update_risk_limits(
+    max_position_size: float = Query(None, ge=0.01, le=100.0),
+    stop_loss_percentage: float = Query(None, ge=0.1, le=50.0),
+    max_daily_loss: float = Query(None, ge=1.0, le=10000.0)
+):
+    """Update risk management parameters."""
+    try:
+        parameters = {}
+        if max_position_size is not None:
+            parameters["max_position_size"] = max_position_size
+        if stop_loss_percentage is not None:
+            parameters["stop_loss_percentage"] = stop_loss_percentage
+        if max_daily_loss is not None:
+            parameters["max_daily_loss"] = max_daily_loss
+        
+        if not parameters:
+            raise HTTPException(status_code=400, detail="No risk parameters provided")
+        
+        command = BotCommand("update_risk_limits", parameters, priority=3)
+        bot_command_queue.append(command)
+        
+        await manager.broadcast({
+            "type": "risk_limits_update",
+            "command_id": command.id,
+            "parameters": parameters,
+            "message": "Risk limits update command issued",
+            "source": "dashboard-api",
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        return {
+            "status": "success",
+            "command_id": command.id,
+            "message": "Risk limits update command queued",
+            "parameters": parameters,
+            "queue_size": len(bot_command_queue),
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    except Exception as e:
+        logger.error(f"Error updating risk limits: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/bot/commands/manual-trade")
+async def manual_trade_command(
+    action: str = Query(..., regex="^(buy|sell|close)$"),
+    symbol: str = Query(..., min_length=3, max_length=20),
+    size_percentage: float = Query(..., ge=0.1, le=100.0),
+    reason: str = Query(default="Manual trade from dashboard")
+):
+    """
+    Issue a manual trading command.
+    
+    WARNING: This will execute real trades if bot is in live mode!
+    """
+    try:
+        parameters = {
+            "action": action,
+            "symbol": symbol,
+            "size_percentage": size_percentage,
+            "reason": reason,
+            "manual_trade": True
+        }
+        
+        command = BotCommand("manual_trade", parameters, priority=4)
+        bot_command_queue.append(command)
+        
+        await manager.broadcast({
+            "type": "manual_trade_command",
+            "command_id": command.id,
+            "parameters": parameters,
+            "message": f"Manual trade command issued: {action} {size_percentage}% {symbol}",
+            "source": "dashboard-api",
+            "warning": "This may execute real trades!",
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        return {
+            "status": "success",
+            "command_id": command.id,
+            "message": f"Manual trade command queued: {action} {size_percentage}% {symbol}",
+            "parameters": parameters,
+            "queue_size": len(bot_command_queue),
+            "warning": "This command may execute real trades if bot is in live mode!",
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    except Exception as e:
+        logger.error(f"Error issuing manual trade: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/bot/commands/queue")
+async def get_command_queue():
+    """Get current command queue status."""
+    return {
+        "queue_size": len(bot_command_queue),
+        "pending_commands": [
+            {
+                "id": cmd.id,
+                "type": cmd.command_type,
+                "priority": cmd.priority,
+                "created_at": cmd.created_at,
+                "status": cmd.status,
+                "attempts": cmd.attempts
+            }
+            for cmd in bot_command_queue
+        ],
+        "history_size": len(command_history),
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/api/bot/commands/history")
+async def get_command_history(limit: int = Query(default=50, ge=1, le=500)):
+    """Get command execution history."""
+    return {
+        "history": command_history[-limit:],
+        "total_executed": len(command_history),
+        "returned": min(limit, len(command_history)),
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.delete("/api/bot/commands/{command_id}")
+async def cancel_command(command_id: str):
+    """Cancel a pending command by ID."""
+    try:
+        # Find and remove command from queue
+        for i, cmd in enumerate(bot_command_queue):
+            if cmd.id == command_id:
+                removed_cmd = bot_command_queue.pop(i)
+                
+                # Add to history as cancelled
+                command_history.append({
+                    "id": removed_cmd.id,
+                    "type": removed_cmd.command_type,
+                    "status": "cancelled",
+                    "cancelled_at": datetime.now().isoformat(),
+                    "created_at": removed_cmd.created_at
+                })
+                
+                await manager.broadcast({
+                    "type": "command_cancelled",
+                    "command_id": command_id,
+                    "message": f"Command {command_id} cancelled",
+                    "source": "dashboard-api",
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+                return {
+                    "status": "success",
+                    "message": f"Command {command_id} cancelled successfully",
+                    "timestamp": datetime.now().isoformat()
+                }
+        
+        raise HTTPException(status_code=404, detail=f"Command {command_id} not found in queue")
+    
+    except Exception as e:
+        logger.error(f"Error cancelling command: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # API Routes (prefixed with /api for consistency)

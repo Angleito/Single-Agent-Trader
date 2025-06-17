@@ -31,5 +31,12 @@ EXPOSE 8767
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD node -e "console.log('MCP Server Ready')" || exit 1
 
-# Start the MCP server
-CMD ["node", "dist/index.js"]
+# Create a simple wrapper script that keeps the server alive
+RUN echo '#!/bin/sh' > /app/start-server.sh && \
+    echo 'echo "MCP-OmniSearch Server starting..."' >> /app/start-server.sh && \
+    echo 'echo "API Keys status: TAVILY=$TAVILY_API_KEY PERPLEXITY=$PERPLEXITY_API_KEY"' >> /app/start-server.sh && \
+    echo 'tail -f /dev/null | node dist/index.js' >> /app/start-server.sh && \
+    chmod +x /app/start-server.sh
+
+# Start the MCP server with stdin feed
+CMD ["/app/start-server.sh"]
