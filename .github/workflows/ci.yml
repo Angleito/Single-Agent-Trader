@@ -73,24 +73,29 @@ jobs:
       run: |
         echo "Checking Poetry environment..."
         poetry env info
-        echo "Listing installed packages..."
-        poetry show | grep -E "(black|ruff|mypy)" || echo "Dev tools not found"
-        echo "Checking Black specifically..."
-        poetry show black
-        echo "Testing Black command..."
+        echo "Activating virtual environment..."
+        source $(poetry env info --path)/bin/activate
+        echo "Checking PATH after activation..."
+        echo $PATH
+        echo "Testing Black directly..."
+        black --version
+        echo "Testing via Poetry..."
         poetry run black --version
 
     - name: Run Black formatting check
       run: |
-        poetry run black --check --diff .
+        source $(poetry env info --path)/bin/activate
+        black --check --diff .
 
     - name: Run Ruff linting
       run: |
-        poetry run ruff check .
+        source $(poetry env info --path)/bin/activate
+        ruff check .
 
     - name: Run MyPy type checking
       run: |
-        poetry run mypy bot/
+        source $(poetry env info --path)/bin/activate
+        mypy bot/
       continue-on-error: true  # Allow to continue even if type checking fails
 
     - name: Check Poetry lock file
