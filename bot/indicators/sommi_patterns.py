@@ -11,6 +11,7 @@ Based on Pine Script patterns:
 """
 
 import logging
+import re
 from dataclasses import dataclass
 from enum import Enum
 
@@ -169,23 +170,7 @@ class SommiPatterns:
                 price_data.index = pd.to_datetime(price_data.index)
 
             # Determine resampling rule based on original frequency
-            freq = pd.infer_freq(price_data.index)
-            if freq is None:
-                # Default to 1-minute base with multiplier
-                resample_rule = f"{multiplier}T"
-                logger.info(f"Could not infer frequency, using {resample_rule}")
-            else:
-                # Extract numeric part and unit
-                import re
-
-                match = re.match(r"(\d*)([A-Z]+)", freq)
-                if match:
-                    num_part = int(match.group(1)) if match.group(1) else 1
-                    unit_part = match.group(2)
-                    new_num = num_part * multiplier
-                    resample_rule = f"{new_num}{unit_part}"
-                else:
-                    resample_rule = f"{multiplier}T"
+            resample_rule = self._determine_resample_rule(price_data.index, multiplier)
 
             logger.debug(f"Resampling to higher timeframe: {resample_rule}")
 
@@ -253,6 +238,74 @@ class SommiPatterns:
         """Return empty series tuple for error cases."""
         empty = pd.Series(dtype=float, index=index)
         return empty, empty, empty
+
+    def _determine_resample_rule(self, index: pd.DatetimeIndex, multiplier: int) -> str:
+        """
+        Determine appropriate resampling rule based on index frequency.
+        
+        Args:
+            index: DatetimeIndex to analyze
+            multiplier: Multiplier for the timeframe
+            
+        Returns:
+            Resampling rule string (e.g., '4T', '60S', '1H')
+        """
+        
+        freq = pd.infer_freq(index)
+        if freq is None:
+            # Try to determine frequency from index differences
+            if len(index) > 1:
+                time_diff = index[1] - index[0]
+                if time_diff == pd.Timedelta(seconds=15):
+                    base_freq = "15S"
+                elif time_diff == pd.Timedelta(seconds=30):
+                    base_freq = "30S"
+                elif time_diff == pd.Timedelta(minutes=1):
+                    base_freq = "1T"
+                elif time_diff == pd.Timedelta(minutes=5):
+                    base_freq = "5T"
+                elif time_diff == pd.Timedelta(minutes=15):
+                    base_freq = "15T"
+                elif time_diff == pd.Timedelta(minutes=30):
+                    base_freq = "30T"
+                elif time_diff == pd.Timedelta(hours=1):
+                    base_freq = "1H"
+                elif time_diff == pd.Timedelta(hours=4):
+                    base_freq = "4H"
+                elif time_diff == pd.Timedelta(days=1):
+                    base_freq = "1D"
+                else:
+                    # Default to 1-minute base with multiplier
+                    base_freq = "1T"
+                
+                # Extract numeric part and unit from base frequency
+                match = re.match(r"(\d*)([A-Z]+)", base_freq)
+                if match:
+                    num_part = int(match.group(1)) if match.group(1) else 1
+                    unit_part = match.group(2)
+                    new_num = num_part * multiplier
+                    resample_rule = f"{new_num}{unit_part}"
+                else:
+                    resample_rule = f"{multiplier}T"
+            else:
+                # Fallback for single data point
+                resample_rule = f"{multiplier}T"
+            
+            logger.debug(f"Inferred frequency from time difference, using {resample_rule}")
+        else:
+            # Extract numeric part and unit
+            match = re.match(r"(\d*)([A-Z]+)", freq)
+            if match:
+                num_part = int(match.group(1)) if match.group(1) else 1
+                unit_part = match.group(2)
+                new_num = num_part * multiplier
+                resample_rule = f"{new_num}{unit_part}"
+            else:
+                resample_rule = f"{multiplier}T"
+            
+            logger.debug(f"Using detected frequency {freq}, resampling with {resample_rule}")
+        
+        return resample_rule
 
     def calculate_heikin_ashi_candles(self, ohlc_data: pd.DataFrame) -> pd.DataFrame:
         """
@@ -699,7 +752,8 @@ class SommiPatterns:
                 logger.warning("Cannot resample non-datetime index")
                 return pd.DataFrame()
 
-            resample_rule = f"{self.htf_multiplier}T"
+            # Use the same frequency detection logic as calculate_higher_timeframe_wt
+            resample_rule = self._determine_resample_rule(price_data.index, self.htf_multiplier)
 
             htf_data = (
                 price_data.resample(resample_rule)

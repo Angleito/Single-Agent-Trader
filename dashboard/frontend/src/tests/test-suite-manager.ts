@@ -85,7 +85,7 @@ export interface TestCase {
   description: string
   steps: TestStep[]
   assertions: TestAssertion[]
-  mockData?: any
+  mockData?: Record<string, unknown>
   skip?: boolean
   only?: boolean
   retry?: number
@@ -96,7 +96,7 @@ export interface TestStep {
   description: string
   action: string
   target?: string
-  data?: any
+  data?: Record<string, unknown>
   wait?: number
   screenshot?: boolean
 }
@@ -113,7 +113,7 @@ export interface TestAssertion {
     | 'performance'
     | 'security'
   target?: string
-  expected: any
+  expected: unknown
   message?: string
 }
 
@@ -137,8 +137,8 @@ export interface AssertionResult {
   id: string
   description: string
   status: 'passed' | 'failed'
-  expected: any
-  actual: any
+  expected: unknown
+  actual: unknown
   message: string
 }
 
@@ -204,17 +204,17 @@ export class TestSuiteManager {
   private config: TestConfig
   private suites = new Map<string, TestSuite>()
   private results = new Map<string, TestResult[]>()
-  private mocks = new Map<string, any>()
-  private browser: any = null
-  private page: any = null
+  private mocks = new Map<string, Record<string, unknown>>()
+  private browser: unknown = null
+  private page: unknown = null
   private isRunning = false
-  private coverage: any = null
-  private lighthouse: any = null
+  private coverage: unknown = null
+  private lighthouse: unknown = null
 
   // Test execution context
   private currentSuite: TestSuite | null = null
   private currentTest: TestCase | null = null
-  private eventListeners = new Map<string, Set<Function>>()
+  private eventListeners = new Map<string, Set<(data?: unknown) => void>>()
 
   // Performance monitoring
   private performanceObserver: PerformanceObserver | null = null
@@ -509,7 +509,7 @@ export class TestSuiteManager {
   private async runAssertion(assertion: TestAssertion): Promise<AssertionResult> {
     const result: AssertionResult = {
       id: assertion.id,
-      description: assertion.message || `Assert ${assertion.type}`,
+      description: assertion.message ?? `Assert ${assertion.type}`,
       status: 'failed',
       expected: assertion.expected,
       actual: null,
@@ -517,7 +517,7 @@ export class TestSuiteManager {
     }
 
     try {
-      let actual: any
+      let actual: unknown
 
       switch (assertion.type) {
         case 'equals':
@@ -891,10 +891,10 @@ export class TestSuiteManager {
   /**
    * Helper methods for test execution
    */
-  private async setupBrowser(): Promise<void> {
+  private setupBrowser(): void {
     // Browser setup would depend on the testing framework
     // This is a placeholder for Playwright/Puppeteer setup
-    console.log('Setting up browser for E2E tests')
+    // Setting up browser for E2E tests
   }
 
   private setupPerformanceMonitoring(): void {
@@ -913,14 +913,14 @@ export class TestSuiteManager {
     }
   }
 
-  private async setupCoverage(): Promise<void> {
+  private setupCoverage(): void {
     // Coverage setup would depend on the tool (Istanbul, etc.)
-    console.log('Setting up code coverage collection')
+    // Setting up code coverage collection
   }
 
-  private async setupSecurityTesting(): Promise<void> {
+  private setupSecurityTesting(): void {
     // Security testing setup
-    console.log('Setting up security testing tools')
+    // Setting up security testing tools
   }
 
   private setupTestEnvironment(): void {
@@ -930,15 +930,15 @@ export class TestSuiteManager {
     }
   }
 
-  private async setupTestMocks(mockData?: any): Promise<void> {
+  private setupTestMocks(mockData?: Record<string, unknown>): void {
     if (!mockData) return
 
     for (const [key, value] of Object.entries(mockData)) {
-      this.mocks.set(key, value)
+      this.mocks.set(key, value as Record<string, unknown>)
     }
   }
 
-  private async cleanupTestMocks(): Promise<void> {
+  private cleanupTestMocks(): void {
     this.mocks.clear()
   }
 
@@ -994,7 +994,13 @@ export class TestSuiteManager {
     }
   }
 
-  private generateTestSummary(results: Map<string, TestResult[]>): any {
+  private generateTestSummary(results: Map<string, TestResult[]>): {
+    total: number
+    passed: number
+    failed: number
+    skipped: number
+    passRate: number
+  } {
     let total = 0
     let passed = 0
     let failed = 0
@@ -1027,37 +1033,41 @@ export class TestSuiteManager {
   }
 
   // Placeholder methods for browser interaction
-  private async getElementValue(target?: string): Promise<any> {
-    return null
+  private getElementValue(_target?: string): Promise<unknown> {
+    return Promise.resolve(null)
   }
-  private async getElementText(target?: string): Promise<string> {
-    return ''
+  private getElementText(_target?: string): Promise<string> {
+    return Promise.resolve('')
   }
-  private async elementExists(target?: string): Promise<boolean> {
-    return false
+  private elementExists(_target?: string): Promise<boolean> {
+    return Promise.resolve(false)
   }
-  private async isElementVisible(target?: string): Promise<boolean> {
-    return false
+  private isElementVisible(_target?: string): Promise<boolean> {
+    return Promise.resolve(false)
   }
-  private async getElementCount(target?: string): Promise<number> {
-    return 0
+  private getElementCount(_target?: string): Promise<number> {
+    return Promise.resolve(0)
   }
-  private async getPerformanceMetric(metric: string): Promise<number> {
-    return 0
+  private getPerformanceMetric(_metric: string): Promise<number> {
+    return Promise.resolve(0)
   }
-  private async checkSecurityRequirement(requirement: string): Promise<boolean> {
-    return true
+  private checkSecurityRequirement(_requirement: string): Promise<boolean> {
+    return Promise.resolve(true)
   }
-  private async takeScreenshot(name: string): Promise<string> {
-    return ''
+  private takeScreenshot(_name: string): Promise<string> {
+    return Promise.resolve('')
   }
-  private async mockApiEndpoint(endpoint: string, response: any): Promise<void> {}
-  private async triggerDOMEvent(target: string, eventType: string): Promise<void> {}
-  private async collectPerformanceMetrics(): Promise<PerformanceMetrics> {
-    return this.metrics
+  private mockApiEndpoint(_endpoint: string, _response: Record<string, unknown>): Promise<void> {
+    return Promise.resolve()
   }
-  private async collectCoverage(): Promise<CoverageReport> {
-    return { statements: 0, branches: 0, functions: 0, lines: 0, files: [] }
+  private triggerDOMEvent(_target: string, _eventType: string): Promise<void> {
+    return Promise.resolve()
+  }
+  private collectPerformanceMetrics(): Promise<PerformanceMetrics> {
+    return Promise.resolve(this.metrics)
+  }
+  private collectCoverage(): Promise<CoverageReport> {
+    return Promise.resolve({ statements: 0, branches: 0, functions: 0, lines: 0, files: [] })
   }
 
   private generateId(): string {
@@ -1067,21 +1077,21 @@ export class TestSuiteManager {
   /**
    * Event handling
    */
-  public addEventListener(event: string, callback: Function): void {
+  public addEventListener(event: string, callback: (data?: unknown) => void): void {
     if (!this.eventListeners.has(event)) {
       this.eventListeners.set(event, new Set())
     }
     this.eventListeners.get(event)!.add(callback)
   }
 
-  public removeEventListener(event: string, callback: Function): void {
+  public removeEventListener(event: string, callback: (data?: unknown) => void): void {
     const listeners = this.eventListeners.get(event)
     if (listeners) {
       listeners.delete(callback)
     }
   }
 
-  private emit(event: string, data?: any): void {
+  private emit(event: string, data?: unknown): void {
     const listeners = this.eventListeners.get(event)
     if (listeners) {
       listeners.forEach((callback) => {

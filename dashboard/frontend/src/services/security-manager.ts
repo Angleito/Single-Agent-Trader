@@ -151,7 +151,7 @@ export interface SecurityEvent {
   sessionId?: string
   ipAddress: string
   userAgent: string
-  details: Record<string, any>
+  details: Record<string, unknown>
   blocked: boolean
   actionTaken?: string
 }
@@ -211,6 +211,31 @@ export interface APIKey {
   enabled: boolean
 }
 
+export interface AuthResponse {
+  userId: string
+  username: string
+  email: string
+  roles?: string[]
+  permissions?: string[]
+  accessToken: string
+  refreshToken: string
+  expiresAt: string
+  preferences?: {
+    theme: string
+    language: string
+    timezone: string
+    notifications: boolean
+  }
+}
+
+export interface SessionMetadata {
+  ipAddress: string
+  userAgent: string
+  rememberMe?: boolean
+  mfaVerified: boolean
+  biometricVerified: boolean
+}
+
 export class SecurityManager {
   private authConfig: AuthenticationConfig
   private securityConfig: SecurityConfig
@@ -222,7 +247,7 @@ export class SecurityManager {
   private encryptionKey: CryptoKey | null = null
   private csrfToken: string | null = null
   private deviceFingerprint: string | null = null
-  private eventListeners = new Map<string, Set<Function>>()
+  private eventListeners = new Map<string, Set<(data?: unknown) => void>>()
   private isInitialized = false
 
   // Biometric authentication
@@ -613,8 +638,8 @@ export class SecurityManager {
       },
       user: {
         id: new TextEncoder().encode(userId),
-        name: this.currentSession?.email || 'user',
-        displayName: this.currentSession?.username || 'User',
+        name: this.currentSession?.email ?? 'user',
+        displayName: this.currentSession?.username ?? 'User',
       },
       pubKeyCredParams: [
         { alg: -7, type: 'public-key' }, // ES256
@@ -766,18 +791,18 @@ export class SecurityManager {
   /**
    * Session management
    */
-  private async createSession(authResponse: any, metadata: any): Promise<UserSession> {
+  private async createSession(authResponse: AuthResponse, metadata: SessionMetadata): Promise<UserSession> {
     const session: UserSession = {
       id: this.generateId(),
       userId: authResponse.userId,
       username: authResponse.username,
       email: authResponse.email,
-      roles: authResponse.roles || [],
-      permissions: authResponse.permissions || [],
+      roles: authResponse.roles ?? [],
+      permissions: authResponse.permissions ?? [],
       tokens: {
         access: authResponse.accessToken,
         refresh: authResponse.refreshToken,
-        csrf: this.csrfToken || undefined,
+        csrf: this.csrfToken ?? undefined,
       },
       metadata: {
         loginTime: new Date(),
@@ -789,7 +814,7 @@ export class SecurityManager {
         mfaVerified: metadata.mfaVerified,
         biometricVerified: metadata.biometricVerified,
       },
-      preferences: authResponse.preferences || {
+      preferences: authResponse.preferences ?? {
         theme: 'dark',
         language: 'en',
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -809,7 +834,7 @@ export class SecurityManager {
     // Session timeout timer
     const timeoutMs = this.authConfig.sessionTimeout * 60 * 1000
     this.sessionTimer = window.setTimeout(() => {
-      this.logout('timeout')
+      void this.logout('timeout')
     }, timeoutMs)
 
     // Token refresh timer
@@ -819,7 +844,7 @@ export class SecurityManager {
 
     this.refreshTimer = window.setTimeout(() => {
       this.refreshTokens().catch(() => {
-        this.logout('security')
+        void this.logout('security')
       })
     }, refreshTime)
 
@@ -879,7 +904,7 @@ export class SecurityManager {
   private async loadSessionFromStorage(): Promise<UserSession | null> {
     try {
       const encryptedData =
-        localStorage.getItem('trading_session') || sessionStorage.getItem('trading_session')
+        localStorage.getItem('trading_session') ?? sessionStorage.getItem('trading_session')
 
       if (!encryptedData) return null
 
@@ -974,8 +999,8 @@ export class SecurityManager {
       navigator.platform,
       screen.width + 'x' + screen.height,
       new Date().getTimezoneOffset(),
-      navigator.hardwareConcurrency || 0,
-      (navigator as any).deviceMemory || 0,
+      navigator.hardwareConcurrency ?? 0,
+      (navigator as typeof navigator & { deviceMemory?: number }).deviceMemory ?? 0,
     ]
 
     const fingerprintString = components.join('|')
@@ -988,7 +1013,7 @@ export class SecurityManager {
       .join('')
   }
 
-  private async setupCSRFProtection(): Promise<void> {
+  private setupCSRFProtection(): void {
     try {
       // Generate CSRF token
       const tokenArray = new Uint8Array(32)
@@ -1062,21 +1087,21 @@ export class SecurityManager {
   /**
    * Event handling
    */
-  public addEventListener(event: string, callback: Function): void {
+  public addEventListener(event: string, callback: (data?: unknown) => void): void {
     if (!this.eventListeners.has(event)) {
       this.eventListeners.set(event, new Set())
     }
     this.eventListeners.get(event)!.add(callback)
   }
 
-  public removeEventListener(event: string, callback: Function): void {
+  public removeEventListener(event: string, callback: (data?: unknown) => void): void {
     const listeners = this.eventListeners.get(event)
     if (listeners) {
       listeners.delete(callback)
     }
   }
 
-  private emit(event: string, data?: any): void {
+  private emit(event: string, data?: unknown): void {
     const listeners = this.eventListeners.get(event)
     if (listeners) {
       listeners.forEach((callback) => {
@@ -1121,26 +1146,26 @@ export class SecurityManager {
   }
 
   // Placeholder methods for brevity - these would be fully implemented
-  private async performPrimaryAuth(username: string, password: string): Promise<any> {
-    return {}
+  private performPrimaryAuth(_username: string, _password: string): Promise<AuthResponse> {
+    return Promise.resolve({} as AuthResponse)
   }
-  private async verifyMFA(userId: string, code: string): Promise<boolean> {
-    return true
+  private verifyMFA(_userId: string, _code: string): Promise<boolean> {
+    return Promise.resolve(true)
   }
-  private validatePassword(password: string): void {}
-  private isAccountLocked(username: string): boolean {
+  private validatePassword(_password: string): void {}
+  private isAccountLocked(_username: string): boolean {
     return false
   }
   private logAuthenticationAttempt(
-    username: string,
-    success: boolean,
-    ip: string,
-    ua: string,
-    details?: any
+    _username: string,
+    _success: boolean,
+    _ip: string,
+    _ua: string,
+    _details?: unknown
   ): void {}
-  private logSecurityEvent(type: SecurityEventType, severity: string, details: any): void {}
-  private detectSuspiciousActivity(username: string, ip: string, ua: string): void {}
-  private checkAPIKeyRateLimit(apiKey: APIKey): boolean {
+  private logSecurityEvent(_type: SecurityEventType, _severity: string, _details: unknown): void {}
+  private detectSuspiciousActivity(_username: string, _ip: string, _ua: string): void {}
+  private checkAPIKeyRateLimit(_apiKey: APIKey): boolean {
     return true
   }
   private async checkExistingSession(): Promise<void> {}

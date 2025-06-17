@@ -57,6 +57,11 @@ jobs:
       run: |
         poetry install --with dev
     
+    - name: Verify Black installation
+      run: |
+        poetry run which black
+        poetry run black --version
+    
     - name: Run Black formatting check
       run: |
         poetry run black --check --diff .
