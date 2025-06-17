@@ -73,29 +73,29 @@ jobs:
       run: |
         echo "Checking Poetry environment..."
         poetry env info
-        echo "Activating virtual environment..."
-        source $(poetry env info --path)/bin/activate
-        echo "Checking PATH after activation..."
-        echo $PATH
-        echo "Testing Black directly..."
-        black --version
-        echo "Testing via Poetry..."
-        poetry run black --version
+        echo "Current working directory:"
+        pwd
+        echo "Checking virtual environment directly..."
+        VENV_PATH=$(poetry env info --path)
+        echo "Virtual env path: $VENV_PATH"
+        ls -la "$VENV_PATH/bin/" | head -10
+        echo "Testing Black directly from venv..."
+        "$VENV_PATH/bin/black" --version
+        echo "Testing via Poetry run..."
+        poetry run python -c "import sys; print('Python path:', sys.executable)"
+        poetry run python -m black --version
 
     - name: Run Black formatting check
       run: |
-        source $(poetry env info --path)/bin/activate
-        black --check --diff .
+        poetry run python -m black --check --diff .
 
     - name: Run Ruff linting
       run: |
-        source $(poetry env info --path)/bin/activate
-        ruff check .
+        poetry run python -m ruff check .
 
     - name: Run MyPy type checking
       run: |
-        source $(poetry env info --path)/bin/activate
-        mypy bot/
+        poetry run python -m mypy bot/
       continue-on-error: true  # Allow to continue even if type checking fails
 
     - name: Check Poetry lock file
