@@ -169,8 +169,8 @@ class OmniSearchClient:
     ):
         """Initialize the OmniSearch client."""
         # Server configuration
-        self.server_url = server_url or getattr(settings, 'omnisearch_server_url', 'https://api.omnisearch.dev/v1')
-        self.api_key = api_key or getattr(settings, 'omnisearch_api_key', None)
+        self.server_url = server_url or getattr(settings.omnisearch, 'server_url', 'https://api.omnisearch.dev/v1')
+        self.api_key = api_key or (settings.omnisearch.api_key.get_secret_value() if settings.omnisearch.api_key else None)
 
         # Client state
         self._session: aiohttp.ClientSession | None = None

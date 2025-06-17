@@ -1,9 +1,0 @@
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-pydantic==2.5.0
-python-socketio[asyncio_client]==5.8.0
-websockets==11.0.2
-aiohttp==3.8.6
-greenlet>=2.0.2
-requests==2.31.0
-bluefin-v2-client==4.2.13

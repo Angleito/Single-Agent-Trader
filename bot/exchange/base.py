@@ -173,12 +173,13 @@ class BaseExchange(ABC):
         pass
         
     @abstractmethod
-    async def cancel_all_orders(self, symbol: Optional[str] = None) -> bool:
+    async def cancel_all_orders(self, symbol: Optional[str] = None, status: Optional[str] = None) -> bool:
         """
         Cancel all open orders.
         
         Args:
             symbol: Optional trading symbol filter
+            status: Optional order status filter (for SDK compatibility)
             
         Returns:
             True if successful

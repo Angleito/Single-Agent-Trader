@@ -2096,12 +2096,13 @@ class CoinbaseClient(BaseExchange):
             logger.error(f"Failed to cancel order {order_id}: {e}")
             return False
 
-    async def cancel_all_orders(self, symbol: str | None = None) -> bool:
+    async def cancel_all_orders(self, symbol: str | None = None, status: str | None = None) -> bool:
         """
         Cancel all open orders, optionally filtered by symbol.
 
         Args:
             symbol: Optional trading symbol filter
+            status: Optional order status filter (not used for Coinbase)
 
         Returns:
             True if successful

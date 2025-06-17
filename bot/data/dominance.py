@@ -120,13 +120,8 @@ class DominanceDataProvider:
                 "DominanceDataProvider being garbage collected with open session. "
                 "Consider using async context manager or calling disconnect() explicitly."
             )
-            # Note: We can't await in __del__, but at least log the issue
-            try:
-                # This will schedule the close but won't block
-                asyncio.create_task(self._session.close())
-            except RuntimeError:
-                # Event loop might be closed already
-                pass
+            # Note: We can't reliably close async sessions from __del__
+            # The session will be cleaned up when the event loop closes
 
     async def __aenter__(self):
         """Async context manager entry."""

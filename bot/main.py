@@ -705,10 +705,17 @@ class TradingEngine:
                 console.print(f"    Using real-time WebSocket data for HF trading ({realtime_intervals}s intervals)")
             else:
                 # Use Bluefin-native market data for extended historical data (500+ candles)
-                from .data.bluefin_market import BluefinMarketDataProvider
-                self.logger.info(f"Using Bluefin native market data provider for {self.symbol}")
-                self.market_data = BluefinMarketDataProvider(self.symbol, self.interval)
-                console.print("    Using Bluefin DEX native market data (500+ candles)")
+                try:
+                    from .data.bluefin_market import BluefinMarketDataProvider
+                    self.logger.info(f"Using Bluefin native market data provider for {self.symbol}")
+                    self.market_data = BluefinMarketDataProvider(self.symbol, self.interval)
+                    console.print("    Using Bluefin DEX native market data (500+ candles)")
+                except ImportError as e:
+                    self.logger.warning(f"BluefinMarketDataProvider not available: {e}")
+                    self.logger.info(f"Falling back to standard MarketDataProvider for {self.symbol}")
+                    # Fallback to standard market data provider
+                    self.market_data = MarketDataProvider(self.symbol, self.interval)
+                    console.print("    Using fallback market data provider for Bluefin")
         else:
             # Use Coinbase market data for Coinbase trading
             market_data_symbol = self.actual_trading_symbol
@@ -862,6 +869,9 @@ class TradingEngine:
                         data = await data
                     elif isinstance(data, asyncio.Task):
                         self.logger.warning("Detected asyncio.Task data, awaiting...")
+                        data = await data
+                    elif hasattr(data, '__await__'):
+                        self.logger.warning("Detected awaitable object, awaiting...")
                         data = await data
                         
                 except Exception as e:
@@ -1132,6 +1142,9 @@ class TradingEngine:
                             latest_data = await latest_data
                         elif isinstance(latest_data, asyncio.Task):
                             self.logger.warning("Detected asyncio.Task data in main loop, awaiting...")
+                            latest_data = await latest_data
+                        elif hasattr(latest_data, '__await__'):
+                            self.logger.warning("Detected awaitable object in main loop, awaiting...")
                             latest_data = await latest_data
                     except Exception as e:
                         self.logger.warning(f"Error getting market data in main loop: {e}")
