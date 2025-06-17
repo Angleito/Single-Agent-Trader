@@ -804,7 +804,12 @@ class MCPMemoryServer:
             # Use asyncio to run blocking I/O in thread pool
             import asyncio
 
-            loop = asyncio.get_event_loop()
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                # If no event loop is running, fall back to synchronous I/O
+                file_path.write_text(experience.json(indent=2))
+                return
             await loop.run_in_executor(
                 None, lambda: file_path.write_text(experience.json(indent=2))
             )

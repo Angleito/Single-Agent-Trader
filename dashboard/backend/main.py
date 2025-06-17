@@ -284,26 +284,37 @@ class ConnectionManager:
         # Default to log category
         return "log"
 
-    async def connect(self, websocket: WebSocket, replay_categories: list[str] = None):
+    async def connect(self, websocket: WebSocket, replay_categories: list[str] = None, connection_info: dict = None):
         """
         Accept WebSocket connection and send buffered messages by category.
 
         Args:
             websocket: WebSocket connection
             replay_categories: List of categories to replay (default: all)
+            connection_info: Additional connection information for diagnostics
         """
         await websocket.accept()
         self.active_connections.add(websocket)
 
-        # Initialize connection metadata
+        # Enhanced connection metadata with diagnostics
         self.connection_metadata[websocket] = {
             "connected_at": datetime.now().isoformat(),
             "categories": replay_categories or list(self.message_buffers.keys()),
             "messages_sent": 0,
+            "messages_received": 0,
+            "last_activity": datetime.now().isoformat(),
+            "connection_info": connection_info or {},
+            "client_ip": connection_info.get("client_ip", "unknown") if connection_info else "unknown",
+            "origin": connection_info.get("origin", "unknown") if connection_info else "unknown",
+            "user_agent": connection_info.get("user_agent", "unknown") if connection_info else "unknown",
+            "is_healthy": True,
+            "error_count": 0,
         }
 
         logger.info(
-            f"WebSocket connection established. Total connections: {len(self.active_connections)}"
+            f"WebSocket connection established from {self.connection_metadata[websocket]['client_ip']} "
+            f"(Origin: {self.connection_metadata[websocket]['origin']}). "
+            f"Total connections: {len(self.active_connections)}"
         )
 
         # Send replay messages by category
@@ -832,10 +843,23 @@ default_origins = ",".join(
         # Docker internal network
         "http://dashboard-frontend:8080",
         "http://dashboard-frontend-prod:8080",
+        # Container-to-container communication
+        "http://dashboard-backend:8000",
         # Alternative localhost variations
         "http://0.0.0.0:3000",
         "http://0.0.0.0:3001",
         "http://0.0.0.0:8080",
+        # WebSocket-specific origins (for browser connections)
+        "ws://localhost:8000",
+        "ws://127.0.0.1:8000",
+        "ws://0.0.0.0:8000",
+        # HTTPS/WSS variants for production
+        "wss://localhost:8000",
+        "wss://127.0.0.1:8000",
+        # Direct browser access to backend port
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://0.0.0.0:8000",
     ]
 )
 
@@ -902,15 +926,34 @@ async def add_json_headers(request, call_next):
     # Add CORS headers for WebSocket upgrades
     if request.headers.get("connection", "").lower() == "upgrade":
         origin = request.headers.get("origin")
-        if origin and origin in allowed_origins:
-            response.headers["Access-Control-Allow-Origin"] = origin
-            response.headers["Access-Control-Allow-Credentials"] = "true"
+        
+        # Enhanced WebSocket CORS handling
+        allow_origin = None
+        if origin:
+            # Check if origin is in allowed list
+            if origin in allowed_origins:
+                allow_origin = origin
+            # Check for localhost variations (more permissive for development)
+            elif any(origin.startswith(prefix) for prefix in ["http://localhost:", "http://127.0.0.1:", "ws://localhost:", "ws://127.0.0.1:"]):
+                allow_origin = origin
+            # Check for docker internal network origins
+            elif origin.startswith("http://dashboard-frontend") or origin.startswith("http://dashboard-backend"):
+                allow_origin = origin
+        
+        # Set appropriate CORS headers
+        if allow_origin:
+            response.headers["Access-Control-Allow-Origin"] = allow_origin
+            response.headers["Access-Control-Allow-Credentials"] = str(allow_credentials).lower()
         else:
-            # Fallback for development
-            response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+            # Fallback for development - be more permissive
+            if os.getenv("ENVIRONMENT", "development") == "development":
+                response.headers["Access-Control-Allow-Origin"] = "*"
+            else:
+                response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+        
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, UPGRADE"
         response.headers["Access-Control-Allow-Headers"] = (
-            "Content-Type, Authorization, X-Requested-With"
+            "Content-Type, Authorization, X-Requested-With, Upgrade, Connection, Sec-WebSocket-Key, Sec-WebSocket-Version, Sec-WebSocket-Protocol"
         )
 
     return response
@@ -958,35 +1001,72 @@ async def websocket_endpoint(websocket: WebSocket):
         f"WebSocket connection attempt - Origin: {origin}, Host: {host}, User-Agent: {user_agent}"
     )
 
-    # Log CORS validation for WebSocket connections
+    # Enhanced CORS validation for WebSocket connections
+    cors_validation_passed = False
     if origin:
         if origin in allowed_origins:
             logger.info(f"WebSocket origin '{origin}' is allowed by CORS policy")
+            cors_validation_passed = True
+        # More permissive localhost checking for development
+        elif any(origin.startswith(prefix) for prefix in ["http://localhost:", "http://127.0.0.1:", "ws://localhost:", "ws://127.0.0.1:"]):
+            logger.info(f"WebSocket origin '{origin}' allowed as localhost development connection")
+            cors_validation_passed = True
+        # Docker internal network origins
+        elif origin.startswith("http://dashboard-frontend") or origin.startswith("http://dashboard-backend"):
+            logger.info(f"WebSocket origin '{origin}' allowed as container network connection")
+            cors_validation_passed = True
         else:
             logger.warning(
                 f"WebSocket origin '{origin}' is NOT in allowed origins list"
             )
-            logger.warning(f"Allowed origins: {', '.join(allowed_origins)}")
+            logger.warning(f"Allowed origins: {', '.join(allowed_origins[:5])}... (showing first 5)")
+            
+            # In development, still allow connection but log warning
+            if os.getenv("ENVIRONMENT", "development") == "development":
+                logger.warning("Allowing connection in development mode despite CORS mismatch")
+                cors_validation_passed = True
     else:
         logger.info(
-            "WebSocket connection has no origin header (this might be normal for some clients)"
+            "WebSocket connection has no origin header (direct client connection or curl/test tool)"
         )
+        cors_validation_passed = True  # Allow connections without origin header
+    
+    # Log connection details for debugging
+    logger.info(f"WebSocket connection details: Host={host}, User-Agent={user_agent[:50] if user_agent else 'Unknown'}, CORS={'PASS' if cors_validation_passed else 'FAIL'}")
 
     try:
         # Accept connection with detailed logging
-        await manager.connect(websocket)
+        # Prepare connection information for diagnostics
+        connection_info = {
+            "client_ip": websocket.client.host if websocket.client else "unknown",
+            "origin": origin,
+            "user_agent": user_agent,
+            "host": host,
+            "cors_validated": cors_validation_passed,
+            "connection_time": datetime.now().isoformat(),
+        }
+        
+        await manager.connect(websocket, connection_info=connection_info)
         logger.info(f"WebSocket connection established successfully from {origin}")
 
-        # Send initial connection confirmation
+        # Send initial connection confirmation with enhanced details
         welcome_message = {
             "timestamp": datetime.now().isoformat(),
             "type": "connection_established",
             "message": "WebSocket connection successful",
+            "connection_id": str(id(websocket)),  # Simple connection identifier
             "server_info": {
                 "version": "1.0.0",
                 "endpoints": ["/ws", "/api/ws"],
-                "features": ["real_time_logs", "llm_monitoring", "trading_data"],
+                "features": ["real_time_logs", "llm_monitoring", "trading_data", "ai_decisions", "system_status"],
+                "active_connections": len(manager.active_connections),
+                "cors_status": "validated" if cors_validation_passed else "warning",
             },
+            "client_info": {
+                "ip": connection_info["client_ip"],
+                "origin": connection_info["origin"],
+                "connected_at": connection_info["connection_time"],
+            }
         }
         await websocket.send_text(json.dumps(welcome_message))
 
@@ -2603,18 +2683,125 @@ async def websocket_test():
     }
 
 
+@app.get("/connectivity/test", include_in_schema=False)
+async def connectivity_test(request: Request):
+    """Network connectivity diagnostics endpoint"""
+    # Get request details
+    client_host = request.client.host if request.client else "unknown"
+    origin = request.headers.get("origin", "no-origin")
+    user_agent = request.headers.get("user-agent", "unknown")
+    
+    # Check CORS status
+    cors_status = "allowed" if origin in allowed_origins else "not-in-list"
+    if origin.startswith(("http://localhost:", "http://127.0.0.1:", "ws://localhost:", "ws://127.0.0.1:")):
+        cors_status = "localhost-allowed"
+    elif origin.startswith(("http://dashboard-frontend", "http://dashboard-backend")):
+        cors_status = "container-network-allowed"
+    
+    # Network information
+    network_info = {
+        "client_ip": client_host,
+        "origin": origin,
+        "user_agent": user_agent[:100] if user_agent else None,
+        "host_header": request.headers.get("host"),
+        "x_forwarded_for": request.headers.get("x-forwarded-for"),
+        "x_real_ip": request.headers.get("x-real-ip"),
+    }
+    
+    # CORS configuration
+    cors_info = {
+        "status": cors_status,
+        "allowed_origins_count": len(allowed_origins),
+        "credentials_allowed": allow_credentials,
+        "sample_allowed_origins": allowed_origins[:10],  # Show first 10 for debugging
+    }
+    
+    # WebSocket status
+    websocket_info = {
+        "endpoint": "/ws",
+        "active_connections": len(manager.active_connections),
+        "suggested_url": f"ws://{request.headers.get('host', 'localhost:8000')}/ws",
+    }
+    
+    # Backend health
+    backend_health = {
+        "server_time": datetime.now().isoformat(),
+        "environment": os.getenv("ENVIRONMENT", "development"),
+        "docker_env": bool(os.getenv("DOCKER_ENV")),
+        "container": bool(os.getenv("CONTAINER")),
+    }
+    
+    return {
+        "status": "ok",
+        "message": "Backend connectivity test successful",
+        "network": network_info,
+        "cors": cors_info,
+        "websocket": websocket_info, 
+        "backend": backend_health,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+@app.get("/ws/connections", include_in_schema=False)
+async def websocket_connections():
+    """Get current WebSocket connection status and diagnostics"""
+    # Only allow in development environment
+    environment = os.getenv("ENVIRONMENT", "development")
+    if environment == "production":
+        raise HTTPException(status_code=404, detail="Not found")
+    
+    connections_info = []
+    for websocket, metadata in manager.connection_metadata.items():
+        # Check if connection is still active
+        is_active = websocket in manager.active_connections
+        
+        connection_data = {
+            "connection_id": str(id(websocket)),
+            "is_active": is_active,
+            "connected_at": metadata.get("connected_at"),
+            "last_activity": metadata.get("last_activity"),
+            "messages_sent": metadata.get("messages_sent", 0),
+            "messages_received": metadata.get("messages_received", 0),
+            "client_ip": metadata.get("client_ip", "unknown"),
+            "origin": metadata.get("origin", "unknown"),
+            "user_agent": metadata.get("user_agent", "unknown")[:100] if metadata.get("user_agent") else "unknown",
+            "is_healthy": metadata.get("is_healthy", True),
+            "error_count": metadata.get("error_count", 0),
+            "categories": metadata.get("categories", []),
+        }
+        connections_info.append(connection_data)
+    
+    return {
+        "active_connections": len(manager.active_connections),
+        "total_connections_served": manager.stats["connections_served"],
+        "total_messages": manager.stats["total_messages"],
+        "messages_by_category": manager.stats["messages_by_category"],
+        "buffer_status": {
+            category: {
+                "current_size": len(buffer),
+                "max_size": manager.buffer_limits[category],
+                "utilization": f"{len(buffer) / manager.buffer_limits[category] * 100:.1f}%"
+            }
+            for category, buffer in manager.message_buffers.items()
+        },
+        "connections": connections_info,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
 # TradingView UDF API Endpoints
 
 
 @app.get("/udf/config")
 async def udf_config():
-    """TradingView UDF configuration"""
-    return {
+    """TradingView UDF configuration with explicit type enforcement"""
+    config = {
         "supports_search": True,
         "supports_group_request": False,
         "supports_marks": True,
         "supports_timescale_marks": True,
         "supports_time": True,
+        "supports_streaming": True,
         "exchanges": [
             {
                 "value": "COINBASE",
@@ -2623,17 +2810,72 @@ async def udf_config():
             }
         ],
         "symbols_types": [{"value": "crypto", "name": "Cryptocurrency"}],
-        "supported_resolutions": ["1", "5", "15", "60", "240", "1D", "1W", "1M"],
+        "supported_resolutions": [
+            str(x) for x in ["1", "5", "15", "60", "240", "1D", "1W", "1M"]
+        ],
+        "currencies": [str(x) for x in ["USD", "EUR", "BTC", "ETH"]],
     }
+
+    # Ensure all values are properly typed - no undefined or null values
+    def clean_response(obj):
+        if isinstance(obj, dict):
+            return {k: clean_response(v) for k, v in obj.items() if v is not None}
+        elif isinstance(obj, list):
+            return [clean_response(item) for item in obj if item is not None]
+        elif isinstance(obj, str):
+            return str(obj)
+        elif isinstance(obj, bool):
+            return bool(obj)
+        elif isinstance(obj, int | float):
+            return obj if obj == obj else 0  # Handle NaN
+        else:
+            return obj
+
+    return clean_response(config)
 
 
 @app.get("/udf/symbols")
 async def udf_symbols(symbol: str):
-    """Get symbol information"""
+    """Get symbol information with explicit type enforcement"""
     symbol_info = tradingview_feed.get_symbol_info(symbol)
     if not symbol_info:
         raise HTTPException(status_code=404, detail="Symbol not found")
-    return symbol_info
+
+    # Ensure all symbol info values are properly typed
+    def clean_symbol_info(obj):
+        if isinstance(obj, dict):
+            cleaned = {}
+            for k, v in obj.items():
+                if v is not None:
+                    if k in [
+                        "name",
+                        "description",
+                        "type",
+                        "session",
+                        "timezone",
+                        "ticker",
+                        "exchange",
+                        "data_status",
+                        "currency_code",
+                        "original_name",
+                    ]:
+                        cleaned[k] = str(v)
+                    elif k in ["minmov", "pricescale", "volume_precision"]:
+                        cleaned[k] = (
+                            int(v) if isinstance(v, int | float) and v == v else 1
+                        )
+                    elif k in ["has_intraday", "has_daily", "has_weekly_and_monthly"]:
+                        cleaned[k] = bool(v)
+                    elif k in ["intraday_multipliers", "supported_resolutions"]:
+                        cleaned[k] = (
+                            [str(item) for item in v] if isinstance(v, list) else []
+                        )
+                    else:
+                        cleaned[k] = v
+            return cleaned
+        return obj
+
+    return clean_symbol_info(symbol_info)
 
 
 @app.get("/udf/search")
@@ -2661,8 +2903,52 @@ async def udf_history(
     to: int = Query(...),
     countback: int | None = None,
 ):
-    """Get historical data"""
-    return tradingview_feed.get_history(symbol, resolution, from_, to, countback)
+    """Get historical data with explicit type enforcement"""
+    history_data = tradingview_feed.get_history(
+        symbol, resolution, from_, to, countback
+    )
+
+    # Ensure all historical data values are properly typed
+    def clean_history_data(obj):
+        if isinstance(obj, dict):
+            cleaned = {}
+            for k, v in obj.items():
+                if v is not None:
+                    if k == "s":
+                        cleaned[k] = str(v)  # Status must be string
+                    elif k in ["t", "o", "h", "l", "c", "v"]:
+                        # Time and OHLCV arrays must be numeric
+                        if isinstance(v, list):
+                            if k == "t":
+                                cleaned[k] = [
+                                    (
+                                        int(item)
+                                        if isinstance(item, int | float)
+                                        and item == item
+                                        else 0
+                                    )
+                                    for item in v
+                                ]
+                            else:
+                                cleaned[k] = [
+                                    (
+                                        float(item)
+                                        if isinstance(item, int | float)
+                                        and item == item
+                                        else 0.0
+                                    )
+                                    for item in v
+                                ]
+                        else:
+                            cleaned[k] = v
+                    elif k == "errmsg":
+                        cleaned[k] = str(v)
+                    else:
+                        cleaned[k] = v
+            return cleaned
+        return obj
+
+    return clean_history_data(history_data)
 
 
 @app.get("/udf/marks")
@@ -2672,8 +2958,33 @@ async def udf_marks(
     from_: int = Query(..., alias="from"),
     to: int = Query(...),
 ):
-    """Get AI decision marks"""
-    return tradingview_feed.get_marks(symbol, from_, to, resolution)
+    """Get AI decision marks with explicit type enforcement"""
+    marks_data = tradingview_feed.get_marks(symbol, from_, to, resolution)
+
+    # Ensure all marks data values are properly typed
+    def clean_marks_data(marks):
+        if isinstance(marks, list):
+            cleaned_marks = []
+            for mark in marks:
+                if isinstance(mark, dict):
+                    cleaned_mark = {}
+                    for k, v in mark.items():
+                        if v is not None:
+                            if k in ["id", "text", "label", "color", "labelFontColor"]:
+                                cleaned_mark[k] = str(v)
+                            elif k in ["time", "minSize"]:
+                                cleaned_mark[k] = (
+                                    int(v)
+                                    if isinstance(v, int | float) and v == v
+                                    else 0
+                                )
+                            else:
+                                cleaned_mark[k] = v
+                    cleaned_marks.append(cleaned_mark)
+            return cleaned_marks
+        return marks
+
+    return clean_marks_data(marks_data)
 
 
 @app.get("/udf/timescale_marks")

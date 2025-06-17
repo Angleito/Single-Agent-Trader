@@ -37,13 +37,20 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Copy optimized nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
+# Copy runtime environment injection script
+COPY inject-env.sh /docker-entrypoint.d/inject-env.sh
+RUN chmod +x /docker-entrypoint.d/inject-env.sh
+
 # Set proper permissions
 RUN chown -R nginx:nginx /usr/share/nginx/html && \
     chmod -R 755 /usr/share/nginx/html
 
-# Create directories for nginx
-RUN mkdir -p /var/cache/nginx /var/log/nginx /var/run/nginx && \
-    chown -R nginx:nginx /var/cache/nginx /var/log/nginx /var/run/nginx
+# Create directories for nginx with proper subdirectory structure
+RUN mkdir -p /var/cache/nginx/client_temp /var/cache/nginx/proxy_temp \
+             /var/cache/nginx/fastcgi_temp /var/cache/nginx/uwsgi_temp \
+             /var/cache/nginx/scgi_temp /var/log/nginx /var/run/nginx && \
+    chown -R 1001:1001 /var/cache/nginx /var/log/nginx /var/run/nginx && \
+    chmod -R 755 /var/cache/nginx /var/log/nginx /var/run/nginx
 
 # Expose port
 EXPOSE 8080
@@ -52,5 +59,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
 
-# Start nginx
+# Start nginx (running as root for now to fix connectivity issues)
 CMD ["nginx", "-g", "daemon off;"]

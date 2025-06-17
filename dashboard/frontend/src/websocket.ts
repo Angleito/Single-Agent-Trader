@@ -240,14 +240,17 @@ export class DashboardWebSocket {
   private readonly MESSAGE_THROTTLE_MS = 50 // 50ms between same message types
 
   constructor(url?: string, config: WebSocketConfig = {}) {
+    // Check for runtime configuration first
+    const runtimeWsUrl = (window as any).__WS_URL__ || (window as any).__RUNTIME_CONFIG__?.WS_URL
+    
     // Use dynamic URL detection if no URL provided
-    if (!url && !config.url) {
+    if (!url && !config.url && !runtimeWsUrl) {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
       url = `${protocol}//${window.location.host}/ws`
     }
 
-    // Set the URL with proper validation
-    let finalUrl = config.url ?? url ?? this.getDefaultWebSocketUrl()
+    // Priority: explicit config.url > constructor url > runtime config > default
+    let finalUrl = config.url ?? url ?? runtimeWsUrl ?? this.getDefaultWebSocketUrl()
 
     // Validate and clean up the URL
     finalUrl = this.validateAndCleanUrl(finalUrl)
@@ -338,18 +341,52 @@ export class DashboardWebSocket {
   }
 
   /**
-   * Get default WebSocket URL based on current environment
+   * Get default WebSocket URL based on current environment with Docker support
    */
   private getDefaultWebSocketUrl(): string {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
+    const hostname = window.location.hostname
+    const port = window.location.port
 
-    // In development mode, use the current host (Vite will proxy)
-    if (host.includes('localhost') || host.includes('127.0.0.1')) {
-      return `${protocol}//${host}/ws`
+    // Smart environment detection for Docker scenarios
+    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1'
+    const isDevPort = port === '3000' || port === '3001' || port === '5173'
+    const isNginxPort = port === '8080'
+    
+    // Production nginx proxy scenario (port 8080)
+    if (isNginxPort) {
+      // Use relative /api/ws path for nginx proxy routing
+      return `${protocol}//${host}/api/ws`
     }
 
-    // In production, use current host
+    // Development scenarios with Docker backend
+    if (isDevPort && isLocalhost) {
+      // In development, connect to backend container port
+      const backendPort = '8000'  // Dashboard backend port from docker-compose
+      return `${protocol}//${hostname}:${backendPort}/ws`
+    }
+
+    // Docker container frontend or localhost scenarios
+    if (isLocalhost) {
+      // Check if we're likely running in a containerized environment
+      const isLikelyContainerized = (
+        // Check for Docker-specific indicators
+        (window as any).__DOCKER_ENV__ ||
+        // Environment variable indicating containerization
+        import.meta.env.VITE_DOCKER_ENV ||
+        // Port patterns suggesting containerization
+        port === '8080' || isDevPort
+      )
+
+      if (isLikelyContainerized) {
+        // Frontend container needs to reach backend container via host networking
+        const backendPort = '8000'  // Dashboard backend port exposed to host
+        return `${protocol}//${hostname}:${backendPort}/ws`
+      }
+    }
+
+    // Default fallback - use current host with /ws path
     return `${protocol}//${host}/ws`
   }
 

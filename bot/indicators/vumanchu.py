@@ -188,7 +188,11 @@ class CipherA:
             DataFrame with comprehensive Cipher A indicators
         """
         # Use thread pool for CPU-intensive calculations to avoid blocking event loop
-        loop = asyncio.get_event_loop()
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # If no event loop is running, fall back to synchronous calculation
+            return self.calculate(df)
         return await loop.run_in_executor(None, self.calculate, df)
 
     async def calculate_streaming(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -287,7 +291,11 @@ class CipherA:
                 ]
             ]
 
-        loop = asyncio.get_event_loop()
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # If no event loop is running, fall back to synchronous calculation
+            return _calc_core()
         return await loop.run_in_executor(None, _calc_core)
 
     async def _calculate_ema_ribbon_async(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -312,7 +320,11 @@ class CipherA:
             ]
             return result[ema_cols]
 
-        loop = asyncio.get_event_loop()
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # If no event loop is running, fall back to synchronous calculation
+            return _calc_ema()
         return await loop.run_in_executor(None, _calc_ema)
 
     async def _calculate_advanced_indicators_async(
@@ -339,7 +351,11 @@ class CipherA:
             advanced_cols = ["rsimfi", "stoch_rsi_k", "stoch_rsi_d", "stc"]
             return result[[col for col in advanced_cols if col in result.columns]]
 
-        loop = asyncio.get_event_loop()
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # If no event loop is running, fall back to synchronous calculation
+            return _calc_advanced()
         return await loop.run_in_executor(None, _calc_advanced)
 
     async def _calculate_signal_patterns_async(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -437,7 +453,11 @@ class CipherA:
             ]
             return result[signal_cols]
 
-        loop = asyncio.get_event_loop()
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # If no event loop is running, fall back to synchronous calculation
+            return _calc_signals()
         return await loop.run_in_executor(None, _calc_signals)
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:

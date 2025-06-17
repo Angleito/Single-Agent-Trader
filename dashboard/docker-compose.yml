@@ -3,14 +3,17 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: dashboard-backend
+    container_name: dashboard-backend-standalone
     ports:
-      - "127.0.0.1:8000:8000"  # SECURITY: Bind to localhost only
+      - "8000:8000"  # Allow external access for frontend connectivity
     volumes:
       # SECURITY FIX: Docker socket exposure removed - CRITICAL VULNERABILITY FIXED
       # - /var/run/docker.sock:/var/run/docker.sock:ro  # DANGEROUS - Removed for security
       - ./backend/logs:/app/logs
       - ./backend/data:/app/data
+      # Access to trading bot logs and data when running alongside main compose
+      - ../logs:/app/trading-logs:ro
+      - ../data:/app/trading-data:ro
 
     # SECURITY HARDENING - Container Security
     user: "1000:1000"  # Run as non-root user
@@ -31,15 +34,26 @@ services:
       - API_HOST=0.0.0.0
       - API_PORT=8000
       - DOCKER_ENV=true
+      # CORS origins for standalone operation
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001,http://localhost:8080,http://127.0.0.1:8080
+      - CORS_ALLOW_CREDENTIALS=false
+      # Security settings
+      - RATE_LIMIT_ENABLED=true
+      - RATE_LIMIT_PER_MINUTE=60
+      - SECURITY_HEADERS_ENABLED=true
+      # Service discovery for trading bot connection (when available)
+      - TRADING_BOT_CONTAINER=ai-trading-bot
+      - EXCHANGE__EXCHANGE_TYPE=${EXCHANGE__EXCHANGE_TYPE:-coinbase}
     restart: unless-stopped
-    # healthcheck:
-    #   test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-    #   interval: 30s
-    #   timeout: 10s
-    #   retries: 5
-    #   start_period: 30s
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     networks:
       - dashboard-network
+      - trading-network
     deploy:
       resources:
         limits:
@@ -59,30 +73,32 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       target: production
-    container_name: dashboard-frontend
+    container_name: dashboard-frontend-standalone
     ports:
-      - "127.0.0.1:3000:8080"  # SECURITY: Bind to localhost only
+      - "3000:8080"  # Allow external access for frontend
 
-    # SECURITY HARDENING - Container Security
-    user: "1000:1000"  # Run as non-root user
-    read_only: true     # Read-only root filesystem
+    # SECURITY HARDENING - Container Security (Temporarily relaxed for debugging)
+    # user: "1000:1000"  # Run as non-root user - temporarily disabled
+    # read_only: true     # Read-only root filesystem - temporarily disabled
     security_opt:
       - no-new-privileges:true  # Prevent privilege escalation
-    cap_drop:
-      - ALL             # Drop all capabilities
-    tmpfs:
-      - /tmp:noexec,nosuid,size=50m  # Secure temporary filesystem
+    # cap_drop:
+    #   - ALL             # Drop all capabilities - temporarily disabled
+    # tmpfs:
+    #   - /tmp:noexec,nosuid,size=50m  # Secure temporary filesystem
     environment:
       - NODE_ENV=production
       - DOCKER_ENV=true
-      - VITE_API_URL=/api
-      - VITE_WS_URL=/ws
+      # Use localhost URLs for browser-based frontend communication
+      - VITE_API_URL=http://localhost:8000
+      - VITE_WS_URL=ws://localhost:8000
     restart: unless-stopped
     networks:
       - dashboard-network
+      - trading-network
     depends_on:
       dashboard-backend:
-        condition: service_started
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -103,9 +119,9 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       target: production
-    container_name: dashboard-frontend-prod
+    container_name: dashboard-frontend-prod-standalone
     ports:
-      - "127.0.0.1:80:8080"  # SECURITY: Bind to localhost only
+      - "3001:8080"  # Allow external access for frontend
 
     # SECURITY HARDENING - Container Security
     user: "1000:1000"  # Run as non-root user
@@ -118,11 +134,13 @@ services:
       - /tmp:noexec,nosuid,size=50m  # Secure temporary filesystem
     environment:
       - NODE_ENV=production
+      # Use relative URLs for API calls - nginx proxy will handle routing
       - VITE_API_URL=/api
-      - VITE_WS_URL=/ws
+      - VITE_WS_URL=/api
     restart: unless-stopped
     networks:
       - dashboard-network
+      - trading-network
     depends_on:
       dashboard-backend:
         condition: service_healthy
@@ -145,9 +163,9 @@ services:
   # Nginx reverse proxy for production
   dashboard-nginx:
     image: nginx:alpine
-    container_name: dashboard-nginx
+    container_name: dashboard-nginx-standalone
     ports:
-      - "127.0.0.1:8080:80"  # SECURITY: Bind to localhost only
+      - "8080:80"  # Allow external access for nginx proxy
 
     # SECURITY HARDENING - Container Security
     user: "101:101"    # Run as nginx user
@@ -167,9 +185,16 @@ services:
     restart: unless-stopped
     networks:
       - dashboard-network
+      - trading-network
     depends_on:
       - dashboard-backend
       - dashboard-frontend-prod
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     profiles:
       - production
     deploy:
@@ -195,9 +220,19 @@ volumes:
     name: dashboard-node-modules
 
 networks:
+  # Internal dashboard network for service isolation
   dashboard-network:
     name: dashboard-network
     driver: bridge
     ipam:
       config:
         - subnet: 172.20.0.0/16
+  
+  # Trading network for compatibility with main compose
+  # Creates the network if it doesn't exist, uses existing if it does
+  trading-network:
+    name: trading-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16

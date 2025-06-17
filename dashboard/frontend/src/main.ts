@@ -465,7 +465,15 @@ class DashboardApp {
 
     // Initialize components
     this.ui = new DashboardUI()
-    this.websocket = new DashboardWebSocket(this.config.websocket_url)
+    
+    // Create WebSocket with fallback URLs for better resilience
+    const fallbackUrls = this.generateWebSocketFallbackUrls()
+    this.websocket = new DashboardWebSocket(this.config.websocket_url, {
+      fallbackUrls,
+      enableResilience: true,
+      maxReconnectAttempts: 10,
+      connectionTimeout: 15000
+    })
 
     // Initialize Phase 4 Enterprise Services (lazy initialization in performInitialization)
     // Services will be initialized during performInitialization() for better error handling
@@ -1642,18 +1650,65 @@ class DashboardApp {
   }
 
   /**
-   * Get WebSocket URL from environment or default
+   * Generate fallback WebSocket URLs for different environments
+   */
+  private generateWebSocketFallbackUrls(): string[] {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const hostname = window.location.hostname
+    const port = window.location.port
+    const fallbacks: string[] = []
+
+    // Runtime configuration from injected environment
+    const runtimeWsUrl = (window as any).__WS_URL__ || (window as any).__RUNTIME_CONFIG__?.WS_URL
+    if (runtimeWsUrl && runtimeWsUrl !== import.meta.env.VITE_WS_URL) {
+      fallbacks.push(runtimeWsUrl)
+    }
+
+    // Docker environment fallbacks
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      // Development server scenarios
+      if (port === '3000' || port === '3001' || port === '5173') {
+        fallbacks.push(`${protocol}//${hostname}:8000/ws`)
+      }
+      
+      // Nginx proxy scenarios
+      if (port === '8080') {
+        fallbacks.push(`${protocol}//${hostname}:8080/api/ws`)
+        fallbacks.push(`${protocol}//${hostname}:8000/ws`)
+      }
+      
+      // Additional localhost variations
+      fallbacks.push(`${protocol}//localhost:8000/ws`)
+      fallbacks.push(`${protocol}//127.0.0.1:8000/ws`)
+    }
+
+    // Relative URL fallbacks
+    fallbacks.push(`${protocol}//${window.location.host}/ws`)
+    fallbacks.push(`${protocol}//${window.location.host}/api/ws`)
+
+    // Remove duplicates and filter out the primary URL
+    const uniqueFallbacks = [...new Set(fallbacks)].filter(url => url !== this.config.websocket_url)
+    
+    return uniqueFallbacks
+  }
+
+  /**
+   * Get WebSocket URL with enhanced Docker environment support
    *
-   * Simplified URL Construction Logic:
-   * 1. Use VITE_WS_URL environment variable if available
-   * 2. Fallback to relative '/ws' path for nginx proxy compatibility
-   * 3. Automatically handle protocol (ws/wss) based on current page protocol
+   * Enhanced URL Construction Logic:
+   * 1. Check for explicit VITE_WS_URL environment variable
+   * 2. Handle Docker container scenarios (backend on different host)
+   * 3. Support both nginx proxy and direct backend connections
+   * 4. Automatically detect development vs production environments
+   * 5. Provide robust fallback mechanisms
    */
   private getWebSocketUrl(): string {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
+    const hostname = window.location.hostname
+    const port = window.location.port
 
-    // Check for environment variable first
+    // Check for explicit environment variable first
     const envWsUrl = import.meta.env.VITE_WS_URL ?? (window as any).__WS_URL__
     if (envWsUrl) {
       // Handle absolute URLs (already include protocol and host)
@@ -1671,27 +1726,80 @@ class DashboardApp {
         return `${protocol}//${host}${envWsUrl}`
       }
 
+      // Handle host:port format (for Docker scenarios)
+      if (envWsUrl.includes(':') && !envWsUrl.startsWith('/')) {
+        return `${protocol}//${envWsUrl}`
+      }
+
       // Fallback: treat as relative path
       return `${protocol}//${host}/${envWsUrl.replace(/^\/+/, '')}`
     }
 
-    // Default fallback - use relative '/ws' path for nginx proxy compatibility
+    // Smart environment detection for Docker scenarios
+    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1'
+    const isStandardWebPort = port === '80' || port === '443' || port === ''
+    const isDevPort = port === '3000' || port === '3001' || port === '5173'
+    const isNginxPort = port === '8080'
+    
+    // Container environment detection
+    const isLikelyContainerized = (
+      // Docker Compose frontend scenarios
+      isNginxPort ||
+      // Development with Vite dev server
+      isDevPort ||
+      // Check for Docker-specific indicators
+      (window as any).__DOCKER_ENV__ ||
+      // Environment variable indicating containerization
+      import.meta.env.VITE_DOCKER_ENV
+    )
+
+    // Production nginx proxy scenario (port 8080)
+    if (isNginxPort) {
+      // Use relative /api/ws path for nginx proxy routing
+      return `${protocol}//${host}/api/ws`
+    }
+
+    // Development scenarios
+    if (isDevPort && isLocalhost) {
+      // In development, try to connect to backend container port
+      const backendPort = '8000'  // Dashboard backend port from docker-compose
+      return `${protocol}//${hostname}:${backendPort}/ws`
+    }
+
+    // Docker container frontend accessing backend
+    if (isLikelyContainerized && isLocalhost) {
+      // Frontend container needs to reach backend container via host networking
+      const backendPort = '8000'  // Dashboard backend port exposed to host
+      return `${protocol}//${hostname}:${backendPort}/ws`
+    }
+
+    // Standard production scenarios
+    if (!isStandardWebPort && !isDevPort) {
+      // Custom port, likely a proxied setup
+      return `${protocol}//${host}/ws`
+    }
+
+    // Default fallback - direct WebSocket to current host with /ws path
     return `${protocol}//${host}/ws`
   }
 
   /**
-   * Get API base URL from environment or default
+   * Get API base URL with enhanced Docker environment support
    *
-   * Simplified URL Construction Logic:
-   * 1. Use VITE_API_URL or VITE_API_BASE_URL environment variable if available
-   * 2. Fallback to relative '/api' path for nginx proxy compatibility
-   * 3. No hardcoded host detection - let environment variables or proxy handle routing
+   * Enhanced URL Construction Logic:
+   * 1. Check for explicit VITE_API_URL/VITE_API_BASE_URL environment variables
+   * 2. Handle Docker container scenarios (backend on different host/port)
+   * 3. Support both nginx proxy and direct backend connections
+   * 4. Automatically detect development vs production environments
+   * 5. Provide robust fallback mechanisms
    */
   private getApiBaseUrl(): string {
     const protocol = window.location.protocol
     const host = window.location.host
+    const hostname = window.location.hostname
+    const port = window.location.port
 
-    // Check for environment variable first
+    // Check for explicit environment variable first
     const envApiUrl =
       import.meta.env.VITE_API_URL ||
       import.meta.env.VITE_API_BASE_URL ||
@@ -1712,11 +1820,60 @@ class DashboardApp {
         return `${protocol}//${host}${envApiUrl}`
       }
 
+      // Handle host:port format (for Docker scenarios)
+      if (envApiUrl.includes(':') && !envApiUrl.startsWith('/')) {
+        return `${protocol}//${envApiUrl}`
+      }
+
       // Fallback: treat as relative path
       return `${protocol}//${host}/${envApiUrl.replace(/^\/+/, '')}`
     }
 
-    // Default fallback - use relative '/api' path for nginx proxy compatibility
+    // Smart environment detection for Docker scenarios
+    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1'
+    const isStandardWebPort = port === '80' || port === '443' || port === ''
+    const isDevPort = port === '3000' || port === '3001' || port === '5173'
+    const isNginxPort = port === '8080'
+    
+    // Container environment detection
+    const isLikelyContainerized = (
+      // Docker Compose frontend scenarios
+      isNginxPort ||
+      // Development with Vite dev server
+      isDevPort ||
+      // Check for Docker-specific indicators
+      (window as any).__DOCKER_ENV__ ||
+      // Environment variable indicating containerization
+      import.meta.env.VITE_DOCKER_ENV
+    )
+
+    // Production nginx proxy scenario (port 8080)
+    if (isNginxPort) {
+      // Use relative /api path for nginx proxy routing
+      return `${protocol}//${host}/api`
+    }
+
+    // Development scenarios
+    if (isDevPort && isLocalhost) {
+      // In development, try to connect to backend container port
+      const backendPort = '8000'  // Dashboard backend port from docker-compose
+      return `${protocol}//${hostname}:${backendPort}`
+    }
+
+    // Docker container frontend accessing backend
+    if (isLikelyContainerized && isLocalhost) {
+      // Frontend container needs to reach backend container via host networking
+      const backendPort = '8000'  // Dashboard backend port exposed to host
+      return `${protocol}//${hostname}:${backendPort}`
+    }
+
+    // Standard production scenarios
+    if (!isStandardWebPort && !isDevPort) {
+      // Custom port, likely a proxied setup
+      return `${protocol}//${host}/api`
+    }
+
+    // Default fallback - relative '/api' path for proxy compatibility
     return `${protocol}//${host}/api`
   }
 
