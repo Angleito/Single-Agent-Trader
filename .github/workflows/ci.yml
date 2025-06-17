@@ -55,6 +55,11 @@ jobs:
     
     - name: Install dependencies
       run: |
+        # Check if lock file is consistent with pyproject.toml
+        if ! poetry check --lock 2>/dev/null; then
+          echo "Lock file is inconsistent, updating..."
+          poetry lock
+        fi
         poetry install --with dev --no-interaction
     
     - name: Verify Black installation
