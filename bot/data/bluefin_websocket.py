@@ -229,9 +229,10 @@ class BluefinWebSocketClient:
                 self._last_message_time = datetime.now(UTC)
                 self._message_count += 1
                 
-                # Log first few messages for debugging
+                # Log message count for debugging (without sensitive data)
                 if self._message_count <= 20:
-                    logger.info(f"WebSocket message #{self._message_count}: {data}")
+                    msg_type = data.get('type', 'unknown') if isinstance(data, dict) else 'unknown'
+                    logger.debug(f"WebSocket message #{self._message_count} type: {msg_type}")
                 
                 await self._process_message(data)
                 

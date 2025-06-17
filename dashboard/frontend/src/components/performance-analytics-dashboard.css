@@ -7,7 +7,11 @@
   border-radius: 12px;
   padding: 24px;
   color: #ffffff;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family:
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   border: 1px solid #333;
 }
@@ -80,7 +84,8 @@
   border-color: #3b82f6;
 }
 
-.export-btn, .refresh-btn {
+.export-btn,
+.refresh-btn {
   background: linear-gradient(135deg, #0891b2, #0e7490);
   color: white;
   border: none;
@@ -92,7 +97,8 @@
   transition: all 0.2s ease;
 }
 
-.export-btn:hover, .refresh-btn:hover {
+.export-btn:hover,
+.refresh-btn:hover {
   background: linear-gradient(135deg, #0e7490, #155e75);
   transform: translateY(-1px);
 }
@@ -482,12 +488,14 @@
   font-size: 12px;
 }
 
-.pnl-cell.positive, .pnl-pct-cell.positive {
+.pnl-cell.positive,
+.pnl-pct-cell.positive {
   color: #22c55e;
   font-weight: 600;
 }
 
-.pnl-cell.negative, .pnl-pct-cell.negative {
+.pnl-cell.negative,
+.pnl-pct-cell.negative {
   color: #ef4444;
   font-weight: 600;
 }
@@ -611,12 +619,12 @@
   .metrics-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .performance-summary {
     flex-direction: column;
     gap: 12px;
   }
-  
+
   .periods-grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -626,62 +634,62 @@
   .performance-analytics-dashboard {
     padding: 16px;
   }
-  
+
   .analytics-header {
     flex-direction: column;
     gap: 16px;
     align-items: stretch;
   }
-  
+
   .header-controls {
     justify-content: center;
     flex-wrap: wrap;
   }
-  
+
   .metrics-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .chart-header {
     flex-direction: column;
     gap: 16px;
     align-items: stretch;
   }
-  
+
   .chart-controls {
     justify-content: space-between;
   }
-  
+
   .content-tabs {
     flex-direction: column;
   }
-  
+
   .tab-btn {
     text-align: center;
   }
-  
+
   .analysis-header {
     flex-direction: column;
     gap: 12px;
     align-items: stretch;
   }
-  
+
   .analysis-controls {
     justify-content: space-between;
   }
-  
+
   .trade-stats-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .trades-table-container {
     overflow-x: auto;
   }
-  
+
   .periods-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .chart-legend {
     flex-direction: column;
     gap: 8px;
@@ -693,15 +701,15 @@
   .trade-stats-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .summary-item {
     text-align: center;
   }
-  
+
   .metric-values {
     gap: 12px;
   }
-  
+
   .period-metrics .metric {
     flex-direction: column;
     gap: 4px;

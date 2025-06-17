@@ -7,7 +7,11 @@
   border-radius: 12px;
   padding: 24px;
   color: #ffffff;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family:
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   border: 1px solid #333;
 }
@@ -100,7 +104,9 @@
   gap: 12px;
 }
 
-.stress-test-btn, .reset-alerts-btn, .export-config-btn {
+.stress-test-btn,
+.reset-alerts-btn,
+.export-config-btn {
   background: linear-gradient(135deg, #0891b2, #0e7490);
   color: white;
   border: none;
@@ -112,7 +118,9 @@
   transition: all 0.2s ease;
 }
 
-.stress-test-btn:hover, .reset-alerts-btn:hover, .export-config-btn:hover {
+.stress-test-btn:hover,
+.reset-alerts-btn:hover,
+.export-config-btn:hover {
   background: linear-gradient(135deg, #0e7490, #155e75);
   transform: translateY(-1px);
 }
@@ -171,7 +179,10 @@
   color: #ffffff;
 }
 
-.risk-score, .exposure-level, .pnl-status, .alert-count {
+.risk-score,
+.exposure-level,
+.pnl-status,
+.alert-count {
   font-size: 18px;
   font-weight: 700;
   padding: 6px 12px;
@@ -414,7 +425,9 @@
   border-top: 1px solid #404040;
 }
 
-.save-config-btn, .reset-config-btn, .validate-config-btn {
+.save-config-btn,
+.reset-config-btn,
+.validate-config-btn {
   background: linear-gradient(135deg, #059669, #047857);
   color: white;
   border: none;
@@ -856,7 +869,8 @@
   flex-shrink: 0;
 }
 
-.acknowledge-btn, .dismiss-btn {
+.acknowledge-btn,
+.dismiss-btn {
   background: #374151;
   color: #d1d5db;
   border: 1px solid #4b5563;
@@ -893,7 +907,8 @@
 
 /* Animations */
 @keyframes pulse-low {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
   }
   50% {
@@ -902,7 +917,8 @@
 }
 
 @keyframes pulse-medium {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
   }
   50% {
@@ -911,7 +927,8 @@
 }
 
 @keyframes pulse-high {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
   }
   50% {
@@ -920,7 +937,8 @@
 }
 
 @keyframes pulse-critical {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.9);
   }
   50% {
@@ -929,7 +947,8 @@
 }
 
 @keyframes pulse-alert {
-  0%, 100% {
+  0%,
+  100% {
     background: rgba(220, 38, 38, 0.05);
   }
   50% {
@@ -942,11 +961,11 @@
   .config-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .risk-overview {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .scenarios-grid {
     grid-template-columns: 1fr;
   }
@@ -956,73 +975,73 @@
   .risk-management-dashboard {
     padding: 16px;
   }
-  
+
   .risk-header {
     flex-direction: column;
     gap: 16px;
     align-items: stretch;
   }
-  
+
   .header-controls {
     justify-content: center;
     flex-wrap: wrap;
   }
-  
+
   .risk-overview {
     grid-template-columns: 1fr;
   }
-  
+
   .content-tabs {
     flex-direction: column;
   }
-  
+
   .tab-btn {
     text-align: center;
   }
-  
+
   .form-row {
     grid-template-columns: 1fr;
   }
-  
+
   .config-actions {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .exposure-header {
     flex-direction: column;
     gap: 12px;
     align-items: stretch;
   }
-  
+
   .exposure-controls {
     justify-content: space-between;
   }
-  
+
   .exposure-table-container {
     overflow-x: auto;
   }
-  
+
   .alerts-header {
     flex-direction: column;
     gap: 12px;
     align-items: stretch;
   }
-  
+
   .alerts-controls {
     justify-content: space-between;
   }
-  
+
   .alert-item {
     flex-direction: column;
     gap: 12px;
   }
-  
+
   .alert-actions {
     flex-direction: row;
     justify-content: center;
   }
-  
+
   .scenario-metrics {
     grid-template-columns: 1fr;
   }
@@ -1032,7 +1051,7 @@
   .card-metrics {
     grid-template-columns: 1fr;
   }
-  
+
   .metric {
     flex-direction: row;
     justify-content: space-between;

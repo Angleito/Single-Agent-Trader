@@ -1,6 +1,6 @@
 /**
  * Advanced Risk Management Dashboard Component
- * 
+ *
  * Provides comprehensive risk management tools with:
  * - Dynamic risk limit configuration
  * - Real-time risk monitoring and alerts
@@ -10,116 +10,116 @@
  * - Automated risk controls
  */
 
-import type { Position, MarketData, RiskMetrics, TradingModeConfig, TradingMode } from '../types';
+import type { RiskMetrics, TradingModeConfig } from '../types'
 
 export interface RiskConfiguration {
-  max_position_size: number;
-  max_portfolio_exposure: number;
-  stop_loss_percentage: number;
-  take_profit_percentage: number;
-  max_daily_loss: number;
-  max_weekly_loss: number;
-  max_monthly_loss: number;
-  max_drawdown: number;
-  leverage_limit: number;
-  correlation_limit: number;
-  concentration_limit: number;
-  volatility_threshold: number;
+  max_position_size: number
+  max_portfolio_exposure: number
+  stop_loss_percentage: number
+  take_profit_percentage: number
+  max_daily_loss: number
+  max_weekly_loss: number
+  max_monthly_loss: number
+  max_drawdown: number
+  leverage_limit: number
+  correlation_limit: number
+  concentration_limit: number
+  volatility_threshold: number
 }
 
 export interface RiskAlert {
-  id: string;
-  type: 'exposure' | 'loss' | 'drawdown' | 'volatility' | 'correlation' | 'concentration';
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  title: string;
-  message: string;
-  threshold: number;
-  current_value: number;
-  timestamp: string;
-  acknowledged: boolean;
+  id: string
+  type: 'exposure' | 'loss' | 'drawdown' | 'volatility' | 'correlation' | 'concentration'
+  severity: 'low' | 'medium' | 'high' | 'critical'
+  title: string
+  message: string
+  threshold: number
+  current_value: number
+  timestamp: string
+  acknowledged: boolean
 }
 
 export interface PortfolioExposure {
-  symbol: string;
-  position_size: number;
-  market_value: number;
-  percentage_of_portfolio: number;
-  unrealized_pnl: number;
-  risk_score: number;
-  correlation_score: number;
+  symbol: string
+  position_size: number
+  market_value: number
+  percentage_of_portfolio: number
+  unrealized_pnl: number
+  risk_score: number
+  correlation_score: number
 }
 
 export interface RiskScenario {
-  name: string;
-  description: string;
-  market_shock: number; // percentage
-  expected_loss: number;
-  probability: number;
-  var_95: number; // Value at Risk 95%
-  var_99: number; // Value at Risk 99%
-  expected_shortfall: number;
+  name: string
+  description: string
+  market_shock: number // percentage
+  expected_loss: number
+  probability: number
+  var_95: number // Value at Risk 95%
+  var_99: number // Value at Risk 99%
+  expected_shortfall: number
 }
 
 export class RiskManagementDashboard {
-  private container: HTMLElement;
-  private apiBaseUrl: string;
-  private currentRiskConfig: RiskConfiguration | null = null;
-  private activeAlerts: RiskAlert[] = [];
-  private portfolioExposures: PortfolioExposure[] = [];
-  private riskScenarios: RiskScenario[] = [];
-  private currentRiskMetrics: RiskMetrics | null = null;
-  private updateInterval: number | null = null;
-  private onRiskAlert?: (alert: RiskAlert) => void;
-  private onConfigUpdate?: (config: RiskConfiguration) => void;
-  private tradingModeConfig: TradingModeConfig | null = null;
+  private container: HTMLElement
+  private apiBaseUrl: string
+  private currentRiskConfig: RiskConfiguration | null = null
+  private activeAlerts: RiskAlert[] = []
+  private portfolioExposures: PortfolioExposure[] = []
+  private riskScenarios: RiskScenario[] = []
+  private currentRiskMetrics: RiskMetrics | null = null
+  private updateInterval: number | null = null
+  private _onRiskAlert?: (alert: RiskAlert) => void
+  private _onConfigUpdate?: (config: RiskConfiguration) => void
+  private tradingModeConfig: TradingModeConfig | null = null
 
   constructor(containerId: string, apiBaseUrl: string) {
-    const container = document.getElementById(containerId);
+    const container = document.getElementById(containerId)
     if (!container) {
-      throw new Error(`Container element with ID ${containerId} not found`);
+      throw new Error(`Container element with ID ${containerId} not found`)
     }
-    
-    this.container = container;
-    this.apiBaseUrl = apiBaseUrl;
-    this.render();
-    this.loadRiskConfiguration();
-    this.startRealtimeUpdates();
+
+    this.container = container
+    this.apiBaseUrl = apiBaseUrl
+    this.render()
+    this.loadRiskConfiguration()
+    this.startRealtimeUpdates()
   }
 
   /**
    * Set event handlers
    */
   public onRiskAlert(callback: (alert: RiskAlert) => void): void {
-    this.onRiskAlert = callback;
+    this._onRiskAlert = callback
   }
 
   public onConfigUpdate(callback: (config: RiskConfiguration) => void): void {
-    this.onConfigUpdate = callback;
+    this._onConfigUpdate = callback
   }
 
   /**
    * Update risk metrics
    */
   public updateRiskMetrics(riskMetrics: RiskMetrics): void {
-    this.currentRiskMetrics = riskMetrics;
-    this.updateRiskMetricsDisplay();
-    this.checkRiskThresholds();
+    this.currentRiskMetrics = riskMetrics
+    this.updateRiskMetricsDisplay()
+    this.checkRiskThresholds()
   }
 
   /**
    * Set trading mode configuration
    */
   public setTradingModeConfig(config: TradingModeConfig): void {
-    this.tradingModeConfig = config;
-    this.render(); // Re-render to update UI based on trading mode
+    this.tradingModeConfig = config
+    this.render() // Re-render to update UI based on trading mode
   }
 
   /**
    * Update portfolio exposures
    */
   public updatePortfolioExposures(exposures: PortfolioExposure[]): void {
-    this.portfolioExposures = exposures;
-    this.updateExposureDisplay();
+    this.portfolioExposures = exposures
+    this.updateExposureDisplay()
   }
 
   /**
@@ -399,9 +399,9 @@ export class RiskManagementDashboard {
           </div>
         </div>
       </div>
-    `;
+    `
 
-    this.attachEventListeners();
+    this.attachEventListeners()
   }
 
   /**
@@ -409,55 +409,55 @@ export class RiskManagementDashboard {
    */
   private attachEventListeners(): void {
     // Header controls
-    const stressTestBtn = document.getElementById('run-stress-test');
-    const resetAlertsBtn = document.getElementById('reset-alerts');
-    const exportConfigBtn = document.getElementById('export-config');
+    const stressTestBtn = document.getElementById('run-stress-test')
+    const resetAlertsBtn = document.getElementById('reset-alerts')
+    const exportConfigBtn = document.getElementById('export-config')
 
-    stressTestBtn?.addEventListener('click', () => this.runStressTest());
-    resetAlertsBtn?.addEventListener('click', () => this.resetAlerts());
-    exportConfigBtn?.addEventListener('click', () => this.exportConfiguration());
+    stressTestBtn?.addEventListener('click', () => this.runStressTest())
+    resetAlertsBtn?.addEventListener('click', () => this.resetAlerts())
+    exportConfigBtn?.addEventListener('click', () => this.exportConfiguration())
 
     // Configuration controls
-    const saveConfigBtn = document.getElementById('save-config');
-    const resetConfigBtn = document.getElementById('reset-config');
-    const validateConfigBtn = document.getElementById('validate-config');
+    const saveConfigBtn = document.getElementById('save-config')
+    const resetConfigBtn = document.getElementById('reset-config')
+    const validateConfigBtn = document.getElementById('validate-config')
 
-    saveConfigBtn?.addEventListener('click', () => this.saveConfiguration());
-    resetConfigBtn?.addEventListener('click', () => this.resetConfiguration());
-    validateConfigBtn?.addEventListener('click', () => this.validateConfiguration());
+    saveConfigBtn?.addEventListener('click', () => this.saveConfiguration())
+    resetConfigBtn?.addEventListener('click', () => this.resetConfiguration())
+    validateConfigBtn?.addEventListener('click', () => this.validateConfiguration())
 
     // Tab switching
-    const tabBtns = document.querySelectorAll('.tab-btn');
-    tabBtns.forEach(btn => {
+    const tabBtns = document.querySelectorAll('.tab-btn')
+    tabBtns.forEach((btn) => {
       btn.addEventListener('click', (e) => {
-        const tabName = (e.target as HTMLElement).dataset.tab;
-        if (tabName) this.switchTab(tabName);
-      });
-    });
+        const tabName = (e.target as HTMLElement).dataset.tab
+        if (tabName) this.switchTab(tabName)
+      })
+    })
 
     // Exposure controls
-    const refreshExposureBtn = document.getElementById('refresh-exposure');
-    const exposureTimeframeSelect = document.getElementById('exposure-timeframe');
+    const refreshExposureBtn = document.getElementById('refresh-exposure')
+    const exposureTimeframeSelect = document.getElementById('exposure-timeframe')
 
-    refreshExposureBtn?.addEventListener('click', () => this.refreshExposureAnalysis());
-    exposureTimeframeSelect?.addEventListener('change', () => this.refreshExposureAnalysis());
+    refreshExposureBtn?.addEventListener('click', () => this.refreshExposureAnalysis())
+    exposureTimeframeSelect?.addEventListener('change', () => this.refreshExposureAnalysis())
 
     // Alerts controls
-    const acknowledgeAllBtn = document.getElementById('acknowledge-all');
-    const alertFilterSelect = document.getElementById('alert-filter');
+    const acknowledgeAllBtn = document.getElementById('acknowledge-all')
+    const alertFilterSelect = document.getElementById('alert-filter')
 
-    acknowledgeAllBtn?.addEventListener('click', () => this.acknowledgeAllAlerts());
-    alertFilterSelect?.addEventListener('change', () => this.filterAlerts());
+    acknowledgeAllBtn?.addEventListener('click', () => this.acknowledgeAllAlerts())
+    alertFilterSelect?.addEventListener('change', () => this.filterAlerts())
 
     // Scenario controls
-    const addScenarioBtn = document.getElementById('add-scenario');
-    addScenarioBtn?.addEventListener('click', () => this.showAddScenarioDialog());
+    const addScenarioBtn = document.getElementById('add-scenario')
+    addScenarioBtn?.addEventListener('click', () => this.showAddScenarioDialog())
 
     // Form validation on input changes
-    const configInputs = document.querySelectorAll('#configuration-tab input');
-    configInputs.forEach(input => {
-      input.addEventListener('input', () => this.validateConfigurationInput());
-    });
+    const configInputs = document.querySelectorAll('#configuration-tab input')
+    configInputs.forEach((input) => {
+      input.addEventListener('input', () => this.validateConfigurationInput())
+    })
   }
 
   /**
@@ -465,15 +465,15 @@ export class RiskManagementDashboard {
    */
   private async loadRiskConfiguration(): Promise<void> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/bot/risk/configuration`);
+      const response = await fetch(`${this.apiBaseUrl}/api/bot/risk/configuration`)
       if (response.ok) {
-        const config = await response.json();
-        this.currentRiskConfig = config;
-        this.populateConfigurationForm(config);
+        const config = await response.json()
+        this.currentRiskConfig = config
+        this.populateConfigurationForm(config)
       }
     } catch (error) {
-      console.warn('Failed to load risk configuration:', error);
-      this.loadDefaultConfiguration();
+      console.warn('Failed to load risk configuration:', error)
+      this.loadDefaultConfiguration()
     }
   }
 
@@ -493,11 +493,11 @@ export class RiskManagementDashboard {
       leverage_limit: 5,
       correlation_limit: 0.7,
       concentration_limit: 30,
-      volatility_threshold: 50
-    };
+      volatility_threshold: 50,
+    }
 
-    this.currentRiskConfig = defaultConfig;
-    this.populateConfigurationForm(defaultConfig);
+    this.currentRiskConfig = defaultConfig
+    this.populateConfigurationForm(defaultConfig)
   }
 
   /**
@@ -516,40 +516,40 @@ export class RiskManagementDashboard {
       { id: 'leverage-limit', value: config.leverage_limit },
       { id: 'correlation-limit', value: config.correlation_limit },
       { id: 'concentration-limit', value: config.concentration_limit },
-      { id: 'volatility-threshold', value: config.volatility_threshold }
-    ];
+      { id: 'volatility-threshold', value: config.volatility_threshold },
+    ]
 
     inputs.forEach(({ id, value }) => {
-      const input = document.getElementById(id) as HTMLInputElement;
-      if (input) input.value = value.toString();
-    });
+      const input = document.getElementById(id) as HTMLInputElement
+      if (input) input.value = value.toString()
+    })
   }
 
   /**
    * Save configuration
    */
   private async saveConfiguration(): Promise<void> {
-    const config = this.getConfigurationFromForm();
-    if (!config) return;
+    const config = this.getConfigurationFromForm()
+    if (!config) return
 
     try {
       const response = await fetch(`${this.apiBaseUrl}/api/bot/risk/configuration`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config)
-      });
+        body: JSON.stringify(config),
+      })
 
       if (response.ok) {
-        this.currentRiskConfig = config;
-        this.onConfigUpdate?.(config);
-        this.showSuccessMessage('Risk configuration saved successfully');
+        this.currentRiskConfig = config
+        this._onConfigUpdate?.(config)
+        this.showSuccessMessage('Risk configuration saved successfully')
       } else {
-        const result = await response.json();
-        throw new Error(result.detail || 'Failed to save configuration');
+        const result = await response.json()
+        throw new Error(result.detail || 'Failed to save configuration')
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.showErrorMessage(`Failed to save configuration: ${errorMessage}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      this.showErrorMessage(`Failed to save configuration: ${errorMessage}`)
     }
   }
 
@@ -559,9 +559,9 @@ export class RiskManagementDashboard {
   private getConfigurationFromForm(): RiskConfiguration | null {
     try {
       const getValue = (id: string): number => {
-        const input = document.getElementById(id) as HTMLInputElement;
-        return parseFloat(input?.value || '0');
-      };
+        const input = document.getElementById(id) as HTMLInputElement
+        return parseFloat(input?.value || '0')
+      }
 
       return {
         max_position_size: getValue('max-position-size'),
@@ -575,11 +575,11 @@ export class RiskManagementDashboard {
         leverage_limit: getValue('leverage-limit'),
         correlation_limit: getValue('correlation-limit'),
         concentration_limit: getValue('concentration-limit'),
-        volatility_threshold: getValue('volatility-threshold')
-      };
+        volatility_threshold: getValue('volatility-threshold'),
+      }
     } catch (error) {
-      this.showErrorMessage('Invalid configuration values');
-      return null;
+      this.showErrorMessage('Invalid configuration values')
+      return null
     }
   }
 
@@ -587,43 +587,43 @@ export class RiskManagementDashboard {
    * Validate configuration
    */
   private validateConfiguration(): void {
-    const config = this.getConfigurationFromForm();
-    if (!config) return;
+    const config = this.getConfigurationFromForm()
+    if (!config) return
 
-    const validationResults = [];
+    const validationResults = []
 
     // Validate ranges
     if (config.max_position_size <= 0 || config.max_position_size > 100) {
-      validationResults.push('Max position size must be between 1% and 100%');
+      validationResults.push('Max position size must be between 1% and 100%')
     }
     if (config.stop_loss_percentage <= 0 || config.stop_loss_percentage > 50) {
-      validationResults.push('Stop loss must be between 0.1% and 50%');
+      validationResults.push('Stop loss must be between 0.1% and 50%')
     }
     if (config.max_daily_loss <= 0) {
-      validationResults.push('Max daily loss must be positive');
+      validationResults.push('Max daily loss must be positive')
     }
     if (config.leverage_limit < 1 || config.leverage_limit > 100) {
-      validationResults.push('Leverage limit must be between 1 and 100');
+      validationResults.push('Leverage limit must be between 1 and 100')
     }
     if (config.correlation_limit < 0 || config.correlation_limit > 1) {
-      validationResults.push('Correlation limit must be between 0 and 1');
+      validationResults.push('Correlation limit must be between 0 and 1')
     }
 
     // Validate logical relationships
     if (config.take_profit_percentage <= config.stop_loss_percentage) {
-      validationResults.push('Take profit should be greater than stop loss');
+      validationResults.push('Take profit should be greater than stop loss')
     }
     if (config.max_weekly_loss <= config.max_daily_loss) {
-      validationResults.push('Weekly loss limit should be greater than daily limit');
+      validationResults.push('Weekly loss limit should be greater than daily limit')
     }
     if (config.max_monthly_loss <= config.max_weekly_loss) {
-      validationResults.push('Monthly loss limit should be greater than weekly limit');
+      validationResults.push('Monthly loss limit should be greater than weekly limit')
     }
 
     if (validationResults.length === 0) {
-      this.showSuccessMessage('Configuration validation passed');
+      this.showSuccessMessage('Configuration validation passed')
     } else {
-      this.showErrorMessage(`Validation failed:\n${validationResults.join('\n')}`);
+      this.showErrorMessage(`Validation failed:\n${validationResults.join('\n')}`)
     }
   }
 
@@ -632,14 +632,14 @@ export class RiskManagementDashboard {
    */
   private validateConfigurationInput(): void {
     // Real-time validation logic
-    const config = this.getConfigurationFromForm();
-    if (!config) return;
+    const config = this.getConfigurationFromForm()
+    if (!config) return
 
     // Update save button state based on validation
-    const saveBtn = document.getElementById('save-config') as HTMLButtonElement;
+    const saveBtn = document.getElementById('save-config') as HTMLButtonElement
     if (saveBtn) {
-      const isValid = this.isConfigurationValid(config);
-      saveBtn.disabled = !isValid;
+      const isValid = this.isConfigurationValid(config)
+      saveBtn.disabled = !isValid
     }
   }
 
@@ -647,40 +647,42 @@ export class RiskManagementDashboard {
    * Check if configuration is valid
    */
   private isConfigurationValid(config: RiskConfiguration): boolean {
-    return config.max_position_size > 0 && 
-           config.max_position_size <= 100 &&
-           config.stop_loss_percentage > 0 &&
-           config.max_daily_loss > 0 &&
-           config.take_profit_percentage > config.stop_loss_percentage;
+    return (
+      config.max_position_size > 0 &&
+      config.max_position_size <= 100 &&
+      config.stop_loss_percentage > 0 &&
+      config.max_daily_loss > 0 &&
+      config.take_profit_percentage > config.stop_loss_percentage
+    )
   }
 
   /**
    * Update risk metrics display
    */
   private updateRiskMetricsDisplay(): void {
-    if (!this.currentRiskMetrics) return;
+    if (!this.currentRiskMetrics) return
 
-    const metrics = this.currentRiskMetrics;
-    
+    const metrics = this.currentRiskMetrics
+
     // Update overview cards
-    const portfolioRiskScore = this.calculatePortfolioRiskScore(metrics);
-    this.updateElement('portfolio-risk-score', this.formatRiskScore(portfolioRiskScore));
-    this.updateElement('var-95', `$${(metrics.value_at_risk_95 || 0).toFixed(2)}`);
-    this.updateElement('max-drawdown', `${(metrics.max_drawdown || 0).toFixed(1)}%`);
-    this.updateElement('sharpe-ratio', (metrics.sharpe_ratio || 0).toFixed(2));
+    const portfolioRiskScore = this.calculatePortfolioRiskScore(metrics)
+    this.updateElement('portfolio-risk-score', this.formatRiskScore(portfolioRiskScore))
+    this.updateElement('var-95', `$${(metrics.value_at_risk_95 || 0).toFixed(2)}`)
+    this.updateElement('max-drawdown', `${(metrics.max_drawdown || 0).toFixed(1)}%`)
+    this.updateElement('sharpe-ratio', (metrics.sharpe_ratio || 0).toFixed(2))
 
-    this.updateElement('total-exposure', `$${(metrics.total_exposure || 0).toFixed(2)}`);
-    this.updateElement('concentration-ratio', `${(metrics.concentration_ratio || 0).toFixed(1)}%`);
-    this.updateElement('avg-correlation', (metrics.avg_correlation || 0).toFixed(2));
+    this.updateElement('total-exposure', `$${(metrics.total_exposure || 0).toFixed(2)}`)
+    this.updateElement('concentration-ratio', `${(metrics.concentration_ratio || 0).toFixed(1)}%`)
+    this.updateElement('avg-correlation', (metrics.avg_correlation || 0).toFixed(2))
 
-    this.updateElement('daily-pnl-limit', `$${(metrics.daily_pnl || 0).toFixed(2)}`);
-    this.updateElement('weekly-pnl-limit', `$${(metrics.weekly_pnl || 0).toFixed(2)}`);
-    this.updateElement('monthly-pnl-limit', `$${(metrics.monthly_pnl || 0).toFixed(2)}`);
+    this.updateElement('daily-pnl-limit', `$${(metrics.daily_pnl || 0).toFixed(2)}`)
+    this.updateElement('weekly-pnl-limit', `$${(metrics.weekly_pnl || 0).toFixed(2)}`)
+    this.updateElement('monthly-pnl-limit', `$${(metrics.monthly_pnl || 0).toFixed(2)}`)
 
     // Update status indicators
-    this.updateRiskStatusIndicator(portfolioRiskScore);
-    this.updateExposureLevelIndicator(metrics.total_exposure || 0);
-    this.updatePnLStatusIndicator(metrics.daily_pnl || 0);
+    this.updateRiskStatusIndicator(portfolioRiskScore)
+    this.updateExposureLevelIndicator(metrics.total_exposure || 0)
+    this.updatePnLStatusIndicator(metrics.daily_pnl || 0)
   }
 
   /**
@@ -688,79 +690,79 @@ export class RiskManagementDashboard {
    */
   private calculatePortfolioRiskScore(metrics: RiskMetrics): number {
     // Simplified risk scoring algorithm
-    let score = 0;
-    
-    score += Math.min((metrics.max_drawdown || 0) * 2, 40); // Max 40 points
-    score += Math.min((metrics.volatility || 0), 30); // Max 30 points
-    score += Math.min((metrics.concentration_ratio || 0), 20); // Max 20 points
-    score += Math.min(Math.abs(metrics.daily_pnl || 0) / 100, 10); // Max 10 points
-    
-    return Math.min(score, 100);
+    let score = 0
+
+    score += Math.min((metrics.max_drawdown || 0) * 2, 40) // Max 40 points
+    score += Math.min(metrics.volatility || 0, 30) // Max 30 points
+    score += Math.min(metrics.concentration_ratio || 0, 20) // Max 20 points
+    score += Math.min(Math.abs(metrics.daily_pnl || 0) / 100, 10) // Max 10 points
+
+    return Math.min(score, 100)
   }
 
   /**
    * Format risk score
    */
   private formatRiskScore(score: number): string {
-    if (score < 30) return 'Low';
-    if (score < 60) return 'Medium';
-    if (score < 80) return 'High';
-    return 'Critical';
+    if (score < 30) return 'Low'
+    if (score < 60) return 'Medium'
+    if (score < 80) return 'High'
+    return 'Critical'
   }
 
   /**
    * Update status indicators
    */
   private updateRiskStatusIndicator(riskScore: number): void {
-    const dot = document.getElementById('risk-status-dot');
-    const text = document.getElementById('risk-status-text');
-    
-    if (!dot || !text) return;
+    const dot = document.getElementById('risk-status-dot')
+    const text = document.getElementById('risk-status-text')
+
+    if (!dot || !text) return
 
     if (riskScore < 30) {
-      dot.className = 'status-dot status-low';
-      text.textContent = 'Low Risk';
+      dot.className = 'status-dot status-low'
+      text.textContent = 'Low Risk'
     } else if (riskScore < 60) {
-      dot.className = 'status-dot status-medium';
-      text.textContent = 'Medium Risk';
+      dot.className = 'status-dot status-medium'
+      text.textContent = 'Medium Risk'
     } else if (riskScore < 80) {
-      dot.className = 'status-dot status-high';
-      text.textContent = 'High Risk';
+      dot.className = 'status-dot status-high'
+      text.textContent = 'High Risk'
     } else {
-      dot.className = 'status-dot status-critical';
-      text.textContent = 'Critical Risk';
+      dot.className = 'status-dot status-critical'
+      text.textContent = 'Critical Risk'
     }
   }
 
   private updateExposureLevelIndicator(exposure: number): void {
-    const exposureLevel = document.getElementById('exposure-level');
-    if (!exposureLevel) return;
+    const exposureLevel = document.getElementById('exposure-level')
+    if (!exposureLevel) return
 
     if (exposure < 1000) {
-      exposureLevel.textContent = 'Low';
-      exposureLevel.className = 'exposure-level exposure-low';
+      exposureLevel.textContent = 'Low'
+      exposureLevel.className = 'exposure-level exposure-low'
     } else if (exposure < 5000) {
-      exposureLevel.textContent = 'Medium';
-      exposureLevel.className = 'exposure-level exposure-medium';
+      exposureLevel.textContent = 'Medium'
+      exposureLevel.className = 'exposure-level exposure-medium'
     } else {
-      exposureLevel.textContent = 'High';
-      exposureLevel.className = 'exposure-level exposure-high';
+      exposureLevel.textContent = 'High'
+      exposureLevel.className = 'exposure-level exposure-high'
     }
   }
 
   private updatePnLStatusIndicator(dailyPnL: number): void {
-    const pnlStatus = document.getElementById('pnl-status');
-    if (!pnlStatus) return;
+    const pnlStatus = document.getElementById('pnl-status')
+    if (!pnlStatus) return
 
     if (dailyPnL >= 0) {
-      pnlStatus.textContent = 'Positive';
-      pnlStatus.className = 'pnl-status pnl-positive';
+      pnlStatus.textContent = 'Positive'
+      pnlStatus.className = 'pnl-status pnl-positive'
     } else if (dailyPnL > -500) {
-      pnlStatus.textContent = 'Warning';
-      pnlStatus.className = 'pnl-status pnl-warning';
+      pnlStatus.textContent = 'Warning'
+      pnlStatus.className = 'pnl-status pnl-warning'
     } else {
-      pnlStatus.textContent = 'Critical';
-      pnlStatus.className = 'pnl-status pnl-critical';
+      pnlStatus.textContent = 'Critical'
+      pnlStatus.className = 'pnl-status pnl-critical'
     }
   }
 
@@ -768,11 +770,11 @@ export class RiskManagementDashboard {
    * Check risk thresholds and generate alerts
    */
   private checkRiskThresholds(): void {
-    if (!this.currentRiskMetrics || !this.currentRiskConfig) return;
+    if (!this.currentRiskMetrics || !this.currentRiskConfig) return
 
-    const newAlerts: RiskAlert[] = [];
-    const metrics = this.currentRiskMetrics;
-    const config = this.currentRiskConfig;
+    const newAlerts: RiskAlert[] = []
+    const metrics = this.currentRiskMetrics
+    const config = this.currentRiskConfig
 
     // Check daily loss limit
     if (Math.abs(metrics.daily_pnl || 0) > config.max_daily_loss) {
@@ -785,8 +787,8 @@ export class RiskManagementDashboard {
         threshold: config.max_daily_loss,
         current_value: Math.abs(metrics.daily_pnl || 0),
         timestamp: new Date().toISOString(),
-        acknowledged: false
-      });
+        acknowledged: false,
+      })
     }
 
     // Check drawdown limit
@@ -800,8 +802,8 @@ export class RiskManagementDashboard {
         threshold: config.max_drawdown,
         current_value: metrics.max_drawdown || 0,
         timestamp: new Date().toISOString(),
-        acknowledged: false
-      });
+        acknowledged: false,
+      })
     }
 
     // Check concentration limit
@@ -815,19 +817,19 @@ export class RiskManagementDashboard {
         threshold: config.concentration_limit,
         current_value: metrics.concentration_ratio || 0,
         timestamp: new Date().toISOString(),
-        acknowledged: false
-      });
+        acknowledged: false,
+      })
     }
 
     // Add new alerts
-    newAlerts.forEach(alert => {
-      if (!this.activeAlerts.find(a => a.type === alert.type && a.severity === alert.severity)) {
-        this.activeAlerts.push(alert);
-        this.onRiskAlert?.(alert);
+    newAlerts.forEach((alert) => {
+      if (!this.activeAlerts.find((a) => a.type === alert.type && a.severity === alert.severity)) {
+        this.activeAlerts.push(alert)
+        this._onRiskAlert?.(alert)
       }
-    });
+    })
 
-    this.updateAlertsDisplay();
+    this.updateAlertsDisplay()
   }
 
   /**
@@ -835,25 +837,27 @@ export class RiskManagementDashboard {
    */
   private updateAlertsDisplay(): void {
     // Update alert counts
-    const criticalCount = this.activeAlerts.filter(a => a.severity === 'critical').length;
-    const highCount = this.activeAlerts.filter(a => a.severity === 'high').length;
-    const mediumCount = this.activeAlerts.filter(a => a.severity === 'medium').length;
+    const criticalCount = this.activeAlerts.filter((a) => a.severity === 'critical').length
+    const highCount = this.activeAlerts.filter((a) => a.severity === 'high').length
+    const mediumCount = this.activeAlerts.filter((a) => a.severity === 'medium').length
 
-    this.updateElement('alert-count', this.activeAlerts.length.toString());
-    this.updateElement('critical-alerts', criticalCount.toString());
-    this.updateElement('high-alerts', highCount.toString());
-    this.updateElement('medium-alerts', mediumCount.toString());
+    this.updateElement('alert-count', this.activeAlerts.length.toString())
+    this.updateElement('critical-alerts', criticalCount.toString())
+    this.updateElement('high-alerts', highCount.toString())
+    this.updateElement('medium-alerts', mediumCount.toString())
 
     // Update alerts list
-    const alertsList = document.getElementById('alerts-list');
-    if (!alertsList) return;
+    const alertsList = document.getElementById('alerts-list')
+    if (!alertsList) return
 
     if (this.activeAlerts.length === 0) {
-      alertsList.innerHTML = '<div class="empty-state">No active alerts</div>';
-      return;
+      alertsList.innerHTML = '<div class="empty-state">No active alerts</div>'
+      return
     }
 
-    alertsList.innerHTML = this.activeAlerts.map(alert => `
+    alertsList.innerHTML = this.activeAlerts
+      .map(
+        (alert) => `
       <div class="alert-item severity-${alert.severity}" data-alert-id="${alert.id}">
         <div class="alert-icon">
           ${this.getAlertIcon(alert.type)}
@@ -873,7 +877,9 @@ export class RiskManagementDashboard {
           <button class="dismiss-btn" onclick="this.dismissAlert('${alert.id}')">✕</button>
         </div>
       </div>
-    `).join('');
+    `
+      )
+      .join('')
   }
 
   /**
@@ -886,24 +892,27 @@ export class RiskManagementDashboard {
       drawdown: '📉',
       volatility: '📈',
       correlation: '🔗',
-      concentration: '🎯'
-    };
-    return icons[type as keyof typeof icons] || '⚠️';
+      concentration: '🎯',
+    }
+    return icons[type as keyof typeof icons] || '⚠️'
   }
 
   /**
    * Update exposure display
    */
   private updateExposureDisplay(): void {
-    const tableBody = document.getElementById('exposure-table-body');
-    if (!tableBody) return;
+    const tableBody = document.getElementById('exposure-table-body')
+    if (!tableBody) return
 
     if (this.portfolioExposures.length === 0) {
-      tableBody.innerHTML = '<tr class="empty-state"><td colspan="8">No positions to analyze</td></tr>';
-      return;
+      tableBody.innerHTML =
+        '<tr class="empty-state"><td colspan="8">No positions to analyze</td></tr>'
+      return
     }
 
-    tableBody.innerHTML = this.portfolioExposures.map(exposure => `
+    tableBody.innerHTML = this.portfolioExposures
+      .map(
+        (exposure) => `
       <tr>
         <td class="symbol-cell">${exposure.symbol}</td>
         <td class="size-cell">${exposure.position_size.toFixed(4)}</td>
@@ -923,17 +932,19 @@ export class RiskManagementDashboard {
           <button class="action-btn close-btn" onclick="this.closePosition('${exposure.symbol}')">Close</button>
         </td>
       </tr>
-    `).join('');
+    `
+      )
+      .join('')
   }
 
   /**
    * Get risk score class
    */
   private getRiskScoreClass(score: number): string {
-    if (score < 3) return 'low';
-    if (score < 6) return 'medium';
-    if (score < 8) return 'high';
-    return 'critical';
+    if (score < 3) return 'low'
+    if (score < 6) return 'medium'
+    if (score < 8) return 'high'
+    return 'critical'
   }
 
   /**
@@ -941,22 +952,22 @@ export class RiskManagementDashboard {
    */
   private switchTab(tabName: string): void {
     // Update tab buttons
-    const tabBtns = document.querySelectorAll('.tab-btn');
-    tabBtns.forEach(btn => {
-      btn.classList.toggle('active', btn.getAttribute('data-tab') === tabName);
-    });
+    const tabBtns = document.querySelectorAll('.tab-btn')
+    tabBtns.forEach((btn) => {
+      btn.classList.toggle('active', btn.getAttribute('data-tab') === tabName)
+    })
 
     // Update tab content
-    const tabContents = document.querySelectorAll('.tab-content');
-    tabContents.forEach(content => {
-      content.classList.toggle('active', content.id === `${tabName}-tab`);
-    });
+    const tabContents = document.querySelectorAll('.tab-content')
+    tabContents.forEach((content) => {
+      content.classList.toggle('active', content.id === `${tabName}-tab`)
+    })
 
     // Load tab-specific data
     if (tabName === 'exposure') {
-      this.refreshExposureAnalysis();
+      this.refreshExposureAnalysis()
     } else if (tabName === 'scenarios') {
-      this.loadRiskScenarios();
+      this.loadRiskScenarios()
     }
   }
 
@@ -966,24 +977,24 @@ export class RiskManagementDashboard {
   private async runStressTest(): Promise<void> {
     try {
       const response = await fetch(`${this.apiBaseUrl}/api/bot/risk/stress-test`, {
-        method: 'POST'
-      });
+        method: 'POST',
+      })
 
       if (response.ok) {
-        const results = await response.json();
-        this.displayStressTestResults(results);
-        this.showSuccessMessage('Stress test completed successfully');
+        const results = await response.json()
+        this.displayStressTestResults(results)
+        this.showSuccessMessage('Stress test completed successfully')
       } else {
-        throw new Error('Stress test failed');
+        throw new Error('Stress test failed')
       }
     } catch (error) {
-      this.showErrorMessage('Failed to run stress test');
+      this.showErrorMessage('Failed to run stress test')
     }
   }
 
   private displayStressTestResults(results: any): void {
     // Implementation for displaying stress test results
-    console.log('Stress test results:', results);
+    console.log('Stress test results:', results)
   }
 
   private async loadRiskScenarios(): Promise<void> {
@@ -997,7 +1008,7 @@ export class RiskManagementDashboard {
         probability: 0.05,
         var_95: -3500,
         var_99: -4800,
-        expected_shortfall: -5500
+        expected_shortfall: -5500,
       },
       {
         name: 'High Volatility',
@@ -1007,19 +1018,21 @@ export class RiskManagementDashboard {
         probability: 0.15,
         var_95: -1200,
         var_99: -1400,
-        expected_shortfall: -1600
-      }
-    ];
+        expected_shortfall: -1600,
+      },
+    ]
 
-    this.riskScenarios = defaultScenarios;
-    this.displayRiskScenarios();
+    this.riskScenarios = defaultScenarios
+    this.displayRiskScenarios()
   }
 
   private displayRiskScenarios(): void {
-    const scenariosGrid = document.getElementById('scenarios-grid');
-    if (!scenariosGrid) return;
+    const scenariosGrid = document.getElementById('scenarios-grid')
+    if (!scenariosGrid) return
 
-    scenariosGrid.innerHTML = this.riskScenarios.map(scenario => `
+    scenariosGrid.innerHTML = this.riskScenarios
+      .map(
+        (scenario) => `
       <div class="scenario-card">
         <div class="scenario-header">
           <h6>${scenario.name}</h6>
@@ -1050,41 +1063,43 @@ export class RiskManagementDashboard {
           <button class="run-scenario-btn" onclick="this.runScenario('${scenario.name}')">Run Test</button>
         </div>
       </div>
-    `).join('');
+    `
+      )
+      .join('')
   }
 
   /**
    * Alert management
    */
   private acknowledgeAlert(alertId: string): void {
-    const alert = this.activeAlerts.find(a => a.id === alertId);
+    const alert = this.activeAlerts.find((a) => a.id === alertId)
     if (alert) {
-      alert.acknowledged = true;
-      this.updateAlertsDisplay();
+      alert.acknowledged = true
+      this.updateAlertsDisplay()
     }
   }
 
   private dismissAlert(alertId: string): void {
-    this.activeAlerts = this.activeAlerts.filter(a => a.id !== alertId);
-    this.updateAlertsDisplay();
+    this.activeAlerts = this.activeAlerts.filter((a) => a.id !== alertId)
+    this.updateAlertsDisplay()
   }
 
   private acknowledgeAllAlerts(): void {
-    this.activeAlerts.forEach(alert => alert.acknowledged = true);
-    this.updateAlertsDisplay();
+    this.activeAlerts.forEach((alert) => (alert.acknowledged = true))
+    this.updateAlertsDisplay()
   }
 
   private resetAlerts(): void {
-    this.activeAlerts = [];
-    this.updateAlertsDisplay();
+    this.activeAlerts = []
+    this.updateAlertsDisplay()
   }
 
   private filterAlerts(): void {
-    const filterSelect = document.getElementById('alert-filter') as HTMLSelectElement;
-    const filter = filterSelect?.value || 'all';
-    
+    const filterSelect = document.getElementById('alert-filter') as HTMLSelectElement
+    const _filter = filterSelect?.value || 'all'
+
     // Implementation for filtering alerts
-    this.updateAlertsDisplay();
+    this.updateAlertsDisplay()
   }
 
   /**
@@ -1092,58 +1107,61 @@ export class RiskManagementDashboard {
    */
   private async refreshExposureAnalysis(): Promise<void> {
     try {
-      const timeframe = (document.getElementById('exposure-timeframe') as HTMLSelectElement)?.value || '1d';
-      const response = await fetch(`${this.apiBaseUrl}/api/bot/risk/exposure?timeframe=${timeframe}`);
-      
+      const timeframe =
+        (document.getElementById('exposure-timeframe') as HTMLSelectElement)?.value || '1d'
+      const response = await fetch(
+        `${this.apiBaseUrl}/api/bot/risk/exposure?timeframe=${timeframe}`
+      )
+
       if (response.ok) {
-        const exposures = await response.json();
-        this.updatePortfolioExposures(exposures);
+        const exposures = await response.json()
+        this.updatePortfolioExposures(exposures)
       }
     } catch (error) {
-      console.warn('Failed to refresh exposure analysis:', error);
+      console.warn('Failed to refresh exposure analysis:', error)
     }
   }
 
   private startRealtimeUpdates(): void {
     this.updateInterval = window.setInterval(() => {
-      this.refreshExposureAnalysis();
-    }, 10000); // Update every 10 seconds
+      this.refreshExposureAnalysis()
+    }, 10000) // Update every 10 seconds
   }
 
   private resetConfiguration(): void {
-    this.loadDefaultConfiguration();
+    this.loadDefaultConfiguration()
   }
 
   private exportConfiguration(): void {
-    if (!this.currentRiskConfig) return;
+    if (!this.currentRiskConfig) return
 
-    const dataStr = JSON.stringify(this.currentRiskConfig, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-    
-    const exportFileDefaultName = `risk-config-${new Date().toISOString().split('T')[0]}.json`;
-    
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
+    const dataStr = JSON.stringify(this.currentRiskConfig, null, 2)
+    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr)
+
+    const exportFileDefaultName = `risk-config-${new Date().toISOString().split('T')[0]}.json`
+
+    const linkElement = document.createElement('a')
+    linkElement.setAttribute('href', dataUri)
+    linkElement.setAttribute('download', exportFileDefaultName)
+    linkElement.click()
   }
 
   private showAddScenarioDialog(): void {
     // Implementation for adding custom scenarios
-    this.showSuccessMessage('Add scenario dialog would open here');
+    this.showSuccessMessage('Add scenario dialog would open here')
   }
 
   private updateElement(id: string, value: string): void {
-    const element = document.getElementById(id);
-    if (element) element.textContent = value;
+    const element = document.getElementById(id)
+    if (element) element.textContent = value
   }
 
   private showSuccessMessage(message: string): void {
-    console.log('Success:', message);
+    console.log('Success:', message)
   }
 
   private showErrorMessage(message: string): void {
-    console.error('Error:', message);
+    console.error('Error:', message)
   }
 
   /**
@@ -1151,7 +1169,7 @@ export class RiskManagementDashboard {
    */
   public destroy(): void {
     if (this.updateInterval) {
-      clearInterval(this.updateInterval);
+      clearInterval(this.updateInterval)
     }
   }
 }

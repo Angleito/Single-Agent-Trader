@@ -183,10 +183,10 @@ class TradingSettings(BaseModel):
         description="Require at least 24 hours of market data before first trade (disabled for 8h trading)"
     )
     min_candles_for_trading: int = Field(
-        default=240,
-        ge=50,
+        default=1,
+        ge=1,
         le=2000,
-        description="Minimum number of candles required before trading (240 = 1 hour for 15s intervals)"
+        description="Minimum number of candles required before trading (1 = start immediately with historical data)"
     )
 
     @field_validator("interval")

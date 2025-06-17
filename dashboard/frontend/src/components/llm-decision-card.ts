@@ -1,25 +1,25 @@
-import type { TradeAction, MarketData, VuManchuIndicators } from '../types';
+import type { TradeAction, MarketData, VuManchuIndicators } from '../types'
 
 export interface LLMDecisionData {
-  action: TradeAction;
-  marketData: MarketData;
-  indicators?: VuManchuIndicators;
-  riskLevel?: 'low' | 'medium' | 'high';
-  positionSize?: number;
+  action: TradeAction
+  marketData: MarketData
+  indicators?: VuManchuIndicators
+  riskLevel?: 'low' | 'medium' | 'high'
+  positionSize?: number
 }
 
 export class LLMDecisionCard {
-  private container: HTMLElement;
-  private currentDecision: LLMDecisionData | null = null;
-  private updateAnimation: Animation | null = null;
+  private container: HTMLElement
+  private currentDecision: LLMDecisionData | null = null
+  private updateAnimation: Animation | null = null
 
   constructor(containerId: string) {
-    const element = document.getElementById(containerId);
+    const element = document.getElementById(containerId)
     if (!element) {
-      throw new Error(`Container element with id '${containerId}' not found`);
+      throw new Error(`Container element with id '${containerId}' not found`)
     }
-    this.container = element;
-    this.render();
+    this.container = element
+    this.render()
   }
 
   /**
@@ -118,20 +118,20 @@ export class LLMDecisionCard {
           <span class="update-text">Live</span>
         </div>
       </div>
-    `;
+    `
 
-    this.addStyles();
+    this.addStyles()
   }
 
   /**
    * Add component styles
    */
   private addStyles(): void {
-    const styleId = 'llm-decision-card-styles';
-    if (document.getElementById(styleId)) return;
+    const styleId = 'llm-decision-card-styles'
+    if (document.getElementById(styleId)) return
 
-    const style = document.createElement('style');
-    style.id = styleId;
+    const style = document.createElement('style')
+    style.id = styleId
     style.textContent = `
       .llm-decision-card {
         background: rgba(17, 24, 39, 0.95);
@@ -479,59 +479,59 @@ export class LLMDecisionCard {
       .llm-decision-card[data-state="updating"] .decision-content {
         animation: fadeIn 0.5s ease;
       }
-    `;
+    `
 
-    document.head.appendChild(style);
+    document.head.appendChild(style)
   }
 
   /**
    * Update the decision card with new data
    */
   public updateDecision(data: LLMDecisionData): void {
-    this.currentDecision = data;
-    
+    this.currentDecision = data
+
     // Show updating state
-    this.setUpdatingState(true);
+    this.setUpdatingState(true)
 
     // Update action display
-    this.updateActionDisplay(data.action);
+    this.updateActionDisplay(data.action)
 
     // Update confidence meter
-    this.updateConfidenceMeter(data.action.confidence);
+    this.updateConfidenceMeter(data.action.confidence)
 
     // Update reasoning
-    this.updateReasoning(data.action.reasoning);
+    this.updateReasoning(data.action.reasoning)
 
     // Update market context
-    this.updateMarketContext(data);
+    this.updateMarketContext(data)
 
     // Update indicators
     if (data.indicators) {
-      this.updateIndicators(data.indicators);
+      this.updateIndicators(data.indicators)
     }
 
     // Update timestamp
-    this.updateTimestamp();
+    this.updateTimestamp()
 
     // Remove updating state after animation
     setTimeout(() => {
-      this.setUpdatingState(false);
-    }, 1000);
+      this.setUpdatingState(false)
+    }, 1000)
   }
 
   /**
    * Update the action display
    */
   private updateActionDisplay(action: TradeAction): void {
-    const actionDisplay = this.container.querySelector('.action-display') as HTMLElement;
-    const actionText = this.container.querySelector('.action-text') as HTMLElement;
-    const actionSubtext = this.container.querySelector('.action-subtext') as HTMLElement;
+    const actionDisplay = this.container.querySelector('.action-display') as HTMLElement
+    const actionText = this.container.querySelector('.action-text') as HTMLElement
+    const actionSubtext = this.container.querySelector('.action-subtext') as HTMLElement
 
-    if (!actionDisplay || !actionText || !actionSubtext) return;
+    if (!actionDisplay || !actionText || !actionSubtext) return
 
-    const actionType = action.action.toLowerCase();
-    actionDisplay.setAttribute('data-action', actionType);
-    actionText.textContent = action.action.toUpperCase();
+    const actionType = action.action.toLowerCase()
+    actionDisplay.setAttribute('data-action', actionType)
+    actionText.textContent = action.action.toUpperCase()
 
     // Set appropriate subtext
     const subtextMap: Record<string, string> = {
@@ -539,32 +539,32 @@ export class LLMDecisionCard {
       sell: 'Bearish signal detected',
       hold: 'No clear signal',
       long: 'Opening long position',
-      short: 'Opening short position'
-    };
+      short: 'Opening short position',
+    }
 
-    actionSubtext.textContent = subtextMap[actionType] || 'Processing...';
+    actionSubtext.textContent = subtextMap[actionType] || 'Processing...'
   }
 
   /**
    * Update the confidence meter
    */
   private updateConfidenceMeter(confidence: number): void {
-    const fill = this.container.querySelector('.confidence-fill') as HTMLElement;
-    const value = this.container.querySelector('.confidence-value') as HTMLElement;
+    const fill = this.container.querySelector('.confidence-fill') as HTMLElement
+    const value = this.container.querySelector('.confidence-value') as HTMLElement
 
-    if (!fill || !value) return;
+    if (!fill || !value) return
 
-    const percentage = Math.round(confidence * 100);
-    fill.style.width = `${percentage}%`;
-    value.textContent = `${percentage}%`;
+    const percentage = Math.round(confidence * 100)
+    fill.style.width = `${percentage}%`
+    value.textContent = `${percentage}%`
 
     // Update fill color based on confidence level
     if (percentage >= 80) {
-      fill.style.background = 'linear-gradient(90deg, #10b981 0%, #34d399 100%)';
+      fill.style.background = 'linear-gradient(90deg, #10b981 0%, #34d399 100%)'
     } else if (percentage >= 60) {
-      fill.style.background = 'linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%)';
+      fill.style.background = 'linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%)'
     } else {
-      fill.style.background = 'linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%)';
+      fill.style.background = 'linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%)'
     }
   }
 
@@ -572,43 +572,42 @@ export class LLMDecisionCard {
    * Update the reasoning section
    */
   private updateReasoning(reasoning: string): void {
-    const reasoningText = this.container.querySelector('.reasoning-text') as HTMLElement;
-    if (!reasoningText) return;
+    const reasoningText = this.container.querySelector('.reasoning-text') as HTMLElement
+    if (!reasoningText) return
 
-    reasoningText.textContent = reasoning;
+    reasoningText.textContent = reasoning
   }
 
   /**
    * Update market context
    */
   private updateMarketContext(data: LLMDecisionData): void {
-    const priceElement = this.container.querySelector('.price-value') as HTMLElement;
-    const changeElement = this.container.querySelector('.change-value') as HTMLElement;
-    const riskElement = this.container.querySelector('.risk-value') as HTMLElement;
-    const positionElement = this.container.querySelector('.position-value') as HTMLElement;
+    const priceElement = this.container.querySelector('.price-value') as HTMLElement
+    const changeElement = this.container.querySelector('.change-value') as HTMLElement
+    const riskElement = this.container.querySelector('.risk-value') as HTMLElement
+    const positionElement = this.container.querySelector('.position-value') as HTMLElement
 
     if (priceElement && data.marketData.price) {
       priceElement.textContent = `$${data.marketData.price.toLocaleString(undefined, {
         minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      })}`;
+        maximumFractionDigits: 2,
+      })}`
     }
 
     if (changeElement && data.marketData.change_percent_24h !== undefined) {
-      const change = data.marketData.change_percent_24h;
-      changeElement.textContent = `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`;
-      changeElement.className = `context-value change-value ${change >= 0 ? 'positive' : 'negative'}`;
+      const change = data.marketData.change_percent_24h
+      changeElement.textContent = `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`
+      changeElement.className = `context-value change-value ${change >= 0 ? 'positive' : 'negative'}`
     }
 
     if (riskElement && data.riskLevel) {
-      riskElement.textContent = data.riskLevel.charAt(0).toUpperCase() + data.riskLevel.slice(1);
-      riskElement.setAttribute('data-risk', data.riskLevel);
+      riskElement.textContent = data.riskLevel.charAt(0).toUpperCase() + data.riskLevel.slice(1)
+      riskElement.setAttribute('data-risk', data.riskLevel)
     }
 
     if (positionElement && data.positionSize !== undefined) {
-      positionElement.textContent = data.positionSize > 0 
-        ? `${data.positionSize.toFixed(4)} units`
-        : 'No position';
+      positionElement.textContent =
+        data.positionSize > 0 ? `${data.positionSize.toFixed(4)} units` : 'No position'
     }
   }
 
@@ -616,31 +615,38 @@ export class LLMDecisionCard {
    * Update indicators display
    */
   private updateIndicators(indicators: VuManchuIndicators): void {
-    const indicatorElements = this.container.querySelectorAll('.indicator-item');
-    
+    const indicatorElements = this.container.querySelectorAll('.indicator-item')
+
     if (indicatorElements.length >= 3) {
       // Cipher A
-      const cipherAValue = indicatorElements[0].querySelector('.indicator-value') as HTMLElement;
+      const cipherAValue = indicatorElements[0].querySelector('.indicator-value') as HTMLElement
       if (cipherAValue && indicators.cipher_a !== null) {
-        cipherAValue.textContent = indicators.cipher_a.toFixed(2);
-        const trend = indicators.cipher_a > 50 ? 'bullish' : indicators.cipher_a < -50 ? 'bearish' : 'neutral';
-        cipherAValue.setAttribute('data-trend', trend);
+        cipherAValue.textContent = indicators.cipher_a.toFixed(2)
+        const trend =
+          indicators.cipher_a > 50 ? 'bullish' : indicators.cipher_a < -50 ? 'bearish' : 'neutral'
+        cipherAValue.setAttribute('data-trend', trend)
       }
 
       // Cipher B
-      const cipherBValue = indicatorElements[1].querySelector('.indicator-value') as HTMLElement;
+      const cipherBValue = indicatorElements[1].querySelector('.indicator-value') as HTMLElement
       if (cipherBValue && indicators.cipher_b !== null) {
-        cipherBValue.textContent = indicators.cipher_b.toFixed(2);
-        const trend = indicators.cipher_b > 0 ? 'bullish' : indicators.cipher_b < 0 ? 'bearish' : 'neutral';
-        cipherBValue.setAttribute('data-trend', trend);
+        cipherBValue.textContent = indicators.cipher_b.toFixed(2)
+        const trend =
+          indicators.cipher_b > 0 ? 'bullish' : indicators.cipher_b < 0 ? 'bearish' : 'neutral'
+        cipherBValue.setAttribute('data-trend', trend)
       }
 
       // Wave Trend
-      const waveTrendValue = indicatorElements[2].querySelector('.indicator-value') as HTMLElement;
+      const waveTrendValue = indicatorElements[2].querySelector('.indicator-value') as HTMLElement
       if (waveTrendValue && indicators.wave_trend_1 !== null) {
-        waveTrendValue.textContent = indicators.wave_trend_1.toFixed(2);
-        const trend = indicators.wave_trend_1 > 0 ? 'bullish' : indicators.wave_trend_1 < 0 ? 'bearish' : 'neutral';
-        waveTrendValue.setAttribute('data-trend', trend);
+        waveTrendValue.textContent = indicators.wave_trend_1.toFixed(2)
+        const trend =
+          indicators.wave_trend_1 > 0
+            ? 'bullish'
+            : indicators.wave_trend_1 < 0
+              ? 'bearish'
+              : 'neutral'
+        waveTrendValue.setAttribute('data-trend', trend)
       }
     }
   }
@@ -649,26 +655,26 @@ export class LLMDecisionCard {
    * Update timestamp
    */
   private updateTimestamp(): void {
-    const timestampValue = this.container.querySelector('.timestamp-value') as HTMLElement;
-    if (!timestampValue) return;
+    const timestampValue = this.container.querySelector('.timestamp-value') as HTMLElement
+    if (!timestampValue) return
 
-    const now = new Date();
-    timestampValue.textContent = now.toLocaleTimeString();
+    const now = new Date()
+    timestampValue.textContent = now.toLocaleTimeString()
   }
 
   /**
    * Set updating state
    */
   private setUpdatingState(updating: boolean): void {
-    const card = this.container.querySelector('.llm-decision-card') as HTMLElement;
-    const indicator = this.container.querySelector('.update-indicator') as HTMLElement;
+    const card = this.container.querySelector('.llm-decision-card') as HTMLElement
+    const indicator = this.container.querySelector('.update-indicator') as HTMLElement
 
     if (card) {
-      card.setAttribute('data-state', updating ? 'updating' : 'active');
+      card.setAttribute('data-state', updating ? 'updating' : 'active')
     }
 
     if (indicator) {
-      indicator.setAttribute('data-updating', updating.toString());
+      indicator.setAttribute('data-updating', updating.toString())
     }
   }
 
@@ -676,10 +682,10 @@ export class LLMDecisionCard {
    * Clear the decision display
    */
   public clear(): void {
-    this.currentDecision = null;
-    const card = this.container.querySelector('.llm-decision-card') as HTMLElement;
+    this.currentDecision = null
+    const card = this.container.querySelector('.llm-decision-card') as HTMLElement
     if (card) {
-      card.setAttribute('data-state', 'empty');
+      card.setAttribute('data-state', 'empty')
     }
   }
 
@@ -687,6 +693,6 @@ export class LLMDecisionCard {
    * Get current decision data
    */
   public getCurrentDecision(): LLMDecisionData | null {
-    return this.currentDecision;
+    return this.currentDecision
   }
 }

@@ -7,7 +7,11 @@
   border-radius: 12px;
   padding: 24px;
   color: #ffffff;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family:
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   border: 1px solid #333;
 }
@@ -719,7 +723,8 @@
 
 /* Animations */
 @keyframes pulse-profit {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
   }
   50% {
@@ -728,7 +733,8 @@
 }
 
 @keyframes pulse-loss {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
   }
   50% {
@@ -737,7 +743,8 @@
 }
 
 @keyframes pulse-alert {
-  0%, 100% {
+  0%,
+  100% {
     background: rgba(220, 38, 38, 0.05);
   }
   50% {
@@ -750,17 +757,17 @@
   .metrics-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .performance-grid {
     grid-template-columns: repeat(3, 1fr);
   }
-  
+
   .chart-header {
     flex-direction: column;
     gap: 16px;
     align-items: stretch;
   }
-  
+
   .chart-controls {
     justify-content: space-between;
   }
@@ -772,30 +779,30 @@
     gap: 16px;
     align-items: stretch;
   }
-  
+
   .metrics-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .performance-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .actions-section {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .action-btn {
     min-width: auto;
   }
-  
+
   .chart-legend {
     flex-direction: column;
     gap: 8px;
     align-items: center;
   }
-  
+
   .pnl-chart {
     height: 250px;
   }
@@ -805,15 +812,15 @@
   .position-monitor {
     padding: 16px;
   }
-  
+
   .performance-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .timeframe-selector {
     width: 100%;
   }
-  
+
   .timeframe-btn {
     flex: 1;
   }

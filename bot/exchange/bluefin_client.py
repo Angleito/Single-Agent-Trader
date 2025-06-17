@@ -8,6 +8,7 @@ actual Bluefin SDK installed, avoiding dependency conflicts.
 import aiohttp
 import asyncio
 import logging
+import os
 from typing import Any, Dict, List, Optional
 from decimal import Decimal
 
@@ -22,16 +23,27 @@ class BluefinServiceClient:
     allowing the main bot to interact with Bluefin without dependency conflicts.
     """
     
-    def __init__(self, service_url: str = "http://bluefin-service:8080"):
+    def __init__(self, service_url: str = "http://bluefin-service:8080", api_key: Optional[str] = None):
         """
         Initialize the Bluefin service client.
         
         Args:
             service_url: URL of the Bluefin service container
+            api_key: API key for authentication (if not provided, will use BLUEFIN_SERVICE_API_KEY env var)
         """
         self.service_url = service_url
         self._session: Optional[aiohttp.ClientSession] = None
         self._connected = False
+        
+        # Get API key from parameter or environment
+        self.api_key = api_key or os.getenv("BLUEFIN_SERVICE_API_KEY")
+        if not self.api_key:
+            logger.warning("No BLUEFIN_SERVICE_API_KEY configured - authentication may fail")
+        
+        # Prepare headers with authentication
+        self._headers = {}
+        if self.api_key:
+            self._headers["Authorization"] = f"Bearer {self.api_key}"
         
     async def connect(self) -> bool:
         """
@@ -42,9 +54,9 @@ class BluefinServiceClient:
         """
         try:
             if self._session is None:
-                self._session = aiohttp.ClientSession()
+                self._session = aiohttp.ClientSession(headers=self._headers)
             
-            # Check service health
+            # Check service health (health endpoint doesn't require auth)
             async with self._session.get(f"{self.service_url}/health") as resp:
                 if resp.status == 200:
                     data = await resp.json()
@@ -77,6 +89,13 @@ class BluefinServiceClient:
             async with self._session.get(f"{self.service_url}/account") as resp:
                 if resp.status == 200:
                     return await resp.json()
+                elif resp.status == 401:
+                    logger.error("Authentication failed - check BLUEFIN_SERVICE_API_KEY")
+                    return {"error": "Authentication failed"}
+                elif resp.status == 429:
+                    retry_after = resp.headers.get("Retry-After", "60")
+                    logger.error(f"Rate limit exceeded - retry after {retry_after} seconds")
+                    return {"error": f"Rate limit exceeded, retry after {retry_after}s"}
                 else:
                     error_text = await resp.text()
                     logger.error(f"Failed to get account data: {error_text}")
@@ -99,6 +118,13 @@ class BluefinServiceClient:
                     positions = data.get("positions", [])
                     logger.info(f"Retrieved {len(positions)} positions from Bluefin service")
                     return positions
+                elif resp.status == 401:
+                    logger.error("Authentication failed - check BLUEFIN_SERVICE_API_KEY")
+                    return []
+                elif resp.status == 429:
+                    retry_after = resp.headers.get("Retry-After", "60")
+                    logger.error(f"Rate limit exceeded - retry after {retry_after} seconds")
+                    return []
                 else:
                     error_text = await resp.text()
                     logger.error(f"Failed to get positions: {error_text}")
@@ -124,6 +150,13 @@ class BluefinServiceClient:
             ) as resp:
                 if resp.status == 200:
                     return await resp.json()
+                elif resp.status == 401:
+                    logger.error("Authentication failed - check BLUEFIN_SERVICE_API_KEY")
+                    return {"status": "error", "message": "Authentication failed"}
+                elif resp.status == 429:
+                    retry_after = resp.headers.get("Retry-After", "60")
+                    logger.error(f"Rate limit exceeded - retry after {retry_after} seconds")
+                    return {"status": "error", "message": f"Rate limit exceeded, retry after {retry_after}s"}
                 else:
                     error_text = await resp.text()
                     logger.error(f"Failed to place order: {error_text}")

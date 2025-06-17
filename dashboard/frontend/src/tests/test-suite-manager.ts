@@ -1,6 +1,6 @@
 /**
  * Comprehensive Testing Suite Manager for Phase 4 Features
- * 
+ *
  * Provides complete testing infrastructure for all Phase 4 components:
  * - Unit testing framework with mocking capabilities
  * - Integration testing for component interactions
@@ -15,46 +15,46 @@
  */
 
 export interface TestConfig {
-  environment: 'development' | 'staging' | 'production';
-  baseUrl: string;
-  timeout: number;
-  retries: number;
-  parallel: boolean;
+  environment: 'development' | 'staging' | 'production'
+  baseUrl: string
+  timeout: number
+  retries: number
+  parallel: boolean
   coverage: {
-    enabled: boolean;
-    threshold: number;
-    reports: string[];
-  };
-  browsers: string[];
+    enabled: boolean
+    threshold: number
+    reports: string[]
+  }
+  browsers: string[]
   viewport: {
-    width: number;
-    height: number;
-  };
-  screenshots: boolean;
-  video: boolean;
-  slowMo: number;
+    width: number
+    height: number
+  }
+  screenshots: boolean
+  video: boolean
+  slowMo: number
 }
 
 export interface TestSuite {
-  id: string;
-  name: string;
-  description: string;
-  type: TestType;
-  category: TestCategory;
-  priority: 'low' | 'medium' | 'high' | 'critical';
-  tags: string[];
-  timeout: number;
-  setup?: () => Promise<void>;
-  teardown?: () => Promise<void>;
-  tests: TestCase[];
-  dependencies: string[];
-  skip?: boolean;
-  only?: boolean;
+  id: string
+  name: string
+  description: string
+  type: TestType
+  category: TestCategory
+  priority: 'low' | 'medium' | 'high' | 'critical'
+  tags: string[]
+  timeout: number
+  setup?: () => Promise<void>
+  teardown?: () => Promise<void>
+  tests: TestCase[]
+  dependencies: string[]
+  skip?: boolean
+  only?: boolean
 }
 
-export type TestType = 
+export type TestType =
   | 'unit'
-  | 'integration' 
+  | 'integration'
   | 'e2e'
   | 'performance'
   | 'security'
@@ -62,7 +62,7 @@ export type TestType =
   | 'visual'
   | 'api'
   | 'accessibility'
-  | 'compatibility';
+  | 'compatibility'
 
 export type TestCategory =
   | 'websocket'
@@ -77,139 +77,147 @@ export type TestCategory =
   | 'risk-management'
   | 'analytics'
   | 'ui'
-  | 'infrastructure';
+  | 'infrastructure'
 
 export interface TestCase {
-  id: string;
-  name: string;
-  description: string;
-  steps: TestStep[];
-  assertions: TestAssertion[];
-  mockData?: any;
-  skip?: boolean;
-  only?: boolean;
-  retry?: number;
+  id: string
+  name: string
+  description: string
+  steps: TestStep[]
+  assertions: TestAssertion[]
+  mockData?: any
+  skip?: boolean
+  only?: boolean
+  retry?: number
 }
 
 export interface TestStep {
-  id: string;
-  description: string;
-  action: string;
-  target?: string;
-  data?: any;
-  wait?: number;
-  screenshot?: boolean;
+  id: string
+  description: string
+  action: string
+  target?: string
+  data?: any
+  wait?: number
+  screenshot?: boolean
 }
 
 export interface TestAssertion {
-  id: string;
-  type: 'equals' | 'contains' | 'exists' | 'visible' | 'enabled' | 'count' | 'performance' | 'security';
-  target?: string;
-  expected: any;
-  message?: string;
+  id: string
+  type:
+    | 'equals'
+    | 'contains'
+    | 'exists'
+    | 'visible'
+    | 'enabled'
+    | 'count'
+    | 'performance'
+    | 'security'
+  target?: string
+  expected: any
+  message?: string
 }
 
 export interface TestResult {
-  id: string;
-  suiteId: string;
-  testId: string;
-  name: string;
-  status: 'passed' | 'failed' | 'skipped' | 'pending';
-  duration: number;
-  startTime: Date;
-  endTime: Date;
-  error?: string;
-  screenshots: string[];
-  performance?: PerformanceMetrics;
-  coverage?: CoverageReport;
-  assertions: AssertionResult[];
+  id: string
+  suiteId: string
+  testId: string
+  name: string
+  status: 'passed' | 'failed' | 'skipped' | 'pending'
+  duration: number
+  startTime: Date
+  endTime: Date
+  error?: string
+  screenshots: string[]
+  performance?: PerformanceMetrics
+  coverage?: CoverageReport
+  assertions: AssertionResult[]
 }
 
 export interface AssertionResult {
-  id: string;
-  description: string;
-  status: 'passed' | 'failed';
-  expected: any;
-  actual: any;
-  message: string;
+  id: string
+  description: string
+  status: 'passed' | 'failed'
+  expected: any
+  actual: any
+  message: string
 }
 
 export interface PerformanceMetrics {
-  loadTime: number;
-  renderTime: number;
-  interactiveTime: number;
-  memoryUsage: number;
-  cpuUsage: number;
-  networkRequests: number;
-  bundleSize: number;
-  lighthouse?: LighthouseReport;
+  loadTime: number
+  renderTime: number
+  interactiveTime: number
+  memoryUsage: number
+  cpuUsage: number
+  networkRequests: number
+  bundleSize: number
+  lighthouse?: LighthouseReport
 }
 
 export interface LighthouseReport {
-  performance: number;
-  accessibility: number;
-  bestPractices: number;
-  seo: number;
-  pwa: number;
+  performance: number
+  accessibility: number
+  bestPractices: number
+  seo: number
+  pwa: number
 }
 
 export interface CoverageReport {
-  statements: number;
-  branches: number;
-  functions: number;
-  lines: number;
-  files: CoverageFile[];
+  statements: number
+  branches: number
+  functions: number
+  lines: number
+  files: CoverageFile[]
 }
 
 export interface CoverageFile {
-  path: string;
-  statements: number;
-  branches: number;
-  functions: number;
-  lines: number;
-  uncoveredLines: number[];
+  path: string
+  statements: number
+  branches: number
+  functions: number
+  lines: number
+  uncoveredLines: number[]
 }
 
 export interface SecurityTestResult {
-  vulnerabilities: SecurityVulnerability[];
-  compliance: ComplianceCheck[];
-  recommendations: string[];
+  vulnerabilities: SecurityVulnerability[]
+  compliance: ComplianceCheck[]
+  recommendations: string[]
 }
 
 export interface SecurityVulnerability {
-  id: string;
-  type: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  description: string;
-  location: string;
-  recommendation: string;
+  id: string
+  type: string
+  severity: 'low' | 'medium' | 'high' | 'critical'
+  description: string
+  location: string
+  recommendation: string
 }
 
 export interface ComplianceCheck {
-  standard: string;
-  requirement: string;
-  status: 'compliant' | 'non-compliant' | 'partial';
-  details: string;
+  standard: string
+  requirement: string
+  status: 'compliant' | 'non-compliant' | 'partial'
+  details: string
 }
 
 export class TestSuiteManager {
-  private config: TestConfig;
-  private suites = new Map<string, TestSuite>();
-  private results = new Map<string, TestResult[]>();
-  private mocks = new Map<string, any>();
-  private browser: any = null;
-  private page: any = null;
-  private isRunning = false;
-  private coverage: any = null;
-  private lighthouse: any = null;
+  private config: TestConfig
+  private suites = new Map<string, TestSuite>()
+  private results = new Map<string, TestResult[]>()
+  private mocks = new Map<string, any>()
+  private browser: any = null
+  private page: any = null
+  private isRunning = false
+  private coverage: any = null
+  private lighthouse: any = null
 
   // Test execution context
-  private currentSuite: TestSuite | null = null;
-  private currentTest: TestCase | null = null;
-  private eventListeners = new Map<string, Set<Function>>();
+  private currentSuite: TestSuite | null = null
+  private currentTest: TestCase | null = null
+  private eventListeners = new Map<string, Set<Function>>()
 
   // Performance monitoring
-  private performanceObserver: PerformanceObserver | null = null;
+  private performanceObserver: PerformanceObserver | null = null
   private metrics: PerformanceMetrics = {
     loadTime: 0,
     renderTime: 0,
@@ -217,13 +225,13 @@ export class TestSuiteManager {
     memoryUsage: 0,
     cpuUsage: 0,
     networkRequests: 0,
-    bundleSize: 0
-  };
+    bundleSize: 0,
+  }
 
   constructor(config: TestConfig) {
-    this.config = config;
-    this.setupTestEnvironment();
-    this.setupDefaultSuites();
+    this.config = config
+    this.setupTestEnvironment()
+    this.setupDefaultSuites()
   }
 
   /**
@@ -233,24 +241,24 @@ export class TestSuiteManager {
     try {
       // Setup browser automation if needed
       if (this.hasE2ETests()) {
-        await this.setupBrowser();
+        await this.setupBrowser()
       }
 
       // Setup performance monitoring
-      this.setupPerformanceMonitoring();
+      this.setupPerformanceMonitoring()
 
       // Setup coverage collection
       if (this.config.coverage.enabled) {
-        await this.setupCoverage();
+        await this.setupCoverage()
       }
 
       // Setup security testing tools
-      await this.setupSecurityTesting();
+      await this.setupSecurityTesting()
 
-      this.emit('initialized');
+      this.emit('initialized')
     } catch (error) {
-      this.emit('error', { phase: 'initialization', error });
-      throw error;
+      this.emit('error', { phase: 'initialization', error })
+      throw error
     }
   }
 
@@ -258,8 +266,8 @@ export class TestSuiteManager {
    * Register a test suite
    */
   public registerSuite(suite: TestSuite): void {
-    this.suites.set(suite.id, suite);
-    this.emit('suiteRegistered', { suite });
+    this.suites.set(suite.id, suite)
+    this.emit('suiteRegistered', { suite })
   }
 
   /**
@@ -267,41 +275,41 @@ export class TestSuiteManager {
    */
   public async runAllSuites(): Promise<Map<string, TestResult[]>> {
     if (this.isRunning) {
-      throw new Error('Tests are already running');
+      throw new Error('Tests are already running')
     }
 
-    this.isRunning = true;
-    this.emit('testRunStarted');
+    this.isRunning = true
+    this.emit('testRunStarted')
 
     try {
-      const startTime = Date.now();
-      const suiteResults = new Map<string, TestResult[]>();
+      const startTime = Date.now()
+      const suiteResults = new Map<string, TestResult[]>()
 
       // Determine execution order based on dependencies
-      const executionOrder = this.resolveDependencies();
+      const executionOrder = this.resolveDependencies()
 
       // Run suites in order
       for (const suiteId of executionOrder) {
-        const suite = this.suites.get(suiteId);
-        if (!suite || suite.skip) continue;
+        const suite = this.suites.get(suiteId)
+        if (!suite || suite.skip) continue
 
-        const results = await this.runSuite(suite);
-        suiteResults.set(suiteId, results);
-        this.results.set(suiteId, results);
+        const results = await this.runSuite(suite)
+        suiteResults.set(suiteId, results)
+        this.results.set(suiteId, results)
       }
 
-      const duration = Date.now() - startTime;
-      const summary = this.generateTestSummary(suiteResults);
+      const duration = Date.now() - startTime
+      const summary = this.generateTestSummary(suiteResults)
 
-      this.emit('testRunCompleted', { 
-        duration, 
-        summary, 
-        results: suiteResults 
-      });
+      this.emit('testRunCompleted', {
+        duration,
+        summary,
+        results: suiteResults,
+      })
 
-      return suiteResults;
+      return suiteResults
     } finally {
-      this.isRunning = false;
+      this.isRunning = false
     }
   }
 
@@ -309,45 +317,45 @@ export class TestSuiteManager {
    * Run a specific test suite
    */
   public async runSuite(suite: TestSuite): Promise<TestResult[]> {
-    this.currentSuite = suite;
-    const results: TestResult[] = [];
+    this.currentSuite = suite
+    const results: TestResult[] = []
 
-    this.emit('suiteStarted', { suite });
+    this.emit('suiteStarted', { suite })
 
     try {
       // Setup suite
       if (suite.setup) {
-        await suite.setup();
+        await suite.setup()
       }
 
       // Run tests
       for (const test of suite.tests) {
         if (test.skip) {
-          results.push(this.createSkippedResult(suite, test));
-          continue;
+          results.push(this.createSkippedResult(suite, test))
+          continue
         }
 
-        const result = await this.runTest(suite, test);
-        results.push(result);
+        const result = await this.runTest(suite, test)
+        results.push(result)
 
         // Break on failure if configured
         if (result.status === 'failed' && !this.config.parallel) {
-          break;
+          break
         }
       }
 
       // Teardown suite
       if (suite.teardown) {
-        await suite.teardown();
+        await suite.teardown()
       }
 
-      this.emit('suiteCompleted', { suite, results });
-      return results;
+      this.emit('suiteCompleted', { suite, results })
+      return results
     } catch (error) {
-      this.emit('suiteError', { suite, error });
-      throw error;
+      this.emit('suiteError', { suite, error })
+      throw error
     } finally {
-      this.currentSuite = null;
+      this.currentSuite = null
     }
   }
 
@@ -355,8 +363,8 @@ export class TestSuiteManager {
    * Run a single test case
    */
   public async runTest(suite: TestSuite, test: TestCase): Promise<TestResult> {
-    this.currentTest = test;
-    const startTime = new Date();
+    this.currentTest = test
+    const startTime = new Date()
     const result: TestResult = {
       id: this.generateId(),
       suiteId: suite.id,
@@ -367,132 +375,131 @@ export class TestSuiteManager {
       startTime,
       endTime: startTime,
       screenshots: [],
-      assertions: []
-    };
+      assertions: [],
+    }
 
-    this.emit('testStarted', { suite, test });
+    this.emit('testStarted', { suite, test })
 
     try {
       // Setup test data and mocks
-      await this.setupTestMocks(test.mockData);
+      await this.setupTestMocks(test.mockData)
 
       // Execute test steps
       for (const step of test.steps) {
-        await this.executeTestStep(step);
-        
+        await this.executeTestStep(step)
+
         if (step.screenshot && this.page) {
-          const screenshot = await this.takeScreenshot(`${test.id}_${step.id}`);
-          result.screenshots.push(screenshot);
+          const screenshot = await this.takeScreenshot(`${test.id}_${step.id}`)
+          result.screenshots.push(screenshot)
         }
       }
 
       // Run assertions
       for (const assertion of test.assertions) {
-        const assertionResult = await this.runAssertion(assertion);
-        result.assertions.push(assertionResult);
-        
+        const assertionResult = await this.runAssertion(assertion)
+        result.assertions.push(assertionResult)
+
         if (assertionResult.status === 'failed') {
-          result.status = 'failed';
-          result.error = assertionResult.message;
+          result.status = 'failed'
+          result.error = assertionResult.message
         }
       }
 
       // Set success status if no failures
       if (result.status === 'pending') {
-        result.status = 'passed';
+        result.status = 'passed'
       }
 
       // Collect performance metrics for performance tests
       if (suite.type === 'performance') {
-        result.performance = await this.collectPerformanceMetrics();
+        result.performance = await this.collectPerformanceMetrics()
       }
 
       // Collect coverage if enabled
       if (this.config.coverage.enabled && suite.type === 'unit') {
-        result.coverage = await this.collectCoverage();
+        result.coverage = await this.collectCoverage()
       }
-
     } catch (error) {
-      result.status = 'failed';
-      result.error = (error as Error).message;
-      
+      result.status = 'failed'
+      result.error = (error as Error).message
+
       if (this.page && this.config.screenshots) {
-        const screenshot = await this.takeScreenshot(`${test.id}_error`);
-        result.screenshots.push(screenshot);
+        const screenshot = await this.takeScreenshot(`${test.id}_error`)
+        result.screenshots.push(screenshot)
       }
     } finally {
-      result.endTime = new Date();
-      result.duration = result.endTime.getTime() - result.startTime.getTime();
-      
-      await this.cleanupTestMocks();
-      this.currentTest = null;
-      
-      this.emit('testCompleted', { suite, test, result });
+      result.endTime = new Date()
+      result.duration = result.endTime.getTime() - result.startTime.getTime()
+
+      await this.cleanupTestMocks()
+      this.currentTest = null
+
+      this.emit('testCompleted', { suite, test, result })
     }
 
-    return result;
+    return result
   }
 
   /**
    * Execute a test step
    */
   private async executeTestStep(step: TestStep): Promise<void> {
-    this.emit('stepStarted', { step });
+    this.emit('stepStarted', { step })
 
     try {
       switch (step.action) {
         case 'navigate':
           if (this.page) {
-            await this.page.goto(step.data.url);
+            await this.page.goto(step.data.url)
           }
-          break;
+          break
 
         case 'click':
           if (this.page && step.target) {
-            await this.page.click(step.target);
+            await this.page.click(step.target)
           }
-          break;
+          break
 
         case 'type':
           if (this.page && step.target) {
-            await this.page.type(step.target, step.data.text);
+            await this.page.type(step.target, step.data.text)
           }
-          break;
+          break
 
         case 'wait':
           if (step.wait) {
-            await new Promise(resolve => setTimeout(resolve, step.wait));
+            await new Promise((resolve) => setTimeout(resolve, step.wait))
           }
-          break;
+          break
 
         case 'waitForSelector':
           if (this.page && step.target) {
-            await this.page.waitForSelector(step.target);
+            await this.page.waitForSelector(step.target)
           }
-          break;
+          break
 
         case 'evaluate':
           if (this.page && step.data.script) {
-            await this.page.evaluate(step.data.script);
+            await this.page.evaluate(step.data.script)
           }
-          break;
+          break
 
         case 'mockApi':
-          await this.mockApiEndpoint(step.data.endpoint, step.data.response);
-          break;
+          await this.mockApiEndpoint(step.data.endpoint, step.data.response)
+          break
 
         case 'triggerEvent':
-          await this.triggerDOMEvent(step.target!, step.data.eventType);
-          break;
+          await this.triggerDOMEvent(step.target!, step.data.eventType)
+          break
 
         default:
-          throw new Error(`Unknown test step action: ${step.action}`);
+          throw new Error(`Unknown test step action: ${step.action}`)
       }
 
-      this.emit('stepCompleted', { step });
+      this.emit('stepCompleted', { step })
     } catch (error) {
-      this.emit('stepError', { step, error });
-      throw error;
+      this.emit('stepError', { step, error })
+      throw error
     }
   }
 
@@ -506,66 +513,65 @@ export class TestSuiteManager {
       status: 'failed',
       expected: assertion.expected,
       actual: null,
-      message: ''
-    };
+      message: '',
+    }
 
     try {
-      let actual: any;
+      let actual: any
 
       switch (assertion.type) {
         case 'equals':
-          actual = await this.getElementValue(assertion.target);
-          result.status = actual === assertion.expected ? 'passed' : 'failed';
-          break;
+          actual = await this.getElementValue(assertion.target)
+          result.status = actual === assertion.expected ? 'passed' : 'failed'
+          break
 
         case 'contains':
-          actual = await this.getElementText(assertion.target);
-          result.status = actual.includes(assertion.expected) ? 'passed' : 'failed';
-          break;
+          actual = await this.getElementText(assertion.target)
+          result.status = actual.includes(assertion.expected) ? 'passed' : 'failed'
+          break
 
         case 'exists':
-          actual = await this.elementExists(assertion.target);
-          result.status = actual === assertion.expected ? 'passed' : 'failed';
-          break;
+          actual = await this.elementExists(assertion.target)
+          result.status = actual === assertion.expected ? 'passed' : 'failed'
+          break
 
         case 'visible':
-          actual = await this.isElementVisible(assertion.target);
-          result.status = actual === assertion.expected ? 'passed' : 'failed';
-          break;
+          actual = await this.isElementVisible(assertion.target)
+          result.status = actual === assertion.expected ? 'passed' : 'failed'
+          break
 
         case 'count':
-          actual = await this.getElementCount(assertion.target);
-          result.status = actual === assertion.expected ? 'passed' : 'failed';
-          break;
+          actual = await this.getElementCount(assertion.target)
+          result.status = actual === assertion.expected ? 'passed' : 'failed'
+          break
 
         case 'performance':
-          actual = await this.getPerformanceMetric(assertion.target!);
-          result.status = actual <= assertion.expected ? 'passed' : 'failed';
-          break;
+          actual = await this.getPerformanceMetric(assertion.target!)
+          result.status = actual <= assertion.expected ? 'passed' : 'failed'
+          break
 
         case 'security':
-          actual = await this.checkSecurityRequirement(assertion.target!);
-          result.status = actual === assertion.expected ? 'passed' : 'failed';
-          break;
+          actual = await this.checkSecurityRequirement(assertion.target!)
+          result.status = actual === assertion.expected ? 'passed' : 'failed'
+          break
 
         default:
-          throw new Error(`Unknown assertion type: ${assertion.type}`);
+          throw new Error(`Unknown assertion type: ${assertion.type}`)
       }
 
-      result.actual = actual;
-      
+      result.actual = actual
+
       if (result.status === 'failed') {
-        result.message = `Expected ${assertion.expected}, but got ${actual}`;
+        result.message = `Expected ${assertion.expected}, but got ${actual}`
       } else {
-        result.message = 'Assertion passed';
+        result.message = 'Assertion passed'
       }
-
     } catch (error) {
-      result.status = 'failed';
-      result.message = `Assertion error: ${(error as Error).message}`;
+      result.status = 'failed'
+      result.message = `Assertion error: ${(error as Error).message}`
     }
 
-    return result;
+    return result
   }
 
   /**
@@ -592,14 +598,14 @@ export class TestSuiteManager {
               id: 'step1',
               description: 'Initialize WebSocket manager',
               action: 'evaluate',
-              data: { script: 'window.testWebSocket = new WebSocketManager(testConfig)' }
+              data: { script: 'window.testWebSocket = new WebSocketManager(testConfig)' },
             },
             {
               id: 'step2',
               description: 'Connect to WebSocket',
               action: 'evaluate',
-              data: { script: 'window.testWebSocket.connect()' }
-            }
+              data: { script: 'window.testWebSocket.connect()' },
+            },
           ],
           assertions: [
             {
@@ -607,9 +613,9 @@ export class TestSuiteManager {
               type: 'equals',
               target: 'window.testWebSocket.isConnected()',
               expected: true,
-              message: 'WebSocket should be connected'
-            }
-          ]
+              message: 'WebSocket should be connected',
+            },
+          ],
         },
         {
           id: 'websocket-reconnection',
@@ -620,14 +626,14 @@ export class TestSuiteManager {
               id: 'step1',
               description: 'Simulate connection loss',
               action: 'evaluate',
-              data: { script: 'window.testWebSocket.simulateDisconnection()' }
+              data: { script: 'window.testWebSocket.simulateDisconnection()' },
             },
             {
               id: 'step2',
               description: 'Wait for reconnection',
               action: 'wait',
-              wait: 5000
-            }
+              wait: 5000,
+            },
           ],
           assertions: [
             {
@@ -635,13 +641,13 @@ export class TestSuiteManager {
               type: 'equals',
               target: 'window.testWebSocket.isConnected()',
               expected: true,
-              message: 'WebSocket should reconnect automatically'
-            }
-          ]
-        }
+              message: 'WebSocket should reconnect automatically',
+            },
+          ],
+        },
       ],
-      dependencies: []
-    });
+      dependencies: [],
+    })
 
     // Notification System Tests
     this.registerSuite({
@@ -663,7 +669,7 @@ export class TestSuiteManager {
               id: 'step1',
               description: 'Send test notification',
               action: 'evaluate',
-              data: { 
+              data: {
                 script: `
                   window.notificationSystem.sendQuickNotification(
                     'test', 
@@ -672,9 +678,9 @@ export class TestSuiteManager {
                     'normal',
                     ['browser']
                   )
-                ` 
-              }
-            }
+                `,
+              },
+            },
           ],
           assertions: [
             {
@@ -682,13 +688,13 @@ export class TestSuiteManager {
               type: 'exists',
               target: '.notification',
               expected: true,
-              message: 'Notification should be displayed'
-            }
-          ]
-        }
+              message: 'Notification should be displayed',
+            },
+          ],
+        },
       ],
-      dependencies: []
-    });
+      dependencies: [],
+    })
 
     // Data Persistence Tests
     this.registerSuite({
@@ -710,15 +716,15 @@ export class TestSuiteManager {
               id: 'step1',
               description: 'Create test record',
               action: 'evaluate',
-              data: { 
+              data: {
                 script: `
                   window.testRecordId = await window.dataManager.create(
                     'test_store', 
                     { name: 'Test Record', value: 123 }
                   )
-                ` 
-              }
-            }
+                `,
+              },
+            },
           ],
           assertions: [
             {
@@ -726,9 +732,9 @@ export class TestSuiteManager {
               type: 'exists',
               target: 'window.testRecordId',
               expected: true,
-              message: 'Record ID should be returned'
-            }
-          ]
+              message: 'Record ID should be returned',
+            },
+          ],
         },
         {
           id: 'read-record',
@@ -739,15 +745,15 @@ export class TestSuiteManager {
               id: 'step1',
               description: 'Read test record',
               action: 'evaluate',
-              data: { 
+              data: {
                 script: `
                   window.testRecord = await window.dataManager.read(
                     'test_store', 
                     window.testRecordId
                   )
-                ` 
-              }
-            }
+                `,
+              },
+            },
           ],
           assertions: [
             {
@@ -755,13 +761,13 @@ export class TestSuiteManager {
               type: 'equals',
               target: 'window.testRecord.name',
               expected: 'Test Record',
-              message: 'Record should be retrieved correctly'
-            }
-          ]
-        }
+              message: 'Record should be retrieved correctly',
+            },
+          ],
+        },
       ],
-      dependencies: []
-    });
+      dependencies: [],
+    })
 
     // Security Tests
     this.registerSuite({
@@ -783,15 +789,15 @@ export class TestSuiteManager {
               id: 'step1',
               description: 'Attempt request without CSRF token',
               action: 'evaluate',
-              data: { 
+              data: {
                 script: `
                   window.csrfTestResult = await fetch('/api/test', {
                     method: 'POST',
                     body: JSON.stringify({test: 'data'})
                   }).then(r => r.status)
-                ` 
-              }
-            }
+                `,
+              },
+            },
           ],
           assertions: [
             {
@@ -799,13 +805,13 @@ export class TestSuiteManager {
               type: 'equals',
               target: 'window.csrfTestResult',
               expected: 403,
-              message: 'Request without CSRF token should be rejected'
-            }
-          ]
-        }
+              message: 'Request without CSRF token should be rejected',
+            },
+          ],
+        },
       ],
-      dependencies: []
-    });
+      dependencies: [],
+    })
 
     // Performance Tests
     this.registerSuite({
@@ -827,8 +833,8 @@ export class TestSuiteManager {
               id: 'step1',
               description: 'Navigate to dashboard',
               action: 'navigate',
-              data: { url: `${this.config.baseUrl}/dashboard` }
-            }
+              data: { url: `${this.config.baseUrl}/dashboard` },
+            },
           ],
           assertions: [
             {
@@ -836,13 +842,13 @@ export class TestSuiteManager {
               type: 'performance',
               target: 'loadTime',
               expected: 3000,
-              message: 'Page should load within 3 seconds'
-            }
-          ]
-        }
+              message: 'Page should load within 3 seconds',
+            },
+          ],
+        },
       ],
-      dependencies: []
-    });
+      dependencies: [],
+    })
 
     // Accessibility Tests
     this.registerSuite({
@@ -864,8 +870,8 @@ export class TestSuiteManager {
               id: 'step1',
               description: 'Navigate to dashboard',
               action: 'navigate',
-              data: { url: `${this.config.baseUrl}/dashboard` }
-            }
+              data: { url: `${this.config.baseUrl}/dashboard` },
+            },
           ],
           assertions: [
             {
@@ -873,13 +879,13 @@ export class TestSuiteManager {
               type: 'exists',
               target: '[aria-label]',
               expected: true,
-              message: 'Elements should have ARIA labels'
-            }
-          ]
-        }
+              message: 'Elements should have ARIA labels',
+            },
+          ],
+        },
       ],
-      dependencies: []
-    });
+      dependencies: [],
+    })
   }
 
   /**
@@ -888,33 +894,33 @@ export class TestSuiteManager {
   private async setupBrowser(): Promise<void> {
     // Browser setup would depend on the testing framework
     // This is a placeholder for Playwright/Puppeteer setup
-    console.log('Setting up browser for E2E tests');
+    console.log('Setting up browser for E2E tests')
   }
 
   private setupPerformanceMonitoring(): void {
     if ('PerformanceObserver' in window) {
       this.performanceObserver = new PerformanceObserver((list) => {
-        const entries = list.getEntries();
+        const entries = list.getEntries()
         for (const entry of entries) {
           if (entry.entryType === 'navigation') {
-            const navigation = entry as PerformanceNavigationTiming;
-            this.metrics.loadTime = navigation.loadEventEnd - navigation.loadEventStart;
+            const navigation = entry as PerformanceNavigationTiming
+            this.metrics.loadTime = navigation.loadEventEnd - navigation.loadEventStart
           }
         }
-      });
+      })
 
-      this.performanceObserver.observe({ entryTypes: ['navigation', 'measure'] });
+      this.performanceObserver.observe({ entryTypes: ['navigation', 'measure'] })
     }
   }
 
   private async setupCoverage(): Promise<void> {
     // Coverage setup would depend on the tool (Istanbul, etc.)
-    console.log('Setting up code coverage collection');
+    console.log('Setting up code coverage collection')
   }
 
   private async setupSecurityTesting(): Promise<void> {
     // Security testing setup
-    console.log('Setting up security testing tools');
+    console.log('Setting up security testing tools')
   }
 
   private setupTestEnvironment(): void {
@@ -925,55 +931,55 @@ export class TestSuiteManager {
   }
 
   private async setupTestMocks(mockData?: any): Promise<void> {
-    if (!mockData) return;
-    
+    if (!mockData) return
+
     for (const [key, value] of Object.entries(mockData)) {
-      this.mocks.set(key, value);
+      this.mocks.set(key, value)
     }
   }
 
   private async cleanupTestMocks(): Promise<void> {
-    this.mocks.clear();
+    this.mocks.clear()
   }
 
   private hasE2ETests(): boolean {
-    return Array.from(this.suites.values()).some(suite => suite.type === 'e2e');
+    return Array.from(this.suites.values()).some((suite) => suite.type === 'e2e')
   }
 
   private resolveDependencies(): string[] {
-    const resolved: string[] = [];
-    const visiting = new Set<string>();
-    const visited = new Set<string>();
+    const resolved: string[] = []
+    const visiting = new Set<string>()
+    const visited = new Set<string>()
 
     const visit = (suiteId: string) => {
-      if (visited.has(suiteId)) return;
+      if (visited.has(suiteId)) return
       if (visiting.has(suiteId)) {
-        throw new Error(`Circular dependency detected: ${suiteId}`);
+        throw new Error(`Circular dependency detected: ${suiteId}`)
       }
 
-      visiting.add(suiteId);
-      const suite = this.suites.get(suiteId);
-      
+      visiting.add(suiteId)
+      const suite = this.suites.get(suiteId)
+
       if (suite) {
         for (const dep of suite.dependencies) {
-          visit(dep);
+          visit(dep)
         }
       }
 
-      visiting.delete(suiteId);
-      visited.add(suiteId);
-      resolved.push(suiteId);
-    };
-
-    for (const suiteId of this.suites.keys()) {
-      visit(suiteId);
+      visiting.delete(suiteId)
+      visited.add(suiteId)
+      resolved.push(suiteId)
     }
 
-    return resolved;
+    for (const suiteId of this.suites.keys()) {
+      visit(suiteId)
+    }
+
+    return resolved
   }
 
   private createSkippedResult(suite: TestSuite, test: TestCase): TestResult {
-    const now = new Date();
+    const now = new Date()
     return {
       id: this.generateId(),
       suiteId: suite.id,
@@ -984,23 +990,29 @@ export class TestSuiteManager {
       startTime: now,
       endTime: now,
       screenshots: [],
-      assertions: []
-    };
+      assertions: [],
+    }
   }
 
   private generateTestSummary(results: Map<string, TestResult[]>): any {
-    let total = 0;
-    let passed = 0;
-    let failed = 0;
-    let skipped = 0;
+    let total = 0
+    let passed = 0
+    let failed = 0
+    let skipped = 0
 
     for (const suiteResults of results.values()) {
       for (const result of suiteResults) {
-        total++;
+        total++
         switch (result.status) {
-          case 'passed': passed++; break;
-          case 'failed': failed++; break;
-          case 'skipped': skipped++; break;
+          case 'passed':
+            passed++
+            break
+          case 'failed':
+            failed++
+            break
+          case 'skipped':
+            skipped++
+            break
         }
       }
     }
@@ -1010,28 +1022,46 @@ export class TestSuiteManager {
       passed,
       failed,
       skipped,
-      passRate: total > 0 ? (passed / total) * 100 : 0
-    };
+      passRate: total > 0 ? (passed / total) * 100 : 0,
+    }
   }
 
   // Placeholder methods for browser interaction
-  private async getElementValue(target?: string): Promise<any> { return null; }
-  private async getElementText(target?: string): Promise<string> { return ''; }
-  private async elementExists(target?: string): Promise<boolean> { return false; }
-  private async isElementVisible(target?: string): Promise<boolean> { return false; }
-  private async getElementCount(target?: string): Promise<number> { return 0; }
-  private async getPerformanceMetric(metric: string): Promise<number> { return 0; }
-  private async checkSecurityRequirement(requirement: string): Promise<boolean> { return true; }
-  private async takeScreenshot(name: string): Promise<string> { return ''; }
+  private async getElementValue(target?: string): Promise<any> {
+    return null
+  }
+  private async getElementText(target?: string): Promise<string> {
+    return ''
+  }
+  private async elementExists(target?: string): Promise<boolean> {
+    return false
+  }
+  private async isElementVisible(target?: string): Promise<boolean> {
+    return false
+  }
+  private async getElementCount(target?: string): Promise<number> {
+    return 0
+  }
+  private async getPerformanceMetric(metric: string): Promise<number> {
+    return 0
+  }
+  private async checkSecurityRequirement(requirement: string): Promise<boolean> {
+    return true
+  }
+  private async takeScreenshot(name: string): Promise<string> {
+    return ''
+  }
   private async mockApiEndpoint(endpoint: string, response: any): Promise<void> {}
   private async triggerDOMEvent(target: string, eventType: string): Promise<void> {}
-  private async collectPerformanceMetrics(): Promise<PerformanceMetrics> { return this.metrics; }
-  private async collectCoverage(): Promise<CoverageReport> { 
-    return { statements: 0, branches: 0, functions: 0, lines: 0, files: [] }; 
+  private async collectPerformanceMetrics(): Promise<PerformanceMetrics> {
+    return this.metrics
+  }
+  private async collectCoverage(): Promise<CoverageReport> {
+    return { statements: 0, branches: 0, functions: 0, lines: 0, files: [] }
   }
 
   private generateId(): string {
-    return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   }
 
   /**
@@ -1039,28 +1069,28 @@ export class TestSuiteManager {
    */
   public addEventListener(event: string, callback: Function): void {
     if (!this.eventListeners.has(event)) {
-      this.eventListeners.set(event, new Set());
+      this.eventListeners.set(event, new Set())
     }
-    this.eventListeners.get(event)!.add(callback);
+    this.eventListeners.get(event)!.add(callback)
   }
 
   public removeEventListener(event: string, callback: Function): void {
-    const listeners = this.eventListeners.get(event);
+    const listeners = this.eventListeners.get(event)
     if (listeners) {
-      listeners.delete(callback);
+      listeners.delete(callback)
     }
   }
 
   private emit(event: string, data?: any): void {
-    const listeners = this.eventListeners.get(event);
+    const listeners = this.eventListeners.get(event)
     if (listeners) {
-      listeners.forEach(callback => {
+      listeners.forEach((callback) => {
         try {
-          callback(data);
+          callback(data)
         } catch (error) {
-          console.error(`Error in test event listener for ${event}:`, error);
+          console.error(`Error in test event listener for ${event}:`, error)
         }
-      });
+      })
     }
   }
 
@@ -1068,15 +1098,15 @@ export class TestSuiteManager {
    * Public API methods
    */
   public getResults(): Map<string, TestResult[]> {
-    return new Map(this.results);
+    return new Map(this.results)
   }
 
   public getSuites(): TestSuite[] {
-    return Array.from(this.suites.values());
+    return Array.from(this.suites.values())
   }
 
   public isTestRunning(): boolean {
-    return this.isRunning;
+    return this.isRunning
   }
 
   /**
@@ -1084,18 +1114,18 @@ export class TestSuiteManager {
    */
   public async destroy(): Promise<void> {
     if (this.browser) {
-      await this.browser.close();
+      await this.browser.close()
     }
 
     if (this.performanceObserver) {
-      this.performanceObserver.disconnect();
+      this.performanceObserver.disconnect()
     }
 
-    this.eventListeners.clear();
-    this.suites.clear();
-    this.results.clear();
-    this.mocks.clear();
+    this.eventListeners.clear()
+    this.suites.clear()
+    this.results.clear()
+    this.mocks.clear()
   }
 }
 
-export default TestSuiteManager;
+export default TestSuiteManager

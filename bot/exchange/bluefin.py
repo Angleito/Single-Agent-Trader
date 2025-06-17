@@ -148,7 +148,8 @@ class BluefinClient(BaseExchange):
         # Use service client instead of direct SDK
         # Connect to the Bluefin SDK service container
         service_url = os.getenv("BLUEFIN_SERVICE_URL", "http://bluefin-service:8080")
-        self._service_client = BluefinServiceClient(service_url)
+        api_key = os.getenv("BLUEFIN_SERVICE_API_KEY")
+        self._service_client = BluefinServiceClient(service_url, api_key)
         
         # Rate limiting
         self._rate_limiter = BluefinRateLimiter(
@@ -615,7 +616,8 @@ class BluefinClient(BaseExchange):
                 # Parse position data
                 size = Decimal(str(pos_data.get("quantity", "0")))
                 if size != 0:
-                    side = "LONG" if size > 0 else "SHORT"
+                    # Use the side field from the service if available
+                    side = pos_data.get("side", "LONG" if size > 0 else "SHORT")
                     position = Position(
                         symbol=pos_symbol,
                         side=side,

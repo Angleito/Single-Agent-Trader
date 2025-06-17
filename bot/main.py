@@ -845,7 +845,7 @@ class TradingEngine:
 
     async def _wait_for_initial_data(self):
         """Wait for sufficient market data to begin trading."""
-        max_wait_time = 60  # Reduced to 1 minute for scalping (need to start fast)
+        max_wait_time = 180  # 3 minutes to allow for initial data collection
         wait_start = datetime.now(UTC)
         historical_data_loaded = False
         websocket_data_received = False

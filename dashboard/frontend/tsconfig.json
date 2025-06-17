@@ -17,6 +17,7 @@
 
     /* Type checking */
     "strict": false,
+    "strictNullChecks": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true,
 

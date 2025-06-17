@@ -1,119 +1,118 @@
 /**
  * LLM Monitoring Dashboard Component
- * 
+ *
  * Provides real-time monitoring of LLM completions, performance metrics,
  * cost tracking, and alert management for the AI trading bot.
  */
 
-import type { 
-  AllWebSocketMessages, 
-  LLMEventMessage, 
-  PerformanceUpdateMessage
-} from './websocket.ts';
-import { DashboardWebSocket } from './websocket.ts';
+import type {
+  LLMEventMessage,
+  PerformanceUpdateMessage,
+} from './websocket.ts'
+import { DashboardWebSocket } from './websocket.ts'
 
 // LLM Event Types
 interface LLMRequest {
-  timestamp: string;
-  request_id: string;
-  session_id: string;
-  model: string;
-  temperature: number;
-  max_tokens: number;
-  prompt_length: number;
-  market_context: Record<string, any>;
-  event_type?: string;
+  timestamp: string
+  request_id: string
+  session_id: string
+  model: string
+  temperature: number
+  max_tokens: number
+  prompt_length: number
+  market_context: Record<string, any>
+  event_type?: string
 }
 
 interface LLMResponse {
-  timestamp: string;
-  request_id: string;
-  session_id: string;
-  success: boolean;
-  response_time_ms: number;
-  cost_estimate_usd: number;
-  error?: string;
-  event_type?: string;
+  timestamp: string
+  request_id: string
+  session_id: string
+  success: boolean
+  response_time_ms: number
+  cost_estimate_usd: number
+  error?: string
+  event_type?: string
 }
 
 interface TradingDecision {
-  timestamp: string;
-  request_id: string;
-  session_id: string;
-  action: string;
-  size_pct: number;
-  rationale: string;
-  symbol: string;
-  current_price: number;
-  indicators: Record<string, number>;
-  event_type?: string;
+  timestamp: string
+  request_id: string
+  session_id: string
+  action: string
+  size_pct: number
+  rationale: string
+  symbol: string
+  current_price: number
+  indicators: Record<string, number>
+  event_type?: string
 }
 
 interface LLMAlert {
-  timestamp: string;
-  level: 'info' | 'warning' | 'critical';
-  category: string;
-  message: string;
-  details: Record<string, any>;
-  event_type?: string;
+  timestamp: string
+  level: 'info' | 'warning' | 'critical'
+  category: string
+  message: string
+  details: Record<string, any>
+  event_type?: string
 }
 
 // Base interface for all LLM events
 interface LLMEvent {
-  event_type: string;
-  timestamp: string;
-  action?: string;
+  event_type: string
+  timestamp: string
+  action?: string
 }
 
 interface LLMMetrics {
-  total_requests: number;
-  total_responses: number;
-  success_rate: number;
-  avg_response_time_ms: number;
-  total_cost_usd: number;
-  active_alerts: number;
+  total_requests: number
+  total_responses: number
+  success_rate: number
+  avg_response_time_ms: number
+  total_cost_usd: number
+  active_alerts: number
 }
 
 class LLMMonitorDashboard {
-  private container: HTMLElement;
-  private websocket: DashboardWebSocket | null = null;
-  private isConnected: boolean = false;
-  private isPaused: boolean = false;
-  private successfulResponses: number = 0;
-  private responseTimes: number[] = [];
+  private container: HTMLElement
+  private websocket: DashboardWebSocket | null = null
+  private isConnected: boolean = false
+  private isPaused: boolean = false
+  private successfulResponses: number = 0
+  private responseTimes: number[] = []
   private decisionCounts = {
     long: 0,
     short: 0,
     hold: 0,
-    close: 0
-  };
+    close: 0,
+  }
   private metrics: LLMMetrics = {
     total_requests: 0,
     total_responses: 0,
     success_rate: 0,
     avg_response_time_ms: 0,
     total_cost_usd: 0,
-    active_alerts: 0
-  };
-  private recentEvents: Array<LLMRequest | LLMResponse | TradingDecision | LLMAlert> = [];
-  private maxEvents: number = 100;
-  
+    active_alerts: 0,
+  }
+  private recentEvents: Array<LLMRequest | LLMResponse | TradingDecision | LLMAlert> = []
+  private maxEvents: number = 100
+
   constructor(containerId: string, websocketInstance?: DashboardWebSocket) {
-    const container = document.getElementById(containerId);
+    const container = document.getElementById(containerId)
     if (!container) {
-      throw new Error(`Container with ID '${containerId}' not found`);
+      throw new Error(`Container with ID '${containerId}' not found`)
     }
-    this.container = container;
-    this.websocket = websocketInstance || null;
-    this.initialize();
+    this.container = container
+    this.websocket = websocketInstance || null
+    this.initialize()
   }
 
   private initialize(): void {
-    this.createDashboardHTML();
-    this.setupWebSocketConnection();
-    this.setupEventListeners();
-    this.loadInitialData();
-    this.startPeriodicUpdates();
+    this.createDashboardHTML()
+    this.setupWebSocketConnection()
+    this.setupEventListeners()
+    this.loadInitialData()
+    this.startPeriodicUpdates()
   }
 
   private createDashboardHTML(): void {
@@ -644,53 +643,53 @@ class LLMMonitorDashboard {
           }
         }
       </style>
-    `;
+    `
   }
 
   private setupWebSocketConnection(): void {
     if (!this.websocket) {
-      console.warn('No WebSocket instance provided to LLM Monitor');
-      return;
+      console.warn('No WebSocket instance provided to LLM Monitor')
+      return
     }
 
     // Listen for connection status changes
     this.websocket.onConnectionStatusChange((status) => {
-      this.updateConnectionStatus(status === 'connected');
-    });
+      this.updateConnectionStatus(status === 'connected')
+    })
 
     // Listen for various LLM-related events
     this.websocket.on('llm_event', (message: LLMEventMessage) => {
       if (message.data) {
-        this.handleLLMEvent(message.data);
+        this.handleLLMEvent(message.data)
       }
-    });
-    
+    })
+
     // Also listen for specific event types that might come through
     this.websocket.on('llm_request', (message: any) => {
       if (message.data) {
-        this.handleLLMEvent({ ...message.data, event_type: 'llm_request' });
+        this.handleLLMEvent({ ...message.data, event_type: 'llm_request' })
       }
-    });
-    
+    })
+
     this.websocket.on('llm_response', (message: any) => {
       if (message.data) {
-        this.handleLLMEvent({ ...message.data, event_type: 'llm_response' });
+        this.handleLLMEvent({ ...message.data, event_type: 'llm_response' })
       }
-    });
-    
+    })
+
     this.websocket.on('trading_decision', (message: any) => {
       if (message.data) {
-        this.handleLLMEvent({ ...message.data, event_type: 'trading_decision' });
+        this.handleLLMEvent({ ...message.data, event_type: 'trading_decision' })
       }
-    });
-    
+    })
+
     this.websocket.on('llm_decision', (message: any) => {
       // Backend sends trading_decision events as llm_decision
       if (message.data) {
-        this.handleLLMEvent(message.data);
+        this.handleLLMEvent(message.data)
       }
-    });
-    
+    })
+
     this.websocket.on('ai_decision', (message: any) => {
       // Map ai_decision to trading_decision for consistency
       if (message.data) {
@@ -698,56 +697,56 @@ class LLMMonitorDashboard {
           ...message.data,
           event_type: 'trading_decision',
           rationale: message.data.reasoning,
-          timestamp: message.data.timestamp || new Date().toISOString()
-        });
+          timestamp: message.data.timestamp || new Date().toISOString(),
+        })
       }
-    });
+    })
 
     // Listen for performance updates
     this.websocket.on('performance_update', (message: PerformanceUpdateMessage) => {
       if (message.data) {
-        this.updateMetrics(message.data);
+        this.updateMetrics(message.data)
       }
-    });
+    })
 
     // Connect if not already connected
     if (!this.websocket.isConnected()) {
-      this.websocket.connect();
+      this.websocket.connect()
     }
   }
 
   private setupEventListeners(): void {
     // Pause/resume feed
-    const pauseBtn = document.getElementById('pause-feed');
+    const pauseBtn = document.getElementById('pause-feed')
     pauseBtn?.addEventListener('click', () => {
-      this.isPaused = !this.isPaused;
-      pauseBtn.textContent = this.isPaused ? 'Resume' : 'Pause';
-    });
+      this.isPaused = !this.isPaused
+      pauseBtn.textContent = this.isPaused ? 'Resume' : 'Pause'
+    })
 
     // Clear feed
     document.getElementById('clear-feed')?.addEventListener('click', () => {
-      this.clearActivityFeed();
-    });
+      this.clearActivityFeed()
+    })
 
     // Event filter
     document.getElementById('event-filter')?.addEventListener('change', (e) => {
-      const target = e.target as HTMLSelectElement;
-      this.filterEvents(target.value);
-    });
+      const target = e.target as HTMLSelectElement
+      this.filterEvents(target.value)
+    })
   }
 
   private updateConnectionStatus(connected: boolean): void {
-    this.isConnected = connected;
-    const statusIndicator = document.querySelector('.status-indicator');
-    const statusText = document.querySelector('.status-text');
-    
+    this.isConnected = connected
+    const statusIndicator = document.querySelector('.status-indicator')
+    const statusText = document.querySelector('.status-text')
+
     if (statusIndicator && statusText) {
       if (connected) {
-        statusIndicator.classList.add('connected');
-        statusText.textContent = 'Connected';
+        statusIndicator.classList.add('connected')
+        statusText.textContent = 'Connected'
       } else {
-        statusIndicator.classList.remove('connected');
-        statusText.textContent = 'Disconnected';
+        statusIndicator.classList.remove('connected')
+        statusText.textContent = 'Disconnected'
       }
     }
   }
@@ -755,53 +754,53 @@ class LLMMonitorDashboard {
   private handleLLMEvent(eventData: any): void {
     // Ensure we have a timestamp
     if (!eventData.timestamp) {
-      eventData.timestamp = new Date().toISOString();
+      eventData.timestamp = new Date().toISOString()
     }
-    
+
     // Add to recent events
-    this.recentEvents.unshift(eventData);
+    this.recentEvents.unshift(eventData)
     if (this.recentEvents.length > this.maxEvents) {
-      this.recentEvents.pop();
+      this.recentEvents.pop()
     }
 
     // Update activity feed if not paused
     if (!this.isPaused) {
-      this.addToActivityFeed(eventData);
+      this.addToActivityFeed(eventData)
     }
 
     // Handle specific event types
     switch (eventData.event_type) {
       case 'llm_request':
-        this.handleRequest(eventData);
-        break;
+        this.handleRequest(eventData)
+        break
       case 'llm_response':
-        this.handleResponse(eventData);
-        break;
+        this.handleResponse(eventData)
+        break
       case 'trading_decision':
-        this.handleDecision(eventData);
-        break;
+        this.handleDecision(eventData)
+        break
       case 'alert':
-        this.handleAlert(eventData);
-        break;
+        this.handleAlert(eventData)
+        break
     }
   }
 
   private addToActivityFeed(eventData: any): void {
-    const feed = document.getElementById('activity-feed');
-    if (!feed) return;
+    const feed = document.getElementById('activity-feed')
+    if (!feed) return
 
     // Remove loading state if present
-    const loadingState = document.getElementById('feed-loading');
+    const loadingState = document.getElementById('feed-loading')
     if (loadingState) {
-      loadingState.remove();
+      loadingState.remove()
     }
 
-    const item = document.createElement('div');
-    item.className = `activity-item ${eventData.event_type}`;
-    
-    const timestamp = new Date(eventData.timestamp).toLocaleTimeString();
-    const typeLabel = eventData.event_type.replace(/_/g, ' ').toUpperCase();
-    
+    const item = document.createElement('div')
+    item.className = `activity-item ${eventData.event_type}`
+
+    const timestamp = new Date(eventData.timestamp).toLocaleTimeString()
+    const typeLabel = eventData.event_type.replace(/_/g, ' ').toUpperCase()
+
     let content = `
       <div class="activity-header">
         <div class="activity-meta">
@@ -810,8 +809,8 @@ class LLMMonitorDashboard {
         </div>
       </div>
       <div class="activity-content">
-    `;
-    
+    `
+
     switch (eventData.event_type) {
       case 'llm_request':
         content += `
@@ -822,17 +821,21 @@ class LLMMonitorDashboard {
             <div class="activity-detail">
               <strong>Tokens:</strong> ${eventData.prompt_tokens || eventData.prompt_length || 'N/A'}
             </div>
-            ${eventData.temperature !== undefined ? `
+            ${
+              eventData.temperature !== undefined
+                ? `
               <div class="activity-detail">
                 <strong>Temperature:</strong> ${eventData.temperature}
               </div>
-            ` : ''}
+            `
+                : ''
+            }
           </div>
-        `;
-        break;
-        
-      case 'llm_response':
-        const statusClass = eventData.success ? 'success' : 'failed';
+        `
+        break
+
+      case 'llm_response': {
+        const statusClass = eventData.success ? 'success' : 'failed'
         content += `
           <div class="activity-details">
             <div class="activity-detail">
@@ -841,51 +844,77 @@ class LLMMonitorDashboard {
             <div class="activity-detail">
               <strong>Response Time:</strong> ${eventData.response_time_ms}ms
             </div>
-            ${eventData.cost_estimate_usd !== undefined ? `
+            ${
+              eventData.cost_estimate_usd !== undefined
+                ? `
               <div class="activity-detail">
                 <strong>Cost:</strong> $${eventData.cost_estimate_usd.toFixed(4)}
               </div>
-            ` : ''}
-            ${eventData.total_tokens ? `
+            `
+                : ''
+            }
+            ${
+              eventData.total_tokens
+                ? `
               <div class="activity-detail">
                 <strong>Total Tokens:</strong> ${eventData.total_tokens}
               </div>
-            ` : ''}
+            `
+                : ''
+            }
           </div>
-          ${eventData.error ? `
+          ${
+            eventData.error
+              ? `
             <div class="activity-error">
               <strong>Error:</strong> ${eventData.error}
             </div>
-          ` : ''}
-        `;
-        break;
-        
-      case 'trading_decision':
-        const actionClass = this.getActionClass(eventData.action);
+          `
+              : ''
+          }
+        `
+        break
+      }
+
+      case 'trading_decision': {
+        const actionClass = this.getActionClass(eventData.action)
         content += `
           <div class="activity-details">
             <div class="activity-detail">
               <strong>Action:</strong> <span class="action ${actionClass}">${eventData.action?.toUpperCase() || 'N/A'}</span>
             </div>
-            ${eventData.confidence !== undefined ? `
+            ${
+              eventData.confidence !== undefined
+                ? `
               <div class="activity-detail">
                 <strong>Confidence:</strong> ${(eventData.confidence * 100).toFixed(1)}%
               </div>
-            ` : ''}
-            ${eventData.price || eventData.current_price ? `
+            `
+                : ''
+            }
+            ${
+              eventData.price || eventData.current_price
+                ? `
               <div class="activity-detail">
                 <strong>Price:</strong> $${(eventData.price || eventData.current_price).toFixed(2)}
               </div>
-            ` : ''}
+            `
+                : ''
+            }
           </div>
-          ${eventData.reasoning || eventData.rationale ? `
+          ${
+            eventData.reasoning || eventData.rationale
+              ? `
             <div class="activity-reasoning">
               <strong>Reasoning:</strong> ${eventData.reasoning || eventData.rationale}
             </div>
-          ` : ''}
-        `;
-        break;
-        
+          `
+              : ''
+          }
+        `
+        break
+      }
+
       case 'alert':
         content += `
           <div class="activity-details">
@@ -899,234 +928,254 @@ class LLMMonitorDashboard {
           <div class="alert-message">
             ${eventData.alert_message}
           </div>
-        `;
-        break;
+        `
+        break
     }
-    
-    content += '</div>';
-    item.innerHTML = content;
-    
+
+    content += '</div>'
+    item.innerHTML = content
+
     // Insert at top
-    feed.insertBefore(item, feed.firstChild);
-    
+    feed.insertBefore(item, feed.firstChild)
+
     // Remove old items if too many
     while (feed.children.length > 100) {
-      feed.removeChild(feed.lastChild!);
+      feed.removeChild(feed.lastChild!)
     }
   }
 
   private getActionClass(action: string): string {
-    const actionLower = action?.toLowerCase();
-    if (actionLower === 'buy' || actionLower === 'long') return 'action-buy';
-    if (actionLower === 'sell' || actionLower === 'short') return 'action-sell';
-    if (actionLower === 'hold') return 'action-hold';
-    if (actionLower === 'close') return 'action-close';
-    return '';
+    const actionLower = action?.toLowerCase()
+    if (actionLower === 'buy' || actionLower === 'long') return 'action-buy'
+    if (actionLower === 'sell' || actionLower === 'short') return 'action-sell'
+    if (actionLower === 'hold') return 'action-hold'
+    if (actionLower === 'close') return 'action-close'
+    return ''
   }
 
-  private handleRequest(data: any): void {
-    this.metrics.total_requests++;
-    this.updateMetricsDisplay();
+  private handleRequest(_data: any): void {
+    this.metrics.total_requests++
+    this.updateMetricsDisplay()
   }
 
   private handleResponse(data: any): void {
-    this.metrics.total_responses++;
-    
+    this.metrics.total_responses++
+
     // Track success
     if (data.success) {
-      this.successfulResponses++;
+      this.successfulResponses++
     }
-    
+
     // Update success rate
-    this.metrics.success_rate = (this.successfulResponses / this.metrics.total_responses) * 100;
-    
+    this.metrics.success_rate = (this.successfulResponses / this.metrics.total_responses) * 100
+
     // Track response time
     if (data.response_time_ms !== undefined) {
-      this.responseTimes.push(data.response_time_ms);
+      this.responseTimes.push(data.response_time_ms)
       // Keep only last 100 response times
       if (this.responseTimes.length > 100) {
-        this.responseTimes.shift();
+        this.responseTimes.shift()
       }
       // Calculate average
-      this.metrics.avg_response_time_ms = this.responseTimes.reduce((a, b) => a + b, 0) / this.responseTimes.length;
+      this.metrics.avg_response_time_ms =
+        this.responseTimes.reduce((a, b) => a + b, 0) / this.responseTimes.length
     }
-    
+
     // Update total cost
     if (data.cost_estimate_usd) {
-      this.metrics.total_cost_usd += data.cost_estimate_usd;
+      this.metrics.total_cost_usd += data.cost_estimate_usd
     }
-    
-    this.updateMetricsDisplay();
+
+    this.updateMetricsDisplay()
   }
 
   private handleDecision(data: any): void {
     // Update decision counters
-    const action = data.action?.toLowerCase();
-    
+    const _action = data.action?.toLowerCase()
+
     // Map action to counter
     if (action === 'buy' || action === 'long') {
-      this.decisionCounts.long++;
-      document.getElementById('long-count')!.textContent = this.decisionCounts.long.toString();
+      this.decisionCounts.long++
+      document.getElementById('long-count')!.textContent = this.decisionCounts.long.toString()
     } else if (action === 'sell' || action === 'short') {
-      this.decisionCounts.short++;
-      document.getElementById('short-count')!.textContent = this.decisionCounts.short.toString();
+      this.decisionCounts.short++
+      document.getElementById('short-count')!.textContent = this.decisionCounts.short.toString()
     } else if (action === 'hold') {
-      this.decisionCounts.hold++;
-      document.getElementById('hold-count')!.textContent = this.decisionCounts.hold.toString();
+      this.decisionCounts.hold++
+      document.getElementById('hold-count')!.textContent = this.decisionCounts.hold.toString()
     } else if (action === 'close') {
-      this.decisionCounts.close++;
-      document.getElementById('close-count')!.textContent = this.decisionCounts.close.toString();
+      this.decisionCounts.close++
+      document.getElementById('close-count')!.textContent = this.decisionCounts.close.toString()
     }
-    
+
     // Add to recent decisions display
-    this.addToRecentDecisions(data);
+    this.addToRecentDecisions(data)
   }
 
   private handleAlert(data: any): void {
-    this.metrics.active_alerts++;
-    this.updateMetricsDisplay();
-    this.addToAlertsPanel(data);
+    this.metrics.active_alerts++
+    this.updateMetricsDisplay()
+    this.addToAlertsPanel(data)
   }
 
   private addToRecentDecisions(data: any): void {
-    const container = document.getElementById('recent-decisions');
-    if (!container) return;
-    
-    const actionClass = this.getActionClass(data.action);
-    const item = document.createElement('div');
-    item.className = 'decision-item';
+    const container = document.getElementById('recent-decisions')
+    if (!container) return
+
+    const actionClass = this.getActionClass(data.action)
+    const item = document.createElement('div')
+    item.className = 'decision-item'
     item.innerHTML = `
       <div class="decision-header">
         <span class="action ${actionClass}">${data.action}</span>
         <span class="timestamp">${new Date(data.timestamp).toLocaleTimeString()}</span>
       </div>
-      ${data.reasoning || data.rationale ? `
+      ${
+        data.reasoning || data.rationale
+          ? `
         <div class="decision-reasoning">
           ${data.reasoning || data.rationale}
         </div>
-      ` : ''}
+      `
+          : ''
+      }
       <div class="decision-details">
         ${data.symbol ? `<span><strong>Symbol:</strong> ${data.symbol}</span>` : ''}
         ${data.price || data.current_price ? `<span><strong>Price:</strong> $${(data.price || data.current_price).toFixed(2)}</span>` : ''}
         ${data.confidence !== undefined ? `<span><strong>Confidence:</strong> ${(data.confidence * 100).toFixed(1)}%</span>` : ''}
         ${data.leverage ? `<span><strong>Leverage:</strong> ${data.leverage}x</span>` : ''}
       </div>
-      ${data.indicators ? `
+      ${
+        data.indicators
+          ? `
         <div class="decision-indicators">
           ${Object.entries(data.indicators)
             .map(([key, value]) => `<span><strong>${key}:</strong> ${value}</span>`)
             .join('')}
         </div>
-      ` : ''}
-    `;
-    
-    container.insertBefore(item, container.firstChild);
-    
+      `
+          : ''
+      }
+    `
+
+    container.insertBefore(item, container.firstChild)
+
     // Keep only last 10 decisions
     while (container.children.length > 10) {
-      container.removeChild(container.lastChild!);
+      container.removeChild(container.lastChild!)
     }
   }
 
   private addToAlertsPanel(data: any): void {
-    const container = document.getElementById('alerts-list');
-    if (!container) return;
-    
-    const item = document.createElement('div');
-    item.className = `alert-item ${data.alert_level}`;
+    const container = document.getElementById('alerts-list')
+    if (!container) return
+
+    const item = document.createElement('div')
+    item.className = `alert-item ${data.alert_level}`
     item.innerHTML = `
       <div class="alert-time">${new Date(data.timestamp).toLocaleString()}</div>
       <div class="alert-message">${data.alert_message}</div>
       <div class="alert-category">${data.alert_category}</div>
-    `;
-    
-    container.insertBefore(item, container.firstChild);
-    
+    `
+
+    container.insertBefore(item, container.firstChild)
+
     // Keep only last 20 alerts
     while (container.children.length > 20) {
-      container.removeChild(container.lastChild!);
+      container.removeChild(container.lastChild!)
     }
   }
 
   private updateMetricsDisplay(): void {
     // Update metric values
-    const totalRequestsEl = document.getElementById('total-requests');
-    const successRateEl = document.getElementById('success-rate');
-    const avgResponseTimeEl = document.getElementById('avg-response-time');
-    const totalCostEl = document.getElementById('total-cost');
-    const activeAlertsEl = document.getElementById('active-alerts');
-    
+    const totalRequestsEl = document.getElementById('total-requests')
+    const successRateEl = document.getElementById('success-rate')
+    const avgResponseTimeEl = document.getElementById('avg-response-time')
+    const totalCostEl = document.getElementById('total-cost')
+    const activeAlertsEl = document.getElementById('active-alerts')
+
     if (totalRequestsEl) {
-      const prevValue = parseInt(totalRequestsEl.textContent || '0');
-      totalRequestsEl.textContent = this.metrics.total_requests.toString();
-      this.updateMetricChange('requests-change', this.metrics.total_requests - prevValue);
+      const prevValue = parseInt(totalRequestsEl.textContent || '0')
+      totalRequestsEl.textContent = this.metrics.total_requests.toString()
+      this.updateMetricChange('requests-change', this.metrics.total_requests - prevValue)
     }
-    
+
     if (successRateEl) {
-      const prevValue = parseFloat(successRateEl.textContent || '0');
-      successRateEl.textContent = `${this.metrics.success_rate.toFixed(1)}%`;
-      this.updateMetricChange('success-change', this.metrics.success_rate - prevValue, '%');
+      const prevValue = parseFloat(successRateEl.textContent || '0')
+      successRateEl.textContent = `${this.metrics.success_rate.toFixed(1)}%`
+      this.updateMetricChange('success-change', this.metrics.success_rate - prevValue, '%')
     }
-    
+
     if (avgResponseTimeEl) {
-      const prevValue = parseInt(avgResponseTimeEl.textContent || '0');
-      avgResponseTimeEl.textContent = `${Math.round(this.metrics.avg_response_time_ms)}ms`;
-      this.updateMetricChange('response-time-change', Math.round(this.metrics.avg_response_time_ms) - prevValue, 'ms', true);
+      const prevValue = parseInt(avgResponseTimeEl.textContent || '0')
+      avgResponseTimeEl.textContent = `${Math.round(this.metrics.avg_response_time_ms)}ms`
+      this.updateMetricChange(
+        'response-time-change',
+        Math.round(this.metrics.avg_response_time_ms) - prevValue,
+        'ms',
+        true
+      )
     }
-    
+
     if (totalCostEl) {
-      const prevValue = parseFloat(totalCostEl.textContent?.replace('$', '') || '0');
-      totalCostEl.textContent = `$${this.metrics.total_cost_usd.toFixed(4)}`;
-      this.updateMetricChange('cost-change', this.metrics.total_cost_usd - prevValue, '$');
+      const prevValue = parseFloat(totalCostEl.textContent?.replace('$', '') || '0')
+      totalCostEl.textContent = `$${this.metrics.total_cost_usd.toFixed(4)}`
+      this.updateMetricChange('cost-change', this.metrics.total_cost_usd - prevValue, '$')
     }
-    
+
     if (activeAlertsEl) {
-      const prevValue = parseInt(activeAlertsEl.textContent || '0');
-      activeAlertsEl.textContent = this.metrics.active_alerts.toString();
-      this.updateMetricChange('alerts-change', this.metrics.active_alerts - prevValue);
+      const prevValue = parseInt(activeAlertsEl.textContent || '0')
+      activeAlertsEl.textContent = this.metrics.active_alerts.toString()
+      this.updateMetricChange('alerts-change', this.metrics.active_alerts - prevValue)
     }
   }
 
-  private updateMetricChange(elementId: string, change: number, suffix: string = '', inverse: boolean = false): void {
-    const element = document.getElementById(elementId);
-    if (!element) return;
-    
+  private updateMetricChange(
+    elementId: string,
+    change: number,
+    suffix: string = '',
+    inverse: boolean = false
+  ): void {
+    const element = document.getElementById(elementId)
+    if (!element) return
+
     if (change === 0) {
-      element.textContent = '';
-      element.className = 'metric-change';
+      element.textContent = ''
+      element.className = 'metric-change'
     } else if (change > 0) {
-      element.textContent = `+${change.toFixed(suffix === '$' ? 4 : suffix === '%' ? 1 : 0)}${suffix}`;
-      element.className = inverse ? 'metric-change negative' : 'metric-change positive';
+      element.textContent = `+${change.toFixed(suffix === '$' ? 4 : suffix === '%' ? 1 : 0)}${suffix}`
+      element.className = inverse ? 'metric-change negative' : 'metric-change positive'
     } else {
-      element.textContent = `${change.toFixed(suffix === '$' ? 4 : suffix === '%' ? 1 : 0)}${suffix}`;
-      element.className = inverse ? 'metric-change positive' : 'metric-change negative';
+      element.textContent = `${change.toFixed(suffix === '$' ? 4 : suffix === '%' ? 1 : 0)}${suffix}`
+      element.className = inverse ? 'metric-change positive' : 'metric-change negative'
     }
   }
 
   private clearActivityFeed(): void {
-    const feed = document.getElementById('activity-feed');
+    const feed = document.getElementById('activity-feed')
     if (feed) {
-      feed.innerHTML = '';
+      feed.innerHTML = ''
     }
   }
 
   private filterEvents(filter: string): void {
-    const feed = document.getElementById('activity-feed');
-    if (!feed) return;
-    
-    const items = feed.children;
+    const feed = document.getElementById('activity-feed')
+    if (!feed) return
+
+    const items = feed.children
     for (let i = 0; i < items.length; i++) {
-      const item = items[i] as HTMLElement;
-      if (item.classList.contains('loading-state')) continue;
-      
+      const item = items[i] as HTMLElement
+      if (item.classList.contains('loading-state')) continue
+
       if (filter === 'all') {
-        item.style.display = 'block';
+        item.style.display = 'block'
       } else {
         // Check if the item's classes contain the filter type
-        const hasFilterType = item.classList.contains(`llm_${filter}`) || 
-                            item.classList.contains(filter) ||
-                            item.classList.contains(`trading_${filter}`);
-        item.style.display = hasFilterType ? 'block' : 'none';
+        const hasFilterType =
+          item.classList.contains(`llm_${filter}`) ||
+          item.classList.contains(filter) ||
+          item.classList.contains(`trading_${filter}`)
+        item.style.display = hasFilterType ? 'block' : 'none'
       }
     }
   }
@@ -1134,79 +1183,83 @@ class LLMMonitorDashboard {
   private async loadInitialData(): Promise<void> {
     try {
       // Show loading state
-      const loadingState = document.getElementById('feed-loading');
+      const loadingState = document.getElementById('feed-loading')
       if (loadingState) {
-        loadingState.style.display = 'flex';
+        loadingState.style.display = 'flex'
       }
-      
+
       // Load initial metrics
-      const response = await fetch('/api/llm/status');
+      const response = await fetch('/api/llm/status')
       if (response.ok) {
-        const data = await response.json();
+        const data = await response.json()
         if (data.metrics?.['24_hours']) {
-          const metrics = data.metrics['24_hours'];
+          const metrics = data.metrics['24_hours']
           this.metrics = {
             total_requests: metrics.total_requests || 0,
             total_responses: metrics.total_responses || 0,
             success_rate: (metrics.success_rate || 0) * 100,
             avg_response_time_ms: metrics.avg_response_time_ms || 0,
             total_cost_usd: metrics.total_cost_usd || 0,
-            active_alerts: data.active_alerts || 0
-          };
-          
+            active_alerts: data.active_alerts || 0,
+          }
+
           // Initialize counters for accurate tracking
-          this.successfulResponses = Math.round((metrics.total_responses || 0) * (metrics.success_rate || 0));
-          
-          this.updateMetricsDisplay();
+          this.successfulResponses = Math.round(
+            (metrics.total_responses || 0) * (metrics.success_rate || 0)
+          )
+
+          this.updateMetricsDisplay()
         }
       }
-      
+
       // Load recent activity
-      const activityResponse = await fetch('/api/llm/activity?limit=50');
+      const activityResponse = await fetch('/api/llm/activity?limit=50')
       if (activityResponse.ok) {
-        const activityData = await activityResponse.json();
-        this.recentEvents = activityData.activity || [];
-        
+        const activityData = await activityResponse.json()
+        this.recentEvents = activityData.activity || []
+
         // Process recent events to update counters
-        this.recentEvents.forEach(event => {
-          const eventWithType = event as LLMEvent;
+        this.recentEvents.forEach((event) => {
+          const eventWithType = event as LLMEvent
           if (eventWithType.event_type === 'trading_decision') {
-            const action = eventWithType.action?.toLowerCase();
-            if (action === 'buy' || action === 'long') this.decisionCounts.long++;
-            else if (action === 'sell' || action === 'short') this.decisionCounts.short++;
-            else if (action === 'hold') this.decisionCounts.hold++;
-            else if (action === 'close') this.decisionCounts.close++;
+            const _action = eventWithType.action?.toLowerCase()
+            if (action === 'buy' || action === 'long') this.decisionCounts.long++
+            else if (action === 'sell' || action === 'short') this.decisionCounts.short++
+            else if (action === 'hold') this.decisionCounts.hold++
+            else if (action === 'close') this.decisionCounts.close++
           }
-        });
-        
+        })
+
         // Update decision counters
-        document.getElementById('long-count')!.textContent = this.decisionCounts.long.toString();
-        document.getElementById('short-count')!.textContent = this.decisionCounts.short.toString();
-        document.getElementById('hold-count')!.textContent = this.decisionCounts.hold.toString();
-        document.getElementById('close-count')!.textContent = this.decisionCounts.close.toString();
-        
+        document.getElementById('long-count')!.textContent = this.decisionCounts.long.toString()
+        document.getElementById('short-count')!.textContent = this.decisionCounts.short.toString()
+        document.getElementById('hold-count')!.textContent = this.decisionCounts.hold.toString()
+        document.getElementById('close-count')!.textContent = this.decisionCounts.close.toString()
+
         // Display recent events (newest first)
-        this.recentEvents.slice().reverse().forEach(event => {
-          this.addToActivityFeed(event);
-        });
+        this.recentEvents
+          .slice()
+          .reverse()
+          .forEach((event) => {
+            this.addToActivityFeed(event)
+          })
       }
-      
+
       // Hide loading state
       if (loadingState) {
-        loadingState.style.display = 'none';
+        loadingState.style.display = 'none'
       }
-      
     } catch (error) {
-      console.error('Failed to load initial LLM data:', error);
-      
+      console.error('Failed to load initial LLM data:', error)
+
       // Hide loading state and show error
-      const loadingState = document.getElementById('feed-loading');
+      const loadingState = document.getElementById('feed-loading')
       if (loadingState) {
         loadingState.innerHTML = `
           <div class="error-state">
             <span>Failed to load activity data</span>
           </div>
-        `;
+        `
       }
     }
   }
@@ -1215,50 +1268,50 @@ class LLMMonitorDashboard {
     // Update metrics every 30 seconds
     setInterval(async () => {
       try {
-        const response = await fetch('/api/llm/metrics?time_window=1h');
+        const response = await fetch('/api/llm/metrics?time_window=1h')
         if (response.ok) {
-          const data = await response.json();
+          const data = await response.json()
           if (data.metrics) {
-            this.updateMetrics(data.metrics);
+            this.updateMetrics(data.metrics)
           }
         }
       } catch (error) {
-        console.error('Failed to update metrics:', error);
+        console.error('Failed to update metrics:', error)
       }
-    }, 30000);
-    
+    }, 30000)
+
     // Also add a visual indicator when metrics update
     setInterval(() => {
       // Animate metric values briefly
-      const metricValues = document.querySelectorAll('.metric-value');
-      metricValues.forEach(el => {
-        el.classList.add('updating');
-        setTimeout(() => el.classList.remove('updating'), 300);
-      });
-    }, 30000);
+      const metricValues = document.querySelectorAll('.metric-value')
+      metricValues.forEach((el) => {
+        el.classList.add('updating')
+        setTimeout(() => el.classList.remove('updating'), 300)
+      })
+    }, 30000)
   }
 
   private updateMetrics(metricsData: any): void {
     if (metricsData.total_requests !== undefined) {
-      this.metrics.total_requests = metricsData.total_requests;
+      this.metrics.total_requests = metricsData.total_requests
     }
     if (metricsData.total_responses !== undefined) {
-      this.metrics.total_responses = metricsData.total_responses;
+      this.metrics.total_responses = metricsData.total_responses
     }
     if (metricsData.success_rate !== undefined) {
-      this.metrics.success_rate = metricsData.success_rate * 100;
+      this.metrics.success_rate = metricsData.success_rate * 100
     }
     if (metricsData.avg_response_time_ms !== undefined) {
-      this.metrics.avg_response_time_ms = metricsData.avg_response_time_ms;
+      this.metrics.avg_response_time_ms = metricsData.avg_response_time_ms
     }
     if (metricsData.total_cost_usd !== undefined) {
-      this.metrics.total_cost_usd = metricsData.total_cost_usd;
+      this.metrics.total_cost_usd = metricsData.total_cost_usd
     }
     if (metricsData.active_alerts !== undefined) {
-      this.metrics.active_alerts = metricsData.active_alerts;
+      this.metrics.active_alerts = metricsData.active_alerts
     }
-    
-    this.updateMetricsDisplay();
+
+    this.updateMetricsDisplay()
   }
 
   // Public methods
@@ -1269,39 +1322,48 @@ class LLMMonitorDashboard {
       // Instead, we'll need to store the bound methods or use a different approach
       // For now, we'll rely on the component being destroyed completely
     }
-    
+
     // Clear the container
-    this.container.innerHTML = '';
-    this.websocket = null;
+    this.container.innerHTML = ''
+    this.websocket = null
   }
 
   public refresh(): void {
-    this.loadInitialData();
+    this.loadInitialData()
   }
 
   public exportData(): string {
-    return JSON.stringify({
-      metrics: this.metrics,
-      recentEvents: this.recentEvents,
-      timestamp: new Date().toISOString()
-    }, null, 2);
+    return JSON.stringify(
+      {
+        metrics: this.metrics,
+        recentEvents: this.recentEvents,
+        timestamp: new Date().toISOString(),
+      },
+      null,
+      2
+    )
   }
 }
 
 // Export for use in other modules
-export { LLMMonitorDashboard };
+export {
+  LLMMonitorDashboard,
 
-// Global initialization function
-(window as any).initLLMMonitor = function(containerId: string, websocketInstance?: DashboardWebSocket) {
-  return new LLMMonitorDashboard(containerId, websocketInstance);
-};
+  // Global initialization function
+}
+;(window as any).initLLMMonitor = function (
+  containerId: string,
+  websocketInstance?: DashboardWebSocket
+) {
+  return new LLMMonitorDashboard(containerId, websocketInstance)
+}
 
 // Auto-initialize if container exists
 document.addEventListener('DOMContentLoaded', () => {
-  const container = document.getElementById('llm-monitor-container');
+  const container = document.getElementById('llm-monitor-container')
   if (container) {
     // Note: Auto-initialization without WebSocket instance will show warning
     // Main app should call initLLMMonitor with websocket instance
-    new LLMMonitorDashboard('llm-monitor-container');
+    new LLMMonitorDashboard('llm-monitor-container')
   }
-});
+})

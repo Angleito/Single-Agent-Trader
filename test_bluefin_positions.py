@@ -55,11 +55,14 @@ async def test_bluefin_positions():
                 print(f"  Side: {position.side}")
                 print(f"  Size: {position.size}")
                 print(f"  Entry Price: {position.entry_price}")
-                # print(f"  Mark Price: {position.mark_price}")  # Not available on Position object
                 print(f"  Unrealized PnL: ${position.unrealized_pnl:.2f}")
                 print(f"  Realized PnL: ${position.realized_pnl:.2f}")
-                print(f"  Margin: ${position.margin:.2f}")
-                print(f"  Leverage: {position.leverage}x")
+                if position.margin_used:
+                    print(f"  Margin Used: ${position.margin_used:.2f}")
+                if position.leverage:
+                    print(f"  Leverage: {position.leverage}x")
+                if position.liquidation_price:
+                    print(f"  Liquidation Price: ${position.liquidation_price:.2f}")
         else:
             print("\nNo open positions found.")
         

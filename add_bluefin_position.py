@@ -6,6 +6,7 @@ This is useful when the bot can't connect to Bluefin service to query positions.
 
 import json
 import os
+import sys
 from datetime import datetime
 from decimal import Decimal
 
@@ -16,11 +17,45 @@ QUANTITY = Decimal("100")  # Your position size
 ENTRY_PRICE = Decimal("2.80")  # Your entry price
 TIMESTAMP = datetime.utcnow().isoformat()
 
+# Validation functions
+def validate_symbol(symbol: str) -> bool:
+    """Validate symbol format."""
+    return bool(symbol and '-' in symbol and len(symbol) > 3)
+
+def validate_side(side: str) -> bool:
+    """Validate side is either LONG or SHORT."""
+    return side in ["LONG", "SHORT"]
+
+def validate_quantity(quantity: Decimal) -> bool:
+    """Validate quantity is positive."""
+    return quantity > 0
+
+def validate_price(price: Decimal) -> bool:
+    """Validate price is positive."""
+    return price > 0
+
 # Path to position file
 POSITION_FILE = "data/positions/fifo_positions.json"
 
 def add_bluefin_position():
     """Add Bluefin position to the bot's tracking."""
+    
+    # Validate inputs
+    if not validate_symbol(SYMBOL):
+        print(f"Error: Invalid symbol format: {SYMBOL}")
+        sys.exit(1)
+    
+    if not validate_side(SIDE):
+        print(f"Error: Side must be either 'LONG' or 'SHORT', got: {SIDE}")
+        sys.exit(1)
+    
+    if not validate_quantity(QUANTITY):
+        print(f"Error: Quantity must be positive, got: {QUANTITY}")
+        sys.exit(1)
+    
+    if not validate_price(ENTRY_PRICE):
+        print(f"Error: Entry price must be positive, got: {ENTRY_PRICE}")
+        sys.exit(1)
     
     # Create directory if it doesn't exist
     os.makedirs(os.path.dirname(POSITION_FILE), exist_ok=True)

@@ -1,265 +1,270 @@
-import type { WebSocketMessage, ConnectionStatus } from './types.ts';
+import type { WebSocketMessage, ConnectionStatus } from './types.ts'
 
 // Enhanced message types based on backend specifications
 export interface TradingLoopMessage {
-  type: 'trading_loop';
+  type: 'trading_loop'
   data: {
-    price: number;
-    action: string;
-    confidence: number;
-    timestamp?: string;
-    symbol?: string;
-  };
+    price: number
+    action: string
+    confidence: number
+    timestamp?: string
+    symbol?: string
+  }
 }
 
 export interface AIDecisionMessage {
-  type: 'ai_decision';
+  type: 'ai_decision'
   data: {
-    action: string;
-    reasoning: string;
-    confidence?: number;
-    timestamp?: string;
-  };
+    action: string
+    reasoning: string
+    confidence?: number
+    timestamp?: string
+  }
 }
 
 export interface SystemStatusMessage {
-  type: 'system_status';
+  type: 'system_status'
   data: {
-    status: string;
-    health: boolean;
-    errors: string[];
-    timestamp?: string;
-  };
+    status: string
+    health: boolean
+    errors: string[]
+    timestamp?: string
+  }
 }
 
 export interface ErrorMessage {
-  type: 'error';
+  type: 'error'
   data: {
-    message: string;
-    level: string;
-    timestamp?: string;
-  };
+    message: string
+    level: string
+    timestamp?: string
+  }
 }
 
 // Specific LLM event message types
 export interface LLMRequestMessage {
-  type: 'llm_request';
+  type: 'llm_request'
   data: {
-    request_id: string;
-    timestamp: string;
-    model: string;
-    prompt_tokens?: number;
-    max_tokens?: number;
-    temperature?: number;
+    request_id: string
+    timestamp: string
+    model: string
+    prompt_tokens?: number
+    max_tokens?: number
+    temperature?: number
     context?: {
-      market_data?: any;
-      indicators?: any;
-      positions?: any;
-    };
-  };
+      market_data?: any
+      indicators?: any
+      positions?: any
+    }
+  }
 }
 
 export interface LLMResponseMessage {
-  type: 'llm_response';
+  type: 'llm_response'
   data: {
-    request_id: string;
-    timestamp: string;
-    model: string;
-    response_time_ms: number;
-    completion_tokens?: number;
-    total_tokens?: number;
-    cost_estimate_usd?: number;
-    success: boolean;
-    error?: string;
-    raw_response?: string;
-  };
+    request_id: string
+    timestamp: string
+    model: string
+    response_time_ms: number
+    completion_tokens?: number
+    total_tokens?: number
+    cost_estimate_usd?: number
+    success: boolean
+    error?: string
+    raw_response?: string
+  }
 }
 
 export interface TradingDecisionMessage {
-  type: 'trading_decision';
+  type: 'trading_decision'
   data: {
-    request_id: string;
-    timestamp: string;
-    action: 'BUY' | 'SELL' | 'HOLD';
-    confidence: number;
-    reasoning: string;
-    price: number;
-    quantity?: number;
-    leverage?: number;
+    request_id: string
+    timestamp: string
+    action: 'BUY' | 'SELL' | 'HOLD'
+    confidence: number
+    reasoning: string
+    price: number
+    quantity?: number
+    leverage?: number
     indicators?: {
-      cipher_a?: number;
-      cipher_b?: number;
-      wave_trend_1?: number;
-      wave_trend_2?: number;
-    };
+      cipher_a?: number
+      cipher_b?: number
+      wave_trend_1?: number
+      wave_trend_2?: number
+    }
     risk_analysis?: {
-      stop_loss?: number;
-      take_profit?: number;
-      risk_reward_ratio?: number;
-    };
-  };
+      stop_loss?: number
+      take_profit?: number
+      risk_reward_ratio?: number
+    }
+  }
 }
 
 export interface LLMEventMessage {
-  type: 'llm_event';
-  event_type: 'llm_request' | 'llm_response' | 'trading_decision' | 'performance_metrics' | 'alert';
-  timestamp: string;
-  source: 'llm_parser';
+  type: 'llm_event'
+  event_type: 'llm_request' | 'llm_response' | 'trading_decision' | 'performance_metrics' | 'alert'
+  timestamp: string
+  source: 'llm_parser'
   data: {
-    event_type: 'llm_request' | 'llm_response' | 'trading_decision' | 'performance_metrics' | 'alert';
-    timestamp: string;
-    session_id?: string;
-    request_id?: string;
-    model?: string;
-    response_time_ms?: number;
-    cost_estimate_usd?: number;
-    action?: string;
-    rationale?: string;
-    success?: boolean;
-    error?: string;
-    alert_level?: 'info' | 'warning' | 'critical';
-    alert_category?: string;
-    alert_message?: string;
-    [key: string]: any;
-  };
+    event_type:
+      | 'llm_request'
+      | 'llm_response'
+      | 'trading_decision'
+      | 'performance_metrics'
+      | 'alert'
+    timestamp: string
+    session_id?: string
+    request_id?: string
+    model?: string
+    response_time_ms?: number
+    cost_estimate_usd?: number
+    action?: string
+    rationale?: string
+    success?: boolean
+    error?: string
+    alert_level?: 'info' | 'warning' | 'critical'
+    alert_category?: string
+    alert_message?: string
+    [key: string]: any
+  }
 }
 
 export interface PerformanceUpdateMessage {
-  type: 'performance_update';
+  type: 'performance_update'
   data: {
-    timestamp: string;
-    avg_response_time_ms: number;
-    success_rate: number;
-    total_cost_usd: number;
-    active_alerts: number;
-    hourly_cost: number;
-  };
+    timestamp: string
+    avg_response_time_ms: number
+    success_rate: number
+    total_cost_usd: number
+    active_alerts: number
+    hourly_cost: number
+  }
 }
 
 export interface TradingViewDecisionMessage {
-  type: 'tradingview_decision';
+  type: 'tradingview_decision'
   data: {
-    symbol: string;
-    timestamp: string;
+    symbol: string
+    timestamp: string
     decision: {
-      decision: string;
-      price: number;
-      confidence: number;
-      reasoning: string;
-    };
-  };
+      decision: string
+      price: number
+      confidence: number
+      reasoning: string
+    }
+  }
 }
 
 export interface PingMessage {
-  type: 'ping';
-  timestamp: string;
+  type: 'ping'
+  timestamp: string
 }
 
 export interface PongMessage {
-  type: 'pong';
-  timestamp: string;
+  type: 'pong'
+  timestamp: string
 }
 
 // Union type for all possible messages
-export type AllWebSocketMessages = 
-  | WebSocketMessage 
-  | TradingLoopMessage 
-  | AIDecisionMessage 
-  | SystemStatusMessage 
-  | ErrorMessage 
+export type AllWebSocketMessages =
+  | WebSocketMessage
+  | TradingLoopMessage
+  | AIDecisionMessage
+  | SystemStatusMessage
+  | ErrorMessage
   | LLMRequestMessage
   | LLMResponseMessage
   | TradingDecisionMessage
   | LLMEventMessage
   | PerformanceUpdateMessage
   | TradingViewDecisionMessage
-  | PingMessage 
-  | PongMessage;
+  | PingMessage
+  | PongMessage
 
 // Event handler type
-export type MessageHandler = (message: AllWebSocketMessages) => void;
+export type MessageHandler = (message: AllWebSocketMessages) => void
 
 // WebSocket client configuration
 export interface WebSocketConfig {
-  url?: string;
-  maxReconnectAttempts?: number;
-  initialReconnectDelay?: number;
-  maxReconnectDelay?: number;
-  pingInterval?: number;
-  connectionTimeout?: number;
-  enableResilience?: boolean;
-  fallbackUrls?: string[];
-  maxMessageRetries?: number;
-  messageRetryDelay?: number;
+  url?: string
+  maxReconnectAttempts?: number
+  initialReconnectDelay?: number
+  maxReconnectDelay?: number
+  pingInterval?: number
+  connectionTimeout?: number
+  enableResilience?: boolean
+  fallbackUrls?: string[]
+  maxMessageRetries?: number
+  messageRetryDelay?: number
 }
 
 export class DashboardWebSocket {
-  private ws: WebSocket | null = null;
-  private url: string;
-  private fallbackUrls: string[] = [];
-  private currentUrlIndex = 0;
-  private reconnectAttempts = 0;
-  private maxReconnectAttempts: number;
-  private reconnectDelay: number;
-  private maxReconnectDelay: number;
-  private pingInterval: number | null = null;
-  private pingIntervalMs: number;
-  private connectionTimeout: number;
-  private isManualClose = false;
-  private connectionTimeoutId: number | null = null;
-  private messageQueue: any[] = [];
-  private maxQueueSize = 50;
-  private lastPongTime: number = Date.now();
-  private pongTimeout = 60000;
-  private enableResilience: boolean;
-  private maxMessageRetries: number;
-  private messageRetryDelay: number;
-  private retryQueue = new Map<string, { message: any; attempts: number; maxRetries: number }>();
+  private ws: WebSocket | null = null
+  private url: string
+  private fallbackUrls: string[] = []
+  private currentUrlIndex = 0
+  private reconnectAttempts = 0
+  private maxReconnectAttempts: number
+  private reconnectDelay: number
+  private maxReconnectDelay: number
+  private pingInterval: number | null = null
+  private pingIntervalMs: number
+  private connectionTimeout: number
+  private isManualClose = false
+  private connectionTimeoutId: number | null = null
+  private messageQueue: any[] = []
+  private maxQueueSize = 50
+  private lastPongTime: number = Date.now()
+  private pongTimeout = 60000
+  private enableResilience: boolean
+  private maxMessageRetries: number
+  private messageRetryDelay: number
+  private retryQueue = new Map<string, { message: any; attempts: number; maxRetries: number }>()
 
   // Event system for message type routing
-  private eventHandlers = new Map<string, Set<MessageHandler>>();
-  
+  private eventHandlers = new Map<string, Set<MessageHandler>>()
+
   // Connection status callbacks
-  private connectionStatusCallbacks = new Set<(status: ConnectionStatus) => void>();
-  private errorCallbacks = new Set<(error: Event | Error) => void>();
+  private connectionStatusCallbacks = new Set<(status: ConnectionStatus) => void>()
+  private errorCallbacks = new Set<(error: Event | Error) => void>()
 
   // Memory management
-  private readonly MAX_EVENT_HANDLERS = 20;
-  private readonly MAX_STATUS_CALLBACKS = 10;
-  private readonly MAX_ERROR_CALLBACKS = 10;
-  private cleanupTimer: number | null = null;
-  private readonly CLEANUP_INTERVAL = 30000; // 30 seconds
+  private readonly MAX_EVENT_HANDLERS = 20
+  private readonly MAX_STATUS_CALLBACKS = 10
+  private readonly MAX_ERROR_CALLBACKS = 10
+  private cleanupTimer: number | null = null
+  private readonly CLEANUP_INTERVAL = 30000 // 30 seconds
 
   // Message throttling for performance
-  private messageThrottle = new Map<string, number>();
-  private readonly MESSAGE_THROTTLE_MS = 50; // 50ms between same message types
+  private messageThrottle = new Map<string, number>()
+  private readonly MESSAGE_THROTTLE_MS = 50 // 50ms between same message types
 
   constructor(url?: string, config: WebSocketConfig = {}) {
     // Use dynamic URL detection if no URL provided
     if (!url && !config.url) {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      url = `${protocol}//${window.location.host}/ws`;
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      url = `${protocol}//${window.location.host}/ws`
     }
-    
+
     // Set the URL with proper validation
-    let finalUrl = config.url || url || this.getDefaultWebSocketUrl();
-    
+    let finalUrl = config.url || url || this.getDefaultWebSocketUrl()
+
     // Validate and clean up the URL
-    finalUrl = this.validateAndCleanUrl(finalUrl);
-    
-    this.url = finalUrl;
-    this.fallbackUrls = config.fallbackUrls || [];
-    this.maxReconnectAttempts = config.maxReconnectAttempts || 5;
-    this.reconnectDelay = config.initialReconnectDelay || 1000;
-    this.maxReconnectDelay = config.maxReconnectDelay || 30000;
-    this.pingIntervalMs = config.pingInterval || 30000;
-    this.connectionTimeout = config.connectionTimeout || 10000;
-    this.enableResilience = config.enableResilience !== false;
-    this.maxMessageRetries = config.maxMessageRetries || 3;
-    this.messageRetryDelay = config.messageRetryDelay || 1000;
-    
+    finalUrl = this.validateAndCleanUrl(finalUrl)
+
+    this.url = finalUrl
+    this.fallbackUrls = config.fallbackUrls || []
+    this.maxReconnectAttempts = config.maxReconnectAttempts || 5
+    this.reconnectDelay = config.initialReconnectDelay || 1000
+    this.maxReconnectDelay = config.maxReconnectDelay || 30000
+    this.pingIntervalMs = config.pingInterval || 30000
+    this.connectionTimeout = config.connectionTimeout || 10000
+    this.enableResilience = config.enableResilience !== false
+    this.maxMessageRetries = config.maxMessageRetries || 3
+    this.messageRetryDelay = config.messageRetryDelay || 1000
+
     // Start memory cleanup
-    this.startMemoryCleanup();
+    this.startMemoryCleanup()
   }
 
   /**
@@ -267,8 +272,8 @@ export class DashboardWebSocket {
    */
   private startMemoryCleanup(): void {
     this.cleanupTimer = window.setInterval(() => {
-      this.performMemoryCleanup();
-    }, this.CLEANUP_INTERVAL);
+      this.performMemoryCleanup()
+    }, this.CLEANUP_INTERVAL)
   }
 
   /**
@@ -277,41 +282,42 @@ export class DashboardWebSocket {
   private performMemoryCleanup(): void {
     // Clean up message queue
     if (this.messageQueue.length > this.maxQueueSize) {
-      this.messageQueue = this.messageQueue.slice(-this.maxQueueSize);
+      this.messageQueue = this.messageQueue.slice(-this.maxQueueSize)
     }
 
     // Clean up event handlers if too many
     if (this.eventHandlers.size > this.MAX_EVENT_HANDLERS) {
       // Keep only the most recently used handlers
-      const entries = Array.from(this.eventHandlers.entries());
-      const recentEntries = entries.slice(-this.MAX_EVENT_HANDLERS);
-      this.eventHandlers = new Map(recentEntries);
+      const entries = Array.from(this.eventHandlers.entries())
+      const recentEntries = entries.slice(-this.MAX_EVENT_HANDLERS)
+      this.eventHandlers = new Map(recentEntries)
     }
 
     // Clean up status callbacks
     if (this.connectionStatusCallbacks.size > this.MAX_STATUS_CALLBACKS) {
-      const callbacks = Array.from(this.connectionStatusCallbacks);
-      this.connectionStatusCallbacks = new Set(callbacks.slice(-this.MAX_STATUS_CALLBACKS));
+      const callbacks = Array.from(this.connectionStatusCallbacks)
+      this.connectionStatusCallbacks = new Set(callbacks.slice(-this.MAX_STATUS_CALLBACKS))
     }
 
     // Clean up error callbacks
     if (this.errorCallbacks.size > this.MAX_ERROR_CALLBACKS) {
-      const callbacks = Array.from(this.errorCallbacks);
-      this.errorCallbacks = new Set(callbacks.slice(-this.MAX_ERROR_CALLBACKS));
+      const callbacks = Array.from(this.errorCallbacks)
+      this.errorCallbacks = new Set(callbacks.slice(-this.MAX_ERROR_CALLBACKS))
     }
 
     // Clean up old message throttle entries
-    const now = Date.now();
+    const now = Date.now()
     for (const [key, timestamp] of this.messageThrottle.entries()) {
-      if (now - timestamp > 10000) { // Remove entries older than 10 seconds
-        this.messageThrottle.delete(key);
+      if (now - timestamp > 10000) {
+        // Remove entries older than 10 seconds
+        this.messageThrottle.delete(key)
       }
     }
 
     // Clean up old retry queue entries
     for (const [messageId, queued] of this.retryQueue.entries()) {
       if (queued.attempts >= queued.maxRetries) {
-        this.retryQueue.delete(messageId);
+        this.retryQueue.delete(messageId)
       }
     }
   }
@@ -320,31 +326,31 @@ export class DashboardWebSocket {
    * Check if message should be throttled
    */
   private shouldThrottleMessage(messageType: string): boolean {
-    const now = Date.now();
-    const lastTime = this.messageThrottle.get(messageType);
-    
+    const now = Date.now()
+    const lastTime = this.messageThrottle.get(messageType)
+
     if (lastTime && now - lastTime < this.MESSAGE_THROTTLE_MS) {
-      return true; // Throttle this message
+      return true // Throttle this message
     }
-    
-    this.messageThrottle.set(messageType, now);
-    return false;
+
+    this.messageThrottle.set(messageType, now)
+    return false
   }
 
   /**
    * Get default WebSocket URL based on current environment
    */
   private getDefaultWebSocketUrl(): string {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.host
+
     // In development mode, use the current host (Vite will proxy)
     if (host.includes('localhost') || host.includes('127.0.0.1')) {
-      return `${protocol}//${host}/ws`;
+      return `${protocol}//${host}/ws`
     }
-    
+
     // In production, use current host
-    return `${protocol}//${host}/ws`;
+    return `${protocol}//${host}/ws`
   }
 
   /**
@@ -354,32 +360,31 @@ export class DashboardWebSocket {
     try {
       // Handle relative paths
       if (url.startsWith('/')) {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const host = window.location.host;
-        url = `${protocol}//${host}${url}`;
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+        const host = window.location.host
+        url = `${protocol}//${host}${url}`
       }
-      
+
       // Ensure URL starts with ws:// or wss://
       if (!url.startsWith('ws://') && !url.startsWith('wss://')) {
-        throw new Error(`Invalid WebSocket URL protocol: ${url}`);
+        throw new Error(`Invalid WebSocket URL protocol: ${url}`)
       }
-      
+
       // Parse URL to validate format
-      const urlObj = new URL(url);
-      
+      const urlObj = new URL(url)
+
       // Ensure path exists (default to /ws if only host provided)
       if (!urlObj.pathname || urlObj.pathname === '/') {
-        urlObj.pathname = '/ws';
+        urlObj.pathname = '/ws'
       }
-      
-      const cleanUrl = urlObj.toString();
-      return cleanUrl;
-      
+
+      const cleanUrl = urlObj.toString()
+      return cleanUrl
     } catch (error) {
-      console.error('WebSocket URL validation failed:', error);
+      console.error('WebSocket URL validation failed:', error)
       // Fallback to default URL
-      const fallbackUrl = this.getDefaultWebSocketUrl();
-      return fallbackUrl;
+      const fallbackUrl = this.getDefaultWebSocketUrl()
+      return fallbackUrl
     }
   }
 
@@ -388,59 +393,60 @@ export class DashboardWebSocket {
    */
   public connect(): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      return;
+      return
     }
 
-    this.isManualClose = false;
-    this.notifyConnectionStatus('connecting');
+    this.isManualClose = false
+    this.notifyConnectionStatus('connecting')
 
     // Debug logging (reduced verbosity)
-    const isDebugMode = (import.meta.env.VITE_DEBUG === 'true') || (import.meta.env.VITE_LOG_LEVEL === 'debug');
+    const isDebugMode =
+      import.meta.env.VITE_DEBUG === 'true' || import.meta.env.VITE_LOG_LEVEL === 'debug'
     if (isDebugMode) {
     }
 
     try {
       // Check if WebSocket is available
       if (typeof WebSocket === 'undefined') {
-        throw new Error('WebSocket not available in this environment');
+        throw new Error('WebSocket not available in this environment')
       }
 
       // Additional checks for WebSocket availability
       if (!window.WebSocket && !(window as any).MozWebSocket) {
-        throw new Error('WebSocket not supported by this browser');
+        throw new Error('WebSocket not supported by this browser')
       }
 
       // Check if we're in a secure context if needed
-      const isSecure = this.url.startsWith('wss://');
+      const isSecure = this.url.startsWith('wss://')
       if (isSecure && !window.isSecureContext) {
       }
 
-      this.ws = new WebSocket(this.url);
+      this.ws = new WebSocket(this.url)
       if (isDebugMode) {
       }
-      
-      this.setupEventListeners();
-      this.setupConnectionTimeout();
+
+      this.setupEventListeners()
+      this.setupConnectionTimeout()
     } catch (error) {
       // More concise error logging
-      const errorMessage = error instanceof Error ? error.message : 'Unknown WebSocket error';
-      console.error('WebSocket connection failed:', errorMessage);
-      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown WebSocket error'
+      console.error('WebSocket connection failed:', errorMessage)
+
       // Provide user-friendly error messages
-      let userErrorMessage = 'Failed to create WebSocket connection';
+      let userErrorMessage = 'Failed to create WebSocket connection'
       if (error instanceof Error) {
         if (error.message.includes('not available')) {
-          userErrorMessage = 'WebSocket not available - browser may not support WebSockets';
+          userErrorMessage = 'WebSocket not available - browser may not support WebSockets'
         } else if (error.message.includes('not supported')) {
-          userErrorMessage = 'WebSocket not supported by this browser';
+          userErrorMessage = 'WebSocket not supported by this browser'
         } else {
-          userErrorMessage = error.message;
+          userErrorMessage = error.message
         }
       }
-      
-      this.notifyError(new Error(userErrorMessage));
-      this.notifyConnectionStatus('error');
-      this.scheduleReconnect();
+
+      this.notifyError(new Error(userErrorMessage))
+      this.notifyConnectionStatus('error')
+      this.scheduleReconnect()
     }
   }
 
@@ -448,16 +454,16 @@ export class DashboardWebSocket {
    * Disconnect from the WebSocket server
    */
   public disconnect(): void {
-    this.isManualClose = true;
-    this.clearPingInterval();
-    this.clearConnectionTimeout();
-    
+    this.isManualClose = true
+    this.clearPingInterval()
+    this.clearConnectionTimeout()
+
     if (this.ws) {
-      this.ws.close(1000, 'Manual disconnect');
-      this.ws = null;
+      this.ws.close(1000, 'Manual disconnect')
+      this.ws = null
     }
-    
-    this.notifyConnectionStatus('disconnected');
+
+    this.notifyConnectionStatus('disconnected')
   }
 
   /**
@@ -466,46 +472,49 @@ export class DashboardWebSocket {
   public send(message: any, queueIfDisconnected = true): boolean {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       try {
-        const jsonMessage = JSON.stringify(message);
-        this.ws.send(jsonMessage);
-        
-        const isDebugMode = (import.meta.env.VITE_DEBUG === 'true') || (import.meta.env.VITE_LOG_LEVEL === 'debug');
+        const jsonMessage = JSON.stringify(message)
+        this.ws.send(jsonMessage)
+
+        const isDebugMode =
+          import.meta.env.VITE_DEBUG === 'true' || import.meta.env.VITE_LOG_LEVEL === 'debug'
         if (isDebugMode) {
-          console.log('Message sent:', message.type);
+          console.log('Message sent:', message.type)
         }
-        return true;
+        return true
       } catch (error) {
-        console.error('Failed to send WebSocket message:', error);
-        
+        console.error('Failed to send WebSocket message:', error)
+
         // Retry critical messages if resilience is enabled
         if (this.enableResilience && this.isCriticalMessage(message)) {
-          this.queueForRetry(message);
+          this.queueForRetry(message)
         }
-        
-        this.notifyError(error instanceof Error ? error : new Error('Failed to send message'));
-        return false;
+
+        this.notifyError(error instanceof Error ? error : new Error('Failed to send message'))
+        return false
       }
     }
-    
+
     // Queue message if disconnected and queueing is enabled
     if (queueIfDisconnected && !this.isManualClose) {
       if (this.messageQueue.length < this.maxQueueSize) {
-        this.messageQueue.push(message);
-        const isDebugMode = (import.meta.env.VITE_DEBUG === 'true') || (import.meta.env.VITE_LOG_LEVEL === 'debug');
+        this.messageQueue.push(message)
+        const isDebugMode =
+          import.meta.env.VITE_DEBUG === 'true' || import.meta.env.VITE_LOG_LEVEL === 'debug'
         if (isDebugMode) {
-          console.log('Message queued:', message.type);
+          console.log('Message queued:', message.type)
         }
-        return true;
+        return true
       } else {
-        console.warn('WebSocket message queue is full, dropping message');
+        console.warn('WebSocket message queue is full, dropping message')
       }
     }
-    
-    const isDebugMode = (import.meta.env.VITE_DEBUG === 'true') || (import.meta.env.VITE_LOG_LEVEL === 'debug');
+
+    const isDebugMode =
+      import.meta.env.VITE_DEBUG === 'true' || import.meta.env.VITE_LOG_LEVEL === 'debug'
     if (isDebugMode) {
-      console.warn('WebSocket not connected, cannot send message');
+      console.warn('WebSocket not connected, cannot send message')
     }
-    return false;
+    return false
   }
 
   /**
@@ -513,20 +522,20 @@ export class DashboardWebSocket {
    */
   public on(messageType: string, handler: MessageHandler): void {
     if (!this.eventHandlers.has(messageType)) {
-      this.eventHandlers.set(messageType, new Set());
+      this.eventHandlers.set(messageType, new Set())
     }
-    this.eventHandlers.get(messageType)!.add(handler);
+    this.eventHandlers.get(messageType)!.add(handler)
   }
 
   /**
    * Unsubscribe from specific message types
    */
   public off(messageType: string, handler: MessageHandler): void {
-    const handlers = this.eventHandlers.get(messageType);
+    const handlers = this.eventHandlers.get(messageType)
     if (handlers) {
-      handlers.delete(handler);
+      handlers.delete(handler)
       if (handlers.size === 0) {
-        this.eventHandlers.delete(messageType);
+        this.eventHandlers.delete(messageType)
       }
     }
   }
@@ -535,52 +544,52 @@ export class DashboardWebSocket {
    * Subscribe to connection status changes
    */
   public onConnectionStatusChange(callback: (status: ConnectionStatus) => void): void {
-    this.connectionStatusCallbacks.add(callback);
+    this.connectionStatusCallbacks.add(callback)
   }
 
   /**
    * Unsubscribe from connection status changes
    */
   public offConnectionStatusChange(callback: (status: ConnectionStatus) => void): void {
-    this.connectionStatusCallbacks.delete(callback);
+    this.connectionStatusCallbacks.delete(callback)
   }
 
   /**
    * Subscribe to errors
    */
   public onError(callback: (error: Event | Error) => void): void {
-    this.errorCallbacks.add(callback);
+    this.errorCallbacks.add(callback)
   }
 
   /**
    * Unsubscribe from errors
    */
   public offError(callback: (error: Event | Error) => void): void {
-    this.errorCallbacks.delete(callback);
+    this.errorCallbacks.delete(callback)
   }
 
   /**
    * Check if client is connected
    */
   public isConnected(): boolean {
-    return this.ws !== null && this.ws.readyState === WebSocket.OPEN;
+    return this.ws !== null && this.ws.readyState === WebSocket.OPEN
   }
 
   /**
    * Get current connection status
    */
   public getConnectionStatus(): ConnectionStatus {
-    if (!this.ws) return 'disconnected';
-    
+    if (!this.ws) return 'disconnected'
+
     switch (this.ws.readyState) {
       case WebSocket.CONNECTING:
-        return 'connecting';
+        return 'connecting'
       case WebSocket.OPEN:
-        return 'connected';
+        return 'connected'
       case WebSocket.CLOSING:
       case WebSocket.CLOSED:
       default:
-        return 'disconnected';
+        return 'disconnected'
     }
   }
 
@@ -591,136 +600,148 @@ export class DashboardWebSocket {
     return {
       attempts: this.reconnectAttempts,
       maxAttempts: this.maxReconnectAttempts,
-      nextDelay: Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts), this.maxReconnectDelay),
-      isReconnecting: this.reconnectAttempts > 0 && !this.isManualClose
-    };
+      nextDelay: Math.min(
+        this.reconnectDelay * Math.pow(2, this.reconnectAttempts),
+        this.maxReconnectDelay
+      ),
+      isReconnecting: this.reconnectAttempts > 0 && !this.isManualClose,
+    }
   }
 
   /**
    * Set up event listeners for the WebSocket
    */
   private setupEventListeners(): void {
-    if (!this.ws) return;
+    if (!this.ws) return
 
     this.ws.onopen = () => {
-      const isDebugMode = (import.meta.env.VITE_DEBUG === 'true') || (import.meta.env.VITE_LOG_LEVEL === 'debug');
+      const isDebugMode =
+        import.meta.env.VITE_DEBUG === 'true' || import.meta.env.VITE_LOG_LEVEL === 'debug'
       if (isDebugMode) {
       }
-      this.clearConnectionTimeout();
-      this.reconnectAttempts = 0;
-      this.reconnectDelay = 1000;
-      this.notifyConnectionStatus('connected');
-      this.startPingInterval();
-      
+      this.clearConnectionTimeout()
+      this.reconnectAttempts = 0
+      this.reconnectDelay = 1000
+      this.notifyConnectionStatus('connected')
+      this.startPingInterval()
+
       // Process queued messages
       if (this.messageQueue.length > 0) {
-        const queuedCount = this.messageQueue.length;
+        const _queuedCount = this.messageQueue.length
         if (isDebugMode) {
         }
-        
+
         while (this.messageQueue.length > 0) {
-          const message = this.messageQueue.shift();
-          this.send(message, false); // Don't re-queue if send fails
+          const message = this.messageQueue.shift()
+          this.send(message, false) // Don't re-queue if send fails
         }
       }
-    };
+    }
 
     this.ws.onmessage = (event) => {
       try {
         // Validate message data before parsing
         if (!event.data || typeof event.data !== 'string') {
-          console.warn('Received invalid WebSocket message data:', event.data);
-          return;
+          console.warn('Received invalid WebSocket message data:', event.data)
+          return
         }
 
-        let message: AllWebSocketMessages;
+        let message: AllWebSocketMessages
         try {
-          message = JSON.parse(event.data);
+          message = JSON.parse(event.data)
         } catch (parseError) {
-          console.error('Failed to parse WebSocket message JSON:', parseError);
-          console.warn('Raw message data:', event.data.substring(0, 200) + (event.data.length > 200 ? '...' : ''));
-          
+          console.error('Failed to parse WebSocket message JSON:', parseError)
+          console.warn(
+            'Raw message data:',
+            event.data.substring(0, 200) + (event.data.length > 200 ? '...' : '')
+          )
+
           // Try to recover from malformed JSON
           if (this.enableResilience) {
-            this.handleMalformedMessage(event.data);
+            this.handleMalformedMessage(event.data)
           }
-          return;
+          return
         }
 
         // Validate message structure
         if (!this.validateMessageStructure(message)) {
-          console.warn('Received message with invalid structure:', message);
+          console.warn('Received message with invalid structure:', message)
           if (this.enableResilience) {
-            this.handleInvalidMessage(message);
+            this.handleInvalidMessage(message)
           }
-          return;
+          return
         }
-        
+
         // Handle pong messages internally
         if (message.type === 'pong') {
-          this.lastPongTime = Date.now();
-          return;
+          this.lastPongTime = Date.now()
+          return
         }
-        
+
         // Handle ping messages (server-initiated ping)
         if (message.type === 'ping') {
-          this.send({ type: 'pong', timestamp: new Date().toISOString() }, false);
-          return;
+          this.send({ type: 'pong', timestamp: new Date().toISOString() }, false)
+          return
         }
-        
+
         // Check if message should be throttled
         if (this.shouldThrottleMessage(message.type)) {
-          return; // Skip processing this message
+          return // Skip processing this message
         }
-        
+
         // Route message to type-specific handlers with error boundaries
-        this.routeMessageSafely(message);
-        
+        this.routeMessageSafely(message)
       } catch (error) {
-        console.error('Critical error in WebSocket message handler:', error);
-        this.notifyError(new Error(`WebSocket message handling failed: ${error instanceof Error ? error.message : 'Unknown error'}`));
-        
+        console.error('Critical error in WebSocket message handler:', error)
+        this.notifyError(
+          new Error(
+            `WebSocket message handling failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+          )
+        )
+
         // Don't disconnect on message handling errors if resilience is enabled
         if (!this.enableResilience) {
-          this.handleCriticalError(error);
+          this.handleCriticalError(error)
         }
       }
-    };
+    }
 
     this.ws.onclose = (event) => {
-      const isDebugMode = (import.meta.env.VITE_DEBUG === 'true') || (import.meta.env.VITE_LOG_LEVEL === 'debug');
-      
+      const isDebugMode =
+        import.meta.env.VITE_DEBUG === 'true' || import.meta.env.VITE_LOG_LEVEL === 'debug'
+
       // Only log close details if it's an unexpected close or in debug mode
       if (event.code !== 1000 || isDebugMode) {
       }
-      
-      this.clearPingInterval();
-      this.clearConnectionTimeout();
-      this.ws = null;
-      
+
+      this.clearPingInterval()
+      this.clearConnectionTimeout()
+      this.ws = null
+
       if (!this.isManualClose) {
-        this.notifyConnectionStatus('disconnected');
-        this.scheduleReconnect();
+        this.notifyConnectionStatus('disconnected')
+        this.scheduleReconnect()
       }
-    };
+    }
 
     this.ws.onerror = (error) => {
       // More concise error logging - avoid dumping raw error objects
-      console.error('WebSocket error occurred');
-      
-      const isDebugMode = (import.meta.env.VITE_DEBUG === 'true') || (import.meta.env.VITE_LOG_LEVEL === 'debug');
+      console.error('WebSocket error occurred')
+
+      const isDebugMode =
+        import.meta.env.VITE_DEBUG === 'true' || import.meta.env.VITE_LOG_LEVEL === 'debug'
       if (isDebugMode) {
         console.error('WebSocket error details:', {
           readyState: this.ws?.readyState,
           url: this.url,
-          error: error
-        });
+          error: error,
+        })
       }
-      
-      this.clearConnectionTimeout();
-      this.notifyError(error);
-      this.notifyConnectionStatus('error');
-    };
+
+      this.clearConnectionTimeout()
+      this.notifyError(error)
+      this.notifyConnectionStatus('error')
+    }
   }
 
   /**
@@ -728,10 +749,14 @@ export class DashboardWebSocket {
    */
   private routeMessageSafely(message: AllWebSocketMessages): void {
     try {
-      this.routeMessage(message);
+      this.routeMessage(message)
     } catch (error) {
-      console.error(`Critical error routing message of type ${message.type}:`, error);
-      this.notifyError(new Error(`Message routing failed: ${error instanceof Error ? error.message : 'Unknown error'}`));
+      console.error(`Critical error routing message of type ${message.type}:`, error)
+      this.notifyError(
+        new Error(
+          `Message routing failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+        )
+      )
     }
   }
 
@@ -739,42 +764,42 @@ export class DashboardWebSocket {
    * Route incoming messages to appropriate handlers
    */
   private routeMessage(message: AllWebSocketMessages): void {
-    const handlers = this.eventHandlers.get(message.type);
+    const handlers = this.eventHandlers.get(message.type)
     if (handlers && handlers.size > 0) {
-      handlers.forEach(handler => {
+      handlers.forEach((handler) => {
         try {
-          handler(message);
+          handler(message)
         } catch (error) {
-          console.error(`Error in message handler for type ${message.type}:`, error);
+          console.error(`Error in message handler for type ${message.type}:`, error)
           // Continue processing other handlers even if one fails
         }
-      });
+      })
     }
-    
+
     // Special handling for llm_event messages - also route to sub-event handlers
     if (message.type === 'llm_event' && 'data' in message && message.data?.event_type) {
-      const subEventHandlers = this.eventHandlers.get(`llm_event:${message.data.event_type}`);
+      const subEventHandlers = this.eventHandlers.get(`llm_event:${message.data.event_type}`)
       if (subEventHandlers && subEventHandlers.size > 0) {
-        subEventHandlers.forEach(handler => {
+        subEventHandlers.forEach((handler) => {
           try {
-            handler(message);
+            handler(message)
           } catch (error) {
-            console.error(`Error in llm_event sub-handler for ${message.data.event_type}:`, error);
+            console.error(`Error in llm_event sub-handler for ${message.data.event_type}:`, error)
           }
-        });
+        })
       }
     }
 
     // Also emit to generic message handlers
-    const genericHandlers = this.eventHandlers.get('*');
+    const genericHandlers = this.eventHandlers.get('*')
     if (genericHandlers) {
-      genericHandlers.forEach(handler => {
+      genericHandlers.forEach((handler) => {
         try {
-          handler(message);
+          handler(message)
         } catch (error) {
-          console.error('Error in generic message handler:', error);
+          console.error('Error in generic message handler:', error)
         }
-      });
+      })
     }
   }
 
@@ -782,43 +807,43 @@ export class DashboardWebSocket {
    * Notify all connection status callbacks
    */
   private notifyConnectionStatus(status: ConnectionStatus): void {
-    this.connectionStatusCallbacks.forEach(callback => {
+    this.connectionStatusCallbacks.forEach((callback) => {
       try {
-        callback(status);
+        callback(status)
       } catch (error) {
-        console.error('Error in connection status callback:', error);
+        console.error('Error in connection status callback:', error)
       }
-    });
+    })
   }
 
   /**
    * Notify all error callbacks
    */
   private notifyError(error: Event | Error): void {
-    this.errorCallbacks.forEach(callback => {
+    this.errorCallbacks.forEach((callback) => {
       try {
-        callback(error);
+        callback(error)
       } catch (callbackError) {
-        console.error('Error in error callback:', callbackError);
+        console.error('Error in error callback:', callbackError)
       }
-    });
+    })
   }
 
   /**
    * Setup connection timeout
    */
   private setupConnectionTimeout(): void {
-    this.clearConnectionTimeout();
-    
+    this.clearConnectionTimeout()
+
     this.connectionTimeoutId = window.setTimeout(() => {
       if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
-        console.error('WebSocket connection timeout');
-        this.ws.close();
-        this.notifyError(new Error('Connection timeout'));
-        this.notifyConnectionStatus('error');
-        this.scheduleReconnect();
+        console.error('WebSocket connection timeout')
+        this.ws.close()
+        this.notifyError(new Error('Connection timeout'))
+        this.notifyConnectionStatus('error')
+        this.scheduleReconnect()
       }
-    }, this.connectionTimeout);
+    }, this.connectionTimeout)
   }
 
   /**
@@ -826,8 +851,8 @@ export class DashboardWebSocket {
    */
   private clearConnectionTimeout(): void {
     if (this.connectionTimeoutId) {
-      clearTimeout(this.connectionTimeoutId);
-      this.connectionTimeoutId = null;
+      clearTimeout(this.connectionTimeoutId)
+      this.connectionTimeoutId = null
     }
   }
 
@@ -836,82 +861,93 @@ export class DashboardWebSocket {
    */
   private scheduleReconnect(): void {
     if (this.isManualClose) {
-      return;
+      return
     }
 
     // Try fallback URLs if available and primary connection failed
-    if (this.reconnectAttempts >= this.maxReconnectAttempts && this.enableResilience && this.fallbackUrls.length > 0) {
-      this.tryFallbackUrl();
-      return;
+    if (
+      this.reconnectAttempts >= this.maxReconnectAttempts &&
+      this.enableResilience &&
+      this.fallbackUrls.length > 0
+    ) {
+      this.tryFallbackUrl()
+      return
     }
 
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      const isDebugMode = (import.meta.env.VITE_DEBUG === 'true') || (import.meta.env.VITE_LOG_LEVEL === 'debug');
+      const isDebugMode =
+        import.meta.env.VITE_DEBUG === 'true' || import.meta.env.VITE_LOG_LEVEL === 'debug'
       if (isDebugMode) {
-        console.log('Max reconnection attempts reached');
+        console.log('Max reconnection attempts reached')
       }
-      this.notifyConnectionStatus('error');
-      
+      this.notifyConnectionStatus('error')
+
       // In resilience mode, keep trying with longer delays
       if (this.enableResilience) {
         setTimeout(() => {
-          this.reconnectAttempts = 0; // Reset attempts
-          this.scheduleReconnect();
-        }, 60000); // Wait 1 minute before resetting
+          this.reconnectAttempts = 0 // Reset attempts
+          this.scheduleReconnect()
+        }, 60000) // Wait 1 minute before resetting
       }
-      return;
+      return
     }
 
-    this.reconnectAttempts++;
+    this.reconnectAttempts++
     const delay = Math.min(
-      this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), 
+      this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1),
       this.maxReconnectDelay
-    );
-    
+    )
+
     // Add jitter to prevent thundering herd
-    const jitter = Math.random() * 1000;
-    const finalDelay = delay + jitter;
-    
+    const jitter = Math.random() * 1000
+    const finalDelay = delay + jitter
+
     // Only log every few attempts to reduce spam, or in debug mode
-    const isDebugMode = (import.meta.env.VITE_DEBUG === 'true') || (import.meta.env.VITE_LOG_LEVEL === 'debug');
+    const isDebugMode =
+      import.meta.env.VITE_DEBUG === 'true' || import.meta.env.VITE_LOG_LEVEL === 'debug'
     if (isDebugMode || this.reconnectAttempts <= 3 || this.reconnectAttempts % 5 === 0) {
-      console.log(`Scheduling reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${Math.round(finalDelay)}ms`);
+      console.log(
+        `Scheduling reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${Math.round(finalDelay)}ms`
+      )
     }
-    
+
     setTimeout(() => {
       if (!this.isManualClose) {
-        this.connect();
+        this.connect()
       }
-    }, finalDelay);
+    }, finalDelay)
   }
 
   /**
    * Start sending periodic ping messages to keep connection alive
    */
   private startPingInterval(): void {
-    this.clearPingInterval();
-    
+    this.clearPingInterval()
+
     // Reset last pong time on start
-    this.lastPongTime = Date.now();
-    
+    this.lastPongTime = Date.now()
+
     this.pingInterval = window.setInterval(() => {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
         // Check if we've received a pong recently
-        const timeSinceLastPong = Date.now() - this.lastPongTime;
+        const timeSinceLastPong = Date.now() - this.lastPongTime
         if (timeSinceLastPong > this.pongTimeout) {
-          console.error('WebSocket pong timeout - connection may be dead');
-          this.ws.close();
-          return;
+          console.error('WebSocket pong timeout - connection may be dead')
+          this.ws.close()
+          return
         }
-        
-        this.send({ 
-          type: 'ping', 
-          timestamp: new Date().toISOString() 
-        }, false); // Don't queue ping messages
+
+        this.send(
+          {
+            type: 'ping',
+            timestamp: new Date().toISOString(),
+          },
+          false
+        ) // Don't queue ping messages
       } else {
-        this.clearPingInterval();
+        this.clearPingInterval()
       }
-    }, this.pingIntervalMs);
+    }, this.pingIntervalMs)
   }
 
   /**
@@ -919,8 +955,8 @@ export class DashboardWebSocket {
    */
   private clearPingInterval(): void {
     if (this.pingInterval) {
-      clearInterval(this.pingInterval);
-      this.pingInterval = null;
+      clearInterval(this.pingInterval)
+      this.pingInterval = null
     }
   }
 
@@ -929,11 +965,16 @@ export class DashboardWebSocket {
    */
   private getReadyStateText(readyState: number): string {
     switch (readyState) {
-      case WebSocket.CONNECTING: return 'CONNECTING';
-      case WebSocket.OPEN: return 'OPEN';
-      case WebSocket.CLOSING: return 'CLOSING';
-      case WebSocket.CLOSED: return 'CLOSED';
-      default: return 'UNKNOWN';
+      case WebSocket.CONNECTING:
+        return 'CONNECTING'
+      case WebSocket.OPEN:
+        return 'OPEN'
+      case WebSocket.CLOSING:
+        return 'CLOSING'
+      case WebSocket.CLOSED:
+        return 'CLOSED'
+      default:
+        return 'UNKNOWN'
     }
   }
 
@@ -943,25 +984,25 @@ export class DashboardWebSocket {
   public destroy(): void {
     // Clear cleanup timer
     if (this.cleanupTimer) {
-      clearInterval(this.cleanupTimer);
-      this.cleanupTimer = null;
+      clearInterval(this.cleanupTimer)
+      this.cleanupTimer = null
     }
-    
+
     // Disconnect WebSocket
-    this.disconnect();
-    
+    this.disconnect()
+
     // Clear all collections
-    this.eventHandlers.clear();
-    this.connectionStatusCallbacks.clear();
-    this.errorCallbacks.clear();
-    this.messageQueue = [];
-    this.messageThrottle.clear();
-    this.retryQueue.clear();
-    
+    this.eventHandlers.clear()
+    this.connectionStatusCallbacks.clear()
+    this.errorCallbacks.clear()
+    this.messageQueue = []
+    this.messageThrottle.clear()
+    this.retryQueue.clear()
+
     // Clear timeouts
     if (this.connectionTimeoutId) {
-      clearTimeout(this.connectionTimeoutId);
-      this.connectionTimeoutId = null;
+      clearTimeout(this.connectionTimeoutId)
+      this.connectionTimeoutId = null
     }
   }
 
@@ -969,29 +1010,33 @@ export class DashboardWebSocket {
    * Helper method to validate message structure
    */
   public static isValidMessage(message: any): message is AllWebSocketMessages {
-    return message && 
-           typeof message === 'object' && 
-           typeof message.type === 'string' &&
-           message.data !== undefined;
+    return (
+      message &&
+      typeof message === 'object' &&
+      typeof message.type === 'string' &&
+      message.data !== undefined
+    )
   }
 
   /**
    * Helper to parse LLM-specific messages
    */
-  public static parseLLMMessage(message: any): LLMRequestMessage | LLMResponseMessage | TradingDecisionMessage | LLMEventMessage | null {
-    if (!this.isValidMessage(message)) return null;
-    
+  public static parseLLMMessage(
+    message: any
+  ): LLMRequestMessage | LLMResponseMessage | TradingDecisionMessage | LLMEventMessage | null {
+    if (!this.isValidMessage(message)) return null
+
     switch (message.type) {
       case 'llm_request':
-        return message as LLMRequestMessage;
+        return message
       case 'llm_response':
-        return message as LLMResponseMessage;
+        return message
       case 'trading_decision':
-        return message as TradingDecisionMessage;
+        return message
       case 'llm_event':
-        return message as LLMEventMessage;
+        return message
       default:
-        return null;
+        return null
     }
   }
 
@@ -999,46 +1044,48 @@ export class DashboardWebSocket {
    * Type guard for specific message types
    */
   public static isLLMRequest(message: any): message is LLMRequestMessage {
-    return message?.type === 'llm_request';
+    return message?.type === 'llm_request'
   }
 
   public static isLLMResponse(message: any): message is LLMResponseMessage {
-    return message?.type === 'llm_response';
+    return message?.type === 'llm_response'
   }
 
   public static isTradingDecision(message: any): message is TradingDecisionMessage {
-    return message?.type === 'trading_decision';
+    return message?.type === 'trading_decision'
   }
 
   public static isLLMEvent(message: any): message is LLMEventMessage {
-    return message?.type === 'llm_event';
+    return message?.type === 'llm_event'
   }
 
   /**
    * Get current queue size
    */
   public getQueueSize(): number {
-    return this.messageQueue.length;
+    return this.messageQueue.length
   }
 
   /**
    * Clear message queue
    */
   public clearQueue(): void {
-    this.messageQueue = [];
+    this.messageQueue = []
   }
 
   /**
    * Extract LLM event data from llm_event message
    */
-  public static extractLLMEventData(message: LLMEventMessage): LLMRequestMessage | LLMResponseMessage | TradingDecisionMessage | null {
-    if (!message.data) return null;
-    
-    const eventData = message.data;
+  public static extractLLMEventData(
+    message: LLMEventMessage
+  ): LLMRequestMessage | LLMResponseMessage | TradingDecisionMessage | null {
+    if (!message.data) return null
+
+    const eventData = message.data
     const baseData = {
       timestamp: eventData.timestamp || message.timestamp,
-    };
-    
+    }
+
     switch (eventData.event_type) {
       case 'llm_request':
         return {
@@ -1051,9 +1098,9 @@ export class DashboardWebSocket {
             max_tokens: eventData.max_tokens,
             temperature: eventData.temperature,
             context: eventData.market_context,
-          }
-        } as LLMRequestMessage;
-        
+          },
+        } as LLMRequestMessage
+
       case 'llm_response':
         return {
           type: 'llm_response',
@@ -1068,9 +1115,9 @@ export class DashboardWebSocket {
             success: eventData.success || false,
             error: eventData.error,
             raw_response: eventData.response_preview,
-          }
-        } as LLMResponseMessage;
-        
+          },
+        } as LLMResponseMessage
+
       case 'trading_decision':
         return {
           type: 'trading_decision',
@@ -1085,11 +1132,11 @@ export class DashboardWebSocket {
             risk_analysis: {
               risk_reward_ratio: eventData.risk_assessment ? 1.5 : undefined,
             },
-          }
-        } as TradingDecisionMessage;
-        
+          },
+        } as TradingDecisionMessage
+
       default:
-        return null;
+        return null
     }
   }
 
@@ -1097,30 +1144,46 @@ export class DashboardWebSocket {
    * Wait for connection to be established
    */
   public async waitForConnection(timeout: number = 5000): Promise<boolean> {
-    const startTime = Date.now();
-    
+    const startTime = Date.now()
+
     while (Date.now() - startTime < timeout) {
       if (this.isConnected()) {
-        return true;
+        return true
       }
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100))
     }
-    
-    return false;
+
+    return false
   }
 
   /**
    * Subscribe to a specific LLM event sub-type
    */
-  public onLLMEvent(eventType: 'llm_request' | 'llm_response' | 'trading_decision' | 'performance_metrics' | 'alert', handler: MessageHandler): void {
-    this.on(`llm_event:${eventType}`, handler);
+  public onLLMEvent(
+    eventType:
+      | 'llm_request'
+      | 'llm_response'
+      | 'trading_decision'
+      | 'performance_metrics'
+      | 'alert',
+    handler: MessageHandler
+  ): void {
+    this.on(`llm_event:${eventType}`, handler)
   }
 
   /**
    * Unsubscribe from a specific LLM event sub-type
    */
-  public offLLMEvent(eventType: 'llm_request' | 'llm_response' | 'trading_decision' | 'performance_metrics' | 'alert', handler: MessageHandler): void {
-    this.off(`llm_event:${eventType}`, handler);
+  public offLLMEvent(
+    eventType:
+      | 'llm_request'
+      | 'llm_response'
+      | 'trading_decision'
+      | 'performance_metrics'
+      | 'alert',
+    handler: MessageHandler
+  ): void {
+    this.off(`llm_event:${eventType}`, handler)
   }
 
   /**
@@ -1128,27 +1191,27 @@ export class DashboardWebSocket {
    */
   private validateMessageStructure(message: any): message is AllWebSocketMessages {
     if (!message || typeof message !== 'object') {
-      return false;
+      return false
     }
 
     if (!message.type || typeof message.type !== 'string') {
-      return false;
+      return false
     }
 
     // Allow undefined data for simple messages like ping/pong
     if (message.data !== undefined && typeof message.data !== 'object') {
-      return false;
+      return false
     }
 
-    return true;
+    return true
   }
 
   /**
    * Handle malformed messages gracefully
    */
   private handleMalformedMessage(data: string): void {
-    console.warn('Attempting to recover from malformed message');
-    
+    console.warn('Attempting to recover from malformed message')
+
     // Try to extract a valid message structure
     try {
       // Common malformed patterns to recover from
@@ -1158,96 +1221,96 @@ export class DashboardWebSocket {
         // Double-encoded JSON
         { regex: /"(\{.*\})"/, name: 'double-encoded' },
         // Concatenated messages
-        { regex: /\}(\{)/g, name: 'concatenated' }
-      ];
+        { regex: /\}(\{)/g, name: 'concatenated' },
+      ]
 
       for (const pattern of patterns) {
         if (pattern.name === 'concatenated') {
           // Split concatenated messages
-          const messages = data.split(pattern.regex);
+          const messages = data.split(pattern.regex)
           messages.forEach((msgStr, index, array) => {
-            if (index < array.length - 1) msgStr += '}';
-            if (index > 0) msgStr = '{' + msgStr;
-            
+            if (index < array.length - 1) msgStr += '}'
+            if (index > 0) msgStr = '{' + msgStr
+
             try {
-              const msg = JSON.parse(msgStr);
+              const msg = JSON.parse(msgStr)
               if (this.validateMessageStructure(msg)) {
-                this.routeMessageSafely(msg);
+                this.routeMessageSafely(msg)
               }
             } catch (e) {
               // Ignore individual parse failures
             }
-          });
-          return;
+          })
+          return
         } else {
-          const match = data.match(pattern.regex);
+          const match = data.match(pattern.regex)
           if (match) {
-            const recoveredData = pattern.name === 'double-encoded' ? match[1] : match[0];
-            const message = JSON.parse(recoveredData);
+            const recoveredData = pattern.name === 'double-encoded' ? match[1] : match[0]
+            const message = JSON.parse(recoveredData)
             if (this.validateMessageStructure(message)) {
-              console.log(`Recovered message using ${pattern.name} pattern`);
-              this.routeMessageSafely(message);
-              return;
+              console.log(`Recovered message using ${pattern.name} pattern`)
+              this.routeMessageSafely(message)
+              return
             }
           }
         }
       }
     } catch (error) {
-      console.warn('Could not recover malformed message:', error);
+      console.warn('Could not recover malformed message:', error)
     }
 
     // If recovery fails, log and continue
-    console.error('Failed to recover malformed message, data length:', data.length);
+    console.error('Failed to recover malformed message, data length:', data.length)
   }
 
   /**
    * Handle invalid message structure
    */
   private handleInvalidMessage(message: any): void {
-    console.warn('Handling invalid message structure:', message);
-    
+    console.warn('Handling invalid message structure:', message)
+
     // Try to create a valid message structure
     if (message && typeof message === 'object') {
       // Add missing type if data exists
       if (!message.type && message.data) {
         // Try to infer type from data structure
-        const inferredType = this.inferMessageType(message.data);
+        const inferredType = this.inferMessageType(message.data)
         if (inferredType) {
-          message.type = inferredType;
-          console.log(`Inferred message type: ${inferredType}`);
-          this.routeMessageSafely(message);
-          return;
+          message.type = inferredType
+          console.log(`Inferred message type: ${inferredType}`)
+          this.routeMessageSafely(message)
+          return
         }
       }
-      
+
       // Add missing data as empty object
       if (message.type && !message.data) {
-        message.data = {};
-        this.routeMessageSafely(message);
-        return;
+        message.data = {}
+        this.routeMessageSafely(message)
+        return
       }
     }
-    
-    console.warn('Could not repair invalid message structure');
+
+    console.warn('Could not repair invalid message structure')
   }
 
   /**
    * Infer message type from data structure
    */
   private inferMessageType(data: any): string | null {
-    if (!data || typeof data !== 'object') return null;
+    if (!data || typeof data !== 'object') return null
 
     // Check for common data patterns
-    if (data.status && data.symbol) return 'bot_status';
-    if (data.price && data.symbol) return 'market_data';
-    if (data.action && data.confidence) return 'trade_action';
-    if (data.cipher_a !== undefined || data.cipher_b !== undefined) return 'indicators';
-    if (data.side && data.entry_price) return 'position';
-    if (data.total_portfolio_value !== undefined) return 'risk_metrics';
-    if (data.health !== undefined) return 'system_status';
-    if (data.message && data.level) return 'error';
+    if (data.status && data.symbol) return 'bot_status'
+    if (data.price && data.symbol) return 'market_data'
+    if (data.action && data.confidence) return 'trade_action'
+    if (data.cipher_a !== undefined || data.cipher_b !== undefined) return 'indicators'
+    if (data.side && data.entry_price) return 'position'
+    if (data.total_portfolio_value !== undefined) return 'risk_metrics'
+    if (data.health !== undefined) return 'system_status'
+    if (data.message && data.level) return 'error'
 
-    return null;
+    return null
   }
 
   /**
@@ -1255,92 +1318,96 @@ export class DashboardWebSocket {
    */
   private tryFallbackUrl(): void {
     if (this.fallbackUrls.length === 0) {
-      console.warn('No fallback URLs available');
-      this.notifyConnectionStatus('error');
-      return;
+      console.warn('No fallback URLs available')
+      this.notifyConnectionStatus('error')
+      return
     }
 
-    this.currentUrlIndex = (this.currentUrlIndex + 1) % this.fallbackUrls.length;
-    const fallbackUrl = this.fallbackUrls[this.currentUrlIndex];
-    
-    console.log(`Trying fallback URL ${this.currentUrlIndex + 1}/${this.fallbackUrls.length}: ${fallbackUrl}`);
-    
+    this.currentUrlIndex = (this.currentUrlIndex + 1) % this.fallbackUrls.length
+    const fallbackUrl = this.fallbackUrls[this.currentUrlIndex]
+
+    console.log(
+      `Trying fallback URL ${this.currentUrlIndex + 1}/${this.fallbackUrls.length}: ${fallbackUrl}`
+    )
+
     // Switch to fallback URL and reset attempts
-    this.url = fallbackUrl;
-    this.reconnectAttempts = 0;
-    this.scheduleReconnect();
+    this.url = fallbackUrl
+    this.reconnectAttempts = 0
+    this.scheduleReconnect()
   }
 
   /**
    * Handle critical errors that might require connection reset
    */
   private handleCriticalError(error: any): void {
-    console.error('Critical WebSocket error, considering connection reset:', error);
-    
+    console.error('Critical WebSocket error, considering connection reset:', error)
+
     // Close current connection
     if (this.ws) {
-      this.ws.close(1006, 'Critical error occurred');
-      this.ws = null;
+      this.ws.close(1006, 'Critical error occurred')
+      this.ws = null
     }
-    
+
     // Schedule reconnection
-    this.notifyConnectionStatus('error');
-    this.scheduleReconnect();
+    this.notifyConnectionStatus('error')
+    this.scheduleReconnect()
   }
 
   /**
    * Check if a message is critical and should be retried
    */
   private isCriticalMessage(message: any): boolean {
-    if (!message || !message.type) return false;
-    
-    const criticalTypes = ['ping', 'pong', 'subscription', 'authentication'];
-    return criticalTypes.includes(message.type);
+    if (!message?.type) return false
+
+    const criticalTypes = ['ping', 'pong', 'subscription', 'authentication']
+    return criticalTypes.includes(message.type)
   }
 
   /**
    * Queue message for retry
    */
   private queueForRetry(message: any): void {
-    const messageId = this.generateMessageId(message);
-    const existing = this.retryQueue.get(messageId);
-    
+    const messageId = this.generateMessageId(message)
+    const existing = this.retryQueue.get(messageId)
+
     if (existing) {
-      existing.attempts++;
+      existing.attempts++
       if (existing.attempts >= existing.maxRetries) {
-        console.warn(`Message retry limit reached for ${message.type}`);
-        this.retryQueue.delete(messageId);
-        return;
+        console.warn(`Message retry limit reached for ${message.type}`)
+        this.retryQueue.delete(messageId)
+        return
       }
     } else {
       this.retryQueue.set(messageId, {
         message,
         attempts: 1,
-        maxRetries: this.maxMessageRetries
-      });
+        maxRetries: this.maxMessageRetries,
+      })
     }
-    
+
     // Schedule retry
     setTimeout(() => {
-      this.retryQueuedMessage(messageId);
-    }, this.messageRetryDelay);
+      this.retryQueuedMessage(messageId)
+    }, this.messageRetryDelay)
   }
 
   /**
    * Retry a queued message
    */
   private retryQueuedMessage(messageId: string): void {
-    const queued = this.retryQueue.get(messageId);
-    if (!queued) return;
-    
-    console.log(`Retrying message ${queued.message.type} (attempt ${queued.attempts}/${queued.maxRetries})`);
-    
+    const queued = this.retryQueue.get(messageId)
+    if (!queued) return
+
+    console.log(
+      `Retrying message ${queued.message.type} (attempt ${queued.attempts}/${queued.maxRetries})`
+    )
+
     if (this.send(queued.message, false)) {
       // Success - remove from retry queue
-      this.retryQueue.delete(messageId);
+      this.retryQueue.delete(messageId)
     } else {
       // Failed - will be handled by queueForRetry if called again
-      console.warn(`Retry failed for message ${queued.message.type}`);
+      console.warn(`Retry failed for message ${queued.message.type}`)
     }
   }
 
@@ -1348,44 +1415,44 @@ export class DashboardWebSocket {
    * Generate unique ID for message retry tracking
    */
   private generateMessageId(message: any): string {
-    const type = message.type || 'unknown';
-    const data = JSON.stringify(message.data || {});
-    const timestamp = message.timestamp || Date.now();
-    return `${type}-${timestamp}-${data.slice(0, 20)}`;
+    const type = message.type || 'unknown'
+    const data = JSON.stringify(message.data || {})
+    const timestamp = message.timestamp || Date.now()
+    return `${type}-${timestamp}-${data.slice(0, 20)}`
   }
 
   /**
    * Get connection health status
    */
   public getConnectionHealth(): {
-    isHealthy: boolean;
-    lastPong: number;
-    queueSize: number;
-    retryQueueSize: number;
-    reconnectAttempts: number;
-    currentUrl: string;
-    issues: string[];
+    isHealthy: boolean
+    lastPong: number
+    queueSize: number
+    retryQueueSize: number
+    reconnectAttempts: number
+    currentUrl: string
+    issues: string[]
   } {
-    const now = Date.now();
-    const timeSinceLastPong = now - this.lastPongTime;
-    const issues: string[] = [];
-    
+    const now = Date.now()
+    const timeSinceLastPong = now - this.lastPongTime
+    const issues: string[] = []
+
     if (timeSinceLastPong > this.pongTimeout) {
-      issues.push('Ping timeout');
+      issues.push('Ping timeout')
     }
-    
+
     if (this.messageQueue.length > this.maxQueueSize * 0.8) {
-      issues.push('Message queue almost full');
+      issues.push('Message queue almost full')
     }
-    
+
     if (this.retryQueue.size > 5) {
-      issues.push('High retry queue size');
+      issues.push('High retry queue size')
     }
-    
+
     if (this.reconnectAttempts > 2) {
-      issues.push('Multiple reconnection attempts');
+      issues.push('Multiple reconnection attempts')
     }
-    
+
     return {
       isHealthy: issues.length === 0 && this.isConnected(),
       lastPong: this.lastPongTime,
@@ -1393,17 +1460,17 @@ export class DashboardWebSocket {
       retryQueueSize: this.retryQueue.size,
       reconnectAttempts: this.reconnectAttempts,
       currentUrl: this.url,
-      issues
-    };
+      issues,
+    }
   }
 }
 
 // Singleton instance with default configuration
-export const webSocketClient = new DashboardWebSocket();
+export const webSocketClient = new DashboardWebSocket()
 
 // Convenience function to create configured client
 export function createWebSocketClient(config: WebSocketConfig = {}): DashboardWebSocket {
-  return new DashboardWebSocket(config.url, config);
+  return new DashboardWebSocket(config.url, config)
 }
 
 // Production-ready client factory with optimized settings
@@ -1417,7 +1484,7 @@ export function createProductionWebSocketClient(): DashboardWebSocket {
     enableResilience: true,
     maxMessageRetries: 3,
     messageRetryDelay: 1000,
-  });
+  })
 }
 
 // Resilient client factory with fallback URLs
@@ -1432,19 +1499,19 @@ export function createResilientWebSocketClient(fallbackUrls: string[] = []): Das
     fallbackUrls,
     maxMessageRetries: 5,
     messageRetryDelay: 2000,
-  });
+  })
 }
 
 // Helper to validate and parse WebSocket messages
 export function parseWebSocketMessage(data: string): AllWebSocketMessages | null {
   try {
-    const message = JSON.parse(data);
+    const message = JSON.parse(data)
     if (DashboardWebSocket.isValidMessage(message)) {
-      return message as AllWebSocketMessages;
+      return message
     }
-    return null;
+    return null
   } catch (error) {
-    console.error('Failed to parse WebSocket message:', error);
-    return null;
+    console.error('Failed to parse WebSocket message:', error)
+    return null
   }
 }

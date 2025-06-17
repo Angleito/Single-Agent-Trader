@@ -20,6 +20,7 @@ COPY main.py .
 COPY tradingview_feed.py .
 COPY log_parser.py .
 COPY llm_log_parser.py .
+COPY rate_limiter.py .
 COPY start.sh .
 
 # Make startup script executable

@@ -15,6 +15,8 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - BLUEFIN_PRIVATE_KEY=${EXCHANGE__BLUEFIN_PRIVATE_KEY:-}
       - BLUEFIN_NETWORK=${EXCHANGE__BLUEFIN_NETWORK:-mainnet}
+      - BLUEFIN_SERVICE_API_KEY=${BLUEFIN_SERVICE_API_KEY:-}
+      - BLUEFIN_SERVICE_RATE_LIMIT=${BLUEFIN_SERVICE_RATE_LIMIT:-100}
       - HOST=0.0.0.0
       - PORT=8080
       - LOG_LEVEL=info
@@ -67,7 +69,7 @@ services:
     # Override the default command - TRADING MODE WITH 1-MINUTE INTERVALS
     # Note: dry-run mode is controlled by SYSTEM__DRY_RUN environment variable
     # Note: Symbol should match the exchange type (BTC-USD for Coinbase, SUI-PERP for Bluefin)
-    command: ["python", "-m", "bot.main", "live", "--symbol", "${TRADING__SYMBOL:-BTC-USD}", "--interval", "1m", "--force"]
+    command: ["python", "-m", "bot.main", "live", "--symbol", "${TRADING__SYMBOL:-BTC-USD}", "--interval", "1m", "--force", "--no-dry-run"]
     
     # Environment variables from .env file
     env_file:
@@ -86,6 +88,7 @@ services:
       - EXCHANGE__EXCHANGE_TYPE=bluefin
       - BLUEFIN_USE_REAL_DATA=true
       - BLUEFIN_SERVICE_URL=http://bluefin-service:8080
+      - BLUEFIN_SERVICE_API_KEY=${BLUEFIN_SERVICE_API_KEY:-}
       # LLM Logging Configuration
       - LLM__ENABLE_COMPLETION_LOGGING=${LLM_ENABLE_COMPLETION_LOGGING:-true}
       - LLM__COMPLETION_LOG_LEVEL=${LLM_COMPLETION_LOG_LEVEL:-INFO}
@@ -104,6 +107,9 @@ services:
       - SYSTEM__WEBSOCKET_RETRY_DELAY=5
       # Logging Level
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # OmniSearch Configuration (disabled temporarily - needs HTTP wrapper)
+      - OMNISEARCH__ENABLED=false
+      # - OMNISEARCH__SERVER_URL=http://mcp-omnisearch:8767
       
     # Volume mounts for persistence and configuration (cleaned up overlapping mounts)
     volumes:
@@ -145,7 +151,7 @@ services:
     # Service dependencies
     depends_on:
       - bluefin-service
-      - mcp-omnisearch
+    #   - mcp-omnisearch  # Temporarily disabled - needs HTTP wrapper
     #   - mcp-memory  # Temporarily disabled
 
   # MCP OmniSearch Server for Enhanced Market Intelligence

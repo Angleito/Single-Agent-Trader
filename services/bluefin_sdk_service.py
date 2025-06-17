@@ -9,18 +9,29 @@ providing a REST API for the main bot to interact with Bluefin DEX.
 import asyncio
 import logging
 import os
+import sys
+import time
+import secrets
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
+from collections import defaultdict
 
 from aiohttp import web
 from bluefin_v2_client import BluefinClient, MARKET_SYMBOLS, Networks
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Add parent directory to path to import secure logging
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+try:
+    from bot.utils.secure_logging import create_secure_logger
+    logger = create_secure_logger(__name__, level=logging.INFO)
+except ImportError:
+    # Fallback to standard logging if secure logging not available
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    logger = logging.getLogger(__name__)
 
 
 class BluefinSDKService:
@@ -128,6 +139,24 @@ class BluefinSDKService:
                 formatted_positions = []
                 for pos in position:
                     if pos:  # Skip None/empty entries
+                        # Log position symbol only for debugging
+                        logger.debug(f"Processing position for symbol: {pos.get('symbol', 'Unknown')}")
+                        
+                        # Check if there's a direct side field
+                        if "side" in pos:
+                            side = pos["side"]
+                            # Map Bluefin side to our convention
+                            if side == "SELL":
+                                side = "SHORT"
+                            elif side == "BUY":
+                                side = "LONG"
+                        elif "positionSide" in pos:
+                            side = pos["positionSide"]
+                        else:
+                            # For Bluefin, negative quantity = SHORT, positive = LONG
+                            quantity = float(pos.get("quantity", 0))
+                            side = "LONG" if quantity > 0 else "SHORT"
+                        
                         formatted_positions.append({
                             "symbol": pos.get("symbol", ""),
                             "quantity": pos.get("quantity", "0"),
@@ -136,11 +165,29 @@ class BluefinSDKService:
                             "realizedPnl": pos.get("realizedPnl", "0"),
                             "leverage": pos.get("leverage", 1),
                             "margin": pos.get("margin", "0"),
-                            "side": "LONG" if float(pos.get("quantity", 0)) > 0 else "SHORT"
+                            "side": side
                         })
                 return formatted_positions
             # If it's a single position dict
             elif isinstance(position, dict):
+                # Log position symbol only for debugging
+                logger.debug(f"Processing position for symbol: {position.get('symbol', 'Unknown')}")
+                
+                # Check if there's a direct side field
+                if "side" in position:
+                    side = position["side"]
+                    # Map Bluefin side to our convention
+                    if side == "SELL":
+                        side = "SHORT"
+                    elif side == "BUY":
+                        side = "LONG"
+                elif "positionSide" in position:
+                    side = position["positionSide"]
+                else:
+                    # For Bluefin, negative quantity = SHORT, positive = LONG
+                    quantity = float(position.get("quantity", 0))
+                    side = "LONG" if quantity > 0 else "SHORT"
+                
                 return [{
                     "symbol": position.get("symbol", ""),
                     "quantity": position.get("quantity", "0"),
@@ -149,7 +196,7 @@ class BluefinSDKService:
                     "realizedPnl": position.get("realizedPnl", "0"),
                     "leverage": position.get("leverage", 1),
                     "margin": position.get("margin", "0"),
-                    "side": "LONG" if float(position.get("quantity", 0)) > 0 else "SHORT"
+                    "side": side
                 }]
             else:
                 logger.warning(f"Unexpected position type: {type(position)}")
@@ -228,6 +275,97 @@ class BluefinSDKService:
 
 # Global service instance
 service = BluefinSDKService()
+
+# Rate limiting configuration
+RATE_LIMIT_REQUESTS = int(os.getenv("BLUEFIN_SERVICE_RATE_LIMIT", "100"))  # requests per minute
+RATE_LIMIT_WINDOW = 60  # seconds
+rate_limit_storage = defaultdict(lambda: {'count': 0, 'window_start': time.time()})
+
+
+# Authentication middleware
+@web.middleware
+async def auth_middleware(request, handler):
+    """Validate API key authentication."""
+    # Skip auth for health check endpoint
+    if request.path == '/health':
+        return await handler(request)
+    
+    # Get API key from environment
+    expected_api_key = os.getenv("BLUEFIN_SERVICE_API_KEY")
+    if not expected_api_key:
+        logger.error("BLUEFIN_SERVICE_API_KEY not configured")
+        return web.json_response(
+            {"error": "Service misconfigured"},
+            status=500
+        )
+    
+    # Check Authorization header
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        logger.warning(f"Missing or invalid auth header from {request.remote}")
+        return web.json_response(
+            {"error": "Unauthorized"},
+            status=401
+        )
+    
+    # Extract and validate token
+    provided_api_key = auth_header[7:]  # Remove "Bearer " prefix
+    if not secrets.compare_digest(provided_api_key, expected_api_key):
+        logger.warning(f"Invalid API key attempt from {request.remote}")
+        return web.json_response(
+            {"error": "Unauthorized"},
+            status=401
+        )
+    
+    # API key is valid, proceed to handler
+    return await handler(request)
+
+
+# Rate limiting middleware
+@web.middleware
+async def rate_limit_middleware(request, handler):
+    """Apply rate limiting per client IP."""
+    # Skip rate limiting for health check
+    if request.path == '/health':
+        return await handler(request)
+    
+    # Get client IP
+    client_ip = request.headers.get('X-Forwarded-For', request.remote)
+    if client_ip:
+        client_ip = client_ip.split(',')[0].strip()
+    
+    # Check rate limit
+    current_time = time.time()
+    client_data = rate_limit_storage[client_ip]
+    
+    # Reset window if expired
+    if current_time - client_data['window_start'] > RATE_LIMIT_WINDOW:
+        client_data['count'] = 0
+        client_data['window_start'] = current_time
+    
+    # Check if limit exceeded
+    if client_data['count'] >= RATE_LIMIT_REQUESTS:
+        remaining_time = int(RATE_LIMIT_WINDOW - (current_time - client_data['window_start']))
+        logger.warning(f"Rate limit exceeded for {client_ip}")
+        return web.json_response(
+            {
+                "error": "Rate limit exceeded",
+                "retry_after": remaining_time
+            },
+            status=429,
+            headers={"Retry-After": str(remaining_time)}
+        )
+    
+    # Increment counter
+    client_data['count'] += 1
+    
+    # Add rate limit headers to response
+    response = await handler(request)
+    response.headers['X-RateLimit-Limit'] = str(RATE_LIMIT_REQUESTS)
+    response.headers['X-RateLimit-Remaining'] = str(RATE_LIMIT_REQUESTS - client_data['count'])
+    response.headers['X-RateLimit-Reset'] = str(int(client_data['window_start'] + RATE_LIMIT_WINDOW))
+    
+    return response
 
 
 # REST API Routes
@@ -322,7 +460,10 @@ async def startup(app):
 
 def create_app():
     """Create the aiohttp application."""
-    app = web.Application()
+    # Create app with middleware
+    app = web.Application(
+        middlewares=[rate_limit_middleware, auth_middleware]
+    )
     
     # Add routes
     app.router.add_get('/health', health_check)
@@ -344,7 +485,16 @@ if __name__ == '__main__':
     host = os.getenv('HOST', '0.0.0.0')
     port = int(os.getenv('PORT', 8080))
     
+    # Check if API key is configured
+    if not os.getenv("BLUEFIN_SERVICE_API_KEY"):
+        logger.warning("BLUEFIN_SERVICE_API_KEY not set - generating a random key")
+        api_key = secrets.token_urlsafe(32)
+        os.environ["BLUEFIN_SERVICE_API_KEY"] = api_key
+        logger.info(f"Generated API key: {api_key}")
+        logger.info("Please set BLUEFIN_SERVICE_API_KEY in your environment for production use")
+    
     # Create and run app
     app = create_app()
     logger.info(f"Starting Bluefin SDK service on {host}:{port}")
+    logger.info(f"Rate limit: {RATE_LIMIT_REQUESTS} requests per {RATE_LIMIT_WINDOW} seconds")
     web.run_app(app, host=host, port=port)

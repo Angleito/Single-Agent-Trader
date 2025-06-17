@@ -7,7 +7,11 @@
   border-radius: 12px;
   padding: 20px;
   color: #ffffff;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family:
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   border: 1px solid #333;
 }
@@ -115,7 +119,8 @@
   box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
 }
 
-.pause-trading-btn, .resume-trading-btn {
+.pause-trading-btn,
+.resume-trading-btn {
   background: linear-gradient(135deg, #0891b2, #0e7490);
   color: white;
   border: none;
@@ -128,12 +133,14 @@
   box-shadow: 0 2px 8px rgba(8, 145, 178, 0.3);
 }
 
-.pause-trading-btn:hover, .resume-trading-btn:hover {
+.pause-trading-btn:hover,
+.resume-trading-btn:hover {
   background: linear-gradient(135deg, #0e7490, #155e75);
   transform: translateY(-1px);
 }
 
-.pause-trading-btn:disabled, .resume-trading-btn:disabled {
+.pause-trading-btn:disabled,
+.resume-trading-btn:disabled {
   background: #374151;
   color: #9ca3af;
   cursor: not-allowed;
@@ -561,21 +568,24 @@
 }
 
 /* Command Queue */
-.queue-header, .history-header {
+.queue-header,
+.history-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
 }
 
-.queue-header h5, .history-header h5 {
+.queue-header h5,
+.history-header h5 {
   margin: 0;
   color: #ffffff;
   font-size: 14px;
   font-weight: 600;
 }
 
-.clear-queue-btn, .refresh-history-btn {
+.clear-queue-btn,
+.refresh-history-btn {
   background: #374151;
   color: #d1d5db;
   border: 1px solid #4b5563;
@@ -586,12 +596,14 @@
   transition: all 0.2s ease;
 }
 
-.clear-queue-btn:hover, .refresh-history-btn:hover {
+.clear-queue-btn:hover,
+.refresh-history-btn:hover {
   background: #4b5563;
   border-color: #6b7280;
 }
 
-.command-list, .history-list {
+.command-list,
+.history-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -599,7 +611,8 @@
   overflow-y: auto;
 }
 
-.command-item, .history-item {
+.command-item,
+.history-item {
   background: #1f1f1f;
   border: 1px solid #374151;
   border-radius: 6px;
@@ -607,24 +620,28 @@
   transition: all 0.2s ease;
 }
 
-.command-item:hover, .history-item:hover {
+.command-item:hover,
+.history-item:hover {
   border-color: #4b5563;
 }
 
-.command-header, .trade-header {
+.command-header,
+.trade-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 6px;
 }
 
-.command-type, .trade-type {
+.command-type,
+.trade-type {
   font-weight: 500;
   color: #ffffff;
   font-size: 13px;
 }
 
-.command-status, .trade-status {
+.command-status,
+.trade-status {
   font-size: 11px;
   padding: 2px 8px;
   border-radius: 12px;
@@ -638,7 +655,8 @@
   color: #f59e0b;
 }
 
-.status-executed, .status-completed {
+.status-executed,
+.status-completed {
   background: rgba(34, 197, 94, 0.2);
   color: #22c55e;
 }
@@ -719,7 +737,7 @@
 }
 
 .manual-trading-interface.emergency-mode::before {
-  content: "🚨 EMERGENCY MODE ACTIVE - TRADING DISABLED";
+  content: '🚨 EMERGENCY MODE ACTIVE - TRADING DISABLED';
   display: block;
   background: linear-gradient(135deg, #dc2626, #b91c1c);
   color: white;
@@ -884,7 +902,8 @@
 
 /* Animations */
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
@@ -903,11 +922,11 @@
   .trading-controls {
     grid-template-columns: 1fr;
   }
-  
+
   .form-row {
     grid-template-columns: 1fr;
   }
-  
+
   .quick-stats {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -919,25 +938,25 @@
     gap: 16px;
     align-items: stretch;
   }
-  
+
   .emergency-controls {
     justify-content: center;
   }
-  
+
   .quick-stats {
     grid-template-columns: 1fr;
   }
-  
+
   .size-input-group {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .modal-content {
     width: 95%;
     padding: 20px;
   }
-  
+
   .modal-actions {
     flex-direction: column;
   }

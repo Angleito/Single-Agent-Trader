@@ -1,91 +1,122 @@
-# Git and version control
+# Git files
 .git
 .gitignore
 .gitattributes
 
-# Environment files
-.env
-.env.local
-.env.development
-.env.test
-.env.production
-
-# Python cache and build artifacts
+# Python cache and compiled files
 __pycache__
-*.pyc
-*.pyo
-*.pyd
-.Python
+*.py[cod]
+*$py.class
 *.so
-.tox
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis
-.pytest_cache
-*.egg-info/
+*.egg
+*.egg-info
 dist/
 build/
-.wheel/
+eggs/
+.eggs/
+sdist/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Virtual environments
-venv/
-env/
-ENV/
-.venv/
-.ENV/
+# Testing and coverage
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.tox/
+nosetests.xml
+pytest.xml
+htmlcov/
+.cache
 
-# IDE and editor files
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Development tools
+.ruff_cache/
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 .DS_Store
-Thumbs.db
+
+# Test files
+test_*.py
+*_test.py
+tests/
+test/
+conftest.py
+pytest.ini
+test-*.py
+**/test_*.py
+**/*_test.py
+**/tests/
+**/test/
 
 # Documentation
 docs/
 *.md
-README*
-CHANGELOG*
-LICENSE*
+!README.md
+!SECURITY.md
 
-# Development and testing
-# tests/  # Keep tests for dominance integration
-test_*.py
-*_test.py
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
+# Examples and scripts
+examples/
+scripts/
+dashboard/
+nginx/
 
-# Logs and data (these should be mounted as volumes)
+# Data files
+data/
 logs/
 *.log
-data/
-*.db
-*.sqlite
-*.sqlite3
+*.json
+!prompts/*.txt
 
-# Docker files (to avoid recursive copying)
+# Environment files
+.env
+.env.*
+*.env
+!example.env
+
+# Docker files (don't include other docker files in build context)
 Dockerfile*
+!Dockerfile.production
 docker-compose*.yml
 .dockerignore
 
-# CI/CD
+# Development config
+config/development.json
+config/nginx/
+config/postgresql.conf
+config/redis.conf
+
+# VCS and CI/CD
 .github/
 .gitlab-ci.yml
 .travis.yml
-.circleci/
-Jenkinsfile
 
-# Package managers
-poetry.lock
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# Poetry files (we only need pyproject.toml and poetry.lock)
+poetry.toml
+
+# Node modules (from MCP server)
+node_modules/
 package-lock.json
+pnpm-lock.yaml
 yarn.lock
 
 # Temporary files
@@ -93,6 +124,127 @@ tmp/
 temp/
 *.tmp
 *.temp
+*.bak
+*.backup
+
+# OS specific files
+Thumbs.db
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# IDE specific files
+.project
+.pydevproject
+.settings/
+.classpath
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# pyenv
+.python-version
+
+# celery beat schedule file
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# mkdocs documentation
+/site
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Security and secrets
+*.pem
+*.key
+*.crt
+*.p12
+secrets/
+.secrets/
+
+# Backup files
+*.backup
+*.bak
+*.orig
+
+# Lock files (except poetry.lock which we need)
+*.lock
+!poetry.lock
+
+# Archive files
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+# Compiled source
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+
+# Packages
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Logs and databases
+*.log
+*.sql
+*.sqlite
 
 # OS generated files
 .DS_Store
@@ -102,29 +254,3 @@ temp/
 .Trashes
 ehthumbs.db
 Thumbs.db
-
-# Scripts (will be copied separately if needed)
-scripts/
-
-# Monitoring and config templates
-monitoring/
-config/
-
-# Backup files
-*.bak
-*.backup
-*.old
-
-# Node modules (if any)
-node_modules/
-
-# Jupyter notebooks
-*.ipynb
-.ipynb_checkpoints/
-
-# Large data files
-*.csv
-*.json
-*.parquet
-*.h5
-*.hdf5

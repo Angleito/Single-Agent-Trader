@@ -70,6 +70,10 @@ class BluefinMarketDataProvider:
         self._max_price_deviation = 0.1  # 10% max price deviation
         self._min_volume = Decimal("0")
         
+        # Extended history tracking
+        self._extended_history_mode = False
+        self._extended_history_limit = 2000  # Max candles to keep in extended mode (e.g., 8 hours of 15s candles)
+        
         # Mock data generation for paper trading
         # Check if we should use real data even in dry run mode
         use_real_data = os.getenv("BLUEFIN_USE_REAL_DATA", "false").lower() == "true"
@@ -148,7 +152,20 @@ class BluefinMarketDataProvider:
             # Fetch initial historical data
             if fetch_historical:
                 try:
-                    await self.fetch_historical_data()
+                    # Fetch 8 hours of historical data on startup
+                    end_time = datetime.now(UTC)
+                    start_time = end_time - timedelta(hours=8)
+                    
+                    # Calculate expected number of candles for logging
+                    interval_seconds = self._interval_to_seconds(self.interval)
+                    expected_candles = int((8 * 3600) / interval_seconds)
+                    
+                    logger.info(
+                        f"Fetching 8 hours of historical data on startup "
+                        f"(~{expected_candles} candles at {self.interval} interval)"
+                    )
+                    
+                    await self.fetch_historical_data(start_time=start_time, end_time=end_time)
                 except Exception as e:
                     logger.warning(
                         f"Failed to fetch historical data: {e}"
@@ -240,9 +257,18 @@ class BluefinMarketDataProvider:
         
         # Calculate start time based on interval and limit
         interval_seconds = self._interval_to_seconds(granularity)
-        required_candles = max(self.candle_limit, 200)
-        default_start = end_time - timedelta(seconds=interval_seconds * required_candles)
-        start_time = start_time or default_start
+        
+        # If start_time is provided (e.g., 8 hours for startup), calculate required candles
+        if start_time:
+            time_range_seconds = (end_time - start_time).total_seconds()
+            required_candles = int(time_range_seconds / interval_seconds)
+            # Ensure we have at least the configured limit
+            required_candles = max(required_candles, self.candle_limit, 200)
+        else:
+            # Default behavior: use candle_limit
+            required_candles = max(self.candle_limit, 200)
+            default_start = end_time - timedelta(seconds=interval_seconds * required_candles)
+            start_time = default_start
         
         logger.info(
             f"Fetching historical data for {self.symbol} from {start_time} to {end_time}"
@@ -260,12 +286,25 @@ class BluefinMarketDataProvider:
                     self.symbol, granularity, start_time, end_time, required_candles
                 )
             
-            # Update cache
-            self._ohlcv_cache = historical_data[-self.candle_limit:]
+            # Update cache - keep all historical data if we fetched more than candle_limit
+            if len(historical_data) > self.candle_limit:
+                # We fetched extended historical data (e.g., 8 hours on startup)
+                self._extended_history_mode = True
+                # Limit to extended history limit to prevent memory issues
+                if len(historical_data) > self._extended_history_limit:
+                    self._ohlcv_cache = historical_data[-self._extended_history_limit:]
+                    logger.info(f"Loaded {len(self._ohlcv_cache)} historical candles (limited to {self._extended_history_limit})")
+                else:
+                    self._ohlcv_cache = historical_data
+                    logger.info(f"Loaded {len(self._ohlcv_cache)} historical candles (extended history)")
+            else:
+                # Normal case: limit to candle_limit
+                self._extended_history_mode = False
+                self._ohlcv_cache = historical_data[-self.candle_limit:]
+                logger.info(f"Loaded {len(self._ohlcv_cache)} historical candles")
+            
             self._last_update = datetime.now(UTC)
             self._cache_timestamps["ohlcv"] = self._last_update
-            
-            logger.info(f"Loaded {len(self._ohlcv_cache)} historical candles")
             
             # Validate data sufficiency
             self._validate_data_sufficiency(len(self._ohlcv_cache))
@@ -494,6 +533,7 @@ class BluefinMarketDataProvider:
             "last_update": self._last_update,
             "latest_price": self.get_latest_price(),
             "subscribers": len(self._subscribers),
+            "extended_history_mode": self._extended_history_mode,
             "cache_status": {
                 key: self._is_cache_valid(key) for key in self._cache_timestamps.keys()
             },
@@ -562,9 +602,15 @@ class BluefinMarketDataProvider:
         # Add candle to cache
         self._ohlcv_cache.append(candle)
         
-        # Maintain cache size
-        if len(self._ohlcv_cache) > self.candle_limit:
-            self._ohlcv_cache = self._ohlcv_cache[-self.candle_limit:]
+        # Maintain cache size based on mode
+        if self._extended_history_mode:
+            # In extended history mode, keep more candles
+            if len(self._ohlcv_cache) > self._extended_history_limit:
+                self._ohlcv_cache = self._ohlcv_cache[-self._extended_history_limit:]
+        else:
+            # Normal mode: maintain candle_limit
+            if len(self._ohlcv_cache) > self.candle_limit:
+                self._ohlcv_cache = self._ohlcv_cache[-self.candle_limit:]
         
         # Update last update time
         self._last_update = datetime.now(UTC)
@@ -715,9 +761,13 @@ class BluefinMarketDataProvider:
                         )
                         
                         self._ohlcv_cache.append(new_candle)
-                        # Keep cache size limited
-                        if len(self._ohlcv_cache) > self.candle_limit:
-                            self._ohlcv_cache = self._ohlcv_cache[-self.candle_limit:]
+                        # Keep cache size limited based on mode
+                        if self._extended_history_mode:
+                            if len(self._ohlcv_cache) > self._extended_history_limit:
+                                self._ohlcv_cache = self._ohlcv_cache[-self._extended_history_limit:]
+                        else:
+                            if len(self._ohlcv_cache) > self.candle_limit:
+                                self._ohlcv_cache = self._ohlcv_cache[-self.candle_limit:]
                         
                         # Notify subscribers
                         await self._notify_subscribers(new_candle)
@@ -844,11 +894,9 @@ class BluefinMarketDataProvider:
                 "endTime": str(int(end_time.timestamp() * 1000))
             }
             
-            # Make API request
-            # Note: Bluefin may not have traditional candlestick endpoints
-            # For now, use exchangeInfo or fall back to mock data
-            url = f"{self._api_base_url}/exchangeInfo"
-            logger.info(f"Fetching market info from Bluefin API: {url}")
+            # Make API request to klines endpoint
+            url = f"{self._api_base_url}/klines"
+            logger.info(f"Fetching candles from Bluefin API: {url} with params: {params}")
             
             async with self._session.get(url, params=params) as response:
                 if response.status != 200:
@@ -1123,9 +1171,13 @@ class BluefinMarketDataProvider:
                         )
                         if candle:
                             self._ohlcv_cache.append(candle)
-                            # Keep cache size limited
-                            if len(self._ohlcv_cache) > self.candle_limit:
-                                self._ohlcv_cache = self._ohlcv_cache[-self.candle_limit:]
+                            # Keep cache size limited based on mode
+                            if self._extended_history_mode:
+                                if len(self._ohlcv_cache) > self._extended_history_limit:
+                                    self._ohlcv_cache = self._ohlcv_cache[-self._extended_history_limit:]
+                            else:
+                                if len(self._ohlcv_cache) > self.candle_limit:
+                                    self._ohlcv_cache = self._ohlcv_cache[-self.candle_limit:]
                             
                             # Notify subscribers
                             await self._notify_subscribers(candle)

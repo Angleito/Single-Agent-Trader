@@ -1,6 +1,6 @@
 /**
  * Trading Performance Analytics Dashboard Component
- * 
+ *
  * Provides comprehensive performance analysis with:
  * - Real-time performance metrics tracking
  * - Historical performance charts and trends
@@ -12,137 +12,137 @@
  * - Performance attribution analysis
  */
 
-import type { Position, MarketData, TradeAction } from '../types';
+// Removed unused imports
 
 export interface PerformanceMetrics {
-  total_return: number;
-  total_return_percentage: number;
-  annualized_return: number;
-  win_rate: number;
-  profit_factor: number;
-  sharpe_ratio: number;
-  sortino_ratio: number;
-  max_drawdown: number;
-  max_drawdown_duration: number; // in days
-  avg_trade_duration: number; // in minutes
-  avg_win: number;
-  avg_loss: number;
-  largest_win: number;
-  largest_loss: number;
-  consecutive_wins: number;
-  consecutive_losses: number;
-  total_trades: number;
-  winning_trades: number;
-  losing_trades: number;
-  total_fees: number;
-  net_profit: number;
-  gross_profit: number;
-  gross_loss: number;
-  volatility: number;
-  calmar_ratio: number;
-  recovery_factor: number;
+  total_return: number
+  total_return_percentage: number
+  annualized_return: number
+  win_rate: number
+  profit_factor: number
+  sharpe_ratio: number
+  sortino_ratio: number
+  max_drawdown: number
+  max_drawdown_duration: number // in days
+  avg_trade_duration: number // in minutes
+  avg_win: number
+  avg_loss: number
+  largest_win: number
+  largest_loss: number
+  consecutive_wins: number
+  consecutive_losses: number
+  total_trades: number
+  winning_trades: number
+  losing_trades: number
+  total_fees: number
+  net_profit: number
+  gross_profit: number
+  gross_loss: number
+  volatility: number
+  calmar_ratio: number
+  recovery_factor: number
 }
 
 export interface TradeAnalytics {
-  trade_id: string;
-  symbol: string;
-  side: 'long' | 'short';
-  entry_time: string;
-  exit_time?: string;
-  entry_price: number;
-  exit_price?: number;
-  quantity: number;
-  pnl: number;
-  pnl_percentage: number;
-  duration: number; // in minutes
-  fees: number;
-  strategy: string;
-  market_conditions: string;
-  confidence_score?: number;
-  tags: string[];
+  trade_id: string
+  symbol: string
+  side: 'long' | 'short'
+  entry_time: string
+  exit_time?: string
+  entry_price: number
+  exit_price?: number
+  quantity: number
+  pnl: number
+  pnl_percentage: number
+  duration: number // in minutes
+  fees: number
+  strategy: string
+  market_conditions: string
+  confidence_score?: number
+  tags: string[]
 }
 
 export interface PerformancePeriod {
-  period: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
-  start_date: string;
-  end_date: string;
-  return_pct: number;
-  trades_count: number;
-  win_rate: number;
-  max_drawdown: number;
-  sharpe_ratio: number;
-  best_trade: number;
-  worst_trade: number;
+  period: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly'
+  start_date: string
+  end_date: string
+  return_pct: number
+  trades_count: number
+  win_rate: number
+  max_drawdown: number
+  sharpe_ratio: number
+  best_trade: number
+  worst_trade: number
 }
 
 export interface BenchmarkComparison {
-  benchmark_name: string;
-  benchmark_return: number;
-  strategy_return: number;
-  alpha: number;
-  beta: number;
-  correlation: number;
-  tracking_error: number;
-  information_ratio: number;
+  benchmark_name: string
+  benchmark_return: number
+  strategy_return: number
+  alpha: number
+  beta: number
+  correlation: number
+  tracking_error: number
+  information_ratio: number
 }
 
 export interface DrawdownPeriod {
-  start_date: string;
-  end_date?: string;
-  peak_value: number;
-  trough_value: number;
-  drawdown_pct: number;
-  duration_days: number;
-  recovery_date?: string;
-  recovery_duration?: number;
-  is_underwater: boolean;
+  start_date: string
+  end_date?: string
+  peak_value: number
+  trough_value: number
+  drawdown_pct: number
+  duration_days: number
+  recovery_date?: string
+  recovery_duration?: number
+  is_underwater: boolean
 }
 
 export class PerformanceAnalyticsDashboard {
-  private container: HTMLElement;
-  private apiBaseUrl: string;
-  private performanceMetrics: PerformanceMetrics | null = null;
-  private tradeAnalytics: TradeAnalytics[] = [];
-  private performancePeriods: PerformancePeriod[] = [];
-  private benchmarkComparisons: BenchmarkComparison[] = [];
-  private drawdownPeriods: DrawdownPeriod[] = [];
-  private chartCanvas: HTMLCanvasElement | null = null;
-  private updateInterval: number | null = null;
-  private selectedTimeframe: string = '30d';
-  private selectedMetric: string = 'cumulative_return';
-  private chartType: string = 'equity_curve';
+  private container: HTMLElement
+  private apiBaseUrl: string
+  private performanceMetrics: PerformanceMetrics | null = null
+  private tradeAnalytics: TradeAnalytics[] = []
+  private performancePeriods: PerformancePeriod[] = []
+  private benchmarkComparisons: BenchmarkComparison[] = []
+  private drawdownPeriods: DrawdownPeriod[] = []
+  private chartCanvas: HTMLCanvasElement | null = null
+  private updateInterval: number | null = null
+  private selectedTimeframe: string = '30d'
+  private selectedMetric: string = 'cumulative_return'
+  private chartType: string = 'equity_curve'
 
   constructor(containerId: string, apiBaseUrl: string) {
-    const container = document.getElementById(containerId);
+    const container = document.getElementById(containerId)
     if (!container) {
-      throw new Error(`Container element with ID ${containerId} not found`);
+      throw new Error(`Container element with ID ${containerId} not found`)
     }
-    
-    this.container = container;
-    this.apiBaseUrl = apiBaseUrl;
-    this.render();
-    this.loadPerformanceData();
-    this.startRealtimeUpdates();
+
+    this.container = container
+    this.apiBaseUrl = apiBaseUrl
+    this.render()
+    void this.loadPerformanceData()
+    this.startRealtimeUpdates()
   }
 
   /**
    * Update performance metrics
    */
   public updatePerformanceMetrics(metrics: PerformanceMetrics): void {
-    this.performanceMetrics = metrics;
-    this.updateMetricsDisplay();
+    this.performanceMetrics = metrics
+    this.updateMetricsDisplay()
   }
 
   /**
    * Add new trade analytics
    */
   public addTradeAnalytics(trade: TradeAnalytics): void {
-    this.tradeAnalytics.unshift(trade);
+    this.tradeAnalytics.unshift(trade)
     // Keep only last 1000 trades for performance
     if (this.tradeAnalytics.length > 1000) {
-      this.tradeAnalytics = this.tradeAnalytics.slice(0, 1000);
+      this.tradeAnalytics = this.tradeAnalytics.slice(0, 1000)
     }
-    this.updateTradeAnalyticsDisplay();
+    this.updateTradeAnalyticsDisplay()
   }
 
   /**
@@ -432,10 +432,10 @@ export class PerformanceAnalyticsDashboard {
           </div>
         </div>
       </div>
-    `;
+    `
 
-    this.attachEventListeners();
-    this.initializeChart();
+    this.attachEventListeners()
+    this.initializeChart()
   }
 
   /**
@@ -443,85 +443,85 @@ export class PerformanceAnalyticsDashboard {
    */
   private attachEventListeners(): void {
     // Header controls
-    const timeframeSelector = document.getElementById('timeframe-selector');
-    const exportBtn = document.getElementById('export-analytics');
-    const refreshBtn = document.getElementById('refresh-analytics');
+    const timeframeSelector = document.getElementById('timeframe-selector')
+    const exportBtn = document.getElementById('export-analytics')
+    const refreshBtn = document.getElementById('refresh-analytics')
 
     timeframeSelector?.addEventListener('change', (e) => {
-      this.selectedTimeframe = (e.target as HTMLSelectElement).value;
-      this.loadPerformanceData();
-    });
+      this.selectedTimeframe = (e.target as HTMLSelectElement).value
+      this.loadPerformanceData()
+    })
 
-    exportBtn?.addEventListener('click', () => this.exportAnalyticsReport());
-    refreshBtn?.addEventListener('click', () => this.loadPerformanceData());
+    exportBtn?.addEventListener('click', () => this.exportAnalyticsReport())
+    refreshBtn?.addEventListener('click', () => this.loadPerformanceData())
 
     // Chart controls
-    const chartTypeSelector = document.getElementById('chart-type-selector');
-    const chartPeriodSelector = document.getElementById('chart-period');
-    const fullscreenBtn = document.getElementById('fullscreen-chart');
+    const chartTypeSelector = document.getElementById('chart-type-selector')
+    const chartPeriodSelector = document.getElementById('chart-period')
+    const fullscreenBtn = document.getElementById('fullscreen-chart')
 
     chartTypeSelector?.addEventListener('change', (e) => {
-      this.chartType = (e.target as HTMLSelectElement).value;
-      this.updateChart();
-    });
+      this.chartType = (e.target as HTMLSelectElement).value
+      this.updateChart()
+    })
 
-    chartPeriodSelector?.addEventListener('change', () => this.updateChart());
-    fullscreenBtn?.addEventListener('click', () => this.toggleChartFullscreen());
+    chartPeriodSelector?.addEventListener('change', () => this.updateChart())
+    fullscreenBtn?.addEventListener('click', () => this.toggleChartFullscreen())
 
     // Tab switching
-    const tabBtns = document.querySelectorAll('.tab-btn');
-    tabBtns.forEach(btn => {
+    const tabBtns = document.querySelectorAll('.tab-btn')
+    tabBtns.forEach((btn) => {
       btn.addEventListener('click', (e) => {
-        const tabName = (e.target as HTMLElement).dataset.tab;
-        if (tabName) this.switchTab(tabName);
-      });
-    });
+        const tabName = (e.target as HTMLElement).dataset.tab
+        if (tabName) this.switchTab(tabName)
+      })
+    })
 
     // Trade analysis controls
-    const tradeFilter = document.getElementById('trade-filter');
-    const tradeSort = document.getElementById('trade-sort');
+    const tradeFilter = document.getElementById('trade-filter')
+    const tradeSort = document.getElementById('trade-sort')
 
-    tradeFilter?.addEventListener('change', () => this.filterTrades());
-    tradeSort?.addEventListener('change', () => this.sortTrades());
+    tradeFilter?.addEventListener('change', () => this.filterTrades())
+    tradeSort?.addEventListener('change', () => this.sortTrades())
   }
 
   /**
    * Initialize chart canvas
    */
   private initializeChart(): void {
-    const canvas = document.getElementById('performance-chart') as HTMLCanvasElement;
-    if (!canvas) return;
+    const canvas = document.getElementById('performance-chart') as HTMLCanvasElement
+    if (!canvas) return
 
-    this.chartCanvas = canvas;
-    this.resizeChart();
-    
+    this.chartCanvas = canvas
+    this.resizeChart()
+
     // Add resize listener
-    window.addEventListener('resize', () => this.resizeChart());
+    window.addEventListener('resize', () => this.resizeChart())
   }
 
   /**
    * Resize chart canvas
    */
   private resizeChart(): void {
-    if (!this.chartCanvas) return;
+    if (!this.chartCanvas) return
 
-    const container = this.chartCanvas.parentElement;
-    if (!container) return;
+    const container = this.chartCanvas.parentElement
+    if (!container) return
 
-    const rect = container.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
+    const rect = container.getBoundingClientRect()
+    const dpr = window.devicePixelRatio || 1
 
-    this.chartCanvas.width = rect.width * dpr;
-    this.chartCanvas.height = 400 * dpr;
-    this.chartCanvas.style.width = rect.width + 'px';
-    this.chartCanvas.style.height = '400px';
+    this.chartCanvas.width = rect.width * dpr
+    this.chartCanvas.height = 400 * dpr
+    this.chartCanvas.style.width = rect.width + 'px'
+    this.chartCanvas.style.height = '400px'
 
-    const ctx = this.chartCanvas.getContext('2d');
+    const ctx = this.chartCanvas.getContext('2d')
     if (ctx) {
-      ctx.scale(dpr, dpr);
+      ctx.scale(dpr, dpr)
     }
 
-    this.updateChart();
+    this.updateChart()
   }
 
   /**
@@ -529,22 +529,24 @@ export class PerformanceAnalyticsDashboard {
    */
   private async loadPerformanceData(): Promise<void> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/bot/analytics/performance?timeframe=${this.selectedTimeframe}`);
+      const response = await fetch(
+        `${this.apiBaseUrl}/api/bot/analytics/performance?timeframe=${this.selectedTimeframe}`
+      )
       if (response.ok) {
-        const data = await response.json();
-        this.performanceMetrics = data.metrics;
-        this.tradeAnalytics = data.trades || [];
-        this.performancePeriods = data.periods || [];
-        this.benchmarkComparisons = data.benchmarks || [];
-        this.drawdownPeriods = data.drawdowns || [];
+        const data = await response.json()
+        this.performanceMetrics = data.metrics
+        this.tradeAnalytics = data.trades || []
+        this.performancePeriods = data.periods || []
+        this.benchmarkComparisons = data.benchmarks || []
+        this.drawdownPeriods = data.drawdowns || []
 
-        this.updateMetricsDisplay();
-        this.updateTradeAnalyticsDisplay();
-        this.updateChart();
+        this.updateMetricsDisplay()
+        this.updateTradeAnalyticsDisplay()
+        this.updateChart()
       }
     } catch (error) {
-      console.warn('Failed to load performance data:', error);
-      this.loadMockData();
+      console.warn('Failed to load performance data:', error)
+      this.loadMockData()
     }
   }
 
@@ -578,53 +580,53 @@ export class PerformanceAnalyticsDashboard {
       gross_loss: -1234.56,
       volatility: 12.34,
       calmar_ratio: 2.21,
-      recovery_factor: 3.85
-    };
+      recovery_factor: 3.85,
+    }
 
-    this.updateMetricsDisplay();
-    this.updateChart();
+    this.updateMetricsDisplay()
+    this.updateChart()
   }
 
   /**
    * Update metrics display
    */
   private updateMetricsDisplay(): void {
-    if (!this.performanceMetrics) return;
+    if (!this.performanceMetrics) return
 
-    const metrics = this.performanceMetrics;
+    const metrics = this.performanceMetrics
 
     // Update summary
-    this.updateElement('total-return', `$${metrics.total_return.toFixed(2)}`);
-    this.updateElement('win-rate', `${metrics.win_rate.toFixed(1)}%`);
-    this.updateElement('sharpe-ratio', metrics.sharpe_ratio.toFixed(2));
+    this.updateElement('total-return', `$${metrics.total_return.toFixed(2)}`)
+    this.updateElement('win-rate', `${metrics.win_rate.toFixed(1)}%`)
+    this.updateElement('sharpe-ratio', metrics.sharpe_ratio.toFixed(2))
 
     // Update detailed metrics
-    this.updateElement('total-return-detailed', `$${metrics.total_return.toFixed(2)}`);
-    this.updateElement('total-return-pct', `${metrics.total_return_percentage.toFixed(2)}%`);
-    this.updateElement('annualized-return', `${metrics.annualized_return.toFixed(2)}%`);
+    this.updateElement('total-return-detailed', `$${metrics.total_return.toFixed(2)}`)
+    this.updateElement('total-return-pct', `${metrics.total_return_percentage.toFixed(2)}%`)
+    this.updateElement('annualized-return', `${metrics.annualized_return.toFixed(2)}%`)
 
-    this.updateElement('max-drawdown-detailed', `${metrics.max_drawdown.toFixed(2)}%`);
-    this.updateElement('volatility', `${metrics.volatility.toFixed(2)}%`);
-    this.updateElement('sharpe-detailed', metrics.sharpe_ratio.toFixed(2));
+    this.updateElement('max-drawdown-detailed', `${metrics.max_drawdown.toFixed(2)}%`)
+    this.updateElement('volatility', `${metrics.volatility.toFixed(2)}%`)
+    this.updateElement('sharpe-detailed', metrics.sharpe_ratio.toFixed(2))
 
-    this.updateElement('total-trades', metrics.total_trades.toString());
-    this.updateElement('win-rate-detailed', `${metrics.win_rate.toFixed(1)}%`);
-    this.updateElement('profit-factor', metrics.profit_factor.toFixed(2));
+    this.updateElement('total-trades', metrics.total_trades.toString())
+    this.updateElement('win-rate-detailed', `${metrics.win_rate.toFixed(1)}%`)
+    this.updateElement('profit-factor', metrics.profit_factor.toFixed(2))
 
-    this.updateElement('avg-win', `$${metrics.avg_win.toFixed(2)}`);
-    this.updateElement('avg-loss', `$${Math.abs(metrics.avg_loss).toFixed(2)}`);
-    this.updateElement('recovery-factor', metrics.recovery_factor.toFixed(2));
+    this.updateElement('avg-win', `$${metrics.avg_win.toFixed(2)}`)
+    this.updateElement('avg-loss', `$${Math.abs(metrics.avg_loss).toFixed(2)}`)
+    this.updateElement('recovery-factor', metrics.recovery_factor.toFixed(2))
 
     // Update trade stats
-    this.updateElement('best-trade', `$${metrics.largest_win.toFixed(2)}`);
-    this.updateElement('worst-trade', `$${metrics.largest_loss.toFixed(2)}`);
-    this.updateElement('avg-duration', this.formatDuration(metrics.avg_trade_duration));
-    this.updateElement('consecutive-wins', metrics.consecutive_wins.toString());
-    this.updateElement('consecutive-losses', metrics.consecutive_losses.toString());
-    this.updateElement('total-fees', `$${metrics.total_fees.toFixed(2)}`);
+    this.updateElement('best-trade', `$${metrics.largest_win.toFixed(2)}`)
+    this.updateElement('worst-trade', `$${metrics.largest_loss.toFixed(2)}`)
+    this.updateElement('avg-duration', this.formatDuration(metrics.avg_trade_duration))
+    this.updateElement('consecutive-wins', metrics.consecutive_wins.toString())
+    this.updateElement('consecutive-losses', metrics.consecutive_losses.toString())
+    this.updateElement('total-fees', `$${metrics.total_fees.toFixed(2)}`)
 
     // Update trends
-    this.updateTrendIndicators();
+    this.updateTrendIndicators()
   }
 
   /**
@@ -632,43 +634,46 @@ export class PerformanceAnalyticsDashboard {
    */
   private updateTrendIndicators(): void {
     // Simplified trend calculation - in reality this would compare to previous periods
-    const trends = {
+    const trends: Record<string, 'up' | 'down'> = {
       returns: this.performanceMetrics!.total_return_percentage > 0 ? 'up' : 'down',
       risk: this.performanceMetrics!.max_drawdown > -10 ? 'up' : 'down',
       trades: this.performanceMetrics!.win_rate > 50 ? 'up' : 'down',
-      efficiency: this.performanceMetrics!.profit_factor > 1 ? 'up' : 'down'
-    };
+      efficiency: this.performanceMetrics!.profit_factor > 1 ? 'up' : 'down',
+    }
 
-    this.updateTrendElement('returns-trend', trends.returns);
-    this.updateTrendElement('risk-trend', trends.risk);
-    this.updateTrendElement('trades-trend', trends.trades);
-    this.updateTrendElement('efficiency-trend', trends.efficiency);
+    this.updateTrendElement('returns-trend', trends.returns)
+    this.updateTrendElement('risk-trend', trends.risk)
+    this.updateTrendElement('trades-trend', trends.trades)
+    this.updateTrendElement('efficiency-trend', trends.efficiency)
   }
 
   /**
    * Update trend element
    */
   private updateTrendElement(id: string, trend: 'up' | 'down'): void {
-    const element = document.getElementById(id);
-    if (!element) return;
+    const element = document.getElementById(id)
+    if (!element) return
 
-    element.className = `metric-trend trend-${trend}`;
-    element.textContent = trend === 'up' ? '↗' : '↘';
+    element.className = `metric-trend trend-${trend}`
+    element.textContent = trend === 'up' ? '↗' : '↘'
   }
 
   /**
    * Update trade analytics display
    */
   private updateTradeAnalyticsDisplay(): void {
-    const tableBody = document.getElementById('trades-table-body');
-    if (!tableBody) return;
+    const tableBody = document.getElementById('trades-table-body')
+    if (!tableBody) return
 
     if (this.tradeAnalytics.length === 0) {
-      tableBody.innerHTML = '<tr class="empty-state"><td colspan="9">No trades to display</td></tr>';
-      return;
+      tableBody.innerHTML = '<tr class="empty-state"><td colspan="9">No trades to display</td></tr>'
+      return
     }
 
-    tableBody.innerHTML = this.tradeAnalytics.slice(0, 50).map(trade => `
+    tableBody.innerHTML = this.tradeAnalytics
+      .slice(0, 50)
+      .map(
+        (trade) => `
       <tr class="trade-row ${trade.pnl >= 0 ? 'winning' : 'losing'}">
         <td class="symbol-cell">${trade.symbol}</td>
         <td class="side-cell">
@@ -688,37 +693,39 @@ export class PerformanceAnalyticsDashboard {
           <button class="action-btn view-btn" onclick="this.viewTradeDetails('${trade.trade_id}')">👁</button>
         </td>
       </tr>
-    `).join('');
+    `
+      )
+      .join('')
   }
 
   /**
    * Update chart based on selected type
    */
   private updateChart(): void {
-    if (!this.chartCanvas) return;
+    if (!this.chartCanvas) return
 
-    const ctx = this.chartCanvas.getContext('2d');
-    if (!ctx) return;
+    const ctx = this.chartCanvas.getContext('2d')
+    if (!ctx) return
 
     // Clear canvas
-    ctx.clearRect(0, 0, this.chartCanvas.width, this.chartCanvas.height);
+    ctx.clearRect(0, 0, this.chartCanvas.width, this.chartCanvas.height)
 
     switch (this.chartType) {
       case 'equity_curve':
-        this.drawEquityCurve(ctx);
-        break;
+        this.drawEquityCurve(ctx)
+        break
       case 'drawdown':
-        this.drawDrawdownChart(ctx);
-        break;
+        this.drawDrawdownChart(ctx)
+        break
       case 'monthly_returns':
-        this.drawMonthlyReturns(ctx);
-        break;
+        this.drawMonthlyReturns(ctx)
+        break
       case 'rolling_sharpe':
-        this.drawRollingSharpe(ctx);
-        break;
+        this.drawRollingSharpe(ctx)
+        break
       case 'underwater':
-        this.drawUnderwaterChart(ctx);
-        break;
+        this.drawUnderwaterChart(ctx)
+        break
     }
   }
 
@@ -726,95 +733,100 @@ export class PerformanceAnalyticsDashboard {
    * Draw equity curve chart
    */
   private drawEquityCurve(ctx: CanvasRenderingContext2D): void {
-    const width = ctx.canvas.width / (window.devicePixelRatio || 1);
-    const height = ctx.canvas.height / (window.devicePixelRatio || 1);
-    const padding = { top: 20, right: 60, bottom: 40, left: 60 };
+    const _width = ctx.canvas.width / (window.devicePixelRatio || 1)
+    const _height = ctx.canvas.height / (window.devicePixelRatio || 1)
+    const padding = { top: 20, right: 60, bottom: 40, left: 60 }
 
     // Generate sample equity curve data
-    const data = this.generateEquityCurveData();
-    
-    if (data.length === 0) return;
+    const data = this.generateEquityCurveData()
+
+    if (data.length === 0) return
 
     // Calculate bounds
-    const xMin = 0;
-    const xMax = data.length - 1;
-    const yMin = Math.min(...data.map(d => d.value));
-    const yMax = Math.max(...data.map(d => d.value));
-    const yRange = yMax - yMin;
+    const _xMin = 0
+    const xMax = data.length - 1
+    const yMin = Math.min(...data.map((d) => d.value))
+    const yMax = Math.max(...data.map((d) => d.value))
+    const yRange = yMax - yMin
 
     // Draw grid
-    this.drawGrid(ctx, width, height, padding);
+    this.drawGrid(ctx, width, height, padding)
 
     // Draw equity curve
-    ctx.strokeStyle = '#22c55e';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
+    ctx.strokeStyle = '#22c55e'
+    ctx.lineWidth = 2
+    ctx.beginPath()
 
     data.forEach((point, index) => {
-      const x = padding.left + (index / xMax) * (width - padding.left - padding.right);
-      const y = padding.top + (1 - (point.value - yMin) / yRange) * (height - padding.top - padding.bottom);
-      
-      if (index === 0) {
-        ctx.moveTo(x, y);
-      } else {
-        ctx.lineTo(x, y);
-      }
-    });
+      const x = padding.left + (index / xMax) * (width - padding.left - padding.right)
+      const y =
+        padding.top + (1 - (point.value - yMin) / yRange) * (height - padding.top - padding.bottom)
 
-    ctx.stroke();
+      if (index === 0) {
+        ctx.moveTo(x, y)
+      } else {
+        ctx.lineTo(x, y)
+      }
+    })
+
+    ctx.stroke()
 
     // Draw axes labels
-    this.drawAxesLabels(ctx, width, height, padding, yMin, yMax);
+    this.drawAxesLabels(ctx, width, height, padding, yMin, yMax)
   }
 
   /**
    * Draw drawdown chart
    */
   private drawDrawdownChart(ctx: CanvasRenderingContext2D): void {
-    const width = ctx.canvas.width / (window.devicePixelRatio || 1);
-    const height = ctx.canvas.height / (window.devicePixelRatio || 1);
-    const padding = { top: 20, right: 60, bottom: 40, left: 60 };
+    const _width = ctx.canvas.width / (window.devicePixelRatio || 1)
+    const _height = ctx.canvas.height / (window.devicePixelRatio || 1)
+    const padding = { top: 20, right: 60, bottom: 40, left: 60 }
 
     // Generate sample drawdown data
-    const data = this.generateDrawdownData();
-    
-    if (data.length === 0) return;
+    const data = this.generateDrawdownData()
+
+    if (data.length === 0) return
 
     // Calculate bounds
-    const xMax = data.length - 1;
-    const yMin = Math.min(...data.map(d => d.drawdown));
-    const yMax = 0;
+    const xMax = data.length - 1
+    const yMin = Math.min(...data.map((d) => d.drawdown))
+    const yMax = 0
 
     // Draw grid
-    this.drawGrid(ctx, width, height, padding);
+    this.drawGrid(ctx, width, height, padding)
 
     // Fill drawdown area
-    ctx.fillStyle = 'rgba(239, 68, 68, 0.3)';
-    ctx.beginPath();
+    ctx.fillStyle = 'rgba(239, 68, 68, 0.3)'
+    ctx.beginPath()
 
     data.forEach((point, index) => {
-      const x = padding.left + (index / xMax) * (width - padding.left - padding.right);
-      const yTop = padding.top;
-      const yBottom = padding.top + (Math.abs(point.drawdown) / Math.abs(yMin)) * (height - padding.top - padding.bottom);
-      
+      const x = padding.left + (index / xMax) * (width - padding.left - padding.right)
+      const yTop = padding.top
+      const _yBottom =
+        padding.top +
+        (Math.abs(point.drawdown) / Math.abs(yMin)) * (height - padding.top - padding.bottom)
+
       if (index === 0) {
-        ctx.moveTo(x, yTop);
+        ctx.moveTo(x, yTop)
       } else {
-        ctx.lineTo(x, yTop);
+        ctx.lineTo(x, yTop)
       }
-    });
+    })
 
     data.reverse().forEach((point, index) => {
-      const x = padding.left + ((xMax - index) / xMax) * (width - padding.left - padding.right);
-      const y = padding.top + (Math.abs(point.drawdown) / Math.abs(yMin)) * (height - padding.top - padding.bottom);
-      ctx.lineTo(x, y);
-    });
+      const x = padding.left + ((xMax - index) / xMax) * (width - padding.left - padding.right)
+      const y =
+        padding.top +
+        (Math.abs(point.drawdown) / Math.abs(yMin)) * (height - padding.top - padding.bottom)
+      ctx.lineTo(x, y)
+    })
 
-    ctx.closePath();
-    ctx.fill();
+    ctx.closePath()
+    ctx.fill()
 
     // Draw axes labels
-    this.drawAxesLabels(ctx, width, height, padding, yMin, yMax);
+    this.drawAxesLabels(ctx, width, height, padding, yMin, yMax)
   }
 
   /**
@@ -822,10 +834,10 @@ export class PerformanceAnalyticsDashboard {
    */
   private drawMonthlyReturns(ctx: CanvasRenderingContext2D): void {
     // Implementation for monthly returns heatmap
-    ctx.fillStyle = '#9ca3af';
-    ctx.font = '14px Inter';
-    ctx.textAlign = 'center';
-    ctx.fillText('Monthly Returns Chart', ctx.canvas.width / 2, ctx.canvas.height / 2);
+    ctx.fillStyle = '#9ca3af'
+    ctx.font = '14px Inter'
+    ctx.textAlign = 'center'
+    ctx.fillText('Monthly Returns Chart', ctx.canvas.width / 2, ctx.canvas.height / 2)
   }
 
   /**
@@ -833,10 +845,10 @@ export class PerformanceAnalyticsDashboard {
    */
   private drawRollingSharpe(ctx: CanvasRenderingContext2D): void {
     // Implementation for rolling Sharpe ratio
-    ctx.fillStyle = '#9ca3af';
-    ctx.font = '14px Inter';
-    ctx.textAlign = 'center';
-    ctx.fillText('Rolling Sharpe Ratio Chart', ctx.canvas.width / 2, ctx.canvas.height / 2);
+    ctx.fillStyle = '#9ca3af'
+    ctx.font = '14px Inter'
+    ctx.textAlign = 'center'
+    ctx.fillText('Rolling Sharpe Ratio Chart', ctx.canvas.width / 2, ctx.canvas.height / 2)
   }
 
   /**
@@ -844,102 +856,115 @@ export class PerformanceAnalyticsDashboard {
    */
   private drawUnderwaterChart(ctx: CanvasRenderingContext2D): void {
     // Implementation for underwater chart
-    ctx.fillStyle = '#9ca3af';
-    ctx.font = '14px Inter';
-    ctx.textAlign = 'center';
-    ctx.fillText('Underwater Chart', ctx.canvas.width / 2, ctx.canvas.height / 2);
+    ctx.fillStyle = '#9ca3af'
+    ctx.font = '14px Inter'
+    ctx.textAlign = 'center'
+    ctx.fillText('Underwater Chart', ctx.canvas.width / 2, ctx.canvas.height / 2)
   }
 
   /**
    * Draw grid
    */
-  private drawGrid(ctx: CanvasRenderingContext2D, width: number, height: number, padding: any): void {
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 1;
+  private drawGrid(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    padding: any
+  ): void {
+    ctx.strokeStyle = '#333'
+    ctx.lineWidth = 1
 
     // Horizontal grid lines
     for (let i = 0; i <= 5; i++) {
-      const y = padding.top + (i / 5) * (height - padding.top - padding.bottom);
-      ctx.beginPath();
-      ctx.moveTo(padding.left, y);
-      ctx.lineTo(width - padding.right, y);
-      ctx.stroke();
+      const y = padding.top + (i / 5) * (height - padding.top - padding.bottom)
+      ctx.beginPath()
+      ctx.moveTo(padding.left, y)
+      ctx.lineTo(width - padding.right, y)
+      ctx.stroke()
     }
 
     // Vertical grid lines
     for (let i = 0; i <= 10; i++) {
-      const x = padding.left + (i / 10) * (width - padding.left - padding.right);
-      ctx.beginPath();
-      ctx.moveTo(x, padding.top);
-      ctx.lineTo(x, height - padding.bottom);
-      ctx.stroke();
+      const x = padding.left + (i / 10) * (width - padding.left - padding.right)
+      ctx.beginPath()
+      ctx.moveTo(x, padding.top)
+      ctx.lineTo(x, height - padding.bottom)
+      ctx.stroke()
     }
   }
 
   /**
    * Draw axes labels
    */
-  private drawAxesLabels(ctx: CanvasRenderingContext2D, width: number, height: number, padding: any, yMin: number, yMax: number): void {
-    ctx.fillStyle = '#9ca3af';
-    ctx.font = '12px Inter';
-    ctx.textAlign = 'right';
+  private drawAxesLabels(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    padding: any,
+    yMin: number,
+    yMax: number
+  ): void {
+    ctx.fillStyle = '#9ca3af'
+    ctx.font = '12px Inter'
+    ctx.textAlign = 'right'
 
     // Y-axis labels
     for (let i = 0; i <= 5; i++) {
-      const y = padding.top + (i / 5) * (height - padding.top - padding.bottom);
-      const value = yMax - (i / 5) * (yMax - yMin);
-      ctx.fillText(value.toFixed(0), padding.left - 10, y + 4);
+      const y = padding.top + (i / 5) * (height - padding.top - padding.bottom)
+      const value = yMax - (i / 5) * (yMax - yMin)
+      ctx.fillText(value.toFixed(0), padding.left - 10, y + 4)
     }
 
     // X-axis labels (simplified)
-    ctx.textAlign = 'center';
-    const labels = ['30d ago', '20d ago', '10d ago', 'Today'];
+    ctx.textAlign = 'center'
+    const labels = ['30d ago', '20d ago', '10d ago', 'Today']
     labels.forEach((label, index) => {
-      const x = padding.left + (index / (labels.length - 1)) * (width - padding.left - padding.right);
-      ctx.fillText(label, x, height - padding.bottom + 20);
-    });
+      const x =
+        padding.left + (index / (labels.length - 1)) * (width - padding.left - padding.right)
+      ctx.fillText(label, x, height - padding.bottom + 20)
+    })
   }
 
   /**
    * Generate sample equity curve data
    */
   private generateEquityCurveData(): Array<{ timestamp: number; value: number }> {
-    const data = [];
-    let value = 10000;
-    const now = Date.now();
+    const data = []
+    let value = 10000
+    const now = Date.now()
 
     for (let i = 0; i < 30; i++) {
-      value += (Math.random() - 0.45) * 100; // Slight upward bias
+      value += (Math.random() - 0.45) * 100 // Slight upward bias
       data.push({
         timestamp: now - (29 - i) * 24 * 60 * 60 * 1000,
-        value: value
-      });
+        value: value,
+      })
     }
 
-    return data;
+    return data
   }
 
   /**
    * Generate sample drawdown data
    */
   private generateDrawdownData(): Array<{ timestamp: number; drawdown: number }> {
-    const data = [];
-    let peak = 10000;
-    let current = 10000;
-    const now = Date.now();
+    const data = []
+    let peak = 10000
+    let current = 10000
+    const now = Date.now()
 
     for (let i = 0; i < 30; i++) {
-      current += (Math.random() - 0.45) * 100;
-      if (current > peak) peak = current;
-      
-      const drawdown = ((current - peak) / peak) * 100;
+      current += (Math.random() - 0.45) * 100
+      if (current > peak) peak = current
+
+      const drawdown = ((current - peak) / peak) * 100
       data.push({
         timestamp: now - (29 - i) * 24 * 60 * 60 * 1000,
-        drawdown: drawdown
-      });
+        drawdown: drawdown,
+      })
     }
 
-    return data;
+    return data
   }
 
   /**
@@ -947,19 +972,19 @@ export class PerformanceAnalyticsDashboard {
    */
   private switchTab(tabName: string): void {
     // Update tab buttons
-    const tabBtns = document.querySelectorAll('.tab-btn');
-    tabBtns.forEach(btn => {
-      btn.classList.toggle('active', btn.getAttribute('data-tab') === tabName);
-    });
+    const tabBtns = document.querySelectorAll('.tab-btn')
+    tabBtns.forEach((btn) => {
+      btn.classList.toggle('active', btn.getAttribute('data-tab') === tabName)
+    })
 
     // Update tab content
-    const tabContents = document.querySelectorAll('.tab-content');
-    tabContents.forEach(content => {
-      content.classList.toggle('active', content.id === `${tabName}-tab`);
-    });
+    const tabContents = document.querySelectorAll('.tab-content')
+    tabContents.forEach((content) => {
+      content.classList.toggle('active', content.id === `${tabName}-tab`)
+    })
 
     // Load tab-specific data
-    this.loadTabData(tabName);
+    this.loadTabData(tabName)
   }
 
   /**
@@ -968,14 +993,14 @@ export class PerformanceAnalyticsDashboard {
   private loadTabData(tabName: string): void {
     switch (tabName) {
       case 'period-performance':
-        this.updatePeriodPerformanceDisplay();
-        break;
+        this.updatePeriodPerformanceDisplay()
+        break
       case 'drawdown-analysis':
-        this.updateDrawdownAnalysisDisplay();
-        break;
+        this.updateDrawdownAnalysisDisplay()
+        break
       case 'benchmark-comparison':
-        this.updateBenchmarkComparisonDisplay();
-        break;
+        this.updateBenchmarkComparisonDisplay()
+        break
     }
   }
 
@@ -983,8 +1008,8 @@ export class PerformanceAnalyticsDashboard {
    * Update period performance display
    */
   private updatePeriodPerformanceDisplay(): void {
-    const periodsGrid = document.getElementById('periods-grid');
-    if (!periodsGrid) return;
+    const periodsGrid = document.getElementById('periods-grid')
+    if (!periodsGrid) return
 
     // Mock period data
     const periods = [
@@ -992,9 +1017,11 @@ export class PerformanceAnalyticsDashboard {
       { period: 'Last Month', return: -2.34, trades: 28, winRate: 52.8 },
       { period: 'This Quarter', return: 15.67, trades: 72, winRate: 62.5 },
       { period: 'Last Quarter', return: 12.34, trades: 68, winRate: 58.9 },
-    ];
+    ]
 
-    periodsGrid.innerHTML = periods.map(period => `
+    periodsGrid.innerHTML = periods
+      .map(
+        (period) => `
       <div class="period-card">
         <h6>${period.period}</h6>
         <div class="period-metrics">
@@ -1014,33 +1041,36 @@ export class PerformanceAnalyticsDashboard {
           </div>
         </div>
       </div>
-    `).join('');
+    `
+      )
+      .join('')
   }
 
   /**
    * Update drawdown analysis display
    */
   private updateDrawdownAnalysisDisplay(): void {
-    if (!this.performanceMetrics) return;
+    if (!this.performanceMetrics) return
 
-    this.updateElement('current-drawdown', `${this.performanceMetrics.max_drawdown.toFixed(2)}%`);
-    this.updateElement('days-underwater', '0'); // Would be calculated from actual data
-    this.updateElement('max-dd-duration', `${this.performanceMetrics.max_drawdown_duration} days`);
+    this.updateElement('current-drawdown', `${this.performanceMetrics.max_drawdown.toFixed(2)}%`)
+    this.updateElement('days-underwater', '0') // Would be calculated from actual data
+    this.updateElement('max-dd-duration', `${this.performanceMetrics.max_drawdown_duration} days`)
 
-    const periodsList = document.getElementById('drawdown-periods-list');
-    if (!periodsList) return;
+    const periodsList = document.getElementById('drawdown-periods-list')
+    if (!periodsList) return
 
-    periodsList.innerHTML = '<div class="empty-state">No significant drawdown periods</div>';
+    periodsList.innerHTML = '<div class="empty-state">No significant drawdown periods</div>'
   }
 
   /**
    * Update benchmark comparison display
    */
   private updateBenchmarkComparisonDisplay(): void {
-    const benchmarkGrid = document.getElementById('benchmark-grid');
-    if (!benchmarkGrid) return;
+    const benchmarkGrid = document.getElementById('benchmark-grid')
+    if (!benchmarkGrid) return
 
-    benchmarkGrid.innerHTML = '<div class="empty-state">Benchmark comparison data not available</div>';
+    benchmarkGrid.innerHTML =
+      '<div class="empty-state">Benchmark comparison data not available</div>'
   }
 
   /**
@@ -1048,43 +1078,43 @@ export class PerformanceAnalyticsDashboard {
    */
   private filterTrades(): void {
     // Implementation for filtering trades
-    this.updateTradeAnalyticsDisplay();
+    this.updateTradeAnalyticsDisplay()
   }
 
   private sortTrades(): void {
     // Implementation for sorting trades
-    this.updateTradeAnalyticsDisplay();
+    this.updateTradeAnalyticsDisplay()
   }
 
   private toggleChartFullscreen(): void {
     // Implementation for fullscreen chart
-    console.log('Toggle fullscreen chart');
+    console.log('Toggle fullscreen chart')
   }
 
   private exportAnalyticsReport(): void {
     // Implementation for exporting analytics report
-    console.log('Export analytics report');
+    console.log('Export analytics report')
   }
 
   private formatDuration(minutes: number): string {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours}h ${mins}m`;
+    const hours = Math.floor(minutes / 60)
+    const mins = minutes % 60
+    return `${hours}h ${mins}m`
   }
 
   private formatDateTime(dateString: string): string {
-    return new Date(dateString).toLocaleString();
+    return new Date(dateString).toLocaleString()
   }
 
   private updateElement(id: string, value: string): void {
-    const element = document.getElementById(id);
-    if (element) element.textContent = value;
+    const element = document.getElementById(id)
+    if (element) element.textContent = value
   }
 
   private startRealtimeUpdates(): void {
     this.updateInterval = window.setInterval(() => {
-      this.loadPerformanceData();
-    }, 30000); // Update every 30 seconds
+      this.loadPerformanceData()
+    }, 30000) // Update every 30 seconds
   }
 
   /**
@@ -1092,9 +1122,9 @@ export class PerformanceAnalyticsDashboard {
    */
   public destroy(): void {
     if (this.updateInterval) {
-      clearInterval(this.updateInterval);
+      clearInterval(this.updateInterval)
     }
-    
-    window.removeEventListener('resize', () => this.resizeChart());
+
+    window.removeEventListener('resize', () => this.resizeChart())
   }
 }
