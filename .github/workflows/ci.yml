@@ -55,7 +55,13 @@ jobs:
     
     - name: Install dependencies
       run: |
-        poetry install --with dev
+        poetry install --with dev --no-interaction --verbose
+    
+    - name: Debug Poetry environment
+      run: |
+        poetry --version
+        poetry env info
+        poetry show --only dev | grep -E "(black|ruff|mypy)"
     
     - name: Verify Black installation
       run: |
@@ -181,7 +187,7 @@ jobs:
     
     - name: Install dependencies
       run: |
-        poetry install --with dev
+        poetry install --with dev --no-interaction --verbose
     
     - name: Create test environment file
       run: |
