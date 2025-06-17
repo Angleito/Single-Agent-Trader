@@ -49,7 +49,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: .venv
-        key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+        key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}-v2
         restore-keys: |
           venv-${{ runner.os }}-
 
@@ -68,21 +68,32 @@ jobs:
         fi
         echo "Installing dependencies..."
         poetry install --with dev --no-interaction --verbose
+        echo "Verifying executables were created..."
+        VENV_PATH=$(poetry env info --path)
+        if [ ! -f "$VENV_PATH/bin/black" ]; then
+          echo "Black executable not found, forcing reinstallation..."
+          poetry run pip install --force-reinstall black
+        fi
+        if [ ! -f "$VENV_PATH/bin/ruff" ]; then
+          echo "Ruff executable not found, forcing reinstallation..."
+          poetry run pip install --force-reinstall ruff  
+        fi
 
     - name: Verify Black installation
       run: |
         echo "Checking Poetry environment..."
         poetry env info
-        echo "Current working directory:"
-        pwd
-        echo "Checking virtual environment directly..."
+        echo "Checking installed packages..."
+        poetry show | grep -E "(black|ruff|mypy)"
+        echo "Checking virtual environment executables..."
         VENV_PATH=$(poetry env info --path)
         echo "Virtual env path: $VENV_PATH"
-        ls -la "$VENV_PATH/bin/" | head -10
-        echo "Testing Black directly from venv..."
-        "$VENV_PATH/bin/black" --version
-        echo "Testing via Poetry run..."
-        poetry run python -c "import sys; print('Python path:', sys.executable)"
+        ls -la "$VENV_PATH/bin/" | grep -E "(black|ruff|mypy)" || echo "No tool executables found"
+        echo "Testing Python module access..."
+        poetry run python -c "import black; print(f'Black version: {black.__version__}')"
+        poetry run python -c "import ruff; print('Ruff imported successfully')" || echo "Ruff import failed"
+        poetry run python -c "import mypy; print('MyPy imported successfully')" || echo "MyPy import failed"
+        echo "Testing module execution..."
         poetry run python -m black --version
 
     - name: Run Black formatting check
