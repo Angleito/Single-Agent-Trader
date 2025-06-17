@@ -5,6 +5,18 @@ import { TradingViewChart } from './tradingview.ts';
 import { LLMDecisionCard, type LLMDecisionData } from './components/llm-decision-card.ts';
 import { StatusIndicators, type ConnectionStatus, type BotStatus as IndicatorBotStatus, type MarketStatus, type PositionStatus } from './components/status-indicators.ts';
 import { LLMMonitorDashboard } from './llm-monitor.ts';
+
+// Phase 4 Enterprise Services
+import { WebSocketManager } from './services/websocket-manager.ts';
+import { NotificationSystem } from './services/notification-system.ts';
+import { DashboardOrchestrator } from './services/dashboard-orchestrator.ts';
+import { MobileOptimizationManager } from './services/mobile-optimization.ts';
+import { DataPersistenceManager } from './services/data-persistence.ts';
+import { ErrorHandlingManager } from './services/error-handling.ts';
+import { SecurityManager } from './services/security-manager.ts';
+import { PerformanceOptimizer } from './services/performance-optimizer.ts';
+import { TestSuiteManager } from './tests/test-suite-manager.ts';
+
 import type { 
   DashboardConfig,
   BotStatus,
@@ -381,7 +393,7 @@ class VisibilityHandler {
 }
 
 /**
- * AI Trading Bot Dashboard Main Application
+ * AI Trading Bot Dashboard Main Application with Phase 4 Enterprise Services
  */
 class DashboardApp {
   public ui: DashboardUI;
@@ -402,6 +414,17 @@ class DashboardApp {
   private systemHealthInterval: number | null = null;
   private headerElements: any = {};
   private sidebarElements: any = {};
+
+  // Phase 4 Enterprise Services
+  private enterpriseWebSocketManager: WebSocketManager | null = null;
+  private notificationSystem: NotificationSystem | null = null;
+  private dashboardOrchestrator: DashboardOrchestrator | null = null;
+  private mobileOptimizer: MobileOptimizationManager | null = null;
+  private dataManager: DataPersistenceManager | null = null;
+  private errorHandler: ErrorHandlingManager | null = null;
+  private securityManager: SecurityManager | null = null;
+  private performanceOptimizer: PerformanceOptimizer | null = null;
+  private testManager: TestSuiteManager | null = null;
   
   // Debounced methods for performance
   private debouncedUpdateMarketData: (data: MarketData) => void;
@@ -434,6 +457,9 @@ class DashboardApp {
     // Initialize components
     this.ui = new DashboardUI();
     this.websocket = new DashboardWebSocket(this.config.websocket_url);
+
+    // Initialize Phase 4 Enterprise Services (lazy initialization in performInitialization)
+    // Services will be initialized during performInitialization() for better error handling
 
     // Setup debounced methods for performance
     this.debouncedUpdateMarketData = this.debouncer.debounce(
@@ -535,10 +561,14 @@ class DashboardApp {
         return null; // Continue without chart
       });
       
-      // Immediately continue with WebSocket
-      this.updateLoadingProgress('Connecting to bot...', 70);
-
-      // Step 3: Set up WebSocket connection
+      // Step 3: Initialize Phase 4 Enterprise Services
+      this.updateLoadingProgress('Initializing enterprise services...', 60);
+      this.performanceMonitor.startTiming('enterprise_services_setup');
+      await this.initializeEnterpriseServices();
+      const servicesTime = this.performanceMonitor.endTiming('enterprise_services_setup');
+      
+      // Step 4: Set up WebSocket connection
+      this.updateLoadingProgress('Connecting to bot...', 75);
       this.performanceMonitor.startTiming('websocket_setup');
       this.setupWebSocketHandlers();
       
@@ -568,7 +598,7 @@ class DashboardApp {
       await connectionPromise;
       const wsTime = this.performanceMonitor.endTiming('websocket_setup');
 
-      // Step 4: Finalize initialization
+      // Step 5: Finalize initialization
       this.updateLoadingProgress('Finalizing...', 90);
       
       await new Promise(resolve => setTimeout(resolve, 200)); // Brief pause for smooth UX
@@ -604,6 +634,138 @@ class DashboardApp {
       const errorMessage = error instanceof Error ? error.message : 'Unknown initialization error';
       this.showInitializationError(errorMessage);
       throw error;
+    }
+  }
+
+  /**
+   * Initialize Phase 4 Enterprise Services
+   */
+  private async initializeEnterpriseServices(): Promise<void> {
+    try {
+      // Initialize Error Handler first (handles other service failures)
+      this.errorHandler = new ErrorHandlingManager({
+        enableAutomaticRecovery: true,
+        enableUserNotifications: true,
+        enableAnalytics: false,
+        enableExternalReporting: false,
+        maxErrorsPerSession: 100,
+        maxBreadcrumbs: 50,
+        ignoredErrors: ['ChunkLoadError', 'NetworkError'],
+        circuitBreaker: {
+          errorThreshold: 5,
+          timeout: 30000,
+          recoveryTimeout: 60000,
+          monitoringPeriod: 300000,
+          halfOpenMaxCalls: 3
+        },
+        defaultRetry: {
+          maxAttempts: 3,
+          baseDelay: 1000,
+          maxDelay: 10000,
+          backoffMultiplier: 2,
+          jitter: true
+        }
+      });
+      
+      // Initialize Security Manager
+      this.securityManager = new SecurityManager({
+        sessionTimeout: 3600000, // 1 hour
+        maxFailedAttempts: 5,
+        lockoutDuration: 300000, // 5 minutes
+        enableBiometric: true,
+        enableMFA: false,
+        tokenRefreshThreshold: 300000, // 5 minutes
+        enableCSRF: true,
+        enableRateLimiting: true,
+        rateLimitRequests: 100,
+        rateLimitWindow: 60000
+      });
+      
+      // Initialize Performance Optimizer
+      this.performanceOptimizer = new PerformanceOptimizer({
+        enableCaching: true,
+        enableCompression: true,
+        enableMetrics: true,
+        cacheSize: 100,
+        compressionThreshold: 1024,
+        metricsInterval: 30000
+      });
+      
+      // Initialize Data Persistence Manager
+      this.dataManager = new DataPersistenceManager({
+        dbName: 'TradingBotDashboard',
+        version: 1,
+        enableCompression: true,
+        enableEncryption: false,
+        maxCacheSize: 50 * 1024 * 1024 // 50MB
+      });
+      await this.dataManager.initialize();
+      
+      // Initialize Enterprise WebSocket Manager (enhanced WebSocket system)
+      this.enterpriseWebSocketManager = new WebSocketManager({
+        url: this.config.websocket_url,
+        reconnectAttempts: 10,
+        reconnectDelay: 1000,
+        heartbeatInterval: 30000,
+        messageQueueSize: 1000,
+        enableCompression: true,
+        enableBatching: true,
+        batchSize: 10,
+        batchTimeout: 100
+      });
+      
+      // Initialize Notification System
+      this.notificationSystem = new NotificationSystem({
+        enableBrowser: true,
+        enableEmail: false,
+        enableWebhook: false,
+        enableSMS: false,
+        enableSlack: false,
+        enableTeams: false,
+        maxRetries: 3,
+        retryDelay: 5000,
+        rateLimitPeriod: 60000,
+        rateLimitRequests: 10
+      });
+      
+      // Initialize Mobile Optimization Manager
+      this.mobileOptimizer = new MobileOptimizationManager({
+        enableTouchGestures: true,
+        enableOfflineMode: true,
+        enablePWA: true,
+        touchSensitivity: 10,
+        batteryThreshold: 0.2,
+        connectionThreshold: 'slow-2g'
+      });
+      
+      // Initialize Dashboard Orchestrator (coordinates all services)
+      this.dashboardOrchestrator = new DashboardOrchestrator({
+        enableAutoSync: true,
+        syncInterval: 30000,
+        enableMetrics: true,
+        metricsInterval: 60000,
+        enableHealthChecks: true,
+        healthCheckInterval: 30000
+      });
+      
+      // Initialize Test Suite Manager (in development mode)
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        this.testManager = new TestSuiteManager({
+          enableCoverage: true,
+          enablePerformanceTests: true,
+          enableIntegrationTests: true,
+          testTimeout: 30000
+        });
+      }
+      
+      this.ui.log('info', 'Phase 4 Enterprise Services initialized successfully', 'Enterprise');
+      
+    } catch (error) {
+      console.error('Failed to initialize enterprise services:', error);
+      this.ui.log('error', `Enterprise services initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'Enterprise');
+      
+      // Continue without enterprise services - core functionality should still work
+      this.handleGracefulDegradation('enterprise-services', error instanceof Error ? error : new Error('Unknown enterprise services error'));
     }
   }
 
@@ -1840,6 +2002,52 @@ class DashboardApp {
       if (this.llmDecisionCard) {
         this.llmDecisionCard.clear();
         this.llmDecisionCard = null;
+      }
+
+      // Destroy Phase 4 Enterprise Services
+      if (this.testManager) {
+        this.testManager.destroy();
+        this.testManager = null;
+      }
+      
+      if (this.dashboardOrchestrator) {
+        this.dashboardOrchestrator.destroy();
+        this.dashboardOrchestrator = null;
+      }
+      
+      if (this.mobileOptimizer) {
+        this.mobileOptimizer.destroy();
+        this.mobileOptimizer = null;
+      }
+      
+      if (this.notificationSystem) {
+        this.notificationSystem.destroy();
+        this.notificationSystem = null;
+      }
+      
+      if (this.enterpriseWebSocketManager) {
+        this.enterpriseWebSocketManager.disconnect();
+        this.enterpriseWebSocketManager = null;
+      }
+      
+      if (this.dataManager) {
+        this.dataManager.destroy();
+        this.dataManager = null;
+      }
+      
+      if (this.performanceOptimizer) {
+        this.performanceOptimizer.destroy();
+        this.performanceOptimizer = null;
+      }
+      
+      if (this.securityManager) {
+        this.securityManager.destroy();
+        this.securityManager = null;
+      }
+      
+      if (this.errorHandler) {
+        this.errorHandler.destroy();
+        this.errorHandler = null;
       }
 
       // Clear all utilities

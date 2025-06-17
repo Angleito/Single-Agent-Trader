@@ -4,7 +4,7 @@ services:
   # Bluefin SDK Service - Isolated container for Bluefin DEX operations
   bluefin-service:
     build:
-      context: ./bluefin-service
+      context: .
       dockerfile: Dockerfile
     image: bluefin-service:latest
     container_name: bluefin-service
@@ -249,7 +249,8 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Removed Docker socket mount for security - use Docker API if needed
+      # - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./dashboard/backend/logs:/app/logs
       - ./dashboard/backend/data:/app/data
       - ./logs:/app/trading-logs:ro  # Access to trading bot logs

@@ -117,7 +117,7 @@ class BluefinClient(BaseExchange):
         if env_dry_run == 'false' or force_live_mode:
             actual_dry_run = False
             logger.warning("🚨 LIVE TRADING MODE ENABLED - Trading with REAL MONEY on Bluefin DEX")
-            logger.warning(f"🚨 Trading SUI-PERP with private key: {bool(private_key or settings.exchange.bluefin_private_key)}")
+            logger.warning("🚨 Trading SUI-PERP with configured credentials")
         elif hasattr(settings.system, 'dry_run') and not settings.system.dry_run:
             actual_dry_run = False
             logger.warning("🚨 LIVE TRADING MODE ENABLED via settings - Trading with REAL MONEY")
@@ -161,7 +161,7 @@ class BluefinClient(BaseExchange):
         
         logger.info(
             f"Initialized BluefinClient (network={network}, "
-            f"dry_run={dry_run}, has_key={bool(self.private_key)})"
+            f"dry_run={dry_run})"
         )
     
     async def connect(self) -> bool:
@@ -739,7 +739,7 @@ class BluefinClient(BaseExchange):
             "exchange": "Bluefin",
             "network": self.network_name,
             "account_address": self._account_address,
-            "has_private_key": bool(self.private_key),
+            "has_credentials": bool(self.private_key),
             "dry_run": self.dry_run,
             "system_dry_run": system_dry_run,
             "trading_mode": trading_mode,

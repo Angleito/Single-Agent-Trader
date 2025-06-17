@@ -9,6 +9,7 @@ the AI trading bot running in Docker container.
 import asyncio
 import json
 import logging
+import os
 import subprocess
 import time
 from contextlib import asynccontextmanager
@@ -27,6 +28,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from llm_log_parser import AlertThresholds, create_llm_log_parser
+from rate_limiter import rate_limit_middleware
 
 # Import TradingView data feed and LLM log parser
 from tradingview_feed import generate_sample_data, tradingview_feed
@@ -515,15 +517,14 @@ app = FastAPI(
 )
 
 # Add CORS middleware
+# Get allowed origins from environment or use defaults
+allowed_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+allow_credentials = os.getenv("CORS_ALLOW_CREDENTIALS", "false").lower() == "true"
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",  # Frontend development server
-        "http://127.0.0.1:3000",  # Alternative localhost
-        "http://localhost:8000",  # Backend for self-requests
-        "*"  # Allow all origins for now (configure for production)
-    ],
-    allow_credentials=True,
+    allow_origins=allowed_origins,
+    allow_credentials=allow_credentials,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=[
         "Accept",
@@ -546,6 +547,11 @@ app.add_middleware(
     ],
 )
 
+# Add rate limiting middleware
+@app.middleware("http")
+async def rate_limiting(request, call_next):
+    """Apply rate limiting to all requests"""
+    return await rate_limit_middleware(request, call_next)
 
 # Add middleware for JSON response handling and security
 @app.middleware("http")
@@ -1874,9 +1880,14 @@ async def health_check():
     }
 
 
-@app.get("/ws/test")
+@app.get("/ws/test", include_in_schema=False)
 async def websocket_test():
-    """WebSocket connectivity test endpoint"""
+    """WebSocket connectivity test endpoint - disabled in production"""
+    # Only allow in development environment
+    environment = os.getenv("ENVIRONMENT", "development")
+    if environment == "production":
+        raise HTTPException(status_code=404, detail="Not found")
+    
     return {
         "websocket_available": True,
         "endpoint": "/ws",
@@ -1888,6 +1899,7 @@ async def websocket_test():
         "protocols": ["ws", "wss"],
         "cors_enabled": True,
         "timestamp": datetime.now().isoformat(),
+        "environment": environment,
     }
 
 

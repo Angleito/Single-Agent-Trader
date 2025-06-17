@@ -106,7 +106,7 @@ from .strategy.memory_enhanced_agent import MemoryEnhancedLLMAgent
 from .types import IndicatorData, MarketState, Position, TradeAction
 from .utils import setup_warnings_suppression
 from .validator import TradeValidator
-from .websocket_publisher import WebSocketPublisher
+# from .websocket_publisher import WebSocketPublisher  # TODO: Implement WebSocketPublisher
 from .command_consumer import CommandConsumer
 
 console = Console()
@@ -196,8 +196,10 @@ class TradingEngine:
         if self.settings.system.enable_websocket_publishing:
             self.logger.info("WebSocket publishing enabled, initializing publisher...")
             try:
-                self.websocket_publisher = WebSocketPublisher(self.settings)
-                self.logger.info("Successfully initialized WebSocket publisher")
+                # TODO: Implement WebSocketPublisher class
+                # self.websocket_publisher = WebSocketPublisher(self.settings)
+                self.logger.warning("WebSocketPublisher not yet implemented, skipping initialization")
+                self.websocket_publisher = None
             except Exception as e:
                 self.logger.error(f"Failed to initialize WebSocket publisher: {e}")
                 self.logger.warning("Continuing without WebSocket publishing")

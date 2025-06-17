@@ -29,12 +29,7 @@ from ..config import settings
 from ..llm_logging import create_llm_logger, create_langchain_callback
 from ..types import MarketState, TradeAction
 from ..mcp.omnisearch_client import OmniSearchClient
-from ..indicators import (
-    FastEMA, ScalpingEMASignals,
-    FastRSI, FastMACD, WilliamsPercentR, ScalpingMomentumSignals,
-    ScalpingVWAP, OnBalanceVolume, VolumeMovingAverage, ScalpingVolumeSignals
-)
-from .scalping_signals import ScalpingSignals
+# Removed imports for deleted scalping indicators
 
 logger = logging.getLogger(__name__)
 
@@ -81,15 +76,9 @@ class LLMAgent:
                                    settings.omnisearch.enabled and 
                                    settings.omnisearch.api_key is not None)
         
-        # Initialize scalping signals system
-        try:
-            self._scalping_signals = ScalpingSignals()
-            self._scalping_enabled = True
-            logger.info("ScalpingSignals system initialized successfully")
-        except Exception as e:
-            logger.error(f"Failed to initialize ScalpingSignals: {e}")
-            self._scalping_signals = None
-            self._scalping_enabled = False
+        # Scalping signals system disabled - modules were removed
+        self._scalping_signals = None
+        self._scalping_enabled = False
 
         # Initialize completion logging if enabled
         if settings.llm.enable_completion_logging:
@@ -125,11 +114,8 @@ class LLMAgent:
         else:
             logger.info("OmniSearch integration disabled - using standard analysis only")
             
-        # Log scalping signals status
-        if self._scalping_enabled:
-            logger.info("📊 ScalpingSignals system enabled for unified signal generation")
-        else:
-            logger.info("ScalpingSignals system disabled - using basic indicator analysis only")
+        # Scalping signals system removed during cleanup
+        logger.info("ScalpingSignals system disabled - using basic indicator analysis only")
 
     def _load_prompt_template(self) -> None:
         """Load the prompt template for trading decisions."""
@@ -502,7 +488,7 @@ FINANCIAL INTELLIGENCE INTEGRATION:
         financial_context = await self._get_financial_context(market_state)
         
         # Get scalping signals analysis if enabled
-        scalping_analysis = await self._get_scalping_analysis(market_state)
+        scalping_analysis = {"enabled": False, "message": "Scalping analysis disabled"}
 
         return {
             "symbol": market_state.symbol,
@@ -901,262 +887,37 @@ FINANCIAL INTELLIGENCE INTEGRATION:
 
     async def _get_scalping_analysis(self, market_state: MarketState) -> Dict[str, Any]:
         """
-        Get comprehensive scalping signals analysis.
+        Get scalping analysis - currently disabled after module removal.
         
         Args:
             market_state: Current market state containing OHLCV data
             
         Returns:
-            Dictionary with scalping analysis data formatted for LLM
+            Dictionary indicating scalping is disabled
         """
-        if not self._scalping_enabled or not self._scalping_signals:
-            return {
-                "scalping_enabled": False,
-                "ema_trend": "N/A",
-                "ema_alignment": "N/A", 
-                "ema_crossovers": "N/A",
-                "ema_strength": "N/A",
-                "fast_rsi_signal": "N/A",
-                "rsi_strength": "N/A",
-                "fast_macd_signal": "N/A",
-                "macd_histogram": "N/A",
-                "williams_signal": "N/A", 
-                "williams_level": "N/A",
-                "momentum_consensus": "N/A",
-                "vwap_position": "N/A",
-                "volume_relative": "N/A",
-                "obv_trend": "N/A",
-                "volume_confirmation": "N/A",
-                "entry_confidence": 0,
-                "supporting_indicators": [],
-                "risk_factors": [],
-                "scalping_consensus": "DISABLED"
-            }
-        
-        try:
-            # Get comprehensive market analysis from scalping signals
-            analysis_result = self._scalping_signals.analyze_market(market_state.ohlcv_data)
-            
-            # Extract consensus data
-            consensus = analysis_result.get('consensus')
-            indicator_results = analysis_result.get('indicator_results', {})
-            individual_signals = analysis_result.get('individual_signals', {})
-            
-            # Format EMA analysis
-            ema_results = indicator_results.get('ema', {})
-            ema_trend = ema_results.get('trend', 'NEUTRAL')
-            ema_alignment = self._format_ema_alignment(ema_results)
-            ema_crossovers = self._format_ema_crossovers(indicator_results.get('ema_signals', {}))
-            ema_strength = ema_results.get('trend_strength', 0.0)
-            
-            # Format momentum analysis  
-            momentum_results = indicator_results.get('momentum', {})
-            fast_rsi_signal, rsi_strength = self._format_rsi_analysis(momentum_results)
-            fast_macd_signal, macd_histogram = self._format_macd_analysis(momentum_results)
-            williams_signal, williams_level = self._format_williams_analysis(momentum_results)
-            momentum_consensus_signal = momentum_results.get('consensus', {}).get('signal', 'NEUTRAL')
-            
-            # Format volume analysis
-            volume_results = indicator_results.get('volume', {})
-            vwap_position = self._format_vwap_position(volume_results)
-            volume_relative = self._format_volume_relative(volume_results)
-            obv_trend = self._format_obv_trend(volume_results)
-            volume_confirmation = volume_results.get('volume_confirmation', 'NEUTRAL')
-            
-            # Extract consensus metrics
-            entry_confidence = int((consensus.entry_confidence if consensus else 0.0) * 100)
-            supporting_indicators = consensus.supporting_indicators if consensus else []
-            risk_factors = consensus.risk_factors if consensus else []
-            
-            # Determine overall scalping consensus
-            if consensus and consensus.entry_signal:
-                scalping_consensus = f"{consensus.entry_signal} ({consensus.signal_quality} confidence)"
-            else:
-                scalping_consensus = "HOLD (insufficient confidence)"
-            
-            logger.debug(f"Scalping analysis completed: consensus={scalping_consensus}, confidence={entry_confidence}%")
-            
-            return {
-                "scalping_enabled": True,
-                "ema_trend": ema_trend,
-                "ema_alignment": ema_alignment,
-                "ema_crossovers": ema_crossovers,
-                "ema_strength": f"{ema_strength:.2f}",
-                "fast_rsi_signal": fast_rsi_signal,
-                "rsi_strength": rsi_strength,
-                "fast_macd_signal": fast_macd_signal,
-                "macd_histogram": macd_histogram,
-                "williams_signal": williams_signal,
-                "williams_level": williams_level,
-                "momentum_consensus": momentum_consensus_signal,
-                "vwap_position": vwap_position,
-                "volume_relative": volume_relative,
-                "obv_trend": obv_trend,
-                "volume_confirmation": volume_confirmation,
-                "entry_confidence": entry_confidence,
-                "supporting_indicators": supporting_indicators,
-                "risk_factors": risk_factors,
-                "scalping_consensus": scalping_consensus
-            }
-            
-        except Exception as e:
-            logger.error(f"Error in scalping analysis: {e}", exc_info=True)
-            return {
-                "scalping_enabled": True,
-                "scalping_error": str(e),
-                "entry_confidence": 0,
-                "scalping_consensus": "ERROR - analysis failed"
-            }
-    
-    def _format_ema_alignment(self, ema_results: Dict) -> str:
-        """Format EMA alignment information."""
-        try:
-            emas = ema_results.get('emas', {})
-            if not emas:
-                return "No EMA data available"
-            
-            # Get EMA values (assuming periods 3, 5, 8, 13)
-            ema_3 = emas.get(3)
-            ema_5 = emas.get(5) 
-            ema_8 = emas.get(8)
-            ema_13 = emas.get(13)
-            
-            if all(v is not None for v in [ema_3, ema_5, ema_8, ema_13]):
-                if ema_3 > ema_5 > ema_8 > ema_13:
-                    return "BULLISH ALIGNMENT (3>5>8>13)"
-                elif ema_3 < ema_5 < ema_8 < ema_13:
-                    return "BEARISH ALIGNMENT (3<5<8<13)"
-                else:
-                    return "MIXED ALIGNMENT"
-            else:
-                return "Insufficient EMA data"
-        except Exception:
-            return "EMA alignment calculation error"
-    
-    def _format_ema_crossovers(self, ema_signals: Dict) -> str:
-        """Format EMA crossover information."""
-        try:
-            crossovers = ema_signals.get('recent_crossovers', [])
-            if not crossovers:
-                return "No recent crossovers"
-            
-            # Get most recent crossover
-            latest = crossovers[-1]
-            crossover_type = latest.get('type', 'unknown')
-            strength = latest.get('strength', 0.0)
-            
-            if crossover_type == 'golden_cross':
-                return f"Golden Cross (strength: {strength:.2f})"
-            elif crossover_type == 'death_cross':
-                return f"Death Cross (strength: {strength:.2f})"
-            else:
-                return f"Recent: {crossover_type}"
-        except Exception:
-            return "Crossover analysis error"
-    
-    def _format_rsi_analysis(self, momentum_results: Dict) -> Tuple[str, str]:
-        """Format RSI analysis."""
-        try:
-            rsi_data = momentum_results.get('fast_rsi', {})
-            current_rsi = rsi_data.get('current_rsi', 50.0)
-            signal = rsi_data.get('signal', 'NEUTRAL')
-            
-            if current_rsi >= 75:
-                strength = "OVERBOUGHT"
-            elif current_rsi <= 25:
-                strength = "OVERSOLD"
-            elif current_rsi >= 60:
-                strength = "STRONG"
-            elif current_rsi <= 40:
-                strength = "WEAK"
-            else:
-                strength = "NEUTRAL"
-            
-            return signal, f"{current_rsi:.1f} ({strength})"
-        except Exception:
-            return "ERROR", "N/A"
-    
-    def _format_macd_analysis(self, momentum_results: Dict) -> Tuple[str, str]:
-        """Format MACD analysis."""
-        try:
-            macd_data = momentum_results.get('fast_macd', {})
-            signal = macd_data.get('signal', 'NEUTRAL')
-            histogram = macd_data.get('histogram', 0.0)
-            
-            if histogram > 0:
-                hist_desc = f"+{histogram:.4f} (bullish momentum)"
-            elif histogram < 0:
-                hist_desc = f"{histogram:.4f} (bearish momentum)"
-            else:
-                hist_desc = "0.0000 (neutral)"
-            
-            return signal, hist_desc
-        except Exception:
-            return "ERROR", "N/A"
-    
-    def _format_williams_analysis(self, momentum_results: Dict) -> Tuple[str, str]:
-        """Format Williams %R analysis."""
-        try:
-            williams_data = momentum_results.get('williams_r', {})
-            signal = williams_data.get('signal', 'NEUTRAL')
-            current_value = williams_data.get('current_value', -50.0)
-            
-            if current_value >= -20:
-                level_desc = f"{current_value:.1f} (overbought)"
-            elif current_value <= -80:
-                level_desc = f"{current_value:.1f} (oversold)"
-            else:
-                level_desc = f"{current_value:.1f} (neutral zone)"
-            
-            return signal, level_desc
-        except Exception:
-            return "ERROR", "N/A"
-    
-    def _format_vwap_position(self, volume_results: Dict) -> str:
-        """Format VWAP position analysis."""
-        try:
-            vwap_data = volume_results.get('vwap', {})
-            position = vwap_data.get('price_vs_vwap', 'neutral')
-            
-            if position == 'above':
-                return "ABOVE VWAP (bullish)"
-            elif position == 'below':
-                return "BELOW VWAP (bearish)"
-            else:
-                return "AT VWAP (neutral)"
-        except Exception:
-            return "VWAP position unknown"
-    
-    def _format_volume_relative(self, volume_results: Dict) -> str:
-        """Format relative volume analysis."""
-        try:
-            vol_data = volume_results.get('volume_analysis', {})
-            relative = vol_data.get('volume_relative_to_average', 1.0)
-            
-            if relative >= 2.0:
-                return f"{relative:.1f}x average (very high)"
-            elif relative >= 1.5:
-                return f"{relative:.1f}x average (high)"
-            elif relative >= 1.2:
-                return f"{relative:.1f}x average (above average)"
-            elif relative <= 0.5:
-                return f"{relative:.1f}x average (very low)"
-            elif relative <= 0.8:
-                return f"{relative:.1f}x average (low)"
-            else:
-                return f"{relative:.1f}x average (normal)"
-        except Exception:
-            return "Volume analysis error"
-    
-    def _format_obv_trend(self, volume_results: Dict) -> str:
-        """Format OBV trend analysis."""
-        try:
-            obv_data = volume_results.get('obv', {})
-            trend = obv_data.get('trend', 'NEUTRAL')
-            
-            return f"{trend} trend"
-        except Exception:
-            return "OBV trend unknown"
+        # Method kept for compatibility but always returns disabled status
+        return {
+            "scalping_enabled": False,
+            "ema_trend": "N/A",
+            "ema_alignment": "N/A", 
+            "ema_crossovers": "N/A",
+            "ema_strength": "N/A",
+            "fast_rsi_signal": "N/A",
+            "rsi_strength": "N/A",
+            "fast_macd_signal": "N/A",
+            "macd_histogram": "N/A",
+            "williams_signal": "N/A", 
+            "williams_level": "N/A",
+            "momentum_consensus": "N/A",
+            "vwap_position": "N/A",
+            "volume_relative": "N/A",
+            "obv_trend": "N/A",
+            "volume_confirmation": "N/A",
+            "entry_confidence": 0,
+            "supporting_indicators": [],
+            "risk_factors": [],
+            "scalping_consensus": "DISABLED"
+        }
 
     async def _get_llm_decision(self, llm_input: dict[str, Any]) -> TradeAction:
         """
