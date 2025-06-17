@@ -2123,7 +2123,7 @@ class CoinbaseClient(BaseExchange):
                 rounded_quantity = str(round(float(quantity), 6))
 
             # Place the futures order using Coinbase Advanced Trader
-            order_data = {
+            order_data: dict[str, Any] = {
                 "product_id": symbol,
                 "side": side,
                 "order_configuration": {
@@ -2324,6 +2324,10 @@ class CoinbaseClient(BaseExchange):
             Futures account balance in USD
         """
         try:
+            if self._client is None:
+                logger.error("Client not initialized")
+                return Decimal("0")
+                
             # Get FCM balance summary
             balance_response = await self._retry_request(
                 self._client.get_fcm_balance_summary
