@@ -334,7 +334,7 @@ class FIFOPositionManager:
             return
 
         # During initialization, always save synchronously to avoid event loop issues
-        if getattr(self, '_initializing', False):
+        if getattr(self, "_initializing", False):
             self._save_state_sync()
             return
 

@@ -199,7 +199,7 @@ class LLMResponseCache:
         """Start the background cleanup task (only if running in async context)."""
         if self._cleanup_started:
             return
-            
+
         try:
             # Only start if we're in an async context
             loop = asyncio.get_running_loop()
@@ -268,7 +268,7 @@ class LLMResponseCache:
         """
         # Start cleanup task if not already started (now we're in async context)
         self._start_cleanup_task()
-        
+
         # Generate cache key
         cache_key = self.hasher.get_cache_key(market_state)
 

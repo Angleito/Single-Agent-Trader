@@ -846,7 +846,7 @@ app = FastAPI(
 #
 # Environment variables for CORS customization:
 # - CORS_ORIGINS: Comma-separated list of allowed origins
-# - FRONTEND_URL: Primary frontend URL for fallback scenarios  
+# - FRONTEND_URL: Primary frontend URL for fallback scenarios
 # - CORS_DEFAULT_ORIGIN: Default origin when no other fallback applies
 # - CORS_ALLOW_CREDENTIALS: Enable/disable credentials (default: true)
 # - ENVIRONMENT: When set to 'development', allows '*' origin for WebSocket upgrades
@@ -1017,9 +1017,8 @@ async def add_json_headers(request, call_next):
                 response.headers["Access-Control-Allow-Origin"] = "*"
             else:
                 # Dynamic fallback based on request origin or environment
-                fallback_origin = (
-                    origin or
-                    os.getenv("FRONTEND_URL", "http://localhost:3000")
+                fallback_origin = origin or os.getenv(
+                    "FRONTEND_URL", "http://localhost:3000"
                 )
                 response.headers["Access-Control-Allow-Origin"] = fallback_origin
 
@@ -1069,9 +1068,9 @@ async def handle_options(path: str, request: Request):
     else:
         # Dynamic fallback based on environment variables or sensible defaults
         allow_origin = (
-            origin or
-            os.getenv("FRONTEND_URL") or
-            os.getenv("CORS_DEFAULT_ORIGIN", "http://localhost:3000")
+            origin
+            or os.getenv("FRONTEND_URL")
+            or os.getenv("CORS_DEFAULT_ORIGIN", "http://localhost:3000")
         )
 
     headers = {
