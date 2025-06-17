@@ -55,16 +55,29 @@ jobs:
 
     - name: Install dependencies
       run: |
+        echo "Current Python version:"
+        python --version
+        echo "Checking Poetry configuration..."
+        poetry config --list
+        echo "Checking project configuration..."
+        poetry check
         # Check if lock file is consistent with pyproject.toml
         if ! poetry check --lock 2>/dev/null; then
           echo "Lock file is inconsistent, updating..."
-          poetry lock
+          poetry lock --verbose
         fi
-        poetry install --with dev --no-interaction
+        echo "Installing dependencies..."
+        poetry install --with dev --no-interaction --verbose
 
     - name: Verify Black installation
       run: |
+        echo "Checking Poetry environment..."
+        poetry env info
+        echo "Listing installed packages..."
+        poetry show | grep -E "(black|ruff|mypy)" || echo "Dev tools not found"
+        echo "Checking Black specifically..."
         poetry show black
+        echo "Testing Black command..."
         poetry run black --version
 
     - name: Run Black formatting check
