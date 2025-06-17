@@ -1709,7 +1709,7 @@ class DashboardApp {
     const port = window.location.port
 
     // Check for explicit environment variable first (multiple patterns for compatibility)
-    const envWsUrl = 
+    const envWsUrl =
       import.meta.env.VITE_WS_URL ||
       (window as any).__WS_URL__ ||
       (window as any).__VITE_WS_URL__ ||

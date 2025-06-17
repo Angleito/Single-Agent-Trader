@@ -287,7 +287,7 @@ export class DashboardWebSocket {
 
   constructor(url?: string, config: WebSocketConfig = {}) {
     // Check for runtime configuration first (multiple patterns for compatibility)
-    const runtimeWsUrl = 
+    const runtimeWsUrl =
       (window as any).__WS_URL__ ||
       (window as any).__VITE_WS_URL__ ||
       (window as any).__RUNTIME_CONFIG__?.WS_URL
@@ -295,7 +295,12 @@ export class DashboardWebSocket {
     // Use dynamic URL detection if no URL provided
     if (!url && !config.url && !runtimeWsUrl) {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      url = `${protocol}//${window.location.host}/ws`
+      const port = window.location.port
+      const isNginxPort = port === '8080'
+      
+      // Use correct path based on environment
+      const wsPath = isNginxPort ? '/api/ws' : '/ws'
+      url = `${protocol}//${window.location.host}${wsPath}`
     }
 
     // Priority: explicit config.url > constructor url > runtime config > default
@@ -770,28 +775,28 @@ export class DashboardWebSocket {
       if (isDebugMode) {
         console.debug('WebSocket connection opened successfully')
       }
-      
+
       this.clearConnectionTimeout()
-      
+
       // Reset connection tracking
       this.reconnectAttempts = 0
       this.reconnectDelay = 1000
       this.consecutiveFailures = 0
       this.lastSuccessfulConnection = Date.now()
-      
+
       // Update circuit breaker state
       if (this.enableCircuitBreaker) {
         this.closeCircuitBreaker()
       }
-      
+
       // Update connection quality
       this.updateConnectionQuality('excellent')
-      
+
       // Exit offline mode if enabled
       if (this.isOffline) {
         this.exitOfflineMode()
       }
-      
+
       this.notifyConnectionStatus('connected')
       this.startPingInterval()
 
@@ -851,34 +856,34 @@ export class DashboardWebSocket {
         // Handle pong messages internally with latency tracking
         if (message.type === 'pong') {
           this.lastPongTime = Date.now()
-          
+
           // Calculate latency if clientTime is available
           if ('clientTime' in message && typeof message.clientTime === 'number') {
             const latency = Date.now() - message.clientTime
             this.updateLatencyHistory(latency)
             this.updateConnectionQualityFromLatency(latency)
           }
-          
+
           // Record successful ping-pong for circuit breaker
           if (this.enableCircuitBreaker && this.circuitBreakerState === 'half-open') {
             this.closeCircuitBreaker()
           }
-          
+
           return
         }
 
         // Handle ping messages (server-initiated ping)
         if (message.type === 'ping') {
-          const pongMessage: any = { 
-            type: 'pong', 
-            timestamp: new Date().toISOString() 
+          const pongMessage: any = {
+            type: 'pong',
+            timestamp: new Date().toISOString()
           }
-          
+
           // Echo back clientTime if present for latency calculation
           if ('clientTime' in message) {
             pongMessage.clientTime = message.clientTime
           }
-          
+
           this.send(pongMessage, false)
           return
         }
@@ -911,7 +916,7 @@ export class DashboardWebSocket {
 
       // Categorize the close event
       const closeReason = this.categorizeCloseEvent(event)
-      
+
       // Only log close details if it's an unexpected close or in debug mode
       if (event.code !== 1000 || isDebugMode) {
         console.log(`WebSocket closed: ${closeReason} (code: ${event.code})`)
@@ -951,10 +956,10 @@ export class DashboardWebSocket {
       }
 
       this.clearConnectionTimeout()
-      
+
       // Update connection quality
       this.updateConnectionQuality('critical')
-      
+
       this.notifyError(error)
       this.notifyConnectionStatus('error')
     }
@@ -1112,8 +1117,8 @@ export class DashboardWebSocket {
 
       // In resilience mode, keep trying with longer delays
       if (this.enableResilience) {
-        const resetDelay = this.enableCircuitBreaker 
-          ? this.circuitBreakerResetTimeMs 
+        const resetDelay = this.enableCircuitBreaker
+          ? this.circuitBreakerResetTimeMs
           : 60000
 
         setTimeout(() => {
@@ -1126,7 +1131,7 @@ export class DashboardWebSocket {
     }
 
     this.reconnectAttempts++
-    
+
     // Enhanced exponential backoff with configurable multiplier
     const baseDelay = this.reconnectDelay * Math.pow(this.backoffMultiplier, this.reconnectAttempts - 1)
     const delay = Math.min(baseDelay, this.maxReconnectDelay)
@@ -1801,7 +1806,7 @@ export class DashboardWebSocket {
    */
   private performHealthCheck(): void {
     const health = this.getConnectionHealth()
-    
+
     // Log health issues if they exist
     if (health.issues.length > 0 && import.meta.env.VITE_DEBUG === 'true') {
       console.debug('Connection health issues:', health.issues)
@@ -1831,7 +1836,7 @@ export class DashboardWebSocket {
     if (errorMessage.includes('not available') || errorMessage.includes('not supported')) return 'browser_support'
     if (errorMessage.includes('security') || errorMessage.includes('origin')) return 'security'
     if (errorMessage.includes('rate limit') || errorMessage.includes('too many')) return 'rate_limit'
-    
+
     return 'unknown'
   }
 
@@ -1888,7 +1893,7 @@ export class DashboardWebSocket {
 
     if (error instanceof Error) {
       const errorType = this.categorizeError(error)
-      
+
       switch (errorType) {
         case 'network':
           return 'Network connection error - please check your internet connection'
@@ -1915,9 +1920,9 @@ export class DashboardWebSocket {
    */
   private handleConnectionFailure(): void {
     this.consecutiveFailures++
-    
+
     // Check if we should open circuit breaker
-    if (this.enableCircuitBreaker && 
+    if (this.enableCircuitBreaker &&
         this.consecutiveFailures >= this.circuitBreakerThreshold) {
       this.openCircuitBreaker()
     }
@@ -1939,7 +1944,7 @@ export class DashboardWebSocket {
   private updateConnectionQuality(quality: 'excellent' | 'good' | 'poor' | 'critical'): void {
     if (this.connectionQuality !== quality) {
       this.connectionQuality = quality
-      
+
       if (import.meta.env.VITE_DEBUG === 'true') {
         console.debug(`Connection quality updated to: ${quality}`)
       }
@@ -1966,7 +1971,7 @@ export class DashboardWebSocket {
    */
   private updateLatencyHistory(latency: number): void {
     this.latencyHistory.push(latency)
-    
+
     // Keep history size manageable
     if (this.latencyHistory.length > 20) {
       this.latencyHistory = this.latencyHistory.slice(-20)
@@ -2052,7 +2057,7 @@ export class DashboardWebSocket {
     if (this.offlineMessageQueue.length === 0) return
 
     console.log(`Flushing ${this.offlineMessageQueue.length} offline messages`)
-    
+
     while (this.offlineMessageQueue.length > 0) {
       const message = this.offlineMessageQueue.shift()
       this.send(message, false)
@@ -2159,7 +2164,7 @@ export class DashboardWebSocket {
     const errorRate = recentErrors.length / 60 // Errors per minute
 
     // Count circuit breaker trips
-    const circuitBreakerTrips = this.errorHistory.filter(e => 
+    const circuitBreakerTrips = this.errorHistory.filter(e =>
       e.type === 'circuit_breaker_open'
     ).length
 

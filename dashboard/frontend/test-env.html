@@ -13,17 +13,17 @@
 </head>
 <body>
     <h1>Environment Variables Test</h1>
-    
+
     <div class="section">
         <h2>Build-time Environment Variables (Vite)</h2>
         <div id="vite-env"></div>
     </div>
-    
+
     <div class="section">
         <h2>Runtime Environment Variables</h2>
         <div id="runtime-env"></div>
     </div>
-    
+
     <div class="section">
         <h2>Resolved URLs</h2>
         <div id="resolved-urls"></div>
@@ -37,7 +37,7 @@
             'VITE_WS_URL': import.meta?.env?.VITE_WS_URL || 'Not set',
             'VITE_DOCKER_ENV': import.meta?.env?.VITE_DOCKER_ENV || 'Not set'
         };
-        
+
         // Test runtime variables
         const runtimeVars = {
             '__API_URL__': window.__API_URL__ || 'Not set',
@@ -47,7 +47,7 @@
             '__VITE_WS_URL__': window.__VITE_WS_URL__ || 'Not set',
             '__RUNTIME_CONFIG__': window.__RUNTIME_CONFIG__ ? JSON.stringify(window.__RUNTIME_CONFIG__) : 'Not set'
         };
-        
+
         // Display results
         function displayVars(vars, containerId) {
             const container = document.getElementById(containerId);
@@ -57,19 +57,19 @@
             }).join('');
             container.innerHTML = html;
         }
-        
+
         // Test URL resolution logic
         function getWebSocketUrl() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const host = window.location.host;
-            
+
             // Same logic as in main.ts
-            const envWsUrl = 
+            const envWsUrl =
                 import.meta?.env?.VITE_WS_URL ||
                 window.__WS_URL__ ||
                 window.__VITE_WS_URL__ ||
                 window.__RUNTIME_CONFIG__?.WS_URL;
-                
+
             if (envWsUrl) {
                 if (envWsUrl.startsWith('ws://') || envWsUrl.startsWith('wss://')) {
                     return envWsUrl;
@@ -82,14 +82,14 @@
                 }
                 return `${protocol}//${host}/${envWsUrl.replace(/^\/+/, '')}`;
             }
-            
+
             return 'No URL resolved';
         }
-        
+
         function getApiUrl() {
             const protocol = window.location.protocol;
             const host = window.location.host;
-            
+
             const envApiUrl =
                 import.meta?.env?.VITE_API_URL ||
                 import.meta?.env?.VITE_API_BASE_URL ||
@@ -98,7 +98,7 @@
                 window.__VITE_API_URL__ ||
                 window.__VITE_API_BASE_URL__ ||
                 window.__RUNTIME_CONFIG__?.API_URL;
-                
+
             if (envApiUrl) {
                 if (envApiUrl.startsWith('http://') || envApiUrl.startsWith('https://')) {
                     return envApiUrl;
@@ -111,21 +111,21 @@
                 }
                 return `${protocol}//${host}/${envApiUrl.replace(/^\/+/, '')}`;
             }
-            
+
             return 'No URL resolved';
         }
-        
+
         // Display all results
         displayVars(viteVars, 'vite-env');
         displayVars(runtimeVars, 'runtime-env');
-        
+
         const resolvedUrls = {
             'Resolved API URL': getApiUrl(),
             'Resolved WebSocket URL': getWebSocketUrl(),
             'Current Location': `${window.location.protocol}//${window.location.host}${window.location.pathname}`
         };
         displayVars(resolvedUrls, 'resolved-urls');
-        
+
         console.log('Environment Test Results:', {
             vite: viteVars,
             runtime: runtimeVars,
