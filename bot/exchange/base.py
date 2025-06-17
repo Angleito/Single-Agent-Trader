@@ -7,7 +7,7 @@ must inherit from, ensuring consistent interface across different exchanges.
 
 from abc import ABC, abstractmethod
 from decimal import Decimal
-from typing import Any
+from typing import Any, Optional
 
 from ..types import (
     AccountType,
@@ -66,7 +66,7 @@ class BaseExchange(ABC):
         """
         self.dry_run = dry_run
         self._connected = False
-        self._last_health_check = None
+        self._last_health_check: Optional[Any] = None
 
     @abstractmethod
     async def connect(self) -> bool:

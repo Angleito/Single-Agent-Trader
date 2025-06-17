@@ -7,7 +7,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, Field, root_validator
+from pydantic import BaseModel, Field, model_validator, ConfigDict
 
 if TYPE_CHECKING:
     pass
@@ -32,12 +32,12 @@ class TradeAction(BaseModel):
         max_length=200, description="Brief explanation for the trading decision"
     )
 
-    @root_validator(skip_on_failure=True)
-    def validate_trade_action(cls, values):
+    @model_validator(mode='after')
+    def validate_trade_action(self) -> 'TradeAction':
         """Validate the entire trade action for consistency."""
-        action = values.get("action")
-        take_profit_pct = values.get("take_profit_pct")
-        stop_loss_pct = values.get("stop_loss_pct")
+        action = self.action
+        take_profit_pct = self.take_profit_pct
+        stop_loss_pct = self.stop_loss_pct
 
         # For HOLD and CLOSE actions, allow 0 values
         if action in ["HOLD", "CLOSE"]:
@@ -61,7 +61,7 @@ class TradeAction(BaseModel):
                     "Stop loss percentage must be between 0 and 50, and greater than 0 for trading actions"
                 )
 
-        return values
+        return self
 
     # Optional futures-specific fields
     leverage: int | None = Field(
@@ -106,11 +106,10 @@ class Position(BaseModel):
     liquidation_price: Decimal | None = None
     margin_health: MarginHealthStatus | None = None
 
-    class Config:
-        """Pydantic configuration."""
-
-        use_enum_values = True
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(
+        use_enum_values=True,
+        arbitrary_types_allowed=True
+    )
 
 
 class MarketData(BaseModel):
@@ -124,10 +123,9 @@ class MarketData(BaseModel):
     close: Decimal
     volume: Decimal
 
-    class Config:
-        """Pydantic configuration."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True
+    )
 
 
 class IndicatorData(BaseModel):
@@ -156,10 +154,9 @@ class IndicatorData(BaseModel):
         None  # Will be list[DominanceCandleData] at runtime
     )
 
-    class Config:
-        """Pydantic configuration."""
-
-        use_enum_values = True
+    model_config = ConfigDict(
+        use_enum_values=True
+    )
 
 
 class MarketState(BaseModel):
@@ -181,10 +178,9 @@ class MarketState(BaseModel):
         None  # Will be list[DominanceCandleData] at runtime
     )
 
-    class Config:
-        """Pydantic configuration."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True
+    )
 
 
 class OrderStatus(str, Enum):
@@ -212,11 +208,10 @@ class Order(BaseModel):
     timestamp: datetime
     filled_quantity: Decimal = Decimal("0")
 
-    class Config:
-        """Pydantic configuration."""
-
-        use_enum_values = True
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(
+        use_enum_values=True,
+        arbitrary_types_allowed=True
+    )
 
 
 class MarginInfo(BaseModel):
@@ -238,10 +233,9 @@ class MarginInfo(BaseModel):
     overnight_margin_requirement: Decimal
     is_overnight_position: bool = False
 
-    class Config:
-        """Pydantic configuration."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True
+    )
 
 
 class FuturesAccountInfo(BaseModel):
@@ -271,11 +265,10 @@ class FuturesAccountInfo(BaseModel):
 
     timestamp: datetime
 
-    class Config:
-        """Pydantic configuration."""
-
-        use_enum_values = True
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(
+        use_enum_values=True,
+        arbitrary_types_allowed=True
+    )
 
 
 class FuturesOrder(BaseModel):
@@ -299,11 +292,10 @@ class FuturesOrder(BaseModel):
     post_only: bool = False  # True for maker-only orders
     time_in_force: Literal["GTC", "IOC", "FOK"] = "GTC"
 
-    class Config:
-        """Pydantic configuration."""
-
-        use_enum_values = True
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(
+        use_enum_values=True,
+        arbitrary_types_allowed=True
+    )
 
 
 class RiskMetrics(BaseModel):
@@ -323,10 +315,9 @@ class RiskMetrics(BaseModel):
     margin_health_status: MarginHealthStatus | None = None
     liquidation_risk_level: float | None = None  # 0.0 to 1.0
 
-    class Config:
-        """Pydantic configuration."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True
+    )
 
 
 class CashTransferRequest(BaseModel):
@@ -338,11 +329,10 @@ class CashTransferRequest(BaseModel):
     currency: str = "USD"
     reason: Literal["MARGIN_CALL", "MANUAL", "AUTO_REBALANCE"] = "MANUAL"
 
-    class Config:
-        """Pydantic configuration."""
-
-        use_enum_values = True
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(
+        use_enum_values=True,
+        arbitrary_types_allowed=True
+    )
 
 
 class FuturesMarketState(BaseModel):
@@ -363,10 +353,9 @@ class FuturesMarketState(BaseModel):
     next_funding_time: datetime | None = None
     open_interest: Decimal | None = None
 
-    class Config:
-        """Pydantic configuration."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True
+    )
 
 
 # Type aliases for common data structures

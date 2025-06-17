@@ -29,6 +29,8 @@ from ..config import settings
 from ..llm_logging import create_llm_logger, create_langchain_callback
 from ..types import MarketState, TradeAction
 from ..mcp.omnisearch_client import OmniSearchClient
+from .llm_cache import get_llm_cache
+from .optimized_prompt import get_optimized_prompt_template
 
 # Removed imports for deleted scalping indicators
 
@@ -83,6 +85,14 @@ class LLMAgent:
             and settings.omnisearch.enabled
             and settings.omnisearch.api_key is not None
         )
+
+        # Performance optimization: LLM response caching
+        self._cache_enabled = getattr(settings, 'llm_cache_enabled', True)
+        self._cache = get_llm_cache() if self._cache_enabled else None
+        
+        # Performance optimization: Optimized prompt templates
+        self._use_optimized_prompts = getattr(settings, 'llm_use_optimized_prompts', True)
+        self._optimized_prompt_template = get_optimized_prompt_template() if self._use_optimized_prompts else None
 
         # Scalping signals system disabled - modules were removed
         self._scalping_signals = None
@@ -346,7 +356,7 @@ FINANCIAL INTELLIGENCE INTEGRATION:
 
     async def analyze_market(self, market_state: MarketState) -> TradeAction:
         """
-        Analyze market state and generate trading decision with enhanced logging.
+        Analyze market state and generate trading decision with enhanced logging and caching.
 
         Args:
             market_state: Complete market state including OHLCV and indicators
@@ -357,12 +367,13 @@ FINANCIAL INTELLIGENCE INTEGRATION:
         request_id = None
 
         try:
-            # Prepare input data for the LLM
-            llm_input = await self._prepare_llm_input(market_state)
-
-            # Get decision from LLM or fallback
-            if self._chain is not None:
-                result = await self._get_llm_decision(llm_input)
+            # Use cache if enabled and LLM is available
+            if self._cache_enabled and self._cache and self._chain is not None:
+                result = await self._cache.get_or_compute(
+                    market_state, 
+                    self._get_cached_llm_decision, 
+                    market_state
+                )
                 # Get request_id from callback handler if available
                 request_id = (
                     getattr(self._langchain_callback, "_current_request_id", None)
@@ -370,7 +381,19 @@ FINANCIAL INTELLIGENCE INTEGRATION:
                     else "llm_completion"
                 )
             else:
-                result = self._get_fallback_decision(market_state)
+                # Original path without caching
+                if self._chain is not None:
+                    # Prepare input data for the LLM
+                    llm_input = await self._prepare_llm_input(market_state)
+                    result = await self._get_llm_decision(llm_input)
+                    # Get request_id from callback handler if available
+                    request_id = (
+                        getattr(self._langchain_callback, "_current_request_id", None)
+                        if self._langchain_callback
+                        else "llm_completion"
+                    )
+                else:
+                    result = self._get_fallback_decision(market_state)
 
             logger.info(f"Generated trade action: {result.action} - {result.rationale}")
 
@@ -903,7 +926,7 @@ FINANCIAL INTELLIGENCE INTEGRATION:
                             "positive": "🟢",
                             "negative": "🔴",
                             "neutral": "⚪",
-                        }.get(news.sentiment, "❓")
+                        }.get(news.sentiment or "neutral", "❓")
 
                         news_line = (
                             f"{sentiment_emoji} {news.base_result.title[:80]}..."
@@ -983,7 +1006,7 @@ FINANCIAL INTELLIGENCE INTEGRATION:
 
     async def _get_llm_decision(self, llm_input: dict[str, Any]) -> TradeAction:
         """
-        Get decision from LLM using LangChain with enhanced logging.
+        Get decision from LLM using LangChain with enhanced logging and optimized prompts.
 
         Args:
             llm_input: Formatted input for the LLM
@@ -1011,11 +1034,16 @@ FINANCIAL INTELLIGENCE INTEGRATION:
                 # Use custom response handling for o3 models - bypass the chain and parse manually
                 from langchain_core.messages import HumanMessage
 
-                # Format the prompt manually
-                if self._prompt_template is None or self._model is None:
-                    raise RuntimeError("LLM components not properly initialized")
+                # Format the prompt manually - use optimized prompt if available
+                if self._use_optimized_prompts and self._optimized_prompt_template:
+                    formatted_prompt = self._optimized_prompt_template.format_prompt(llm_input)
+                    logger.debug(f"Using optimized prompt (size: {len(formatted_prompt)} chars)")
+                else:
+                    if self._prompt_template is None or self._model is None:
+                        raise RuntimeError("LLM components not properly initialized")
+                    formatted_prompt = self._prompt_template.format(**llm_input)
+                    logger.debug(f"Using standard prompt (size: {len(formatted_prompt)} chars)")
                 
-                formatted_prompt = self._prompt_template.format(**llm_input)
                 message = HumanMessage(content=formatted_prompt)
 
                 # Get raw response from model
@@ -1030,9 +1058,34 @@ FINANCIAL INTELLIGENCE INTEGRATION:
             else:
                 if self._chain is None:
                     raise RuntimeError("LLM chain not properly initialized")
-                result = await self._chain.ainvoke(llm_input, **chain_kwargs)
+                
+                # Use optimized chain if available
+                if self._use_optimized_prompts and self._optimized_prompt_template:
+                    # Create a temporary optimized prompt for non-o3 models
+                    optimized_prompt_text = self._optimized_prompt_template.format_prompt(llm_input)
+                    
+                    # Create temporary chain with optimized prompt
+                    if PromptTemplate is not None and JsonOutputParser is not None:
+                        temp_prompt = PromptTemplate.from_template(optimized_prompt_text)
+                        parser = JsonOutputParser(pydantic_object=TradeAction)
+                        temp_chain = temp_prompt | self._model | parser
+                        result = await temp_chain.ainvoke({}, **chain_kwargs)
+                        logger.debug(f"Used optimized prompt chain (size: {len(optimized_prompt_text)} chars)")
+                    else:
+                        result = await self._chain.ainvoke(llm_input, **chain_kwargs)
+                else:
+                    result = await self._chain.ainvoke(llm_input, **chain_kwargs)
 
             response_time = time.time() - start_time
+
+            # Record performance metrics for prompt optimization
+            if self._use_optimized_prompts and self._optimized_prompt_template:
+                # Estimate decision quality (simplified for now)
+                decision_quality = 1.0 if result.get('action') != 'HOLD' else 0.8
+                # Note: In production, you might want to track actual trade outcomes
+                
+                # Update prompt optimizer with performance data
+                # This would be implemented in the optimizer class
 
             # Ensure result is a TradeAction
             if isinstance(result, dict):
@@ -1049,11 +1102,35 @@ FINANCIAL INTELLIGENCE INTEGRATION:
             ):
                 self._completion_logger.log_performance_metrics()
 
+            # Log performance improvement
+            if response_time < 2.0:
+                logger.info(f"⚡ Fast LLM response: {response_time:.2f}s (target: <2.0s)")
+            elif response_time > 3.0:
+                logger.warning(f"🐌 Slow LLM response: {response_time:.2f}s (target: <2.0s)")
+
             return trade_action
 
         except Exception as e:
             logger.error(f"LLM decision error: {e}")
             raise
+
+    async def _get_cached_llm_decision(self, market_state: MarketState) -> TradeAction:
+        """
+        Get LLM decision for caching system.
+        
+        This method is called by the cache when a cache miss occurs.
+        
+        Args:
+            market_state: Market state for analysis
+            
+        Returns:
+            TradeAction from LLM analysis
+        """
+        # Prepare input data for the LLM
+        llm_input = await self._prepare_llm_input(market_state)
+        
+        # Get decision from LLM
+        return await self._get_llm_decision(llm_input)
 
     def _calculate_cipher_b_alignment(self, indicators) -> str:
         """
@@ -1200,7 +1277,7 @@ FINANCIAL INTELLIGENCE INTEGRATION:
 
     def get_status(self) -> dict[str, Any]:
         """
-        Get status information about the LLM agent including logging status.
+        Get status information about the LLM agent including logging and caching status.
 
         Returns:
             Dictionary with agent status and logging information
@@ -1219,7 +1296,21 @@ FINANCIAL INTELLIGENCE INTEGRATION:
             "omnisearch_client_available": self._omnisearch_client is not None,
             "scalping_signals_enabled": self._scalping_enabled,
             "scalping_signals_available": self._scalping_signals is not None,
+            "cache_enabled": self._cache_enabled,
+            "optimized_prompts_enabled": self._use_optimized_prompts,
         }
+
+        # Add cache statistics if available
+        if self._cache:
+            try:
+                cache_stats = self._cache.get_cache_stats()
+                status.update({
+                    "cache_stats": cache_stats,
+                    "cache_hit_rate": cache_stats.get("hit_rate", 0),
+                    "cache_size": cache_stats.get("cache_size", 0),
+                })
+            except Exception as e:
+                logger.warning(f"Could not retrieve cache statistics: {e}")
 
         # Add performance metrics if completion logger is available
         if self._completion_logger and settings.llm.enable_performance_tracking:

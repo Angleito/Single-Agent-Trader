@@ -11,7 +11,7 @@ import warnings
 
 # Set up warning registry for this module
 if not hasattr(sys.modules[__name__], "__warningregistry__"):
-    sys.modules[__name__].__warningregistry__ = {}
+    setattr(sys.modules[__name__], "__warningregistry__", {})
 
 # Comprehensive pandas_ta import with maximum warning suppression
 with warnings.catch_warnings():

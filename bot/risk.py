@@ -9,7 +9,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, Optional, Union
 
 from .config import settings
 from .fee_calculator import fee_calculator
@@ -38,7 +38,7 @@ class RiskManager:
     and maximum concurrent positions to protect the trading account.
     """
 
-    def __init__(self, position_manager: PositionManager | None = None):
+    def __init__(self, position_manager: Optional[PositionManager] = None) -> None:
         """Initialize the risk manager.
 
         Args:
@@ -551,7 +551,7 @@ class RiskManager:
             max_daily_loss_reached=self._is_daily_loss_limit_reached(),
         )
 
-    def get_daily_summary(self, target_date: date | None = None) -> dict[str, Any]:
+    def get_daily_summary(self, target_date: Optional[date] = None) -> dict[str, Any]:
         """
         Get daily trading summary.
 

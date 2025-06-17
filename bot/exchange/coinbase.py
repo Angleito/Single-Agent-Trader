@@ -11,7 +11,7 @@ import time
 import traceback
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, List, Optional, Dict, Union
 
 try:
     # Prefer the new official SDK import path first
@@ -120,7 +120,7 @@ class CoinbaseRateLimiter:
     def __init__(self, max_requests: int = 10, window_seconds: int = 60):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
-        self.requests = []
+        self.requests: List[float] = []
         self._lock = asyncio.Lock()
 
     async def acquire(self) -> None:
@@ -209,12 +209,12 @@ class CoinbaseClient(BaseExchange):
         if provided_legacy or (settings_legacy and not provided_cdp):
             # Use legacy authentication
             self.auth_method = "legacy"
-            self.api_key = api_key or settings.exchange.cb_api_key.get_secret_value()
+            self.api_key = api_key or (settings.exchange.cb_api_key.get_secret_value() if settings.exchange.cb_api_key else None)
             self.api_secret = (
-                api_secret or settings.exchange.cb_api_secret.get_secret_value()
+                api_secret or (settings.exchange.cb_api_secret.get_secret_value() if settings.exchange.cb_api_secret else None)
             )
             self.passphrase = (
-                passphrase or settings.exchange.cb_passphrase.get_secret_value()
+                passphrase or (settings.exchange.cb_passphrase.get_secret_value() if settings.exchange.cb_passphrase else None)
             )
             self.cdp_api_key_name = None
             self.cdp_private_key = None
@@ -227,10 +227,10 @@ class CoinbaseClient(BaseExchange):
             self.passphrase = None
             self.cdp_api_key_name = (
                 cdp_api_key_name
-                or settings.exchange.cdp_api_key_name.get_secret_value()
+                or (settings.exchange.cdp_api_key_name.get_secret_value() if settings.exchange.cdp_api_key_name else None)
             )
             self.cdp_private_key = (
-                cdp_private_key or settings.exchange.cdp_private_key.get_secret_value()
+                cdp_private_key or (settings.exchange.cdp_private_key.get_secret_value() if settings.exchange.cdp_private_key else None)
             )
         else:
             # No credentials provided - will work in dry run mode only
@@ -244,9 +244,9 @@ class CoinbaseClient(BaseExchange):
         self.sandbox = settings.exchange.cb_sandbox
 
         # Client will be initialized when needed
-        self._client = None
+        self._client: Optional[Any] = None
         self._connected = False  # Use _connected from parent class
-        self._last_health_check = None
+        self._last_health_check: Optional[datetime] = None
 
         # Rate limiting
         self._rate_limiter = CoinbaseRateLimiter(
@@ -266,20 +266,20 @@ class CoinbaseClient(BaseExchange):
         self.max_futures_leverage = settings.trading.max_futures_leverage
 
         # Cached futures account info
-        self._futures_account_info = None
-        self._last_margin_check = None
+        self._futures_account_info: Optional[Any] = None
+        self._last_margin_check: Optional[datetime] = None
 
         # Portfolio management
-        self._portfolios = {}
-        self._futures_portfolio_id = None
-        self._default_portfolio_id = None
+        self._portfolios: Dict[str, Any] = {}
+        self._futures_portfolio_id: Optional[str] = None
+        self._default_portfolio_id: Optional[str] = None
 
         # Futures contract management
-        self._futures_contract_manager = None
+        self._futures_contract_manager: Optional[Any] = None
 
         # Volume tracking for fee tiers
         self._monthly_volume = Decimal("0")
-        self._last_volume_check = None
+        self._last_volume_check: Optional[datetime] = None
         self._volume_check_interval = timedelta(hours=1)
 
         # Compose a concise init message to avoid line length issues

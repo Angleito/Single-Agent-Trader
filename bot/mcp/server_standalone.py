@@ -28,7 +28,7 @@ class MemoryStore:
     """Simple in-memory storage for experiences."""
 
     def __init__(self) -> None:
-        self.memories = {}
+        self.memories: Dict[str, Dict[str, Any]] = {}
         self.storage_path = Path("/app/data")
         self.storage_path.mkdir(parents=True, exist_ok=True)
         self._load_from_disk()

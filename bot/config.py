@@ -646,34 +646,44 @@ class ExchangeSettings(BaseModel):
                 self.bluefin_private_key
                 and self.bluefin_private_key.get_secret_value().strip()
             ):
-                # Support multiple Sui private key formats - temporarily skip validation
-                # to debug startswith issue
-                try:
-                    private_key = self.bluefin_private_key.get_secret_value().strip()
+                # Support multiple Sui private key formats with proper validation
+                private_key = self.bluefin_private_key.get_secret_value().strip()
 
-                    # Remove common prefixes
-                    if private_key.startswith("0x"):
-                        private_key = private_key[2:]
-                    elif private_key.startswith("suiprivkey"):
-                        # This is a Bech32-encoded Sui private key, which is also valid
-                        # No validation needed for this format
+                # Check for mnemonic phrase format (12 or 24 words)
+                words = private_key.split()
+                if len(words) in [12, 24]:
+                    # This is a mnemonic phrase - validate word count and basic structure
+                    if all(word.isalpha() and len(word) > 2 for word in words):
                         return self
+                    else:
+                        raise ValueError(
+                            "Bluefin mnemonic phrase contains invalid words"
+                        )
 
-                    # Validate hex format (after removing 0x prefix)
-                    if private_key and not all(
-                        c in "0123456789abcdefABCDEF" for c in private_key
-                    ):
-                        # Skip validation error for now
-                        pass
-                        # raise ValueError(
-                        #     "Bluefin private key must be a valid hexadecimal string or Sui private key format"
-                        # )
-                except Exception as e:
-                    # Skip validation errors to debug the startswith issue
-                    print(
-                        f"Warning: Bluefin private key validation error (skipped): {e}"
-                    )
-                    pass
+                # Remove common prefixes for other formats
+                if private_key.startswith("0x"):
+                    private_key = private_key[2:]
+                elif private_key.startswith("suiprivkey"):
+                    # This is a Bech32-encoded Sui private key, which is valid
+                    # Basic length validation for Bech32 format
+                    if len(private_key) < 20:
+                        raise ValueError(
+                            "Bluefin Sui private key in Bech32 format appears too short"
+                        )
+                    return self
+
+                # Validate hex format (after removing 0x prefix)
+                if private_key:
+                    # Check for valid hex characters
+                    if not all(c in "0123456789abcdefABCDEF" for c in private_key):
+                        raise ValueError(
+                            "Bluefin private key must be a valid hexadecimal string, Sui private key format (suiprivkey...), or mnemonic phrase"
+                        )
+                    # Check for reasonable length (32 bytes = 64 hex chars)
+                    if len(private_key) != 64:
+                        raise ValueError(
+                            "Bluefin hex private key must be exactly 64 characters (32 bytes)"
+                        )
 
         return self
 

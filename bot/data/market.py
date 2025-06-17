@@ -6,7 +6,7 @@ import logging
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, Optional
 
 import aiohttp
 import pandas as pd
@@ -105,6 +105,11 @@ class MarketDataProvider:
         self._max_reconnect_attempts = settings.exchange.websocket_reconnect_attempts
         self._is_connected = False
         self._connection_lock = asyncio.Lock()
+
+        # Non-blocking message processing
+        self._message_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
+        self._processing_task: Optional[asyncio.Task] = None
+        self._running = False
 
         # Subscribers for real-time updates
         self._subscribers: list[Callable] = []
@@ -266,6 +271,15 @@ class MarketDataProvider:
     async def disconnect(self) -> None:
         """Disconnect from all data feeds and cleanup resources."""
         self._is_connected = False
+        self._running = False
+
+        # Stop message processing task
+        if self._processing_task and not self._processing_task.done():
+            self._processing_task.cancel()
+            try:
+                await self._processing_task
+            except asyncio.CancelledError:
+                pass
 
         # Stop WebSocket connection
         if self._ws_task and not self._ws_task.done():
@@ -700,8 +714,14 @@ class MarketDataProvider:
         - Trade stream
         - Level 1 order book updates (if needed)
         """
+        self._running = True
+        
+        # Start non-blocking message processor
+        self._processing_task = asyncio.create_task(self._process_websocket_messages())
+        
+        # Start WebSocket handler
         self._ws_task = asyncio.create_task(self._websocket_handler())
-        logger.info("WebSocket connection task started")
+        logger.info("WebSocket connection and message processor started")
 
         # Give WebSocket a moment to establish connection
         await asyncio.sleep(0.5)
@@ -784,7 +804,7 @@ class MarketDataProvider:
             # Reset reconnection counter on successful connection
             self._reconnect_attempts = 0
 
-            # Handle incoming messages
+            # Handle incoming messages - non-blocking queue approach
             message_count = 0
             async for message in websocket:
                 try:
@@ -797,11 +817,57 @@ class MarketDataProvider:
                             f"WebSocket message #{message_count}: {parsed_message.get('channel', 'unknown')} - {parsed_message.get('type', 'unknown')}"
                         )
 
-                    await self._handle_websocket_message(parsed_message)
+                    # Add to queue for non-blocking processing
+                    try:
+                        self._message_queue.put_nowait(parsed_message)
+                    except asyncio.QueueFull:
+                        logger.warning("Message queue full, dropping oldest message")
+                        # Drop oldest message and add new one
+                        try:
+                            self._message_queue.get_nowait()
+                            self._message_queue.put_nowait(parsed_message)
+                        except asyncio.QueueEmpty:
+                            pass
+                            
                 except json.JSONDecodeError as e:
                     logger.warning(f"Failed to parse WebSocket message: {e}")
                 except Exception as e:
                     logger.error(f"Error handling WebSocket message: {e}")
+
+    async def _process_websocket_messages(self) -> None:
+        """
+        Non-blocking WebSocket message processor using asyncio queue.
+        
+        Processes messages in background without blocking WebSocket reception.
+        """
+        while self._running:
+            try:
+                # Get message without blocking for too long
+                message = await asyncio.wait_for(
+                    self._message_queue.get(), timeout=0.1
+                )
+                
+                # Process message in background task to avoid blocking
+                asyncio.create_task(self._handle_websocket_message_async(message))
+                
+            except asyncio.TimeoutError:
+                # No message available, continue loop
+                continue
+            except Exception as e:
+                logger.error(f"Error in message processor: {e}")
+                await asyncio.sleep(0.1)
+
+    async def _handle_websocket_message_async(self, message: dict[str, Any]) -> None:
+        """
+        Handle WebSocket message asynchronously without blocking the queue processor.
+        
+        Args:
+            message: Parsed WebSocket message
+        """
+        try:
+            await self._handle_websocket_message(message)
+        except Exception as e:
+            logger.error(f"Error in async message handler: {e}")
 
     async def _handle_websocket_message(self, message: dict[str, Any]) -> None:
         """
@@ -1089,19 +1155,44 @@ class MarketDataProvider:
 
     async def _notify_subscribers(self, data: MarketData) -> None:
         """
-        Notify all subscribers of new data.
+        Notify all subscribers of new data using non-blocking tasks.
 
         Args:
             data: New market data to broadcast
         """
+        # Create tasks for all subscriber callbacks to run concurrently
+        tasks = []
         for callback in self._subscribers:
             try:
                 if asyncio.iscoroutinefunction(callback):
-                    await callback(data)
+                    # Create task for async callback
+                    task = asyncio.create_task(self._safe_callback_async(callback, data))
+                    tasks.append(task)
                 else:
-                    callback(data)
+                    # Create task for sync callback
+                    task = asyncio.create_task(self._safe_callback_sync(callback, data))
+                    tasks.append(task)
             except Exception as e:
-                logger.error(f"Error in subscriber callback {callback.__name__}: {e}")
+                logger.error(f"Error creating subscriber task for {callback.__name__}: {e}")
+        
+        # Don't wait for all tasks to complete - fire and forget for non-blocking behavior
+        # Tasks will run in background without blocking the caller
+
+    async def _safe_callback_async(self, callback: Callable, data: MarketData) -> None:
+        """Safely execute async callback."""
+        try:
+            await callback(data)
+        except Exception as e:
+            logger.error(f"Error in async subscriber callback {callback.__name__}: {e}")
+
+    async def _safe_callback_sync(self, callback: Callable, data: MarketData) -> None:
+        """Safely execute sync callback in thread pool."""
+        try:
+            # Run sync callback in thread pool to avoid blocking event loop
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, callback, data)
+        except Exception as e:
+            logger.error(f"Error in sync subscriber callback {callback.__name__}: {e}")
 
     def is_connected(self) -> bool:
         """

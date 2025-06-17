@@ -58,7 +58,7 @@
     "keep_historical_days": 30
   },
   "system": {
-    "dry_run": false,
+    "dry_run": true,
     "environment": "production",
     "log_level": "INFO",
     "log_file_path": "/app/logs/bot_docker.log",

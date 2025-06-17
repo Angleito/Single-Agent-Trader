@@ -80,7 +80,7 @@ def sample_timestamps() -> list[datetime]:
 def sample_price_data() -> dict[str, Any]:
     """Generate realistic sample price data."""
     np.random.seed(42)
-    base_price = 50000
+    base_price = 50000.0
     prices = [base_price]
 
     for _i in range(199):
@@ -96,7 +96,7 @@ def sample_price_data() -> dict[str, Any]:
                 "high": price * 1.003,
                 "low": price * 0.997,
                 "close": price,
-                "volume": np.random.uniform(1000000, 5000000),
+                "volume": int(np.random.uniform(1000000, 5000000)),
             }
             for price in prices[-50:]  # Last 50 candles
         ],
@@ -107,7 +107,7 @@ def sample_price_data() -> dict[str, Any]:
 def sample_nasdaq_data() -> dict[str, Any]:
     """Generate realistic NASDAQ sample data."""
     np.random.seed(24)
-    base_price = 15000
+    base_price = 15000.0
     prices = [base_price]
 
     for _i in range(199):
@@ -123,7 +123,7 @@ def sample_nasdaq_data() -> dict[str, Any]:
                 "high": price * 1.002,
                 "low": price * 0.998,
                 "close": price,
-                "volume": np.random.uniform(500000, 2000000),
+                "volume": int(np.random.uniform(500000, 2000000)),
             }
             for price in prices[-50:]
         ],
@@ -736,7 +736,7 @@ def cleanup_test_artifacts() -> Generator[None, None, None]:
         "high_volatility_scenario",
     ]
 )
-def market_scenario(request: pytest.FixtureRequest) -> dict[str, float | str]:
+def market_scenario(request: pytest.FixtureRequest) -> dict[str, Any]:
     """Parametrized market scenarios for comprehensive testing."""
     scenarios = {
         "bullish_scenario": {
@@ -767,9 +767,9 @@ def market_scenario(request: pytest.FixtureRequest) -> dict[str, float | str]:
     return scenarios[request.param]
 
 
-# Skip markers for external dependencies
-def pytest_configure(config):
-    """Register custom markers."""
+# Skip markers for external dependencies - additional markers
+def pytest_configure_additional(config: pytest.Config) -> None:
+    """Register additional custom markers."""
     config.addinivalue_line(
         "markers", "requires_omnisearch: mark test as requiring OmniSearch API"
     )
@@ -835,7 +835,7 @@ def benchmark_timer() -> Any:
     import time
 
     @contextmanager
-    def timer() -> Generator[callable, None, None]:
+    def timer() -> Generator[Any, None, None]:
         start = time.perf_counter()
         yield lambda: time.perf_counter() - start
 

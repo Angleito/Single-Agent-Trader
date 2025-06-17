@@ -94,59 +94,19 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             return await super().analyze_market(market_state)
 
         try:
-            # Retrieve relevant past experiences
-            similar_experiences = await self._retrieve_relevant_memories(market_state)
-
-            # Generate memory context for the prompt
-            memory_context = self._format_memory_context(similar_experiences)
-
-            # Get pattern insights if available
-            pattern_insights = await self._get_pattern_insights()
-
-            # Get sentiment-enhanced context combining memory and web search
-            sentiment_enhanced_context = await self._get_sentiment_enhanced_context(
-                market_state
-            )
-
-            # Enhance the prompt with memory and sentiment context
-            enhanced_market_state = self._enhance_with_memory(
-                market_state,
-                memory_context,
-                pattern_insights,
-                sentiment_enhanced_context,
-            )
-
-            # Get decision using enhanced context
-            result = await super().analyze_market(enhanced_market_state)
+            # Use cache if enabled, but with memory-enhanced computation
+            if self._cache_enabled and self._cache and self._chain is not None:
+                result = await self._cache.get_or_compute(
+                    market_state, 
+                    self._get_memory_enhanced_decision, 
+                    market_state
+                )
+            else:
+                # Original memory-enhanced path without caching
+                result = await self._get_memory_enhanced_decision(market_state)
 
             # Store sentiment data with the decision for future learning
             await self._store_sentiment_data_for_learning(market_state, result)
-
-            # Log memory-enhanced decision
-            logger.info(
-                f"🤖 Memory+Sentiment-Enhanced Decision: {result.action} | "
-                f"Similar experiences: {len(similar_experiences)} | "
-                f"Memory context: {'✅ Applied' if memory_context != 'No similar past experiences found.' else '❌ None'} | "
-                f"Sentiment context: {'✅ Applied' if 'sentiment' in sentiment_enhanced_context.lower() else '❌ None'}"
-            )
-
-            # Log detailed memory context used
-            if similar_experiences:
-                logger.debug(
-                    f"Top 3 similar experiences: "
-                    f"{[exp.experience_id for exp in similar_experiences[:3]]}"
-                )
-
-                # Log success rates of similar trades
-                successful_similar = sum(
-                    1
-                    for exp in similar_experiences
-                    if exp.outcome and exp.outcome.get("success", False)
-                )
-                logger.debug(
-                    f"Similar trade success rate: {successful_similar}/{len(similar_experiences)} "
-                    f"({successful_similar/len(similar_experiences)*100:.1f}%)"
-                )
 
             return result
 
@@ -154,6 +114,74 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             logger.error(f"Error in memory-enhanced analysis: {e}")
             # Fall back to base implementation
             return await super().analyze_market(market_state)
+
+    async def _get_memory_enhanced_decision(self, market_state: MarketState) -> TradeAction:
+        """
+        Get memory-enhanced decision (used by cache system).
+        
+        Args:
+            market_state: Current market state
+            
+        Returns:
+            TradeAction with memory and sentiment enhancement
+        """
+        # Retrieve relevant past experiences
+        similar_experiences = await self._retrieve_relevant_memories(market_state)
+
+        # Generate memory context for the prompt
+        memory_context = self._format_memory_context(similar_experiences)
+
+        # Get pattern insights if available
+        pattern_insights = await self._get_pattern_insights()
+
+        # Get sentiment-enhanced context combining memory and web search
+        sentiment_enhanced_context = await self._get_sentiment_enhanced_context(
+            market_state
+        )
+
+        # Enhance the prompt with memory and sentiment context
+        enhanced_market_state = self._enhance_with_memory(
+            market_state,
+            memory_context,
+            pattern_insights,
+            sentiment_enhanced_context,
+        )
+
+        # Get decision using enhanced context (bypass cache for this call)
+        if self._chain is not None:
+            # Prepare input data for the LLM
+            llm_input = await self._prepare_llm_input(enhanced_market_state)
+            result = await self._get_llm_decision(llm_input)
+        else:
+            result = self._get_fallback_decision(market_state)
+
+        # Log memory-enhanced decision
+        logger.info(
+            f"🤖 Memory+Sentiment-Enhanced Decision: {result.action} | "
+            f"Similar experiences: {len(similar_experiences)} | "
+            f"Memory context: {'✅ Applied' if memory_context != 'No similar past experiences found.' else '❌ None'} | "
+            f"Sentiment context: {'✅ Applied' if 'sentiment' in sentiment_enhanced_context.lower() else '❌ None'}"
+        )
+
+        # Log detailed memory context used
+        if similar_experiences:
+            logger.debug(
+                f"Top 3 similar experiences: "
+                f"{[exp.experience_id for exp in similar_experiences[:3]]}"
+            )
+
+            # Log success rates of similar trades
+            successful_similar = sum(
+                1
+                for exp in similar_experiences
+                if exp.outcome and exp.outcome.get("success", False)
+            )
+            logger.debug(
+                f"Similar trade success rate: {successful_similar}/{len(similar_experiences)} "
+                f"({successful_similar/len(similar_experiences)*100:.1f}%)"
+            )
+
+        return result
 
     async def _retrieve_relevant_memories(
         self, market_state: MarketState

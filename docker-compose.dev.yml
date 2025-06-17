@@ -23,7 +23,7 @@ services:
       - DEBUG=true
 
     ports:
-      - "8080:8080"  # Direct access for local development
+      - "127.0.0.1:8080:8080"  # SECURITY: Bind to localhost only for development
 
     volumes:
       - ./logs/bluefin:/app/logs
@@ -46,7 +46,7 @@ services:
       dockerfile: Dockerfile
     container_name: dashboard-backend-dev
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"  # SECURITY: Bind to localhost only
     volumes:
       - ./dashboard/backend:/app:delegated  # Mount source for live reloading
       - ./logs:/app/trading-logs:ro
@@ -59,9 +59,9 @@ services:
       - API_HOST=0.0.0.0
       - API_PORT=8000
       - DOCKER_ENV=true
-      # Enable CORS for local frontend development
+      # SECURITY: Restricted CORS for development
       - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080
-      - CORS_ALLOW_CREDENTIALS=true
+      - CORS_ALLOW_CREDENTIALS=false
       # Bluefin service configuration
       - BLUEFIN_SERVICE_URL=http://bluefin-service:8080
       - BLUEFIN_SERVICE_API_KEY=${BLUEFIN_SERVICE_API_KEY:-}
@@ -91,7 +91,7 @@ services:
       target: development
     container_name: dashboard-frontend-dev
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"  # SECURITY: Bind to localhost only
     volumes:
       - ./dashboard/frontend:/app:delegated
       - /app/node_modules  # Anonymous volume for node_modules

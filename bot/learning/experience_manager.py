@@ -374,14 +374,15 @@ class ExperienceManager:
         )
 
         # Log structured trade outcome
-        self.trade_logger.log_trade_outcome(
-            experience_id=active_trade.experience_id,
-            entry_price=entry_price,
-            exit_price=exit_price,
-            pnl=realized_pnl,
-            duration_minutes=duration_minutes,
-            insights=None,  # Will be populated after reflection
-        )
+        if entry_price is not None:
+            self.trade_logger.log_trade_outcome(
+                experience_id=active_trade.experience_id,
+                entry_price=entry_price,
+                exit_price=exit_price,
+                pnl=realized_pnl,
+                duration_minutes=duration_minutes,
+                insights=None,  # Will be populated after reflection
+            )
 
         # Archive the trade
         del self.active_trades[active_trade.trade_id]

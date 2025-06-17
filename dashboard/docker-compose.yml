@@ -5,11 +5,24 @@ services:
       dockerfile: Dockerfile
     container_name: dashboard-backend
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"  # SECURITY: Bind to localhost only
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # SECURITY FIX: Docker socket exposure removed - CRITICAL VULNERABILITY FIXED
+      # - /var/run/docker.sock:/var/run/docker.sock:ro  # DANGEROUS - Removed for security
       - ./backend/logs:/app/logs
       - ./backend/data:/app/data
+    
+    # SECURITY HARDENING - Container Security
+    user: "1000:1000"  # Run as non-root user
+    read_only: true     # Read-only root filesystem
+    security_opt:
+      - no-new-privileges:true  # Prevent privilege escalation
+    cap_drop:
+      - ALL             # Drop all capabilities
+    cap_add:
+      - NET_BIND_SERVICE  # Only add required capabilities
+    tmpfs:
+      - /tmp:noexec,nosuid,size=50m  # Secure temporary filesystem
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
@@ -48,7 +61,17 @@ services:
       target: production
     container_name: dashboard-frontend
     ports:
-      - "3000:8080"
+      - "127.0.0.1:3000:8080"  # SECURITY: Bind to localhost only
+    
+    # SECURITY HARDENING - Container Security
+    user: "1000:1000"  # Run as non-root user
+    read_only: true     # Read-only root filesystem
+    security_opt:
+      - no-new-privileges:true  # Prevent privilege escalation
+    cap_drop:
+      - ALL             # Drop all capabilities
+    tmpfs:
+      - /tmp:noexec,nosuid,size=50m  # Secure temporary filesystem
     environment:
       - NODE_ENV=production
       - DOCKER_ENV=true
@@ -82,7 +105,17 @@ services:
       target: production
     container_name: dashboard-frontend-prod
     ports:
-      - "80:8080"
+      - "127.0.0.1:80:8080"  # SECURITY: Bind to localhost only
+    
+    # SECURITY HARDENING - Container Security
+    user: "1000:1000"  # Run as non-root user
+    read_only: true     # Read-only root filesystem
+    security_opt:
+      - no-new-privileges:true  # Prevent privilege escalation
+    cap_drop:
+      - ALL             # Drop all capabilities
+    tmpfs:
+      - /tmp:noexec,nosuid,size=50m  # Secure temporary filesystem
     environment:
       - NODE_ENV=production
       - VITE_API_URL=http://dashboard-backend:8000
@@ -114,7 +147,20 @@ services:
     image: nginx:alpine
     container_name: dashboard-nginx
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"  # SECURITY: Bind to localhost only
+    
+    # SECURITY HARDENING - Container Security
+    user: "101:101"    # Run as nginx user
+    read_only: true     # Read-only root filesystem
+    security_opt:
+      - no-new-privileges:true  # Prevent privilege escalation
+    cap_drop:
+      - ALL             # Drop all capabilities
+    cap_add:
+      - NET_BIND_SERVICE  # Only add required capabilities
+    tmpfs:
+      - /tmp:noexec,nosuid,size=50m      # Secure temporary filesystem
+      - /var/cache/nginx:noexec,nosuid,size=50m  # Nginx cache
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro

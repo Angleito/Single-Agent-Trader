@@ -1211,24 +1211,24 @@ export class TradingViewChart {
           .then((config) => {
             console.log('[UDF onReady]: Configuration loaded', config)
             const validatedConfig = this.validateUDFConfig({
-              supports_search: Boolean(false),
-              supports_group_request: Boolean(false),
+              supports_search: false,
+              supports_group_request: false,
               supported_resolutions: ['1', '5', '15', '30', '60', '240', '1D'],
-              supports_marks: Boolean(true),
-              supports_timescale_marks: Boolean(true),
-              supports_time: Boolean(true),
-              supports_streaming: Boolean(true),
+              supports_marks: true,
+              supports_timescale_marks: true,
+              supports_time: true,
+              supports_streaming: true,
               exchanges: [
                 {
-                  value: String('Coinbase'),
-                  name: String('Coinbase Pro'),
-                  desc: String('Coinbase Pro Exchange'),
+                  value: 'Coinbase',
+                  name: 'Coinbase Pro',
+                  desc: 'Coinbase Pro Exchange',
                 },
               ],
               symbols_types: [
                 {
-                  name: String('crypto'),
-                  value: String('crypto'),
+                  name: 'crypto',
+                  value: 'crypto',
                 },
               ],
               currencies: ['USD', 'EUR', 'BTC', 'ETH'],
@@ -1242,13 +1242,13 @@ export class TradingViewChart {
           .catch((error) => {
             console.warn('[UDF onReady]: Using fallback config', error)
             const fallbackConfig = this.validateUDFConfig({
-              supports_search: Boolean(false),
-              supports_group_request: Boolean(false),
+              supports_search: false,
+              supports_group_request: false,
               supported_resolutions: ['1', '5', '15', '30', '60', '240', '1D'],
-              supports_marks: Boolean(true),
-              supports_timescale_marks: Boolean(true),
-              supports_time: Boolean(true),
-              supports_streaming: Boolean(true),
+              supports_marks: true,
+              supports_timescale_marks: true,
+              supports_time: true,
+              supports_streaming: true,
             })
 
             // Additional validation before calling callback
@@ -1287,24 +1287,24 @@ export class TradingViewChart {
             console.log('[UDF resolveSymbol]: Symbol resolved', symbolInfo)
 
             const validatedSymbolInfo = this.validateSymbolInfo({
-              name: String(symbolInfo.name || normalizedSymbol),
-              description: String(symbolInfo.description || normalizedSymbol),
-              type: String('crypto'),
-              session: String('24x7'),
-              timezone: String('Etc/UTC'),
-              ticker: String(normalizedSymbol),
-              exchange: String('Coinbase'),
-              minmov: Number(symbolInfo.minmov || 1),
-              pricescale: Number(symbolInfo.pricescale || 100000),
-              has_intraday: Boolean(true),
-              has_daily: Boolean(true),
-              has_weekly_and_monthly: Boolean(true),
+              name: '' + (symbolInfo.name || normalizedSymbol),
+              description: '' + (symbolInfo.description || normalizedSymbol),
+              type: 'crypto',
+              session: '24x7',
+              timezone: 'Etc/UTC',
+              ticker: '' + normalizedSymbol,
+              exchange: 'Coinbase',
+              minmov: +(symbolInfo.minmov || 1),
+              pricescale: +(symbolInfo.pricescale || 100000),
+              has_intraday: true,
+              has_daily: true,
+              has_weekly_and_monthly: true,
               intraday_multipliers: ['1', '5', '15', '30', '60'],
               supported_resolutions: ['1', '5', '15', '30', '60', '240', '1D'],
-              volume_precision: Number(symbolInfo.volume_precision || 8),
-              data_status: String('streaming'),
-              currency_code: String(symbolInfo.currency_code || 'USD'),
-              original_name: String(normalizedSymbol),
+              volume_precision: +(symbolInfo.volume_precision || 8),
+              data_status: 'streaming',
+              currency_code: '' + (symbolInfo.currency_code || 'USD'),
+              original_name: '' + normalizedSymbol,
               ...symbolInfo,
             })
 
@@ -1360,12 +1360,12 @@ export class TradingViewChart {
             const bars: UDFBar[] = []
             for (let i = 0; i < data.t.length; i++) {
               const bar: UDFBar = this.validateBarData({
-                time: Number(data.t[i]) * 1000, // Convert to milliseconds
-                open: Number(data.o[i]),
-                high: Number(data.h[i]),
-                low: Number(data.l[i]),
-                close: Number(data.c[i]),
-                volume: Number(data.v[i] || 0),
+                time: +data.t[i] * 1000, // Convert to milliseconds
+                open: +data.o[i],
+                high: +data.h[i],
+                low: +data.l[i],
+                close: +data.c[i],
+                volume: +(data.v[i] || 0),
               })
               bars.push(bar)
 

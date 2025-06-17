@@ -6,6 +6,16 @@ services:
     image: ai-trading-bot:latest
     container_name: ai-trading-bot-prod
     restart: always
+    
+    # ENHANCED SECURITY HARDENING
+    user: "1000:1000"  # Run as non-root user
+    read_only: true     # Read-only root filesystem
+    security_opt:
+      - no-new-privileges:true  # Prevent privilege escalation
+    cap_drop:
+      - ALL             # Drop all capabilities
+    cap_add:
+      - NET_BIND_SERVICE  # Only add required capabilities
 
     # Environment variables from .env file (optional)
     # env_file:
@@ -62,12 +72,10 @@ services:
     # Production command
     command: ["python", "-m", "bot.main", "live"]
 
-    # Security options
-    security_opt:
-      - no-new-privileges:true
-    read_only: false  # Bot needs to write to logs and data
+    # ENHANCED Security options - writable volumes configured separately
     tmpfs:
       - /tmp:noexec,nosuid,size=100m
+      - /var/tmp:noexec,nosuid,size=50m
 
     networks:
       - trading-network
@@ -77,12 +85,23 @@ services:
     image: dashboard-backend:latest
     container_name: dashboard-backend-prod
     restart: always
+    
+    # ENHANCED SECURITY HARDENING
+    user: "1000:1000"  # Run as non-root user
+    read_only: true     # Read-only root filesystem
+    security_opt:
+      - no-new-privileges:true  # Prevent privilege escalation
+    cap_drop:
+      - ALL             # Drop all capabilities
+    cap_add:
+      - NET_BIND_SERVICE  # Only add required capabilities
 
     ports:
       - "127.0.0.1:8000:8000"  # Bind to localhost only for security
 
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # SECURITY FIX: Docker socket exposure removed - CRITICAL VULNERABILITY FIXED
+      # - /var/run/docker.sock:/var/run/docker.sock:ro  # DANGEROUS - Removed for security
       - dashboard-logs:/app/logs
       - dashboard-data:/app/data
       - trading-logs:/app/trading-logs:ro
@@ -123,11 +142,9 @@ services:
         max-size: "50m"
         max-file: "3"
 
-    security_opt:
-      - no-new-privileges:true
-    read_only: false
     tmpfs:
       - /tmp:noexec,nosuid,size=100m
+      - /var/tmp:noexec,nosuid,size=50m
 
     networks:
       - trading-network
@@ -137,6 +154,14 @@ services:
     image: dashboard-frontend:latest
     container_name: dashboard-frontend-prod
     restart: always
+    
+    # ENHANCED SECURITY HARDENING
+    user: "1000:1000"  # Run as non-root user
+    read_only: true     # Read-only root filesystem
+    security_opt:
+      - no-new-privileges:true  # Prevent privilege escalation
+    cap_drop:
+      - ALL             # Drop all capabilities
 
     environment:
       - NODE_ENV=production
@@ -162,9 +187,6 @@ services:
         max-size: "10m"
         max-file: "2"
 
-    security_opt:
-      - no-new-privileges:true
-    read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,size=50m
       - /var/cache/nginx:noexec,nosuid,size=50m
@@ -177,6 +199,16 @@ services:
     image: nginx:alpine
     container_name: nginx-prod
     restart: always
+    
+    # ENHANCED SECURITY HARDENING
+    user: "101:101"    # Run as nginx user
+    read_only: true     # Read-only root filesystem
+    security_opt:
+      - no-new-privileges:true  # Prevent privilege escalation
+    cap_drop:
+      - ALL             # Drop all capabilities
+    cap_add:
+      - NET_BIND_SERVICE  # Only add required capabilities
 
     ports:
       - "80:80"
@@ -206,12 +238,10 @@ services:
         max-size: "10m"
         max-file: "3"
 
-    security_opt:
-      - no-new-privileges:true
-    read_only: true
     tmpfs:
       - /var/cache/nginx:noexec,nosuid,size=100m
       - /var/run:noexec,nosuid,size=50m
+      - /tmp:noexec,nosuid,size=50m
 
     networks:
       - trading-network

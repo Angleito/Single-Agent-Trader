@@ -234,7 +234,8 @@ class WarningsFilter:
 
         This method can be used to restore warnings if needed for debugging.
         """
-        warnings.filters[:] = self._original_warnings_state
+        # Reset to original state by recreating the list
+        warnings.filters[:] = list(self._original_warnings_state)  # type: ignore[index]
         self._suppressed_patterns.clear()
 
     def get_suppressed_patterns(self) -> list[str]:
@@ -333,7 +334,7 @@ def initialize_early_warning_suppression() -> None:
     """
     # Set warning registry to capture import-time warnings
     if not hasattr(sys.modules[__name__], "__warningregistry__"):
-        sys.modules[__name__].__warningregistry__ = {}
+        setattr(sys.modules[__name__], "__warningregistry__", {})
 
     # Comprehensive message-based filtering including LangChain
     message_patterns = [

@@ -8,7 +8,7 @@ from collections import deque
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, Optional, Union
 
 import aiohttp
 import pandas as pd
@@ -35,7 +35,7 @@ class BluefinMarketDataProvider:
     - Perpetual futures symbol mapping
     """
 
-    def __init__(self, symbol: str = None, interval: str = None):
+    def __init__(self, symbol: Optional[str] = None, interval: Optional[str] = None) -> None:
         """
         Initialize the Bluefin market data provider.
 
@@ -54,10 +54,10 @@ class BluefinMarketDataProvider:
         self._tick_cache: list[dict[str, Any]] = []
         self._cache_timestamps: dict[str, datetime] = {}
         self._cache_ttl = timedelta(seconds=settings.data.data_cache_ttl_seconds)
-        self._last_update: datetime | None = None
+        self._last_update: Optional[datetime] = None
 
         # HTTP session for API calls
-        self._session: aiohttp.ClientSession | None = None
+        self._session: Optional[aiohttp.ClientSession] = None
 
         # Connection state
         self._is_connected = False
@@ -81,21 +81,26 @@ class BluefinMarketDataProvider:
         use_real_data = os.getenv("BLUEFIN_USE_REAL_DATA", "false").lower() == "true"
         # Use real data by default unless explicitly in dry_run mode without real data
         self._use_mock_data = settings.system.dry_run and not use_real_data
-        self._mock_price_update_task: asyncio.Task | None = None
+        self._mock_price_update_task: Optional[asyncio.Task] = None
 
         # WebSocket connection
-        self._ws: WebSocketClientProtocol | None = None
-        self._ws_task: asyncio.Task | None = None
-        self._reconnect_task: asyncio.Task | None = None
+        self._ws: Optional[WebSocketClientProtocol] = None
+        self._ws_task: Optional[asyncio.Task] = None
+        self._reconnect_task: Optional[asyncio.Task] = None
         self._ws_connected = False
         self._reconnect_attempts = 0
         self._max_reconnect_attempts = 10
         self._reconnect_delay = 5  # seconds
+        self._running = False
+
+        # Non-blocking message processing
+        self._message_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
+        self._processing_task: Optional[asyncio.Task] = None
 
         # Tick data buffer for candle building
         self._tick_buffer: deque[dict[str, Any]] = deque(maxlen=10000)
-        self._candle_builder_task: asyncio.Task | None = None
-        self._last_candle_timestamp: datetime | None = None
+        self._candle_builder_task: Optional[asyncio.Task] = None
+        self._last_candle_timestamp: Optional[datetime] = None
 
         # Bluefin API configuration
         self._api_base_url = "https://dapi.api.sui-prod.bluefin.io"
@@ -143,6 +148,11 @@ class BluefinMarketDataProvider:
                 )
             else:
                 logger.info("Connecting to Bluefin WebSocket for real-time data")
+                self._running = True
+                
+                # Start non-blocking message processor
+                self._processing_task = asyncio.create_task(self._process_websocket_messages())
+                
                 # Start WebSocket connection
                 await self._connect_websocket()
 
@@ -192,6 +202,15 @@ class BluefinMarketDataProvider:
     async def disconnect(self) -> None:
         """Disconnect from all data feeds and cleanup resources."""
         self._is_connected = False
+        self._running = False
+
+        # Stop message processing task
+        if self._processing_task and not self._processing_task.done():
+            self._processing_task.cancel()
+            try:
+                await self._processing_task
+            except asyncio.CancelledError:
+                pass
 
         # Stop mock price update task
         if self._mock_price_update_task and not self._mock_price_update_task.done():
@@ -326,7 +345,7 @@ class BluefinMarketDataProvider:
                 return self._ohlcv_cache
             raise
 
-    async def fetch_latest_price(self) -> Decimal | None:
+    async def fetch_latest_price(self) -> Optional[Decimal]:
         """
         Fetch the latest price for the symbol.
 
@@ -368,7 +387,7 @@ class BluefinMarketDataProvider:
         # Fall back to cached OHLCV data
         return self.get_latest_price()
 
-    async def fetch_orderbook(self, level: int = 2) -> dict[str, Any] | None:
+    async def fetch_orderbook(self, level: int = 2) -> Optional[dict[str, Any]]:
         """
         Fetch order book data.
 
@@ -405,7 +424,7 @@ class BluefinMarketDataProvider:
             logger.error(f"Error fetching orderbook: {e}")
             return None
 
-    def get_latest_ohlcv(self, limit: int | None = None) -> list[MarketData]:
+    def get_latest_ohlcv(self, limit: Optional[int] = None) -> list[MarketData]:
         """
         Get the latest OHLCV data.
 
@@ -420,7 +439,7 @@ class BluefinMarketDataProvider:
 
         return self._ohlcv_cache[-limit:].copy()
 
-    def get_latest_price(self) -> Decimal | None:
+    def get_latest_price(self) -> Optional[Decimal]:
         """
         Get the most recent price from cache.
 
@@ -437,7 +456,7 @@ class BluefinMarketDataProvider:
 
         return None
 
-    def to_dataframe(self, limit: int | None = None) -> pd.DataFrame:
+    def to_dataframe(self, limit: Optional[int] = None) -> pd.DataFrame:
         """
         Convert OHLCV data to pandas DataFrame for indicator calculations.
 
@@ -493,19 +512,75 @@ class BluefinMarketDataProvider:
 
     async def _notify_subscribers(self, data: MarketData) -> None:
         """
-        Notify all subscribers of new data.
+        Notify all subscribers of new data using non-blocking tasks.
 
         Args:
             data: New market data to broadcast
         """
+        # Create tasks for all subscriber callbacks to run concurrently
         for callback in self._subscribers:
             try:
                 if asyncio.iscoroutinefunction(callback):
-                    await callback(data)
+                    # Create task for async callback
+                    asyncio.create_task(self._safe_callback_async(callback, data))
                 else:
-                    callback(data)
+                    # Create task for sync callback
+                    asyncio.create_task(self._safe_callback_sync(callback, data))
             except Exception as e:
-                logger.error(f"Error in subscriber callback {callback.__name__}: {e}")
+                logger.error(f"Error creating subscriber task for {callback.__name__}: {e}")
+        
+        # Don't wait for all tasks to complete - fire and forget for non-blocking behavior
+
+    async def _safe_callback_async(self, callback: Callable, data: MarketData) -> None:
+        """Safely execute async callback."""
+        try:
+            await callback(data)
+        except Exception as e:
+            logger.error(f"Error in async subscriber callback {callback.__name__}: {e}")
+
+    async def _safe_callback_sync(self, callback: Callable, data: MarketData) -> None:
+        """Safely execute sync callback in thread pool."""
+        try:
+            # Run sync callback in thread pool to avoid blocking event loop
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, callback, data)
+        except Exception as e:
+            logger.error(f"Error in sync subscriber callback {callback.__name__}: {e}")
+
+    async def _process_websocket_messages(self) -> None:
+        """
+        Non-blocking WebSocket message processor using asyncio queue.
+        
+        Processes messages in background without blocking WebSocket reception.
+        """
+        while self._running:
+            try:
+                # Get message without blocking for too long
+                message = await asyncio.wait_for(
+                    self._message_queue.get(), timeout=0.1
+                )
+                
+                # Process message in background task to avoid blocking
+                asyncio.create_task(self._handle_websocket_message_async(message))
+                
+            except asyncio.TimeoutError:
+                # No message available, continue loop
+                continue
+            except Exception as e:
+                logger.error(f"Error in message processor: {e}")
+                await asyncio.sleep(0.1)
+
+    async def _handle_websocket_message_async(self, message: dict[str, Any]) -> None:
+        """
+        Handle WebSocket message asynchronously without blocking the queue processor.
+        
+        Args:
+            message: Parsed WebSocket message
+        """
+        try:
+            await self._process_websocket_message(message)
+        except Exception as e:
+            logger.error(f"Error in async message handler: {e}")
 
     def is_connected(self) -> bool:
         """
@@ -811,7 +886,7 @@ class BluefinMarketDataProvider:
             except Exception as e:
                 logger.error(f"Error in mock price update: {e}")
 
-    async def _fetch_bluefin_ticker_price(self) -> Decimal | None:
+    async def _fetch_bluefin_ticker_price(self) -> Optional[Decimal]:
         """
         Fetch real-time ticker price from Bluefin API.
 
@@ -1011,7 +1086,7 @@ class BluefinMarketDataProvider:
         self._cache_timestamps.clear()
         logger.info("All cached data cleared")
 
-    def get_tick_data(self, limit: int | None = None) -> list[dict[str, Any]]:
+    def get_tick_data(self, limit: Optional[int] = None) -> list[dict[str, Any]]:
         """
         Get recent tick/trade data.
 
@@ -1064,7 +1139,7 @@ class BluefinMarketDataProvider:
         logger.info(f"Subscribed to market data for {self.symbol}")
 
     async def _handle_websocket_messages(self) -> None:
-        """Handle incoming WebSocket messages."""
+        """Handle incoming WebSocket messages using non-blocking queue."""
         if not self._ws:
             return
 
@@ -1072,11 +1147,23 @@ class BluefinMarketDataProvider:
             async for message in self._ws:
                 try:
                     data = json.loads(message)
-                    await self._process_websocket_message(data)
+                    
+                    # Add to queue for non-blocking processing
+                    try:
+                        self._message_queue.put_nowait(data)
+                    except asyncio.QueueFull:
+                        logger.warning("Bluefin message queue full, dropping oldest message")
+                        # Drop oldest message and add new one
+                        try:
+                            self._message_queue.get_nowait()
+                            self._message_queue.put_nowait(data)
+                        except asyncio.QueueEmpty:
+                            pass
+                            
                 except json.JSONDecodeError:
                     logger.error(f"Invalid JSON in WebSocket message: {message}")
                 except Exception as e:
-                    logger.error(f"Error processing WebSocket message: {e}")
+                    logger.error(f"Error handling WebSocket message: {e}")
 
         except websockets.ConnectionClosed:
             logger.warning("WebSocket connection closed")
@@ -1323,7 +1410,7 @@ class BluefinMarketDataClient:
     with additional convenience methods and error handling.
     """
 
-    def __init__(self, symbol: str = None, interval: str = None):
+    def __init__(self, symbol: Optional[str] = None, interval: Optional[str] = None) -> None:
         """
         Initialize the Bluefin market data client.
 
@@ -1334,12 +1421,12 @@ class BluefinMarketDataClient:
         self.provider = BluefinMarketDataProvider(symbol, interval)
         self._initialized = False
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "BluefinMarketDataClient":
         """Async context manager entry."""
         await self.connect()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Async context manager exit."""
         await self.disconnect()
 
@@ -1382,7 +1469,7 @@ class BluefinMarketDataClient:
 
         return self._to_dataframe(data)
 
-    async def get_current_price(self) -> Decimal | None:
+    async def get_current_price(self) -> Optional[Decimal]:
         """
         Get the current market price.
 
@@ -1394,7 +1481,7 @@ class BluefinMarketDataClient:
 
         return await self.provider.fetch_latest_price()
 
-    async def get_orderbook_snapshot(self, level: int = 2) -> dict[str, Any] | None:
+    async def get_orderbook_snapshot(self, level: int = 2) -> Optional[dict[str, Any]]:
         """
         Get a snapshot of the current order book.
 
@@ -1409,7 +1496,7 @@ class BluefinMarketDataClient:
 
         return await self.provider.fetch_orderbook(level)
 
-    def get_latest_ohlcv_dataframe(self, limit: int | None = None) -> pd.DataFrame:
+    def get_latest_ohlcv_dataframe(self, limit: Optional[int] = None) -> pd.DataFrame:
         """
         Get latest OHLCV data as DataFrame.
 

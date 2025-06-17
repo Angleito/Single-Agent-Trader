@@ -49,7 +49,7 @@ class ParsedLogEntry:
     log_level: LogLevel
     logger_name: str
     raw_message: str
-    container_name: str = "ai-trading-bot"
+    container_name: str
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -69,7 +69,6 @@ class AIDecisionLog(ParsedLogEntry):
 
     trade_action: TradeAction
     reasoning: str
-    container_name: str = "ai-trading-bot"
     confidence: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -92,7 +91,6 @@ class TradingLoopLog(ParsedLogEntry):
     loop_number: int
     price: float
     action: TradeAction
-    container_name: str = "ai-trading-bot"
     confidence: float | None = None
     risk_status: str | None = None
     symbol: str | None = None
@@ -119,7 +117,6 @@ class SystemStatusLog(ParsedLogEntry):
 
     component: str
     status: str
-    container_name: str = "ai-trading-bot"
     details: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -142,7 +139,6 @@ class ErrorLog(ParsedLogEntry):
     error_type: str
     error_message: str
     component: str
-    container_name: str = "ai-trading-bot"
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -163,7 +159,6 @@ class PerformanceLog(ParsedLogEntry):
 
     metric_name: str
     metric_value: float
-    container_name: str = "ai-trading-bot"
     unit: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -216,7 +211,7 @@ class DockerLogParser:
         """Initialize the Docker log parser."""
         self.container_name = container_name
         self._stop_event = threading.Event()
-        self._log_queue = Queue()
+        self._log_queue: Queue[str] = Queue()
         self._parsing_thread: threading.Thread | None = None
 
     def parse_log_line(self, line: str) -> ParsedLogEntry | None:

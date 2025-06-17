@@ -9,7 +9,7 @@ import asyncio
 import logging
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Optional, List, Dict, Literal, cast
 
 from ..config import settings
 from ..types import (
@@ -60,7 +60,7 @@ class BluefinRateLimiter:
     def __init__(self, max_requests: int = 30, window_seconds: int = 60):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
-        self.requests = []
+        self.requests: List[float] = []
         self._lock = asyncio.Lock()
 
     async def acquire(self) -> None:
@@ -168,9 +168,9 @@ class BluefinClient(BaseExchange):
         )
 
         # Cached data
-        self._account_address = None
-        self._leverage_settings = {}
-        self._contract_info = {}
+        self._account_address: Optional[str] = None
+        self._leverage_settings: Dict[str, Any] = {}
+        self._contract_info: Dict[str, Any] = {}
 
         logger.info(
             f"Initialized BluefinClient (network={network}, " f"dry_run={dry_run})"
@@ -542,7 +542,7 @@ class BluefinClient(BaseExchange):
             return Order(
                 id=f"paper_bluefin_{int(datetime.utcnow().timestamp() * 1000)}",
                 symbol=symbol,
-                side=side,
+                side=cast(Literal["BUY", "SELL"], side),
                 type="MARKET",
                 quantity=quantity,
                 status=OrderStatus.FILLED,
@@ -575,7 +575,7 @@ class BluefinClient(BaseExchange):
                 order = Order(
                     id=order_data.get("id", f"bluefin_{datetime.utcnow().timestamp()}"),
                     symbol=symbol,
-                    side=side,
+                    side=cast(Literal["BUY", "SELL"], side),
                     type="MARKET",
                     quantity=quantity,
                     status=OrderStatus.PENDING,
@@ -619,7 +619,7 @@ class BluefinClient(BaseExchange):
             return Order(
                 id=f"paper_limit_{int(datetime.utcnow().timestamp() * 1000)}",
                 symbol=symbol,
-                side=side,
+                side=cast(Literal["BUY", "SELL"], side),
                 type="LIMIT",
                 quantity=quantity,
                 price=price,
@@ -650,7 +650,7 @@ class BluefinClient(BaseExchange):
                         "id", f"bluefin_limit_{datetime.utcnow().timestamp()}"
                     ),
                     symbol=symbol,
-                    side=side,
+                    side=cast(Literal["BUY", "SELL"], side),
                     type="LIMIT",
                     quantity=quantity,
                     price=price,
@@ -690,6 +690,8 @@ class BluefinClient(BaseExchange):
             positions = []
             for pos_data in positions_data:
                 pos_symbol = pos_data.get("symbol")
+                if not pos_symbol:
+                    continue
 
                 # Skip if symbol filter provided and doesn't match
                 if symbol and pos_symbol != self._convert_symbol(symbol):
@@ -702,7 +704,7 @@ class BluefinClient(BaseExchange):
                     side = pos_data.get("side", "LONG" if size > 0 else "SHORT")
                     position = Position(
                         symbol=pos_symbol,
-                        side=side,
+                        side=cast(Literal["LONG", "SHORT", "FLAT"], side),
                         size=abs(size),
                         entry_price=Decimal(str(pos_data.get("avgPrice", "0"))),
                         unrealized_pnl=Decimal(str(pos_data.get("unrealizedPnl", "0"))),

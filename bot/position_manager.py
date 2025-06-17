@@ -12,6 +12,7 @@ import threading
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from typing import Any, Optional, Union
 
 import aiofiles
 
@@ -33,10 +34,10 @@ class PositionManager:
 
     def __init__(
         self,
-        data_dir: Path | None = None,
-        paper_trading_account: PaperTradingAccount | None = None,
+        data_dir: Optional[Path] = None,
+        paper_trading_account: Optional[PaperTradingAccount] = None,
         use_fifo: bool = True,
-    ):
+    ) -> None:
         """
         Initialize the position manager.
 
@@ -431,7 +432,7 @@ class PositionManager:
                 "trades_count": trades_count,
             }
 
-    def get_position_summary(self) -> dict[str, any]:
+    def get_position_summary(self) -> dict[str, Any]:
         """
         Get summary of all positions.
 
@@ -726,7 +727,7 @@ class PositionManager:
             logger.error(f"Failed to load position state: {e}")
             # Continue with empty state
 
-    def get_paper_trading_performance(self, days: int = 7) -> dict[str, any]:
+    def get_paper_trading_performance(self, days: int = 7) -> dict[str, Any]:
         """
         Get enhanced paper trading performance metrics.
 
@@ -794,7 +795,7 @@ class PositionManager:
 """
         return report
 
-    def get_weekly_performance_summary(self) -> dict[str, any]:
+    def get_weekly_performance_summary(self) -> dict[str, Any]:
         """Get weekly performance summary."""
         if self.paper_account:
             return self.paper_account.get_performance_summary(days=7)
@@ -819,7 +820,7 @@ class PositionManager:
             "active_positions": len(self._positions),
         }
 
-    def get_tax_lots_report(self, symbol: str) -> dict | None:
+    def get_tax_lots_report(self, symbol: str) -> Optional[dict]:
         """
         Get FIFO tax lots report for a symbol.
 
