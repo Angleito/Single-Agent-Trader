@@ -261,7 +261,13 @@ class FeeCalculator:
             # Calculate total fees
             fees = self.calculate_trade_fees(
                 # Dummy trade action for calculation
-                TradeAction(action="LONG", size_pct=10, take_profit_pct=2.0, stop_loss_pct=1.0),
+                TradeAction(
+                    action="LONG", 
+                    size_pct=10, 
+                    take_profit_pct=2.0, 
+                    stop_loss_pct=1.0,
+                    rationale="Fee calculation dummy action"
+                ),
                 position_value,
                 Decimal("1000"),  # Dummy price
                 is_market_order

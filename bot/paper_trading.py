@@ -439,7 +439,13 @@ class PaperTradingAccount:
         if not trade_to_close:
             logger.warning(f"No open position found for {symbol}")
             return self._create_failed_order(
-                TradeAction(action="CLOSE", size_pct=0, rationale="No position"),
+                TradeAction(
+                    action="CLOSE", 
+                    size_pct=0, 
+                    take_profit_pct=0.0, 
+                    stop_loss_pct=0.0, 
+                    rationale="No position"
+                ),
                 symbol,
                 "NO_POSITION",
             )

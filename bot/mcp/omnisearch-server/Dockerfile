@@ -8,7 +8,8 @@ WORKDIR /app
 COPY package*.json ./
 COPY pnpm-lock.yaml ./
 
-# Install pnpm and dependencies
+# Install pnpm, wget and dependencies
+RUN apk add --no-cache wget
 RUN npm install -g pnpm
 RUN pnpm install
 
@@ -27,16 +28,16 @@ USER mcp
 # Expose port for health checks
 EXPOSE 8767
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD node -e "console.log('MCP Server Ready')" || exit 1
+# Health check using HTTP endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8767/health || exit 1
 
-# Create a simple wrapper script that keeps the server alive
+# Create a simple wrapper script that starts the HTTP wrapper
 RUN echo '#!/bin/sh' > /app/start-server.sh && \
-    echo 'echo "MCP-OmniSearch Server starting..."' >> /app/start-server.sh && \
+    echo 'echo "MCP-OmniSearch HTTP Wrapper starting..."' >> /app/start-server.sh && \
     echo 'echo "API Keys status: TAVILY=$TAVILY_API_KEY PERPLEXITY=$PERPLEXITY_API_KEY"' >> /app/start-server.sh && \
-    echo 'tail -f /dev/null | node dist/index.js' >> /app/start-server.sh && \
+    echo 'node http_wrapper.js' >> /app/start-server.sh && \
     chmod +x /app/start-server.sh
 
-# Start the MCP server with stdin feed
+# Start the HTTP wrapper which will spawn the MCP server
 CMD ["/app/start-server.sh"]

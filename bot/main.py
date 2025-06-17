@@ -421,11 +421,10 @@ class TradingEngine:
             # Create trade action from parameters
             trade_action = TradeAction(
                 action=parameters["action"].upper(),
-                symbol=parameters["symbol"],
-                size_pct=parameters["size_percentage"] / 100.0,
-                reasoning=parameters.get("reason", "Manual trade from dashboard"),
-                confidence=1.0,  # Manual trades have full confidence
-                manual_trade=True
+                size_pct=int(parameters["size_percentage"]),
+                take_profit_pct=2.0,  # Default take profit
+                stop_loss_pct=1.5,   # Default stop loss
+                rationale=parameters.get("reason", "Manual trade from dashboard")
             )
             
             # Execute the trade
@@ -458,11 +457,10 @@ class TradingEngine:
             if self.current_position.side != "FLAT":
                 close_action = TradeAction(
                     action="CLOSE",
-                    symbol=self.current_position.symbol,
-                    size_pct=1.0,  # Close 100%
-                    reasoning="Emergency position closure",
-                    confidence=1.0,
-                    emergency_close=True
+                    size_pct=0,  # Close actions use size_pct=0
+                    take_profit_pct=0.0,
+                    stop_loss_pct=0.0,
+                    rationale="Emergency position closure"
                 )
                 await self._execute_trade_action(close_action)
         except Exception as e:

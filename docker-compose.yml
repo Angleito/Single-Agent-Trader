@@ -107,9 +107,9 @@ services:
       - SYSTEM__WEBSOCKET_RETRY_DELAY=5
       # Logging Level
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      # OmniSearch Configuration (disabled temporarily - needs HTTP wrapper)
-      - OMNISEARCH__ENABLED=false
-      # - OMNISEARCH__SERVER_URL=http://mcp-omnisearch:8767
+      # OmniSearch Configuration
+      - OMNISEARCH__ENABLED=true
+      - OMNISEARCH__SERVER_URL=http://mcp-omnisearch:8767
       
     # Volume mounts for persistence and configuration (cleaned up overlapping mounts)
     volumes:
@@ -151,7 +151,7 @@ services:
     # Service dependencies
     depends_on:
       - bluefin-service
-    #   - mcp-omnisearch  # Temporarily disabled - needs HTTP wrapper
+      - mcp-omnisearch
     #   - mcp-memory  # Temporarily disabled
 
   # MCP OmniSearch Server for Enhanced Market Intelligence
