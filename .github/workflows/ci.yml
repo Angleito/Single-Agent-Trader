@@ -56,16 +56,33 @@ jobs:
     - name: Install dependencies
       run: |
         poetry install --with dev --no-interaction --verbose
+        # Force reinstall dev tools if they're missing
+        if ! poetry run black --version 2>/dev/null; then
+          echo "Black not found, forcing reinstall of dev dependencies..."
+          poetry add --group dev black@^24.0.0 ruff@^0.3.0 mypy@^1.8.0 --no-interaction
+        fi
     
     - name: Debug Poetry environment
       run: |
         poetry --version
         poetry env info
         poetry show --only dev | grep -E "(black|ruff|mypy)"
+        echo "--- Virtual environment contents ---"
+        ls -la .venv/bin/ | grep -E "(black|ruff|mypy)" || echo "No dev tools found in .venv/bin/"
+        echo "--- Python path in Poetry ---"
+        poetry run python -c "import sys; print('\\n'.join(sys.path))"
+        echo "--- Direct pip list in venv ---"
+        .venv/bin/pip list | grep -E "(black|ruff|mypy)" || echo "No dev tools in pip list"
     
     - name: Verify Black installation
       run: |
-        poetry run black --version
+        if ! poetry run black --version 2>/dev/null; then
+          echo "Still can't find Black, trying direct pip install..."
+          .venv/bin/pip install black==24.10.0
+          poetry run black --version
+        else
+          poetry run black --version
+        fi
     
     - name: Run Black formatting check
       run: |
