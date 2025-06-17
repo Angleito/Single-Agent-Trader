@@ -1569,6 +1569,18 @@ async def add_llm_decision_to_chart(decision_data: dict[str, Any]):
         ) from e
 
 
+# WebSocket monitoring endpoints
+@app.get("/api/websocket/status")
+async def websocket_status():
+    """Get WebSocket connection status and statistics"""
+    return {
+        "active_connections": len(manager.active_connections),
+        "buffer_size": len(manager.log_buffer),
+        "log_streamer_running": log_streamer.running if log_streamer else False,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
 # Error handlers
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):

@@ -62,16 +62,34 @@ export class StatusIndicators {
 
   private alertContainer: HTMLElement | null = null;
   private audioContext?: AudioContext;
+  private audioInitialized = false;
 
   constructor() {
-    this.initializeAudioContext();
     this.createAlertContainer();
+    this.setupAudioInitialization();
   }
 
-  private initializeAudioContext() {
-    if (typeof window !== 'undefined' && 'AudioContext' in window) {
-      this.audioContext = new AudioContext();
-    }
+  private setupAudioInitialization() {
+    // Set up one-time user interaction listener for audio context
+    const initAudio = () => {
+      if (!this.audioInitialized && typeof window !== 'undefined' && 'AudioContext' in window) {
+        try {
+          this.audioContext = new AudioContext();
+          this.audioInitialized = true;
+          // Remove listeners once initialized
+          document.removeEventListener('click', initAudio);
+          document.removeEventListener('keydown', initAudio);
+          document.removeEventListener('touchstart', initAudio);
+        } catch (error) {
+          console.warn('Failed to initialize AudioContext:', error);
+        }
+      }
+    };
+
+    // Add listeners for user interaction
+    document.addEventListener('click', initAudio, { once: true, passive: true });
+    document.addEventListener('keydown', initAudio, { once: true, passive: true });
+    document.addEventListener('touchstart', initAudio, { once: true, passive: true });
   }
 
   private createAlertContainer() {
@@ -93,8 +111,18 @@ export class StatusIndicators {
     this.alertContainer = container;
   }
 
-  private playAlertSound(type: 'success' | 'warning' | 'error') {
+  private async playAlertSound(type: 'success' | 'warning' | 'error') {
     if (!this.soundEnabled || !this.audioContext) return;
+
+    // Resume audio context if suspended (required by some browsers)
+    if (this.audioContext.state === 'suspended') {
+      try {
+        await this.audioContext.resume();
+      } catch (error) {
+        console.warn('Failed to resume AudioContext:', error);
+        return;
+      }
+    }
 
     const oscillator = this.audioContext.createOscillator();
     const gainNode = this.audioContext.createGain();

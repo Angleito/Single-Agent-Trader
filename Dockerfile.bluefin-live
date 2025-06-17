@@ -1,0 +1,92 @@
+# Minimal Bluefin Live Trading Docker
+# Only includes dependencies needed for live trading (no backtesting)
+
+FROM python:3.12-slim
+
+# Install UV for fast Python package management
+ENV UV_VERSION=0.5.11
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    gcc \
+    g++ \
+    make \
+    libffi-dev \
+    libssl-dev \
+    python3-dev \
+    && curl -LsSf https://astral.sh/uv/${UV_VERSION}/install.sh | sh \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/root/.local/bin:$PATH"
+
+WORKDIR /app
+
+# Create virtual environment and install minimal dependencies for live trading
+RUN uv venv /app/.venv && \
+    . /app/.venv/bin/activate && \
+    echo "=== Installing core dependencies ===" && \
+    uv pip install --no-cache-dir \
+        "python-dotenv>=1.0.1" \
+        "pydantic>=2.10.5" \
+        "pydantic-settings>=2.7.0" \
+        "click>=8.1.7" \
+        "rich>=13.9.4" && \
+    echo "=== Installing LangChain and OpenAI ===" && \
+    uv pip install --no-cache-dir \
+        "langchain>=0.3.10" \
+        "langchain-core>=0.3.22" \
+        "langchain-openai>=0.2.14" \
+        "openai>=1.58.1" && \
+    echo "=== Installing minimal data processing ===" && \
+    uv pip install --no-cache-dir \
+        "numpy>=1.26.4" && \
+    echo "=== Installing Socket.IO with correct versions ===" && \
+    uv pip install --no-cache-dir \
+        "python-socketio[asyncio_client]==5.8.0" \
+        "python-engineio>=4.6.0,<4.7.0" \
+        "websockets==12.0" \
+        "aiohttp==3.9.0" && \
+    echo "=== Installing Bluefin SDK ===" && \
+    uv pip install --no-cache-dir "bluefin-v2-client==3.2.4" && \
+    echo "=== Installing networking dependencies ===" && \
+    uv pip install --no-cache-dir \
+        "aiofiles>=24.1.0" \
+        "httpx>=0.28.1" \
+        "backoff>=2.2.1" && \
+    echo "=== Cleanup ===" && \
+    uv pip uninstall socketio websocket || true && \
+    echo "=== Verification ===" && \
+    python -c "import socketio; print('✅ Socket.IO ready')" && \
+    python -c "import bluefin_v2_client; print('✅ Bluefin SDK ready')" && \
+    python -c "import numpy; print('✅ NumPy ready')"
+
+# Environment variables optimized for live trading
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/app/.venv/bin:$PATH" \
+    PYTHONPATH="/app" \
+    VIRTUAL_ENV="/app/.venv" \
+    EXCHANGE__EXCHANGE_TYPE=bluefin \
+    SOCKETIO_ASYNC_MODE=aiohttp
+
+# Create non-root user
+RUN groupadd --gid 1000 botuser \
+    && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash botuser
+
+# Copy application code
+COPY --chown=botuser:botuser bot/ ./bot/
+COPY --chown=botuser:botuser prompts/ ./prompts/
+
+# Create required directories
+RUN mkdir -p /app/config /app/logs /app/data \
+    && chown -R botuser:botuser /app
+
+USER botuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python -c "import sys; sys.exit(0)"
+
+# Default command - SUI-PERP live trading
+CMD ["python", "-m", "bot.main", "live", "--symbol", "SUI-PERP", "--interval", "5m"]

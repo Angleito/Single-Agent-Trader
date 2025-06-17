@@ -1,0 +1,95 @@
+# OrbStack-Optimized Bluefin DEX Trading Bot
+# Fixes Socket.IO conflicts and enables proper live trading mode
+
+services:
+  ai-trading-bot-bluefin-orbstack:
+    build:
+      context: .
+      dockerfile: Dockerfile.bluefin-orbstack
+      args:
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
+        VCS_REF: ${VCS_REF:-$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")}
+        VERSION: ${VERSION:-0.1.0}
+    image: ai-trading-bot:bluefin-orbstack-${VERSION:-latest}
+    container_name: ai-trading-bot-bluefin-orbstack
+    restart: unless-stopped
+    
+    # OrbStack optimizations for DEX API connectivity
+    network_mode: host  # Direct API access for Bluefin DEX
+    
+    # Command for SUI-PERP live trading
+    command: ["python", "-m", "bot.main", "live", "--symbol", "SUI-PERP", "--interval", "5m"]
+    
+    # Environment variables - LIVE TRADING MODE
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - CONFIG_FILE=/app/config/production.json
+      
+      # FORCE LIVE TRADING MODE
+      - SYSTEM__DRY_RUN=false
+      - SYSTEM__ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      
+      # Exchange Configuration
+      - EXCHANGE__EXCHANGE_TYPE=bluefin
+      - EXCHANGE__BLUEFIN_NETWORK=mainnet
+      - EXCHANGE__BLUEFIN_PRIVATE_KEY=${EXCHANGE__BLUEFIN_PRIVATE_KEY}
+      
+      # Trading Configuration for SUI-PERP
+      - TRADING__SYMBOL=SUI-PERP
+      - TRADING__LEVERAGE=5
+      - TRADING__ENABLE_FUTURES=true
+      - MAX_POSITION_SIZE=0.01  # Conservative 1% position sizing
+      - RISK_PER_TRADE=0.01     # Conservative 1% risk
+      
+      # LLM Configuration
+      - LLM__OPENAI_API_KEY=${LLM__OPENAI_API_KEY}
+      
+      # OrbStack/Socket.IO optimizations
+      - BLUEFIN_NETWORK_TIMEOUT=30
+      - SOCKETIO_ASYNC_MODE=aiohttp
+      - BLUEFIN_CONNECTION_RETRIES=3
+      - BLUEFIN_FORCE_LIVE_MODE=true  # Override dry-run detection
+      
+      # OmniSearch MCP
+      - OMNISEARCH__ENABLED=true
+      - OMNISEARCH__SERVER_URL=https://api.omnisearch.dev/v1
+      
+    # Volume mounts
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./config:/app/config:ro
+      - ./prompts:/app/prompts:ro
+      
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import sys; sys.exit(0)' || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s  # Extra time for Bluefin SDK initialization
+      
+    # Resource limits for OrbStack
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+          
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Usage Instructions:
+# 1. Set EXCHANGE__BLUEFIN_PRIVATE_KEY in .env
+# 2. Run: docker-compose -f docker-compose.orbstack-bluefin.yml up --build
+# 3. Monitor logs for "LIVE TRADING MODE ENABLED" confirmation
+# 4. Bot will trade SUI-PERP with real money on Bluefin DEX

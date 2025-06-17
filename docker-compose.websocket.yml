@@ -1,0 +1,80 @@
+# Docker Compose Override for WebSocket-Enabled Dashboard
+# 
+# This override file enables real-time WebSocket communication between
+# the trading bot and dashboard for live monitoring.
+#
+# Usage:
+#   docker-compose -f docker-compose.yml -f docker-compose.websocket.yml up
+#
+# Or set as default:
+#   export COMPOSE_FILE=docker-compose.yml:docker-compose.websocket.yml
+#   docker-compose up
+
+version: '3.8'
+
+services:
+  ai-trading-bot:
+    environment:
+      # Enable WebSocket publishing for real-time dashboard updates
+      - SYSTEM__ENABLE_WEBSOCKET_PUBLISHING=true
+      - SYSTEM__WEBSOCKET_DASHBOARD_URL=ws://dashboard-backend:8000/ws
+      - SYSTEM__WEBSOCKET_PUBLISH_INTERVAL=1.0
+      - SYSTEM__WEBSOCKET_MAX_RETRIES=5
+      - SYSTEM__WEBSOCKET_RETRY_DELAY=5
+      - SYSTEM__WEBSOCKET_TIMEOUT=10
+      - SYSTEM__WEBSOCKET_QUEUE_SIZE=100
+    
+    # Ensure dashboard backend is ready before bot starts
+    depends_on:
+      dashboard-backend:
+        condition: service_healthy
+      bluefin-service:
+        condition: service_started
+
+  dashboard-backend:
+    environment:
+      # Enable verbose WebSocket logging for debugging
+      - LOG_LEVEL=INFO
+      - WEBSOCKET_LOG_CONNECTIONS=true
+      - WEBSOCKET_LOG_MESSAGES=false  # Set to true for message debugging
+    
+    # Enhanced health check for WebSocket readiness
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health && curl -f -H 'Upgrade: websocket' -H 'Connection: Upgrade' http://localhost:8000/ws || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  dashboard-frontend:
+    environment:
+      # Configure frontend to use internal Docker network URLs
+      - VITE_API_URL=http://dashboard-backend:8000
+      - VITE_WS_URL=ws://dashboard-backend:8000
+      # Enable WebSocket debugging in frontend
+      - VITE_WEBSOCKET_DEBUG=true
+      - VITE_WEBSOCKET_RECONNECT_INTERVAL=3000
+      - VITE_WEBSOCKET_MAX_RECONNECT_ATTEMPTS=10
+
+  # Optional: Add a WebSocket test container for debugging
+  websocket-tester:
+    image: python:3.12-slim
+    container_name: websocket-tester
+    profiles:
+      - debug
+    volumes:
+      - ./test_websocket_client.py:/app/test_websocket_client.py
+      - ./test_docker_websocket.sh:/app/test_docker_websocket.sh
+    working_dir: /app
+    command: |
+      bash -c "
+        pip install websockets aiohttp &&
+        echo 'WebSocket tester ready. Run tests with:' &&
+        echo '  docker-compose exec websocket-tester python test_websocket_client.py --docker-url' &&
+        echo '  docker-compose exec websocket-tester ./test_docker_websocket.sh' &&
+        tail -f /dev/null
+      "
+    networks:
+      - trading-network
+    depends_on:
+      - dashboard-backend

@@ -270,7 +270,7 @@ class EMAribbon:
                 self._total_calculation_time / self._calculation_count
             )
 
-            logger.info(
+            logger.debug(
                 "EMA ribbon calculation completed",
                 extra={
                     "indicator": "ema_ribbon",
@@ -506,7 +506,7 @@ class EMAribbon:
 
             # Log signal generation events
             if long_signal_count > 0:
-                logger.info(
+                logger.debug(
                     "EMA long crossover signals generated",
                     extra={
                         "indicator": "ema_ribbon",
@@ -521,7 +521,7 @@ class EMAribbon:
                 )
 
             if short_signal_count > 0:
-                logger.info(
+                logger.debug(
                     "EMA short crossover signals generated",
                     extra={
                         "indicator": "ema_ribbon",

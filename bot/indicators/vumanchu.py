@@ -12,7 +12,14 @@ originally written in Pine Script. Integrates all newly implemented components:
 - Sommi Pattern recognition
 - Complete divergence detection system
 
-Provides 100% Pine Script compatibility with exact parameter matching.
+SCALPING OPTIMIZATION:
+Parameters have been optimized for 15-second scalping timeframes:
+- Reduced WaveTrend periods for faster signal generation
+- Adjusted overbought/oversold levels for earlier entry/exit signals
+- Shortened RSI+MFI periods for quicker momentum detection
+- Reduced stochastic periods for enhanced scalping responsiveness
+
+Provides Pine Script compatibility with scalping-optimized parameter defaults.
 """
 
 import logging
@@ -41,10 +48,10 @@ class CipherA:
     """
     VuManChu Cipher A Complete Implementation.
 
-    Integrates all advanced Cipher A components:
-    - WaveTrend Oscillator (Channel=9, Average=13, MA=3)
+    Integrates all advanced Cipher A components (Optimized for 15-second scalping):
+    - WaveTrend Oscillator (Channel=6, Average=8, MA=3)
     - 8-EMA Ribbon system [5,11,15,18,21,24,28,34]
-    - RSI+MFI Combined indicator (Period=60, Multiplier=150)
+    - RSI+MFI Combined indicator (Period=20, Multiplier=150)
     - Advanced Signal Patterns:
       * Diamond patterns (Red/Green diamonds)
       * Yellow Cross signals with precise conditions
@@ -59,21 +66,21 @@ class CipherA:
 
     def __init__(
         self,
-        # WaveTrend parameters (Pine Script defaults for Cipher A)
-        wt_channel_length: int = 9,
-        wt_average_length: int = 13,
+        # WaveTrend parameters (Optimized for 15-second scalping)
+        wt_channel_length: int = 6,  # Reduced from 9 for faster response
+        wt_average_length: int = 8,  # Reduced from 13 for quicker signals
         wt_ma_length: int = 3,
-        # Overbought/Oversold levels
-        overbought_level: float = 60.0,
-        overbought_level2: float = 53.0,
+        # Overbought/Oversold levels (Adjusted for scalping sensitivity)
+        overbought_level: float = 45.0,  # Reduced from 60.0 for earlier signals
+        overbought_level2: float = 38.0,  # Reduced from 53.0 for scalping
         overbought_level3: float = 100.0,
-        oversold_level: float = -60.0,
-        oversold_level2: float = -53.0,
+        oversold_level: float = -45.0,  # Increased from -60.0 for earlier signals
+        oversold_level2: float = -38.0,  # Increased from -53.0 for scalping
         oversold_level3: float = -100.0,
         # RSI parameters
         rsi_length: int = 14,
-        # RSI+MFI parameters (Pine Script defaults)
-        rsimfi_period: int = 60,
+        # RSI+MFI parameters (Optimized for scalping)
+        rsimfi_period: int = 20,  # Reduced from 60 for faster momentum detection
         rsimfi_multiplier: float = 150.0,
         # EMA Ribbon lengths (Pine Script defaults)
         ema_ribbon_lengths: list[int] | None = None,
@@ -91,17 +98,17 @@ class CipherA:
         Initialize Cipher A with all integrated components.
 
         Args:
-            wt_channel_length: WaveTrend channel length (Pine Script: 9)
-            wt_average_length: WaveTrend average length (Pine Script: 13)
+            wt_channel_length: WaveTrend channel length (Scalping optimized: 6)
+            wt_average_length: WaveTrend average length (Scalping optimized: 8)
             wt_ma_length: WaveTrend MA length (Pine Script: 3)
-            overbought_level: Primary overbought level (60.0)
-            overbought_level2: Secondary overbought level (53.0)
+            overbought_level: Primary overbought level (Scalping: 45.0)
+            overbought_level2: Secondary overbought level (Scalping: 38.0)
             overbought_level3: Extreme overbought level (100.0)
-            oversold_level: Primary oversold level (-60.0)
-            oversold_level2: Secondary oversold level (-53.0)
+            oversold_level: Primary oversold level (Scalping: -45.0)
+            oversold_level2: Secondary oversold level (Scalping: -38.0)
             oversold_level3: Extreme oversold level (-100.0)
             rsi_length: RSI calculation period (14)
-            rsimfi_period: RSI+MFI period (Pine Script: 60)
+            rsimfi_period: RSI+MFI period (Scalping optimized: 20)
             rsimfi_multiplier: RSI+MFI multiplier (Pine Script: 150.0)
             ema_ribbon_lengths: EMA ribbon lengths (default: [5,11,15,18,21,24,28,34])
             stoch_rsi_length: Stochastic RSI length (14)
@@ -844,8 +851,8 @@ class CipherB:
     """
     VuManChu Cipher B Complete Implementation.
 
-    Integrates all advanced Cipher B components:
-    - WaveTrend Oscillator (Channel=9, Average=12, MA=3)
+    Integrates all advanced Cipher B components (Optimized for 15-second scalping):
+    - WaveTrend Oscillator (Channel=6, Average=7, MA=3)
     - 8-EMA Ribbon system [5,11,15,18,21,24,28,34]
     - Advanced Signal Patterns:
       * Buy/Sell circles with exact Pine Script timing
@@ -862,16 +869,16 @@ class CipherB:
 
     def __init__(
         self,
-        # WaveTrend parameters (Pine Script defaults for Cipher B)
-        wt_channel_length: int = 9,
-        wt_average_length: int = 12,
+        # WaveTrend parameters (Optimized for 15-second scalping)
+        wt_channel_length: int = 6,  # Reduced from 9 for faster response
+        wt_average_length: int = 7,  # Reduced from 12 for quicker signals
         wt_ma_length: int = 3,
-        # Overbought/Oversold levels for Cipher B
-        ob_level: float = 53.0,
-        ob_level2: float = 60.0,
+        # Overbought/Oversold levels for Cipher B (Adjusted for scalping)
+        ob_level: float = 40.0,  # Reduced from 53.0 for earlier signals
+        ob_level2: float = 50.0,  # Reduced from 60.0 for scalping sensitivity
         ob_level3: float = 100.0,
-        os_level: float = -53.0,
-        os_level2: float = -60.0,
+        os_level: float = -40.0,  # Increased from -53.0 for earlier signals
+        os_level2: float = -50.0,  # Increased from -60.0 for scalping sensitivity
         os_level3: float = -75.0,
         # Divergence-specific levels
         wt_div_ob_level: float = 45.0,
@@ -880,9 +887,9 @@ class CipherB:
         rsi_div_os_level: float = 30.0,
         # RSI parameters
         rsi_length: int = 14,
-        # Stochastic RSI parameters
-        stoch_length: int = 14,
-        stoch_rsi_length: int = 14,
+        # Stochastic RSI parameters (Optimized for scalping)
+        stoch_length: int = 8,  # Reduced from 14 for faster signals
+        stoch_rsi_length: int = 8,  # Reduced from 14 for scalping responsiveness
         stoch_k_smooth: int = 3,
         stoch_d_smooth: int = 3,
         # EMA Ribbon lengths (Pine Script defaults)
@@ -897,22 +904,22 @@ class CipherB:
         Initialize Cipher B with all integrated components.
 
         Args:
-            wt_channel_length: WaveTrend channel length (Pine Script: 9)
-            wt_average_length: WaveTrend average length (Pine Script: 12)
+            wt_channel_length: WaveTrend channel length (Scalping optimized: 6)
+            wt_average_length: WaveTrend average length (Scalping optimized: 7)
             wt_ma_length: WaveTrend MA length (Pine Script: 3)
-            ob_level: Overbought level 1 (53.0)
-            ob_level2: Overbought level 2 (60.0)
+            ob_level: Overbought level 1 (Scalping: 40.0)
+            ob_level2: Overbought level 2 (Scalping: 50.0)
             ob_level3: Overbought level 3 (100.0)
-            os_level: Oversold level 1 (-53.0)
-            os_level2: Oversold level 2 (-60.0)
+            os_level: Oversold level 1 (Scalping: -40.0)
+            os_level2: Oversold level 2 (Scalping: -50.0)
             os_level3: Oversold level 3 (-75.0)
             wt_div_ob_level: WaveTrend divergence overbought (45.0)
             wt_div_os_level: WaveTrend divergence oversold (-65.0)
             rsi_div_ob_level: RSI divergence overbought (60.0)
             rsi_div_os_level: RSI divergence oversold (30.0)
             rsi_length: RSI calculation period (14)
-            stoch_length: Stochastic length (14)
-            stoch_rsi_length: Stochastic RSI length (14)
+            stoch_length: Stochastic length (Scalping: 8)
+            stoch_rsi_length: Stochastic RSI length (Scalping: 8)
             stoch_k_smooth: Stochastic K smoothing (3)
             stoch_d_smooth: Stochastic D smoothing (3)
             ema_ribbon_lengths: EMA ribbon lengths (default: [5,11,15,18,21,24,28,34])
@@ -1834,10 +1841,10 @@ class VuManChuIndicators:
         result = df.copy()
 
         try:
-            logger.info("Starting comprehensive VuManChu Cipher calculation")
+            logger.debug("Starting comprehensive VuManChu Cipher calculation")
 
             # Calculate Cipher A with all integrated components
-            logger.info("Calculating Cipher A indicators")
+            logger.debug("Calculating Cipher A indicators")
             try:
                 result = self.cipher_a.calculate(result)
             except Exception as e:
@@ -1846,7 +1853,7 @@ class VuManChuIndicators:
                 result = self._add_cipher_a_fallbacks(result)
 
             # Calculate Cipher B with all integrated components
-            logger.info("Calculating Cipher B indicators")
+            logger.debug("Calculating Cipher B indicators")
             try:
                 result = self.cipher_b.calculate(result)
             except Exception as e:
@@ -1855,11 +1862,11 @@ class VuManChuIndicators:
                 result = self._add_cipher_b_fallbacks(result)
 
             # Add utility indicators
-            logger.info("Adding utility indicators")
+            logger.debug("Adding utility indicators")
             result = self._add_utility_indicators(result)
 
             # Add combined analysis
-            logger.info("Generating combined signal analysis")
+            logger.debug("Generating combined signal analysis")
             result = self._add_combined_analysis(result)
 
             # Process dominance candles if provided
@@ -1867,7 +1874,7 @@ class VuManChuIndicators:
                 logger.info("Processing dominance candlestick analysis")
                 result = self._add_dominance_analysis(result, dominance_candles)
 
-            logger.info("VuManChu Cipher calculation completed successfully")
+            logger.debug("VuManChu Cipher calculation completed successfully")
 
         except Exception as e:
             logger.error(f"Error in comprehensive indicator calculation: {str(e)}")

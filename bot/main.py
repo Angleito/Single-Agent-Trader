@@ -106,6 +106,7 @@ from .strategy.memory_enhanced_agent import MemoryEnhancedLLMAgent
 from .types import IndicatorData, MarketState, Position, TradeAction
 from .utils import setup_warnings_suppression
 from .validator import TradeValidator
+from .websocket_publisher import WebSocketPublisher
 
 console = Console()
 
@@ -126,7 +127,7 @@ class TradingEngine:
     def __init__(
         self,
         symbol: str = "BTC-USD",
-        interval: str = "1m",
+        interval: str = "15s",
         config_file: str | None = None,
         dry_run: bool = True,
     ):
@@ -188,6 +189,18 @@ class TradingEngine:
                 self.logger.error(f"Failed to initialize OmniSearch client: {e}")
                 self.logger.warning("Continuing without OmniSearch integration")
                 self.omnisearch_client = None
+
+        # Initialize WebSocket publisher for real-time dashboard integration
+        self.websocket_publisher = None
+        if self.settings.system.enable_websocket_publishing:
+            self.logger.info("WebSocket publishing enabled, initializing publisher...")
+            try:
+                self.websocket_publisher = WebSocketPublisher(self.settings)
+                self.logger.info("Successfully initialized WebSocket publisher")
+            except Exception as e:
+                self.logger.error(f"Failed to initialize WebSocket publisher: {e}")
+                self.logger.warning("Continuing without WebSocket publishing")
+                self.websocket_publisher = None
 
         if self.settings.mcp.enabled:
             self.logger.info("MCP memory system enabled, initializing components...")
@@ -272,7 +285,7 @@ class TradingEngine:
     def _can_trade_now(self) -> bool:
         """
         Check if trading is currently allowed based on data availability and timing.
-        For momentum trading, we only trade when a new 5-minute candle completes.
+        For high-frequency scalping, we trade on every new candle completion (1s-15s).
         
         Returns:
             True if trading is allowed, False otherwise
@@ -291,7 +304,24 @@ class TradingEngine:
             return False
 
         # Get latest candle to check if a new one has completed
-        latest_data = self.market_data.get_latest_ohlcv(limit=1)
+        # Handle both sync and async providers
+        try:
+            import inspect
+            latest_data = []
+            if hasattr(self.market_data, 'get_latest_ohlcv'):
+                method = getattr(self.market_data, 'get_latest_ohlcv')
+                if inspect.iscoroutinefunction(method):
+                    # Can't await in non-async method, defer to caller
+                    self.logger.debug("Async method detected, skipping fresh data check")
+                    return False
+                else:
+                    latest_data = method(limit=1)
+            else:
+                latest_data = []
+        except Exception as e:
+            self.logger.warning(f"Error checking latest data: {e}")
+            return False
+        
         if not latest_data:
             self.logger.debug("📊 No market data available")
             return False
@@ -313,10 +343,10 @@ class TradingEngine:
                 # This is the same candle we already analyzed
                 return False
 
-        # For momentum trading: only analyze on candle completion
-        # A 5-minute candle completes every 5 minutes (e.g., 10:00, 10:05, 10:10)
+        # For high-frequency scalping: analyze on every new candle completion
+        # A 15-second candle completes every 15 seconds (e.g., 10:00:00, 10:00:15, 10:00:30)
         current_time = datetime.now(UTC)
-        candle_interval_seconds = self._get_interval_minutes(self.interval) * 60
+        candle_interval_seconds = self._get_interval_seconds(self.interval)
 
         # Check if enough time has passed since last analysis (at least candle interval)
         if self.last_candle_analysis_time is not None:
@@ -474,9 +504,39 @@ class TradingEngine:
             self.actual_trading_symbol = self.symbol
             console.print(f"    Using spot symbol: [green]{self.actual_trading_symbol}[/green]")
 
-        # Now initialize market data provider with the correct symbol
+        # Initialize market data provider based on exchange type and trading mode
         console.print("  • Connecting to market data feed...")
-        self.market_data = MarketDataProvider(self.actual_trading_symbol, self.interval)
+        
+        # Check if this is high-frequency trading (interval < 1 minute)
+        interval_seconds = self._get_interval_seconds(self.interval)
+        is_high_frequency = interval_seconds <= 60  # 1 minute or less
+        
+        if self.settings.exchange.exchange_type == "bluefin":
+            if is_high_frequency:
+                # Use real-time WebSocket data provider for high-frequency trading
+                from .data.realtime_market import RealtimeMarketDataProvider
+                self.logger.info(f"Using real-time WebSocket market data provider for HF trading: {self.symbol}")
+                # Convert interval to seconds for real-time provider
+                realtime_intervals = [interval_seconds]
+                if interval_seconds > 1:
+                    realtime_intervals.append(1)  # Always include 1-second candles for scalping
+                if 5 not in realtime_intervals and interval_seconds != 5:
+                    realtime_intervals.append(5)  # Include 5-second candles
+                self.market_data = RealtimeMarketDataProvider(self.symbol, realtime_intervals)
+                console.print(f"    Using real-time WebSocket data for HF trading ({realtime_intervals}s intervals)")
+            else:
+                # Use Bluefin-native market data for extended historical data (500+ candles)
+                from .data.bluefin_market import BluefinMarketDataProvider
+                self.logger.info(f"Using Bluefin native market data provider for {self.symbol}")
+                self.market_data = BluefinMarketDataProvider(self.symbol, self.interval)
+                console.print("    Using Bluefin DEX native market data (500+ candles)")
+        else:
+            # Use Coinbase market data for Coinbase trading
+            market_data_symbol = self.actual_trading_symbol
+            self.logger.info(f"Using Coinbase market data for {market_data_symbol}")
+            self.market_data = MarketDataProvider(market_data_symbol, self.interval)
+            console.print(f"    Using Coinbase market data for {market_data_symbol}")
+        
         await self.market_data.connect()
 
         # Verify LLM agent is available
@@ -554,11 +614,28 @@ class TradingEngine:
         console.print("  • Checking for existing positions...")
         await self._reconcile_positions()
 
+        # Initialize WebSocket publisher if enabled
+        if self.websocket_publisher:
+            console.print("  • Connecting to dashboard WebSocket...")
+            try:
+                connected = await self.websocket_publisher.initialize()
+                if connected:
+                    console.print("    [green]✓ Dashboard WebSocket connected[/green]")
+                    await self.websocket_publisher.publish_system_status(
+                        status="initialized", 
+                        health=True
+                    )
+                else:
+                    console.print("    [yellow]⚠ Dashboard WebSocket unavailable[/yellow]")
+            except Exception as e:
+                self.logger.warning(f"Failed to connect to dashboard WebSocket: {e}")
+                console.print("    [yellow]⚠ Dashboard WebSocket connection failed[/yellow]")
+
         console.print("[green]✓ All components initialized successfully[/green]")
 
     async def _wait_for_initial_data(self):
         """Wait for sufficient market data to begin trading."""
-        max_wait_time = 300  # Increased to 5 minutes for 24h data requirement
+        max_wait_time = 60  # Reduced to 1 minute for scalping (need to start fast)
         wait_start = datetime.now(UTC)
         historical_data_loaded = False
         websocket_data_received = False
@@ -577,28 +654,53 @@ class TradingEngine:
                     f"Timeout waiting for initial market data after {max_wait_time}s"
                 )
 
-            # Check for historical data
-            data = self.market_data.get_latest_ohlcv(limit=500)  # Get more data for 24h check
+            # Check for historical data - handle both sync and async providers
+            import inspect
+            data = []
+            if hasattr(self.market_data, 'get_latest_ohlcv'):
+                method = getattr(self.market_data, 'get_latest_ohlcv')
+                try:
+                    if inspect.iscoroutinefunction(method):
+                        data = await method(limit=500)  # Get more data for 24h check
+                    else:
+                        data = method(limit=500)  # Get more data for 24h check
+                    
+                    # Safety check - ensure data is not a coroutine
+                    if inspect.iscoroutine(data):
+                        self.logger.warning("Detected coroutine data, awaiting...")
+                        data = await data
+                        
+                except Exception as e:
+                    self.logger.warning(f"Error getting market data: {e}")
+                    data = []
+            
+            # Ensure data is a list/sequence before using len()
+            if not isinstance(data, (list, tuple)):
+                self.logger.warning(f"Unexpected data type: {type(data)}, converting to list")
+                data = list(data) if data else []
 
             if not historical_data_loaded:
                 # Calculate how many candles represent 24 hours
-                interval_minutes = self._get_interval_minutes(self.interval)
-                candles_per_24h = (24 * 60) // interval_minutes
+                interval_seconds = self._get_interval_seconds(self.interval)
+                candles_per_24h = (24 * 60 * 60) // interval_seconds
 
                 if require_24h_data:
-                    # Require full 24 hours of data
-                    if len(data) >= candles_per_24h:
+                    # For scalping, we don't need 24h of data - just enough for indicators
+                    if len(data) >= min_candles_required:
+                        hours_available = (len(data) * interval_seconds) / 3600
                         self.logger.info(
-                            f"✅ Loaded {len(data)} historical candles ({24} hours at {self.interval} intervals) for analysis"
+                            f"✅ Loaded {len(data)} historical candles ({hours_available:.1f} hours at {self.interval} intervals) for scalping analysis"
                         )
                         historical_data_loaded = True
                         self.trading_enabled = True
-                    elif len(data) >= min_candles_required:
-                        hours_available = (len(data) * interval_minutes) / 60
+                    elif len(data) >= 50:
+                        hours_available = (len(data) * interval_seconds) / 3600
                         self.logger.warning(
-                            f"⚠️ Only {hours_available:.1f} hours of data available ({len(data)} candles). "
-                            f"Waiting for 24 hours of data before enabling trading..."
+                            f"⚠️ Limited data available ({hours_available:.2f} hours, {len(data)} candles). "
+                            f"Starting with reduced data for scalping..."
                         )
+                        historical_data_loaded = True
+                        self.trading_enabled = True  # Enable for scalping with limited data
                 else:
                     # Just require minimum candles
                     if len(data) >= min_candles_required:
@@ -623,38 +725,56 @@ class TradingEngine:
 
             # We're ready when we have sufficient historical data and either:
             # 1. WebSocket is receiving data, OR
-            # 2. We've waited at least 30 seconds for WebSocket (market might be closed/inactive)
+            # 2. We've waited at least 10 seconds for WebSocket (scalping needs to start fast)
             if historical_data_loaded:
                 if websocket_data_received:
                     self.logger.info(
-                        "🚀 Both historical and real-time data available, ready to trade"
+                        "🚀 Both historical and real-time data available, ready for scalping"
                     )
                     self.data_validation_complete = True
                     break
-                elif elapsed_time > 30:
-                    # After 30 seconds, proceed if we have historical data even without WebSocket
+                elif elapsed_time > 10:
+                    # After 10 seconds, proceed if we have historical data even without WebSocket
                     self.logger.warning(
-                        "⚠️ Proceeding with historical data only. WebSocket data not yet received "
-                        "(market may be closed or inactive)"
+                        "⚠️ Proceeding with historical data only for scalping. WebSocket data not yet received "
+                        "(market may be closed or starting fast for scalping)"
                     )
                     self.data_validation_complete = True
                     break
 
             # Log progress every 10 seconds
             if int(elapsed_time) % 10 == 0 and elapsed_time > 0:
-                status = self.market_data.get_data_status()
-                interval_minutes = self._get_interval_minutes(self.interval)
-                candles_per_24h = (24 * 60) // interval_minutes
-                hours_available = (len(data) * interval_minutes) / 60 if data else 0
+                from .data.realtime_market import RealtimeMarketDataProvider
+                
+                if isinstance(self.market_data, RealtimeMarketDataProvider):
+                    # Real-time provider status
+                    status = self.market_data.get_status()
+                    tick_rate = status.get('tick_rate_per_second', 0)
+                    current_price = status.get('current_price', 'N/A')
+                    
+                    self.logger.info(
+                        f"⏳ Waiting for real-time data... Elapsed: {int(elapsed_time)}s\n"
+                        f"   📊 Current candles: {len(data)} available\n"
+                        f"   🌐 WebSocket connected: {status.get('websocket_connected', False)}\n"
+                        f"   📈 Tick rate: {tick_rate:.1f} ticks/sec\n"
+                        f"   💰 Current price: ${current_price}\n"
+                        f"   ⚡ Trading enabled: {self.trading_enabled}"
+                    )
+                else:
+                    # Standard provider status
+                    status = self.market_data.get_data_status()
+                    interval_seconds = self._get_interval_seconds(self.interval)
+                    candles_per_24h = (24 * 60 * 60) // interval_seconds
+                    hours_available = (len(data) * interval_seconds) / 3600 if data else 0
 
-                self.logger.info(
-                    f"⏳ Waiting for data... Elapsed: {int(elapsed_time)}s\n"
-                    f"   📊 Historical: {len(data)}/{candles_per_24h} candles ({hours_available:.1f}/24 hours)\n"
-                    f"   🌐 WebSocket connected: {status.get('websocket_connected', False)}\n"
-                    f"   📈 WebSocket data: {status.get('websocket_data_received', False)}\n"
-                    f"   💰 Latest price: ${status.get('latest_price', 'N/A')}\n"
-                    f"   ⚡ Trading enabled: {self.trading_enabled}"
-                )
+                    self.logger.info(
+                        f"⏳ Waiting for data... Elapsed: {int(elapsed_time)}s\n"
+                        f"   📊 Historical: {len(data)}/{candles_per_24h} candles ({hours_available:.1f}/24 hours)\n"
+                        f"   🌐 WebSocket connected: {status.get('websocket_connected', False)}\n"
+                        f"   📈 WebSocket data: {status.get('websocket_data_received', False)}\n"
+                        f"   💰 Latest price: ${status.get('latest_price', 'N/A')}\n"
+                        f"   ⚡ Trading enabled: {self.trading_enabled}"
+                    )
 
             await asyncio.sleep(1)
 
@@ -666,17 +786,40 @@ class TradingEngine:
         table.add_column("Details", style="dim")
 
         # Market data status
-        data_status = self.market_data.get_data_status()
-        ws_status = (
-            "✓ Receiving data"
-            if data_status.get("websocket_data_received", False)
-            else "⚠ Waiting for data"
-        )
-        table.add_row(
-            "Market Data",
-            "✓ Connected" if data_status["connected"] else "✗ Disconnected",
-            f"{data_status['cached_candles']} candles, WebSocket: {ws_status}",
-        )
+        from .data.realtime_market import RealtimeMarketDataProvider
+        
+        if isinstance(self.market_data, RealtimeMarketDataProvider):
+            # Real-time provider status
+            data_status = self.market_data.get_status()
+            ws_status = (
+                "✓ Real-time data"
+                if data_status.get("websocket_connected", False)
+                else "⚠ Waiting for data"
+            )
+            
+            # Show tick rate and current candles
+            tick_rate = data_status.get("tick_rate_per_second", 0)
+            tick_info = f"{tick_rate:.1f} ticks/sec" if tick_rate else "No ticks"
+            details = f"{tick_info}, WebSocket: {ws_status}"
+            
+            table.add_row(
+                "Market Data (RT)",
+                "✓ Connected" if data_status["connected"] else "✗ Disconnected",
+                details,
+            )
+        else:
+            # Standard provider status
+            data_status = self.market_data.get_data_status()
+            ws_status = (
+                "✓ Receiving data"
+                if data_status.get("websocket_data_received", False)
+                else "⚠ Waiting for data"
+            )
+            table.add_row(
+                "Market Data",
+                "✓ Connected" if data_status["connected"] else "✗ Disconnected",
+                f"{data_status['cached_candles']} candles, WebSocket: {ws_status}",
+            )
 
         # Exchange status
         exchange_status = self.exchange_client.get_connection_status()
@@ -734,6 +877,7 @@ class TradingEngine:
         self._running = True
 
         loop_count = 0
+        last_status_log = datetime.now(UTC)
 
         while self._running and not self._shutdown_requested:
             try:
@@ -759,8 +903,30 @@ class TradingEngine:
                         await self.market_data.connect()
                         continue
 
-                # Get latest market data
-                latest_data = self.market_data.get_latest_ohlcv(limit=200)
+                # Get latest market data - handle different provider types
+                import inspect
+                from .data.realtime_market import RealtimeMarketDataProvider
+                
+                if isinstance(self.market_data, RealtimeMarketDataProvider):
+                    # Real-time provider - get candles for the current trading interval
+                    interval_seconds = self._get_interval_seconds(self.interval)
+                    latest_data = self.market_data.get_candle_history(interval_seconds, limit=200)
+                    
+                    # If we don't have enough historical data, try to get completed candles
+                    if len(latest_data) < 50:  # Need at least 50 candles for indicators
+                        # Force completion of current candles and retry
+                        self.market_data.tick_aggregator.force_complete_candles(self.symbol)
+                        latest_data = self.market_data.get_candle_history(interval_seconds, limit=200)
+                        
+                elif hasattr(self.market_data, 'get_latest_ohlcv'):
+                    method = getattr(self.market_data, 'get_latest_ohlcv')
+                    if inspect.iscoroutinefunction(method):
+                        latest_data = await method(limit=200)
+                    else:
+                        latest_data = method(limit=200)
+                else:
+                    latest_data = []
+                    
                 if not latest_data:
                     self.logger.warning("No market data available, waiting...")
                     await asyncio.sleep(5)
@@ -768,8 +934,22 @@ class TradingEngine:
 
                 current_price = latest_data[-1].close
 
-                # Calculate technical indicators
-                df = self.market_data.to_dataframe(limit=200)
+                # Publish market data to dashboard
+                if self.websocket_publisher:
+                    await self.websocket_publisher.publish_market_data(
+                        symbol=self.actual_trading_symbol,
+                        price=float(current_price),
+                        timestamp=latest_data[-1].timestamp
+                    )
+
+                # Calculate technical indicators - handle different provider types
+                if isinstance(self.market_data, RealtimeMarketDataProvider):
+                    # Real-time provider - use specific interval
+                    interval_seconds = self._get_interval_seconds(self.interval)
+                    df = self.market_data.to_dataframe(interval_seconds, limit=200)
+                else:
+                    # Standard provider
+                    df = self.market_data.to_dataframe(limit=200)
 
                 # Initialize dominance candles
                 dominance_candles = None
@@ -820,12 +1000,35 @@ class TradingEngine:
                         indicator_state = self.indicator_calc.get_latest_state(
                             df_with_indicators
                         )
+                        
+                        # Publish indicator data to dashboard
+                        if self.websocket_publisher:
+                            await self.websocket_publisher.publish_indicator_data(
+                                symbol=self.actual_trading_symbol,
+                                indicators={
+                                    "cipher_a": indicator_state.get("cipher_a", {}),
+                                    "cipher_b": indicator_state.get("cipher_b", {}),
+                                    "wave_trend_1": indicator_state.get("wave_trend_1"),
+                                    "wave_trend_2": indicator_state.get("wave_trend_2"),
+                                    "rsi": indicator_state.get("rsi"),
+                                    "stoch_rsi": indicator_state.get("stoch_rsi"),
+                                    "schaff_trend": indicator_state.get("schaff_trend"),
+                                    "rsimfi": indicator_state.get("rsimfi")
+                                }
+                            )
                     except Exception as e:
                         self.logger.warning(
                             f"Indicator calculation failed: {e}, using fallback values"
                         )
                         # Use fallback indicator state
                         indicator_state = self._get_fallback_indicator_state()
+                        
+                        # Publish fallback indicator data to dashboard
+                        if self.websocket_publisher:
+                            await self.websocket_publisher.publish_indicator_data(
+                                symbol=self.actual_trading_symbol,
+                                indicators=indicator_state
+                            )
 
                 # Prepare indicator data
                 indicator_dict = {
@@ -943,8 +1146,8 @@ class TradingEngine:
                         )
 
                 # Calculate how many candles represent 24 hours based on interval
-                interval_minutes = self._get_interval_minutes(self.interval)
-                candles_per_24h = min((24 * 60) // interval_minutes, len(latest_data))
+                interval_seconds = self._get_interval_seconds(self.interval)
+                candles_per_24h = min((24 * 60 * 60) // interval_seconds, len(latest_data))
 
                 # Get the last 24 hours of data (or all available if less)
                 historical_data = latest_data[-candles_per_24h:]
@@ -976,7 +1179,7 @@ class TradingEngine:
                 self.last_candle_analysis_time = candle_timestamp
 
                 self.logger.info(
-                    f"🕐 Analyzing new {self.interval} candle completed at {latest_candle.timestamp.strftime('%H:%M:%S')} - Price: ${current_price}"
+                    f"⚡ Scalping analysis: {self.interval} candle at {latest_candle.timestamp.strftime('%H:%M:%S.%f')[:-3]} - Price: ${current_price}"
                 )
 
                 # Get LLM trading decision
@@ -985,6 +1188,38 @@ class TradingEngine:
                     f"{'Memory-Enhanced' if self._memory_available else 'Standard'} LLM Agent"
                 )
                 trade_action = await self.llm_agent.analyze_market(market_state)
+
+                # Publish LLM decision to dashboard
+                if self.websocket_publisher:
+                    await self.websocket_publisher.publish_ai_decision(
+                        action=trade_action.action,
+                        reasoning=trade_action.rationale,
+                        confidence=trade_action.size_pct / 100.0  # Convert percentage to decimal
+                    )
+                    
+                    # Also publish detailed trading decision
+                    await self.websocket_publisher.publish_trading_decision(
+                        request_id=f"trade_{int(datetime.now(UTC).timestamp())}",
+                        action=trade_action.action,
+                        confidence=trade_action.size_pct / 100.0,
+                        reasoning=trade_action.rationale,
+                        price=float(current_price),
+                        quantity=trade_action.size_pct / 100.0,
+                        leverage=self.settings.trading.leverage,
+                        indicators={
+                            "cipher_a": indicator_state.get("cipher_a", {}),
+                            "cipher_b": indicator_state.get("cipher_b", {}),
+                            "wave_trend_1": indicator_state.get("wave_trend_1"),
+                            "wave_trend_2": indicator_state.get("wave_trend_2"),
+                            "rsi": indicator_state.get("rsi"),
+                            "stoch_rsi": indicator_state.get("stoch_rsi")
+                        },
+                        risk_analysis={
+                            "current_price": float(current_price),
+                            "position_size": trade_action.size_pct / 100.0,
+                            "leverage": self.settings.trading.leverage
+                        }
+                    )
 
                 # Record trading decision in memory if MCP is enabled
                 experience_id = None
@@ -1077,6 +1312,17 @@ class TradingEngine:
                     except Exception as e:
                         self.logger.debug(f"Could not retrieve pattern statistics: {e}")
 
+                # Periodic status logging (every 2 minutes)
+                if (datetime.now(UTC) - last_status_log).total_seconds() > 120:
+                    data_status = self.market_data.get_data_status()
+                    self.logger.info(
+                        f"🔄 Trading Status: Loop #{loop_count} | "
+                        f"WebSocket: {'✓' if data_status.get('websocket_connected') else '✗'} | "
+                        f"Latest Price: ${data_status.get('latest_price', 'N/A')} | "
+                        f"OmniSearch: {'✓ Active' if hasattr(self, 'omnisearch_client') else '✗ Disabled'}"
+                    )
+                    last_status_log = datetime.now(UTC)
+
                 # Calculate sleep time to maintain update frequency
                 loop_duration = (datetime.now(UTC) - loop_start).total_seconds()
                 sleep_time = max(
@@ -1163,6 +1409,23 @@ class TradingEngine:
                 if order.status in ["FILLED", "PENDING"]:
                     self.successful_trades += 1
 
+                    # Publish trade execution to dashboard
+                    if self.websocket_publisher:
+                        await self.websocket_publisher.publish_trade_execution(
+                            order_id=order.id,
+                            symbol=self.actual_trading_symbol,
+                            side=trade_action.action,
+                            quantity=float(order.quantity),
+                            price=float(order.price),
+                            status=order.status,
+                            trade_action={
+                                "action": trade_action.action,
+                                "size_pct": trade_action.size_pct,
+                                "rationale": trade_action.rationale,
+                                "experience_id": experience_id
+                            }
+                        )
+
                     # Update position manager
                     if hasattr(order, "filled_quantity") and order.filled_quantity > 0:
                         # Store previous position before update
@@ -1247,6 +1510,35 @@ class TradingEngine:
             self.logger.error(f"Trade execution error: {e}")
             console.print(f"[red]Trade execution error: {e}[/red]")
 
+    def _get_interval_seconds(self, interval: str) -> int:
+        """
+        Convert interval string to seconds.
+
+        Args:
+            interval: Interval string (e.g., '1s', '15s', '1m', '5m', '1h', '1d')
+
+        Returns:
+            Number of seconds in the interval
+        """
+        interval_map = {
+            "1s": 1,
+            "5s": 5,
+            "15s": 15,
+            "30s": 30,
+            "1m": 60,
+            "3m": 180,
+            "5m": 300,
+            "15m": 900,
+            "30m": 1800,
+            "1h": 3600,
+            "2h": 7200,
+            "4h": 14400,
+            "6h": 21600,
+            "12h": 43200,
+            "1d": 86400,
+        }
+        return interval_map.get(interval.lower(), 15)  # Default to 15 seconds for scalping
+
     def _get_interval_minutes(self, interval: str) -> int:
         """
         Convert interval string to minutes.
@@ -1257,20 +1549,7 @@ class TradingEngine:
         Returns:
             Number of minutes in the interval
         """
-        interval_map = {
-            "1m": 1,
-            "3m": 3,
-            "5m": 5,
-            "15m": 15,
-            "30m": 30,
-            "1h": 60,
-            "2h": 120,
-            "4h": 240,
-            "6h": 360,
-            "12h": 720,
-            "1d": 1440,
-        }
-        return interval_map.get(interval.lower(), 5)  # Default to 5 minutes
+        return self._get_interval_seconds(interval) / 60
 
     async def _update_position_tracking(self, current_price: Decimal):
         """
@@ -1292,6 +1571,17 @@ class TradingEngine:
 
             self.current_position.unrealized_pnl = pnl
 
+            # Publish position update to dashboard
+            if self.websocket_publisher:
+                await self.websocket_publisher.publish_position_update(
+                    symbol=self.actual_trading_symbol,
+                    side=self.current_position.side.lower(),
+                    size=float(self.current_position.size),
+                    entry_price=float(self.current_position.entry_price),
+                    current_price=float(current_price),
+                    unrealized_pnl=float(pnl)
+                )
+
             # Update risk manager with P&L
             self.risk_manager.update_daily_pnl(Decimal("0"), pnl)
 
@@ -1303,6 +1593,17 @@ class TradingEngine:
                     )
                 except Exception as e:
                     self.logger.warning(f"Failed to update trade progress: {e}")
+        else:
+            # Publish flat position to dashboard
+            if self.websocket_publisher:
+                await self.websocket_publisher.publish_position_update(
+                    symbol=self.actual_trading_symbol,
+                    side="flat",
+                    size=0.0,
+                    entry_price=0.0,
+                    current_price=float(current_price),
+                    unrealized_pnl=0.0
+                )
 
             # This code was moved to the main trading loop
 
@@ -1429,6 +1730,13 @@ class TradingEngine:
                 console.print("  • Disconnecting from OmniSearch...")
                 cleanup_tasks.append(
                     asyncio.create_task(self.omnisearch_client.disconnect())
+                )
+
+            # Close WebSocket publisher connection
+            if hasattr(self, "websocket_publisher") and self.websocket_publisher:
+                console.print("  • Disconnecting from dashboard WebSocket...")
+                cleanup_tasks.append(
+                    asyncio.create_task(self.websocket_publisher.close())
                 )
 
             # Stop experience manager if enabled
@@ -1837,7 +2145,7 @@ def cli() -> None:
     "--dry-run/--no-dry-run", default=True, help="Run in dry-run mode (default)"
 )
 @click.option("--symbol", default="BTC-USD", help="Trading symbol")
-@click.option("--interval", default="1m", help="Candle interval")
+@click.option("--interval", default="15s", help="Candle interval (scalping: 1s/5s/15s/30s)")
 @click.option("--config", default=None, help="Configuration file path")
 @click.option("--force", is_flag=True, help="Skip confirmation prompt for live trading")
 def live(dry_run: bool, symbol: str, interval: str, config: str | None, force: bool) -> None:

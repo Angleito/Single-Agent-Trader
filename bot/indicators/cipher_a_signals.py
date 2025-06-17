@@ -42,10 +42,10 @@ class CipherASignals:
 
     def __init__(
         self,
-        # WaveTrend parameters
-        wt_channel_length: int = 10,
-        wt_average_length: int = 21,
-        wt_ma_length: int = 4,
+        # WaveTrend parameters (Optimized for 15-second scalping)
+        wt_channel_length: int = 6,  # Reduced from 10 for faster response
+        wt_average_length: int = 8,  # Reduced from 21 for quicker signals
+        wt_ma_length: int = 3,  # Reduced from 4 for scalping
         # Overbought/Oversold levels
         overbought_level: float = 60.0,
         overbought_level2: float = 53.0,
@@ -58,14 +58,14 @@ class CipherASignals:
         # RSI+MFI parameters
         rsimfi_period: int = 60,
         rsimfi_multiplier: float = 150.0,
-        # EMA parameters for candle patterns
-        ema2_length: int = 2,
-        ema8_length: int = 8,
-        # Yellow cross signal thresholds
-        yellow_cross_up_wt2_max: float = 45.0,
+        # EMA parameters for candle patterns (Optimized for scalping)
+        ema2_length: int = 1,  # Reduced from 2 for faster trend detection
+        ema8_length: int = 3,  # Reduced from 8 for scalping responsiveness
+        # Yellow cross signal thresholds (Adjusted for scalping sensitivity)
+        yellow_cross_up_wt2_max: float = 35.0,  # Reduced from 45.0 for earlier signals
         yellow_cross_up_rsi_max: float = 30.0,
         yellow_cross_up_rsi_min: float = 15.0,
-        yellow_cross_down_wt2_min: float = 55.0,
+        yellow_cross_down_wt2_min: float = 45.0,  # Reduced from 55.0 for scalping
         yellow_cross_down_rsi_max: float = 70.0,
         yellow_cross_down_rsi_min: float = 85.0,
     ):
@@ -85,12 +85,12 @@ class CipherASignals:
             rsi_length: RSI calculation period
             rsimfi_period: RSI+MFI calculation period
             rsimfi_multiplier: RSI+MFI multiplier
-            ema2_length: Fast EMA period for candle patterns
-            ema8_length: Slow EMA period for candle patterns
-            yellow_cross_up_wt2_max: Max WT2 level for yellow cross up
+            ema2_length: Fast EMA period for candle patterns (Scalping: 1)
+            ema8_length: Slow EMA period for candle patterns (Scalping: 3)
+            yellow_cross_up_wt2_max: Max WT2 level for yellow cross up (Scalping: 35.0)
             yellow_cross_up_rsi_max: Max RSI level for yellow cross up
             yellow_cross_up_rsi_min: Min RSI level for yellow cross up
-            yellow_cross_down_wt2_min: Min WT2 level for yellow cross down
+            yellow_cross_down_wt2_min: Min WT2 level for yellow cross down (Scalping: 45.0)
             yellow_cross_down_rsi_max: Max RSI level for yellow cross down
             yellow_cross_down_rsi_min: Min RSI level for yellow cross down
         """
@@ -285,7 +285,7 @@ class CipherASignals:
         # Calculate pattern frequency
         total_points = len(wt1) if wt1 is not None and not wt1.empty else 0
 
-        logger.info(
+        logger.debug(
             "Diamond patterns calculation completed",
             extra={
                 "indicator": "cipher_a_signals",
@@ -508,7 +508,7 @@ class CipherASignals:
                 ),
             }
 
-        logger.info(
+        logger.debug(
             "Yellow cross signals calculation completed",
             extra={
                 "indicator": "cipher_a_signals",
@@ -848,7 +848,7 @@ class CipherASignals:
         start_time = time.perf_counter()
         tracemalloc.start()
 
-        logger.info(
+        logger.debug(
             "Starting complete Cipher A signals calculation",
             extra={
                 "indicator": "cipher_a_signals",
@@ -1025,7 +1025,7 @@ class CipherASignals:
             # Generate comprehensive summary
             summary = self._generate_complete_signal_summary(result)
 
-            logger.info(
+            logger.debug(
                 "Complete Cipher A signals calculation successful",
                 extra={
                     "indicator": "cipher_a_signals",

@@ -7,7 +7,7 @@ readme = "README.md"
 packages = [{include = "bot"}]
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = ">=3.12,<3.13"
 pip = "^24.0.0"
 setuptools = "^69.0.0"
 pandas = "^2.2.0"
@@ -20,17 +20,19 @@ pydantic = "^2.6.0"
 pydantic-settings = "^2.2.0"
 python-dotenv = "^1.0.0"
 coinbase-advanced-py = "^1.3.0"
-# bluefin-v2-client = "~3.2.0"  # Install separately due to dependency conflicts
+# bluefin-v2-client = "^4.2.13"  # Install separately in Docker due to build complexity
 openai = "^1.12.0"
 click = "^8.1.7"
 websockets = "^12.0"
-aiohttp = "^3.9.0"
+aiohttp = ">=3.8.5,<4.0.0"
 rich = "^13.7.0"
 requests = "^2.31.0"
 docker = "^7.1.0"
-websocket-client = "^1.8.0"
+websocket-client = "1.6.4"
 psutil = "^6.1.0"
 aiofiles = "^24.0.0"
+python-socketio = "5.8.0"
+aiohappyeyeballs = "^2.6.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"

@@ -316,7 +316,7 @@ class SchaffTrendCycle:
             overbought_count = (stc_return > self.overbought).sum()
             oversold_count = (stc_return < self.oversold).sum()
 
-            logger.info(
+            logger.debug(
                 "Schaff Trend Cycle calculation completed",
                 extra={
                     "indicator": "schaff_trend_cycle",
@@ -511,7 +511,7 @@ class SchaffTrendCycle:
         """
         start_time = time.perf_counter()
 
-        logger.info(
+        logger.debug(
             "Starting Schaff Trend Cycle DataFrame calculation",
             extra={
                 "indicator": "schaff_trend_cycle",
@@ -575,7 +575,7 @@ class SchaffTrendCycle:
             bearish_signals = (signals == -1).sum()
 
             if bullish_signals > 0:
-                logger.info(
+                logger.debug(
                     "STC bullish signals generated",
                     extra={
                         "indicator": "schaff_trend_cycle",
@@ -590,7 +590,7 @@ class SchaffTrendCycle:
                 )
 
             if bearish_signals > 0:
-                logger.info(
+                logger.debug(
                     "STC bearish signals generated",
                     extra={
                         "indicator": "schaff_trend_cycle",
@@ -614,7 +614,7 @@ class SchaffTrendCycle:
             # Generate comprehensive summary
             summary = self._generate_calculation_summary(result)
 
-            logger.info(
+            logger.debug(
                 "Schaff Trend Cycle DataFrame calculation completed",
                 extra={
                     "indicator": "schaff_trend_cycle",

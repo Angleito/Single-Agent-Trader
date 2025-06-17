@@ -786,7 +786,7 @@ class WaveTrend:
             wt1_valid_count = (~wt1.isna()).sum()
             wt2_valid_count = (~wt2.isna()).sum()
 
-            logger.info(
+            logger.debug(
                 "WaveTrend calculation completed",
                 extra={
                     "indicator": "wavetrend",
@@ -1010,7 +1010,7 @@ class WaveTrend:
 
             # Log signal generation events
             if cross_up_count > 0:
-                logger.info(
+                logger.debug(
                     "WaveTrend bullish cross signals generated",
                     extra={
                         "indicator": "wavetrend",
@@ -1025,7 +1025,7 @@ class WaveTrend:
                 )
 
             if cross_down_count > 0:
-                logger.info(
+                logger.debug(
                     "WaveTrend bearish cross signals generated",
                     extra={
                         "indicator": "wavetrend",
@@ -1095,7 +1095,7 @@ class WaveTrend:
         """
         start_time = time.perf_counter()
 
-        logger.info(
+        logger.debug(
             "Starting WaveTrend DataFrame calculation",
             extra={
                 "indicator": "wavetrend",
@@ -1195,7 +1195,7 @@ class WaveTrend:
                 "cross_down": result["wt_cross_down"].sum(),
             }
 
-            logger.info(
+            logger.debug(
                 "WaveTrend DataFrame calculation completed",
                 extra={
                     "indicator": "wavetrend",

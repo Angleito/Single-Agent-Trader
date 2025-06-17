@@ -1,0 +1,126 @@
+# Docker Compose for Bluefin DEX Trading with UV
+# Fast builds and dependency management using UV
+
+services:
+  ai-trading-bot-bluefin:
+    build:
+      context: .
+      dockerfile: Dockerfile.bluefin-uv
+      args:
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
+        VCS_REF: ${VCS_REF:-$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")}
+        VERSION: ${VERSION:-0.1.0}
+    image: ai-trading-bot:bluefin-uv-${VERSION:-latest}
+    container_name: ai-trading-bot-bluefin-uv
+    restart: unless-stopped
+    
+    # Command for perpetual trading on Bluefin
+    command: ["python", "-m", "bot.main", "live", "--symbol", "${TRADING__SYMBOL:-SUI-PERP}", "--interval", "${TRADING__INTERVAL:-5m}"]
+    
+    # Environment variables from .env file
+    env_file:
+      - .env
+    
+    # Bluefin-specific environment overrides
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - CONFIG_FILE=/app/config/production.json
+      # Force Bluefin exchange
+      - EXCHANGE__EXCHANGE_TYPE=bluefin
+      # System Configuration - LIVE TRADING MODE
+      - SYSTEM__DRY_RUN=false  # LIVE TRADING WITH REAL MONEY
+      - SYSTEM__ENVIRONMENT=${SYSTEM__ENVIRONMENT:-production}
+      # Bluefin configuration
+      - EXCHANGE__BLUEFIN_NETWORK=${EXCHANGE__BLUEFIN_NETWORK:-mainnet}
+      - EXCHANGE__BLUEFIN_PRIVATE_KEY=${EXCHANGE__BLUEFIN_PRIVATE_KEY}
+      # Trading configuration  
+      - TRADING__SYMBOL=${TRADING__SYMBOL:-SUI-PERP}  # Use SUI-PERP for native Bluefin trading
+      - TRADING__LEVERAGE=${TRADING__LEVERAGE:-5}
+      - TRADING__ENABLE_FUTURES=true
+      # LLM Configuration
+      - LLM__OPENAI_API_KEY=${LLM__OPENAI_API_KEY}
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+    # Volume mounts
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./config:/app/config:ro
+      - ./prompts:/app/prompts:ro
+      # Mount bot code for development (optional)
+      # - ./bot:/app/bot:ro
+      
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "/app/healthcheck.sh"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 45s  # Give more time for SDK initialization
+      
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 2G  # Bluefin SDK needs more memory
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+          
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        
+    networks:
+      - bluefin-network
+
+  # Development service with hot-reload
+  ai-trading-bot-bluefin-dev:
+    extends: ai-trading-bot-bluefin
+    container_name: ai-trading-bot-bluefin-dev
+    profiles:
+      - dev
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - SYSTEM__DRY_RUN=true
+      - LOG_LEVEL=DEBUG
+      - EXCHANGE__EXCHANGE_TYPE=bluefin
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./config:/app/config:ro
+      - ./bot:/app/bot:ro  # Mount source code for development
+      - ./prompts:/app/prompts:ro
+    command: ["python", "-m", "bot.main", "live", "--symbol", "SUI-PERP", "--interval", "1m"]
+
+networks:
+  bluefin-network:
+    name: bluefin-network
+    driver: bridge
+
+# Usage Instructions:
+# 
+# 1. Build the image (fast with UV):
+#    docker-compose -f docker-compose.bluefin-uv.yml build
+#
+# 2. Paper trading (default - safe):
+#    docker-compose -f docker-compose.bluefin-uv.yml up
+#
+# 3. Live trading (DANGEROUS - real money):
+#    SYSTEM__DRY_RUN=false docker-compose -f docker-compose.bluefin-uv.yml up
+#
+# 4. Development mode with hot-reload:
+#    docker-compose -f docker-compose.bluefin-uv.yml --profile dev up
+#
+# 5. View logs:
+#    docker-compose -f docker-compose.bluefin-uv.yml logs -f
+#
+# 6. Stop:
+#    docker-compose -f docker-compose.bluefin-uv.yml down

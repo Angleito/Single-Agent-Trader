@@ -245,7 +245,7 @@ class RSIMFIIndicator:
                 "std": float(rsimfi_values.std()) if valid_count > 0 else 0,
             }
 
-            logger.info(
+            logger.debug(
                 "RSI+MFI calculation completed",
                 extra={
                     "indicator": "rsimfi",

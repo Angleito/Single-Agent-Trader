@@ -685,7 +685,7 @@ class SommiPatterns:
                 result["sommi_flag_confidence"], result["sommi_diamond_confidence"]
             )
 
-            logger.info("Sommi pattern analysis completed successfully")
+            logger.debug("Sommi pattern analysis completed successfully")
             return result
 
         except Exception as e:

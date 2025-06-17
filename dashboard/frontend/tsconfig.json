@@ -28,7 +28,7 @@
     },
 
     /* Global declarations */
-    "types": ["vite/client", "node"]
+    "types": ["node"]
   },
   "include": [
     "src/**/*",

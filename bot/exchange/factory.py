@@ -96,9 +96,15 @@ class ExchangeFactory:
     def _create_bluefin(dry_run: bool, **kwargs) -> BluefinClient:
         """Create a Bluefin exchange client."""
         # Extract Bluefin-specific parameters
-        private_key = kwargs.get('private_key') or getattr(
-            settings.exchange, 'bluefin_private_key', None
-        )
+        private_key = kwargs.get('private_key')
+        if not private_key:
+            # Get from settings and extract string value if SecretStr
+            private_key_setting = getattr(settings.exchange, 'bluefin_private_key', None)
+            if private_key_setting:
+                private_key = private_key_setting.get_secret_value()
+            else:
+                private_key = None
+        
         network = kwargs.get('network') or getattr(
             settings.exchange, 'bluefin_network', 'mainnet'
         )

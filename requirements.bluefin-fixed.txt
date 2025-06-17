@@ -1,0 +1,20 @@
+# Bluefin SDK requirements with Socket.IO fixes
+# Install in this specific order to avoid conflicts
+
+# Core async/networking dependencies first
+python-socketio[asyncio_client]==5.8.0
+websockets==12.0
+aiohttp==3.9.0
+
+# Threading and async support
+greenlet==2.0.2
+gevent==22.10.2
+
+# Bluefin SDK - install last to avoid overriding fixed dependencies
+bluefin-v2-client==3.2.4
+
+# Additional dependencies for Sui integration
+pysui
+base58
+ed25519
+pycryptodome

@@ -70,14 +70,16 @@ class CipherBSignals:
 
     def __init__(
         self,
-        wt_channel_length: int = 9,
-        wt_average_length: int = 12,
+        # WaveTrend parameters (Optimized for 15-second scalping)
+        wt_channel_length: int = 6,  # Reduced from 9 for faster response
+        wt_average_length: int = 7,  # Reduced from 12 for quicker signals
         wt_ma_length: int = 3,
-        ob_level: float = 53.0,
-        ob_level2: float = 60.0,
+        # Overbought/Oversold levels (Adjusted for scalping sensitivity)
+        ob_level: float = 40.0,  # Reduced from 53.0 for earlier signals
+        ob_level2: float = 50.0,  # Reduced from 60.0 for scalping
         ob_level3: float = 100.0,
-        os_level: float = -53.0,
-        os_level2: float = -60.0,
+        os_level: float = -40.0,  # Increased from -53.0 for earlier signals
+        os_level2: float = -50.0,  # Increased from -60.0 for scalping
         os_level3: float = -75.0,
         wt_div_ob_level: float = 45.0,
         wt_div_os_level: float = -65.0,
@@ -86,8 +88,9 @@ class CipherBSignals:
         rsi_length: int = 14,
         rsi_div_ob_level: float = 60.0,
         rsi_div_os_level: float = 30.0,
-        stoch_length: int = 14,
-        stoch_rsi_length: int = 14,
+        # Stochastic parameters (Optimized for scalping)
+        stoch_length: int = 8,  # Reduced from 14 for faster signals
+        stoch_rsi_length: int = 8,  # Reduced from 14 for scalping responsiveness
         stoch_k_smooth: int = 3,
         stoch_d_smooth: int = 3,
         stoch_use_log: bool = True,
@@ -97,7 +100,28 @@ class CipherBSignals:
         Initialize Cipher B Signals calculator.
 
         Args:
-            wt_channel_length: WaveTrend channel length
+            wt_channel_length: WaveTrend channel length (Scalping optimized: 6)
+            wt_average_length: WaveTrend average length (Scalping optimized: 7)
+            wt_ma_length: WaveTrend MA length
+            ob_level: Overbought level 1 (Scalping: 40.0)
+            ob_level2: Overbought level 2 (Scalping: 50.0)
+            ob_level3: Overbought level 3 (100.0)
+            os_level: Oversold level 1 (Scalping: -40.0)
+            os_level2: Oversold level 2 (Scalping: -50.0)
+            os_level3: Oversold level 3 (-75.0)
+            wt_div_ob_level: WaveTrend divergence overbought (45.0)
+            wt_div_os_level: WaveTrend divergence oversold (-65.0)
+            wt_div_ob_level_add: Additional WaveTrend divergence overbought (15.0)
+            wt_div_os_level_add: Additional WaveTrend divergence oversold (-40.0)
+            rsi_length: RSI calculation period (14)
+            rsi_div_ob_level: RSI divergence overbought (60.0)
+            rsi_div_os_level: RSI divergence oversold (30.0)
+            stoch_length: Stochastic length (Scalping: 8)
+            stoch_rsi_length: Stochastic RSI length (Scalping: 8)
+            stoch_k_smooth: Stochastic K smoothing (3)
+            stoch_d_smooth: Stochastic D smoothing (3)
+            stoch_use_log: Use logarithmic calculation for stochastic
+            stoch_use_avg: Use average calculation for stochastic
             wt_average_length: WaveTrend average length
             wt_ma_length: WaveTrend MA length
             ob_level: Overbought level 1

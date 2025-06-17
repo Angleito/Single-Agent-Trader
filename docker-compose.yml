@@ -1,6 +1,53 @@
 # Docker Compose for AI Trading Bot with Dashboard
 
 services:
+  # Bluefin SDK Service - Isolated container for Bluefin DEX operations
+  bluefin-service:
+    build:
+      context: ./bluefin-service
+      dockerfile: Dockerfile
+    image: bluefin-service:latest
+    container_name: bluefin-service
+    restart: unless-stopped
+    
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - DRY_RUN=${SYSTEM__DRY_RUN:-true}
+      - BLUEFIN_PRIVATE_KEY=${EXCHANGE__BLUEFIN_PRIVATE_KEY:-}
+      - BLUEFIN_NETWORK=${EXCHANGE__BLUEFIN_NETWORK:-mainnet}
+      - HOST=0.0.0.0
+      - PORT=8080
+      - LOG_LEVEL=info
+    
+    ports:
+      - "8081:8080"  # External access for debugging
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    
+    networks:
+      - trading-network
+    
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.3'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   ai-trading-bot:
     build:
       context: .
@@ -9,13 +56,13 @@ services:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
         VCS_REF: ${VCS_REF:-$(git rev-parse --short HEAD)}
         VERSION: ${VERSION:-0.1.0}
-        EXCHANGE_TYPE: ${EXCHANGE_TYPE:-coinbase}
-    image: ai-trading-bot:${EXCHANGE_TYPE:-coinbase}-${VERSION:-latest}
+        EXCHANGE_TYPE: bluefin
+    image: ai-trading-bot:bluefin-${VERSION:-latest}
     container_name: ai-trading-bot
     restart: unless-stopped
     
-    # Override the default command - MOMENTUM TRADING MODE WITH 5-MINUTE CANDLES
-    command: ["python", "-m", "bot.main", "live", "--no-dry-run", "--force", "--symbol", "ETH-USD", "--interval", "5m"]
+    # Override the default command - ULTRA-ADAPTIVE TRADING MODE WITH 15-SECOND SCALPING (PAPER TRADING)
+    command: ["python", "-m", "bot.main", "live", "--dry-run", "--symbol", "SUI-PERP", "--interval", "15s"]
     
     # Environment variables from .env file
     env_file:
@@ -28,10 +75,10 @@ services:
       - PYTHONWARNINGS=ignore::UserWarning,ignore::DeprecationWarning,ignore::SyntaxWarning,ignore::FutureWarning
       - CONFIG_FILE=/app/config/production.json
       # System Configuration
-      - SYSTEM__DRY_RUN=false  # LIVE TRADING MODE - REAL MONEY
+      - SYSTEM__DRY_RUN=${SYSTEM__DRY_RUN:-true}   # Use .env setting, default to safe mode
       - SYSTEM__ENVIRONMENT=production  # Production environment for live trading
       # Exchange Configuration
-      - EXCHANGE__EXCHANGE_TYPE=${EXCHANGE_TYPE:-coinbase}
+      - EXCHANGE__EXCHANGE_TYPE=bluefin
       # LLM Logging Configuration
       - LLM__ENABLE_COMPLETION_LOGGING=${LLM_ENABLE_COMPLETION_LOGGING:-true}
       - LLM__COMPLETION_LOG_LEVEL=${LLM_COMPLETION_LOG_LEVEL:-INFO}
@@ -42,6 +89,12 @@ services:
       # MCP Memory Configuration (disabled for testing)
       - MCP_ENABLED=false
       # - MCP_SERVER_URL=http://mcp-memory:8765
+      # WebSocket Publishing Configuration - Enable real-time dashboard updates
+      - SYSTEM__ENABLE_WEBSOCKET_PUBLISHING=${SYSTEM__ENABLE_WEBSOCKET_PUBLISHING:-true}
+      - SYSTEM__WEBSOCKET_DASHBOARD_URL=ws://dashboard-backend:8000/ws
+      - SYSTEM__WEBSOCKET_PUBLISH_INTERVAL=1.0
+      - SYSTEM__WEBSOCKET_MAX_RETRIES=5
+      - SYSTEM__WEBSOCKET_RETRY_DELAY=5
       # Logging Level
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       
@@ -82,9 +135,63 @@ services:
     networks:
       - trading-network
     
-    # Temporarily disabled MCP dependency for testing
-    # depends_on:
-    #   - mcp-memory
+    # Service dependencies
+    depends_on:
+      - bluefin-service
+      - mcp-omnisearch
+    #   - mcp-memory  # Temporarily disabled
+
+  # MCP OmniSearch Server for Enhanced Market Intelligence
+  mcp-omnisearch:
+    build:
+      context: ./bot/mcp/omnisearch-server
+      dockerfile: Dockerfile
+    image: mcp-omnisearch-server:latest
+    container_name: mcp-omnisearch-server
+    restart: unless-stopped
+    
+    environment:
+      - NODE_ENV=production
+      # Search Provider API Keys (optional - only providers with keys will be enabled)
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+      - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY:-}
+      - KAGI_API_KEY=${KAGI_API_KEY:-}
+      - JINA_AI_API_KEY=${JINA_AI_API_KEY:-}
+      - BRAVE_API_KEY=${BRAVE_API_KEY:-}
+      - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY:-}
+      - MCP_SERVER_PORT=8767
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+    volumes:
+      - ./logs/mcp:/app/logs
+      
+    ports:
+      - "8767:8767"
+      
+    healthcheck:
+      test: ["CMD", "node", "-e", "console.log('MCP OmniSearch Ready')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+      
+    networks:
+      - trading-network
+      
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.3'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+          
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # MCP Memory Server for AI Learning
   mcp-memory:
@@ -198,9 +305,9 @@ services:
       - "3000:8080"
     environment:
       - NODE_ENV=production
-      # Use relative URLs for API calls - nginx proxy will handle routing
-      - VITE_API_URL=/api
-      - VITE_WS_URL=/api
+      # Use internal Docker network URLs for direct backend communication
+      - VITE_API_URL=http://dashboard-backend:8000
+      - VITE_WS_URL=ws://dashboard-backend:8000
     restart: unless-stopped
     networks:
       - trading-network

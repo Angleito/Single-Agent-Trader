@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  ai-trading-bot-live:
+    build:
+      context: .
+      dockerfile: Dockerfile.bluefin-live
+      args:
+        BUILD_DATE: ${BUILD_DATE:-}
+        VCS_REF: ${VCS_REF:-}
+        VERSION: ${VERSION:-0.1.0}
+    image: ai-trading-bot:bluefin-live-latest
+    container_name: ai-trading-bot-bluefin-live
+    network_mode: host  # OrbStack optimization for DEX connectivity
+    restart: unless-stopped
+    environment:
+      # Trading Configuration - SUI-PERP Live Trading
+      - SYSTEM__DRY_RUN=false
+      - EXCHANGE__EXCHANGE_TYPE=bluefin
+      - TRADING__SYMBOL=SUI-PERP
+      - TRADING__LEVERAGE=5
+      - TRADING__INTERVAL=5m
+      
+      # Bluefin DEX Configuration
+      - EXCHANGE__BLUEFIN_NETWORK=mainnet
+      - BLUEFIN_FORCE_LIVE_MODE=true
+      - SOCKETIO_ASYNC_MODE=aiohttp
+      
+      # Risk Management (Conservative)
+      - MAX_POSITION_SIZE=0.01
+      - STOP_LOSS_PERCENTAGE=2.0
+      - MAX_DAILY_TRADES=10
+      
+      # Performance Settings
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - UV_NO_CACHE=1
+      
+      # Load from .env file
+      - LLM__OPENAI_API_KEY=${LLM__OPENAI_API_KEY}
+      - EXCHANGE__BLUEFIN_PRIVATE_KEY=${EXCHANGE__BLUEFIN_PRIVATE_KEY}
+    
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./config:/app/config
+    
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  default:
+    name: bluefin-trading

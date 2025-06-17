@@ -1,0 +1,61 @@
+{
+  "name": "mcp-omnisearch",
+  "version": "0.0.5",
+  "description": "MCP server for integrating Omnisearch with LLMs",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "mcp-omnisearch": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc && chmod +x dist/index.js",
+    "start": "node dist/index.js",
+    "dev": "npx @modelcontextprotocol/inspector dist/index.js",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "pnpm run build && changeset publish"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "search",
+    "ai",
+    "web-search",
+    "tavily",
+    "brave-search",
+    "kagi",
+    "perplexity",
+    "jina-ai",
+    "firecrawl",
+    "llm",
+    "content-processing",
+    "summarization",
+    "fact-verification",
+    "content-enrichment",
+    "url-reader",
+    "pdf-processing",
+    "image-captioning",
+    "unified-search",
+    "multi-provider",
+    "web-crawling",
+    "site-mapping",
+    "data-extraction",
+    "web-interactions"
+  ],
+  "author": "Scott Spence",
+  "license": "MIT",
+  "devDependencies": {
+    "@changesets/cli": "^2.29.4",
+    "@types/node": "^22.15.21",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.11.5"
+  }
+}

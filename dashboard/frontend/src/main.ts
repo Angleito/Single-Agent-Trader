@@ -1470,9 +1470,13 @@ class DashboardApp {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
     
-    // In development mode (localhost with nginx proxy), always use proxy
-    if (host.includes('localhost:8080') || host.includes('localhost:3000') || 
-        host.includes('127.0.0.1:8080') || host.includes('127.0.0.1:3000')) {
+    // In development mode on port 3000, connect directly to backend on port 8000
+    if (host.includes('localhost:3000') || host.includes('127.0.0.1:3000')) {
+      return `${protocol}//localhost:8000/ws`;
+    }
+    
+    // In development mode with nginx proxy on port 8080, use proxy
+    if (host.includes('localhost:8080') || host.includes('127.0.0.1:8080')) {
       // Nginx proxy will forward /api/ws to the backend automatically
       // WebSocket upgrade is configured within the /api/ location block
       return `${protocol}//${host}/api/ws`;

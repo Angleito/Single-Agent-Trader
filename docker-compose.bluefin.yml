@@ -1,149 +1,126 @@
-version: '3.8'
+# Docker Compose for Bluefin DEX Trading
+# Use this file instead of docker-compose.yml when trading on Bluefin
 
 services:
   ai-trading-bot-bluefin:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.bluefin
       args:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
         VCS_REF: ${VCS_REF:-$(git rev-parse --short HEAD)}
         VERSION: ${VERSION:-0.1.0}
-        EXCHANGE_TYPE: bluefin
     image: ai-trading-bot:bluefin-${VERSION:-latest}
     container_name: ai-trading-bot-bluefin
     restart: unless-stopped
-    environment:
-      # Exchange Configuration
-      - EXCHANGE__EXCHANGE_TYPE=bluefin
-      - EXCHANGE__BLUEFIN_PRIVATE_KEY=${BLUEFIN_PRIVATE_KEY}
-      - EXCHANGE__BLUEFIN_NETWORK=${BLUEFIN_NETWORK:-mainnet}
-      - EXCHANGE__BLUEFIN_RPC_URL=${BLUEFIN_RPC_URL:-}
-      
-      # Trading Configuration
-      - TRADING__SYMBOL=${TRADING_SYMBOL:-ETH-USD}
-      - TRADING__LEVERAGE=${TRADING_LEVERAGE:-5}
-      - TRADING__MAX_FUTURES_LEVERAGE=${TRADING_MAX_FUTURES_LEVERAGE:-10}
-      - TRADING__ENABLE_FUTURES=true  # Bluefin only supports futures
-      
-      # LLM Configuration
-      - LLM__OPENAI_API_KEY=${OPENAI_API_KEY}
-      - LLM__PROVIDER=${LLM_PROVIDER:-openai}
-      - LLM__MODEL_NAME=${LLM_MODEL_NAME:-gpt-4}
-      
-      # System Configuration
-      - SYSTEM__DRY_RUN=${DRY_RUN:-true}
-      - SYSTEM__LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - SYSTEM__ENVIRONMENT=${ENVIRONMENT:-production}
-      
-      # Risk Management
-      - RISK__MAX_DAILY_LOSS_PCT=${RISK_MAX_DAILY_LOSS_PCT:-5.0}
-      - RISK__DEFAULT_STOP_LOSS_PCT=${RISK_DEFAULT_STOP_LOSS_PCT:-2.0}
-      - RISK__DEFAULT_TAKE_PROFIT_PCT=${RISK_DEFAULT_TAKE_PROFIT_PCT:-4.0}
-      
-      # MCP Memory (if enabled)
-      - MCP_ENABLED=${MCP_ENABLED:-false}
-      - MCP_SERVER_URL=http://mcp-memory:8765
-      
-      # OmniSearch (if enabled)
-      - OMNISEARCH__ENABLED=${OMNISEARCH_ENABLED:-false}
-      - OMNISEARCH__API_KEY=${OMNISEARCH_API_KEY:-}
     
+    # Command for perpetual trading on Bluefin
+    command: ["python", "-m", "bot.main", "live", "--no-dry-run", "--force", "--symbol", "ETH-PERP", "--interval", "5m"]
+    
+    # Environment variables from .env file
+    env_file:
+      - .env
+    
+    # Bluefin-specific environment overrides
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - CONFIG_FILE=/app/config/production.json
+      # Force Bluefin exchange
+      - EXCHANGE__EXCHANGE_TYPE=bluefin
+      # System Configuration
+      - SYSTEM__DRY_RUN=${SYSTEM__DRY_RUN:-true}  # Default to paper trading
+      - SYSTEM__ENVIRONMENT=${SYSTEM__ENVIRONMENT:-production}
+      # Bluefin network
+      - EXCHANGE__BLUEFIN_NETWORK=${EXCHANGE__BLUEFIN_NETWORK:-mainnet}
+      # Perpetual futures are always enabled on Bluefin
+      - TRADING__ENABLE_FUTURES=true
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LLM__ENABLE_COMPLETION_LOGGING=${LLM_ENABLE_COMPLETION_LOGGING:-true}
+      
+    # Volume mounts
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
       - ./config:/app/config:ro
-      - ./prompts:/app/prompts:ro
-    
-    networks:
-      - trading-network
-    
+      
+    # Health check
     healthcheck:
-      test: ["CMD", "/app/healthcheck.sh"]
+      test: ["CMD-SHELL", "/app/healthcheck.sh"]
       interval: 30s
-      timeout: 10s
+      timeout: 15s
       retries: 3
-      start_period: 10s
-    
+      start_period: 30s
+      
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+          
+    # Logging
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-    
-    command: >
-      python -m bot.main live
-      ${DRY_RUN:+--dry-run}
+        
+    networks:
+      - bluefin-network
 
-  # Optional: MCP Memory Server for learning capabilities
+  # Optional: MCP Memory Server for learning (works with Bluefin)
   mcp-memory:
     build:
-      context: .
-      dockerfile: Dockerfile.mcp
-    container_name: mcp-memory-bluefin
+      context: ./bot/mcp
+      dockerfile: Dockerfile
+    image: mcp-memory-server:latest
+    container_name: mcp-memory-server
     restart: unless-stopped
+    profiles:
+      - with-memory
+    
     environment:
       - MCP_SERVER_PORT=8765
       - MEM0_API_KEY=${MEM0_API_KEY:-}
-      - MCP_MEMORY_RETENTION_DAYS=${MCP_MEMORY_RETENTION_DAYS:-90}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MEMORY_RETENTION_DAYS=${MCP_MEMORY_RETENTION_DAYS:-90}
+      
     volumes:
-      - mcp-memory-data:/app/memory_store
-    networks:
-      - trading-network
+      - ./data/mcp_memory:/app/data
+      - ./logs/mcp:/app/logs
+      
+    ports:
+      - "8765:8765"
+      
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8765/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-    profiles:
-      - with-memory
-
-  # Optional: Monitoring with Prometheus
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus-bluefin
-    restart: unless-stopped
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus-data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
-    ports:
-      - "9090:9090"
+      start_period: 10s
+      
     networks:
-      - trading-network
-    profiles:
-      - monitoring
-
-  # Optional: Grafana for visualization
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana-bluefin
-    restart: unless-stopped
-    environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
-      - GF_USERS_ALLOW_SIGN_UP=false
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
-    ports:
-      - "3000:3000"
-    networks:
-      - trading-network
-    depends_on:
-      - prometheus
-    profiles:
-      - monitoring
+      - bluefin-network
 
 networks:
-  trading-network:
+  bluefin-network:
+    name: bluefin-network
     driver: bridge
 
-volumes:
-  mcp-memory-data:
-  prometheus-data:
-  grafana-data:
+# Usage:
+# 1. Build the Bluefin-specific image:
+#    docker-compose -f docker-compose.bluefin.yml build
+#
+# 2. Run in paper trading mode (default):
+#    docker-compose -f docker-compose.bluefin.yml up
+#
+# 3. Run in live trading mode (DANGEROUS - uses real money):
+#    SYSTEM__DRY_RUN=false docker-compose -f docker-compose.bluefin.yml up
+#
+# 4. Run with memory/learning enabled:
+#    docker-compose -f docker-compose.bluefin.yml --profile with-memory up

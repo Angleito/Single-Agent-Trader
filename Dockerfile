@@ -22,6 +22,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
     git \
+    libffi-dev \
+    autotools-dev \
+    automake \
+    libtool \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Poetry
@@ -42,6 +47,9 @@ COPY pyproject.toml poetry.lock* ./
 RUN poetry config virtualenvs.in-project true \
     && poetry install --only=main --no-root \
     && rm -rf $POETRY_CACHE_DIR
+
+# Note: bluefin-v2-client can be installed at runtime if live trading is needed
+# For paper trading mode, the bot works without it
 
 # Production stage
 FROM python:3.12-slim AS production
@@ -65,6 +73,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     git \
+    libffi8 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
@@ -77,21 +86,12 @@ WORKDIR /app
 # Copy virtual environment from builder
 COPY --from=builder --chown=botuser:botuser /app/.venv /app/.venv
 
-# Install exchange-specific dependencies
-# This handles Bluefin's conflicting dependencies by installing them separately
-RUN if [ "${EXCHANGE_TYPE}" = "bluefin" ]; then \
-        echo "Installing Bluefin dependencies..." && \
-        /app/.venv/bin/pip install --no-cache-dir \
-            bluefin-v2-client==3.2.4 \
-            aiohttp==3.8.6 \
-            websocket-client==1.6.4; \
-    fi
+# Note: Bluefin dependencies are not installed in the main image due to conflicts
+# Use Dockerfile.bluefin for Bluefin-specific builds
 
 # Copy application code
 COPY --chown=botuser:botuser bot/ ./bot/
 COPY --chown=botuser:botuser pyproject.toml ./
-COPY --chown=botuser:botuser scripts/ ./scripts/
-COPY --chown=botuser:botuser docs/ ./docs/
 
 # Create required directories
 RUN mkdir -p /app/config /app/logs /app/data /app/prompts \

@@ -60,7 +60,7 @@ export default defineConfig({
       },
       // Tree-shaking optimization
       treeshake: {
-        moduleSideEffects: false
+        moduleSideEffects: true
       }
     },
     // CSS optimization

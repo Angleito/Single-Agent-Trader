@@ -14,9 +14,25 @@ __author__ = "Architect Roo"
 __description__ = "AI-powered crypto futures trading bot"
 
 # Core components
-# Backtesting
-from .backtest.engine import BacktestEngine, BacktestResults, BacktestTrade
 from .config import settings
+
+# Conditional imports for optional components
+try:
+    from .backtest.engine import BacktestEngine, BacktestResults, BacktestTrade
+    _BACKTEST_AVAILABLE = True
+except ImportError:
+    # Create dummy classes if pandas not available
+    class BacktestEngine:
+        def __init__(self, *args, **kwargs):
+            raise ImportError("Backtesting requires pandas. Install with: pip install pandas")
+    
+    class BacktestResults:
+        pass
+    
+    class BacktestTrade:
+        pass
+    
+    _BACKTEST_AVAILABLE = False
 
 # Data and indicators
 from .data.dominance import DominanceData, DominanceDataProvider
