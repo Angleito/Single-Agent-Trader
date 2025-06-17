@@ -1708,8 +1708,12 @@ class DashboardApp {
     const hostname = window.location.hostname
     const port = window.location.port
 
-    // Check for explicit environment variable first
-    const envWsUrl = import.meta.env.VITE_WS_URL ?? (window as any).__WS_URL__
+    // Check for explicit environment variable first (multiple patterns for compatibility)
+    const envWsUrl = 
+      import.meta.env.VITE_WS_URL ||
+      (window as any).__WS_URL__ ||
+      (window as any).__VITE_WS_URL__ ||
+      (window as any).__RUNTIME_CONFIG__?.WS_URL
     if (envWsUrl) {
       // Handle absolute URLs (already include protocol and host)
       if (envWsUrl.startsWith('ws://') || envWsUrl.startsWith('wss://')) {
@@ -1799,11 +1803,16 @@ class DashboardApp {
     const hostname = window.location.hostname
     const port = window.location.port
 
-    // Check for explicit environment variable first
+    // Check for explicit environment variable first (multiple patterns for compatibility)
     const envApiUrl =
       import.meta.env.VITE_API_URL ||
       import.meta.env.VITE_API_BASE_URL ||
-      (window as any).__API_URL__
+      (window as any).__API_URL__ ||
+      (window as any).__API_BASE_URL__ ||
+      (window as any).__VITE_API_URL__ ||
+      (window as any).__VITE_API_BASE_URL__ ||
+      (window as any).__RUNTIME_CONFIG__?.API_URL ||
+      (window as any).__RUNTIME_CONFIG__?.API_BASE_URL
     if (envApiUrl) {
       // Handle absolute URLs (already include protocol and host)
       if (envApiUrl.startsWith('http://') || envApiUrl.startsWith('https://')) {

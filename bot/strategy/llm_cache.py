@@ -187,18 +187,29 @@ class LLMResponseCache:
             "cleanups": 0,
         }
 
-        # Start cleanup task
+        # Cleanup task management - defer creation until first use
         self._cleanup_task = None
-        self._start_cleanup_task()
+        self._cleanup_started = False
 
         logger.info(
             f"🚀 LLM Cache initialized: TTL={ttl_seconds}s, Max={max_entries} entries"
         )
 
     def _start_cleanup_task(self):
-        """Start the background cleanup task."""
-        if self._cleanup_task is None:
-            self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
+        """Start the background cleanup task (only if running in async context)."""
+        if self._cleanup_started:
+            return
+            
+        try:
+            # Only start if we're in an async context
+            loop = asyncio.get_running_loop()
+            if self._cleanup_task is None:
+                self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
+                self._cleanup_started = True
+                logger.debug("Started LLM cache cleanup task")
+        except RuntimeError:
+            # No event loop running - cleanup will be started later when cache is used
+            logger.debug("Deferring LLM cache cleanup task start (no event loop)")
 
     async def _periodic_cleanup(self):
         """Periodic cleanup of expired entries."""
@@ -255,6 +266,9 @@ class LLMResponseCache:
         Returns:
             TradeAction from cache or newly computed
         """
+        # Start cleanup task if not already started (now we're in async context)
+        self._start_cleanup_task()
+        
         # Generate cache key
         cache_key = self.hasher.get_cache_key(market_state)
 

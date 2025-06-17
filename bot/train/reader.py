@@ -35,7 +35,9 @@ class RAGReader:
         # Create knowledge directory if it doesn't exist
         self.knowledge_dir.mkdir(exist_ok=True)
 
-        logger.info(f"Initialized RAGReader with knowledge dir: {self.knowledge_dir}")
+        logger.info(
+            f"Initialized RAGReader with knowledge dir: {self.knowledge_dir}"
+        )
 
     async def load_knowledge_base(self) -> bool:
         """
@@ -82,7 +84,9 @@ class RAGReader:
                         "RSI extreme levels (>80 or <20)",
                         "Volume divergence",
                     ],
-                    "risk_management": "Use 1.5% stop loss, 2-3% take profit",
+                    "risk_management": (
+                        "Use 1.5% stop loss, 2-3% take profit"
+                    ),
                 },
                 "mean_reversion": {
                     "description": (
@@ -173,7 +177,9 @@ class RAGReader:
             "position_sizing": {
                 "max_risk_per_trade": "2% of account",
                 "max_portfolio_risk": "6% of account",
-                "correlation_limits": "No more than 3 correlated positions",
+                "correlation_limits": (
+                    "No more than 3 correlated positions"
+                ),
             },
             "stop_loss_rules": {
                 "trend_trades": "1.5-2% stop loss",
@@ -203,7 +209,9 @@ class RAGReader:
                 "cipher_a": {
                     "purpose": "Trend identification and momentum",
                     "signals": {
-                        "bullish": ("Trend dot above zero, RSI recovery from oversold"),
+                        "bullish": (
+                            "Trend dot above zero, RSI recovery from oversold"
+                        ),
                         "bearish": (
                             "Trend dot below zero, RSI decline from overbought"
                         ),
@@ -242,7 +250,13 @@ class RAGReader:
                 "type": "indicators",
                 "title": "technical_indicators_guide",
                 "content": indicator_content,
-                "tags": ["indicators", "technical", "cipher", "rsi", "ema"],
+                "tags": [
+                    "indicators",
+                    "technical",
+                    "cipher",
+                    "rsi",
+                    "ema",
+                ],
             }
         )
 
@@ -290,7 +304,9 @@ class RAGReader:
         scored_docs.sort(key=lambda x: x[0], reverse=True)
         return [doc for _, doc in scored_docs[:max_results]]
 
-    def get_context_for_decision(self, market_conditions: dict[str, Any]) -> str:
+    def get_context_for_decision(
+        self, market_conditions: dict[str, Any]
+    ) -> str:
         """
         Get relevant context for trading decision based on market conditions.
 
@@ -323,9 +339,8 @@ class RAGReader:
         if strategies:
             context_parts.append("Strategy Guidance:")
             for doc in strategies[:1]:  # Take top strategy
-                context_parts.append(
-                    f"- {doc['title']}: {doc['content'].get('description', '')}"
-                )
+                desc = doc['content'].get('description', '')
+                context_parts.append(f"- {doc['title']}: {desc}")
 
         if risk_docs:
             context_parts.append("\\nRisk Management:")
@@ -337,10 +352,16 @@ class RAGReader:
 
         if indicator_docs:
             context_parts.append("\\nIndicator Interpretation:")
-            cipher_content = indicator_docs[0]["content"].get("cipher_indicators", {})
-            cipher_a_purpose = cipher_content.get("cipher_a", {}).get("purpose", "")
+            cipher_content = indicator_docs[0]["content"].get(
+                "cipher_indicators", {}
+            )
+            cipher_a_purpose = (
+                cipher_content.get("cipher_a", {}).get("purpose", "")
+            )
             context_parts.append(f"- Cipher A: {cipher_a_purpose}")
-            cipher_b_purpose = cipher_content.get("cipher_b", {}).get("purpose", "")
+            cipher_b_purpose = (
+                cipher_content.get("cipher_b", {}).get("purpose", "")
+            )
             context_parts.append(f"- Cipher B: {cipher_b_purpose}")
 
         return "\\n".join(context_parts)

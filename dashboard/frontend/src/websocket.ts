@@ -158,11 +158,13 @@ export interface TradingViewDecisionMessage {
 export interface PingMessage {
   type: 'ping'
   timestamp: string
+  clientTime?: number
 }
 
 export interface PongMessage {
   type: 'pong'
   timestamp: string
+  clientTime?: number
 }
 
 // Union type for all possible messages
@@ -196,6 +198,17 @@ export interface WebSocketConfig {
   fallbackUrls?: string[]
   maxMessageRetries?: number
   messageRetryDelay?: number
+  // Enhanced configuration
+  enableJitter?: boolean
+  jitterMaxMs?: number
+  enableCircuitBreaker?: boolean
+  circuitBreakerThreshold?: number
+  circuitBreakerResetTimeMs?: number
+  enableOfflineMode?: boolean
+  connectionHealthCheckInterval?: number
+  maxConsecutiveFailures?: number
+  backoffMultiplier?: number
+  enableNetworkStatusDetection?: boolean
 }
 
 export class DashboardWebSocket {
@@ -239,9 +252,45 @@ export class DashboardWebSocket {
   private messageThrottle = new Map<string, number>()
   private readonly MESSAGE_THROTTLE_MS = 50 // 50ms between same message types
 
+  // Enhanced error handling and connection resilience
+  private enableJitter: boolean
+  private jitterMaxMs: number
+  private enableCircuitBreaker: boolean
+  private circuitBreakerThreshold: number
+  private circuitBreakerResetTimeMs: number
+  private enableOfflineMode: boolean
+  private connectionHealthCheckInterval: number
+  private maxConsecutiveFailures: number
+  private backoffMultiplier: number
+  private enableNetworkStatusDetection: boolean
+
+  // Connection health monitoring
+  private consecutiveFailures = 0
+  private lastSuccessfulConnection: number = Date.now()
+  private connectionQuality: 'excellent' | 'good' | 'poor' | 'critical' = 'excellent'
+  private averageLatency = 0
+  private latencyHistory: number[] = []
+  private circuitBreakerState: 'closed' | 'open' | 'half-open' = 'closed'
+  private circuitBreakerOpenTime: number | null = null
+  private healthCheckTimer: number | null = null
+  private networkStatusListener: (() => void) | null = null
+
+  // Error categorization
+  private errorHistory: Array<{ type: string; timestamp: number; recoverable: boolean }> = []
+  private readonly ERROR_HISTORY_SIZE = 20
+
+  // Offline mode support
+  private isOffline = false
+  private offlineModeCallbacks = new Set<(isOffline: boolean) => void>()
+  private offlineMessageQueue: any[] = []
+  private readonly MAX_OFFLINE_QUEUE_SIZE = 100
+
   constructor(url?: string, config: WebSocketConfig = {}) {
-    // Check for runtime configuration first
-    const runtimeWsUrl = (window as any).__WS_URL__ || (window as any).__RUNTIME_CONFIG__?.WS_URL
+    // Check for runtime configuration first (multiple patterns for compatibility)
+    const runtimeWsUrl = 
+      (window as any).__WS_URL__ ||
+      (window as any).__VITE_WS_URL__ ||
+      (window as any).__RUNTIME_CONFIG__?.WS_URL
 
     // Use dynamic URL detection if no URL provided
     if (!url && !config.url && !runtimeWsUrl) {
@@ -266,8 +315,28 @@ export class DashboardWebSocket {
     this.maxMessageRetries = config.maxMessageRetries ?? 3
     this.messageRetryDelay = config.messageRetryDelay ?? 1000
 
+    // Enhanced configuration
+    this.enableJitter = config.enableJitter !== false
+    this.jitterMaxMs = config.jitterMaxMs ?? 1000
+    this.enableCircuitBreaker = config.enableCircuitBreaker !== false
+    this.circuitBreakerThreshold = config.circuitBreakerThreshold ?? 5
+    this.circuitBreakerResetTimeMs = config.circuitBreakerResetTimeMs ?? 60000
+    this.enableOfflineMode = config.enableOfflineMode !== false
+    this.connectionHealthCheckInterval = config.connectionHealthCheckInterval ?? 30000
+    this.maxConsecutiveFailures = config.maxConsecutiveFailures ?? 3
+    this.backoffMultiplier = config.backoffMultiplier ?? 2
+    this.enableNetworkStatusDetection = config.enableNetworkStatusDetection !== false
+
     // Start memory cleanup
     this.startMemoryCleanup()
+
+    // Setup network status detection
+    if (this.enableNetworkStatusDetection) {
+      this.setupNetworkStatusDetection()
+    }
+
+    // Setup connection health monitoring
+    this.startHealthCheck()
   }
 
   /**
@@ -309,19 +378,34 @@ export class DashboardWebSocket {
     }
 
     // Clean up old message throttle entries
-    const now = Date.now()
-    for (const [key, timestamp] of this.messageThrottle.entries()) {
-      if (now - timestamp > 10000) {
+    const currentTime = Date.now()
+    const throttleEntries = Array.from(this.messageThrottle.entries())
+    for (const [key, timestamp] of throttleEntries) {
+      if (currentTime - timestamp > 10000) {
         // Remove entries older than 10 seconds
         this.messageThrottle.delete(key)
       }
     }
 
     // Clean up old retry queue entries
-    for (const [messageId, queued] of this.retryQueue.entries()) {
+    const retryEntries = Array.from(this.retryQueue.entries())
+    for (const [messageId, queued] of retryEntries) {
       if (queued.attempts >= queued.maxRetries) {
         this.retryQueue.delete(messageId)
       }
+    }
+
+    // Clean up old error history
+    this.errorHistory = this.errorHistory.filter(e => currentTime - e.timestamp < 86400000) // Keep 24 hours
+
+    // Clean up latency history (keep reasonable size)
+    if (this.latencyHistory.length > 50) {
+      this.latencyHistory = this.latencyHistory.slice(-20)
+    }
+
+    // Clean up offline message queue if too large
+    if (this.offlineMessageQueue.length > this.MAX_OFFLINE_QUEUE_SIZE) {
+      this.offlineMessageQueue = this.offlineMessageQueue.slice(-this.MAX_OFFLINE_QUEUE_SIZE)
     }
   }
 
@@ -426,11 +510,24 @@ export class DashboardWebSocket {
   }
 
   /**
-   * Connect to the WebSocket server
+   * Connect to the WebSocket server with enhanced error handling
    */
   public connect(): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       return
+    }
+
+    // Check circuit breaker state
+    if (this.enableCircuitBreaker && this.circuitBreakerState === 'open') {
+      const timeSinceOpen = Date.now() - (this.circuitBreakerOpenTime || 0)
+      if (timeSinceOpen < this.circuitBreakerResetTimeMs) {
+        console.warn('Circuit breaker is open, connection attempt blocked')
+        return
+      } else {
+        // Try to move to half-open state
+        this.circuitBreakerState = 'half-open'
+        console.log('Circuit breaker moving to half-open state')
+      }
     }
 
     this.isManualClose = false
@@ -439,8 +536,6 @@ export class DashboardWebSocket {
     // Debug logging (reduced verbosity)
     const isDebugMode =
       import.meta.env.VITE_DEBUG === 'true' || import.meta.env.VITE_LOG_LEVEL === 'debug'
-    if (isDebugMode) {
-    }
 
     try {
       // Check if WebSocket is available
@@ -453,37 +548,39 @@ export class DashboardWebSocket {
         throw new Error('WebSocket not supported by this browser')
       }
 
+      // Check network connectivity
+      if (this.enableOfflineMode && !navigator.onLine) {
+        throw new Error('No network connection available')
+      }
+
       // Check if we're in a secure context if needed
       const isSecure = this.url.startsWith('wss://')
       if (isSecure && !window.isSecureContext) {
+        console.warn('Secure WebSocket requested but not in secure context')
       }
 
       this.ws = new WebSocket(this.url)
       if (isDebugMode) {
+        console.debug('WebSocket connection attempt to:', this.url)
       }
 
       this.setupEventListeners()
       this.setupConnectionTimeout()
     } catch (error) {
+      // Enhanced error categorization
+      const errorType = this.categorizeError(error)
+      this.recordError(errorType, error instanceof Error)
+
       // More concise error logging
       const errorMessage = error instanceof Error ? error.message : 'Unknown WebSocket error'
       console.error('WebSocket connection failed:', errorMessage)
 
       // Provide user-friendly error messages
-      let userErrorMessage = 'Failed to create WebSocket connection'
-      if (error instanceof Error) {
-        if (error.message.includes('not available')) {
-          userErrorMessage = 'WebSocket not available - browser may not support WebSockets'
-        } else if (error.message.includes('not supported')) {
-          userErrorMessage = 'WebSocket not supported by this browser'
-        } else {
-          userErrorMessage = error.message
-        }
-      }
+      const userErrorMessage = this.getUserFriendlyErrorMessage(error)
 
       this.notifyError(new Error(userErrorMessage))
       this.notifyConnectionStatus('error')
-      this.scheduleReconnect()
+      this.handleConnectionFailure()
     }
   }
 
@@ -504,7 +601,7 @@ export class DashboardWebSocket {
   }
 
   /**
-   * Send a message to the server with retry capability
+   * Send a message to the server with enhanced retry and offline support
    */
   public send(message: any, queueIfDisconnected = true): boolean {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -527,6 +624,22 @@ export class DashboardWebSocket {
         }
 
         this.notifyError(error instanceof Error ? error : new Error('Failed to send message'))
+        return false
+      }
+    }
+
+    // Handle offline mode
+    if (this.enableOfflineMode && this.isOffline && queueIfDisconnected) {
+      if (this.offlineMessageQueue.length < this.MAX_OFFLINE_QUEUE_SIZE) {
+        this.offlineMessageQueue.push(message)
+        const isDebugMode =
+          import.meta.env.VITE_DEBUG === 'true' || import.meta.env.VITE_LOG_LEVEL === 'debug'
+        if (isDebugMode) {
+          console.log('Message queued for offline mode:', message.type)
+        }
+        return true
+      } else {
+        console.warn('Offline message queue is full, dropping message')
         return false
       }
     }
@@ -655,23 +768,49 @@ export class DashboardWebSocket {
       const isDebugMode =
         import.meta.env.VITE_DEBUG === 'true' || import.meta.env.VITE_LOG_LEVEL === 'debug'
       if (isDebugMode) {
+        console.debug('WebSocket connection opened successfully')
       }
+      
       this.clearConnectionTimeout()
+      
+      // Reset connection tracking
       this.reconnectAttempts = 0
       this.reconnectDelay = 1000
+      this.consecutiveFailures = 0
+      this.lastSuccessfulConnection = Date.now()
+      
+      // Update circuit breaker state
+      if (this.enableCircuitBreaker) {
+        this.closeCircuitBreaker()
+      }
+      
+      // Update connection quality
+      this.updateConnectionQuality('excellent')
+      
+      // Exit offline mode if enabled
+      if (this.isOffline) {
+        this.exitOfflineMode()
+      }
+      
       this.notifyConnectionStatus('connected')
       this.startPingInterval()
 
       // Process queued messages
       if (this.messageQueue.length > 0) {
-        const _queuedCount = this.messageQueue.length
+        const queuedCount = this.messageQueue.length
         if (isDebugMode) {
+          console.debug(`Processing ${queuedCount} queued messages`)
         }
 
         while (this.messageQueue.length > 0) {
           const message = this.messageQueue.shift()
           this.send(message, false) // Don't re-queue if send fails
         }
+      }
+
+      // Process offline message queue if available
+      if (this.enableOfflineMode && this.offlineMessageQueue.length > 0) {
+        this.flushOfflineQueue()
       }
     }
 
@@ -709,15 +848,38 @@ export class DashboardWebSocket {
           return
         }
 
-        // Handle pong messages internally
+        // Handle pong messages internally with latency tracking
         if (message.type === 'pong') {
           this.lastPongTime = Date.now()
+          
+          // Calculate latency if clientTime is available
+          if ('clientTime' in message && typeof message.clientTime === 'number') {
+            const latency = Date.now() - message.clientTime
+            this.updateLatencyHistory(latency)
+            this.updateConnectionQualityFromLatency(latency)
+          }
+          
+          // Record successful ping-pong for circuit breaker
+          if (this.enableCircuitBreaker && this.circuitBreakerState === 'half-open') {
+            this.closeCircuitBreaker()
+          }
+          
           return
         }
 
         // Handle ping messages (server-initiated ping)
         if (message.type === 'ping') {
-          this.send({ type: 'pong', timestamp: new Date().toISOString() }, false)
+          const pongMessage: any = { 
+            type: 'pong', 
+            timestamp: new Date().toISOString() 
+          }
+          
+          // Echo back clientTime if present for latency calculation
+          if ('clientTime' in message) {
+            pongMessage.clientTime = message.clientTime
+          }
+          
+          this.send(pongMessage, false)
           return
         }
 
@@ -747,8 +909,17 @@ export class DashboardWebSocket {
       const isDebugMode =
         import.meta.env.VITE_DEBUG === 'true' || import.meta.env.VITE_LOG_LEVEL === 'debug'
 
+      // Categorize the close event
+      const closeReason = this.categorizeCloseEvent(event)
+      
       // Only log close details if it's an unexpected close or in debug mode
       if (event.code !== 1000 || isDebugMode) {
+        console.log(`WebSocket closed: ${closeReason} (code: ${event.code})`)
+      }
+
+      // Record the error if it wasn't a clean close
+      if (event.code !== 1000) {
+        this.recordError('connection_closed', event.code < 1003)
       }
 
       this.clearPingInterval()
@@ -757,13 +928,16 @@ export class DashboardWebSocket {
 
       if (!this.isManualClose) {
         this.notifyConnectionStatus('disconnected')
-        this.scheduleReconnect()
+        this.handleConnectionFailure()
       }
     }
 
     this.ws.onerror = (error) => {
-      // More concise error logging - avoid dumping raw error objects
-      console.error('WebSocket error occurred')
+      // Enhanced error handling with categorization
+      const errorType = this.categorizeError(error)
+      this.recordError(errorType, false)
+
+      console.error(`WebSocket error occurred: ${errorType}`)
 
       const isDebugMode =
         import.meta.env.VITE_DEBUG === 'true' || import.meta.env.VITE_LOG_LEVEL === 'debug'
@@ -771,11 +945,16 @@ export class DashboardWebSocket {
         console.error('WebSocket error details:', {
           readyState: this.ws?.readyState,
           url: this.url,
+          errorType,
           error: error,
         })
       }
 
       this.clearConnectionTimeout()
+      
+      // Update connection quality
+      this.updateConnectionQuality('critical')
+      
       this.notifyError(error)
       this.notifyConnectionStatus('error')
     }
@@ -894,10 +1073,16 @@ export class DashboardWebSocket {
   }
 
   /**
-   * Schedule a reconnection attempt with exponential backoff and fallback URLs
+   * Schedule a reconnection attempt with enhanced exponential backoff and circuit breaker
    */
   private scheduleReconnect(): void {
     if (this.isManualClose) {
+      return
+    }
+
+    // Check if we should enter offline mode
+    if (this.enableOfflineMode && !navigator.onLine) {
+      this.enterOfflineMode()
       return
     }
 
@@ -917,34 +1102,49 @@ export class DashboardWebSocket {
       if (isDebugMode) {
         console.log('Max reconnection attempts reached')
       }
+
+      // Update circuit breaker state
+      if (this.enableCircuitBreaker) {
+        this.openCircuitBreaker()
+      }
+
       this.notifyConnectionStatus('error')
 
       // In resilience mode, keep trying with longer delays
       if (this.enableResilience) {
+        const resetDelay = this.enableCircuitBreaker 
+          ? this.circuitBreakerResetTimeMs 
+          : 60000
+
         setTimeout(() => {
           this.reconnectAttempts = 0 // Reset attempts
+          this.consecutiveFailures = 0
           this.scheduleReconnect()
-        }, 60000) // Wait 1 minute before resetting
+        }, resetDelay)
       }
       return
     }
 
     this.reconnectAttempts++
-    const delay = Math.min(
-      this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1),
-      this.maxReconnectDelay
-    )
+    
+    // Enhanced exponential backoff with configurable multiplier
+    const baseDelay = this.reconnectDelay * Math.pow(this.backoffMultiplier, this.reconnectAttempts - 1)
+    const delay = Math.min(baseDelay, this.maxReconnectDelay)
 
-    // Add jitter to prevent thundering herd
-    const jitter = Math.random() * 1000
+    // Add jitter to prevent thundering herd (configurable)
+    const jitter = this.enableJitter ? Math.random() * this.jitterMaxMs : 0
     const finalDelay = delay + jitter
+
+    // Adaptive delay based on connection history
+    const adaptiveMultiplier = this.getAdaptiveDelayMultiplier()
+    const adaptedDelay = finalDelay * adaptiveMultiplier
 
     // Only log every few attempts to reduce spam, or in debug mode
     const isDebugMode =
       import.meta.env.VITE_DEBUG === 'true' || import.meta.env.VITE_LOG_LEVEL === 'debug'
     if (isDebugMode || this.reconnectAttempts <= 3 || this.reconnectAttempts % 5 === 0) {
       console.log(
-        `Scheduling reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${Math.round(finalDelay)}ms`
+        `Scheduling reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${Math.round(adaptedDelay)}ms (quality: ${this.connectionQuality})`
       )
     }
 
@@ -952,11 +1152,11 @@ export class DashboardWebSocket {
       if (!this.isManualClose) {
         this.connect()
       }
-    }, finalDelay)
+    }, adaptedDelay)
   }
 
   /**
-   * Start sending periodic ping messages to keep connection alive
+   * Start sending periodic ping messages with enhanced health monitoring
    */
   private startPingInterval(): void {
     this.clearPingInterval()
@@ -970,14 +1170,22 @@ export class DashboardWebSocket {
         const timeSinceLastPong = Date.now() - this.lastPongTime
         if (timeSinceLastPong > this.pongTimeout) {
           console.error('WebSocket pong timeout - connection may be dead')
+          this.recordError('ping_timeout', true)
+          this.updateConnectionQuality('critical')
           this.ws.close()
           return
         }
 
+        // Update connection quality based on ping responsiveness
+        this.updateConnectionQualityFromPing(timeSinceLastPong)
+
+        // Send ping with timestamp for latency calculation
+        const pingTime = Date.now()
         this.send(
           {
             type: 'ping',
             timestamp: new Date().toISOString(),
+            clientTime: pingTime,
           },
           false
         ) // Don't queue ping messages
@@ -1016,13 +1224,26 @@ export class DashboardWebSocket {
   }
 
   /**
-   * Clean up all resources
+   * Clean up all resources including enhanced features
    */
   public destroy(): void {
     // Clear cleanup timer
     if (this.cleanupTimer) {
       clearInterval(this.cleanupTimer)
       this.cleanupTimer = null
+    }
+
+    // Clear health check timer
+    if (this.healthCheckTimer) {
+      clearInterval(this.healthCheckTimer)
+      this.healthCheckTimer = null
+    }
+
+    // Remove network status listener
+    if (this.networkStatusListener) {
+      window.removeEventListener('online', this.networkStatusListener)
+      window.removeEventListener('offline', this.networkStatusListener)
+      this.networkStatusListener = null
     }
 
     // Disconnect WebSocket
@@ -1032,9 +1253,13 @@ export class DashboardWebSocket {
     this.eventHandlers.clear()
     this.connectionStatusCallbacks.clear()
     this.errorCallbacks.clear()
+    this.offlineModeCallbacks.clear()
     this.messageQueue = []
+    this.offlineMessageQueue = []
     this.messageThrottle.clear()
     this.retryQueue.clear()
+    this.errorHistory = []
+    this.latencyHistory = []
 
     // Clear timeouts
     if (this.connectionTimeoutId) {
@@ -1459,7 +1684,7 @@ export class DashboardWebSocket {
   }
 
   /**
-   * Get connection health status
+   * Get enhanced connection health status
    */
   public getConnectionHealth(): {
     isHealthy: boolean
@@ -1469,9 +1694,16 @@ export class DashboardWebSocket {
     reconnectAttempts: number
     currentUrl: string
     issues: string[]
+    connectionQuality: 'excellent' | 'good' | 'poor' | 'critical'
+    averageLatency: number
+    consecutiveFailures: number
+    circuitBreakerState: 'closed' | 'open' | 'half-open'
+    isOffline: boolean
+    timeSinceLastSuccess: number
   } {
     const now = Date.now()
     const timeSinceLastPong = now - this.lastPongTime
+    const timeSinceLastSuccess = now - this.lastSuccessfulConnection
     const issues: string[] = []
 
     if (timeSinceLastPong > this.pongTimeout) {
@@ -1490,6 +1722,22 @@ export class DashboardWebSocket {
       issues.push('Multiple reconnection attempts')
     }
 
+    if (this.consecutiveFailures > this.maxConsecutiveFailures) {
+      issues.push('Multiple consecutive failures')
+    }
+
+    if (this.circuitBreakerState === 'open') {
+      issues.push('Circuit breaker is open')
+    }
+
+    if (this.isOffline) {
+      issues.push('Offline mode active')
+    }
+
+    if (this.averageLatency > 1000) {
+      issues.push('High latency')
+    }
+
     return {
       isHealthy: issues.length === 0 && this.isConnected(),
       lastPong: this.lastPongTime,
@@ -1498,6 +1746,433 @@ export class DashboardWebSocket {
       reconnectAttempts: this.reconnectAttempts,
       currentUrl: this.url,
       issues,
+      connectionQuality: this.connectionQuality,
+      averageLatency: this.averageLatency,
+      consecutiveFailures: this.consecutiveFailures,
+      circuitBreakerState: this.circuitBreakerState,
+      isOffline: this.isOffline,
+      timeSinceLastSuccess,
+    }
+  }
+
+  /**
+   * Setup network status detection
+   */
+  private setupNetworkStatusDetection(): void {
+    if (typeof window === 'undefined' || !window.navigator) {
+      return
+    }
+
+    this.networkStatusListener = () => {
+      const wasOffline = this.isOffline
+      const isNowOnline = navigator.onLine
+
+      if (wasOffline && isNowOnline) {
+        console.log('Network connection restored, attempting to reconnect')
+        this.exitOfflineMode()
+        if (!this.isConnected()) {
+          this.connect()
+        }
+      } else if (!wasOffline && !isNowOnline) {
+        console.log('Network connection lost, entering offline mode')
+        this.enterOfflineMode()
+      }
+    }
+
+    window.addEventListener('online', this.networkStatusListener)
+    window.addEventListener('offline', this.networkStatusListener)
+  }
+
+  /**
+   * Start connection health monitoring
+   */
+  private startHealthCheck(): void {
+    if (this.healthCheckTimer) {
+      clearInterval(this.healthCheckTimer)
+    }
+
+    this.healthCheckTimer = window.setInterval(() => {
+      this.performHealthCheck()
+    }, this.connectionHealthCheckInterval)
+  }
+
+  /**
+   * Perform periodic health check
+   */
+  private performHealthCheck(): void {
+    const health = this.getConnectionHealth()
+    
+    // Log health issues if they exist
+    if (health.issues.length > 0 && import.meta.env.VITE_DEBUG === 'true') {
+      console.debug('Connection health issues:', health.issues)
+    }
+
+    // Update connection quality based on overall health
+    if (health.issues.length >= 3) {
+      this.updateConnectionQuality('critical')
+    } else if (health.issues.length >= 2) {
+      this.updateConnectionQuality('poor')
+    } else if (health.issues.length >= 1) {
+      this.updateConnectionQuality('good')
+    }
+  }
+
+  /**
+   * Categorize different types of errors
+   */
+  private categorizeError(error: any): string {
+    if (!error) return 'unknown'
+
+    const errorMessage = error.message || error.toString().toLowerCase()
+
+    if (errorMessage.includes('timeout')) return 'timeout'
+    if (errorMessage.includes('network')) return 'network'
+    if (errorMessage.includes('refused') || errorMessage.includes('unreachable')) return 'connection_refused'
+    if (errorMessage.includes('not available') || errorMessage.includes('not supported')) return 'browser_support'
+    if (errorMessage.includes('security') || errorMessage.includes('origin')) return 'security'
+    if (errorMessage.includes('rate limit') || errorMessage.includes('too many')) return 'rate_limit'
+    
+    return 'unknown'
+  }
+
+  /**
+   * Categorize WebSocket close events
+   */
+  private categorizeCloseEvent(event: CloseEvent): string {
+    switch (event.code) {
+      case 1000: return 'Normal closure'
+      case 1001: return 'Going away'
+      case 1002: return 'Protocol error'
+      case 1003: return 'Unsupported data'
+      case 1005: return 'No status received'
+      case 1006: return 'Abnormal closure'
+      case 1007: return 'Invalid frame payload data'
+      case 1008: return 'Policy violation'
+      case 1009: return 'Message too large'
+      case 1010: return 'Missing extension'
+      case 1011: return 'Internal error'
+      case 1012: return 'Service restart'
+      case 1013: return 'Try again later'
+      case 1014: return 'Bad gateway'
+      case 1015: return 'TLS handshake'
+      default: return `Unknown (${event.code})`
+    }
+  }
+
+  /**
+   * Record error in history for analysis
+   */
+  private recordError(errorType: string, recoverable: boolean): void {
+    this.errorHistory.push({
+      type: errorType,
+      timestamp: Date.now(),
+      recoverable
+    })
+
+    // Keep history size manageable
+    if (this.errorHistory.length > this.ERROR_HISTORY_SIZE) {
+      this.errorHistory = this.errorHistory.slice(-this.ERROR_HISTORY_SIZE)
+    }
+
+    // Update consecutive failures counter
+    if (!recoverable) {
+      this.consecutiveFailures++
+    }
+  }
+
+  /**
+   * Get user-friendly error message
+   */
+  private getUserFriendlyErrorMessage(error: any): string {
+    if (!error) return 'Unknown connection error'
+
+    if (error instanceof Error) {
+      const errorType = this.categorizeError(error)
+      
+      switch (errorType) {
+        case 'network':
+          return 'Network connection error - please check your internet connection'
+        case 'connection_refused':
+          return 'Unable to connect to server - server may be unavailable'
+        case 'timeout':
+          return 'Connection timeout - server is not responding'
+        case 'browser_support':
+          return 'WebSocket not supported by this browser'
+        case 'security':
+          return 'Security error - check HTTPS/WSS configuration'
+        case 'rate_limit':
+          return 'Too many connection attempts - please wait before retrying'
+        default:
+          return error.message || 'Connection failed'
+      }
+    }
+
+    return 'Unknown connection error'
+  }
+
+  /**
+   * Handle connection failure with enhanced logic
+   */
+  private handleConnectionFailure(): void {
+    this.consecutiveFailures++
+    
+    // Check if we should open circuit breaker
+    if (this.enableCircuitBreaker && 
+        this.consecutiveFailures >= this.circuitBreakerThreshold) {
+      this.openCircuitBreaker()
+    }
+
+    // Update connection quality
+    this.updateConnectionQuality('critical')
+
+    // Schedule reconnection or enter offline mode
+    if (this.enableOfflineMode && !navigator.onLine) {
+      this.enterOfflineMode()
+    } else {
+      this.scheduleReconnect()
+    }
+  }
+
+  /**
+   * Update connection quality based on various factors
+   */
+  private updateConnectionQuality(quality: 'excellent' | 'good' | 'poor' | 'critical'): void {
+    if (this.connectionQuality !== quality) {
+      this.connectionQuality = quality
+      
+      if (import.meta.env.VITE_DEBUG === 'true') {
+        console.debug(`Connection quality updated to: ${quality}`)
+      }
+    }
+  }
+
+  /**
+   * Update connection quality based on ping responsiveness
+   */
+  private updateConnectionQualityFromPing(timeSinceLastPong: number): void {
+    if (timeSinceLastPong < this.pingIntervalMs * 1.5) {
+      this.updateConnectionQuality('excellent')
+    } else if (timeSinceLastPong < this.pingIntervalMs * 2) {
+      this.updateConnectionQuality('good')
+    } else if (timeSinceLastPong < this.pongTimeout * 0.8) {
+      this.updateConnectionQuality('poor')
+    } else {
+      this.updateConnectionQuality('critical')
+    }
+  }
+
+  /**
+   * Update latency history and calculate average
+   */
+  private updateLatencyHistory(latency: number): void {
+    this.latencyHistory.push(latency)
+    
+    // Keep history size manageable
+    if (this.latencyHistory.length > 20) {
+      this.latencyHistory = this.latencyHistory.slice(-20)
+    }
+
+    // Calculate running average
+    this.averageLatency = this.latencyHistory.reduce((sum, lat) => sum + lat, 0) / this.latencyHistory.length
+  }
+
+  /**
+   * Update connection quality based on latency
+   */
+  private updateConnectionQualityFromLatency(latency: number): void {
+    if (latency < 100) {
+      this.updateConnectionQuality('excellent')
+    } else if (latency < 300) {
+      this.updateConnectionQuality('good')
+    } else if (latency < 1000) {
+      this.updateConnectionQuality('poor')
+    } else {
+      this.updateConnectionQuality('critical')
+    }
+  }
+
+  /**
+   * Get adaptive delay multiplier based on connection history
+   */
+  private getAdaptiveDelayMultiplier(): number {
+    if (this.consecutiveFailures === 0) return 1
+    if (this.consecutiveFailures < 3) return 1.5
+    if (this.consecutiveFailures < 5) return 2
+    return 3
+  }
+
+  /**
+   * Circuit breaker methods
+   */
+  private openCircuitBreaker(): void {
+    this.circuitBreakerState = 'open'
+    this.circuitBreakerOpenTime = Date.now()
+    console.warn('Circuit breaker opened due to consecutive failures')
+  }
+
+  private closeCircuitBreaker(): void {
+    if (this.circuitBreakerState !== 'closed') {
+      this.circuitBreakerState = 'closed'
+      this.circuitBreakerOpenTime = null
+      this.consecutiveFailures = 0
+      console.log('Circuit breaker closed - connection restored')
+    }
+  }
+
+  /**
+   * Offline mode methods
+   */
+  private enterOfflineMode(): void {
+    if (!this.isOffline) {
+      this.isOffline = true
+      console.log('Entering offline mode')
+      this.notifyOfflineMode(true)
+    }
+  }
+
+  private exitOfflineMode(): void {
+    if (this.isOffline) {
+      this.isOffline = false
+      console.log('Exiting offline mode')
+      this.notifyOfflineMode(false)
+    }
+  }
+
+  private notifyOfflineMode(isOffline: boolean): void {
+    this.offlineModeCallbacks.forEach((callback) => {
+      try {
+        callback(isOffline)
+      } catch (error) {
+        console.error('Error in offline mode callback:', error)
+      }
+    })
+  }
+
+  private flushOfflineQueue(): void {
+    if (this.offlineMessageQueue.length === 0) return
+
+    console.log(`Flushing ${this.offlineMessageQueue.length} offline messages`)
+    
+    while (this.offlineMessageQueue.length > 0) {
+      const message = this.offlineMessageQueue.shift()
+      this.send(message, false)
+    }
+  }
+
+  /**
+   * Public methods for offline mode
+   */
+  public onOfflineModeChange(callback: (isOffline: boolean) => void): void {
+    this.offlineModeCallbacks.add(callback)
+  }
+
+  public offOfflineModeChange(callback: (isOffline: boolean) => void): void {
+    this.offlineModeCallbacks.delete(callback)
+  }
+
+  public isInOfflineMode(): boolean {
+    return this.isOffline
+  }
+
+  /**
+   * Get current connection quality
+   */
+  public getConnectionQuality(): 'excellent' | 'good' | 'poor' | 'critical' {
+    return this.connectionQuality
+  }
+
+  /**
+   * Get average latency
+   */
+  public getAverageLatency(): number {
+    return this.averageLatency
+  }
+
+  /**
+   * Get circuit breaker state
+   */
+  public getCircuitBreakerState(): 'closed' | 'open' | 'half-open' {
+    return this.circuitBreakerState
+  }
+
+  /**
+   * Get consecutive failures count
+   */
+  public getConsecutiveFailures(): number {
+    return this.consecutiveFailures
+  }
+
+  /**
+   * Force circuit breaker reset (for admin/debugging purposes)
+   */
+  public resetCircuitBreaker(): void {
+    this.closeCircuitBreaker()
+    console.log('Circuit breaker manually reset')
+  }
+
+  /**
+   * Get error history for debugging
+   */
+  public getErrorHistory(): Array<{ type: string; timestamp: number; recoverable: boolean }> {
+    return [...this.errorHistory]
+  }
+
+  /**
+   * Clear error history
+   */
+  public clearErrorHistory(): void {
+    this.errorHistory = []
+    this.consecutiveFailures = 0
+    console.log('Error history cleared')
+  }
+
+  /**
+   * Get latency history
+   */
+  public getLatencyHistory(): number[] {
+    return [...this.latencyHistory]
+  }
+
+  /**
+   * Force connection quality update (for testing)
+   */
+  public setConnectionQuality(quality: 'excellent' | 'good' | 'poor' | 'critical'): void {
+    this.updateConnectionQuality(quality)
+  }
+
+  /**
+   * Get comprehensive connection statistics
+   */
+  public getConnectionStats(): {
+    uptime: number
+    totalReconnects: number
+    averageLatency: number
+    connectionQuality: string
+    messagesQueued: number
+    offlineMessagesQueued: number
+    errorRate: number
+    lastSuccessfulConnection: number
+    circuitBreakerTrips: number
+  } {
+    const now = Date.now()
+    const recentErrors = this.errorHistory.filter(e => now - e.timestamp < 3600000) // Last hour
+    const errorRate = recentErrors.length / 60 // Errors per minute
+
+    // Count circuit breaker trips
+    const circuitBreakerTrips = this.errorHistory.filter(e => 
+      e.type === 'circuit_breaker_open'
+    ).length
+
+    return {
+      uptime: now - this.lastSuccessfulConnection,
+      totalReconnects: this.reconnectAttempts,
+      averageLatency: this.averageLatency,
+      connectionQuality: this.connectionQuality,
+      messagesQueued: this.messageQueue.length,
+      offlineMessagesQueued: this.offlineMessageQueue.length,
+      errorRate,
+      lastSuccessfulConnection: this.lastSuccessfulConnection,
+      circuitBreakerTrips,
     }
   }
 }
@@ -1521,10 +2196,20 @@ export function createProductionWebSocketClient(): DashboardWebSocket {
     enableResilience: true,
     maxMessageRetries: 3,
     messageRetryDelay: 1000,
+    enableJitter: true,
+    jitterMaxMs: 1000,
+    enableCircuitBreaker: true,
+    circuitBreakerThreshold: 5,
+    circuitBreakerResetTimeMs: 60000,
+    enableOfflineMode: true,
+    connectionHealthCheckInterval: 30000,
+    maxConsecutiveFailures: 3,
+    backoffMultiplier: 2,
+    enableNetworkStatusDetection: true,
   })
 }
 
-// Resilient client factory with fallback URLs
+// Resilient client factory with enhanced fallback and error handling
 export function createResilientWebSocketClient(fallbackUrls: string[] = []): DashboardWebSocket {
   return new DashboardWebSocket(undefined, {
     maxReconnectAttempts: 10,
@@ -1536,6 +2221,61 @@ export function createResilientWebSocketClient(fallbackUrls: string[] = []): Das
     fallbackUrls,
     maxMessageRetries: 5,
     messageRetryDelay: 2000,
+    enableJitter: true,
+    jitterMaxMs: 2000,
+    enableCircuitBreaker: true,
+    circuitBreakerThreshold: 3,
+    circuitBreakerResetTimeMs: 30000,
+    enableOfflineMode: true,
+    connectionHealthCheckInterval: 15000,
+    maxConsecutiveFailures: 2,
+    backoffMultiplier: 2.5,
+    enableNetworkStatusDetection: true,
+  })
+}
+
+// High-performance client factory for low-latency requirements
+export function createHighPerformanceWebSocketClient(): DashboardWebSocket {
+  return new DashboardWebSocket(undefined, {
+    maxReconnectAttempts: 3,
+    initialReconnectDelay: 250,
+    maxReconnectDelay: 5000,
+    pingInterval: 10000,
+    connectionTimeout: 5000,
+    enableResilience: true,
+    maxMessageRetries: 2,
+    messageRetryDelay: 500,
+    enableJitter: false, // Disable jitter for predictable timing
+    enableCircuitBreaker: false, // Disable for immediate reconnection
+    enableOfflineMode: false, // Disable for performance
+    connectionHealthCheckInterval: 10000,
+    maxConsecutiveFailures: 5,
+    backoffMultiplier: 1.5,
+    enableNetworkStatusDetection: false,
+  })
+}
+
+// Development client factory with extensive logging and debugging
+export function createDevelopmentWebSocketClient(): DashboardWebSocket {
+  return new DashboardWebSocket(undefined, {
+    maxReconnectAttempts: 20,
+    initialReconnectDelay: 1000,
+    maxReconnectDelay: 10000,
+    pingInterval: 5000,
+    connectionTimeout: 30000,
+    enableResilience: true,
+    maxMessageRetries: 10,
+    messageRetryDelay: 1000,
+    enableJitter: true,
+    jitterMaxMs: 500,
+    enableCircuitBreaker: true,
+    circuitBreakerThreshold: 10,
+    circuitBreakerResetTimeMs: 30000,
+    enableOfflineMode: true,
+    connectionHealthCheckInterval: 5000,
+    maxConsecutiveFailures: 10,
+    backoffMultiplier: 1.5,
+    enableNetworkStatusDetection: true,
   })
 }
 

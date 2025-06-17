@@ -157,6 +157,7 @@ class TradingEngine:
             config_file: Optional configuration file path
             dry_run: Whether to run in dry-run mode
         """
+        print(f"DEBUG: TradingEngine.__init__ started")
         self.symbol = symbol
         self.interval = interval
         self.dry_run = dry_run
@@ -164,28 +165,43 @@ class TradingEngine:
         self._shutdown_requested = False
         self._memory_available = False  # Initialize early to prevent AttributeError
 
+        print(f"DEBUG: About to load configuration")
         # Load configuration
         self.settings = self._load_configuration(config_file, dry_run)
+        print(f"DEBUG: Configuration loaded")
 
         # Setup logging
+        print(f"DEBUG: About to setup logging")
         self._setup_logging()
         self.logger = logging.getLogger(__name__)
+        print(f"DEBUG: Logging setup complete")
 
         # Initialize paper trading if in dry run mode
+        print(f"DEBUG: About to initialize paper trading")
         self.paper_account = None
         if self.dry_run:
-            self.paper_account = PaperTradingAccount(
-                starting_balance=self.settings.paper_trading.starting_balance
-            )
+            print(f"DEBUG: Accessing paper_trading settings...")
+            balance = self.settings.paper_trading.starting_balance
+            print(f"DEBUG: Starting balance: {balance}")
+            print(f"DEBUG: Creating PaperTradingAccount...")
+            self.paper_account = PaperTradingAccount(starting_balance=balance)
+            print(f"DEBUG: PaperTradingAccount created successfully")
 
         # Initialize components (market data will be initialized after exchange connection)
         self.market_data: MarketDataProviderType = None
         self.logger.debug("About to initialize VuManChu indicators...")
+        print(f"DEBUG: About to create VuManChuIndicators()")
         self.indicator_calc = VuManChuIndicators()
+        print(f"DEBUG: VuManChuIndicators created successfully")
+        print(f"DEBUG: About to log VuManChu success...")
         self.logger.debug("VuManChu indicators initialized successfully")
+        print(f"DEBUG: Logged VuManChu success")
+        print(f"DEBUG: About to set actual_trading_symbol")
         self.actual_trading_symbol = symbol  # Will be updated if futures are enabled
+        print(f"DEBUG: Set actual_trading_symbol")
 
         # Initialize MCP memory components if enabled
+        print(f"DEBUG: About to initialize MCP memory components")
         self.logger.debug("About to initialize MCP memory components...")
         self.memory_server = None
         self.experience_manager = None
@@ -2786,7 +2802,9 @@ def live(
     except KeyboardInterrupt:
         console.print("\n👋 Bot stopped by user")
     except Exception as e:
+        import traceback
         console.print(f"❌ Error: {e}", style="red")
+        console.print(f"Full traceback:\n{traceback.format_exc()}", style="yellow")
         sys.exit(1)
 
 

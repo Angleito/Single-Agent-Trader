@@ -18,7 +18,9 @@ from .config import settings
 
 # Conditional imports for optional components
 try:
-    from .backtest.engine import BacktestEngine, BacktestResults, BacktestTrade
+    # Temporarily disable backtest import to debug async issue
+    # from .backtest.engine import BacktestEngine, BacktestResults, BacktestTrade
+    raise ImportError("Temporarily disabled for debugging")
 
     _BACKTEST_AVAILABLE = True
 except ImportError:
