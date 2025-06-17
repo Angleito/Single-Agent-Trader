@@ -79,7 +79,9 @@ class ExperienceManager:
         # Initialize trade logger
         self.trade_logger = TradeLogger()
 
-        logger.info("🎯 Experience Manager: Initialized with enhanced logging and trade tracking")
+        logger.info(
+            "🎯 Experience Manager: Initialized with enhanced logging and trade tracking"
+        )
 
     async def start(self) -> None:
         """Start the experience manager background monitoring."""
@@ -155,7 +157,7 @@ class ExperienceManager:
             market_state=market_state,
             trade_action=trade_action,
             experience_id=experience_id,
-            memory_context=None  # Will be populated by memory-enhanced agent
+            memory_context=None,  # Will be populated by memory-enhanced agent
         )
 
         return experience_id
@@ -169,7 +171,9 @@ class ExperienceManager:
             experience_id: Experience ID from memory
         """
         self.pending_experiences[order_id] = experience_id
-        logger.info(f"🔗 Experience Manager: Linked order {order_id} to experience {experience_id[:8]}...")
+        logger.info(
+            f"🔗 Experience Manager: Linked order {order_id} to experience {experience_id[:8]}..."
+        )
 
     def start_tracking_trade(
         self, order: Order, trade_action: TradeAction, market_state: MarketState
@@ -188,7 +192,9 @@ class ExperienceManager:
         # Check if we have an experience for this order
         experience_id = self.pending_experiences.get(order.id)
         if not experience_id:
-            logger.warning(f"⚠️ Experience Manager: No experience found for order {order.id}")
+            logger.warning(
+                f"⚠️ Experience Manager: No experience found for order {order.id}"
+            )
             return None
 
         # Create active trade tracking
@@ -253,10 +259,13 @@ class ExperienceManager:
         entry_price = active_trade.entry_order.price
         size = active_trade.entry_order.quantity
 
-        if position.side == "LONG":
-            unrealized_pnl = (current_price - entry_price) * size
-        else:  # SHORT
-            unrealized_pnl = (entry_price - current_price) * size
+        if entry_price is not None and size is not None:
+            if position.side == "LONG":
+                unrealized_pnl = (current_price - entry_price) * size
+            else:  # SHORT
+                unrealized_pnl = (entry_price - current_price) * size
+        else:
+            unrealized_pnl = Decimal("0")
 
         active_trade.unrealized_pnl = unrealized_pnl
 
@@ -326,17 +335,23 @@ class ExperienceManager:
         entry_price = active_trade.entry_order.price
         size = active_trade.entry_order.quantity
 
-        if active_trade.entry_order.side == "BUY":  # Was LONG
-            realized_pnl = (exit_price - entry_price) * size
-        else:  # Was SHORT
-            realized_pnl = (entry_price - exit_price) * size
+        if entry_price is not None and size is not None:
+            if active_trade.entry_order.side == "BUY":  # Was LONG
+                realized_pnl = (exit_price - entry_price) * size
+            else:  # Was SHORT
+                realized_pnl = (entry_price - exit_price) * size
+        else:
+            realized_pnl = Decimal("0")
 
         active_trade.realized_pnl = realized_pnl
 
         # Calculate trade duration
-        duration_minutes = (
-            active_trade.exit_time - active_trade.entry_time
-        ).total_seconds() / 60
+        if active_trade.exit_time is not None:
+            duration_minutes = (
+                active_trade.exit_time - active_trade.entry_time
+            ).total_seconds() / 60
+        else:
+            duration_minutes = 0.0
 
         # Update the experience with outcome
         await self.memory_server.update_experience_outcome(
@@ -347,9 +362,14 @@ class ExperienceManager:
             market_data_at_exit=market_state_at_exit,
         )
 
+        # Calculate percentage return safely
+        pnl_percentage = 0.0
+        if entry_price is not None and entry_price > 0:
+            pnl_percentage = float(realized_pnl) / float(entry_price) * 100
+
         logger.info(
             f"🏁 Experience Manager: Trade completed | ID: {active_trade.trade_id} | "
-            f"PnL: ${realized_pnl:.2f} ({'+' if realized_pnl > 0 else ''}{realized_pnl/entry_price*100:.2f}%) | "
+            f"PnL: ${realized_pnl:.2f} ({'+' if realized_pnl > 0 else ''}{pnl_percentage:.2f}%) | "
             f"Duration: {duration_minutes:.1f}min | {'✅ WIN' if realized_pnl > 0 else '❌ LOSS'}"
         )
 
@@ -360,7 +380,7 @@ class ExperienceManager:
             exit_price=exit_price,
             pnl=realized_pnl,
             duration_minutes=duration_minutes,
-            insights=None  # Will be populated after reflection
+            insights=None,  # Will be populated after reflection
         )
 
         # Archive the trade
@@ -522,14 +542,16 @@ class ExperienceManager:
         }
 
         for trade in self.active_trades.values():
-            summary["total_unrealized_pnl"] += trade.unrealized_pnl
+            summary["total_unrealized_pnl"] = (
+                summary["total_unrealized_pnl"] + trade.unrealized_pnl
+            )
 
             trade_info = {
                 "trade_id": trade.trade_id,
                 "symbol": trade.entry_order.symbol,
                 "side": trade.entry_order.side,
-                "entry_price": float(trade.entry_order.price),
-                "size": float(trade.entry_order.quantity),
+                "entry_price": float(trade.entry_order.price) if trade.entry_order.price else 0.0,
+                "size": float(trade.entry_order.quantity) if trade.entry_order.quantity else 0.0,
                 "unrealized_pnl": float(trade.unrealized_pnl),
                 "duration_hours": (datetime.now(UTC) - trade.entry_time).total_seconds()
                 / 3600,

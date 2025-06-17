@@ -2,7 +2,7 @@
 
 /**
  * Docker Environment Validator for AI Trading Bot Dashboard
- * 
+ *
  * Validates Docker containers, networks, volumes, and inter-service communication
  */
 
@@ -57,7 +57,7 @@ function log(level, message, data = null) {
     const timestamp = new Date().toISOString();
     const logMessage = `[${timestamp}] [${level.padEnd(5)}] ${message}`;
     console.log(logMessage);
-    
+
     if (data && typeof data === 'object') {
         console.log(JSON.stringify(data, null, 2));
     } else if (data) {
@@ -108,12 +108,12 @@ function makeRequest(url, timeout = 10000) {
                 });
             });
         });
-        
+
         request.on('timeout', () => {
             request.destroy();
             reject(new Error('Request timeout'));
         });
-        
+
         request.on('error', reject);
     });
 }
@@ -121,20 +121,20 @@ function makeRequest(url, timeout = 10000) {
 // Validation functions
 async function validateDockerInstallation() {
     logInfo('Validating Docker installation...');
-    
+
     try {
         // Check Docker version
         const dockerVersion = await execCommand('docker --version');
         logSuccess('Docker is installed', dockerVersion.stdout);
-        
+
         // Check Docker daemon
         const dockerInfo = await execCommand('docker info --format "{{.ServerVersion}}"');
         logSuccess('Docker daemon is running', `Server version: ${dockerInfo.stdout}`);
-        
+
         // Check Docker Compose
         const composeVersion = await execCommand('docker-compose --version');
         logSuccess('Docker Compose is available', composeVersion.stdout);
-        
+
         VALIDATION_RESULTS.dockerInstallation = true;
         return true;
     } catch (error) {
@@ -145,20 +145,20 @@ async function validateDockerInstallation() {
 
 async function validateComposeFile() {
     logInfo('Validating Docker Compose configuration...');
-    
+
     try {
         const composeFile = path.join(process.cwd(), CONFIG.COMPOSE_FILE);
-        
+
         if (!fs.existsSync(composeFile)) {
             throw new Error(`Compose file not found: ${composeFile}`);
         }
-        
+
         logSuccess('Docker Compose file exists', composeFile);
-        
+
         // Validate compose file syntax
         const validateResult = await execCommand(`docker-compose -f ${composeFile} config`);
         logSuccess('Docker Compose file syntax is valid');
-        
+
         VALIDATION_RESULTS.composeFileExists = true;
         return true;
     } catch (error) {
@@ -169,12 +169,12 @@ async function validateComposeFile() {
 
 async function validateContainers() {
     logInfo('Validating Docker containers...');
-    
+
     try {
         // Check if containers exist and are running
         const psResult = await execCommand('docker-compose ps --format json');
         let containers = [];
-        
+
         if (psResult.stdout) {
             // Parse container information
             containers = psResult.stdout.split('\n')
@@ -188,14 +188,14 @@ async function validateContainers() {
                 })
                 .filter(container => container !== null);
         }
-        
+
         logInfo(`Found ${containers.length} containers`);
-        
+
         let allContainersRunning = true;
-        
+
         for (const requiredContainer of CONFIG.REQUIRED_CONTAINERS) {
             const container = containers.find(c => c.Name.includes(requiredContainer));
-            
+
             if (container) {
                 if (container.State === 'running') {
                     logSuccess(`Container ${requiredContainer} is running`);
@@ -208,7 +208,7 @@ async function validateContainers() {
                 allContainersRunning = false;
             }
         }
-        
+
         if (allContainersRunning) {
             VALIDATION_RESULTS.containersRunning = true;
             return true;
@@ -223,21 +223,21 @@ async function validateContainers() {
 
 async function validateNetworks() {
     logInfo('Validating Docker networks...');
-    
+
     try {
         const networksResult = await execCommand('docker network ls --format "{{.Name}}"');
         const networks = networksResult.stdout.split('\n').filter(name => name.trim());
-        
+
         let allNetworksExist = true;
-        
+
         for (const requiredNetwork of CONFIG.REQUIRED_NETWORKS) {
             if (networks.includes(requiredNetwork)) {
                 logSuccess(`Network ${requiredNetwork} exists`);
-                
+
                 // Get network details
                 const networkInfo = await execCommand(`docker network inspect ${requiredNetwork}`);
                 const networkData = JSON.parse(networkInfo.stdout)[0];
-                
+
                 logInfo(`Network ${requiredNetwork} details`, {
                     driver: networkData.Driver,
                     subnet: networkData.IPAM?.Config?.[0]?.Subnet,
@@ -248,7 +248,7 @@ async function validateNetworks() {
                 allNetworksExist = false;
             }
         }
-        
+
         if (allNetworksExist) {
             VALIDATION_RESULTS.networksCreated = true;
             return true;
@@ -263,22 +263,22 @@ async function validateNetworks() {
 
 async function validateVolumes() {
     logInfo('Validating Docker volumes...');
-    
+
     try {
         const volumesResult = await execCommand('docker volume ls --format "{{.Name}}"');
         const volumes = volumesResult.stdout.split('\n').filter(name => name.trim());
-        
+
         let allVolumesExist = true;
-        
+
         for (const requiredVolume of CONFIG.REQUIRED_VOLUMES) {
             if (volumes.includes(requiredVolume)) {
                 logSuccess(`Volume ${requiredVolume} exists`);
-                
+
                 // Get volume details
                 try {
                     const volumeInfo = await execCommand(`docker volume inspect ${requiredVolume}`);
                     const volumeData = JSON.parse(volumeInfo.stdout)[0];
-                    
+
                     logInfo(`Volume ${requiredVolume} details`, {
                         driver: volumeData.Driver,
                         mountpoint: volumeData.Mountpoint
@@ -291,7 +291,7 @@ async function validateVolumes() {
                 // Don't fail validation for missing volumes as they might be created on-demand
             }
         }
-        
+
         VALIDATION_RESULTS.volumesCreated = true;
         return true;
     } catch (error) {
@@ -302,15 +302,15 @@ async function validateVolumes() {
 
 async function validateServiceHealth() {
     logInfo('Validating service health...');
-    
+
     let allServicesHealthy = true;
-    
+
     for (const [serviceName, config] of Object.entries(CONFIG.SERVICE_ENDPOINTS)) {
         try {
             logInfo(`Checking ${serviceName} service health...`);
-            
+
             const response = await makeRequest(config.url + config.healthPath, config.timeout);
-            
+
             if (response.statusCode >= 200 && response.statusCode < 400) {
                 logSuccess(`${serviceName} service is healthy`, {
                     url: config.url + config.healthPath,
@@ -332,7 +332,7 @@ async function validateServiceHealth() {
             allServicesHealthy = false;
         }
     }
-    
+
     if (allServicesHealthy) {
         VALIDATION_RESULTS.servicesHealthy = true;
         return true;
@@ -343,47 +343,47 @@ async function validateServiceHealth() {
 
 async function validateInterServiceCommunication() {
     logInfo('Validating inter-service communication...');
-    
+
     try {
         // Test if frontend can reach backend through Docker network
         const backendContainerId = await execCommand(
             'docker-compose ps -q dashboard-backend'
         );
-        
+
         const frontendContainerId = await execCommand(
             'docker-compose ps -q dashboard-frontend'
         );
-        
+
         if (!backendContainerId.stdout || !frontendContainerId.stdout) {
             throw new Error('Could not find container IDs');
         }
-        
+
         // Test network connectivity from frontend to backend
         try {
             const connectivityTest = await execCommand(
                 `docker exec ${frontendContainerId.stdout.trim()} wget --spider -T 5 http://dashboard-backend:8000/health`
             );
-            
+
             logSuccess('Frontend can reach backend through Docker network');
             VALIDATION_RESULTS.interServiceComm = true;
             return true;
         } catch (connectivityError) {
             logWarning('Direct inter-service connectivity test failed', connectivityError.error?.message);
-            
+
             // Try alternative test - check if both containers are on same network
             const backendNetworks = await execCommand(
                 `docker inspect ${backendContainerId.stdout.trim()} --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}'`
             );
-            
+
             const frontendNetworks = await execCommand(
                 `docker inspect ${frontendContainerId.stdout.trim()} --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}'`
             );
-            
+
             const backendNets = backendNetworks.stdout.split(' ').filter(n => n.trim());
             const frontendNets = frontendNetworks.stdout.split(' ').filter(n => n.trim());
-            
+
             const commonNetworks = backendNets.filter(net => frontendNets.includes(net));
-            
+
             if (commonNetworks.length > 0) {
                 logSuccess('Containers share common networks', commonNetworks);
                 VALIDATION_RESULTS.interServiceComm = true;
@@ -404,23 +404,23 @@ async function validateInterServiceCommunication() {
 
 async function validateResourceUsage() {
     logInfo('Validating container resource usage...');
-    
+
     try {
         // Get container resource stats
         const statsResult = await execCommand(
             'docker stats --no-stream --format "table {{.Container}}\\t{{.CPUPerc}}\\t{{.MemUsage}}\\t{{.NetIO}}"'
         );
-        
+
         logInfo('Container resource usage', statsResult.stdout);
-        
+
         // Check for containers using excessive resources
         const lines = statsResult.stdout.split('\n').slice(1); // Skip header
         let resourcesOk = true;
-        
+
         for (const line of lines) {
             if (line.trim()) {
                 const [container, cpu, memory, network] = line.split('\t').map(s => s.trim());
-                
+
                 // Extract CPU percentage
                 const cpuMatch = cpu.match(/(\d+\.?\d*)%/);
                 if (cpuMatch) {
@@ -431,7 +431,7 @@ async function validateResourceUsage() {
                         logInfo(`Container ${container} CPU usage: ${cpu}`);
                     }
                 }
-                
+
                 // Extract memory usage
                 const memoryInfo = memory.split(' / ');
                 if (memoryInfo.length === 2) {
@@ -439,7 +439,7 @@ async function validateResourceUsage() {
                 }
             }
         }
-        
+
         VALIDATION_RESULTS.resourceUsage = true;
         return true;
     } catch (error) {
@@ -450,7 +450,7 @@ async function validateResourceUsage() {
 
 async function validateLogsAccess() {
     logInfo('Validating log access...');
-    
+
     try {
         // Test access to container logs
         for (const container of CONFIG.REQUIRED_CONTAINERS) {
@@ -458,7 +458,7 @@ async function validateLogsAccess() {
                 const logsResult = await execCommand(
                     `docker-compose logs --tail=5 ${container}`
                 );
-                
+
                 if (logsResult.stdout || logsResult.stderr) {
                     logSuccess(`Can access logs for ${container}`);
                 } else {
@@ -469,7 +469,7 @@ async function validateLogsAccess() {
                 return false;
             }
         }
-        
+
         VALIDATION_RESULTS.logsAccessible = true;
         return true;
     } catch (error) {
@@ -495,10 +495,10 @@ function generateValidationReport() {
             workingDirectory: process.cwd()
         }
     };
-    
+
     const reportPath = path.join(__dirname, 'docker-validation-report.json');
     fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
-    
+
     logInfo(`Docker validation report saved: ${reportPath}`);
     return report;
 }
@@ -507,9 +507,9 @@ function generateValidationReport() {
 function saveTestStatus() {
     const testDir = path.dirname(__filename);
     const statusFile = path.join(testDir, '.docker_test_passed');
-    
+
     const allTestsPassed = Object.values(VALIDATION_RESULTS).every(result => result === true);
-    
+
     if (allTestsPassed) {
         fs.writeFileSync(statusFile, `Docker validation passed at ${new Date().toISOString()}`);
         logSuccess('All Docker validation tests passed');
@@ -519,7 +519,7 @@ function saveTestStatus() {
         }
         logError('Some Docker validation tests failed');
     }
-    
+
     return allTestsPassed;
 }
 
@@ -528,7 +528,7 @@ async function runDockerValidation() {
     logInfo('='.repeat(60));
     logInfo('Starting Docker Environment Validation');
     logInfo('='.repeat(60));
-    
+
     const validations = [
         { name: 'Docker Installation', fn: validateDockerInstallation },
         { name: 'Compose File', fn: validateComposeFile },
@@ -540,13 +540,13 @@ async function runDockerValidation() {
         { name: 'Resource Usage', fn: validateResourceUsage },
         { name: 'Log Access', fn: validateLogsAccess }
     ];
-    
+
     logInfo(`Running ${validations.length} Docker validation tests...`);
-    
+
     for (const validation of validations) {
         logInfo('-'.repeat(40));
         logInfo(`Running: ${validation.name}`);
-        
+
         try {
             const result = await validation.fn();
             if (result) {
@@ -557,32 +557,32 @@ async function runDockerValidation() {
         } catch (error) {
             logError(`${validation.name} validation threw an error`, error.message);
         }
-        
+
         // Small delay between validations
         await new Promise(resolve => setTimeout(resolve, 500));
     }
-    
+
     logInfo('-'.repeat(40));
     logInfo('Docker Validation Summary:');
-    
+
     let passCount = 0;
     for (const [testName, result] of Object.entries(VALIDATION_RESULTS)) {
         const status = result ? 'PASS' : 'FAIL';
         const icon = result ? '✓' : '✗';
         logInfo(`  ${icon} ${testName}: ${status}`);
-        
+
         if (result) passCount++;
     }
-    
+
     const totalTests = Object.keys(VALIDATION_RESULTS).length;
     logInfo(`Overall: ${passCount}/${totalTests} tests passed (${Math.round((passCount/totalTests) * 100)}%)`);
-    
+
     // Generate validation report
     const report = generateValidationReport();
-    
+
     // Save test status
     const allPassed = saveTestStatus();
-    
+
     if (allPassed) {
         logSuccess('All Docker validation tests completed successfully!');
         process.exit(0);

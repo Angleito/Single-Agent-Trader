@@ -127,35 +127,35 @@ class TradingSettings(BaseModel):
         default=0.006,  # 0.6% maker fee (basic tier)
         ge=0.0,
         le=0.02,
-        description="Spot maker fee rate (for limit orders)"
+        description="Spot maker fee rate (for limit orders)",
     )
     spot_taker_fee_rate: float = Field(
         default=0.012,  # 1.2% taker fee (basic tier)
         ge=0.0,
         le=0.02,
-        description="Spot taker fee rate (for market orders)"
+        description="Spot taker fee rate (for market orders)",
     )
     # Legacy fee names for backward compatibility
     maker_fee_rate: float = Field(
         default=0.006,  # Default to spot maker fee
         ge=0.0,
         le=0.02,
-        description="Maker fee rate (for limit orders)"
+        description="Maker fee rate (for limit orders)",
     )
     taker_fee_rate: float = Field(
         default=0.012,  # Default to spot taker fee
         ge=0.0,
         le=0.02,
-        description="Taker fee rate (for market orders)"
+        description="Taker fee rate (for market orders)",
     )
     # Futures trading fees
     futures_fee_rate: float = Field(
         default=0.0015,  # 0.15% for futures
         ge=0.0,
         le=0.01,
-        description="Futures trading fee rate"
+        description="Futures trading fee rate",
     )
-    
+
     # Volume-based fee tiers for Coinbase (monthly USD volume)
     fee_tier_thresholds: list[dict[str, Any]] = Field(
         default_factory=lambda: [
@@ -168,7 +168,7 @@ class TradingSettings(BaseModel):
             {"volume": 75000000, "maker": 0.0002, "taker": 0.0005},  # $75M+
             {"volume": 250000000, "maker": 0.0, "taker": 0.0005},  # $250M+
         ],
-        description="Volume-based fee tiers for Coinbase spot trading"
+        description="Volume-based fee tiers for Coinbase spot trading",
     )
 
     # Trading Interval Configuration - Scalping Mode
@@ -176,24 +176,37 @@ class TradingSettings(BaseModel):
         default=15,  # 15 seconds minimum for high-frequency scalping
         ge=1,
         le=300,
-        description="Minimum interval between trades in seconds (15s for scalping)"
+        description="Minimum interval between trades in seconds (15s for scalping)",
     )
     require_24h_data_before_trading: bool = Field(
         default=False,
-        description="Require at least 24 hours of market data before first trade (disabled for 8h trading)"
+        description="Require at least 24 hours of market data before first trade (disabled for 8h trading)",
     )
     min_candles_for_trading: int = Field(
         default=1,
         ge=1,
         le=2000,
-        description="Minimum number of candles required before trading (1 = start immediately with historical data)"
+        description="Minimum number of candles required before trading (1 = start immediately with historical data)",
     )
 
     @field_validator("interval")
     @classmethod
     def validate_interval(cls, v: str) -> str:
         """Validate trading interval format."""
-        valid_intervals = ["1s", "5s", "15s", "30s", "1m", "3m", "5m", "15m", "30m", "1h", "4h", "1d"]
+        valid_intervals = [
+            "1s",
+            "5s",
+            "15s",
+            "30s",
+            "1m",
+            "3m",
+            "5m",
+            "15m",
+            "30m",
+            "1h",
+            "4h",
+            "1d",
+        ]
         if v not in valid_intervals:
             raise ValueError(f"Invalid interval. Must be one of: {valid_intervals}")
         return v
@@ -432,7 +445,8 @@ class OmniSearchSettings(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     enabled: bool = Field(
-        default=False, description="Enable OmniSearch MCP server for market intelligence"
+        default=False,
+        description="Enable OmniSearch MCP server for market intelligence",
     )
     api_key: SecretStr | None = Field(
         default=None, description="API key for OmniSearch service"
@@ -567,8 +581,8 @@ class ExchangeSettings(BaseModel):
         default=None, description="Custom Sui RPC endpoint for Bluefin"
     )
     bluefin_service_url: str = Field(
-        default="http://bluefin-service:8080", 
-        description="Bluefin microservice URL for SDK operations"
+        default="http://bluefin-service:8080",
+        description="Bluefin microservice URL for SDK operations",
     )
 
     @field_validator(
@@ -594,8 +608,10 @@ class ExchangeSettings(BaseModel):
             has_legacy = all(
                 [
                     self.cb_api_key and self.cb_api_key.get_secret_value().strip(),
-                    self.cb_api_secret and self.cb_api_secret.get_secret_value().strip(),
-                    self.cb_passphrase and self.cb_passphrase.get_secret_value().strip(),
+                    self.cb_api_secret
+                    and self.cb_api_secret.get_secret_value().strip(),
+                    self.cb_passphrase
+                    and self.cb_passphrase.get_secret_value().strip(),
                 ]
             )
 
@@ -623,18 +639,18 @@ class ExchangeSettings(BaseModel):
                     raise ValueError(
                         "CDP private key must be in PEM format starting with '-----BEGIN EC PRIVATE KEY-----'"
                     )
-                    
+
         elif self.exchange_type == "bluefin":
             # Validate Bluefin credentials only when using Bluefin
             if (
-                self.bluefin_private_key 
+                self.bluefin_private_key
                 and self.bluefin_private_key.get_secret_value().strip()
             ):
                 # Support multiple Sui private key formats - temporarily skip validation
                 # to debug startswith issue
                 try:
                     private_key = self.bluefin_private_key.get_secret_value().strip()
-                    
+
                     # Remove common prefixes
                     if private_key.startswith("0x"):
                         private_key = private_key[2:]
@@ -642,9 +658,11 @@ class ExchangeSettings(BaseModel):
                         # This is a Bech32-encoded Sui private key, which is also valid
                         # No validation needed for this format
                         return self
-                    
+
                     # Validate hex format (after removing 0x prefix)
-                    if private_key and not all(c in "0123456789abcdefABCDEF" for c in private_key):
+                    if private_key and not all(
+                        c in "0123456789abcdefABCDEF" for c in private_key
+                    ):
                         # Skip validation error for now
                         pass
                         # raise ValueError(
@@ -652,7 +670,9 @@ class ExchangeSettings(BaseModel):
                         # )
                 except Exception as e:
                     # Skip validation errors to debug the startswith issue
-                    print(f"Warning: Bluefin private key validation error (skipped): {e}")
+                    print(
+                        f"Warning: Bluefin private key validation error (skipped): {e}"
+                    )
                     pass
 
         return self
@@ -690,10 +710,16 @@ class RiskSettings(BaseModel):
 
     # Stop Loss and Take Profit - Scalping Mode
     default_stop_loss_pct: float = Field(
-        default=0.3, ge=0.05, le=2.0, description="Default stop loss percentage (tight for scalping)"
+        default=0.3,
+        ge=0.05,
+        le=2.0,
+        description="Default stop loss percentage (tight for scalping)",
     )
     default_take_profit_pct: float = Field(
-        default=0.5, ge=0.1, le=3.0, description="Default take profit percentage (quick scalping targets)"
+        default=0.5,
+        ge=0.1,
+        le=3.0,
+        description="Default take profit percentage (quick scalping targets)",
     )
 
     # Account Protection
@@ -723,7 +749,10 @@ class DataSettings(BaseModel):
         default=True, description="Enable real-time data updates"
     )
     data_cache_ttl_seconds: int = Field(
-        default=1, ge=1, le=30, description="Data cache TTL in seconds (fast refresh for scalping)"
+        default=1,
+        ge=1,
+        le=30,
+        description="Data cache TTL in seconds (fast refresh for scalping)",
     )
 
     # Indicator Configuration
@@ -739,7 +768,10 @@ class DataSettings(BaseModel):
         default=7, ge=3, le=21, description="Cipher A EMA length (faster for scalping)"
     )
     cipher_b_vwap_length: int = Field(
-        default=10, ge=3, le=20, description="Cipher B VWAP length (faster for scalping)"
+        default=10,
+        ge=3,
+        le=20,
+        description="Cipher B VWAP length (faster for scalping)",
     )
 
     # Cipher B Signal Filter Configuration
@@ -917,7 +949,10 @@ class SystemSettings(BaseModel):
 
     # Performance - Scalping Mode
     update_frequency_seconds: float = Field(
-        default=1.0, ge=0.1, le=60.0, description="Main loop update frequency (1s for high-frequency scalping)"
+        default=1.0,
+        ge=0.1,
+        le=60.0,
+        description="Main loop update frequency (1s for high-frequency scalping)",
     )
     parallel_processing: bool = Field(
         default=True, description="Enable parallel processing where possible"
@@ -963,10 +998,14 @@ class SystemSettings(BaseModel):
         default=False, description="Enable real-time WebSocket publishing to dashboard"
     )
     websocket_dashboard_url: str = Field(
-        default="ws://localhost:8000/ws", description="Dashboard WebSocket URL for real-time data"
+        default="ws://localhost:8000/ws",
+        description="Dashboard WebSocket URL for real-time data",
     )
     websocket_publish_interval: float = Field(
-        default=1.0, ge=0.1, le=60.0, description="WebSocket publishing interval in seconds"
+        default=1.0,
+        ge=0.1,
+        le=60.0,
+        description="WebSocket publishing interval in seconds",
     )
     websocket_max_retries: int = Field(
         default=3, ge=1, le=10, description="Maximum WebSocket reconnection attempts"
@@ -978,7 +1017,10 @@ class SystemSettings(BaseModel):
         default=10, ge=5, le=60, description="WebSocket connection timeout in seconds"
     )
     websocket_queue_size: int = Field(
-        default=100, ge=10, le=1000, description="Maximum queued messages during connection issues"
+        default=100,
+        ge=10,
+        le=1000,
+        description="Maximum queued messages during connection issues",
     )
 
     @field_validator("alert_email")
@@ -1087,7 +1129,9 @@ class Settings(BaseSettings):
         if env == Environment.PRODUCTION:
             # Allow dry-run override for testing purposes
             if self.system.dry_run:
-                logger.warning("Production environment running in dry-run mode - this should only be for testing")
+                logger.warning(
+                    "Production environment running in dry-run mode - this should only be for testing"
+                )
 
             if self.exchange.cb_sandbox:
                 raise ValueError("Production environment cannot use sandbox exchange")

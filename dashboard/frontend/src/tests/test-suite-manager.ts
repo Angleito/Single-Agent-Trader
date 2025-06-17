@@ -672,8 +672,8 @@ export class TestSuiteManager {
               data: {
                 script: `
                   window.notificationSystem.sendQuickNotification(
-                    'test', 
-                    'Test Notification', 
+                    'test',
+                    'Test Notification',
                     'This is a test notification',
                     'normal',
                     ['browser']
@@ -719,7 +719,7 @@ export class TestSuiteManager {
               data: {
                 script: `
                   window.testRecordId = await window.dataManager.create(
-                    'test_store', 
+                    'test_store',
                     { name: 'Test Record', value: 123 }
                   )
                 `,
@@ -748,7 +748,7 @@ export class TestSuiteManager {
               data: {
                 script: `
                   window.testRecord = await window.dataManager.read(
-                    'test_store', 
+                    'test_store',
                     window.testRecordId
                   )
                 `,

@@ -34,7 +34,7 @@
     "@typescript-eslint/no-unsafe-call": "off",
     "@typescript-eslint/no-unsafe-argument": "off",
     "@typescript-eslint/no-unsafe-return": "off",
-    
+
     // Set these to warn instead of error
     "@typescript-eslint/no-floating-promises": "warn",
     "@typescript-eslint/no-misused-promises": "warn",
@@ -42,7 +42,7 @@
     "@typescript-eslint/prefer-optional-chain": "warn",
     "@typescript-eslint/ban-types": "warn",
     "@typescript-eslint/require-await": "warn",
-    
+
     // General rules
     "no-console": ["warn", { "allow": ["warn", "error"] }],
     "no-debugger": "error",

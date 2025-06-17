@@ -13,7 +13,7 @@ This document describes the CORS (Cross-Origin Resource Sharing) configuration f
 
 ### Allowed Methods
 - GET
-- POST  
+- POST
 - PUT
 - DELETE
 - OPTIONS
@@ -63,7 +63,7 @@ This document describes the CORS (Cross-Origin Resource Sharing) configuration f
 
 ### Headers Security
 - X-Content-Type-Options: nosniff - Prevents MIME type sniffing
-- X-Frame-Options: DENY - Prevents clickjacking attacks  
+- X-Frame-Options: DENY - Prevents clickjacking attacks
 - X-XSS-Protection: 1; mode=block - Enables XSS filtering
 
 ## Testing

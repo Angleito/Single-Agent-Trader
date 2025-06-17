@@ -2,7 +2,6 @@
 """Generate a secure API key for the Bluefin service."""
 
 import secrets
-import sys
 
 
 def generate_api_key(length: int = 32) -> str:
@@ -13,7 +12,7 @@ def generate_api_key(length: int = 32) -> str:
 def main():
     """Generate and display API key with instructions."""
     api_key = generate_api_key()
-    
+
     print("=" * 60)
     print("Bluefin Service API Key Generated")
     print("=" * 60)

@@ -132,7 +132,7 @@ All tests pass when:
    ```bash
    # Check ports
    lsof -i :3000,8000,8765,8767,8081
-   
+
    # Kill processes
    docker-compose down
    docker system prune -f
@@ -143,7 +143,7 @@ All tests pass when:
    # Check logs
    docker-compose logs dashboard-backend
    docker-compose logs ai-trading-bot
-   
+
    # Verify config
    grep WEBSOCKET .env.test
    ```
@@ -152,7 +152,7 @@ All tests pass when:
    ```bash
    # View specific test logs
    cat tests/docker/results/*/fault_tolerance.log
-   
+
    # Check container health
    docker-compose ps
    docker stats
@@ -171,14 +171,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      
+
       - name: Set up Docker
         uses: docker/setup-buildx-action@v1
-      
+
       - name: Run WebSocket tests
         run: |
           ./tests/docker/run_all_tests.sh
-        
+
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v2

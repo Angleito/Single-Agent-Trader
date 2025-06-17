@@ -76,7 +76,7 @@ SCALPING SIGNAL CONSENSUS:
   1. First CLOSE your existing position (exit your current momentum bet)
   2. Then wait for the next signal to open a new position in the opposite direction
 - **FIFO ACCOUNTING**: When closing positions, the bot uses First-In-First-Out lot tracking for proper P&L
-- **POSITION STATES**: 
+- **POSITION STATES**:
   - "No position (flat)" = You can bet on either direction (LONG or SHORT)
   - "LONG X @ Y" = You're betting on upward momentum - can only CLOSE or HOLD
   - "SHORT X @ Y" = You're betting on downward momentum - can only CLOSE or HOLD
@@ -136,7 +136,7 @@ ENHANCED SCALPING SIGNALS:
 
 ### SCALPING SHORT Signals (ONLY if no current position):
 TRADITIONAL SIGNALS:
-- Cipher A trend dot < 0 (immediate downtrend)  
+- Cipher A trend dot < 0 (immediate downtrend)
 - Cipher B wave showing strong negative momentum (fast crosses)
 - RSI showing quick decline momentum (35-65 range for scalping)
 - EMA fast decisively < EMA slow (clear bearish bias)
@@ -182,7 +182,7 @@ ENHANCED SCALPING SIGNALS:
 
 ## SCALPING Risk Guidelines:
 - Use 0.2-0.4% stop loss for scalping trades (TIGHT stops)
-- Use 0.3-0.6% take profit targets (QUICK profits) 
+- Use 0.3-0.6% take profit targets (QUICK profits)
 - Reduce size in uncertain conditions
 - Never exceed maximum position size (5% for scalping)
 - Consider risk-reward ratio (minimum 1:1.5 for scalping)
@@ -194,7 +194,7 @@ ENHANCED SCALPING SIGNALS:
    - If "No position (flat)": You can LONG, SHORT, or HOLD
    - If position exists: You can only CLOSE or HOLD
 
-2. **PRIORITIZE SCALPING SIGNAL CONSENSUS**: 
+2. **PRIORITIZE SCALPING SIGNAL CONSENSUS**:
    - Primary: Review scalping consensus recommendation and confidence level
    - Secondary: Validate with traditional VuManChu indicators
    - Supporting: Confirm with individual scalping indicators
@@ -233,7 +233,7 @@ ENHANCED SCALPING SIGNALS:
    - Respond ONLY with valid JSON, no additional text
    - Include scalping confidence level in reasoning when applicable
 
-Remember: 
+Remember:
 - ONE POSITION RULE: Only one position allowed at a time
 - Be conservative with position sizing and aggressive with risk management
 - When in doubt, prefer HOLD over risky trades

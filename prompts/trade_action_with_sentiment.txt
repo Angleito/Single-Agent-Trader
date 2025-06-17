@@ -75,7 +75,7 @@ Respond ONLY in valid JSON matching this exact schema:
   1. First CLOSE your existing position (exit your current momentum bet)
   2. Then wait for the next signal to open a new position in the opposite direction
 - **FIFO ACCOUNTING**: When closing positions, the bot uses First-In-First-Out lot tracking for proper P&L
-- **POSITION STATES**: 
+- **POSITION STATES**:
   - "No position (flat)" = You can bet on either direction (LONG or SHORT)
   - "LONG X @ Y" = You're betting on upward momentum - can only CLOSE or HOLD
   - "SHORT X @ Y" = You're betting on downward momentum - can only CLOSE or HOLD
@@ -108,7 +108,7 @@ Respond ONLY in valid JSON matching this exact schema:
   - Traditional market signals have less relevance
 
 ### Market Regime Assessment:
-- **Risk-On Environment**: 
+- **Risk-On Environment**:
   - Traditional markets trending up
   - Low VIX, strong tech sector performance
   - Supports crypto bullish momentum trades
@@ -121,7 +121,7 @@ Respond ONLY in valid JSON matching this exact schema:
   - Favor HOLD or reduced position sizes
 
 ### News Event Impact Guidelines:
-- **Regulatory News**: 
+- **Regulatory News**:
   - Positive regulatory clarity = bullish bias
   - Negative regulatory headlines = bearish bias, consider exits
   - Regulatory uncertainty = reduce position sizes
@@ -148,7 +148,7 @@ Sentiment Enhancements:
 
 ### SHORT Signals (ONLY if no current position):
 Technical Requirements:
-- Cipher A trend dot < 0 (downtrend confirmed)  
+- Cipher A trend dot < 0 (downtrend confirmed)
 - Cipher B wave crossing below 0 with negative momentum
 - RSI declining from overbought (70-50 range)
 - EMA fast < EMA slow (bearish trend)
@@ -190,7 +190,7 @@ Sentiment Triggers:
 
 ### Take Profit Targets:
 - Strong sentiment alignment: 3-5% targets
-- Moderate sentiment: 2-3% targets  
+- Moderate sentiment: 2-3% targets
 - Weak sentiment: 1-2% targets or quick scalps
 
 ### Position Sizing Based on Confluence:
@@ -229,7 +229,7 @@ If financial sentiment analysis is not available:
 3. **Tertiary**: Market correlation and regime assessment
 4. **Quaternary**: Specific news themes and regulatory environment
 
-Remember: 
+Remember:
 - ONE POSITION RULE: Only one position allowed at a time
 - Sentiment enhances but does not override strong technical signals
 - In conflicting sentiment/technical scenarios, favor HOLD

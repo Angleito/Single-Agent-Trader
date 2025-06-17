@@ -160,7 +160,7 @@ export class KagiEnrichmentProvider implements EnhancementProvider {
 
 				// Combine and filter results
 				const allData = [...webData.data, ...newsData.data]
-					.filter(result => 
+					.filter(result =>
 						// Filter for results about software/development/AI
 						result.snippet?.toLowerCase().includes('software') ||
 						result.snippet?.toLowerCase().includes('develop') ||
@@ -174,7 +174,7 @@ export class KagiEnrichmentProvider implements EnhancementProvider {
 				const enhanced_content = allData
 					.map((result) => result.snippet)
 					.filter(Boolean)
-					.map(snippet => 
+					.map(snippet =>
 						// Fix HTML entities
 						snippet
 							.replace(/&#39;/g, "'")

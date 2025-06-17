@@ -144,9 +144,9 @@ check_service_health() {
     local SERVICE=$1
     local MAX_ATTEMPTS=30
     local ATTEMPT=0
-    
+
     echo -n "Checking $SERVICE health"
-    
+
     while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
         if docker-compose ps $SERVICE | grep -q "healthy"; then
             echo " ✓"
@@ -156,7 +156,7 @@ check_service_health() {
         sleep 2
         ((ATTEMPT++))
     done
-    
+
     echo " ✗"
     return 1
 }

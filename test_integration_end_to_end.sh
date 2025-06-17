@@ -17,12 +17,12 @@ test_endpoint() {
     local url=$1
     local description=$2
     local expected_content=$3
-    
+
     echo -n "🔍 Testing $description... "
-    
+
     response=$(curl -s -w "%{http_code}" "$url" -o /tmp/test_response)
     http_code="${response: -3}"
-    
+
     if [[ "$http_code" == "200" ]]; then
         if [[ -n "$expected_content" ]]; then
             if grep -q "$expected_content" /tmp/test_response; then
@@ -50,12 +50,12 @@ test_json_endpoint() {
     local url=$1
     local description=$2
     local json_key=$3
-    
+
     echo -n "🔍 Testing $description... "
-    
+
     response=$(curl -s "$url")
     http_code=$(curl -s -w "%{http_code}" "$url" -o /dev/null)
-    
+
     if [[ "$http_code" == "200" ]]; then
         if [[ -n "$json_key" ]]; then
             if echo "$response" | jq -e "$json_key" > /dev/null 2>&1; then

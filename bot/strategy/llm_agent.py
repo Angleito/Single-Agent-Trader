@@ -11,7 +11,7 @@ to analyze market state and generate trading actions.
 import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Type, Union
 
 try:
     from langchain_core.output_parsers import JsonOutputParser
@@ -20,15 +20,16 @@ try:
     from langchain_openai import ChatOpenAI
 except ImportError:
     # Graceful degradation if LangChain not installed
-    ChatOpenAI = None
-    PromptTemplate = None
-    JsonOutputParser = None
-    RunnablePassthrough = None
+    ChatOpenAI = None  # type: ignore
+    PromptTemplate = None  # type: ignore
+    JsonOutputParser = None  # type: ignore
+    RunnablePassthrough = None  # type: ignore
 
 from ..config import settings
 from ..llm_logging import create_llm_logger, create_langchain_callback
 from ..types import MarketState, TradeAction
 from ..mcp.omnisearch_client import OmniSearchClient
+
 # Removed imports for deleted scalping indicators
 
 logger = logging.getLogger(__name__)
@@ -42,7 +43,12 @@ class LLMAgent:
     and current position to generate structured trading actions.
     """
 
-    def __init__(self, model_provider: str = None, model_name: str = None, omnisearch_client: Optional[OmniSearchClient] = None):
+    def __init__(
+        self,
+        model_provider: Optional[str] = None,
+        model_name: Optional[str] = None,
+        omnisearch_client: Optional[OmniSearchClient] = None,
+    ):
         """
         Initialize the LLM agent.
 
@@ -61,21 +67,23 @@ class LLMAgent:
             self.temperature = settings.llm.temperature
 
         # LangChain components
-        self._model = None
-        self._prompt_template = None
-        self._chain = None
+        self._model: Optional[Any] = None
+        self._prompt_template: Optional[Any] = None
+        self._chain: Optional[Any] = None
 
         # Enhanced logging components
         self._completion_logger: Optional[Any] = None
         self._langchain_callback: Optional[Any] = None
         self._completion_count = 0
-        
+
         # OmniSearch integration
         self._omnisearch_client = omnisearch_client
-        self._omnisearch_enabled = (omnisearch_client is not None and 
-                                   settings.omnisearch.enabled and 
-                                   settings.omnisearch.api_key is not None)
-        
+        self._omnisearch_enabled = (
+            omnisearch_client is not None
+            and settings.omnisearch.enabled
+            and settings.omnisearch.api_key is not None
+        )
+
         # Scalping signals system disabled - modules were removed
         self._scalping_signals = None
         self._scalping_enabled = False
@@ -107,15 +115,21 @@ class LLMAgent:
             self._initialize_model()
         else:
             logger.warning("LangChain not available - using fallback decision logic")
-            
+
         # Log OmniSearch status
         if self._omnisearch_enabled:
-            logger.info("🔍 OmniSearch integration enabled for enhanced market intelligence")
+            logger.info(
+                "🔍 OmniSearch integration enabled for enhanced market intelligence"
+            )
         else:
-            logger.info("OmniSearch integration disabled - using standard analysis only")
-            
+            logger.info(
+                "OmniSearch integration disabled - using standard analysis only"
+            )
+
         # Scalping signals system removed during cleanup
-        logger.info("ScalpingSignals system disabled - using basic indicator analysis only")
+        logger.info(
+            "ScalpingSignals system disabled - using basic indicator analysis only"
+        )
 
     def _load_prompt_template(self) -> None:
         """Load the prompt template for trading decisions."""
@@ -276,7 +290,7 @@ FINANCIAL INTELLIGENCE INTEGRATION:
                     raise ValueError("OpenAI API key not configured")
 
                 # Base kwargs required for any OpenAI chat completion
-                base_kwargs = {
+                base_kwargs: Dict[str, Any] = {
                     "model": self.model_name,
                     "api_key": settings.llm.openai_api_key.get_secret_value(),
                 }
@@ -448,7 +462,7 @@ FINANCIAL INTELLIGENCE INTEGRATION:
 
         # Get futures-specific information if available
         margin_health = "N/A"
-        available_margin = "N/A"
+        available_margin: Union[str, float] = "N/A"
 
         if hasattr(market_state, "futures_account") and market_state.futures_account:
             margin_health = market_state.futures_account.margin_info.health_status.value
@@ -483,10 +497,10 @@ FINANCIAL INTELLIGENCE INTEGRATION:
 
         # Calculate Cipher B signal alignment
         cipher_b_alignment = self._calculate_cipher_b_alignment(market_state.indicators)
-        
+
         # Get financial context from OmniSearch if enabled
         financial_context = await self._get_financial_context(market_state)
-        
+
         # Get scalping signals analysis if enabled
         scalping_analysis = await self._get_scalping_analysis(market_state)
 
@@ -741,146 +755,194 @@ FINANCIAL INTELLIGENCE INTEGRATION:
     async def _get_financial_context(self, market_state: MarketState) -> str:
         """
         Get financial context from OmniSearch for enhanced market intelligence.
-        
+
         Args:
             market_state: Current market state containing symbol and price data
-            
+
         Returns:
             Formatted string with financial context and sentiment analysis
         """
         if not self._omnisearch_enabled or not self._omnisearch_client:
             return "OmniSearch disabled - no external market intelligence available"
-        
+
         try:
             # Extract base symbol for searches
             base_symbol = market_state.symbol.split("-")[0]  # "BTC-USD" -> "BTC"
-            
+
             context_sections = []
-            
+
             # 1. Get crypto sentiment for current symbol
             if settings.omnisearch.enable_crypto_sentiment:
                 try:
-                    crypto_sentiment = await self._omnisearch_client.search_crypto_sentiment(base_symbol)
+                    crypto_sentiment = (
+                        await self._omnisearch_client.search_crypto_sentiment(
+                            base_symbol
+                        )
+                    )
                     sentiment_section = [
                         f"=== {base_symbol} Sentiment Analysis ===",
                         f"Overall Sentiment: {crypto_sentiment.overall_sentiment.upper()} ({crypto_sentiment.sentiment_score:+.2f})",
                         f"Confidence: {crypto_sentiment.confidence:.1%}",
                         f"Sources: {crypto_sentiment.source_count}",
                     ]
-                    
+
                     if crypto_sentiment.news_sentiment is not None:
-                        sentiment_section.append(f"News Sentiment: {crypto_sentiment.news_sentiment:+.2f}")
+                        sentiment_section.append(
+                            f"News Sentiment: {crypto_sentiment.news_sentiment:+.2f}"
+                        )
                     if crypto_sentiment.social_sentiment is not None:
-                        sentiment_section.append(f"Social Sentiment: {crypto_sentiment.social_sentiment:+.2f}")
+                        sentiment_section.append(
+                            f"Social Sentiment: {crypto_sentiment.social_sentiment:+.2f}"
+                        )
                     if crypto_sentiment.technical_sentiment is not None:
-                        sentiment_section.append(f"Technical Sentiment: {crypto_sentiment.technical_sentiment:+.2f}")
-                    
+                        sentiment_section.append(
+                            f"Technical Sentiment: {crypto_sentiment.technical_sentiment:+.2f}"
+                        )
+
                     if crypto_sentiment.key_drivers:
-                        sentiment_section.append(f"Key Drivers: {', '.join(crypto_sentiment.key_drivers[:3])}")
+                        sentiment_section.append(
+                            f"Key Drivers: {', '.join(crypto_sentiment.key_drivers[:3])}"
+                        )
                     if crypto_sentiment.risk_factors:
-                        sentiment_section.append(f"Risk Factors: {', '.join(crypto_sentiment.risk_factors[:3])}")
-                    
+                        sentiment_section.append(
+                            f"Risk Factors: {', '.join(crypto_sentiment.risk_factors[:3])}"
+                        )
+
                     context_sections.append("\n".join(sentiment_section))
-                    
+
                 except Exception as e:
-                    logger.warning(f"Failed to get crypto sentiment for {base_symbol}: {e}")
-                    context_sections.append(f"=== {base_symbol} Sentiment Analysis ===\nUnavailable - API error")
-            
+                    logger.warning(
+                        f"Failed to get crypto sentiment for {base_symbol}: {e}"
+                    )
+                    context_sections.append(
+                        f"=== {base_symbol} Sentiment Analysis ===\nUnavailable - API error"
+                    )
+
             # 2. Get NASDAQ sentiment for market context
             if settings.omnisearch.enable_nasdaq_sentiment:
                 try:
-                    nasdaq_sentiment = await self._omnisearch_client.search_nasdaq_sentiment()
+                    nasdaq_sentiment = (
+                        await self._omnisearch_client.search_nasdaq_sentiment()
+                    )
                     nasdaq_section = [
                         "=== NASDAQ Market Sentiment ===",
                         f"Overall Sentiment: {nasdaq_sentiment.overall_sentiment.upper()} ({nasdaq_sentiment.sentiment_score:+.2f})",
                         f"Confidence: {nasdaq_sentiment.confidence:.1%}",
                     ]
-                    
+
                     if nasdaq_sentiment.key_drivers:
-                        nasdaq_section.append(f"Key Market Drivers: {', '.join(nasdaq_sentiment.key_drivers[:2])}")
+                        nasdaq_section.append(
+                            f"Key Market Drivers: {', '.join(nasdaq_sentiment.key_drivers[:2])}"
+                        )
                     if nasdaq_sentiment.risk_factors:
-                        nasdaq_section.append(f"Market Risks: {', '.join(nasdaq_sentiment.risk_factors[:2])}")
-                    
+                        nasdaq_section.append(
+                            f"Market Risks: {', '.join(nasdaq_sentiment.risk_factors[:2])}"
+                        )
+
                     context_sections.append("\n".join(nasdaq_section))
-                    
+
                 except Exception as e:
                     logger.warning(f"Failed to get NASDAQ sentiment: {e}")
-                    context_sections.append("=== NASDAQ Market Sentiment ===\nUnavailable - API error")
-            
+                    context_sections.append(
+                        "=== NASDAQ Market Sentiment ===\nUnavailable - API error"
+                    )
+
             # 3. Get correlation analysis between crypto and traditional markets
             if settings.omnisearch.enable_correlation_analysis:
                 try:
-                    correlation = await self._omnisearch_client.search_market_correlation(base_symbol, "QQQ")
+                    correlation = (
+                        await self._omnisearch_client.search_market_correlation(
+                            base_symbol, "QQQ"
+                        )
+                    )
                     correlation_section = [
                         f"=== {base_symbol}-NASDAQ Correlation ===",
                         f"Correlation: {correlation.direction.upper()} {correlation.strength.upper()} ({correlation.correlation_coefficient:+.3f})",
                         f"Timeframe: {correlation.timeframe}",
                     ]
-                    
+
                     if correlation.beta is not None:
                         correlation_section.append(f"Beta: {correlation.beta:.2f}")
-                    
+
                     # Interpret correlation for trading context
                     if abs(correlation.correlation_coefficient) > 0.5:
                         if correlation.correlation_coefficient > 0:
-                            correlation_section.append("⚠️ Strong positive correlation - crypto may follow stock market moves")
+                            correlation_section.append(
+                                "⚠️ Strong positive correlation - crypto may follow stock market moves"
+                            )
                         else:
-                            correlation_section.append("📈 Strong negative correlation - crypto may move opposite to stocks")
+                            correlation_section.append(
+                                "📈 Strong negative correlation - crypto may move opposite to stocks"
+                            )
                     else:
-                        correlation_section.append("➡️ Weak correlation - crypto moving independently from stocks")
-                    
+                        correlation_section.append(
+                            "➡️ Weak correlation - crypto moving independently from stocks"
+                        )
+
                     context_sections.append("\n".join(correlation_section))
-                    
+
                 except Exception as e:
-                    logger.warning(f"Failed to get market correlation for {base_symbol}: {e}")
-                    context_sections.append(f"=== {base_symbol}-NASDAQ Correlation ===\nUnavailable - API error")
-            
+                    logger.warning(
+                        f"Failed to get market correlation for {base_symbol}: {e}"
+                    )
+                    context_sections.append(
+                        f"=== {base_symbol}-NASDAQ Correlation ===\nUnavailable - API error"
+                    )
+
             # 4. Get recent financial news
             try:
                 # Search for crypto-specific news
                 crypto_news = await self._omnisearch_client.search_financial_news(
-                    f"{base_symbol} cryptocurrency", 
-                    limit=3, 
-                    timeframe="24h"
+                    f"{base_symbol} cryptocurrency", limit=3, timeframe="24h"
                 )
-                
+
                 if crypto_news:
                     news_section = [f"=== Recent {base_symbol} News (24h) ==="]
                     for news in crypto_news[:3]:
                         sentiment_emoji = {
                             "positive": "🟢",
-                            "negative": "🔴", 
-                            "neutral": "⚪"
+                            "negative": "🔴",
+                            "neutral": "⚪",
                         }.get(news.sentiment, "❓")
-                        
-                        news_line = f"{sentiment_emoji} {news.base_result.title[:80]}..."
+
+                        news_line = (
+                            f"{sentiment_emoji} {news.base_result.title[:80]}..."
+                        )
                         if news.impact_level:
                             news_line += f" [{news.impact_level.upper()} IMPACT]"
                         news_section.append(news_line)
-                    
+
                     context_sections.append("\n".join(news_section))
                 else:
-                    context_sections.append(f"=== Recent {base_symbol} News (24h) ===\nNo recent news found")
-                    
+                    context_sections.append(
+                        f"=== Recent {base_symbol} News (24h) ===\nNo recent news found"
+                    )
+
             except Exception as e:
                 logger.warning(f"Failed to get financial news for {base_symbol}: {e}")
-                context_sections.append(f"=== Recent {base_symbol} News (24h) ===\nUnavailable - API error")
-            
+                context_sections.append(
+                    f"=== Recent {base_symbol} News (24h) ===\nUnavailable - API error"
+                )
+
             # Combine all sections
             if context_sections:
                 full_context = "\n\n".join(context_sections)
-                
+
                 # Add interpretation guidance
                 full_context += "\n\n=== Market Intelligence Summary ===\n"
                 full_context += "Use this external intelligence to validate or challenge your technical analysis.\n"
                 full_context += "Strong sentiment divergence from technicals may indicate potential reversals.\n"
-                full_context += "High market correlations suggest macro risk-on/risk-off dynamics."
-                
-                logger.info(f"🔍 OmniSearch: Retrieved financial context for {base_symbol}")
+                full_context += (
+                    "High market correlations suggest macro risk-on/risk-off dynamics."
+                )
+
+                logger.info(
+                    f"🔍 OmniSearch: Retrieved financial context for {base_symbol}"
+                )
                 return full_context
             else:
                 return "No financial context available from OmniSearch"
-                
+
         except Exception as e:
             logger.error(f"Error getting financial context: {e}")
             return f"Error retrieving financial context: {str(e)}"
@@ -888,10 +950,10 @@ FINANCIAL INTELLIGENCE INTEGRATION:
     async def _get_scalping_analysis(self, market_state: MarketState) -> Dict[str, Any]:
         """
         Get scalping analysis - currently disabled after module removal.
-        
+
         Args:
             market_state: Current market state containing OHLCV data
-            
+
         Returns:
             Dictionary indicating scalping is disabled
         """
@@ -899,14 +961,14 @@ FINANCIAL INTELLIGENCE INTEGRATION:
         return {
             "scalping_enabled": False,
             "ema_trend": "N/A",
-            "ema_alignment": "N/A", 
+            "ema_alignment": "N/A",
             "ema_crossovers": "N/A",
             "ema_strength": "N/A",
             "fast_rsi_signal": "N/A",
             "rsi_strength": "N/A",
             "fast_macd_signal": "N/A",
             "macd_histogram": "N/A",
-            "williams_signal": "N/A", 
+            "williams_signal": "N/A",
             "williams_level": "N/A",
             "momentum_consensus": "N/A",
             "vwap_position": "N/A",
@@ -916,7 +978,7 @@ FINANCIAL INTELLIGENCE INTEGRATION:
             "entry_confidence": 0,
             "supporting_indicators": [],
             "risk_factors": [],
-            "scalping_consensus": "DISABLED"
+            "scalping_consensus": "DISABLED",
         }
 
     async def _get_llm_decision(self, llm_input: dict[str, Any]) -> TradeAction:
@@ -948,21 +1010,26 @@ FINANCIAL INTELLIGENCE INTEGRATION:
             if self.model_name.startswith("o3"):
                 # Use custom response handling for o3 models - bypass the chain and parse manually
                 from langchain_core.messages import HumanMessage
-                
+
                 # Format the prompt manually
+                if self._prompt_template is None or self._model is None:
+                    raise RuntimeError("LLM components not properly initialized")
+                
                 formatted_prompt = self._prompt_template.format(**llm_input)
                 message = HumanMessage(content=formatted_prompt)
-                
+
                 # Get raw response from model
                 raw_response = await self._model.ainvoke([message])
                 response_content = raw_response.content
-                
+
                 # Log the full response for debugging
                 logger.info(f"Full LLM Response:\n{response_content}")
-                
+
                 # Extract JSON from the response
                 result = self._extract_json_from_response(response_content)
             else:
+                if self._chain is None:
+                    raise RuntimeError("LLM chain not properly initialized")
                 result = await self._chain.ainvoke(llm_input, **chain_kwargs)
 
             response_time = time.time() - start_time
@@ -1106,8 +1173,12 @@ FINANCIAL INTELLIGENCE INTEGRATION:
             ):
                 reduce_only = True
 
-        omnisearch_status = " (OmniSearch enabled)" if self._omnisearch_enabled else " (OmniSearch disabled)"
-        
+        omnisearch_status = (
+            " (OmniSearch enabled)"
+            if self._omnisearch_enabled
+            else " (OmniSearch disabled)"
+        )
+
         return TradeAction(
             action=action,
             size_pct=size_pct,
@@ -1173,47 +1244,53 @@ FINANCIAL INTELLIGENCE INTEGRATION:
     def _extract_json_from_response(self, response_content: str) -> dict[str, Any]:
         """
         Extract JSON from a verbose response that contains both analysis and JSON.
-        
+
         Args:
             response_content: Full response content from LLM
-            
+
         Returns:
             Dictionary containing the JSON decision
         """
         import json
         import re
-        
+
         try:
             # Look for JSON_DECISION: followed by JSON
-            json_pattern = r'JSON_DECISION:\s*(\{.*?\})'
+            json_pattern = r"JSON_DECISION:\s*(\{.*?\})"
             match = re.search(json_pattern, response_content, re.DOTALL)
-            
+
             if match:
                 json_str = match.group(1)
                 # Clean up the JSON string
                 json_str = json_str.strip()
                 return json.loads(json_str)
-            
+
             # Fallback: look for any JSON-like structure
             json_pattern = r'\{[^{}]*"action"[^{}]*\}'
             match = re.search(json_pattern, response_content, re.DOTALL)
-            
+
             if match:
                 json_str = match.group(0)
                 return json.loads(json_str)
-                
+
             # Last resort: try to find just the values and construct JSON
-            logger.warning("Could not find JSON in response, attempting to parse manually")
-            
+            logger.warning(
+                "Could not find JSON in response, attempting to parse manually"
+            )
+
             # Extract individual fields
             action_match = re.search(r'"action":\s*"([^"]+)"', response_content)
             size_match = re.search(r'"size_pct":\s*(\d+(?:\.\d+)?)', response_content)
-            tp_match = re.search(r'"take_profit_pct":\s*(\d+(?:\.\d+)?)', response_content)
-            sl_match = re.search(r'"stop_loss_pct":\s*(\d+(?:\.\d+)?)', response_content)
+            tp_match = re.search(
+                r'"take_profit_pct":\s*(\d+(?:\.\d+)?)', response_content
+            )
+            sl_match = re.search(
+                r'"stop_loss_pct":\s*(\d+(?:\.\d+)?)', response_content
+            )
             leverage_match = re.search(r'"leverage":\s*(\d+)', response_content)
             reduce_match = re.search(r'"reduce_only":\s*(true|false)', response_content)
             rationale_match = re.search(r'"rationale":\s*"([^"]+)"', response_content)
-            
+
             if action_match:
                 return {
                     "action": action_match.group(1),
@@ -1221,12 +1298,20 @@ FINANCIAL INTELLIGENCE INTEGRATION:
                     "take_profit_pct": float(tp_match.group(1)) if tp_match else 2.0,
                     "stop_loss_pct": float(sl_match.group(1)) if sl_match else 1.0,
                     "leverage": int(leverage_match.group(1)) if leverage_match else 1,
-                    "reduce_only": reduce_match.group(1) == "true" if reduce_match else False,
-                    "rationale": rationale_match.group(1) if rationale_match else "Parsed from verbose response"
+                    "reduce_only": (
+                        reduce_match.group(1) == "true" if reduce_match else False
+                    ),
+                    "rationale": (
+                        rationale_match.group(1)
+                        if rationale_match
+                        else "Parsed from verbose response"
+                    ),
                 }
-            
+
             # Final fallback - return HOLD
-            logger.error("Could not parse any decision from response, defaulting to HOLD")
+            logger.error(
+                "Could not parse any decision from response, defaulting to HOLD"
+            )
             return {
                 "action": "HOLD",
                 "size_pct": 0,
@@ -1234,9 +1319,9 @@ FINANCIAL INTELLIGENCE INTEGRATION:
                 "stop_loss_pct": 1.0,
                 "leverage": 1,
                 "reduce_only": False,
-                "rationale": "Failed to parse response"
+                "rationale": "Failed to parse response",
             }
-            
+
         except Exception as e:
             logger.error(f"Error parsing JSON from response: {e}")
             # Return safe default
@@ -1247,7 +1332,7 @@ FINANCIAL INTELLIGENCE INTEGRATION:
                 "stop_loss_pct": 1.0,
                 "leverage": 1,
                 "reduce_only": False,
-                "rationale": "JSON parsing error"
+                "rationale": "JSON parsing error",
             }
 
     def log_decision_with_validation(

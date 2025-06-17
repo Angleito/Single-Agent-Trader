@@ -126,7 +126,7 @@ class WarningsFilter:
             self._suppressed_patterns.append(pattern)
 
     def suppress_custom_pattern(
-        self, pattern: str, categories: list[type] | None = None
+        self, pattern: str, categories: list[type[Warning]] | None = None
     ) -> None:
         """
         Suppress warnings matching a custom pattern.
@@ -300,7 +300,7 @@ def suppress_langchain_warnings() -> None:
     warnings_filter.suppress_langchain_warnings()
 
 
-def suppress_pandas_ta_import_warnings():
+def suppress_pandas_ta_import_warnings() -> warnings.catch_warnings:
     """
     Context manager style function to temporarily suppress warnings
     during pandas_ta import.
@@ -323,7 +323,7 @@ def init_all_suppressions() -> None:
     warnings_filter.apply_all_filters()
 
 
-def initialize_early_warning_suppression():
+def initialize_early_warning_suppression() -> None:
     """
     Initialize comprehensive warning suppression that must happen before any library imports.
 

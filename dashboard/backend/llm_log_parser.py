@@ -511,8 +511,10 @@ class LLMLogParser:
             # Start from end of file if it exists
             if self.log_file.exists():
                 self._last_position = self.log_file.stat().st_size
-                logger.info(f"Starting log monitoring from position {self._last_position}")
-            
+                logger.info(
+                    f"Starting log monitoring from position {self._last_position}"
+                )
+
             while not self._stop_event.is_set():
                 if self.log_file.exists():
                     try:
@@ -550,12 +552,11 @@ class LLMLogParser:
             responses = [r for r in self.responses if r.timestamp >= cutoff]
             requests = [r for r in self.requests if r.timestamp >= cutoff]
             decisions = [d for d in self.decisions if d.timestamp >= cutoff]
-            metrics = [m for m in self.metrics if m.timestamp >= cutoff]
+            [m for m in self.metrics if m.timestamp >= cutoff]
         else:
             responses = self.responses
             requests = self.requests
             decisions = self.decisions
-            metrics = self.metrics
 
         # Decision analysis
         action_counts = defaultdict(int)
@@ -591,16 +592,20 @@ class LLMLogParser:
                     ]
                 ),
             }
-        
+
         # If we only have decisions (no request/response logs), provide decision-based metrics
         elif decisions:
             # Calculate decision rate
             if decisions and len(decisions) >= 2:
-                time_span = (decisions[-1].timestamp - decisions[0].timestamp).total_seconds()
-                decisions_per_hour = len(decisions) / (time_span / 3600) if time_span > 0 else 0
+                time_span = (
+                    decisions[-1].timestamp - decisions[0].timestamp
+                ).total_seconds()
+                decisions_per_hour = (
+                    len(decisions) / (time_span / 3600) if time_span > 0 else 0
+                )
             else:
                 decisions_per_hour = 0
-            
+
             return {
                 "time_window": str(time_window) if time_window else "all_time",
                 "total_requests": 0,
@@ -618,7 +623,7 @@ class LLMLogParser:
                 ),
                 "no_llm_logs": True,  # Indicate that we only have decision logs
             }
-        
+
         # No data at all
         else:
             return {"no_data": True, "total_decisions": 0}

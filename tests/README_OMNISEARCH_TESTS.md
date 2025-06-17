@@ -120,7 +120,7 @@ pytest tests/ --profile
 ### Test Markers
 
 - `@pytest.mark.unit` - Unit tests
-- `@pytest.mark.integration` - Integration tests  
+- `@pytest.mark.integration` - Integration tests
 - `@pytest.mark.slow` - Slow-running tests
 - `@pytest.mark.external` - Tests requiring external services
 - `@pytest.mark.omnisearch` - OmniSearch-specific tests
@@ -242,7 +242,7 @@ Tests verify graceful fallback behavior:
   run: |
     poetry install
     python scripts/run_omnisearch_tests.py --all --coverage
-    
+
 - name: Upload Coverage
   uses: codecov/codecov-action@v3
   with:
@@ -282,10 +282,10 @@ async def test_omnisearch_client_search_news(mock_omnisearch_client):
         )
     ]
     mock_omnisearch_client.search_financial_news.return_value = expected_news
-    
+
     # Act
     results = await mock_omnisearch_client.search_financial_news("bitcoin")
-    
+
     # Assert
     assert len(results) == 1
     assert results[0].base_result.title == "Bitcoin Surges"
@@ -330,7 +330,7 @@ from unittest.mock import AsyncMock, Mock
 # For async methods
 mock_method = AsyncMock(return_value=expected_result)
 
-# For sync methods  
+# For sync methods
 mock_method = Mock(return_value=expected_result)
 ```
 

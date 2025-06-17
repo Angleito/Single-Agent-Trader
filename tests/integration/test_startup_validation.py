@@ -8,9 +8,11 @@ environment validation, component initialization, and health checks.
 import json
 import os
 import tempfile
+from collections.abc import Generator
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -25,13 +27,13 @@ class TestStartupValidation:
     """Test configuration loading and startup validation."""
 
     @pytest.fixture
-    def temp_config_dir(self):
+    def temp_config_dir(self) -> Generator[Path, None, None]:
         """Create temporary directory for test configuration files."""
         with tempfile.TemporaryDirectory() as temp_dir:
             yield Path(temp_dir)
 
     @pytest.fixture
-    def valid_config_data(self):
+    def valid_config_data(self) -> dict[str, Any]:
         """Create valid configuration data for testing."""
         return {
             "system": {

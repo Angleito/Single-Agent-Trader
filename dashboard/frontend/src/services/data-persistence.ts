@@ -266,7 +266,7 @@ export class DataPersistenceManager {
       const workerCode = `
         self.onmessage = function(e) {
           const { id, action, data } = e.data;
-          
+
           try {
             if (action === 'compress') {
               // Simple compression using JSON stringification and encoding

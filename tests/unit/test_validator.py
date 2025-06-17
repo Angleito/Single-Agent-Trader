@@ -9,7 +9,7 @@ from bot.validator import TradeValidator
 class TestTradeValidator:
     """Test cases for the trade validator."""
 
-    def test_validator_initialization(self):
+    def test_validator_initialization(self) -> None:
         """Test validator initialization."""
         validator = TradeValidator()
 
@@ -18,7 +18,7 @@ class TestTradeValidator:
         assert validator.max_sl_pct == 10.0
         assert validator.valid_actions == {"LONG", "SHORT", "CLOSE", "HOLD"}
 
-    def test_validate_valid_trade_action(self):
+    def test_validate_valid_trade_action(self) -> None:
         """Test validation of a valid trade action."""
         validator = TradeValidator()
 
@@ -37,7 +37,7 @@ class TestTradeValidator:
         assert result.take_profit_pct == 2.5
         assert result.stop_loss_pct == 1.5
 
-    def test_validate_oversized_position(self):
+    def test_validate_oversized_position(self) -> None:
         """Test validation caps oversized positions."""
         validator = TradeValidator()
 
@@ -53,7 +53,7 @@ class TestTradeValidator:
 
         assert result.size_pct == 20  # Should be capped
 
-    def test_validate_json_string(self):
+    def test_validate_json_string(self) -> None:
         """Test validation of JSON string input."""
         validator = TradeValidator()
 
@@ -72,7 +72,7 @@ class TestTradeValidator:
         assert result.action == "SHORT"
         assert result.size_pct == 10
 
-    def test_validate_invalid_json(self):
+    def test_validate_invalid_json(self) -> None:
         """Test validation with invalid JSON returns HOLD."""
         validator = TradeValidator()
 
@@ -84,7 +84,7 @@ class TestTradeValidator:
         assert result.size_pct == 0
         assert "Validation error" in result.rationale
 
-    def test_validate_invalid_action(self):
+    def test_validate_invalid_action(self) -> None:
         """Test validation with invalid action returns HOLD."""
         validator = TradeValidator()
 
@@ -101,7 +101,7 @@ class TestTradeValidator:
         assert result.action == "HOLD"
         assert result.size_pct == 0
 
-    def test_validate_negative_values(self):
+    def test_validate_negative_values(self) -> None:
         """Test validation with negative values returns HOLD."""
         validator = TradeValidator()
 
@@ -118,7 +118,7 @@ class TestTradeValidator:
         assert result.action == "HOLD"
         assert result.size_pct == 0
 
-    def test_sanitize_llm_output(self):
+    def test_sanitize_llm_output(self) -> None:
         """Test LLM output sanitization."""
         validator = TradeValidator()
 
@@ -139,7 +139,7 @@ class TestTradeValidator:
         parsed = json.loads(sanitized)
         assert parsed["action"] == "LONG"
 
-    def test_validate_hold_action_zero_size(self):
+    def test_validate_hold_action_zero_size(self) -> None:
         """Test that HOLD and CLOSE actions have zero size."""
         validator = TradeValidator()
 
@@ -156,7 +156,7 @@ class TestTradeValidator:
         assert result.action == "HOLD"
         assert result.size_pct == 0
 
-    def test_validate_risk_reward_ratio(self):
+    def test_validate_risk_reward_ratio(self) -> None:
         """Test risk-reward ratio validation."""
         validator = TradeValidator()
 
@@ -173,7 +173,7 @@ class TestTradeValidator:
         # Should adjust take profit to improve ratio
         assert result.take_profit_pct >= 2.0
 
-    def test_validate_excessive_take_profit(self):
+    def test_validate_excessive_take_profit(self) -> None:
         """Test validation caps excessive take profit."""
         validator = TradeValidator()
 
@@ -189,7 +189,7 @@ class TestTradeValidator:
 
         assert result.take_profit_pct <= 20.0  # Should be capped
 
-    def test_get_validation_summary(self):
+    def test_get_validation_summary(self) -> None:
         """Test validation summary generation."""
         validator = TradeValidator()
 

@@ -2,7 +2,7 @@
 
 /**
  * HTTP Wrapper for MCP OmniSearch Server
- * 
+ *
  * This wrapper provides an HTTP API interface to the MCP OmniSearch server,
  * allowing the AI Trading Bot to communicate with it via REST API calls.
  */
@@ -36,7 +36,7 @@ const pendingRequests = new Map();
 async function startMCPServer() {
     return new Promise((resolve, reject) => {
         console.log('Starting MCP OmniSearch server...');
-        
+
         mcpProcess = spawn('node', [MCP_SERVER_PATH], {
             stdio: ['pipe', 'pipe', 'pipe'],
             env: { ...process.env }  // Pass all environment variables to the child process
@@ -113,7 +113,7 @@ function sendMCPRequest(message) {
         pendingRequests.set(messageId, { resolve, reject });
 
         mcpProcess.stdin.write(JSON.stringify(message) + '\n');
-        
+
         // Timeout after 30 seconds
         setTimeout(() => {
             if (pendingRequests.has(messageId)) {
@@ -156,7 +156,7 @@ async function callMCPTool(toolName, args) {
 // Health check endpoint
 app.get('/health', async (req, res) => {
     let availableTools = [];
-    
+
     if (isConnected) {
         try {
             // Query available tools from MCP server
@@ -165,14 +165,14 @@ app.get('/health', async (req, res) => {
                 id: ++requestId,
                 method: "tools/list"
             };
-            
+
             const toolsResult = await sendMCPRequest(toolsMessage);
             availableTools = toolsResult.tools || [];
         } catch (error) {
             console.error('Error getting tools:', error);
         }
     }
-    
+
     res.json({
         status: isConnected ? 'healthy' : 'unhealthy',
         connected: isConnected,
@@ -285,7 +285,7 @@ app.all('/crypto-sentiment', async (req, res) => {
             console.error('Error parsing MCP response:', err);
             responseContent = typeof result === 'string' ? result : JSON.stringify(result);
         }
-        
+
         const sentiment = parseSentimentFromAI(responseContent);
 
         res.json({
@@ -349,7 +349,7 @@ app.all('/market-sentiment', async (req, res) => {
             console.error('Error parsing MCP response:', err);
             responseContent = typeof result === 'string' ? result : JSON.stringify(result);
         }
-        
+
         const sentiment = parseSentimentFromAI(responseContent);
 
         res.json({
@@ -417,7 +417,7 @@ app.all('/market-correlation', async (req, res) => {
             console.error('Error parsing MCP response:', err);
             responseContent = typeof result === 'string' ? result : JSON.stringify(result);
         }
-        
+
         const correlation = parseCorrelationFromAI(responseContent);
 
         res.json({
@@ -437,11 +437,11 @@ app.all('/market-correlation', async (req, res) => {
 function analyzeSentiment(text) {
     const positiveWords = ['bullish', 'positive', 'growth', 'surge', 'rally', 'gain'];
     const negativeWords = ['bearish', 'negative', 'decline', 'fall', 'drop', 'loss'];
-    
+
     const textLower = text.toLowerCase();
     const positiveCount = positiveWords.filter(word => textLower.includes(word)).length;
     const negativeCount = negativeWords.filter(word => textLower.includes(word)).length;
-    
+
     if (positiveCount > negativeCount) return 'positive';
     if (negativeCount > positiveCount) return 'negative';
     return 'neutral';
@@ -460,8 +460,8 @@ function parseSentimentFromAI(content) {
     try {
         // Simple parsing logic - in production, use more sophisticated NLP
         let contentString = '';
-        
-        
+
+
         if (typeof content === 'string') {
             contentString = content;
         } else if (content === null || content === undefined) {
@@ -471,7 +471,7 @@ function parseSentimentFromAI(content) {
         } else {
             contentString = String(content);
         }
-        
+
         if (typeof contentString !== 'string') {
             console.error('contentString is not a string:', typeof contentString, contentString);
             return {
@@ -485,12 +485,12 @@ function parseSentimentFromAI(content) {
                 risk_factors: ['Analysis unavailable']
             };
         }
-        
+
         const contentLower = contentString.toLowerCase();
-        
+
         let score = 0;
         let overall = 'neutral';
-        
+
         if (contentLower.includes('very bullish')) {
             score = 0.8;
             overall = 'bullish';
@@ -504,7 +504,7 @@ function parseSentimentFromAI(content) {
             score = -0.5;
             overall = 'bearish';
         }
-        
+
         return {
             overall,
             score,
@@ -534,8 +534,8 @@ function parseCorrelationFromAI(content) {
     try {
         // Simple parsing - extract numbers from AI response
         let contentString = '';
-        
-        
+
+
         if (typeof content === 'string') {
             contentString = content;
         } else if (content === null || content === undefined) {
@@ -545,7 +545,7 @@ function parseCorrelationFromAI(content) {
         } else {
             contentString = String(content);
         }
-        
+
         if (typeof contentString !== 'string') {
             console.error('contentString is not a string:', typeof contentString, contentString);
             return {
@@ -554,9 +554,9 @@ function parseCorrelationFromAI(content) {
                 r_squared: 0
             };
         }
-        
+
         const numbers = contentString.match(/-?\d+\.?\d*/g) || [];
-        
+
         return {
             coefficient: parseFloat(numbers[0]) || 0,
             beta: parseFloat(numbers[1]) || 1,
@@ -576,7 +576,7 @@ function parseCorrelationFromAI(content) {
 async function start() {
     try {
         await startMCPServer();
-        
+
         app.listen(PORT, '0.0.0.0', () => {
             console.log(`OmniSearch HTTP wrapper listening on port ${PORT}`);
         });

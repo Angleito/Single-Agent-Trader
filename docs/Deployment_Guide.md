@@ -127,45 +127,45 @@ sys.path.append('/app')
 
 def validate_production_config():
     """Validate production configuration."""
-    
+
     checks = []
-    
+
     # Check environment
     env = os.getenv('ENVIRONMENT')
     if env == 'production':
         checks.append(("✅", "Environment set to production"))
     else:
         checks.append(("❌", f"Environment is {env}, should be production"))
-    
+
     # Check dry run
     dry_run = os.getenv('DRY_RUN', 'true').lower()
     if dry_run == 'false':
         checks.append(("⚠️", "DRY_RUN disabled - LIVE TRADING ACTIVE"))
     else:
         checks.append(("✅", "DRY_RUN enabled - Safe mode"))
-    
+
     # Check API keys
     if os.getenv('COINBASE_API_KEY'):
         checks.append(("✅", "Coinbase API key configured"))
     else:
         checks.append(("❌", "Coinbase API key missing"))
-    
+
     if os.getenv('OPENAI_API_KEY'):
         checks.append(("✅", "OpenAI API key configured"))
     else:
         checks.append(("❌", "OpenAI API key missing"))
-    
+
     # Print results
     print("🔍 Production Configuration Check:")
     for status, message in checks:
         print(f"   {status} {message}")
-    
+
     # Check if any critical failures
     failures = [check for check in checks if check[0] == "❌"]
     if failures:
         print("\n❌ Critical issues found - deployment not ready")
         return False
-    
+
     print("\n✅ Production configuration validated")
     return True
 
@@ -260,15 +260,15 @@ async def test_coinbase_connection():
     try:
         client = CoinbaseClient()
         await client.connect()
-        
+
         # Test basic API call
         accounts = await client.get_accounts()
         print("✅ Coinbase API connection successful")
         print(f"   Found {len(accounts)} accounts")
-        
+
         await client.disconnect()
         return True
-        
+
     except Exception as e:
         print(f"❌ Coinbase API connection failed: {e}")
         return False
@@ -278,28 +278,28 @@ def test_openai_connection():
     try:
         import openai
         openai.api_key = os.getenv('OPENAI_API_KEY')
-        
+
         # Test API call
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": "Hello"}],
             max_tokens=5
         )
-        
+
         print("✅ OpenAI API connection successful")
         return True
-        
+
     except Exception as e:
         print(f"❌ OpenAI API connection failed: {e}")
         return False
 
 if __name__ == "__main__":
     print("🔑 Testing API connections...")
-    
+
     # Test APIs
     coinbase_ok = asyncio.run(test_coinbase_connection())
     openai_ok = test_openai_connection()
-    
+
     if coinbase_ok and openai_ok:
         print("\n✅ All API connections successful")
     else:

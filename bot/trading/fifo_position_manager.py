@@ -274,10 +274,10 @@ class FIFOPositionManager:
     ) -> None:
         """
         Reconcile FIFO position from exchange position data.
-        
+
         This creates a synthetic position based on exchange data without
         individual lot tracking. Used during startup reconciliation.
-        
+
         Args:
             symbol: Trading symbol
             side: Position side (LONG/SHORT)
@@ -321,7 +321,7 @@ class FIFOPositionManager:
         try:
             # Check if we're in an async context
             try:
-                loop = asyncio.get_running_loop()
+                asyncio.get_running_loop()
                 # We're in an async context, schedule the save as a fire-and-forget task
                 task = asyncio.create_task(self._save_state_async())
                 # Add error handling callback

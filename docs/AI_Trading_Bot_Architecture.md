@@ -4,8 +4,8 @@
 
 ## 1. Objective
 
-Build an AI-assisted crypto-futures trading bot for Coinbase Futures.  
-Primary decision-making is handled by a **LangChain agent** powered by large language models (LLMs).  
+Build an AI-assisted crypto-futures trading bot for Coinbase Futures.
+Primary decision-making is handled by a **LangChain agent** powered by large language models (LLMs).
 Custom technical indicators (VuManChu Cipher A & B) are re-implemented in Python for full local control.
 
 ## 2. High-Level Components
@@ -22,13 +22,13 @@ Custom technical indicators (VuManChu Cipher A & B) are re-implemented in Python
 
 ## 3. Tech Stack
 
-* Python 3.12 (type hints, `slots`)  
-* **Poetry** for dependency/venv management  
-* `coinbase-advanced-py` SDK  
-* `pandas`, `numpy`, `pandas-ta` for TA math  
-* `langchain` + chosen LLM connector (`openai`, `ollama`, etc.)  
-* `pydantic` v2 for data models & settings  
-* `python-dotenv` for secret management  
+* Python 3.12 (type hints, `slots`)
+* **Poetry** for dependency/venv management
+* `coinbase-advanced-py` SDK
+* `pandas`, `numpy`, `pandas-ta` for TA math
+* `langchain` + chosen LLM connector (`openai`, `ollama`, etc.)
+* `pydantic` v2 for data models & settings
+* `python-dotenv` for secret management
 * Tooling: `pytest`, `black`, `ruff`, `pre-commit`
 
 ## 4. Directory Layout
@@ -76,18 +76,18 @@ flowchart LR
 
 ## 6. Indicator Implementation (`bot/indicators/vumanchu.py`)
 
-* **Cipher A**  
-  * EMA cloud trend dots  
-  * RSI divergence detection  
-  * Trend confirmation filters  
-* **Cipher B**  
-  * VWAP-driven money-flow index  
-  * Zero-lag MACD style “waves”  
-  * Positive/negative momentum cross detection  
+* **Cipher A**
+  * EMA cloud trend dots
+  * RSI divergence detection
+  * Trend confirmation filters
+* **Cipher B**
+  * VWAP-driven money-flow index
+  * Zero-lag MACD style “waves”
+  * Positive/negative momentum cross detection
 
 Guidelines:
-* Use **vectorized** `numpy`/`pandas` operations; no for-loops.  
-* Return latest state plus full series for backtests.  
+* Use **vectorized** `numpy`/`pandas` operations; no for-loops.
+* Return latest state plus full series for backtests.
 * Provide typings:
   ```python
   def cipher_a(df: pd.DataFrame) -> pd.Series: ...
@@ -142,18 +142,18 @@ class TradeAction(BaseModel):
 
 ## 8. Validation & Risk (`bot/validator.py`, `bot/risk.py`)
 
-* Validate LLM JSON output with pydantic; on error → `HOLD`.  
+* Validate LLM JSON output with pydantic; on error → `HOLD`.
 * Enforce:
-  * `size_pct` ≤ account free margin & config cap  
-  * Daily drawdown, max concurrent trades, etc.  
+  * `size_pct` ≤ account free margin & config cap
+  * Daily drawdown, max concurrent trades, etc.
 * Inject TP/SL levels into order before sending.
 
 ## 9. Trading Layer (`bot/exchange/coinbase.py`)
 
 * Thin wrapper over `coinbase-advanced-py`:
-  * `place_market_order`, `place_limit_order`, `cancel_all`, etc.  
-* Handle auth via env vars (`CB_API_KEY`, `CB_API_SECRET`).  
-* Convert `%`-based TP/SL to absolute price.  
+  * `place_market_order`, `place_limit_order`, `cancel_all`, etc.
+* Handle auth via env vars (`CB_API_KEY`, `CB_API_SECRET`).
+* Convert `%`-based TP/SL to absolute price.
 
 ## 10. Configuration (`bot/config.py`)
 
@@ -170,31 +170,31 @@ class Settings(BaseSettings, env_file=".env", frozen=True):
 
 ## 11. CLI Entry (`bot/main.py`)
 
-* `python -m bot.main live` – starts real-time loop  
-* `python -m bot.main backtest --from 2024-01-01 --to 2025-01-01`  
+* `python -m bot.main live` – starts real-time loop
+* `python -m bot.main backtest --from 2024-01-01 --to 2025-01-01`
 * Graceful SIGINT shutdown; pending order cancels.
 
 ## 12. Testing
 
-* **Unit tests** per module (`tests/`): indicators, validator, risk.  
-* **Golden prompt tests**: record LLM calls with LangChain “vcr” to avoid hitting API every run.  
+* **Unit tests** per module (`tests/`): indicators, validator, risk.
+* **Golden prompt tests**: record LLM calls with LangChain “vcr” to avoid hitting API every run.
 * **Backtest** coverage ≥1 year on BTC & ETH.
 
 ## 13. Development Workflow
 
-1. `poetry install`  
-2. Copy `.env.example` → `.env`, add keys.  
-3. Run `pre-commit install`.  
-4. Implement indicator math first (passes unit tests).  
-5. Build LLM agent, test prompt locally via `python scripts/try_prompt.py`.  
-6. Integrate exchange layer with dry-run flag.  
+1. `poetry install`
+2. Copy `.env.example` → `.env`, add keys.
+3. Run `pre-commit install`.
+4. Implement indicator math first (passes unit tests).
+5. Build LLM agent, test prompt locally via `python scripts/try_prompt.py`.
+6. Integrate exchange layer with dry-run flag.
 7. Confirm end-to-end in backtest before live.
 
 ## 14. Future Enhancements
 
-* Integrate RAG book knowledge via [`bot/train/reader.py`].  
-* Add Slack/Discord alerting module.  
-* Multi-symbol support & portfolio optimizer.  
+* Integrate RAG book knowledge via [`bot/train/reader.py`].
+* Add Slack/Discord alerting module.
+* Multi-symbol support & portfolio optimizer.
 * Reinforcement-learning fine-tuning of prompt & risk params.
 
 ---

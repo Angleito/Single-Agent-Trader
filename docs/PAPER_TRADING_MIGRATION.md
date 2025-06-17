@@ -101,21 +101,21 @@ SYSTEM__DRY_RUN=false  # Live trading mode (DANGER: uses real money!)
 
 ### Issue: Bot still in paper trading mode when you want live trading
 
-**Solution**: 
+**Solution**:
 1. Check your .env file has `SYSTEM__DRY_RUN=false`
 2. Restart the bot to pick up the new setting
 3. Confirm the startup message shows "LIVE mode"
 
 ### Issue: Accidentally trading with real money
 
-**Solution**: 
+**Solution**:
 1. Immediately set `SYSTEM__DRY_RUN=true` in your .env file
 2. The bot defaults to paper trading for safety
 3. Always check the startup logs before proceeding
 
 ### Issue: Docker not respecting .env settings
 
-**Solution**: 
+**Solution**:
 1. Ensure your .env file is in the project root
 2. Use `docker-compose down` and `docker-compose up` to restart
 3. Check that docker-compose.yml references `${SYSTEM__DRY_RUN:-true}`

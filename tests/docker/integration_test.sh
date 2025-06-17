@@ -64,7 +64,7 @@ check_service_health() {
     local SERVICE=$1
     local MAX_ATTEMPTS=30
     local ATTEMPT=0
-    
+
     while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
         if docker-compose ps $SERVICE 2>/dev/null | grep -q "healthy\|Up"; then
             return 0
@@ -72,7 +72,7 @@ check_service_health() {
         sleep 2
         ((ATTEMPT++))
     done
-    
+
     return 1
 }
 
@@ -122,27 +122,27 @@ class TradingMonitor:
         self.metrics = defaultdict(int)
         self.messages = []
         self.start_time = time.time()
-        
+
     async def monitor(self):
         uri = "ws://localhost:8000/ws"
-        
+
         try:
             async with websockets.connect(uri) as websocket:
                 print(f"Connected to dashboard WebSocket")
-                
+
                 while time.time() - self.start_time < self.duration:
                     try:
                         message = await asyncio.wait_for(websocket.recv(), timeout=1.0)
                         data = json.loads(message)
-                        
+
                         # Track message types
                         msg_type = data.get("type", "unknown")
                         self.metrics[msg_type] += 1
-                        
+
                         # Store message
                         data["received_at"] = datetime.utcnow().isoformat()
                         self.messages.append(data)
-                        
+
                         # Print key events
                         if msg_type == "ai_decision":
                             print(f"AI Decision: {data.get('action')} - {data.get('reasoning', '')[:50]}...")
@@ -150,18 +150,18 @@ class TradingMonitor:
                             print(f"Trade Executed: {data.get('side')} {data.get('size')} @ {data.get('price')}")
                         elif msg_type == "position_update":
                             print(f"Position Update: P&L {data.get('pnl', 0):.2f} ({data.get('pnl_percentage', 0):.2%})")
-                            
+
                     except asyncio.TimeoutError:
                         continue
                     except Exception as e:
                         print(f"Error: {e}")
-                        
+
         except Exception as e:
             print(f"Connection failed: {e}")
-            
+
         # Save results
         self.save_results()
-        
+
     def save_results(self):
         results = {
             "duration": time.time() - self.start_time,
@@ -171,10 +171,10 @@ class TradingMonitor:
             "unique_message_types": list(self.metrics.keys()),
             "sample_messages": self.messages[-10:] if self.messages else []
         }
-        
+
         with open("metrics.json", "w") as f:
             json.dump(results, f, indent=2)
-            
+
         print(f"\nMonitoring complete:")
         print(f"Total messages: {results['total_messages']}")
         print(f"Message rate: {results['messages_per_second']:.2f} msg/s")
@@ -241,7 +241,7 @@ def analyze_logs():
         "errors": [],
         "warnings": []
     }
-    
+
     # Analyze bot logs
     try:
         with open("bot.log", "r") as f:
@@ -254,11 +254,11 @@ def analyze_logs():
                         results["websocket_events"]["disconnections"] += 1
                     elif "publish" in line.lower():
                         results["websocket_events"]["messages_published"] += 1
-                
+
                 # Trading events
                 if "action" in line.lower() and ("buy" in line.lower() or "sell" in line.lower() or "hold" in line.lower()):
                     results["trading_events"]["decisions"] += 1
-                
+
                 # Errors and warnings
                 if "ERROR" in line:
                     results["errors"].append(line.strip()[:200])
@@ -266,7 +266,7 @@ def analyze_logs():
                     results["warnings"].append(line.strip()[:200])
     except Exception as e:
         print(f"Error analyzing bot logs: {e}")
-    
+
     # Analyze dashboard logs
     try:
         with open("dashboard.log", "r") as f:
@@ -277,7 +277,7 @@ def analyze_logs():
                     results["websocket_events"]["messages_broadcast"] += 1
     except Exception as e:
         print(f"Error analyzing dashboard logs: {e}")
-    
+
     # Load metrics from monitor
     try:
         with open("metrics.json", "r") as f:
@@ -285,30 +285,30 @@ def analyze_logs():
             results["monitor_metrics"] = monitor_metrics
     except Exception as e:
         print(f"Error loading monitor metrics: {e}")
-    
+
     # Save analysis
     with open("analysis.json", "w") as f:
         json.dump(results, f, indent=2)
-    
+
     # Print summary
     print("\n=== Integration Test Analysis ===")
     print(f"\nWebSocket Events:")
     for event, count in results["websocket_events"].items():
         print(f"  {event}: {count}")
-    
+
     print(f"\nTrading Events:")
     for event, count in results["trading_events"].items():
         print(f"  {event}: {count}")
-    
+
     if "monitor_metrics" in results:
         print(f"\nMessage Flow:")
         print(f"  Total messages: {results['monitor_metrics']['total_messages']}")
         print(f"  Message rate: {results['monitor_metrics']['messages_per_second']:.2f} msg/s")
         print(f"  Message types: {len(results['monitor_metrics']['unique_message_types'])}")
-    
+
     print(f"\nErrors: {len(results['errors'])}")
     print(f"Warnings: {len(results['warnings'])}")
-    
+
     return results
 
 if __name__ == "__main__":
@@ -328,7 +328,7 @@ VALIDATION_ERRORS=()
 # Check metrics file
 if [ -f "$METRICS_FILE" ]; then
     print_success "Metrics collected successfully"
-    
+
     # Validate message flow
     MSG_COUNT=$(jq -r '.total_messages // 0' "$METRICS_FILE")
     if [ "$MSG_COUNT" -gt 0 ]; then

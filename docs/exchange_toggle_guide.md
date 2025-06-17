@@ -56,7 +56,7 @@ When you change `EXCHANGE__EXCHANGE_TYPE` in your `.env` file:
    ```bash
    # Copy the example environment file
    cp .env.example .env
-   
+
    # Edit .env and add Coinbase credentials
    EXCHANGE__EXCHANGE_TYPE=coinbase
    EXCHANGE__CDP_API_KEY_NAME="your-key-name"
@@ -71,10 +71,10 @@ When you change `EXCHANGE__EXCHANGE_TYPE` in your `.env` file:
    ```bash
    # Install Sui CLI (if not already installed)
    brew install sui
-   
+
    # Create new wallet
    sui client new-address ed25519
-   
+
    # Export private key
    sui keytool export --address <your-address>
    ```
@@ -399,15 +399,15 @@ class BaseExchange(ABC):
     @abstractmethod
     async def connect(self) -> None:
         """Establish connection to exchange"""
-    
+
     @abstractmethod
     async def get_balance(self) -> Dict[str, float]:
         """Get account balances"""
-    
+
     @abstractmethod
     async def place_order(self, order: Order) -> str:
         """Place a trading order"""
-    
+
     @abstractmethod
     async def get_position(self, symbol: str) -> Optional[Position]:
         """Get current position for symbol"""
@@ -483,11 +483,11 @@ from bot.exchange.base import BaseExchange
 class NewExchange(BaseExchange):
     def __init__(self, config: NewExchangeConfig):
         self.config = config
-    
+
     async def connect(self) -> None:
         # Implementation
         pass
-    
+
     # Implement all abstract methods
 ```
 

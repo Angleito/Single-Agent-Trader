@@ -81,7 +81,7 @@ Example: `ws://localhost:8080/ws/multi/ETH-PERP,BTC-PERP,SUI-PERP`
 ```json
 {
   "type": "trade",
-  "symbol": "ETH-PERP", 
+  "symbol": "ETH-PERP",
   "timestamp": 1672531200.456,
   "data": {
     "price": 2500.234567,
@@ -150,14 +150,14 @@ import json
 
 async def test_websocket():
     uri = "ws://localhost:8080/ws/ETH-PERP"
-    
+
     async with websockets.connect(uri) as websocket:
         # Send ping
         await websocket.send(json.dumps({
             "type": "ping",
             "timestamp": time.time()
         }))
-        
+
         # Receive messages
         async for message in websocket:
             data = json.loads(message)
@@ -325,7 +325,7 @@ provider.client.subscribe_to_price_updates(on_price_update)
 
 ### Planned Features
 - **Order Book Data**: Level 2 market depth streaming
-- **Multiple Exchanges**: Binance, OKX WebSocket integration  
+- **Multiple Exchanges**: Binance, OKX WebSocket integration
 - **Data Persistence**: Historical tick data storage
 - **Advanced Analytics**: Real-time volatility, momentum indicators
 - **Load Balancing**: Multiple WebSocket servers
@@ -365,7 +365,7 @@ class BluefinServiceClient:
     async def connect_websocket(self, symbols: List[str]) -> bool
     async def disconnect_websocket(self)
     def subscribe_to_price_updates(self, callback: Callable)
-    def subscribe_to_trades(self, callback: Callable)  
+    def subscribe_to_trades(self, callback: Callable)
     def get_latest_price(self, symbol: str) -> Optional[float]
     def is_websocket_connected(self) -> bool
     def get_websocket_status(self) -> Dict
@@ -388,7 +388,7 @@ class TickAggregator:
 The real-time WebSocket data streaming system provides a robust foundation for high-frequency scalping trading. It offers:
 
 - **Low Latency**: Sub-second data updates
-- **Reliability**: Automatic reconnection and error handling  
+- **Reliability**: Automatic reconnection and error handling
 - **Flexibility**: Multiple timeframes and intervals
 - **Scalability**: Support for multiple symbols and connections
 - **Integration**: Seamless integration with existing trading infrastructure

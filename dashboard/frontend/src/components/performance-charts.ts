@@ -88,7 +88,7 @@ export class PerformanceCharts {
               <button class="time-btn" data-period="monthly">Monthly</button>
             </div>
           </div>
-          
+
           <div class="metrics-grid">
             <div class="metric-card">
               <div class="metric-label">Total P&L</div>
@@ -955,7 +955,7 @@ export class PerformanceCharts {
         .metrics-grid {
           grid-template-columns: 1fr 1fr;
         }
-        
+
         .performance-charts-container {
           padding: var(--spacing-md);
         }

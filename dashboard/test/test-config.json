@@ -4,7 +4,7 @@
     "version": "1.0.0",
     "description": "Comprehensive integration tests for WebSocket connections, API endpoints, and UI components in Docker environment"
   },
-  
+
   "services": {
     "backend": {
       "name": "dashboard-backend",
@@ -37,14 +37,14 @@
       ]
     }
   },
-  
+
   "websocket": {
     "url": "ws://localhost:8000/ws",
     "connectionTimeout": 10000,
     "messageTimeout": 5000,
     "expectedMessageTypes": [
       "echo",
-      "llm_decision", 
+      "llm_decision",
       "llm_event",
       "tradingview_update",
       "docker-logs"
@@ -60,7 +60,7 @@
       }
     ]
   },
-  
+
   "docker": {
     "composeFile": "docker-compose.yml",
     "requiredContainers": [
@@ -79,7 +79,7 @@
       "maxMemoryUsage": "1GB"
     }
   },
-  
+
   "testSuites": {
     "websocket": {
       "enabled": true,
@@ -98,7 +98,7 @@
       "tests": [
         "healthCheck",
         "rootEndpoint",
-        "statusEndpoint", 
+        "statusEndpoint",
         "tradingDataEndpoint",
         "logsEndpoint",
         "llmEndpoints",
@@ -148,7 +148,7 @@
       "timeout": 60000
     }
   },
-  
+
   "mockData": {
     "symbols": ["BTC-USD", "ETH-USD", "SOL-USD", "AVAX-USD"],
     "timeframes": ["1m", "5m", "15m", "1h", "4h", "1d"],
@@ -163,7 +163,7 @@
     "testDataCount": 100,
     "sessionDuration": 3600000
   },
-  
+
   "reporting": {
     "outputDirectory": "./test-reports",
     "formats": ["json", "html", "console"],
@@ -171,7 +171,7 @@
     "includeLogs": true,
     "detailedMetrics": true
   },
-  
+
   "thresholds": {
     "minimumPassRate": 80,
     "maxResponseTime": 5000,
@@ -183,7 +183,7 @@
       "docker.servicesHealthy"
     ]
   },
-  
+
   "environments": {
     "development": {
       "backend_url": "http://localhost:8000",
@@ -197,7 +197,7 @@
       "nginx_url": "http://localhost:8080"
     }
   },
-  
+
   "retryPolicy": {
     "maxRetries": 3,
     "retryDelay": 1000,
@@ -208,7 +208,7 @@
       "ENOTFOUND"
     ]
   },
-  
+
   "monitoring": {
     "healthCheckInterval": 30000,
     "performanceMetrics": true,

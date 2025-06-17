@@ -491,7 +491,7 @@ Systematic testing of all providers with real-world queries:
    - ✅ AND/OR/NOT (boolean operators)
 
 2. **Provider-Specific Implementation** ✅
-   
+
    a. Brave Search ✅
    - ✅ Implemented native operator support in query string
    - ✅ Successfully tested with site:, filetype:, intitle: operators

@@ -78,6 +78,7 @@ warnings.simplefilter("ignore", SyntaxWarning)
 import asyncio
 import logging
 import signal
+import time
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -88,6 +89,9 @@ import click
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+
+# from .websocket_publisher import WebSocketPublisher  # TODO: Implement WebSocketPublisher
+from .command_consumer import CommandConsumer
 
 # Local imports
 from .config import Settings, create_settings
@@ -106,8 +110,6 @@ from .strategy.memory_enhanced_agent import MemoryEnhancedLLMAgent
 from .types import IndicatorData, MarketState, Position, TradeAction
 from .utils import setup_warnings_suppression
 from .validator import TradeValidator
-# from .websocket_publisher import WebSocketPublisher  # TODO: Implement WebSocketPublisher
-from .command_consumer import CommandConsumer
 
 console = Console()
 
@@ -163,7 +165,7 @@ class TradingEngine:
             )
 
         # Initialize components (market data will be initialized after exchange connection)
-        self.market_data = None
+        self.market_data: MarketDataProvider | None = None
         self.indicator_calc = VuManChuIndicators()
         self.actual_trading_symbol = symbol  # Will be updated if futures are enabled
 
@@ -179,11 +181,15 @@ class TradingEngine:
             try:
                 self.omnisearch_client = OmniSearchClient(
                     server_url=self.settings.omnisearch.server_url,
-                    api_key=self.settings.omnisearch.api_key.get_secret_value() if self.settings.omnisearch.api_key else None,
+                    api_key=(
+                        self.settings.omnisearch.api_key.get_secret_value()
+                        if self.settings.omnisearch.api_key
+                        else None
+                    ),
                     enable_cache=True,
                     cache_ttl=self.settings.omnisearch.cache_ttl_seconds,
                     rate_limit_requests=self.settings.omnisearch.rate_limit_requests_per_minute,
-                    rate_limit_window=60
+                    rate_limit_window=60,
                 )
                 self.logger.info("Successfully initialized OmniSearch client")
             except Exception as e:
@@ -198,7 +204,9 @@ class TradingEngine:
             try:
                 # TODO: Implement WebSocketPublisher class
                 # self.websocket_publisher = WebSocketPublisher(self.settings)
-                self.logger.warning("WebSocketPublisher not yet implemented, skipping initialization")
+                self.logger.warning(
+                    "WebSocketPublisher not yet implemented, skipping initialization"
+                )
                 self.websocket_publisher = None
             except Exception as e:
                 self.logger.error(f"Failed to initialize WebSocket publisher: {e}")
@@ -208,7 +216,9 @@ class TradingEngine:
         # Initialize Command Consumer for bidirectional dashboard control
         self.command_consumer = None
         if self.settings.system.enable_websocket_publishing:  # Use same setting for now
-            self.logger.info("Dashboard control enabled, initializing command consumer...")
+            self.logger.info(
+                "Dashboard control enabled, initializing command consumer..."
+            )
             try:
                 self.command_consumer = CommandConsumer()
                 self._register_command_callbacks()
@@ -291,59 +301,56 @@ class TradingEngine:
         self.start_time = datetime.now(UTC)
 
         # Trading interval control
-        self.last_trade_time = None
-        self.last_candle_analysis_time = None  # Track when we last analyzed a candle
+        self.last_trade_time: Optional[datetime] = None
+        self.last_candle_analysis_time: Optional[datetime] = (
+            None  # Track when we last analyzed a candle
+        )
         self.trading_enabled = False  # Will be enabled after data validation
         self.data_validation_complete = False
 
         self.logger.info(f"Initialized TradingEngine for {symbol} at {interval}")
 
     @property
-    def exchange(self):
+    def exchange(self) -> Any:
         """Backward compatibility property - maps to exchange_client."""
         return self.exchange_client
 
-    def _register_command_callbacks(self):
+    def _register_command_callbacks(self) -> None:
         """Register callback functions for dashboard commands."""
         if not self.command_consumer:
             return
-        
+
         # Register emergency stop callback
         self.command_consumer.register_callback(
-            "emergency_stop", 
-            self._handle_emergency_stop
+            "emergency_stop", self._handle_emergency_stop
         )
-        
+
         # Register pause/resume trading callbacks
         self.command_consumer.register_callback(
-            "pause_trading", 
-            self._handle_pause_trading
+            "pause_trading", self._handle_pause_trading
         )
         self.command_consumer.register_callback(
-            "resume_trading", 
-            self._handle_resume_trading
+            "resume_trading", self._handle_resume_trading
         )
-        
+
         # Register risk limit update callback
         self.command_consumer.register_callback(
-            "update_risk_limits", 
-            self._handle_update_risk_limits
+            "update_risk_limits", self._handle_update_risk_limits
         )
-        
+
         # Register manual trade callback
         self.command_consumer.register_callback(
-            "manual_trade", 
-            self._handle_manual_trade
+            "manual_trade", self._handle_manual_trade
         )
-        
+
         self.logger.info("Registered all command callbacks for dashboard integration")
 
-    async def _handle_emergency_stop(self):
+    async def _handle_emergency_stop(self) -> None:
         """Handle emergency stop command from dashboard."""
         self.logger.critical("🚨 EMERGENCY STOP ACTIVATED FROM DASHBOARD")
         self._shutdown_requested = True
         self.trading_enabled = False
-        
+
         # Close all positions if possible
         try:
             if self.current_position.side != "FLAT":
@@ -351,64 +358,66 @@ class TradingEngine:
                 await self._close_all_positions()
         except Exception as e:
             self.logger.error(f"Error closing positions during emergency stop: {e}")
-        
+
         # Publish emergency stop status
         if self.websocket_publisher:
             await self.websocket_publisher.publish_system_status(
                 status="emergency_stopped",
                 health=False,
-                message="Emergency stop activated from dashboard"
+                message="Emergency stop activated from dashboard",
             )
 
-    async def _handle_pause_trading(self):
+    async def _handle_pause_trading(self) -> None:
         """Handle pause trading command from dashboard."""
         self.logger.warning("📍 Trading paused from dashboard")
         self.trading_enabled = False
-        
+
         if self.websocket_publisher:
             await self.websocket_publisher.publish_system_status(
                 status="trading_paused",
                 health=True,
-                message="Trading paused from dashboard"
+                message="Trading paused from dashboard",
             )
 
-    async def _handle_resume_trading(self):
+    async def _handle_resume_trading(self) -> None:
         """Handle resume trading command from dashboard."""
         self.logger.info("▶️ Trading resumed from dashboard")
         self.trading_enabled = True
         self._shutdown_requested = False
-        
+
         if self.websocket_publisher:
             await self.websocket_publisher.publish_system_status(
                 status="trading_active",
                 health=True,
-                message="Trading resumed from dashboard"
+                message="Trading resumed from dashboard",
             )
 
-    async def _handle_update_risk_limits(self, parameters: dict):
+    async def _handle_update_risk_limits(self, parameters: dict) -> None:
         """Handle risk limit update command from dashboard."""
         self.logger.info(f"Updating risk limits from dashboard: {parameters}")
-        
+
         try:
             # Update risk manager settings
             if "max_position_size" in parameters:
                 self.risk_manager.max_position_size = parameters["max_position_size"]
-            
+
             if "stop_loss_percentage" in parameters:
-                self.risk_manager.stop_loss_percentage = parameters["stop_loss_percentage"] / 100.0
-            
+                self.risk_manager.stop_loss_percentage = (
+                    parameters["stop_loss_percentage"] / 100.0
+                )
+
             if "max_daily_loss" in parameters:
                 self.risk_manager.max_daily_loss = parameters["max_daily_loss"]
-            
+
             self.logger.info("Risk limits updated successfully")
-            
+
             if self.websocket_publisher:
                 await self.websocket_publisher.publish_system_status(
                     status="risk_limits_updated",
                     health=True,
-                    message=f"Risk limits updated: {parameters}"
+                    message=f"Risk limits updated: {parameters}",
                 )
-                
+
         except Exception as e:
             self.logger.error(f"Error updating risk limits: {e}")
             raise
@@ -416,20 +425,20 @@ class TradingEngine:
     async def _handle_manual_trade(self, parameters: dict) -> bool:
         """Handle manual trade command from dashboard."""
         self.logger.info(f"Executing manual trade from dashboard: {parameters}")
-        
+
         try:
             # Create trade action from parameters
             trade_action = TradeAction(
                 action=parameters["action"].upper(),
                 size_pct=int(parameters["size_percentage"]),
                 take_profit_pct=2.0,  # Default take profit
-                stop_loss_pct=1.5,   # Default stop loss
-                rationale=parameters.get("reason", "Manual trade from dashboard")
+                stop_loss_pct=1.5,  # Default stop loss
+                rationale=parameters.get("reason", "Manual trade from dashboard"),
             )
-            
+
             # Execute the trade
             success = await self._execute_trade_action(trade_action)
-            
+
             if success:
                 self.logger.info("Manual trade executed successfully")
                 if self.websocket_publisher:
@@ -440,18 +449,18 @@ class TradingEngine:
                         size=str(trade_action.size_pct),
                         price="market",
                         status="filled",
-                        manual=True
+                        manual=True,
                     )
             else:
                 self.logger.warning("Manual trade execution failed")
-            
+
             return success
-            
+
         except Exception as e:
             self.logger.error(f"Error executing manual trade: {e}")
             return False
 
-    async def _close_all_positions(self):
+    async def _close_all_positions(self) -> None:
         """Close all open positions (used for emergency stop)."""
         try:
             if self.current_position.side != "FLAT":
@@ -460,7 +469,7 @@ class TradingEngine:
                     size_pct=0,  # Close actions use size_pct=0
                     take_profit_pct=0.0,
                     stop_loss_pct=0.0,
-                    rationale="Emergency position closure"
+                    rationale="Emergency position closure",
                 )
                 await self._execute_trade_action(close_action)
         except Exception as e:
@@ -470,7 +479,7 @@ class TradingEngine:
         """
         Check if trading is currently allowed based on data availability and timing.
         For high-frequency scalping, we trade on every new candle completion (1s-15s).
-        
+
         Returns:
             True if trading is allowed, False otherwise
         """
@@ -491,12 +500,15 @@ class TradingEngine:
         # Handle both sync and async providers
         try:
             import inspect
+
             latest_data = []
-            if hasattr(self.market_data, 'get_latest_ohlcv'):
-                method = getattr(self.market_data, 'get_latest_ohlcv')
+            if hasattr(self.market_data, "get_latest_ohlcv"):
+                method = self.market_data.get_latest_ohlcv
                 if inspect.iscoroutinefunction(method):
                     # Can't await in non-async method, defer to caller
-                    self.logger.debug("Async method detected, skipping fresh data check")
+                    self.logger.debug(
+                        "Async method detected, skipping fresh data check"
+                    )
                     return False
                 else:
                     latest_data = method(limit=1)
@@ -505,7 +517,7 @@ class TradingEngine:
         except Exception as e:
             self.logger.warning(f"Error checking latest data: {e}")
             return False
-        
+
         if not latest_data:
             self.logger.debug("📊 No market data available")
             return False
@@ -539,7 +551,9 @@ class TradingEngine:
             if last_analysis_time.tzinfo is None:
                 last_analysis_time = last_analysis_time.replace(tzinfo=UTC)
 
-            time_since_last_analysis = (current_time - last_analysis_time).total_seconds()
+            time_since_last_analysis = (
+                current_time - last_analysis_time
+            ).total_seconds()
             if time_since_last_analysis < candle_interval_seconds:
                 return False
 
@@ -583,7 +597,7 @@ class TradingEngine:
 
         return settings
 
-    def _setup_logging(self):
+    def _setup_logging(self) -> None:
         """Setup logging configuration."""
         log_level = getattr(logging, self.settings.system.log_level)
 
@@ -608,7 +622,7 @@ class TradingEngine:
         root_logger = logging.getLogger()
         root_logger.handlers = [h for h in root_logger.handlers if h is not None]
 
-    async def run(self):
+    async def run(self) -> None:
         """
         Main trading loop entry point.
 
@@ -659,17 +673,17 @@ class TradingEngine:
                         if hasattr(self.dominance_provider, "_session"):
                             self.dominance_provider._session = None
 
-    def _setup_signal_handlers(self):
+    def _setup_signal_handlers(self) -> None:
         """Setup signal handlers for graceful shutdown."""
 
-        def signal_handler(signum, frame):
+        def signal_handler(signum: int, frame: Any) -> None:
             self.logger.info(f"Received signal {signum}, requesting shutdown...")
             self._shutdown_requested = True
 
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
 
-    async def _initialize_components(self):
+    async def _initialize_components(self) -> None:
         """Initialize all trading components."""
         console.print("[cyan]Initializing trading components...[/cyan]")
 
@@ -682,24 +696,33 @@ class TradingEngine:
         # Get the actual trading symbol (futures contract if enabled)
         if self.exchange_client.enable_futures:
             console.print("  • Determining active futures contract...")
-            self.actual_trading_symbol = await self.exchange_client.get_trading_symbol(self.symbol)
-            console.print(f"    Using futures contract: [green]{self.actual_trading_symbol}[/green]")
+            self.actual_trading_symbol = await self.exchange_client.get_trading_symbol(
+                self.symbol
+            )
+            console.print(
+                f"    Using futures contract: [green]{self.actual_trading_symbol}[/green]"
+            )
         else:
             self.actual_trading_symbol = self.symbol
-            console.print(f"    Using spot symbol: [green]{self.actual_trading_symbol}[/green]")
+            console.print(
+                f"    Using spot symbol: [green]{self.actual_trading_symbol}[/green]"
+            )
 
         # Initialize market data provider based on exchange type and trading mode
         console.print("  • Connecting to market data feed...")
-        
+
         # Check if this is high-frequency trading (interval < 1 minute)
         interval_seconds = self._get_interval_seconds(self.interval)
         is_high_frequency = interval_seconds <= 60  # 1 minute or less
-        
+
         if self.settings.exchange.exchange_type == "bluefin":
             # Always try BluefinMarketDataProvider first for Bluefin exchange
             try:
                 from .data.bluefin_market import BluefinMarketDataProvider
-                self.logger.info(f"Using Bluefin native market data provider for {self.symbol}")
+
+                self.logger.info(
+                    f"Using Bluefin native market data provider for {self.symbol}"
+                )
                 self.market_data = BluefinMarketDataProvider(self.symbol, self.interval)
                 console.print("    Using Bluefin DEX native market data")
             except ImportError as e:
@@ -708,22 +731,39 @@ class TradingEngine:
                 if is_high_frequency:
                     try:
                         from .data.realtime_market import RealtimeMarketDataProvider
-                        self.logger.info(f"Using real-time WebSocket market data provider for HF trading: {self.symbol}")
+
+                        self.logger.info(
+                            f"Using real-time WebSocket market data provider for HF trading: {self.symbol}"
+                        )
                         # Convert interval to seconds for real-time provider
                         realtime_intervals = [interval_seconds]
                         if interval_seconds > 1:
-                            realtime_intervals.append(1)  # Always include 1-second candles for scalping
+                            realtime_intervals.append(
+                                1
+                            )  # Always include 1-second candles for scalping
                         if 5 not in realtime_intervals and interval_seconds != 5:
                             realtime_intervals.append(5)  # Include 5-second candles
-                        self.market_data = RealtimeMarketDataProvider(self.symbol, realtime_intervals)
-                        console.print(f"    Using real-time WebSocket data for HF trading ({realtime_intervals}s intervals)")
+                        self.market_data = RealtimeMarketDataProvider(
+                            self.symbol, realtime_intervals
+                        )
+                        console.print(
+                            f"    Using real-time WebSocket data for HF trading ({realtime_intervals}s intervals)"
+                        )
                     except ImportError:
-                        self.logger.warning("RealtimeMarketDataProvider not available, falling back to standard provider")
-                        self.market_data = MarketDataProvider(self.symbol, self.interval)
-                        console.print(f"    Using standard market data provider (real-time module not available)")
+                        self.logger.warning(
+                            "RealtimeMarketDataProvider not available, falling back to standard provider"
+                        )
+                        self.market_data = MarketDataProvider(
+                            self.symbol, self.interval
+                        )
+                        console.print(
+                            "    Using standard market data provider (real-time module not available)"
+                        )
                 else:
                     # Fallback to standard market data provider
-                    self.logger.info(f"Falling back to standard MarketDataProvider for {self.symbol}")
+                    self.logger.info(
+                        f"Falling back to standard MarketDataProvider for {self.symbol}"
+                    )
                     self.market_data = MarketDataProvider(self.symbol, self.interval)
                     console.print("    Using fallback market data provider for Bluefin")
         else:
@@ -732,7 +772,7 @@ class TradingEngine:
             self.logger.info(f"Using Coinbase market data for {market_data_symbol}")
             self.market_data = MarketDataProvider(market_data_symbol, self.interval)
             console.print(f"    Using Coinbase market data for {market_data_symbol}")
-        
+
         await self.market_data.connect()
 
         # Verify LLM agent is available
@@ -750,7 +790,9 @@ class TradingEngine:
                 if connected:
                     console.print("    [green]✓ OmniSearch connected[/green]")
                 else:
-                    console.print("    [yellow]⚠ OmniSearch service unavailable[/yellow]")
+                    console.print(
+                        "    [yellow]⚠ OmniSearch service unavailable[/yellow]"
+                    )
             except Exception as e:
                 self.logger.warning(f"Failed to connect to OmniSearch: {e}")
                 console.print("    [yellow]⚠ OmniSearch connection failed[/yellow]")
@@ -767,15 +809,23 @@ class TradingEngine:
                 console.print("    [green]✓ Experience tracking started[/green]")
 
                 # Log memory system status and pattern statistics
-                if self.memory_server and hasattr(self.memory_server, '_connected') and self.memory_server._connected:
+                if (
+                    self.memory_server
+                    and hasattr(self.memory_server, "_connected")
+                    and self.memory_server._connected
+                ):
                     self._memory_available = True
                     memory_count = len(self.memory_server.memory_cache)
-                    console.print(f"    [cyan]📊 {memory_count} stored experiences loaded[/cyan]")
+                    console.print(
+                        f"    [cyan]📊 {memory_count} stored experiences loaded[/cyan]"
+                    )
 
                     # Log pattern performance if we have enough data
                     if memory_count >= 10:
                         try:
-                            pattern_stats = await self.memory_server.get_pattern_statistics()
+                            pattern_stats = (
+                                await self.memory_server.get_pattern_statistics()
+                            )
                             if pattern_stats:
                                 self.logger.info("=== Pattern Performance Summary ===")
                                 sorted_patterns = sorted(
@@ -784,13 +834,17 @@ class TradingEngine:
                                     reverse=True,
                                 )[:5]
                                 for pattern, stats in sorted_patterns:
-                                    if stats["count"] >= 3:  # Only show patterns with enough samples
+                                    if (
+                                        stats["count"] >= 3
+                                    ):  # Only show patterns with enough samples
                                         self.logger.info(
                                             f"  {pattern}: {stats['success_rate']:.1%} win rate "
                                             f"({stats['count']} trades, avg PnL=${stats['avg_pnl']:.2f})"
                                         )
                         except Exception as e:
-                            self.logger.debug(f"Could not retrieve pattern statistics: {e}")
+                            self.logger.debug(
+                                f"Could not retrieve pattern statistics: {e}"
+                            )
 
             except Exception as e:
                 self.logger.warning(f"Failed to start experience manager: {e}")
@@ -818,14 +872,17 @@ class TradingEngine:
                 if connected:
                     console.print("    [green]✓ Dashboard WebSocket connected[/green]")
                     await self.websocket_publisher.publish_system_status(
-                        status="initialized", 
-                        health=True
+                        status="initialized", health=True
                     )
                 else:
-                    console.print("    [yellow]⚠ Dashboard WebSocket unavailable[/yellow]")
+                    console.print(
+                        "    [yellow]⚠ Dashboard WebSocket unavailable[/yellow]"
+                    )
             except Exception as e:
                 self.logger.warning(f"Failed to connect to dashboard WebSocket: {e}")
-                console.print("    [yellow]⚠ Dashboard WebSocket connection failed[/yellow]")
+                console.print(
+                    "    [yellow]⚠ Dashboard WebSocket connection failed[/yellow]"
+                )
 
         # Initialize Command Consumer if enabled
         if self.command_consumer:
@@ -837,11 +894,13 @@ class TradingEngine:
                 console.print("    [green]✓ Dashboard command consumer started[/green]")
             except Exception as e:
                 self.logger.warning(f"Failed to start command consumer: {e}")
-                console.print("    [yellow]⚠ Dashboard command consumer unavailable[/yellow]")
+                console.print(
+                    "    [yellow]⚠ Dashboard command consumer unavailable[/yellow]"
+                )
 
         console.print("[green]✓ All components initialized successfully[/green]")
 
-    async def _wait_for_initial_data(self):
+    async def _wait_for_initial_data(self) -> None:
         """Wait for sufficient market data to begin trading."""
         max_wait_time = 180  # 3 minutes to allow for initial data collection
         wait_start = datetime.now(UTC)
@@ -864,15 +923,16 @@ class TradingEngine:
 
             # Check for historical data - handle both sync and async providers
             import inspect
+
             data = []
-            if hasattr(self.market_data, 'get_latest_ohlcv'):
-                method = getattr(self.market_data, 'get_latest_ohlcv')
+            if hasattr(self.market_data, "get_latest_ohlcv"):
+                method = self.market_data.get_latest_ohlcv
                 try:
                     if inspect.iscoroutinefunction(method):
                         data = await method(limit=500)  # Get more data for 24h check
                     else:
                         data = method(limit=500)  # Get more data for 24h check
-                    
+
                     # Safety check - ensure data is not a coroutine or Task
                     if inspect.iscoroutine(data):
                         self.logger.warning("Detected coroutine data, awaiting...")
@@ -880,23 +940,29 @@ class TradingEngine:
                     elif isinstance(data, asyncio.Task):
                         self.logger.warning("Detected asyncio.Task data, awaiting...")
                         data = await data
-                    elif hasattr(data, '__await__'):
+                    elif hasattr(data, "__await__"):
                         self.logger.warning("Detected awaitable object, awaiting...")
                         data = await data
-                        
+
                 except Exception as e:
                     self.logger.warning(f"Error getting market data: {e}")
                     data = []
-            
+
             # Ensure data is a list/sequence before using len()
             if isinstance(data, asyncio.Task):
-                self.logger.error(f"Data is still an asyncio.Task: {data}. This should have been awaited.")
+                self.logger.error(
+                    f"Data is still an asyncio.Task: {data}. This should have been awaited."
+                )
                 data = []
             elif inspect.iscoroutine(data):
-                self.logger.error(f"Data is still a coroutine: {data}. This should have been awaited.")
+                self.logger.error(
+                    f"Data is still a coroutine: {data}. This should have been awaited."
+                )
                 data = []
-            elif not isinstance(data, (list, tuple)):
-                self.logger.warning(f"Unexpected data type: {type(data)}, converting to list")
+            elif not isinstance(data, list | tuple):
+                self.logger.warning(
+                    f"Unexpected data type: {type(data)}, converting to list"
+                )
                 data = list(data) if data else []
 
             if not historical_data_loaded:
@@ -920,7 +986,9 @@ class TradingEngine:
                             f"Starting with reduced data for scalping..."
                         )
                         historical_data_loaded = True
-                        self.trading_enabled = True  # Enable for scalping with limited data
+                        self.trading_enabled = (
+                            True  # Enable for scalping with limited data
+                        )
                 else:
                     # Just require minimum candles
                     if len(data) >= min_candles_required:
@@ -936,7 +1004,9 @@ class TradingEngine:
                             f"Indicators may be unreliable until more data is accumulated."
                         )
                         historical_data_loaded = True
-                        self.trading_enabled = False  # Don't enable trading with limited data
+                        self.trading_enabled = (
+                            False  # Don't enable trading with limited data
+                        )
 
             # Check for WebSocket data
             if self.market_data.has_websocket_data() and not websocket_data_received:
@@ -966,13 +1036,15 @@ class TradingEngine:
             if int(elapsed_time) % 10 == 0 and elapsed_time > 0:
                 try:
                     from .data.realtime_market import RealtimeMarketDataProvider
-                    
-                    if RealtimeMarketDataProvider and isinstance(self.market_data, RealtimeMarketDataProvider):
+
+                    if RealtimeMarketDataProvider and isinstance(
+                        self.market_data, RealtimeMarketDataProvider
+                    ):
                         # Real-time provider status
                         status = self.market_data.get_status()
-                        tick_rate = status.get('tick_rate_per_second', 0)
-                        current_price = status.get('current_price', 'N/A')
-                        
+                        tick_rate = status.get("tick_rate_per_second", 0)
+                        current_price = status.get("current_price", "N/A")
+
                         self.logger.info(
                             f"⏳ Waiting for real-time data... Elapsed: {int(elapsed_time)}s\n"
                             f"   📊 Current candles: {len(data)} available\n"
@@ -986,7 +1058,9 @@ class TradingEngine:
                         status = self.market_data.get_data_status()
                         interval_seconds = self._get_interval_seconds(self.interval)
                         candles_per_24h = (24 * 60 * 60) // interval_seconds
-                        hours_available = (len(data) * interval_seconds) / 3600 if data else 0
+                        hours_available = (
+                            (len(data) * interval_seconds) / 3600 if data else 0
+                        )
 
                         self.logger.info(
                             f"⏳ Waiting for data... Elapsed: {int(elapsed_time)}s\n"
@@ -1006,7 +1080,7 @@ class TradingEngine:
 
             await asyncio.sleep(1)
 
-    def _display_startup_summary(self):
+    def _display_startup_summary(self) -> None:
         """Display trading engine startup summary."""
         table = Table(title="Trading Engine Status")
         table.add_column("Component", style="cyan")
@@ -1016,8 +1090,10 @@ class TradingEngine:
         # Market data status
         try:
             from .data.realtime_market import RealtimeMarketDataProvider
-            
-            if RealtimeMarketDataProvider and isinstance(self.market_data, RealtimeMarketDataProvider):
+
+            if RealtimeMarketDataProvider and isinstance(
+                self.market_data, RealtimeMarketDataProvider
+            ):
                 # Real-time provider status
                 data_status = self.market_data.get_status()
                 ws_status = (
@@ -1025,12 +1101,12 @@ class TradingEngine:
                     if data_status.get("websocket_connected", False)
                     else "⚠ Waiting for data"
                 )
-                
+
                 # Show tick rate and current candles
                 tick_rate = data_status.get("tick_rate_per_second", 0)
                 tick_info = f"{tick_rate:.1f} ticks/sec" if tick_rate else "No ticks"
                 details = f"{tick_info}, WebSocket: {ws_status}"
-                
+
                 table.add_row(
                     "Market Data (RT)",
                     "✓ Connected" if data_status["connected"] else "✗ Disconnected",
@@ -1039,8 +1115,10 @@ class TradingEngine:
         except ImportError:
             # RealtimeMarketDataProvider not available
             RealtimeMarketDataProvider = None
-            
-        if not RealtimeMarketDataProvider or not isinstance(self.market_data, RealtimeMarketDataProvider):
+
+        if not RealtimeMarketDataProvider or not isinstance(
+            self.market_data, RealtimeMarketDataProvider
+        ):
             # Standard provider status
             data_status = self.market_data.get_data_status()
             ws_status = (
@@ -1056,16 +1134,22 @@ class TradingEngine:
 
         # Exchange status
         exchange_status = self.exchange_client.get_connection_status()
-        exchange_name = exchange_status.get("exchange", self.exchange_client.exchange_name)
+        exchange_name = exchange_status.get(
+            "exchange", self.exchange_client.exchange_name
+        )
         exchange_details = []
-        
+
         if exchange_status.get("is_decentralized", False):
-            exchange_details.append(f"{exchange_status.get('network', 'mainnet')} network")
+            exchange_details.append(
+                f"{exchange_status.get('network', 'mainnet')} network"
+            )
             if exchange_status.get("blockchain"):
                 exchange_details.append(f"({exchange_status['blockchain']})")
         else:
-            exchange_details.append(f"{'Sandbox' if exchange_status.get('sandbox', False) else 'Live'} mode")
-        
+            exchange_details.append(
+                f"{'Sandbox' if exchange_status.get('sandbox', False) else 'Live'} mode"
+            )
+
         table.add_row(
             f"Exchange ({exchange_name})",
             "✓ Connected" if exchange_status["connected"] else "✗ Disconnected",
@@ -1081,8 +1165,14 @@ class TradingEngine:
         )
 
         # OmniSearch status
-        omnisearch_status = "✓ Enabled" if llm_status.get("omnisearch_enabled", False) else "✗ Disabled"
-        omnisearch_details = "Market intelligence active" if llm_status.get("omnisearch_enabled", False) else "Standard analysis only"
+        omnisearch_status = (
+            "✓ Enabled" if llm_status.get("omnisearch_enabled", False) else "✗ Disabled"
+        )
+        omnisearch_details = (
+            "Market intelligence active"
+            if llm_status.get("omnisearch_enabled", False)
+            else "Standard analysis only"
+        )
         table.add_row(
             "OmniSearch",
             omnisearch_status,
@@ -1099,7 +1189,7 @@ class TradingEngine:
         console.print(table)
         console.print()
 
-    async def _main_trading_loop(self):
+    async def _main_trading_loop(self) -> None:
         """
         Main trading loop that runs continuously.
 
@@ -1138,59 +1228,83 @@ class TradingEngine:
 
                 # Get latest market data - handle different provider types
                 import inspect
+
                 try:
                     from .data.realtime_market import RealtimeMarketDataProvider
-                    is_realtime_provider = RealtimeMarketDataProvider and isinstance(self.market_data, RealtimeMarketDataProvider)
+
+                    is_realtime_provider = RealtimeMarketDataProvider and isinstance(
+                        self.market_data, RealtimeMarketDataProvider
+                    )
                 except ImportError:
                     RealtimeMarketDataProvider = None
                     is_realtime_provider = False
-                
+
                 if is_realtime_provider:
                     # Real-time provider - get candles for the current trading interval
                     interval_seconds = self._get_interval_seconds(self.interval)
-                    latest_data = self.market_data.get_candle_history(interval_seconds, limit=200)
-                    
+                    latest_data = self.market_data.get_candle_history(
+                        interval_seconds, limit=200
+                    )
+
                     # If we don't have enough historical data, try to get completed candles
                     if len(latest_data) < 50:  # Need at least 50 candles for indicators
                         # Force completion of current candles and retry
-                        self.market_data.tick_aggregator.force_complete_candles(self.symbol)
-                        latest_data = self.market_data.get_candle_history(interval_seconds, limit=200)
-                        
-                elif hasattr(self.market_data, 'get_latest_ohlcv'):
-                    method = getattr(self.market_data, 'get_latest_ohlcv')
+                        self.market_data.tick_aggregator.force_complete_candles(
+                            self.symbol
+                        )
+                        latest_data = self.market_data.get_candle_history(
+                            interval_seconds, limit=200
+                        )
+
+                elif hasattr(self.market_data, "get_latest_ohlcv"):
+                    method = self.market_data.get_latest_ohlcv
                     try:
                         if inspect.iscoroutinefunction(method):
                             latest_data = await method(limit=200)
                         else:
                             latest_data = method(limit=200)
-                        
+
                         # Safety check - ensure data is not a coroutine or Task
                         if inspect.iscoroutine(latest_data):
-                            self.logger.warning("Detected coroutine data in main loop, awaiting...")
+                            self.logger.warning(
+                                "Detected coroutine data in main loop, awaiting..."
+                            )
                             latest_data = await latest_data
                         elif isinstance(latest_data, asyncio.Task):
-                            self.logger.warning("Detected asyncio.Task data in main loop, awaiting...")
+                            self.logger.warning(
+                                "Detected asyncio.Task data in main loop, awaiting..."
+                            )
                             latest_data = await latest_data
-                        elif hasattr(latest_data, '__await__'):
-                            self.logger.warning("Detected awaitable object in main loop, awaiting...")
+                        elif hasattr(latest_data, "__await__"):
+                            self.logger.warning(
+                                "Detected awaitable object in main loop, awaiting..."
+                            )
                             latest_data = await latest_data
                     except Exception as e:
-                        self.logger.warning(f"Error getting market data in main loop: {e}")
+                        self.logger.warning(
+                            f"Error getting market data in main loop: {e}"
+                        )
                         latest_data = []
                 else:
                     latest_data = []
-                    
+
                 # Ensure latest_data is a list/sequence before using it
                 if isinstance(latest_data, asyncio.Task):
-                    self.logger.error(f"latest_data is still an asyncio.Task: {latest_data}. This should have been awaited.")
+                    self.logger.error(
+                        f"latest_data is still an asyncio.Task: {latest_data}. This should have been awaited."
+                    )
                     latest_data = []
                 elif inspect.iscoroutine(latest_data):
-                    self.logger.error(f"latest_data is still a coroutine: {latest_data}. This should have been awaited.")
+                    self.logger.error(
+                        f"latest_data is still a coroutine: {latest_data}. This should have been awaited."
+                    )
                     latest_data = []
-                elif not isinstance(latest_data, (list, tuple)):
-                    self.logger.warning(f"Unexpected latest_data type: {type(latest_data)}, converting to list")
+                elif not isinstance(latest_data, list | tuple):
+                    self.logger.warning(
+                        f"Unexpected latest_data type: {type(latest_data)}, converting to list"
+                    )
                     latest_data = list(latest_data) if latest_data else []
-                
+
                 if not latest_data:
                     self.logger.warning("No market data available, waiting...")
                     await asyncio.sleep(5)
@@ -1203,7 +1317,7 @@ class TradingEngine:
                     await self.websocket_publisher.publish_market_data(
                         symbol=self.actual_trading_symbol,
                         price=float(current_price),
-                        timestamp=latest_data[-1].timestamp
+                        timestamp=latest_data[-1].timestamp,
                     )
 
                 # Calculate technical indicators - handle different provider types
@@ -1264,7 +1378,7 @@ class TradingEngine:
                         indicator_state = self.indicator_calc.get_latest_state(
                             df_with_indicators
                         )
-                        
+
                         # Publish indicator data to dashboard
                         if self.websocket_publisher:
                             await self.websocket_publisher.publish_indicator_data(
@@ -1277,8 +1391,8 @@ class TradingEngine:
                                     "rsi": indicator_state.get("rsi"),
                                     "stoch_rsi": indicator_state.get("stoch_rsi"),
                                     "schaff_trend": indicator_state.get("schaff_trend"),
-                                    "rsimfi": indicator_state.get("rsimfi")
-                                }
+                                    "rsimfi": indicator_state.get("rsimfi"),
+                                },
                             )
                     except Exception as e:
                         self.logger.warning(
@@ -1286,12 +1400,12 @@ class TradingEngine:
                         )
                         # Use fallback indicator state
                         indicator_state = self._get_fallback_indicator_state()
-                        
+
                         # Publish fallback indicator data to dashboard
                         if self.websocket_publisher:
                             await self.websocket_publisher.publish_indicator_data(
                                 symbol=self.actual_trading_symbol,
-                                indicators=indicator_state
+                                indicators=indicator_state,
                             )
 
                 # Prepare indicator data
@@ -1411,7 +1525,9 @@ class TradingEngine:
 
                 # Calculate how many candles represent 24 hours based on interval
                 interval_seconds = self._get_interval_seconds(self.interval)
-                candles_per_24h = min((24 * 60 * 60) // interval_seconds, len(latest_data))
+                candles_per_24h = min(
+                    (24 * 60 * 60) // interval_seconds, len(latest_data)
+                )
 
                 # Get the last 24 hours of data (or all available if less)
                 historical_data = latest_data[-candles_per_24h:]
@@ -1458,9 +1574,10 @@ class TradingEngine:
                     await self.websocket_publisher.publish_ai_decision(
                         action=trade_action.action,
                         reasoning=trade_action.rationale,
-                        confidence=trade_action.size_pct / 100.0  # Convert percentage to decimal
+                        confidence=trade_action.size_pct
+                        / 100.0,  # Convert percentage to decimal
                     )
-                    
+
                     # Also publish detailed trading decision
                     await self.websocket_publisher.publish_trading_decision(
                         request_id=f"trade_{int(datetime.now(UTC).timestamp())}",
@@ -1476,13 +1593,13 @@ class TradingEngine:
                             "wave_trend_1": indicator_state.get("wave_trend_1"),
                             "wave_trend_2": indicator_state.get("wave_trend_2"),
                             "rsi": indicator_state.get("rsi"),
-                            "stoch_rsi": indicator_state.get("stoch_rsi")
+                            "stoch_rsi": indicator_state.get("stoch_rsi"),
                         },
                         risk_analysis={
                             "current_price": float(current_price),
                             "position_size": trade_action.size_pct / 100.0,
-                            "leverage": self.settings.trading.leverage
-                        }
+                            "leverage": self.settings.trading.leverage,
+                        },
                     )
 
                 # Record trading decision in memory if MCP is enabled
@@ -1554,21 +1671,33 @@ class TradingEngine:
 
                 # Log heartbeat to confirm loop is running
                 if loop_count % 5 == 0:
-                    self.logger.debug(f"Trading loop heartbeat - iteration {loop_count}")
+                    self.logger.debug(
+                        f"Trading loop heartbeat - iteration {loop_count}"
+                    )
 
                 # Log pattern statistics every 100 loops if memory is enabled
-                if loop_count % 100 == 0 and self.memory_server and self._memory_available:
+                if (
+                    loop_count % 100 == 0
+                    and self.memory_server
+                    and self._memory_available
+                ):
                     try:
-                        pattern_stats = await self.memory_server.get_pattern_statistics()
+                        pattern_stats = (
+                            await self.memory_server.get_pattern_statistics()
+                        )
                         if pattern_stats:
-                            self.logger.info("📊 === MCP Pattern Performance Update ===")
+                            self.logger.info(
+                                "📊 === MCP Pattern Performance Update ==="
+                            )
                             sorted_patterns = sorted(
                                 pattern_stats.items(),
                                 key=lambda x: x[1]["success_rate"] * x[1]["count"],
                                 reverse=True,
                             )[:5]
                             for pattern, stats in sorted_patterns:
-                                if stats["count"] >= 2:  # Show patterns with at least 2 samples
+                                if (
+                                    stats["count"] >= 2
+                                ):  # Show patterns with at least 2 samples
                                     self.logger.info(
                                         f"  📈 {pattern}: {stats['success_rate']:.1%} win rate | "
                                         f"{stats['count']} trades | Avg PnL: ${stats['avg_pnl']:.2f}"
@@ -1629,7 +1758,9 @@ class TradingEngine:
                 f"📦 Executing trade: {trade_action.action} {trade_action.size_pct}% | "
                 f"Experience ID: {experience_id[:8] if experience_id else 'None'}..."
             )
-            self.logger.debug(f"Trade execution started at {datetime.now(UTC).isoformat()}")
+            self.logger.debug(
+                f"Trade execution started at {datetime.now(UTC).isoformat()}"
+            )
 
             # Check if we already have an open position and the action is LONG or SHORT
             if self.current_position.side != "FLAT" and trade_action.action in [
@@ -1666,7 +1797,9 @@ class TradingEngine:
                         self.experience_manager.link_order_to_experience(
                             order.id, experience_id
                         )
-                        self.logger.debug(f"MCP Integration: Linked order {order.id} to experience {experience_id[:8]}...")
+                        self.logger.debug(
+                            f"MCP Integration: Linked order {order.id} to experience {experience_id[:8]}..."
+                        )
                     except Exception as e:
                         self.logger.warning(f"Failed to link order to experience: {e}")
 
@@ -1686,8 +1819,8 @@ class TradingEngine:
                                 "action": trade_action.action,
                                 "size_pct": trade_action.size_pct,
                                 "rationale": trade_action.rationale,
-                                "experience_id": experience_id
-                            }
+                                "experience_id": experience_id,
+                            },
                         )
 
                     # Update position manager
@@ -1697,7 +1830,7 @@ class TradingEngine:
 
                         updated_position = (
                             self.position_manager.update_position_from_order(
-                                order, order.price
+                                order, order.price or current_price
                             )
                         )
                         self.current_position = updated_position
@@ -1714,9 +1847,11 @@ class TradingEngine:
                                 # Add timeout to prevent blocking
                                 await asyncio.wait_for(
                                     self.experience_manager.complete_trade(
-                                        order, order.price, market_state
+                                        order,
+                                        order.price or current_price,
+                                        market_state,
                                     ),
-                                    timeout=5.0  # 5 second timeout
+                                    timeout=5.0,  # 5 second timeout
                                 )
                                 self.logger.info(
                                     "✅ MCP Integration: Completed trade tracking for closed position"
@@ -1764,7 +1899,9 @@ class TradingEngine:
                             f"({account_status['roi_percent']:.2f}%)"
                         )
 
-                    self.logger.debug(f"Trade execution completed at {datetime.now(UTC).isoformat()}")
+                    self.logger.debug(
+                        f"Trade execution completed at {datetime.now(UTC).isoformat()}"
+                    )
                 else:
                     console.print(f"[yellow]⚠ Trade failed:[/yellow] {order.status}")
             else:
@@ -1801,9 +1938,11 @@ class TradingEngine:
             "12h": 43200,
             "1d": 86400,
         }
-        return interval_map.get(interval.lower(), 15)  # Default to 15 seconds for scalping
+        return interval_map.get(
+            interval.lower(), 15
+        )  # Default to 15 seconds for scalping
 
-    def _get_interval_minutes(self, interval: str) -> int:
+    def _get_interval_minutes(self, interval: str) -> float:
         """
         Convert interval string to minutes.
 
@@ -1815,7 +1954,7 @@ class TradingEngine:
         """
         return self._get_interval_seconds(interval) / 60
 
-    async def _update_position_tracking(self, current_price: Decimal):
+    async def _update_position_tracking(self, current_price: Decimal) -> None:
         """
         Update position tracking and P&L calculations.
 
@@ -1843,7 +1982,7 @@ class TradingEngine:
                     size=float(self.current_position.size),
                     entry_price=float(self.current_position.entry_price),
                     current_price=float(current_price),
-                    unrealized_pnl=float(pnl)
+                    unrealized_pnl=float(pnl),
                 )
 
             # Update risk manager with P&L
@@ -1866,7 +2005,7 @@ class TradingEngine:
                     size=0.0,
                     entry_price=0.0,
                     current_price=float(current_price),
-                    unrealized_pnl=0.0
+                    unrealized_pnl=0.0,
                 )
 
             # This code was moved to the main trading loop
@@ -1952,7 +2091,7 @@ class TradingEngine:
         current_time = datetime.now(UTC)
         return current_time.hour == 23 and current_time.minute >= 50
 
-    async def _shutdown(self):
+    async def _shutdown(self) -> None:
         """
         Graceful shutdown procedure.
 
@@ -1969,7 +2108,11 @@ class TradingEngine:
 
         try:
             # Cancel all open orders
-            if hasattr(self, "exchange_client") and self.exchange_client is not None and self.exchange_client.is_connected():
+            if (
+                hasattr(self, "exchange_client")
+                and self.exchange_client is not None
+                and self.exchange_client.is_connected()
+            ):
                 console.print("  • Cancelling open orders...")
                 cleanup_tasks.append(
                     asyncio.create_task(
@@ -1990,14 +2133,20 @@ class TradingEngine:
                 )
 
             # Close OmniSearch connection
-            if hasattr(self, "omnisearch_client") and self.omnisearch_client is not None:
+            if (
+                hasattr(self, "omnisearch_client")
+                and self.omnisearch_client is not None
+            ):
                 console.print("  • Disconnecting from OmniSearch...")
                 cleanup_tasks.append(
                     asyncio.create_task(self.omnisearch_client.disconnect())
                 )
 
             # Close WebSocket publisher connection
-            if hasattr(self, "websocket_publisher") and self.websocket_publisher is not None:
+            if (
+                hasattr(self, "websocket_publisher")
+                and self.websocket_publisher is not None
+            ):
                 console.print("  • Disconnecting from dashboard WebSocket...")
                 cleanup_tasks.append(
                     asyncio.create_task(self.websocket_publisher.close())
@@ -2009,19 +2158,23 @@ class TradingEngine:
                 cleanup_tasks.append(
                     asyncio.create_task(self.command_consumer.stop_polling())
                 )
-                cleanup_tasks.append(
-                    asyncio.create_task(self.command_consumer.close())
-                )
+                cleanup_tasks.append(asyncio.create_task(self.command_consumer.close()))
 
             # Stop experience manager if enabled
-            if hasattr(self, "experience_manager") and self.experience_manager is not None:
+            if (
+                hasattr(self, "experience_manager")
+                and self.experience_manager is not None
+            ):
                 console.print("  • Stopping experience tracking...")
                 cleanup_tasks.append(
                     asyncio.create_task(self.experience_manager.stop())
                 )
 
             # Close dominance data connection - CRITICAL for async session cleanup
-            if hasattr(self, "dominance_provider") and self.dominance_provider is not None:
+            if (
+                hasattr(self, "dominance_provider")
+                and self.dominance_provider is not None
+            ):
                 console.print("  • Disconnecting from dominance data...")
                 cleanup_tasks.append(
                     asyncio.create_task(self.dominance_provider.disconnect())
@@ -2064,10 +2217,10 @@ class TradingEngine:
                         except Exception:
                             pass
 
-    async def _reconcile_positions(self):
+    async def _reconcile_positions(self) -> None:
         """
         Reconcile local position state with actual exchange positions.
-        
+
         This method checks for existing positions on the exchange and updates
         the local position state to match, preventing conflicts when the bot
         restarts with open positions.
@@ -2076,10 +2229,14 @@ class TradingEngine:
             # Get current positions from exchange
             if self.exchange_client.enable_futures:
                 # For futures trading, check CFM positions
-                positions = await self.exchange_client.get_futures_positions(self.actual_trading_symbol)
+                positions = await self.exchange_client.get_futures_positions(
+                    self.actual_trading_symbol
+                )
             else:
                 # For spot trading, check regular positions
-                positions = await self.exchange_client.get_positions(self.actual_trading_symbol)
+                positions = await self.exchange_client.get_positions(
+                    self.actual_trading_symbol
+                )
 
             if not positions:
                 self.logger.info("No existing positions found on exchange")
@@ -2089,27 +2246,31 @@ class TradingEngine:
             # Process the first position found for our symbol
             for position in positions:
                 # Handle both dict and object formats
-                if hasattr(position, 'get'):
+                if hasattr(position, "get"):
                     # Dictionary format
-                    symbol = position.get('symbol') or position.get('product_id')
-                    size = Decimal(str(position.get('size', 0)))
-                    side = position.get('side', 'FLAT')
-                    entry_price = Decimal(str(position.get('entry_price', 0)))
-                    unrealized_pnl = Decimal(str(position.get('unrealized_pnl', 0)))
+                    symbol = position.get("symbol") or position.get("product_id")
+                    size = Decimal(str(position.get("size", 0)))
+                    side = position.get("side", "FLAT")
+                    entry_price = Decimal(str(position.get("entry_price", 0)))
+                    unrealized_pnl = Decimal(str(position.get("unrealized_pnl", 0)))
                 else:
                     # Object format
-                    symbol = getattr(position, 'symbol', None) or getattr(position, 'product_id', None)
-                    size = Decimal(str(getattr(position, 'size', 0)))
-                    side = getattr(position, 'side', 'FLAT')
-                    entry_price = Decimal(str(getattr(position, 'entry_price', 0)))
-                    unrealized_pnl = Decimal(str(getattr(position, 'unrealized_pnl', 0)))
+                    symbol = getattr(position, "symbol", None) or getattr(
+                        position, "product_id", None
+                    )
+                    size = Decimal(str(getattr(position, "size", 0)))
+                    side = getattr(position, "side", "FLAT")
+                    entry_price = Decimal(str(getattr(position, "entry_price", 0)))
+                    unrealized_pnl = Decimal(
+                        str(getattr(position, "unrealized_pnl", 0))
+                    )
 
                 if symbol == self.actual_trading_symbol:
                     # Convert position data to our format
                     if size > 0:
-                        if side.upper() in ['LONG', 'BUY']:
+                        if side.upper() in ["LONG", "BUY"]:
                             position_side = "LONG"
-                        elif side.upper() in ['SHORT', 'SELL']:
+                        elif side.upper() in ["SHORT", "SELL"]:
                             position_side = "SHORT"
                         else:
                             position_side = "LONG" if size > 0 else "SHORT"
@@ -2151,7 +2312,7 @@ class TradingEngine:
             console.print(f"    [red]✗ Position reconciliation failed: {e}[/red]")
             # Continue with FLAT position assumption on error
 
-    def _display_final_summary(self):
+    def _display_final_summary(self) -> None:
         """Display final trading session summary."""
         total_runtime = datetime.now(UTC) - self.start_time
         success_rate = (self.successful_trades / max(self.trade_count, 1)) * 100
@@ -2419,10 +2580,14 @@ def cli() -> None:
     "--dry-run/--no-dry-run", default=True, help="Run in dry-run mode (default)"
 )
 @click.option("--symbol", default="BTC-USD", help="Trading symbol")
-@click.option("--interval", default="15s", help="Candle interval (scalping: 1s/5s/15s/30s)")
+@click.option(
+    "--interval", default="15s", help="Candle interval (scalping: 1s/5s/15s/30s)"
+)
 @click.option("--config", default=None, help="Configuration file path")
 @click.option("--force", is_flag=True, help="Skip confirmation prompt for live trading")
-def live(dry_run: bool, symbol: str, interval: str, config: str | None, force: bool) -> None:
+def live(
+    dry_run: bool, symbol: str, interval: str, config: str | None, force: bool
+) -> None:
     """Start live trading bot."""
     if dry_run:
         console.print(
@@ -2448,7 +2613,9 @@ def live(dry_run: bool, symbol: str, interval: str, config: str | None, force: b
         )
 
         # Confirmation for live trading (skip if --force flag is used)
-        if not force and not click.confirm("Are you sure you want to trade with real money?"):
+        if not force and not click.confirm(
+            "Are you sure you want to trade with real money?"
+        ):
             console.print("Cancelled live trading.")
             sys.exit(0)
 

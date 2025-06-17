@@ -114,7 +114,7 @@ import pyta
 # RSI
 df['rsi'] = pyta.rsi(df['close'], period=14)
 
-# Moving Average  
+# Moving Average
 df['sma'] = pyta.sma(df['close'], period=20)
 
 # MACD

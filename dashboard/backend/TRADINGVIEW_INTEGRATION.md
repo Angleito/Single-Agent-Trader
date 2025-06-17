@@ -203,7 +203,7 @@ Request body examples:
        "close": 65050.0,
        "volume": 150.5
    }
-   
+
    # Send to dashboard
    requests.post("http://dashboard:8000/tradingview/update/BTC-USD", json={
        "price_data": {"resolution": "1", "new_bar": bar_data}
@@ -221,7 +221,7 @@ Request body examples:
        "timestamp": int(time.time()),
        "indicators": {"rsi": 67.5, "ema": 65200.0}
    }
-   
+
    # Send to dashboard
    requests.post("http://dashboard:8000/tradingview/update/BTC-USD", json={
        "ai_decision": decision_data
@@ -237,7 +237,7 @@ Request body examples:
        "parameters": {"period": 9, "source": "hlc3"},
        "timestamp": int(time.time())
    }
-   
+
    # Send to dashboard
    requests.post("http://dashboard:8000/tradingview/update/BTC-USD", json={
        "indicator": indicator_data
@@ -282,14 +282,14 @@ const ws = new WebSocket('ws://localhost:8000/ws');
 
 ws.onmessage = function(event) {
     const data = JSON.parse(event.data);
-    
+
     if (data.type === 'tradingview_update') {
         // Handle real-time data updates
         if (data.data.price_data) {
             // Update chart with new price data
             widget.chart().executeActionById('ResetChart');
         }
-        
+
         if (data.data.ai_decision) {
             // Show notification for new AI decision
             console.log('New AI Decision:', data.data.ai_decision.action);
@@ -343,7 +343,7 @@ Add new trading pairs by creating `SymbolInfo` objects:
 ```python
 new_symbol = SymbolInfo(
     name="ETH-USD",
-    ticker="ETH-USD", 
+    ticker="ETH-USD",
     description="Ethereum vs US Dollar",
     pricescale=100  # 2 decimal places
 )
@@ -355,7 +355,7 @@ tradingview_feed.add_symbol(new_symbol)
 # TradingView resolution to seconds
 RESOLUTION_MAP = {
     "1": 60,        # 1 minute
-    "5": 300,       # 5 minutes  
+    "5": 300,       # 5 minutes
     "15": 900,      # 15 minutes
     "60": 3600,     # 1 hour
     "240": 14400,   # 4 hours

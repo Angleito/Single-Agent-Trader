@@ -372,7 +372,9 @@ class OrderManager:
             logger.info(f"Order {order_id} cancelled")
             return True
 
-    def cancel_all_orders(self, symbol: str | None = None, status: str | None = None) -> int:
+    def cancel_all_orders(
+        self, symbol: str | None = None, status: str | None = None
+    ) -> int:
         """
         Cancel all active orders.
 

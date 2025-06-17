@@ -25,10 +25,10 @@ This manual provides comprehensive guidance for day-to-day operations, monitorin
   ```bash
   # Check bot status
   docker ps | grep ai-trading-bot
-  
+
   # Verify health endpoints
   curl -s http://localhost:8080/health | jq '.status'
-  
+
   # Check recent logs for errors
   docker logs ai-trading-bot --since=24h | grep -E "(ERROR|CRITICAL)"
   ```
@@ -37,10 +37,10 @@ This manual provides comprehensive guidance for day-to-day operations, monitorin
   ```bash
   # Get daily P&L summary
   docker exec ai-trading-bot python scripts/daily_report.py
-  
+
   # Check position status
   curl -s http://localhost:8080/positions | jq '.'
-  
+
   # Review risk metrics
   curl -s http://localhost:8080/risk/metrics | jq '.'
   ```
@@ -49,7 +49,7 @@ This manual provides comprehensive guidance for day-to-day operations, monitorin
   ```bash
   # Check market data connectivity
   curl -s http://localhost:8080/market/status | jq '.'
-  
+
   # Verify indicator calculations
   curl -s http://localhost:8080/indicators/status | jq '.'
   ```
@@ -105,11 +105,11 @@ def generate_daily_report():
     """Generate comprehensive daily report."""
     settings = create_settings()
     health_endpoints = create_health_endpoints(settings)
-    
+
     # Get current metrics
     health = health_endpoints.get_health_detailed()
     metrics = health_endpoints.get_metrics()
-    
+
     report = {
         "date": datetime.now().isoformat(),
         "system_health": health,
@@ -118,17 +118,17 @@ def generate_daily_report():
         "risk_analysis": get_risk_analysis(),
         "recommendations": get_recommendations()
     }
-    
+
     # Save report
     report_file = f"reports/daily_report_{datetime.now().strftime('%Y%m%d')}.json"
     Path(report_file).parent.mkdir(exist_ok=True)
-    
+
     with open(report_file, 'w') as f:
         json.dump(report, f, indent=2, default=str)
-    
+
     # Print summary to console
     print_report_summary(report)
-    
+
     return report
 
 
@@ -164,13 +164,13 @@ def get_risk_analysis():
 def get_recommendations():
     """Generate operational recommendations."""
     recommendations = []
-    
+
     # Add logic to generate recommendations based on:
     # - Performance trends
     # - Risk metrics
     # - System health
     # - Market conditions
-    
+
     return recommendations
 
 
@@ -180,31 +180,31 @@ def print_report_summary(report):
     print(f"AI Trading Bot - Daily Report")
     print(f"Date: {report['date']}")
     print("=" * 50)
-    
+
     # System Health
     health = report['system_health']
     print(f"System Health: {health['status'].upper()}")
     print(f"Uptime: {health.get('uptime', 'N/A')}")
-    
+
     # Trading Performance
     trading = report['trading_summary']
     print(f"\nTrading Performance:")
     print(f"  Trades Executed: {trading['trades_executed']}")
     print(f"  Success Rate: {trading['success_rate']:.1f}%")
     print(f"  Daily P&L: ${trading['daily_pnl']:.2f}")
-    
+
     # Risk Analysis
     risk = report['risk_analysis']
     print(f"\nRisk Analysis:")
     print(f"  Daily Loss Used: {risk['daily_loss_used']:.1f}%")
     print(f"  Risk Score: {risk['risk_score']}")
-    
+
     # Recommendations
     if report['recommendations']:
         print(f"\nRecommendations:")
         for i, rec in enumerate(report['recommendations'], 1):
             print(f"  {i}. {rec}")
-    
+
     print("=" * 50)
 
 
@@ -234,13 +234,13 @@ from bot.config import create_settings
 
 class HealthMonitor:
     """Continuous health monitoring system."""
-    
+
     def __init__(self, check_interval=300):  # 5 minutes
         self.check_interval = check_interval
         self.settings = create_settings()
         self.health_endpoints = create_health_endpoints(self.settings)
         self.logger = logging.getLogger(__name__)
-        
+
         # Health thresholds
         self.thresholds = {
             "memory_usage_mb": 1500,
@@ -249,38 +249,38 @@ class HealthMonitor:
             "api_error_rate": 0.1,
             "response_time_ms": 5000
         }
-    
+
     def run_monitoring_loop(self):
         """Run continuous monitoring loop."""
         self.logger.info("Starting health monitoring loop...")
-        
+
         while True:
             try:
                 # Perform health check
                 health_status = self.perform_health_check()
-                
+
                 # Check thresholds and alert if necessary
                 alerts = self.check_thresholds(health_status)
-                
+
                 if alerts:
                     self.send_alerts(alerts)
-                
+
                 # Log health status
                 self.log_health_status(health_status)
-                
+
                 # Wait for next check
                 time.sleep(self.check_interval)
-                
+
             except Exception as e:
                 self.logger.error(f"Health monitoring error: {e}")
                 time.sleep(60)  # Wait 1 minute on error
-    
+
     def perform_health_check(self):
         """Perform comprehensive health check."""
         try:
             health = self.health_endpoints.get_health_detailed()
             metrics = self.health_endpoints.get_metrics()
-            
+
             return {
                 "timestamp": datetime.now().isoformat(),
                 "health": health,
@@ -293,21 +293,21 @@ class HealthMonitor:
                 "error": str(e),
                 "status": "error"
             }
-    
+
     def check_thresholds(self, health_status):
         """Check if any health metrics exceed thresholds."""
         alerts = []
-        
+
         if health_status.get("status") == "error":
             alerts.append({
                 "severity": "critical",
                 "message": f"Health check failed: {health_status.get('error')}"
             })
             return alerts
-        
+
         health = health_status.get("health", {})
         metrics = health_status.get("metrics", {})
-        
+
         # Check memory usage
         memory_mb = metrics.get("memory_usage_mb", 0)
         if memory_mb > self.thresholds["memory_usage_mb"]:
@@ -315,7 +315,7 @@ class HealthMonitor:
                 "severity": "warning",
                 "message": f"High memory usage: {memory_mb}MB (threshold: {self.thresholds['memory_usage_mb']}MB)"
             })
-        
+
         # Check CPU usage
         cpu_percent = metrics.get("cpu_usage_percent", 0)
         if cpu_percent > self.thresholds["cpu_usage_percent"]:
@@ -323,7 +323,7 @@ class HealthMonitor:
                 "severity": "warning",
                 "message": f"High CPU usage: {cpu_percent}% (threshold: {self.thresholds['cpu_usage_percent']}%)"
             })
-        
+
         # Check API error rate
         error_rate = metrics.get("api_error_rate", 0)
         if error_rate > self.thresholds["api_error_rate"]:
@@ -331,9 +331,9 @@ class HealthMonitor:
                 "severity": "critical",
                 "message": f"High API error rate: {error_rate:.2%} (threshold: {self.thresholds['api_error_rate']:.2%})"
             })
-        
+
         return alerts
-    
+
     def send_alerts(self, alerts):
         """Send alerts to configured endpoints."""
         for alert in alerts:
@@ -341,39 +341,39 @@ class HealthMonitor:
             webhook_url = self.settings.system.alert_webhook_url
             if webhook_url:
                 self.send_webhook_alert(webhook_url, alert)
-            
+
             # Send to email if configured
             alert_email = self.settings.system.alert_email
             if alert_email:
                 self.send_email_alert(alert_email, alert)
-            
+
             # Log the alert
             self.logger.warning(f"ALERT: {alert['message']}")
-    
+
     def send_webhook_alert(self, webhook_url, alert):
         """Send alert to webhook (Slack, Discord, etc.)."""
         import requests
-        
+
         payload = {
             "text": f"🚨 Trading Bot Alert ({alert['severity'].upper()}): {alert['message']}",
             "username": "Trading Bot Monitor"
         }
-        
+
         try:
             response = requests.post(webhook_url, json=payload, timeout=10)
             response.raise_for_status()
         except Exception as e:
             self.logger.error(f"Failed to send webhook alert: {e}")
-    
+
     def send_email_alert(self, email, alert):
         """Send alert via email."""
         # Implementation would send email using SMTP
         pass
-    
+
     def log_health_status(self, health_status):
         """Log health status for analysis."""
         log_file = "logs/health_monitor.log"
-        
+
         with open(log_file, "a") as f:
             f.write(json.dumps(health_status, default=str) + "\n")
 
@@ -423,17 +423,17 @@ from bot.config import create_settings
 
 class SlackAlerter:
     """Send alerts to Slack channels."""
-    
+
     def __init__(self):
         self.settings = create_settings()
         self.webhook_url = self.settings.system.alert_webhook_url
-    
+
     def send_alert(self, message, severity="info", channel=None):
         """Send alert to Slack."""
         if not self.webhook_url:
             print("No webhook URL configured")
             return
-        
+
         # Choose emoji and color based on severity
         emoji_map = {
             "info": "ℹ️",
@@ -441,14 +441,14 @@ class SlackAlerter:
             "critical": "🚨",
             "success": "✅"
         }
-        
+
         color_map = {
             "info": "#36a64f",
             "warning": "#ff9500",
             "critical": "#ff0000",
             "success": "#00ff00"
         }
-        
+
         payload = {
             "username": "Trading Bot",
             "icon_emoji": ":robot_face:",
@@ -471,14 +471,14 @@ class SlackAlerter:
                 }
             ]
         }
-        
+
         try:
             response = requests.post(self.webhook_url, json=payload, timeout=10)
             response.raise_for_status()
             print(f"Alert sent to Slack: {message}")
         except Exception as e:
             print(f"Failed to send Slack alert: {e}")
-    
+
     def send_trading_summary(self, summary):
         """Send daily trading summary to Slack."""
         message = f"""
@@ -491,9 +491,9 @@ class SlackAlerter:
 
 🎯 Risk Usage: {summary.get('daily_loss_used', 0):.1f}% / {summary.get('max_daily_loss', 0):.1f}%
         """
-        
+
         self.send_alert(message, "info", "#trading-reports")
-    
+
     def send_system_alert(self, component, status, details=""):
         """Send system status alert."""
         if status == "healthy":
@@ -661,7 +661,7 @@ print(client.test_connection())
    ```bash
    # Check environment variables
    docker exec ai-trading-bot env | grep -E "(API_KEY|SECRET)"
-   
+
    # Validate configuration format
    python -c "from bot.config import create_settings; print('Config OK')"
    ```
@@ -681,7 +681,7 @@ print(client.test_connection())
    # Test external connectivity
    docker exec ai-trading-bot ping -c 3 api.coinbase.com
    docker exec ai-trading-bot ping -c 3 api.openai.com
-   
+
    # Check DNS resolution
    docker exec ai-trading-bot nslookup api.coinbase.com
    ```
@@ -840,25 +840,25 @@ from bot.main import TradingEngine
 def profile_trading_loop():
     """Profile the main trading loop."""
     pr = cProfile.Profile()
-    
+
     # Create trading engine
     engine = TradingEngine(dry_run=True)
-    
+
     # Profile a single iteration
     pr.enable()
-    
+
     # Simulate trading loop components
     data = engine.market_data.get_latest_ohlcv(200)
     df = engine.market_data.to_dataframe(200)
     indicators = engine.indicator_calc.calculate_all(df)
-    
+
     pr.disable()
-    
+
     # Print results
     s = io.StringIO()
     ps = pstats.Stats(pr, stream=s).sort_stats('cumulative')
     ps.print_stats()
-    
+
     print(s.getvalue())
 
 
@@ -916,21 +916,21 @@ class OptimizedDataProvider:
     def __init__(self):
         self.cache = {}
         self.cache_ttl = 30  # seconds
-    
+
     def get_ohlcv_cached(self, symbol, limit=200):
         """Get OHLCV data with intelligent caching."""
         cache_key = f"{symbol}_{limit}"
         now = time.time()
-        
+
         if cache_key in self.cache:
             data, timestamp = self.cache[cache_key]
             if now - timestamp < self.cache_ttl:
                 return data
-        
+
         # Fetch fresh data
         data = self.fetch_ohlcv(symbol, limit)
         self.cache[cache_key] = (data, now)
-        
+
         return data
 ```
 
@@ -953,7 +953,7 @@ class OptimizedHTTPClient:
             use_dns_cache=True,
             keepalive_timeout=60
         )
-    
+
     async def get_session(self):
         if not self.session:
             timeout = aiohttp.ClientTimeout(total=30)
@@ -976,21 +976,21 @@ import pandas as pd
 class OptimizedIndicators:
     def __init__(self):
         self.cache = {}
-    
+
     def calculate_ema_vectorized(self, data, period):
         """Optimized EMA calculation using numpy."""
         cache_key = f"ema_{period}_{hash(str(data.values.tobytes()))}"
-        
+
         if cache_key in self.cache:
             return self.cache[cache_key]
-        
+
         # Vectorized EMA calculation
         alpha = 2.0 / (period + 1.0)
         result = data.ewm(alpha=alpha).mean()
-        
+
         self.cache[cache_key] = result
         return result
-    
+
     def calculate_all_optimized(self, df):
         """Calculate all indicators with optimization."""
         # Use pandas operations instead of loops
@@ -1022,132 +1022,132 @@ import boto3  # For S3 uploads
 
 class BackupManager:
     """Manage automated backups of trading bot data."""
-    
+
     def __init__(self):
         self.backup_dir = Path("/backups/trading-bot")
         self.backup_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Backup retention policy
         self.retention_days = {
             "daily": 30,
             "weekly": 12,  # 12 weeks
             "monthly": 12  # 12 months
         }
-    
+
     def create_backup(self, backup_type="daily"):
         """Create a complete backup."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_name = f"trading_bot_{backup_type}_{timestamp}"
         backup_path = self.backup_dir / backup_name
-        
+
         backup_path.mkdir(exist_ok=True)
-        
+
         # Backup configuration
         self.backup_configuration(backup_path)
-        
+
         # Backup logs
         self.backup_logs(backup_path)
-        
+
         # Backup data
         self.backup_data(backup_path)
-        
+
         # Backup database (if applicable)
         self.backup_database(backup_path)
-        
+
         # Create compressed archive
         archive_path = self.create_archive(backup_path)
-        
+
         # Upload to cloud storage
         if os.getenv("AWS_S3_BUCKET"):
             self.upload_to_s3(archive_path)
-        
+
         # Cleanup temporary directory
         shutil.rmtree(backup_path)
-        
+
         # Cleanup old backups
         self.cleanup_old_backups(backup_type)
-        
+
         return archive_path
-    
+
     def backup_configuration(self, backup_path):
         """Backup configuration files."""
         config_backup = backup_path / "config"
         config_backup.mkdir(exist_ok=True)
-        
+
         # Copy config files (without secrets)
         for config_file in Path("config").glob("*.json"):
             shutil.copy2(config_file, config_backup)
-        
+
         # Export current settings (sanitized)
         from bot.config import create_settings
         settings = create_settings()
         settings.save_to_file(config_backup / "current_settings.json", include_secrets=False)
-    
+
     def backup_logs(self, backup_path, days=7):
         """Backup recent log files."""
         logs_backup = backup_path / "logs"
         logs_backup.mkdir(exist_ok=True)
-        
+
         cutoff_date = datetime.now() - timedelta(days=days)
-        
+
         for log_file in Path("logs").glob("*.log"):
             if log_file.stat().st_mtime > cutoff_date.timestamp():
                 shutil.copy2(log_file, logs_backup)
-    
+
     def backup_data(self, backup_path):
         """Backup data directory."""
         if Path("data").exists():
             shutil.copytree("data", backup_path / "data")
-    
+
     def backup_database(self, backup_path):
         """Backup database if configured."""
         # Implementation would backup PostgreSQL/SQLite data
         pass
-    
+
     def create_archive(self, backup_path):
         """Create compressed archive of backup."""
         archive_path = backup_path.with_suffix(".tar.gz")
-        
+
         with tarfile.open(archive_path, "w:gz") as tar:
             tar.add(backup_path, arcname=backup_path.name)
-        
+
         return archive_path
-    
+
     def upload_to_s3(self, archive_path):
         """Upload backup to S3."""
         try:
             s3_client = boto3.client('s3')
             bucket = os.getenv("AWS_S3_BUCKET")
             key = f"backups/{archive_path.name}"
-            
+
             s3_client.upload_file(str(archive_path), bucket, key)
             print(f"Backup uploaded to S3: s3://{bucket}/{key}")
-            
+
         except Exception as e:
             print(f"Failed to upload to S3: {e}")
-    
+
     def cleanup_old_backups(self, backup_type):
         """Remove old backups based on retention policy."""
         retention_days = self.retention_days.get(backup_type, 30)
         cutoff_date = datetime.now() - timedelta(days=retention_days)
-        
+
         pattern = f"trading_bot_{backup_type}_*.tar.gz"
         for backup_file in self.backup_dir.glob(pattern):
             if backup_file.stat().st_mtime < cutoff_date.timestamp():
                 backup_file.unlink()
                 print(f"Removed old backup: {backup_file}")
-    
+
     def restore_backup(self, backup_path, restore_type="config"):
         """Restore from backup."""
         if not Path(backup_path).exists():
             raise FileNotFoundError(f"Backup file not found: {backup_path}")
-        
+
         # Extract backup
         with tarfile.open(backup_path, "r:gz") as tar:
             tar.extractall(self.backup_dir)
-        
+
         extracted_dir = self.backup_dir / Path(backup_path).stem.replace(".tar", "")
-        
+
         try:
             if restore_type == "config":
                 self.restore_configuration(extracted_dir)
@@ -1156,30 +1156,30 @@ class BackupManager:
             elif restore_type == "full":
                 self.restore_configuration(extracted_dir)
                 self.restore_data(extracted_dir)
-            
+
             print(f"Restore completed: {restore_type}")
-            
+
         finally:
             # Cleanup extracted files
             if extracted_dir.exists():
                 shutil.rmtree(extracted_dir)
-    
+
     def restore_configuration(self, backup_dir):
         """Restore configuration from backup."""
         config_backup = backup_dir / "config"
         if config_backup.exists():
             # Stop trading bot before restore
             os.system("docker-compose down")
-            
+
             # Backup current config
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             shutil.move("config", f"config_backup_{timestamp}")
-            
+
             # Restore config
             shutil.copytree(config_backup, "config")
-            
+
             print("Configuration restored. Please restart the trading bot.")
-    
+
     def restore_data(self, backup_dir):
         """Restore data from backup."""
         data_backup = backup_dir / "data"
@@ -1187,33 +1187,33 @@ class BackupManager:
             if Path("data").exists():
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 shutil.move("data", f"data_backup_{timestamp}")
-            
+
             shutil.copytree(data_backup, "data")
             print("Data restored.")
 
 
 if __name__ == "__main__":
     import sys
-    
+
     backup_manager = BackupManager()
-    
+
     if len(sys.argv) > 1:
         command = sys.argv[1]
-        
+
         if command == "backup":
             backup_type = sys.argv[2] if len(sys.argv) > 2 else "daily"
             archive_path = backup_manager.create_backup(backup_type)
             print(f"Backup created: {archive_path}")
-            
+
         elif command == "restore":
             if len(sys.argv) < 3:
                 print("Usage: backup.py restore <backup_file> [config|data|full]")
                 sys.exit(1)
-            
+
             backup_file = sys.argv[2]
             restore_type = sys.argv[3] if len(sys.argv) > 3 else "config"
             backup_manager.restore_backup(backup_file, restore_type)
-            
+
         else:
             print("Usage: backup.py [backup|restore] ...")
     else:
@@ -1262,7 +1262,7 @@ import pandas as pd
 
 class LogAnalyzer:
     """Analyze trading bot logs for insights and issues."""
-    
+
     def __init__(self, log_file="logs/bot.log"):
         self.log_file = Path(log_file)
         self.patterns = {
@@ -1273,11 +1273,11 @@ class LogAnalyzer:
             "position": re.compile(r"Position: (\w+) ([\d.]+)"),
             "pnl": re.compile(r"P&L: \$([\d.-]+)")
         }
-    
+
     def analyze_logs(self, hours=24):
         """Perform comprehensive log analysis."""
         cutoff_time = datetime.now() - timedelta(hours=hours)
-        
+
         results = {
             "summary": self.get_log_summary(cutoff_time),
             "errors": self.analyze_errors(cutoff_time),
@@ -1285,27 +1285,27 @@ class LogAnalyzer:
             "performance": self.analyze_performance(cutoff_time),
             "api_metrics": self.analyze_api_metrics(cutoff_time)
         }
-        
+
         return results
-    
+
     def get_log_summary(self, cutoff_time):
         """Get basic log statistics."""
         total_lines = 0
         error_count = 0
         warning_count = 0
         info_count = 0
-        
+
         with open(self.log_file, 'r') as f:
             for line in f:
                 total_lines += 1
-                
+
                 if "ERROR" in line:
                     error_count += 1
                 elif "WARNING" in line:
                     warning_count += 1
                 elif "INFO" in line:
                     info_count += 1
-        
+
         return {
             "total_lines": total_lines,
             "error_count": error_count,
@@ -1313,12 +1313,12 @@ class LogAnalyzer:
             "info_count": info_count,
             "error_rate": error_count / max(total_lines, 1)
         }
-    
+
     def analyze_errors(self, cutoff_time):
         """Analyze error patterns and frequency."""
         errors = []
         error_types = Counter()
-        
+
         with open(self.log_file, 'r') as f:
             for line in f:
                 if "ERROR" in line or "CRITICAL" in line:
@@ -1331,20 +1331,20 @@ class LogAnalyzer:
                         error_types["Timeout Error"] += 1
                     else:
                         error_types["Other Error"] += 1
-                    
+
                     errors.append(line.strip())
-        
+
         return {
             "total_errors": len(errors),
             "error_types": dict(error_types),
             "recent_errors": errors[-10:] if errors else []
         }
-    
+
     def analyze_trading_activity(self, cutoff_time):
         """Analyze trading performance and patterns."""
         trades = []
         pnl_values = []
-        
+
         with open(self.log_file, 'r') as f:
             for line in f:
                 # Extract trade information
@@ -1357,12 +1357,12 @@ class LogAnalyzer:
                         "price": float(price),
                         "timestamp": self.extract_timestamp(line)
                     })
-                
+
                 # Extract P&L information
                 pnl_match = self.patterns["pnl"].search(line)
                 if pnl_match:
                     pnl_values.append(float(pnl_match.group(1)))
-        
+
         return {
             "total_trades": len(trades),
             "trade_types": Counter([t["action"] for t in trades]),
@@ -1374,12 +1374,12 @@ class LogAnalyzer:
                 "average": sum(pnl_values) / max(len(pnl_values), 1) if pnl_values else 0
             }
         }
-    
+
     def analyze_performance(self, cutoff_time):
         """Analyze system performance metrics."""
         api_times = []
         memory_usage = []
-        
+
         with open(self.log_file, 'r') as f:
             for line in f:
                 # Extract API response times
@@ -1390,13 +1390,13 @@ class LogAnalyzer:
                         "endpoint": endpoint,
                         "response_time": int(response_time)
                     })
-                
+
                 # Extract memory usage
                 if "Memory usage:" in line:
                     memory_match = re.search(r"Memory usage: ([\d.]+)", line)
                     if memory_match:
                         memory_usage.append(float(memory_match.group(1)))
-        
+
         return {
             "api_performance": {
                 "average_response_time": sum([t["response_time"] for t in api_times]) / max(len(api_times), 1),
@@ -1409,12 +1409,12 @@ class LogAnalyzer:
                 "max": max(memory_usage) if memory_usage else 0
             }
         }
-    
+
     def analyze_api_metrics(self, cutoff_time):
         """Analyze API call patterns and success rates."""
         api_calls = Counter()
         api_errors = Counter()
-        
+
         with open(self.log_file, 'r') as f:
             for line in f:
                 if "API call" in line:
@@ -1422,10 +1422,10 @@ class LogAnalyzer:
                     for endpoint in ["coinbase", "openai", "anthropic"]:
                         if endpoint in line.lower():
                             api_calls[endpoint] += 1
-                            
+
                             if "ERROR" in line:
                                 api_errors[endpoint] += 1
-        
+
         return {
             "api_calls": dict(api_calls),
             "api_errors": dict(api_errors),
@@ -1434,21 +1434,21 @@ class LogAnalyzer:
                 for endpoint, calls in api_calls.items()
             }
         }
-    
+
     def extract_timestamp(self, log_line):
         """Extract timestamp from log line."""
         timestamp_match = re.match(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", log_line)
         if timestamp_match:
             return datetime.strptime(timestamp_match.group(1), "%Y-%m-%d %H:%M:%S")
         return datetime.now()
-    
+
     def generate_report(self, analysis_results):
         """Generate formatted analysis report."""
         report = []
         report.append("=" * 60)
         report.append("AI Trading Bot - Log Analysis Report")
         report.append("=" * 60)
-        
+
         # Summary
         summary = analysis_results["summary"]
         report.append(f"\n📊 Log Summary:")
@@ -1456,20 +1456,20 @@ class LogAnalyzer:
         report.append(f"  Errors: {summary['error_count']:,}")
         report.append(f"  Warnings: {summary['warning_count']:,}")
         report.append(f"  Error Rate: {summary['error_rate']:.2%}")
-        
+
         # Trading Activity
         trading = analysis_results["trading_activity"]
         report.append(f"\n💰 Trading Activity:")
         report.append(f"  Total Trades: {trading['total_trades']}")
         report.append(f"  Trade Types: {dict(trading['trade_types'])}")
         report.append(f"  Average Position Size: {trading['average_position_size']:.1f}%")
-        
+
         pnl = trading["pnl_summary"]
         report.append(f"  P&L Summary:")
         report.append(f"    Current: ${pnl['current']:.2f}")
         report.append(f"    Max: ${pnl['max']:.2f}")
         report.append(f"    Min: ${pnl['min']:.2f}")
-        
+
         # Performance
         performance = analysis_results["performance"]
         api_perf = performance["api_performance"]
@@ -1477,24 +1477,24 @@ class LogAnalyzer:
         report.append(f"  Average API Response: {api_perf['average_response_time']:.0f}ms")
         report.append(f"  Max API Response: {api_perf['max_response_time']:.0f}ms")
         report.append(f"  Slow Requests (>5s): {api_perf['slow_requests']}")
-        
+
         memory = performance["memory_usage"]
         report.append(f"  Memory Usage: {memory['current']:.1f}MB (avg: {memory['average']:.1f}MB)")
-        
+
         # API Metrics
         api_metrics = analysis_results["api_metrics"]
         report.append(f"\n🔌 API Metrics:")
         for endpoint, success_rate in api_metrics["success_rates"].items():
             calls = api_metrics["api_calls"].get(endpoint, 0)
             report.append(f"  {endpoint.title()}: {calls} calls, {success_rate:.1%} success rate")
-        
+
         # Recent Errors
         errors = analysis_results["errors"]
         if errors["recent_errors"]:
             report.append(f"\n🚨 Recent Errors:")
             for error in errors["recent_errors"][-5:]:
                 report.append(f"  • {error}")
-        
+
         return "\n".join(report)
 
 
@@ -1503,15 +1503,15 @@ if __name__ == "__main__":
     results = analyzer.analyze_logs(hours=24)
     report = analyzer.generate_report(results)
     print(report)
-    
+
     # Save report to file
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     report_file = f"reports/log_analysis_{timestamp}.txt"
     Path(report_file).parent.mkdir(exist_ok=True)
-    
+
     with open(report_file, 'w') as f:
         f.write(report)
-    
+
     print(f"\nReport saved to: {report_file}")
 ```
 
@@ -1551,7 +1551,7 @@ class Severity(Enum):
 
 class IncidentResponse:
     """Automated incident response procedures."""
-    
+
     def __init__(self):
         self.settings = create_settings()
         self.response_procedures = {
@@ -1560,7 +1560,7 @@ class IncidentResponse:
             Severity.MEDIUM: self.medium_response,
             Severity.LOW: self.low_response
         }
-    
+
     def handle_incident(self, incident_type, severity, details):
         """Handle incident based on severity level."""
         incident = {
@@ -1571,84 +1571,84 @@ class IncidentResponse:
             "details": details,
             "status": "OPEN"
         }
-        
+
         # Log incident
         self.log_incident(incident)
-        
+
         # Execute response procedure
         response_actions = self.response_procedures[severity](incident)
         incident["actions"] = response_actions
-        
+
         # Send notifications
         self.send_notifications(incident)
-        
+
         return incident
-    
+
     def critical_response(self, incident):
         """Critical incident response (P0)."""
         actions = []
-        
+
         # Immediate actions
         actions.append("IMMEDIATE: Stop trading bot")
         self.execute_emergency_stop()
-        
+
         actions.append("IMMEDIATE: Cancel all open orders")
         self.cancel_all_orders()
-        
+
         actions.append("IMMEDIATE: Notify on-call team")
         self.notify_oncall_team(incident)
-        
+
         # Assessment actions
         actions.append("ASSESS: Determine root cause")
         actions.append("ASSESS: Evaluate financial impact")
         actions.append("ASSESS: Check system integrity")
-        
+
         return actions
-    
+
     def high_response(self, incident):
         """High severity incident response (P1)."""
         actions = []
-        
+
         actions.append("MONITOR: Increase monitoring frequency")
         actions.append("ANALYZE: Review recent logs and metrics")
         actions.append("NOTIFY: Alert operations team")
-        
+
         # If trading performance degraded
         if "trading" in incident["type"].lower():
             actions.append("CONSIDER: Reduce position sizes")
             actions.append("CONSIDER: Increase risk limits")
-        
+
         return actions
-    
+
     def medium_response(self, incident):
         """Medium severity incident response (P2)."""
         actions = []
-        
+
         actions.append("LOG: Document issue for analysis")
         actions.append("MONITOR: Track metrics for trends")
         actions.append("SCHEDULE: Review in next maintenance window")
-        
+
         return actions
-    
+
     def low_response(self, incident):
         """Low severity incident response (P3)."""
         actions = []
-        
+
         actions.append("TRACK: Add to backlog")
         actions.append("OPTIMIZE: Consider for next optimization cycle")
-        
+
         return actions
-    
+
     def execute_emergency_stop(self):
         """Execute emergency stop procedure."""
         import os
-        
+
         # Stop trading bot
         os.system("docker-compose down")
-        
+
         # Send emergency notification
         self.send_emergency_alert("Trading bot emergency stop executed")
-    
+
     def cancel_all_orders(self):
         """Cancel all open orders across all symbols."""
         try:
@@ -1657,7 +1657,7 @@ class IncidentResponse:
             pass
         except Exception as e:
             print(f"Error cancelling orders: {e}")
-    
+
     def notify_oncall_team(self, incident):
         """Notify on-call team of critical incident."""
         message = f"""
@@ -1675,10 +1675,10 @@ Immediate actions have been taken:
 
 Please respond immediately.
         """
-        
+
         # Send to on-call notification system
         self.send_alert(message, "critical")
-    
+
     def send_notifications(self, incident):
         """Send appropriate notifications based on severity."""
         if incident["severity"] in ["P0", "P1"]:
@@ -1687,24 +1687,24 @@ Please respond immediately.
         else:
             # Standard notifications
             self.send_alert(f"Incident {incident['id']}: {incident['type']}", "warning")
-    
+
     def send_alert(self, message, severity):
         """Send alert via configured channels."""
         # Implementation would send to Slack, email, PagerDuty, etc.
         print(f"ALERT ({severity}): {message}")
-    
+
     def send_emergency_alert(self, message):
         """Send emergency alert to all channels."""
         # Implementation would send emergency notifications
         print(f"EMERGENCY: {message}")
-    
+
     def log_incident(self, incident):
         """Log incident for tracking and analysis."""
         incident_file = f"logs/incidents/{incident['id']}.json"
-        
+
         from pathlib import Path
         Path(incident_file).parent.mkdir(parents=True, exist_ok=True)
-        
+
         with open(incident_file, 'w') as f:
             json.dump(incident, f, indent=2, default=str)
 
@@ -1712,14 +1712,14 @@ Please respond immediately.
 # Example usage
 if __name__ == "__main__":
     response = IncidentResponse()
-    
+
     # Example critical incident
     incident = response.handle_incident(
         incident_type="Trading Bot Crash",
         severity=Severity.CRITICAL,
         details="Bot container crashed with out-of-memory error during trading session"
     )
-    
+
     print(f"Incident {incident['id']} handled with {len(incident['actions'])} actions")
 ```
 
@@ -1744,15 +1744,15 @@ from bot.config import create_settings
 
 class MaintenanceManager:
     """Manage routine maintenance tasks."""
-    
+
     def __init__(self):
         self.settings = create_settings()
         self.maintenance_log = "logs/maintenance.log"
-    
+
     def run_weekly_maintenance(self):
         """Run all weekly maintenance tasks."""
         self.log_maintenance("Starting weekly maintenance")
-        
+
         tasks = [
             ("Log rotation and cleanup", self.rotate_logs),
             ("Configuration backup", self.backup_configuration),
@@ -1761,7 +1761,7 @@ class MaintenanceManager:
             ("System cleanup", self.system_cleanup),
             ("Update check", self.check_updates)
         ]
-        
+
         for task_name, task_func in tasks:
             try:
                 self.log_maintenance(f"Starting: {task_name}")
@@ -1769,64 +1769,64 @@ class MaintenanceManager:
                 self.log_maintenance(f"Completed: {task_name}")
             except Exception as e:
                 self.log_maintenance(f"Failed: {task_name} - {e}")
-        
+
         self.log_maintenance("Weekly maintenance completed")
-    
+
     def rotate_logs(self):
         """Rotate and compress old log files."""
         logs_dir = Path("logs")
         cutoff_date = datetime.now() - timedelta(days=7)
-        
+
         for log_file in logs_dir.glob("*.log"):
             if log_file.stat().st_mtime < cutoff_date.timestamp():
                 # Compress old log files
                 compressed_name = f"{log_file}.{datetime.now().strftime('%Y%m%d')}.gz"
                 os.system(f"gzip -c {log_file} > {compressed_name}")
-                
+
                 # Clear original log file
                 with open(log_file, 'w') as f:
                     f.write("")
-    
+
     def backup_configuration(self):
         """Create configuration backup."""
         timestamp = datetime.now().strftime("%Y%m%d")
         backup_dir = Path(f"backups/config_{timestamp}")
         backup_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Copy configuration files
         for config_file in Path("config").glob("*.json"):
             shutil.copy2(config_file, backup_dir)
-        
+
         # Export current settings
         settings = create_settings()
         settings.save_to_file(backup_dir / "current_settings.json")
-    
+
     def analyze_performance(self):
         """Analyze system performance trends."""
         # Run log analysis
         os.system("python scripts/log_analyzer.py > reports/weekly_performance.txt")
-        
+
         # Generate performance report
         os.system("python scripts/performance_report.py")
-    
+
     def security_check(self):
         """Perform security checks."""
         checks = []
-        
+
         # Check file permissions
         for sensitive_file in [".env", "config/"]:
             if Path(sensitive_file).exists():
                 stat = Path(sensitive_file).stat()
                 if stat.st_mode & 0o077:  # World or group readable
                     checks.append(f"WARNING: {sensitive_file} has loose permissions")
-        
+
         # Check for secrets in logs
         for log_file in Path("logs").glob("*.log"):
             with open(log_file, 'r') as f:
                 content = f.read()
                 if any(keyword in content for keyword in ["password", "secret", "key"]):
                     checks.append(f"WARNING: Potential secret exposure in {log_file}")
-        
+
         # Save security report
         with open("reports/security_check.txt", 'w') as f:
             f.write(f"Security Check - {datetime.now()}\n")
@@ -1836,7 +1836,7 @@ class MaintenanceManager:
                     f.write(f"{check}\n")
             else:
                 f.write("No security issues found.\n")
-    
+
     def system_cleanup(self):
         """Clean up temporary files and optimize storage."""
         # Remove old temporary files
@@ -1844,27 +1844,27 @@ class MaintenanceManager:
         for temp_dir in temp_dirs:
             if Path(temp_dir).exists():
                 shutil.rmtree(temp_dir)
-        
+
         # Clean Docker artifacts
         os.system("docker system prune -f")
-        
+
         # Optimize database (if applicable)
         # os.system("vacuumdb trading_bot")
-    
+
     def check_updates(self):
         """Check for available updates."""
         # Check for Python package updates
         os.system("pip list --outdated > reports/package_updates.txt")
-        
+
         # Check for security updates
         os.system("apt list --upgradable > reports/system_updates.txt")
-        
+
         # Generate update report
         with open("reports/update_check.txt", 'w') as f:
             f.write(f"Update Check - {datetime.now()}\n")
             f.write("=" * 40 + "\n")
             f.write("Check package_updates.txt and system_updates.txt for available updates.\n")
-    
+
     def log_maintenance(self, message):
         """Log maintenance activity."""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1896,45 +1896,45 @@ from bot.config import create_settings
 
 class ConfigDriftDetector:
     """Detect changes in configuration from baseline."""
-    
+
     def __init__(self):
         self.baseline_file = "config/baseline_config.json"
         self.settings = create_settings()
-    
+
     def create_baseline(self):
         """Create configuration baseline."""
         baseline = self.get_config_snapshot()
-        
+
         with open(self.baseline_file, 'w') as f:
             json.dump(baseline, f, indent=2, default=str)
-        
+
         print(f"Baseline created: {self.baseline_file}")
-    
+
     def check_drift(self):
         """Check for configuration drift."""
         if not Path(self.baseline_file).exists():
             print("No baseline found. Creating baseline...")
             self.create_baseline()
             return
-        
+
         # Load baseline
         with open(self.baseline_file, 'r') as f:
             baseline = json.load(f)
-        
+
         # Get current configuration
         current = self.get_config_snapshot()
-        
+
         # Compare configurations
         drift_report = self.compare_configs(baseline, current)
-        
+
         if drift_report["changes"]:
             print("⚠️  Configuration drift detected!")
             self.print_drift_report(drift_report)
         else:
             print("✅ No configuration drift detected")
-        
+
         return drift_report
-    
+
     def get_config_snapshot(self):
         """Get current configuration snapshot."""
         # Export configuration without secrets
@@ -1943,26 +1943,26 @@ class ConfigDriftDetector:
             'exchange': {'cb_api_key', 'cb_api_secret', 'cb_passphrase'},
             'system': {'api_secret_key', 'instance_id'}
         })
-        
+
         return {
             "config": config_dict,
             "hash": self.calculate_config_hash(config_dict),
             "timestamp": self.settings.model_dump()['system']['instance_id']  # Placeholder
         }
-    
+
     def calculate_config_hash(self, config_dict):
         """Calculate hash of configuration."""
         config_str = json.dumps(config_dict, sort_keys=True, default=str)
         return hashlib.sha256(config_str.encode()).hexdigest()
-    
+
     def compare_configs(self, baseline, current):
         """Compare baseline and current configurations."""
         changes = []
-        
+
         def compare_dicts(baseline_dict, current_dict, path=""):
             for key in set(baseline_dict.keys()) | set(current_dict.keys()):
                 current_path = f"{path}.{key}" if path else key
-                
+
                 if key not in baseline_dict:
                     changes.append({
                         "type": "added",
@@ -1984,16 +1984,16 @@ class ConfigDriftDetector:
                         "old_value": baseline_dict[key],
                         "new_value": current_dict[key]
                     })
-        
+
         compare_dicts(baseline["config"], current["config"])
-        
+
         return {
             "baseline_hash": baseline["hash"],
             "current_hash": current["hash"],
             "changes": changes,
             "drift_detected": len(changes) > 0
         }
-    
+
     def print_drift_report(self, drift_report):
         """Print formatted drift report."""
         print(f"\nConfiguration Drift Report")
@@ -2002,7 +2002,7 @@ class ConfigDriftDetector:
         print(f"Current Hash:  {drift_report['current_hash'][:16]}...")
         print(f"Changes: {len(drift_report['changes'])}")
         print()
-        
+
         for change in drift_report['changes']:
             if change['type'] == 'changed':
                 print(f"CHANGED: {change['path']}")

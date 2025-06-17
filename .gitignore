@@ -298,7 +298,7 @@ CLAUDE.md
 .aider*
 .github/copilot*
 
-# Additional IDE/Editor Files  
+# Additional IDE/Editor Files
 .nova/
 .sublime-project
 .sublime-workspace
@@ -320,7 +320,7 @@ logs/**/*.log
 
 # Additional Security Files
 *.env.local
-*.env.production  
+*.env.production
 *.env.development
 
 # Dashboard and Integration Reports (contains sensitive data)
@@ -366,7 +366,7 @@ performance_*.json
 metrics_*.json
 monitoring/
 
-# Additional development artifacts  
+# Additional development artifacts
 scratch_*.py
 debug_*.py
 test_*.md

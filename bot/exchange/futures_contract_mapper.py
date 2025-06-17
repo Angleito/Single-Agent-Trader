@@ -5,17 +5,18 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+
 class FuturesContractMapper:
     """Maps spot symbols to their corresponding futures contracts."""
 
     # Map base symbols to their futures contract prefixes
     FUTURES_PREFIXES = {
-        'ETH-USD': 'ET',
-        'BTC-USD': 'BT',
-        'SOL-USD': 'SOL',
-        'DOGE-USD': 'DOGE',
-        'LTC-USD': 'LTC',
-        'BCH-USD': 'BCH'
+        "ETH-USD": "ET",
+        "BTC-USD": "BT",
+        "SOL-USD": "SOL",
+        "DOGE-USD": "DOGE",
+        "LTC-USD": "LTC",
+        "BCH-USD": "BCH",
     }
 
     @staticmethod
@@ -23,7 +24,7 @@ class FuturesContractMapper:
         """Get the current/next contract month in format DDMMMYY."""
         # Futures typically expire on the last Friday of the month
         # We should use the next month's contract if we're past expiry
-        now = datetime.now()
+        datetime.now()
 
         # For now, return the known active contract
         # In production, this would calculate based on current date
@@ -32,10 +33,10 @@ class FuturesContractMapper:
     @staticmethod
     def spot_to_futures_symbol(spot_symbol: str) -> str:
         """Convert spot symbol to futures contract symbol.
-        
+
         Args:
             spot_symbol: Spot trading pair (e.g., 'ETH-USD')
-            
+
         Returns:
             Futures contract symbol (e.g., 'ET-27JUN25-CDE')
         """
@@ -53,15 +54,15 @@ class FuturesContractMapper:
     @staticmethod
     def futures_to_spot_symbol(futures_symbol: str) -> str:
         """Convert futures contract symbol back to spot symbol.
-        
+
         Args:
             futures_symbol: Futures contract (e.g., 'ET-27JUN25-CDE')
-            
+
         Returns:
             Spot symbol (e.g., 'ETH-USD')
         """
         # Extract the prefix (everything before the first dash)
-        parts = futures_symbol.split('-')
+        parts = futures_symbol.split("-")
         if len(parts) < 3:
             return futures_symbol
 

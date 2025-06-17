@@ -513,21 +513,21 @@ export class TradingViewChart {
   private createValidatedWidgetConfig(): any {
     // Ensure all configuration values have proper types
     const config = {
-      // Basic widget settings - use explicit type coercion
-      width: String('100%'),
-      height: String('100%'),
-      symbol: String(this.normalizeSymbol(this.config.symbol)),
-      interval: String(this.normalizeInterval(this.config.interval || '1')),
-      container_id: String(this.config.container_id),
+      // Basic widget settings - use primitive type coercion
+      width: '100%',
+      height: '100%',
+      symbol: '' + this.normalizeSymbol(this.config.symbol),
+      interval: '' + this.normalizeInterval(this.config.interval || '1'),
+      container_id: '' + this.config.container_id,
       datafeed: this.createUDFDatafeed(),
-      library_path: String(this.config.library_path || '/'),
+      library_path: '' + (this.config.library_path || '/'),
 
       // Locale and timezone - ensure string types
-      locale: String('en'),
-      timezone: String('Etc/UTC'),
+      locale: 'en',
+      timezone: 'Etc/UTC',
 
       // Debug setting - ensure boolean type
-      debug: Boolean(false),
+      debug: false,
 
       // Feature arrays - ensure they're proper arrays with string elements
       disabled_features: [
@@ -543,7 +543,7 @@ export class TradingViewChart {
         'header_indicators',
         'header_compare',
         'compare_symbol',
-      ].map((feature) => String(feature)),
+      ],
 
       enabled_features: [
         'study_templates',
@@ -558,54 +558,52 @@ export class TradingViewChart {
         'adaptive_logo',
         'chart_style_hilo',
         'datasource_copypaste',
-      ].map((feature) => String(feature)),
+      ],
 
-      // Storage configuration - only include if defined, with explicit type coercion
+      // Storage configuration - only include if defined, with primitive type coercion
       ...(this.config.charts_storage_url && {
-        charts_storage_url: String(this.config.charts_storage_url),
-        charts_storage_api_version: String(this.config.charts_storage_api_version || '1.1'),
-        client_id: String(this.config.client_id || 'ai-trading-bot'),
-        user_id: String(this.config.user_id || 'default_user'),
+        charts_storage_url: '' + this.config.charts_storage_url,
+        charts_storage_api_version: '' + (this.config.charts_storage_api_version || '1.1'),
+        client_id: '' + (this.config.client_id || 'ai-trading-bot'),
+        user_id: '' + (this.config.user_id || 'default_user'),
       }),
 
       // Boolean settings - explicit boolean coercion
-      fullscreen: Boolean(this.config.fullscreen || false),
-      autosize: Boolean(this.config.autosize !== false),
+      fullscreen: !!(this.config.fullscreen || false),
+      autosize: !!(this.config.autosize !== false),
 
       // Object configurations - ensure they return proper objects
       studies_overrides: this.getValidatedStudiesOverrides(),
       overrides: this.getValidatedChartOverrides(),
 
       // Theme - ensure proper string value
-      theme: String(this.config.theme === 'light' ? 'Light' : 'Dark'),
+      theme: this.config.theme === 'light' ? 'Light' : 'Dark',
 
       // CSS URL - only include if it exists, with proper string type
       ...(this.checkCSSFileExists() && {
-        custom_css_url: String('./tradingview-custom.css'),
+        custom_css_url: './tradingview-custom.css',
       }),
 
       // Loading screen configuration - ensure proper object structure
       loading_screen: {
-        backgroundColor: String('#1e1e1e'),
+        backgroundColor: '#1e1e1e',
       },
 
       // Favorites configuration - ensure proper object structure with typed arrays
       favorites: {
-        intervals: ['1', '5', '15', '30', '60', '240', '1D'].map((interval) => String(interval)),
-        chartTypes: ['Area', 'Line', 'Candles', 'HeikinAshi', 'Hollow Candles'].map((type) =>
-          String(type)
-        ),
+        intervals: ['1', '5', '15', '30', '60', '240', '1D'],
+        chartTypes: ['Area', 'Line', 'Candles', 'HeikinAshi', 'Hollow Candles'],
       },
 
       // Time frames configuration - ensure proper object structure with typed properties
       time_frames: [
-        { text: String('1m'), resolution: String('1') },
-        { text: String('5m'), resolution: String('5') },
-        { text: String('15m'), resolution: String('15') },
-        { text: String('30m'), resolution: String('30') },
-        { text: String('1h'), resolution: String('60') },
-        { text: String('4h'), resolution: String('240') },
-        { text: String('1D'), resolution: String('1D') },
+        { text: '1m', resolution: '1' },
+        { text: '5m', resolution: '5' },
+        { text: '15m', resolution: '15' },
+        { text: '30m', resolution: '30' },
+        { text: '1h', resolution: '60' },
+        { text: '4h', resolution: '240' },
+        { text: '1D', resolution: '1D' },
       ],
     }
 
@@ -1270,57 +1268,56 @@ export class TradingViewChart {
         onResultReadyCallback([])
       },
 
-      resolveSymbol: async (
+      resolveSymbol: (
         symbolName: string,
         onSymbolResolvedCallback: Function,
         onResolveErrorCallback: Function
       ) => {
         console.log('[UDF resolveSymbol]: Resolving', symbolName)
 
-        try {
-          const normalizedSymbol = this.normalizeSymbol(symbolName)
-          const response = await fetch(
-            `${this.backendBaseUrl}/udf/symbols?symbol=${normalizedSymbol}`
-          )
-
-          if (!response.ok) {
-            throw new Error(`Failed to resolve symbol: ${response.statusText}`)
-          }
-
-          const symbolInfo = await response.json()
-          console.log('[UDF resolveSymbol]: Symbol resolved', symbolInfo)
-
-          const validatedSymbolInfo = this.validateSymbolInfo({
-            name: String(symbolInfo.name || normalizedSymbol),
-            description: String(symbolInfo.description || normalizedSymbol),
-            type: String('crypto'),
-            session: String('24x7'),
-            timezone: String('Etc/UTC'),
-            ticker: String(normalizedSymbol),
-            exchange: String('Coinbase'),
-            minmov: Number(symbolInfo.minmov || 1),
-            pricescale: Number(symbolInfo.pricescale || 100000),
-            has_intraday: Boolean(true),
-            has_daily: Boolean(true),
-            has_weekly_and_monthly: Boolean(true),
-            intraday_multipliers: ['1', '5', '15', '30', '60'],
-            supported_resolutions: ['1', '5', '15', '30', '60', '240', '1D'],
-            volume_precision: Number(symbolInfo.volume_precision || 8),
-            data_status: String('streaming'),
-            currency_code: String(symbolInfo.currency_code || 'USD'),
-            original_name: String(normalizedSymbol),
-            ...symbolInfo,
+        const normalizedSymbol = this.normalizeSymbol(symbolName)
+        fetch(`${this.backendBaseUrl}/udf/symbols?symbol=${normalizedSymbol}`)
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`Failed to resolve symbol: ${response.statusText}`)
+            }
+            return response.json()
           })
+          .then(symbolInfo => {
+            console.log('[UDF resolveSymbol]: Symbol resolved', symbolInfo)
 
-          onSymbolResolvedCallback(validatedSymbolInfo)
-        } catch (error) {
-          // eslint-disable-next-line no-console
-        console.error('[UDF resolveSymbol]: Error resolving symbol', error)
-          onResolveErrorCallback('Symbol resolution failed')
-        }
+            const validatedSymbolInfo = this.validateSymbolInfo({
+              name: String(symbolInfo.name || normalizedSymbol),
+              description: String(symbolInfo.description || normalizedSymbol),
+              type: String('crypto'),
+              session: String('24x7'),
+              timezone: String('Etc/UTC'),
+              ticker: String(normalizedSymbol),
+              exchange: String('Coinbase'),
+              minmov: Number(symbolInfo.minmov || 1),
+              pricescale: Number(symbolInfo.pricescale || 100000),
+              has_intraday: Boolean(true),
+              has_daily: Boolean(true),
+              has_weekly_and_monthly: Boolean(true),
+              intraday_multipliers: ['1', '5', '15', '30', '60'],
+              supported_resolutions: ['1', '5', '15', '30', '60', '240', '1D'],
+              volume_precision: Number(symbolInfo.volume_precision || 8),
+              data_status: String('streaming'),
+              currency_code: String(symbolInfo.currency_code || 'USD'),
+              original_name: String(normalizedSymbol),
+              ...symbolInfo,
+            })
+
+            onSymbolResolvedCallback(validatedSymbolInfo)
+          })
+          .catch(error => {
+            // eslint-disable-next-line no-console
+            console.error('[UDF resolveSymbol]: Error resolving symbol', error)
+            onResolveErrorCallback('Symbol resolution failed')
+          })
       },
 
-      getBars: async (
+      getBars: (
         symbolInfo: any,
         resolution: string,
         periodParams: any,
@@ -1333,60 +1330,60 @@ export class TradingViewChart {
           periodParams,
         })
 
-        try {
-          const params = new URLSearchParams({
-            symbol: symbolInfo.name,
-            resolution: resolution,
-            from: periodParams.from.toString(),
-            to: periodParams.to.toString(),
-            countback: periodParams.countback?.toString() || '300',
-          })
+        const params = new URLSearchParams({
+          symbol: symbolInfo.name,
+          resolution: resolution,
+          from: periodParams.from.toString(),
+          to: periodParams.to.toString(),
+          countback: periodParams.countback?.toString() || '300',
+        })
 
-          const response = await fetch(`${this.backendBaseUrl}/udf/history?${params}`)
-
-          if (!response.ok) {
-            throw new Error(`Failed to fetch bars: ${response.statusText}`)
-          }
-
-          const data = await response.json()
-
-          if (data.s === 'no_data') {
-            console.log('[UDF getBars]: No data available')
-            onHistoryCallback([], { noData: true })
-            return
-          }
-
-          if (data.s !== 'ok') {
-            throw new Error(`Data fetch error: ${data.s}`)
-          }
-
-          // Convert to TradingView bar format with validation
-          const bars: UDFBar[] = []
-          for (let i = 0; i < data.t.length; i++) {
-            const bar: UDFBar = this.validateBarData({
-              time: Number(data.t[i]) * 1000, // Convert to milliseconds
-              open: Number(data.o[i]),
-              high: Number(data.h[i]),
-              low: Number(data.l[i]),
-              close: Number(data.c[i]),
-              volume: Number(data.v[i] || 0),
-            })
-            bars.push(bar)
-
-            // Cache the most recent bar for real-time updates
-            if (i === data.t.length - 1) {
-              const key = `${symbolInfo.name}_${resolution}`
-              this.currentBars.set(key, bar)
+        fetch(`${this.backendBaseUrl}/udf/history?${params}`)
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`Failed to fetch bars: ${response.statusText}`)
             }
-          }
+            return response.json()
+          })
+          .then(data => {
+            if (data.s === 'no_data') {
+              console.log('[UDF getBars]: No data available')
+              onHistoryCallback([], { noData: true })
+              return
+            }
 
-          console.log(`[UDF getBars]: Loaded ${bars.length} bars`)
-          onHistoryCallback(bars, { noData: false })
-        } catch (error) {
-          // eslint-disable-next-line no-console
-        console.error('[UDF getBars]: Error fetching bars', error)
-          onErrorCallback('Failed to fetch historical data')
-        }
+            if (data.s !== 'ok') {
+              throw new Error(`Data fetch error: ${data.s}`)
+            }
+
+            // Convert to TradingView bar format with validation
+            const bars: UDFBar[] = []
+            for (let i = 0; i < data.t.length; i++) {
+              const bar: UDFBar = this.validateBarData({
+                time: Number(data.t[i]) * 1000, // Convert to milliseconds
+                open: Number(data.o[i]),
+                high: Number(data.h[i]),
+                low: Number(data.l[i]),
+                close: Number(data.c[i]),
+                volume: Number(data.v[i] || 0),
+              })
+              bars.push(bar)
+
+              // Cache the most recent bar for real-time updates
+              if (i === data.t.length - 1) {
+                const key = `${symbolInfo.name}_${resolution}`
+                this.currentBars.set(key, bar)
+              }
+            }
+
+            console.log(`[UDF getBars]: Loaded ${bars.length} bars`)
+            onHistoryCallback(bars, { noData: false })
+          })
+          .catch(error => {
+            // eslint-disable-next-line no-console
+            console.error('[UDF getBars]: Error fetching bars', error)
+            onErrorCallback('Failed to fetch historical data')
+          })
       },
 
       subscribeBars: (

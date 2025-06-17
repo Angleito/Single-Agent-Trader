@@ -9,7 +9,7 @@ services:
       dockerfile: Dockerfile.bluefin
     container_name: bluefin-service-dev
     restart: unless-stopped
-    
+
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
@@ -21,17 +21,17 @@ services:
       - PORT=8080
       - LOG_LEVEL=debug
       - DEBUG=true
-    
+
     ports:
       - "8080:8080"  # Direct access for local development
-    
+
     volumes:
       - ./logs/bluefin:/app/logs
       - ./services:/app:delegated  # Mount source code for development
-    
+
     networks:
       - trading-network
-    
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 15s
@@ -41,7 +41,7 @@ services:
 
   # Dashboard Backend (development mode)
   dashboard-backend:
-    build: 
+    build:
       context: ./dashboard/backend
       dockerfile: Dockerfile
     container_name: dashboard-backend-dev

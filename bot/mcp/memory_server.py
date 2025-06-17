@@ -369,7 +369,9 @@ class MCPMemoryServer:
                     f"MCP Memory: Best match - Similarity: {similarity:.3f} | "
                     f"Action: {exp.decision.get('action')} | "
                     f"Outcome: {'WIN' if exp.outcome and exp.outcome['success'] else 'LOSS'} | "
-                    f"PnL: ${exp.outcome['pnl']:.2f}" if exp.outcome else "No outcome"
+                    f"PnL: ${exp.outcome['pnl']:.2f}"
+                    if exp.outcome
+                    else "No outcome"
                 )
 
         # Log query details
@@ -388,7 +390,7 @@ class MCPMemoryServer:
                 "action": exp.decision.get("action"),
                 "outcome": exp.outcome,
             }
-            for similarity, exp in scored_experiences[:query_params.max_results]
+            for similarity, exp in scored_experiences[: query_params.max_results]
         ]
 
         self.trade_logger.log_memory_query(
@@ -739,7 +741,7 @@ class MCPMemoryServer:
             base_confidence -= loss_factor
 
         # Ensure within bounds
-        return max(0.1, min(0.9, base_confidence))
+        return float(max(0.1, min(0.9, base_confidence)))
 
     async def _store_remote(self, experience: TradingExperience) -> None:
         """Store experience on remote MCP server."""
@@ -770,7 +772,9 @@ class MCPMemoryServer:
         headers["Content-Type"] = "application/json"
 
         try:
-            logger.debug(f"Updating remote experience {experience.experience_id[:8]}...")
+            logger.debug(
+                f"Updating remote experience {experience.experience_id[:8]}..."
+            )
             async with self._session.put(
                 f"{self.server_url}/memories/{experience.experience_id}",
                 headers=headers,
@@ -780,9 +784,13 @@ class MCPMemoryServer:
                 if response.status not in [200, 204]:
                     logger.warning(f"Failed to update remotely: {response.status}")
                 else:
-                    logger.debug(f"Remote update successful for {experience.experience_id[:8]}")
+                    logger.debug(
+                        f"Remote update successful for {experience.experience_id[:8]}"
+                    )
         except TimeoutError:
-            logger.warning(f"Remote update timed out for {experience.experience_id[:8]}")
+            logger.warning(
+                f"Remote update timed out for {experience.experience_id[:8]}"
+            )
         except aiohttp.ClientError as e:
             logger.warning(f"Remote update network error: {e}")
         except Exception as e:
@@ -795,10 +803,10 @@ class MCPMemoryServer:
         try:
             # Use asyncio to run blocking I/O in thread pool
             import asyncio
+
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(
-                None,
-                lambda: file_path.write_text(experience.json(indent=2))
+                None, lambda: file_path.write_text(experience.json(indent=2))
             )
         except Exception as e:
             logger.error(f"Failed to save experience locally: {e}")
@@ -870,7 +878,7 @@ class MCPMemoryServer:
         return removed_count
 
 
-async def main():
+async def main() -> None:
     """Main entry point for running the MCP memory server."""
     import uvicorn
     from fastapi import FastAPI, HTTPException
@@ -887,7 +895,7 @@ async def main():
     await memory_server.connect()
 
     @app.get("/health")
-    async def health_check():
+    async def health_check() -> dict[str, Any]:
         """Health check endpoint."""
         return {
             "status": "healthy",
@@ -898,10 +906,10 @@ async def main():
 
     @app.post("/experience")
     async def store_experience(
-        market_state: dict,
-        trade_action: dict,
-        additional_context: dict | None = None,
-    ):
+        market_state: dict[str, Any],
+        trade_action: dict[str, Any],
+        additional_context: dict[str, Any] | None = None,
+    ) -> dict[str, str]:
         """Store a new trading experience."""
         try:
             # Convert dicts to proper objects
@@ -916,7 +924,7 @@ async def main():
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @app.get("/experience/{experience_id}")
-    async def get_experience(experience_id: str):
+    async def get_experience(experience_id: str) -> dict[str, Any]:
         """Retrieve a specific experience."""
         experience = memory_server.memory_cache.get(experience_id)
         if not experience:

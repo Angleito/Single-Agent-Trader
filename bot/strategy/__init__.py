@@ -10,7 +10,7 @@ except ImportError:
     MemoryEnhancedAgent = None
 
 __all__ = [
-    "LLMAgent", 
+    "LLMAgent",
     "CoreStrategy",
 ]
 

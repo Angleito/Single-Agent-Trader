@@ -1,11 +1,8 @@
 """Unit tests for OmniSearch MCP client."""
 
-import asyncio
-import json
 import time
-from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
-from uuid import UUID
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, Mock, patch
 
 import aiohttp
 import pytest
@@ -40,10 +37,10 @@ class TestSearchCache:
         """Test setting and getting cache values."""
         cache = SearchCache()
         test_value = {"data": "test"}
-        
+
         cache.set("test_key", test_value)
         result = cache.get("test_key")
-        
+
         assert result == test_value
 
     def test_cache_get_nonexistent_key(self):
@@ -56,13 +53,13 @@ class TestSearchCache:
         """Test cache entry expiration."""
         cache = SearchCache()
         test_value = {"data": "test"}
-        
+
         # Set with very short TTL
         cache.set("test_key", test_value, ttl=1)
-        
+
         # Should be available immediately
         assert cache.get("test_key") == test_value
-        
+
         # Sleep and check expiration
         time.sleep(1.1)
         assert cache.get("test_key") is None
@@ -70,17 +67,17 @@ class TestSearchCache:
     def test_cache_clear_expired(self):
         """Test clearing expired entries."""
         cache = SearchCache()
-        
+
         # Add some entries with different TTLs
         cache.set("key1", "value1", ttl=1)
         cache.set("key2", "value2", ttl=10)
-        
+
         # Wait for first to expire
         time.sleep(1.1)
-        
+
         # Clear expired
         expired_count = cache.clear_expired()
-        
+
         assert expired_count == 1
         assert cache.get("key1") is None
         assert cache.get("key2") == "value2"
@@ -88,18 +85,18 @@ class TestSearchCache:
     def test_cache_custom_ttl_override(self):
         """Test custom TTL override for specific entries."""
         cache = SearchCache(default_ttl=100)
-        
+
         cache.set("default_ttl", "value1")  # Uses default TTL
         cache.set("custom_ttl", "value2", ttl=200)  # Uses custom TTL
-        
+
         # Check that entries exist
         assert cache.get("default_ttl") == "value1"
         assert cache.get("custom_ttl") == "value2"
-        
+
         # Verify TTL values are set correctly
         default_entry = cache.cache["default_ttl"]
         custom_entry = cache.cache["custom_ttl"]
-        
+
         assert custom_entry["expires_at"] > default_entry["expires_at"]
 
 
@@ -117,7 +114,7 @@ class TestRateLimiter:
     async def test_rate_limiter_allow_requests(self):
         """Test rate limiter allows requests within limit."""
         limiter = RateLimiter(max_requests=5, window_seconds=10)
-        
+
         # Should allow first 5 requests
         for _ in range(5):
             result = await limiter.acquire()
@@ -127,17 +124,17 @@ class TestRateLimiter:
     async def test_rate_limiter_block_excess_requests(self):
         """Test rate limiter blocks requests exceeding limit."""
         limiter = RateLimiter(max_requests=2, window_seconds=10)
-        
+
         # First 2 requests should succeed quickly
         start_time = time.time()
         for _ in range(2):
             result = await limiter.acquire()
             assert result is True
-        
+
         # Should be fast (under 0.1 seconds)
         elapsed = time.time() - start_time
         assert elapsed < 0.1
-        
+
         # Third request should be delayed
         # Note: In real test, we'd mock time.time() to avoid actual delays
         # For now, we'll test the logic without waiting
@@ -146,14 +143,14 @@ class TestRateLimiter:
     async def test_rate_limiter_window_cleanup(self):
         """Test rate limiter cleans up old requests."""
         limiter = RateLimiter(max_requests=3, window_seconds=1)
-        
+
         # Add requests manually to simulate old requests
         current_time = time.time()
         limiter.requests = [
             current_time - 2,  # Older than window
             current_time - 0.5,  # Within window
         ]
-        
+
         # Should clean up old request and allow new one
         result = await limiter.acquire()
         assert result is True
@@ -169,9 +166,9 @@ class TestSearchResult:
             title="Test Article",
             url="https://example.com/test",
             snippet="This is a test snippet",
-            source="example.com"
+            source="example.com",
         )
-        
+
         assert result.title == "Test Article"
         assert result.url == "https://example.com/test"
         assert result.snippet == "This is a test snippet"
@@ -189,9 +186,9 @@ class TestSearchResult:
             snippet="Test snippet",
             source="example.com",
             published_date=pub_date,
-            relevance_score=0.85
+            relevance_score=0.85,
         )
-        
+
         assert result.published_date == pub_date
         assert result.relevance_score == 0.85
 
@@ -204,9 +201,9 @@ class TestSearchResult:
                 url="https://example.com",
                 snippet="Test",
                 source="example.com",
-                relevance_score=1.5
+                relevance_score=1.5,
             )
-        
+
         with pytest.raises(ValueError):
             # Negative relevance score
             SearchResult(
@@ -214,7 +211,7 @@ class TestSearchResult:
                 url="https://example.com",
                 snippet="Test",
                 source="example.com",
-                relevance_score=-0.1
+                relevance_score=-0.1,
             )
 
 
@@ -227,17 +224,17 @@ class TestFinancialNewsResult:
             title="Bitcoin ETF Approved",
             url="https://example.com/btc-etf",
             snippet="SEC approves Bitcoin ETF",
-            source="financial-news.com"
+            source="financial-news.com",
         )
-        
+
         financial_result = FinancialNewsResult(
             base_result=base_result,
             sentiment="positive",
             mentioned_symbols=["BTC", "ETH"],
             news_category="regulation",
-            impact_level="high"
+            impact_level="high",
         )
-        
+
         assert financial_result.base_result == base_result
         assert financial_result.sentiment == "positive"
         assert financial_result.mentioned_symbols == ["BTC", "ETH"]
@@ -247,14 +244,11 @@ class TestFinancialNewsResult:
     def test_financial_news_result_defaults(self):
         """Test FinancialNewsResult with default values."""
         base_result = SearchResult(
-            title="Test",
-            url="https://example.com",
-            snippet="Test",
-            source="test.com"
+            title="Test", url="https://example.com", snippet="Test", source="test.com"
         )
-        
+
         financial_result = FinancialNewsResult(base_result=base_result)
-        
+
         assert financial_result.sentiment is None
         assert financial_result.mentioned_symbols == []
         assert financial_result.news_category is None
@@ -271,9 +265,9 @@ class TestSentimentAnalysis:
             overall_sentiment="bullish",
             sentiment_score=0.75,
             confidence=0.85,
-            source_count=15
+            source_count=15,
         )
-        
+
         assert sentiment.symbol == "BTC"
         assert sentiment.overall_sentiment == "bullish"
         assert sentiment.sentiment_score == 0.75
@@ -293,9 +287,9 @@ class TestSentimentAnalysis:
             social_sentiment=-0.5,
             technical_sentiment=-0.2,
             key_drivers=["Regulatory concerns", "Market correction"],
-            risk_factors=["High volatility", "Regulatory uncertainty"]
+            risk_factors=["High volatility", "Regulatory uncertainty"],
         )
-        
+
         assert sentiment.news_sentiment == -0.3
         assert sentiment.social_sentiment == -0.5
         assert sentiment.technical_sentiment == -0.2
@@ -311,9 +305,9 @@ class TestSentimentAnalysis:
                 overall_sentiment="bullish",
                 sentiment_score=1.5,
                 confidence=0.8,
-                source_count=10
+                source_count=10,
             )
-        
+
         with pytest.raises(ValueError):
             # Confidence out of range
             SentimentAnalysis(
@@ -321,7 +315,7 @@ class TestSentimentAnalysis:
                 overall_sentiment="bullish",
                 sentiment_score=0.5,
                 confidence=1.2,
-                source_count=10
+                source_count=10,
             )
 
 
@@ -335,9 +329,9 @@ class TestMarketCorrelation:
             secondary_symbol="QQQ",
             correlation_coefficient=0.65,
             strength="moderate",
-            direction="positive"
+            direction="positive",
         )
-        
+
         assert correlation.primary_symbol == "BTC"
         assert correlation.secondary_symbol == "QQQ"
         assert correlation.correlation_coefficient == 0.65
@@ -354,9 +348,9 @@ class TestMarketCorrelation:
             strength="weak",
             direction="negative",
             beta=-0.8,
-            r_squared=0.15
+            r_squared=0.15,
         )
-        
+
         assert correlation.beta == -0.8
         assert correlation.r_squared == 0.15
         assert isinstance(correlation.last_updated, datetime)
@@ -370,7 +364,7 @@ class TestMarketCorrelation:
                 secondary_symbol="QQQ",
                 correlation_coefficient=1.5,
                 strength="strong",
-                direction="positive"
+                direction="positive",
             )
 
 
@@ -380,7 +374,7 @@ class TestOmniSearchClient:
     def test_client_initialization_defaults(self):
         """Test client initialization with default values."""
         client = OmniSearchClient()
-        
+
         assert client.server_url is not None
         assert client.api_key is None
         assert client.cache is not None
@@ -396,9 +390,9 @@ class TestOmniSearchClient:
             enable_cache=False,
             cache_ttl=600,
             rate_limit_requests=50,
-            rate_limit_window=1800
+            rate_limit_window=1800,
         )
-        
+
         assert client.server_url == "https://custom.api.com"
         assert client.api_key == "test_key"
         assert client.cache is None  # Disabled
@@ -409,14 +403,14 @@ class TestOmniSearchClient:
     async def test_connect_success(self):
         """Test successful connection to OmniSearch service."""
         client = OmniSearchClient()
-        
-        with patch.object(client, '_session') as mock_session:
+
+        with patch.object(client, "_session") as mock_session:
             mock_response = AsyncMock()
             mock_response.status = 200
             mock_session.get.return_value.__aenter__.return_value = mock_response
-            
+
             result = await client.connect()
-            
+
             assert result is True
             assert client._connected is True
 
@@ -424,14 +418,14 @@ class TestOmniSearchClient:
     async def test_connect_failure(self):
         """Test failed connection to OmniSearch service."""
         client = OmniSearchClient()
-        
-        with patch.object(client, '_session') as mock_session:
+
+        with patch.object(client, "_session") as mock_session:
             mock_response = AsyncMock()
             mock_response.status = 500
             mock_session.get.return_value.__aenter__.return_value = mock_response
-            
+
             result = await client.connect()
-            
+
             assert result is False
             assert client._connected is False
 
@@ -439,12 +433,12 @@ class TestOmniSearchClient:
     async def test_connect_exception(self):
         """Test connection exception handling."""
         client = OmniSearchClient()
-        
-        with patch.object(client, '_session') as mock_session:
+
+        with patch.object(client, "_session") as mock_session:
             mock_session.get.side_effect = aiohttp.ClientError("Connection failed")
-            
+
             result = await client.connect()
-            
+
             assert result is False
             assert client._connected is False
 
@@ -455,9 +449,9 @@ class TestOmniSearchClient:
         client._connected = True
         client._session = Mock()
         client._session.close = AsyncMock()
-        
+
         await client.disconnect()
-        
+
         assert client._connected is False
         assert client._session is None
         client._session.close.assert_called_once()
@@ -466,7 +460,7 @@ class TestOmniSearchClient:
     async def test_search_financial_news_cache_hit(self):
         """Test financial news search with cache hit."""
         client = OmniSearchClient()
-        
+
         # Mock cache hit
         cached_data = [
             {
@@ -476,15 +470,15 @@ class TestOmniSearchClient:
                     "url": "https://example.com",
                     "snippet": "Test snippet",
                     "source": "test.com",
-                    "relevance_score": 0.8
+                    "relevance_score": 0.8,
                 },
-                "sentiment": "positive"
+                "sentiment": "positive",
             }
         ]
         client.cache.set("financial_news:test query:5:24h:True", cached_data)
-        
+
         results = await client.search_financial_news("test query")
-        
+
         assert len(results) == 1
         assert results[0].base_result.title == "Test News"
         assert results[0].sentiment == "positive"
@@ -495,7 +489,7 @@ class TestOmniSearchClient:
         client = OmniSearchClient()
         client._connected = True
         client._session = AsyncMock()
-        
+
         # Mock API response
         mock_response = AsyncMock()
         mock_response.status = 200
@@ -511,17 +505,17 @@ class TestOmniSearchClient:
                     "sentiment": "positive",
                     "mentioned_symbols": ["BTC"],
                     "category": "price",
-                    "impact_level": "high"
+                    "impact_level": "high",
                 }
             ]
         }
         client._session.get.return_value.__aenter__.return_value = mock_response
-        
+
         # Mock rate limiter
         client.rate_limiter.acquire = AsyncMock(return_value=True)
-        
+
         results = await client.search_financial_news("bitcoin news")
-        
+
         assert len(results) == 1
         assert results[0].base_result.title == "Bitcoin Surges"
         assert results[0].sentiment == "positive"
@@ -533,17 +527,17 @@ class TestOmniSearchClient:
         client = OmniSearchClient()
         client._connected = True
         client._session = AsyncMock()
-        
+
         # Mock API error
         mock_response = AsyncMock()
         mock_response.status = 500
         client._session.get.return_value.__aenter__.return_value = mock_response
-        
+
         # Mock rate limiter
         client.rate_limiter.acquire = AsyncMock(return_value=True)
-        
+
         results = await client.search_financial_news("test query")
-        
+
         # Should return fallback results (empty list in this case)
         assert isinstance(results, list)
 
@@ -553,7 +547,7 @@ class TestOmniSearchClient:
         client = OmniSearchClient()
         client._connected = True
         client._session = AsyncMock()
-        
+
         # Mock API response
         mock_response = AsyncMock()
         mock_response.status = 200
@@ -567,16 +561,16 @@ class TestOmniSearchClient:
                 "social_sentiment": 0.7,
                 "technical_sentiment": 0.4,
                 "key_drivers": ["ETF approval", "Institutional adoption"],
-                "risk_factors": ["Regulatory uncertainty"]
+                "risk_factors": ["Regulatory uncertainty"],
             }
         }
         client._session.get.return_value.__aenter__.return_value = mock_response
-        
+
         # Mock rate limiter
         client.rate_limiter.acquire = AsyncMock(return_value=True)
-        
+
         sentiment = await client.search_crypto_sentiment("BTC-USD")
-        
+
         assert sentiment.symbol == "BTC"
         assert sentiment.overall_sentiment == "bullish"
         assert sentiment.sentiment_score == 0.6
@@ -589,7 +583,7 @@ class TestOmniSearchClient:
         client = OmniSearchClient()
         client._connected = True
         client._session = AsyncMock()
-        
+
         # Mock API response
         mock_response = AsyncMock()
         mock_response.status = 200
@@ -600,16 +594,16 @@ class TestOmniSearchClient:
                 "confidence": 0.7,
                 "source_count": 30,
                 "key_drivers": ["Interest rate concerns"],
-                "risk_factors": ["Economic slowdown"]
+                "risk_factors": ["Economic slowdown"],
             }
         }
         client._session.get.return_value.__aenter__.return_value = mock_response
-        
+
         # Mock rate limiter
         client.rate_limiter.acquire = AsyncMock(return_value=True)
-        
+
         sentiment = await client.search_nasdaq_sentiment()
-        
+
         assert sentiment.symbol == "NASDAQ"
         assert sentiment.overall_sentiment == "bearish"
         assert sentiment.sentiment_score == -0.3
@@ -620,24 +614,20 @@ class TestOmniSearchClient:
         client = OmniSearchClient()
         client._connected = True
         client._session = AsyncMock()
-        
+
         # Mock API response
         mock_response = AsyncMock()
         mock_response.status = 200
         mock_response.json.return_value = {
-            "correlation": {
-                "coefficient": 0.45,
-                "beta": 1.2,
-                "r_squared": 0.35
-            }
+            "correlation": {"coefficient": 0.45, "beta": 1.2, "r_squared": 0.35}
         }
         client._session.get.return_value.__aenter__.return_value = mock_response
-        
+
         # Mock rate limiter
         client.rate_limiter.acquire = AsyncMock(return_value=True)
-        
+
         correlation = await client.search_market_correlation("BTC", "QQQ")
-        
+
         assert correlation.primary_symbol == "BTC"
         assert correlation.secondary_symbol == "QQQ"
         assert correlation.correlation_coefficient == 0.45
@@ -650,9 +640,9 @@ class TestOmniSearchClient:
         """Test health check functionality."""
         client = OmniSearchClient()
         client._connected = True
-        
+
         health = await client.health_check()
-        
+
         assert health["connected"] is True
         assert "server_url" in health
         assert "cache_enabled" in health
@@ -665,7 +655,7 @@ class TestOmniSearchClient:
         """Test header generation without API key."""
         client = OmniSearchClient()
         headers = client._get_headers()
-        
+
         assert headers["Content-Type"] == "application/json"
         assert headers["User-Agent"] == "AI-Trading-Bot/1.0"
         assert "Authorization" not in headers
@@ -674,7 +664,7 @@ class TestOmniSearchClient:
         """Test header generation with API key."""
         client = OmniSearchClient(api_key="test_key")
         headers = client._get_headers()
-        
+
         assert headers["Content-Type"] == "application/json"
         assert headers["User-Agent"] == "AI-Trading-Bot/1.0"
         assert headers["Authorization"] == "Bearer test_key"
@@ -682,16 +672,16 @@ class TestOmniSearchClient:
     def test_parse_date_valid_formats(self):
         """Test date parsing with valid formats."""
         client = OmniSearchClient()
-        
+
         # Test ISO format with Z
         date1 = client._parse_date("2024-01-01T12:00:00Z")
         assert isinstance(date1, datetime)
         assert date1.tzinfo == UTC
-        
+
         # Test ISO format with microseconds
         date2 = client._parse_date("2024-01-01T12:00:00.123456Z")
         assert isinstance(date2, datetime)
-        
+
         # Test simple date
         date3 = client._parse_date("2024-01-01")
         assert isinstance(date3, datetime)
@@ -699,11 +689,11 @@ class TestOmniSearchClient:
     def test_parse_date_invalid_format(self):
         """Test date parsing with invalid format."""
         client = OmniSearchClient()
-        
+
         # Invalid format should return None
         result = client._parse_date("invalid date")
         assert result is None
-        
+
         # None input should return None
         result = client._parse_date(None)
         assert result is None
@@ -712,9 +702,9 @@ class TestOmniSearchClient:
     async def test_get_fallback_sentiment(self):
         """Test fallback sentiment generation."""
         client = OmniSearchClient()
-        
+
         sentiment = await client._get_fallback_sentiment("BTC")
-        
+
         assert sentiment.symbol == "BTC"
         assert sentiment.overall_sentiment == "neutral"
         assert sentiment.sentiment_score == 0.0
@@ -725,9 +715,9 @@ class TestOmniSearchClient:
     async def test_get_fallback_correlation(self):
         """Test fallback correlation generation."""
         client = OmniSearchClient()
-        
+
         correlation = await client._get_fallback_correlation("BTC", "QQQ", "30d")
-        
+
         assert correlation.primary_symbol == "BTC"
         assert correlation.secondary_symbol == "QQQ"
         assert correlation.correlation_coefficient == 0.0
@@ -739,9 +729,9 @@ class TestOmniSearchClient:
     async def test_get_fallback_news_empty(self):
         """Test fallback news with no local cache."""
         client = OmniSearchClient()
-        
+
         results = await client._get_fallback_news("test query", 5)
-        
+
         # Should return empty list when no fallback data
         assert isinstance(results, list)
         assert len(results) == 0
@@ -752,20 +742,20 @@ class TestOmniSearchClient:
         client = OmniSearchClient(rate_limit_requests=1, rate_limit_window=10)
         client._connected = True
         client._session = AsyncMock()
-        
+
         # Mock API response
         mock_response = AsyncMock()
         mock_response.status = 200
         mock_response.json.return_value = {"results": []}
         client._session.get.return_value.__aenter__.return_value = mock_response
-        
+
         # First request should succeed quickly
         start_time = time.time()
         await client.search_financial_news("test")
         first_request_time = time.time() - start_time
-        
+
         assert first_request_time < 0.1  # Should be fast
-        
+
         # Verify rate limiter was called
         assert len(client.rate_limiter.requests) == 1
 
@@ -774,7 +764,7 @@ class TestOmniSearchClient:
 @pytest.fixture
 def mock_aiohttp_session():
     """Mock aiohttp session for testing."""
-    with patch('aiohttp.ClientSession') as mock:
+    with patch("aiohttp.ClientSession") as mock:
         session = AsyncMock()
         mock.return_value = session
         yield session
@@ -795,7 +785,7 @@ def sample_financial_news_response():
                 "sentiment": "positive",
                 "mentioned_symbols": ["BTC", "BTCUSD"],
                 "category": "price",
-                "impact_level": "high"
+                "impact_level": "high",
             },
             {
                 "title": "Ethereum Network Upgrade",
@@ -807,8 +797,8 @@ def sample_financial_news_response():
                 "sentiment": "positive",
                 "mentioned_symbols": ["ETH"],
                 "category": "technology",
-                "impact_level": "medium"
-            }
+                "impact_level": "medium",
+            },
         ]
     }
 
@@ -828,12 +818,12 @@ def sample_sentiment_response():
             "key_drivers": [
                 "Institutional adoption increasing",
                 "Positive regulatory developments",
-                "Strong technical momentum"
+                "Strong technical momentum",
             ],
             "risk_factors": [
                 "Market volatility",
-                "Regulatory uncertainty in some regions"
-            ]
+                "Regulatory uncertainty in some regions",
+            ],
         }
     }
 
@@ -841,64 +831,64 @@ def sample_sentiment_response():
 @pytest.fixture
 def sample_correlation_response():
     """Sample correlation analysis API response."""
-    return {
-        "correlation": {
-            "coefficient": 0.73,
-            "beta": 1.85,
-            "r_squared": 0.53
-        }
-    }
+    return {"correlation": {"coefficient": 0.73, "beta": 1.85, "r_squared": 0.53}}
 
 
 class TestOmniSearchClientIntegration:
     """Integration tests for OmniSearchClient with mocked external services."""
 
     @pytest.mark.asyncio
-    async def test_full_search_workflow(self, mock_aiohttp_session, sample_financial_news_response):
+    async def test_full_search_workflow(
+        self, mock_aiohttp_session, sample_financial_news_response
+    ):
         """Test complete search workflow from connection to results."""
         client = OmniSearchClient()
-        
+
         # Mock connection success
         health_response = AsyncMock()
         health_response.status = 200
-        
+
         # Mock search response
         search_response = AsyncMock()
         search_response.status = 200
         search_response.json.return_value = sample_financial_news_response
-        
+
         mock_aiohttp_session.get.return_value.__aenter__.side_effect = [
             health_response,  # Connection health check
-            search_response   # Search request
+            search_response,  # Search request
         ]
-        
+
         # Test workflow
         connected = await client.connect()
         assert connected is True
-        
+
         results = await client.search_financial_news("bitcoin ethereum")
         assert len(results) == 2
         assert results[0].base_result.title == "Bitcoin Reaches New High"
         assert results[1].base_result.title == "Ethereum Network Upgrade"
-        
+
         await client.disconnect()
 
     @pytest.mark.asyncio
-    async def test_sentiment_analysis_workflow(self, mock_aiohttp_session, sample_sentiment_response):
+    async def test_sentiment_analysis_workflow(
+        self, mock_aiohttp_session, sample_sentiment_response
+    ):
         """Test sentiment analysis workflow."""
         client = OmniSearchClient()
         client._connected = True
         client._session = mock_aiohttp_session
-        
+
         # Mock sentiment response
         sentiment_response = AsyncMock()
         sentiment_response.status = 200
         sentiment_response.json.return_value = sample_sentiment_response
-        
-        mock_aiohttp_session.get.return_value.__aenter__.return_value = sentiment_response
-        
+
+        mock_aiohttp_session.get.return_value.__aenter__.return_value = (
+            sentiment_response
+        )
+
         sentiment = await client.search_crypto_sentiment("BTC")
-        
+
         assert sentiment.symbol == "BTC"
         assert sentiment.overall_sentiment == "bullish"
         assert sentiment.sentiment_score == 0.65
@@ -906,21 +896,25 @@ class TestOmniSearchClientIntegration:
         assert len(sentiment.risk_factors) == 2
 
     @pytest.mark.asyncio
-    async def test_correlation_analysis_workflow(self, mock_aiohttp_session, sample_correlation_response):
+    async def test_correlation_analysis_workflow(
+        self, mock_aiohttp_session, sample_correlation_response
+    ):
         """Test correlation analysis workflow."""
         client = OmniSearchClient()
         client._connected = True
         client._session = mock_aiohttp_session
-        
+
         # Mock correlation response
         correlation_response = AsyncMock()
         correlation_response.status = 200
         correlation_response.json.return_value = sample_correlation_response
-        
-        mock_aiohttp_session.get.return_value.__aenter__.return_value = correlation_response
-        
+
+        mock_aiohttp_session.get.return_value.__aenter__.return_value = (
+            correlation_response
+        )
+
         correlation = await client.search_market_correlation("BTC", "QQQ")
-        
+
         assert correlation.primary_symbol == "BTC"
         assert correlation.secondary_symbol == "QQQ"
         assert correlation.correlation_coefficient == 0.73
@@ -932,14 +926,14 @@ class TestOmniSearchClientIntegration:
     async def test_caching_across_requests(self):
         """Test caching behavior across multiple requests."""
         client = OmniSearchClient(cache_ttl=300)  # 5 minute cache
-        
+
         # First request - should hit API
-        with patch.object(client, '_search_with_fallback') as mock_search:
+        with patch.object(client, "_search_with_fallback") as mock_search:
             mock_search.return_value = {"results": []}
-            
+
             await client.search_financial_news("test query")
             assert mock_search.call_count == 1
-            
+
             # Second identical request - should hit cache
             await client.search_financial_news("test query")
             assert mock_search.call_count == 1  # Not called again
@@ -950,19 +944,19 @@ class TestOmniSearchClientIntegration:
         client = OmniSearchClient()
         client._connected = True
         client._session = AsyncMock()
-        
+
         # Test API timeout
-        client._session.get.side_effect = asyncio.TimeoutError()
-        
+        client._session.get.side_effect = TimeoutError()
+
         # Should handle timeout gracefully and return fallback
         sentiment = await client.search_crypto_sentiment("BTC")
         assert sentiment.symbol == "BTC"
         assert sentiment.overall_sentiment == "neutral"
         assert sentiment.confidence == 0.1
-        
+
         # Test network error
         client._session.get.side_effect = aiohttp.ClientError("Network error")
-        
+
         correlation = await client.search_market_correlation("BTC", "QQQ")
         assert correlation.correlation_coefficient == 0.0
         assert correlation.strength == "weak"

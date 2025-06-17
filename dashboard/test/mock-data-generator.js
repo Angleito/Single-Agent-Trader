@@ -2,7 +2,7 @@
 
 /**
  * Mock Data Generator for AI Trading Bot Dashboard Testing
- * 
+ *
  * Generates realistic trading data, LLM decisions, and market conditions
  * for comprehensive integration testing
  */
@@ -46,10 +46,10 @@ class MockDataGenerator {
         const trend = this.trendDirection * (Math.random() * 0.001 + 0.0005);
         const noise = (Math.random() - 0.5) * volatility;
         const movement = trend + noise;
-        
+
         const newPrice = basePrice * (1 + movement);
         this.lastPrices[symbol] = newPrice;
-        
+
         return newPrice;
     }
 
@@ -58,27 +58,27 @@ class MockDataGenerator {
         const interval = CONFIG.TIME_RANGES[timeframe];
         const basePrice = CONFIG.BASE_PRICES[symbol];
         const data = [];
-        
+
         let currentTime = Date.now() - (count * interval);
         let currentPrice = basePrice;
-        
+
         for (let i = 0; i < count; i++) {
             const open = currentPrice;
             const volatility = this.getVolatilityForCondition();
-            
+
             // Generate high and low
             const range = open * volatility;
             const high = open + (Math.random() * range);
             const low = open - (Math.random() * range);
-            
+
             // Generate close price
             const close = this.generatePriceMovement(symbol, open, volatility * 0.5);
             currentPrice = close;
-            
+
             // Generate volume (higher during volatility)
             const baseVolume = Math.random() * 1000 + 500;
             const volume = baseVolume * (1 + volatility * 10);
-            
+
             data.push({
                 time: Math.floor(currentTime / 1000),
                 open: parseFloat(open.toFixed(2)),
@@ -87,10 +87,10 @@ class MockDataGenerator {
                 close: parseFloat(close.toFixed(2)),
                 volume: Math.floor(volume)
             });
-            
+
             currentTime += interval;
         }
-        
+
         return data;
     }
 
@@ -99,7 +99,7 @@ class MockDataGenerator {
         const closes = ohlcvData.map(d => d.close);
         const highs = ohlcvData.map(d => d.high);
         const lows = ohlcvData.map(d => d.low);
-        
+
         return {
             rsi: this.calculateRSI(closes),
             ma_20: this.calculateSMA(closes, 20),
@@ -119,21 +119,21 @@ class MockDataGenerator {
     generateLLMDecision(symbol = null, customIndicators = null) {
         const targetSymbol = symbol || CONFIG.SYMBOLS[Math.floor(Math.random() * CONFIG.SYMBOLS.length)];
         const currentPrice = this.lastPrices[targetSymbol];
-        
+
         // Generate indicators if not provided
         let indicators = customIndicators;
         if (!indicators) {
             const ohlcvData = this.generateOHLCV(targetSymbol, '5m', 50);
             indicators = this.generateIndicators(targetSymbol, ohlcvData);
         }
-        
+
         // Generate decision based on indicators and market conditions
         const action = this.generateActionBasedOnIndicators(indicators);
         const sizePct = this.generatePositionSize(action, indicators);
         const rationale = this.generateRationale(action, indicators, this.marketCondition);
-        
+
         this.tradeCounter++;
-        
+
         return {
             type: 'llm_decision',
             timestamp: new Date().toISOString(),
@@ -161,7 +161,7 @@ class MockDataGenerator {
         const responseTime = Math.floor(Math.random() * 5000) + 1000; // 1-6 seconds
         const tokens = Math.floor(Math.random() * 500) + 100;
         const cost = (tokens / 1000) * 0.03; // Rough cost estimate
-        
+
         return {
             type: 'llm_completion',
             timestamp: new Date().toISOString(),
@@ -186,11 +186,11 @@ class MockDataGenerator {
         const targetSymbol = symbol || CONFIG.SYMBOLS[Math.floor(Math.random() * CONFIG.SYMBOLS.length)];
         const currentPrice = this.lastPrices[targetSymbol];
         const side = action || (Math.random() > 0.5 ? 'long' : 'short');
-        
+
         const entryPrice = currentPrice * (1 + (Math.random() - 0.5) * 0.02);
         const size = Math.random() * 0.1 + 0.01; // 1-11% position size
         const unrealizedPnl = (currentPrice - entryPrice) * size * (side === 'long' ? 1 : -1);
-        
+
         return {
             type: 'position_update',
             timestamp: new Date().toISOString(),
@@ -214,7 +214,7 @@ class MockDataGenerator {
         const balance = 50000 + (Math.random() - 0.5) * 20000; // $30k-$70k range
         const availableBalance = balance * (0.7 + Math.random() * 0.3); // 70-100% available
         const totalPnl = (Math.random() - 0.5) * 5000; // ±$5k PnL
-        
+
         return {
             type: 'account_update',
             timestamp: new Date().toISOString(),
@@ -236,7 +236,7 @@ class MockDataGenerator {
         const totalTrades = Math.floor(Math.random() * 100) + 50;
         const winningTrades = Math.floor(totalTrades * (0.4 + Math.random() * 0.4)); // 40-80% win rate
         const losingTrades = totalTrades - winningTrades;
-        
+
         return {
             type: 'performance_metrics',
             timestamp: new Date().toISOString(),
@@ -261,7 +261,7 @@ class MockDataGenerator {
     simulateMarketCondition(condition = null, duration = 60000) {
         const targetCondition = condition || CONFIG.MARKET_CONDITIONS[Math.floor(Math.random() * CONFIG.MARKET_CONDITIONS.length)];
         this.marketCondition = targetCondition;
-        
+
         switch (targetCondition) {
             case 'bull':
                 this.trendDirection = 1;
@@ -276,7 +276,7 @@ class MockDataGenerator {
                 this.trendDirection = Math.random() > 0.5 ? 1 : -1;
                 break;
         }
-        
+
         return {
             type: 'market_condition',
             timestamp: new Date().toISOString(),
@@ -294,26 +294,26 @@ class MockDataGenerator {
     // Helper methods for calculations
     calculateRSI(prices, period = 14) {
         if (prices.length < period) return 50; // Default neutral RSI
-        
+
         let gains = 0;
         let losses = 0;
-        
+
         for (let i = 1; i <= period; i++) {
             const change = prices[prices.length - i] - prices[prices.length - i - 1];
             if (change > 0) gains += change;
             else losses -= change;
         }
-        
+
         const avgGain = gains / period;
         const avgLoss = losses / period;
         const rs = avgGain / (avgLoss || 1);
-        
+
         return parseFloat((100 - (100 / (1 + rs))).toFixed(2));
     }
 
     calculateSMA(values, period) {
         if (values.length < period) return values[values.length - 1];
-        
+
         const sum = values.slice(-period).reduce((a, b) => a + b, 0);
         return parseFloat((sum / period).toFixed(2));
     }
@@ -321,11 +321,11 @@ class MockDataGenerator {
     calculateBollingerBands(prices, period = 20, multiplier = 2) {
         const sma = this.calculateSMA(prices, period);
         if (prices.length < period) return { upper: sma * 1.02, lower: sma * 0.98 };
-        
+
         const squared_diffs = prices.slice(-period).map(price => Math.pow(price - sma, 2));
         const variance = squared_diffs.reduce((a, b) => a + b, 0) / period;
         const std_dev = Math.sqrt(variance);
-        
+
         return {
             upper: parseFloat((sma + (std_dev * multiplier)).toFixed(2)),
             lower: parseFloat((sma - (std_dev * multiplier)).toFixed(2))
@@ -341,20 +341,20 @@ class MockDataGenerator {
     calculateEMA(prices, period) {
         if (prices.length === 0) return 0;
         if (prices.length === 1) return prices[0];
-        
+
         const multiplier = 2 / (period + 1);
         let ema = prices[0];
-        
+
         for (let i = 1; i < Math.min(prices.length, period * 2); i++) {
             ema = (prices[i] * multiplier) + (ema * (1 - multiplier));
         }
-        
+
         return parseFloat(ema.toFixed(2));
     }
 
     calculateATR(highs, lows, closes, period = 14) {
         if (highs.length < 2) return 1;
-        
+
         const trueRanges = [];
         for (let i = 1; i < Math.min(highs.length, period + 1); i++) {
             const tr1 = highs[i] - lows[i];
@@ -362,7 +362,7 @@ class MockDataGenerator {
             const tr3 = Math.abs(lows[i] - closes[i - 1]);
             trueRanges.push(Math.max(tr1, tr2, tr3));
         }
-        
+
         return parseFloat((trueRanges.reduce((a, b) => a + b, 0) / trueRanges.length).toFixed(2));
     }
 
@@ -371,28 +371,28 @@ class MockDataGenerator {
         const rsi = indicators.rsi;
         const macdSignal = indicators.macd > 0 ? 1 : -1;
         const trendSignal = indicators.ma_20 > indicators.ma_50 ? 1 : -1;
-        
+
         let bullishSignals = 0;
         let bearishSignals = 0;
-        
+
         // RSI signals
         if (rsi < 30) bullishSignals++;
         if (rsi > 70) bearishSignals++;
-        
+
         // MACD signals
         if (macdSignal > 0) bullishSignals++;
         else bearishSignals++;
-        
+
         // Trend signals
         if (trendSignal > 0) bullishSignals++;
         else bearishSignals++;
-        
+
         // Market condition influence
         if (this.marketCondition === 'bull') bullishSignals++;
         if (this.marketCondition === 'bear') bearishSignals++;
-        
+
         const netSignal = bullishSignals - bearishSignals;
-        
+
         if (netSignal > 1) return 'LONG';
         if (netSignal < -1) return 'SHORT';
         if (Math.random() > 0.7) return 'CLOSE'; // 30% chance to close
@@ -401,26 +401,26 @@ class MockDataGenerator {
 
     generatePositionSize(action, indicators) {
         if (action === 'HOLD' || action === 'CLOSE') return 0;
-        
+
         const riskLevel = this.calculateRiskLevel(indicators);
         const baseSize = 0.02; // 2% base position
         const riskMultiplier = riskLevel < 0.3 ? 1.5 : riskLevel > 0.7 ? 0.5 : 1;
-        
+
         return parseFloat((baseSize * riskMultiplier * (0.5 + Math.random())).toFixed(4));
     }
 
     calculateRiskLevel(indicators) {
         let riskScore = 0;
-        
+
         // Volatility indicators
         const atr = indicators.atr || 1;
         const avgPrice = (indicators.ma_20 + indicators.ma_50) / 2;
         const volatility = atr / avgPrice;
-        
+
         if (volatility > 0.02) riskScore += 0.3;
         if (this.marketCondition === 'volatile') riskScore += 0.3;
         if (indicators.rsi > 80 || indicators.rsi < 20) riskScore += 0.2;
-        
+
         return Math.min(riskScore, 1.0);
     }
 
@@ -455,7 +455,7 @@ class MockDataGenerator {
                 `Position sizing at maximum allocation`
             ]
         };
-        
+
         const actionRationales = rationales[action] || rationales['HOLD'];
         return actionRationales[Math.floor(Math.random() * actionRationales.length)];
     }
@@ -479,14 +479,14 @@ class MockDataGenerator {
             market_condition: this.marketCondition,
             events: []
         };
-        
+
         const eventCount = Math.floor(duration / updateInterval);
         let currentTime = Date.now();
-        
+
         for (let i = 0; i < eventCount; i++) {
             // Generate different types of events
             const eventType = Math.random();
-            
+
             if (eventType < 0.3) {
                 // LLM decision event
                 session.events.push(this.generateLLMDecision());
@@ -503,10 +503,10 @@ class MockDataGenerator {
                 // Performance metrics
                 session.events.push(this.generatePerformanceMetrics());
             }
-            
+
             currentTime += updateInterval;
         }
-        
+
         return session;
     }
 }
@@ -514,7 +514,7 @@ class MockDataGenerator {
 // CLI interface for generating test data
 function main() {
     const generator = new MockDataGenerator();
-    
+
     if (process.argv.length < 3) {
         console.log('Usage: node mock-data-generator.js <command> [options]');
         console.log('Commands:');
@@ -526,21 +526,21 @@ function main() {
         console.log('  market-condition [condition] - Simulate market condition');
         return;
     }
-    
+
     const command = process.argv[2];
     const outputDir = path.join(__dirname, 'data');
-    
+
     if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
     }
-    
+
     switch (command) {
         case 'llm-decision':
             const symbol = process.argv[3] || null;
             const decision = generator.generateLLMDecision(symbol);
             console.log(JSON.stringify(decision, null, 2));
             break;
-            
+
         case 'ohlcv':
             const ohlcvSymbol = process.argv[3] || 'BTC-USD';
             const timeframe = process.argv[4] || '5m';
@@ -548,7 +548,7 @@ function main() {
             const ohlcvData = generator.generateOHLCV(ohlcvSymbol, timeframe, count);
             console.log(JSON.stringify(ohlcvData, null, 2));
             break;
-            
+
         case 'session':
             const duration = parseInt(process.argv[3]) || 3600000; // 1 hour default
             const session = generator.generateTradingSession(duration);
@@ -556,14 +556,14 @@ function main() {
             fs.writeFileSync(sessionFile, JSON.stringify(session, null, 2));
             console.log(`Trading session saved to: ${sessionFile}`);
             break;
-            
+
         case 'indicators':
             const indSymbol = process.argv[3] || 'BTC-USD';
             const ohlcv = generator.generateOHLCV(indSymbol, '5m', 100);
             const indicators = generator.generateIndicators(indSymbol, ohlcv);
             console.log(JSON.stringify(indicators, null, 2));
             break;
-            
+
         case 'stream':
             const streamCount = parseInt(process.argv[3]) || 10;
             const events = [];
@@ -581,13 +581,13 @@ function main() {
             }
             console.log(JSON.stringify(events, null, 2));
             break;
-            
+
         case 'market-condition':
             const condition = process.argv[3] || null;
             const marketSim = generator.simulateMarketCondition(condition);
             console.log(JSON.stringify(marketSim, null, 2));
             break;
-            
+
         default:
             console.log(`Unknown command: ${command}`);
             break;

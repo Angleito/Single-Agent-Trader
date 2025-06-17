@@ -19,24 +19,24 @@ jobs:
     name: Code Quality Checks
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: ${{ env.PYTHON_VERSION }}
-    
+
     - name: Cache Poetry installation
       uses: actions/cache@v4
       with:
         path: ~/.local
         key: poetry-${{ runner.os }}-${{ env.POETRY_VERSION }}
-    
+
     - name: Install Poetry
       uses: snok/install-poetry@v1
       with:
@@ -44,7 +44,7 @@ jobs:
         virtualenvs-create: true
         virtualenvs-in-project: true
         installer-parallel: true
-    
+
     - name: Cache dependencies
       uses: actions/cache@v4
       with:
@@ -52,7 +52,7 @@ jobs:
         key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
         restore-keys: |
           venv-${{ runner.os }}-
-    
+
     - name: Install dependencies
       run: |
         # Check if lock file is consistent with pyproject.toml
@@ -61,25 +61,25 @@ jobs:
           poetry lock
         fi
         poetry install --with dev --no-interaction
-    
+
     - name: Verify Black installation
       run: |
         poetry show black
         poetry run black --version
-    
+
     - name: Run Black formatting check
       run: |
         poetry run black --check --diff .
-    
+
     - name: Run Ruff linting
       run: |
         poetry run ruff check .
-    
+
     - name: Run MyPy type checking
       run: |
         poetry run mypy bot/
       continue-on-error: true  # Allow to continue even if type checking fails
-    
+
     - name: Check Poetry lock file
       run: |
         poetry check
@@ -90,35 +90,35 @@ jobs:
     name: Security Scanning
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-    
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: ${{ env.PYTHON_VERSION }}
-    
+
     - name: Install Poetry
       uses: snok/install-poetry@v1
       with:
         version: ${{ env.POETRY_VERSION }}
-    
+
     - name: Install dependencies
       run: |
         poetry install --only=main
-    
+
     - name: Run Safety security check
       run: |
         poetry add --group dev safety
         poetry run safety check --json || true
-    
+
     - name: Run Bandit security linting
       run: |
         poetry add --group dev bandit
         poetry run bandit -r bot/ -f json || true
-    
+
     - name: Run Semgrep security scan
       uses: returntocorp/semgrep-action@v1
       with:
@@ -133,11 +133,11 @@ jobs:
     name: Tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    
+
     strategy:
       matrix:
         python-version: ["3.12"]
-    
+
     services:
       redis:
         image: redis:7-alpine
@@ -148,7 +148,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-      
+
       postgres:
         image: postgres:15-alpine
         env:
@@ -162,33 +162,33 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-    
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
-    
+
     - name: Install Poetry
       uses: snok/install-poetry@v1
       with:
         version: ${{ env.POETRY_VERSION }}
         virtualenvs-create: true
         virtualenvs-in-project: true
-    
+
     - name: Cache dependencies
       uses: actions/cache@v4
       with:
         path: .venv
         key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
-    
+
     - name: Install dependencies
       run: |
         poetry install --with dev --no-interaction --verbose
-    
+
     - name: Create test environment file
       run: |
         cat > .env.test << EOF
@@ -207,7 +207,7 @@ jobs:
         COINBASE_PASSPHRASE=test_passphrase
         OPENAI_API_KEY=test_openai_key
         EOF
-    
+
     - name: Run pytest with coverage
       env:
         ENV_FILE: .env.test
@@ -219,7 +219,7 @@ jobs:
           --cov-report=term-missing \
           --junitxml=pytest-results.xml \
           -v
-    
+
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
       if: success()
@@ -227,7 +227,7 @@ jobs:
         file: ./coverage.xml
         flags: unittests
         name: codecov-umbrella
-    
+
     - name: Upload test results
       uses: actions/upload-artifact@v4
       if: always()
@@ -243,25 +243,25 @@ jobs:
     name: Configuration Validation
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-    
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: ${{ env.PYTHON_VERSION }}
-    
+
     - name: Install Poetry
       uses: snok/install-poetry@v1
       with:
         version: ${{ env.POETRY_VERSION }}
-    
+
     - name: Install dependencies
       run: |
         poetry install --only=main
-    
+
     - name: Validate configuration files
       run: |
         # Create minimal environment for validation
@@ -273,39 +273,39 @@ jobs:
         COINBASE_PASSPHRASE=test_passphrase
         OPENAI_API_KEY=test_openai_key
         EOF
-        
+
         # Run configuration validation (skip API connectivity in CI)
         ENV_FILE=.env.validation poetry run python -c "
         from bot.config import Settings
         from bot.config_utils import StartupValidator
         settings = Settings()
         validator = StartupValidator(settings)
-        
+
         # Run validation but skip API connectivity tests in CI
         validator.validate_environment_variables()
         validator.validate_system_dependencies()
         validator.validate_file_permissions()
         validator.validate_configuration_integrity()
-        
+
         # Check only for critical environment variable issues
         env_issues = validator.validation_results['environment_vars']
         critical_issues = [issue for issue in env_issues if 'API key is required' in issue]
-        
+
         # In CI, we only care about non-API validation
         if critical_issues:
             print('Configuration validation: PASSED (API keys are test placeholders in CI)')
         else:
             print('Configuration validation: PASSED')
         "
-    
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
-    
+
     - name: Validate Docker Compose files
       run: |
         docker compose -f docker-compose.yml config
         docker compose -f docker-compose.prod.yml config
-    
+
     - name: Validate Kubernetes manifests
       run: |
         # Check if k8s directory exists
@@ -313,7 +313,7 @@ jobs:
           # Install kubeval for Kubernetes validation
           curl -L https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz | tar xz
           sudo mv kubeval /usr/local/bin
-          
+
           # Validate all Kubernetes manifests
           find k8s/ -name "*.yaml" -exec kubeval {} \;
           echo "✅ Kubernetes manifests validated"
@@ -328,18 +328,18 @@ jobs:
     timeout-minutes: 20
     needs: [code-quality, security-scan, test, config-validation]
     if: github.event_name != 'pull_request'
-    
+
     outputs:
       image-digest: ${{ steps.build.outputs.digest }}
       image-tag: ${{ steps.meta.outputs.tags }}
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-    
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
-    
+
     - name: Log in to Container Registry
       if: github.event_name != 'pull_request'
       uses: docker/login-action@v3
@@ -347,7 +347,7 @@ jobs:
         registry: ${{ env.REGISTRY }}
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-    
+
     - name: Extract metadata
       id: meta
       uses: docker/metadata-action@v5
@@ -362,7 +362,7 @@ jobs:
           org.opencontainers.image.title=AI Trading Bot
           org.opencontainers.image.description=LangChain-powered crypto futures trading bot
           org.opencontainers.image.vendor=AI Trading Bot Project
-    
+
     - name: Build and push Docker image
       id: build
       uses: docker/build-push-action@v5
@@ -378,7 +378,7 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
         platforms: linux/amd64,linux/arm64
-    
+
     - name: Run container security scan
       uses: aquasecurity/trivy-action@master
       if: github.event_name != 'pull_request'
@@ -386,7 +386,7 @@ jobs:
         image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
         format: 'sarif'
         output: 'trivy-results.sarif'
-    
+
     - name: Upload Trivy scan results
       uses: github/codeql-action/upload-sarif@v3
       if: always() && github.event_name != 'pull_request'
@@ -400,21 +400,21 @@ jobs:
     timeout-minutes: 15
     needs: [build-image]
     if: github.event_name != 'pull_request'
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-    
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
-    
+
     - name: Log in to Container Registry
       uses: docker/login-action@v3
       with:
         registry: ${{ env.REGISTRY }}
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-    
+
     - name: Create test environment
       run: |
         cat > .env.integration << EOF
@@ -426,18 +426,18 @@ jobs:
         COINBASE_PASSPHRASE=test_passphrase
         OPENAI_API_KEY=test_openai_key
         EOF
-    
+
     - name: Run integration tests
       run: |
         # Override image in docker-compose for testing
         export AI_TRADING_BOT_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-        
+
         # Start services
         docker compose -f docker-compose.yml --env-file .env.integration up -d
-        
+
         # Wait for services to be ready
         sleep 30
-        
+
         # Run health checks
         docker compose exec -T ai-trading-bot python -c "
         from bot.config import Settings
@@ -448,22 +448,22 @@ jobs:
         print(f'Health check: {status}')
         assert status.get('status') in ['healthy', 'warning'], f'Unexpected status: {status}'
         "
-        
+
         # Run integration tests
         docker compose exec -T ai-trading-bot python -m pytest tests/integration/ -v
-    
+
     - name: Collect logs
       if: always()
       run: |
         docker compose logs > integration-test-logs.txt
-    
+
     - name: Upload logs
       uses: actions/upload-artifact@v4
       if: always()
       with:
         name: integration-test-logs
         path: integration-test-logs.txt
-    
+
     - name: Cleanup
       if: always()
       run: |
@@ -476,37 +476,37 @@ jobs:
     timeout-minutes: 10
     needs: [code-quality, security-scan, test, integration-test]
     if: always()
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-    
+
     - name: Download test artifacts
       uses: actions/download-artifact@v4
       with:
         path: ./artifacts
-    
+
     - name: Generate CI report
       run: |
         cat > ci-report.md << EOF
         # CI Pipeline Report
-        
+
         **Commit:** ${{ github.sha }}
         **Branch:** ${{ github.ref_name }}
         **Workflow:** ${{ github.workflow }}
         **Run ID:** ${{ github.run_id }}
         **Date:** $(date -u)
-        
+
         ## Job Status
         - Code Quality: ${{ needs.code-quality.result }}
         - Security Scan: ${{ needs.security-scan.result }}
         - Tests: ${{ needs.test.result }}
         - Integration Tests: ${{ needs.integration-test.result }}
-        
+
         ## Artifacts
         $(find ./artifacts -type f -name "*.xml" -o -name "*.json" -o -name "*.html" | head -10)
         EOF
-    
+
     - name: Upload CI report
       uses: actions/upload-artifact@v4
       with:

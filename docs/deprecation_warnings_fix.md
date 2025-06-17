@@ -60,7 +60,7 @@ import warnings
 
 # Suppress pandas_ta and pkg_resources warnings early
 warnings.filterwarnings("ignore", message=r".*pkg_resources is deprecated.*", category=UserWarning)
-warnings.filterwarnings("ignore", message=r".*pkg_resources package is slated for removal.*", category=UserWarning) 
+warnings.filterwarnings("ignore", message=r".*pkg_resources package is slated for removal.*", category=UserWarning)
 warnings.filterwarnings("ignore", message=r".*invalid escape sequence.*", category=SyntaxWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="pkg_resources")
 warnings.filterwarnings("ignore", category=UserWarning, module="pandas_ta")

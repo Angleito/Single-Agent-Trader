@@ -2,7 +2,7 @@
 
 /**
  * REST API Integration Test for AI Trading Bot Dashboard
- * 
+ *
  * Tests all REST API endpoints, data validation, and error handling
  */
 
@@ -59,7 +59,7 @@ function log(level, message, data = null) {
     const timestamp = new Date().toISOString();
     const logMessage = `[${timestamp}] [${level.padEnd(5)}] ${message}`;
     console.log(logMessage);
-    
+
     if (data) {
         console.log(JSON.stringify(data, null, 2));
     }
@@ -87,7 +87,7 @@ function makeRequest(url, options = {}) {
         const urlObj = new URL(url);
         const isHttps = urlObj.protocol === 'https:';
         const httpModule = isHttps ? https : http;
-        
+
         const requestOptions = {
             hostname: urlObj.hostname,
             port: urlObj.port || (isHttps ? 443 : 80),
@@ -100,14 +100,14 @@ function makeRequest(url, options = {}) {
             },
             timeout: CONFIG.REQUEST_TIMEOUT
         };
-        
+
         const req = httpModule.request(requestOptions, (res) => {
             let data = '';
-            
+
             res.on('data', (chunk) => {
                 data += chunk;
             });
-            
+
             res.on('end', () => {
                 try {
                     const responseData = {
@@ -116,7 +116,7 @@ function makeRequest(url, options = {}) {
                         body: data,
                         data: null
                     };
-                    
+
                     // Try to parse JSON response
                     if (data) {
                         try {
@@ -126,27 +126,27 @@ function makeRequest(url, options = {}) {
                             responseData.data = data;
                         }
                     }
-                    
+
                     resolve(responseData);
                 } catch (error) {
                     reject(error);
                 }
             });
         });
-        
+
         req.on('error', (error) => {
             reject(error);
         });
-        
+
         req.on('timeout', () => {
             req.destroy();
             reject(new Error('Request timeout'));
         });
-        
+
         if (options.body) {
             req.write(options.body);
         }
-        
+
         req.end();
     });
 }
@@ -170,13 +170,13 @@ async function makeRequestWithRetry(url, options = {}, retries = CONFIG.RETRY_AT
 // Test functions
 async function testHealthCheck() {
     logInfo('Testing health check endpoint...');
-    
+
     try {
         const response = await makeRequestWithRetry(`${CONFIG.API_BASE_URL}/health`);
-        
+
         if (response.statusCode === 200) {
             logSuccess('Health check endpoint accessible');
-            
+
             if (response.data && response.data.status === 'healthy') {
                 logSuccess('Health check returns correct status');
                 TEST_RESULTS.healthCheck = true;
@@ -197,13 +197,13 @@ async function testHealthCheck() {
 
 async function testRootEndpoint() {
     logInfo('Testing root endpoint...');
-    
+
     try {
         const response = await makeRequestWithRetry(`${CONFIG.API_BASE_URL}/`);
-        
+
         if (response.statusCode === 200) {
             logSuccess('Root endpoint accessible');
-            
+
             if (response.data && response.data.service) {
                 logSuccess('Root endpoint returns service information');
                 TEST_RESULTS.rootEndpoint = true;
@@ -224,19 +224,19 @@ async function testRootEndpoint() {
 
 async function testStatusEndpoint() {
     logInfo('Testing status endpoint...');
-    
+
     try {
         const response = await makeRequestWithRetry(`${CONFIG.API_BASE_URL}/status`);
-        
+
         if (response.statusCode === 200) {
             logSuccess('Status endpoint accessible');
-            
+
             if (response.data) {
                 const requiredFields = ['timestamp', 'bot_status', 'websocket_connections'];
-                const hasRequiredFields = requiredFields.every(field => 
+                const hasRequiredFields = requiredFields.every(field =>
                     response.data.hasOwnProperty(field)
                 );
-                
+
                 if (hasRequiredFields) {
                     logSuccess('Status endpoint returns required fields');
                     logInfo('Status data', {
@@ -265,32 +265,32 @@ async function testStatusEndpoint() {
 
 async function testTradingDataEndpoint() {
     logInfo('Testing trading data endpoint...');
-    
+
     try {
         const response = await makeRequestWithRetry(`${CONFIG.API_BASE_URL}/trading-data`);
-        
+
         if (response.statusCode === 200) {
             logSuccess('Trading data endpoint accessible');
-            
+
             if (response.data) {
                 const requiredFields = ['timestamp', 'account', 'performance'];
-                const hasRequiredFields = requiredFields.every(field => 
+                const hasRequiredFields = requiredFields.every(field =>
                     response.data.hasOwnProperty(field)
                 );
-                
+
                 if (hasRequiredFields) {
                     logSuccess('Trading data endpoint returns required fields');
-                    
+
                     // Validate account data structure
                     if (response.data.account && response.data.account.balance) {
                         logSuccess('Account data structure is valid');
                     }
-                    
+
                     // Validate performance data structure
                     if (response.data.performance && response.data.performance.total_trades !== undefined) {
                         logSuccess('Performance data structure is valid');
                     }
-                    
+
                     TEST_RESULTS.tradingDataEndpoint = true;
                     return true;
                 } else {
@@ -313,13 +313,13 @@ async function testTradingDataEndpoint() {
 
 async function testLogsEndpoint() {
     logInfo('Testing logs endpoint...');
-    
+
     try {
         const response = await makeRequestWithRetry(`${CONFIG.API_BASE_URL}/logs?limit=10`);
-        
+
         if (response.statusCode === 200) {
             logSuccess('Logs endpoint accessible');
-            
+
             if (response.data && Array.isArray(response.data.logs)) {
                 logSuccess('Logs endpoint returns array of logs');
                 logInfo(`Retrieved ${response.data.logs.length} log entries`);
@@ -341,7 +341,7 @@ async function testLogsEndpoint() {
 
 async function testLLMEndpoints() {
     logInfo('Testing LLM monitoring endpoints...');
-    
+
     const llmEndpoints = [
         { path: '/llm/status', name: 'LLM Status' },
         { path: '/llm/metrics', name: 'LLM Metrics' },
@@ -349,16 +349,16 @@ async function testLLMEndpoints() {
         { path: '/llm/decisions?limit=5', name: 'LLM Decisions' },
         { path: '/llm/alerts?limit=5', name: 'LLM Alerts' }
     ];
-    
+
     let successCount = 0;
-    
+
     for (const endpoint of llmEndpoints) {
         try {
             const response = await makeRequestWithRetry(`${CONFIG.API_BASE_URL}${endpoint.path}`);
-            
+
             if (response.statusCode === 200) {
                 logSuccess(`${endpoint.name} endpoint accessible`);
-                
+
                 if (response.data && response.data.timestamp) {
                     logSuccess(`${endpoint.name} returns timestamped data`);
                     successCount++;
@@ -372,7 +372,7 @@ async function testLLMEndpoints() {
             logWarning(`${endpoint.name} request failed`, { error: error.message });
         }
     }
-    
+
     if (successCount >= 3) {
         logSuccess('LLM endpoints are mostly functional');
         TEST_RESULTS.llmStatusEndpoint = true;
@@ -389,22 +389,22 @@ async function testLLMEndpoints() {
 
 async function testTradingViewEndpoints() {
     logInfo('Testing TradingView UDF endpoints...');
-    
+
     const tradingViewEndpoints = [
         { path: '/udf/config', name: 'TradingView Config' },
         { path: '/udf/time', name: 'TradingView Time' },
         { path: '/tradingview/symbols', name: 'TradingView Symbols' }
     ];
-    
+
     let successCount = 0;
-    
+
     for (const endpoint of tradingViewEndpoints) {
         try {
             const response = await makeRequestWithRetry(`${CONFIG.API_BASE_URL}${endpoint.path}`);
-            
+
             if (response.statusCode === 200) {
                 logSuccess(`${endpoint.name} endpoint accessible`);
-                
+
                 if (response.data) {
                     logSuccess(`${endpoint.name} returns data`);
                     successCount++;
@@ -418,7 +418,7 @@ async function testTradingViewEndpoints() {
             logWarning(`${endpoint.name} request failed`, { error: error.message });
         }
     }
-    
+
     if (successCount >= 2) {
         logSuccess('TradingView endpoints are functional');
         TEST_RESULTS.tradingViewEndpoints = true;
@@ -431,21 +431,21 @@ async function testTradingViewEndpoints() {
 
 async function testErrorHandling() {
     logInfo('Testing API error handling...');
-    
+
     const errorTests = [
         { path: '/nonexistent-endpoint', expectedStatus: 404, name: 'Non-existent endpoint' },
         { path: '/llm/decisions?limit=invalid', expectedStatus: [422, 400], name: 'Invalid query parameter' },
         { path: '/udf/symbols?symbol=INVALID-SYMBOL', expectedStatus: [404, 400], name: 'Invalid symbol request' }
     ];
-    
+
     let errorHandlingPassed = true;
-    
+
     for (const test of errorTests) {
         try {
             const response = await makeRequestWithRetry(`${CONFIG.API_BASE_URL}${test.path}`);
-            
+
             const expectedStatuses = Array.isArray(test.expectedStatus) ? test.expectedStatus : [test.expectedStatus];
-            
+
             if (expectedStatuses.includes(response.statusCode)) {
                 logSuccess(`${test.name} returns expected error status: ${response.statusCode}`);
             } else {
@@ -457,7 +457,7 @@ async function testErrorHandling() {
             logInfo(`${test.name} resulted in network error (acceptable)`, { error: error.message });
         }
     }
-    
+
     if (errorHandlingPassed) {
         logSuccess('API error handling is working correctly');
         TEST_RESULTS.errorHandling = true;
@@ -470,7 +470,7 @@ async function testErrorHandling() {
 
 async function testResponseValidation() {
     logInfo('Testing API response validation...');
-    
+
     const validationTests = [
         {
             endpoint: '/health',
@@ -488,25 +488,25 @@ async function testResponseValidation() {
             name: 'Trading data validation'
         }
     ];
-    
+
     let validationPassed = true;
-    
+
     for (const test of validationTests) {
         try {
             const response = await makeRequestWithRetry(`${CONFIG.API_BASE_URL}${test.endpoint}`);
-            
+
             if (response.statusCode === 200 && response.data) {
-                const missingFields = test.requiredFields.filter(field => 
+                const missingFields = test.requiredFields.filter(field =>
                     !response.data.hasOwnProperty(field)
                 );
-                
+
                 if (missingFields.length === 0) {
                     logSuccess(`${test.name} - all required fields present`);
                 } else {
                     logWarning(`${test.name} - missing fields: ${missingFields.join(', ')}`);
                     validationPassed = false;
                 }
-                
+
                 // Check timestamp format
                 if (response.data.timestamp) {
                     const timestampDate = new Date(response.data.timestamp);
@@ -526,7 +526,7 @@ async function testResponseValidation() {
             validationPassed = false;
         }
     }
-    
+
     if (validationPassed) {
         logSuccess('API response validation passed');
         TEST_RESULTS.responseValidation = true;
@@ -539,7 +539,7 @@ async function testResponseValidation() {
 
 async function testCORSHeaders() {
     logInfo('Testing CORS headers...');
-    
+
     try {
         const response = await makeRequestWithRetry(`${CONFIG.API_BASE_URL}/health`, {
             headers: {
@@ -547,7 +547,7 @@ async function testCORSHeaders() {
                 'Access-Control-Request-Method': 'GET'
             }
         });
-        
+
         const corsHeaders = response.headers['access-control-allow-origin'];
         if (corsHeaders) {
             logSuccess('CORS headers are present');
@@ -565,28 +565,28 @@ async function testCORSHeaders() {
 
 async function testAPIPerformance() {
     logInfo('Testing API performance...');
-    
+
     const performanceTests = [
         { endpoint: '/health', name: 'Health Check' },
         { endpoint: '/status', name: 'Status' },
         { endpoint: '/trading-data', name: 'Trading Data' }
     ];
-    
+
     let performanceResults = [];
-    
+
     for (const test of performanceTests) {
         const startTime = Date.now();
-        
+
         try {
             await makeRequestWithRetry(`${CONFIG.API_BASE_URL}${test.endpoint}`);
             const duration = Date.now() - startTime;
-            
+
             performanceResults.push({
                 endpoint: test.name,
                 duration: duration,
                 status: 'success'
             });
-            
+
             if (duration < 1000) {
                 logSuccess(`${test.name} responded in ${duration}ms`);
             } else {
@@ -600,17 +600,17 @@ async function testAPIPerformance() {
                 status: 'failed',
                 error: error.message
             });
-            
+
             logWarning(`${test.name} failed after ${duration}ms`);
         }
     }
-    
+
     const avgDuration = performanceResults
         .filter(r => r.status === 'success')
         .reduce((sum, r) => sum + r.duration, 0) / performanceResults.length;
-    
+
     logInfo(`Average response time: ${Math.round(avgDuration)}ms`);
-    
+
     return performanceResults;
 }
 
@@ -618,9 +618,9 @@ async function testAPIPerformance() {
 function saveTestStatus() {
     const testDir = path.dirname(__filename);
     const statusFile = path.join(testDir, '.api_test_passed');
-    
+
     const allTestsPassed = Object.values(TEST_RESULTS).every(result => result === true);
-    
+
     if (allTestsPassed) {
         fs.writeFileSync(statusFile, `API tests passed at ${new Date().toISOString()}`);
         logSuccess('All API tests passed');
@@ -630,7 +630,7 @@ function saveTestStatus() {
         }
         logError('Some API tests failed');
     }
-    
+
     return allTestsPassed;
 }
 
@@ -648,10 +648,10 @@ function generateTestReport(performanceResults = []) {
             failed: Object.values(TEST_RESULTS).filter(r => !r).length
         }
     };
-    
+
     const reportPath = path.join(path.dirname(__filename), 'api-test-report.json');
     fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
-    
+
     logInfo(`Test report saved: ${reportPath}`);
     return report;
 }
@@ -661,7 +661,7 @@ async function runAPITests() {
     logInfo('='.repeat(60));
     logInfo('Starting REST API Integration Tests');
     logInfo('='.repeat(60));
-    
+
     const tests = [
         { name: 'Health Check', fn: testHealthCheck },
         { name: 'Root Endpoint', fn: testRootEndpoint },
@@ -674,16 +674,16 @@ async function runAPITests() {
         { name: 'Response Validation', fn: testResponseValidation },
         { name: 'CORS Headers', fn: testCORSHeaders }
     ];
-    
+
     logInfo(`Running ${tests.length} API test suites...`);
     logInfo(`Target API URL: ${CONFIG.API_BASE_URL}`);
-    
+
     let performanceResults = [];
-    
+
     for (const test of tests) {
         logInfo('-'.repeat(40));
         logInfo(`Running: ${test.name}`);
-        
+
         try {
             const result = await test.fn();
             if (result) {
@@ -694,37 +694,37 @@ async function runAPITests() {
         } catch (error) {
             logError(`${test.name} threw an error`, { error: error.message });
         }
-        
+
         // Small delay between tests
         await new Promise(resolve => setTimeout(resolve, 500));
     }
-    
+
     // Run performance tests
     logInfo('-'.repeat(40));
     logInfo('Running performance tests...');
     performanceResults = await testAPIPerformance();
-    
+
     logInfo('-'.repeat(40));
     logInfo('API Tests Summary:');
-    
+
     let passCount = 0;
     for (const [testName, result] of Object.entries(TEST_RESULTS)) {
         const status = result ? 'PASS' : 'FAIL';
         const icon = result ? '✓' : '✗';
         logInfo(`  ${icon} ${testName}: ${status}`);
-        
+
         if (result) passCount++;
     }
-    
+
     const totalTests = Object.keys(TEST_RESULTS).length;
     logInfo(`Overall: ${passCount}/${totalTests} tests passed (${Math.round((passCount/totalTests) * 100)}%)`);
-    
+
     // Generate test report
     const report = generateTestReport(performanceResults);
-    
+
     // Save test status
     const allPassed = saveTestStatus();
-    
+
     if (allPassed) {
         logSuccess('All REST API integration tests completed successfully!');
         process.exit(0);

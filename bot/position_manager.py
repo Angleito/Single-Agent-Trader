@@ -182,16 +182,16 @@ class PositionManager:
     ) -> Position:
         """
         Update position state based on actual exchange position data.
-        
+
         This method is used during startup to reconcile local position state
         with actual positions found on the exchange.
-        
+
         Args:
             symbol: Trading symbol
             side: Position side (LONG/SHORT)
             size: Position size
             entry_price: Entry price from exchange
-            
+
         Returns:
             Updated position
         """
@@ -653,7 +653,7 @@ class PositionManager:
         try:
             # Check if we're in an async context
             try:
-                loop = asyncio.get_running_loop()
+                asyncio.get_running_loop()
                 # We're in an async context, schedule the save as a fire-and-forget task
                 task = asyncio.create_task(self._save_state_async())
                 # Add error handling callback

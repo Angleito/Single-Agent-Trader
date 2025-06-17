@@ -28,7 +28,7 @@ class TradeFees(NamedTuple):
 class FeeCalculator:
     """
     Calculate trading fees and adjust position sizes accordingly.
-    
+
     This calculator takes into account different fee structures for:
     - Spot trading (maker/taker fees)
     - Futures trading (standard futures fees)
@@ -38,16 +38,20 @@ class FeeCalculator:
     def __init__(self):
         """Initialize the fee calculator with current settings."""
         # Use spot-specific fees if available, otherwise fall back to legacy names
-        self.spot_maker_fee_rate = getattr(settings.trading, 'spot_maker_fee_rate', settings.trading.maker_fee_rate)
-        self.spot_taker_fee_rate = getattr(settings.trading, 'spot_taker_fee_rate', settings.trading.taker_fee_rate)
+        self.spot_maker_fee_rate = getattr(
+            settings.trading, "spot_maker_fee_rate", settings.trading.maker_fee_rate
+        )
+        self.spot_taker_fee_rate = getattr(
+            settings.trading, "spot_taker_fee_rate", settings.trading.taker_fee_rate
+        )
         self.futures_fee_rate = settings.trading.futures_fee_rate
         self.enable_futures = settings.trading.enable_futures
-        self.fee_tier_thresholds = getattr(settings.trading, 'fee_tier_thresholds', [])
-        
+        self.fee_tier_thresholds = getattr(settings.trading, "fee_tier_thresholds", [])
+
         # Legacy support
         self.maker_fee_rate = self.spot_maker_fee_rate
         self.taker_fee_rate = self.spot_taker_fee_rate
-        
+
         # Track current volume tier
         self.current_volume = 0
         self.current_tier = self._get_fee_tier(0)
@@ -64,17 +68,17 @@ class FeeCalculator:
         trade_action: TradeAction,
         position_value: Decimal,
         current_price: Decimal,
-        is_market_order: bool = True
+        is_market_order: bool = True,
     ) -> TradeFees:
         """
         Calculate total fees for a complete trade (entry + exit).
-        
+
         Args:
             trade_action: The trade action being executed
             position_value: The value of the position in USD
             current_price: Current market price
             is_market_order: Whether this is a market order (True) or limit order (False)
-            
+
         Returns:
             TradeFees object with detailed fee breakdown
         """
@@ -87,7 +91,7 @@ class FeeCalculator:
                     exit_fee=Decimal("0"),
                     total_fee=Decimal("0"),
                     fee_rate=0.0,
-                    net_position_value=Decimal("0")
+                    net_position_value=Decimal("0"),
                 )
 
             # Check for zero or negative current price
@@ -98,7 +102,7 @@ class FeeCalculator:
                     exit_fee=Decimal("0"),
                     total_fee=Decimal("0"),
                     fee_rate=0.0,
-                    net_position_value=Decimal("0")
+                    net_position_value=Decimal("0"),
                 )
 
             # Determine the appropriate fee rate
@@ -107,8 +111,12 @@ class FeeCalculator:
                 logger.debug(f"Using futures fee rate: {fee_rate:.4f}")
             else:
                 # Use current tier rates for spot trading
-                fee_rate = self.taker_fee_rate if is_market_order else self.maker_fee_rate
-                logger.debug(f"Using spot {'taker' if is_market_order else 'maker'} fee rate: {fee_rate:.4f} (Volume: ${self.current_volume:,.2f})")
+                fee_rate = (
+                    self.taker_fee_rate if is_market_order else self.maker_fee_rate
+                )
+                logger.debug(
+                    f"Using spot {'taker' if is_market_order else 'maker'} fee rate: {fee_rate:.4f} (Volume: ${self.current_volume:,.2f})"
+                )
 
             # Calculate entry fee
             entry_fee = position_value * Decimal(str(fee_rate))
@@ -127,7 +135,7 @@ class FeeCalculator:
                 exit_fee=exit_fee,
                 total_fee=total_fee,
                 fee_rate=fee_rate,
-                net_position_value=net_position_value
+                net_position_value=net_position_value,
             )
 
             logger.debug(
@@ -146,7 +154,7 @@ class FeeCalculator:
                 exit_fee=Decimal("0"),
                 total_fee=Decimal("0"),
                 fee_rate=0.0,
-                net_position_value=position_value
+                net_position_value=position_value,
             )
 
     def adjust_position_size_for_fees(
@@ -154,20 +162,20 @@ class FeeCalculator:
         trade_action: TradeAction,
         account_balance: Decimal,
         current_price: Decimal,
-        is_market_order: bool = True
+        is_market_order: bool = True,
     ) -> tuple[TradeAction, TradeFees]:
         """
         Adjust position size to account for trading fees.
-        
+
         This ensures that the total cost (position + fees) doesn't exceed
         the intended position size percentage of the account.
-        
+
         Args:
             trade_action: Original trade action
             account_balance: Current account balance
             current_price: Current market price
             is_market_order: Whether this is a market order
-            
+
         Returns:
             Tuple of (adjusted_trade_action, calculated_fees)
         """
@@ -179,7 +187,7 @@ class FeeCalculator:
                     exit_fee=Decimal("0"),
                     total_fee=Decimal("0"),
                     fee_rate=0.0,
-                    net_position_value=Decimal("0")
+                    net_position_value=Decimal("0"),
                 )
 
             # Check for zero or negative account balance
@@ -192,7 +200,7 @@ class FeeCalculator:
                     exit_fee=Decimal("0"),
                     total_fee=Decimal("0"),
                     fee_rate=0.0,
-                    net_position_value=Decimal("0")
+                    net_position_value=Decimal("0"),
                 )
 
             # Check for zero or negative size percentage
@@ -205,7 +213,7 @@ class FeeCalculator:
                     exit_fee=Decimal("0"),
                     total_fee=Decimal("0"),
                     fee_rate=0.0,
-                    net_position_value=Decimal("0")
+                    net_position_value=Decimal("0"),
                 )
 
             # Check for zero or negative current price
@@ -218,11 +226,13 @@ class FeeCalculator:
                     exit_fee=Decimal("0"),
                     total_fee=Decimal("0"),
                     fee_rate=0.0,
-                    net_position_value=Decimal("0")
+                    net_position_value=Decimal("0"),
                 )
 
             # Calculate intended position value
-            intended_position_value = account_balance * Decimal(str(trade_action.size_pct / 100))
+            intended_position_value = account_balance * Decimal(
+                str(trade_action.size_pct / 100)
+            )
 
             # Apply leverage
             leverage = trade_action.leverage or settings.trading.leverage
@@ -245,10 +255,12 @@ class FeeCalculator:
                     adjusted_action = trade_action.copy()
                     adjusted_action.size_pct = 0
                     return adjusted_action, initial_fees
-                
+
                 # Fees are deducted from margin, so we need to ensure we have enough margin
-                required_margin = leveraged_position_value / Decimal(str(leverage))
-                available_for_position = intended_position_value - initial_fees.total_fee
+                leveraged_position_value / Decimal(str(leverage))
+                available_for_position = (
+                    intended_position_value - initial_fees.total_fee
+                )
 
                 if available_for_position <= 0:
                     logger.warning("Insufficient funds after accounting for fees")
@@ -270,7 +282,9 @@ class FeeCalculator:
 
             else:
                 # For spot trading, fees come directly from position value
-                available_for_position = intended_position_value - initial_fees.total_fee
+                available_for_position = (
+                    intended_position_value - initial_fees.total_fee
+                )
 
                 if available_for_position <= 0:
                     logger.warning("Insufficient funds after accounting for fees")
@@ -295,11 +309,16 @@ class FeeCalculator:
             adjusted_action.size_pct = max(0, int(new_size_pct))
 
             # Recalculate fees for the adjusted position
-            adjusted_position_value = account_balance * Decimal(str(adjusted_action.size_pct / 100))
+            adjusted_position_value = account_balance * Decimal(
+                str(adjusted_action.size_pct / 100)
+            )
             adjusted_leveraged_value = adjusted_position_value * Decimal(str(leverage))
 
             final_fees = self.calculate_trade_fees(
-                adjusted_action, adjusted_leveraged_value, current_price, is_market_order
+                adjusted_action,
+                adjusted_leveraged_value,
+                current_price,
+                is_market_order,
             )
 
             logger.info(
@@ -317,23 +336,23 @@ class FeeCalculator:
                 exit_fee=Decimal("0"),
                 total_fee=Decimal("0"),
                 fee_rate=0.0,
-                net_position_value=Decimal("0")
+                net_position_value=Decimal("0"),
             )
 
     def calculate_minimum_profitable_move(
         self,
         position_value: Decimal,
         leverage: int = None,
-        is_market_order: bool = True
+        is_market_order: bool = True,
     ) -> Decimal:
         """
         Calculate the minimum price move needed to break even after fees.
-        
+
         Args:
             position_value: Value of the position
             leverage: Trading leverage
             is_market_order: Whether using market orders
-            
+
         Returns:
             Minimum percentage move needed to break even
         """
@@ -344,27 +363,31 @@ class FeeCalculator:
             fees = self.calculate_trade_fees(
                 # Dummy trade action for calculation
                 TradeAction(
-                    action="LONG", 
-                    size_pct=10, 
-                    take_profit_pct=2.0, 
+                    action="LONG",
+                    size_pct=10,
+                    take_profit_pct=2.0,
                     stop_loss_pct=1.0,
-                    rationale="Fee calculation dummy action"
+                    rationale="Fee calculation dummy action",
                 ),
                 position_value,
                 Decimal("1000"),  # Dummy price
-                is_market_order
+                is_market_order,
             )
 
             # Check for zero position value to prevent division by zero
             if position_value == 0:
-                logger.warning("Position value cannot be zero for minimum profitable move calculation")
+                logger.warning(
+                    "Position value cannot be zero for minimum profitable move calculation"
+                )
                 return Decimal("0.001")  # 0.1% fallback
-            
+
             # Check for zero leverage to prevent division by zero
             if leverage == 0:
-                logger.warning("Leverage cannot be zero for minimum profitable move calculation")
+                logger.warning(
+                    "Leverage cannot be zero for minimum profitable move calculation"
+                )
                 return Decimal("0.001")  # 0.1% fallback
-            
+
             # The minimum move needed is the fee percentage times 2 (round trip)
             # divided by leverage (since leverage amplifies the move)
             fee_percentage = float(fees.total_fee / position_value)
@@ -386,17 +409,17 @@ class FeeCalculator:
         trade_action: TradeAction,
         position_value: Decimal,
         current_price: Decimal,
-        leverage: int = None
+        leverage: int = None,
     ) -> tuple[bool, str]:
         """
         Validate that a trade has sufficient profit targets to cover fees.
-        
+
         Args:
             trade_action: Trade action to validate
             position_value: Position value
             current_price: Current market price
             leverage: Trading leverage
-            
+
         Returns:
             Tuple of (is_profitable, reason)
         """
@@ -414,36 +437,48 @@ class FeeCalculator:
 
             # Check if take profit is sufficient
             if take_profit_decimal < min_move * 2:  # 2x safety margin
-                return False, f"Take profit {trade_action.take_profit_pct:.2f}% too low to cover fees (min: {float(min_move * 2):.4%})"
+                return (
+                    False,
+                    f"Take profit {trade_action.take_profit_pct:.2f}% too low to cover fees (min: {float(min_move * 2):.4%})",
+                )
 
             # Check if stop loss gives reasonable risk/reward
             if stop_loss_decimal == 0:
                 logger.warning("Stop loss percentage cannot be zero")
-                return False, "Stop loss percentage cannot be zero for risk/reward calculation"
-            
+                return (
+                    False,
+                    "Stop loss percentage cannot be zero for risk/reward calculation",
+                )
+
             risk_reward_ratio = float(take_profit_decimal / stop_loss_decimal)
             if risk_reward_ratio < 1.5:  # Minimum 1.5:1 ratio after fees
-                return False, f"Risk/reward ratio {risk_reward_ratio:.2f} too low after accounting for fees"
+                return (
+                    False,
+                    f"Risk/reward ratio {risk_reward_ratio:.2f} too low after accounting for fees",
+                )
 
             return True, "Trade profitability validated"
 
         except Exception as e:
             logger.error(f"Error validating trade profitability: {e}")
             return True, "Validation error - allowing trade"
-    
+
     def _get_fee_tier(self, volume: float) -> dict[str, float]:
         """
         Get the fee tier based on trading volume.
-        
+
         Args:
             volume: Monthly trading volume in USD
-            
+
         Returns:
             Fee tier dictionary with maker and taker rates
         """
         if not self.fee_tier_thresholds:
-            return {"maker": self.spot_maker_fee_rate, "taker": self.spot_taker_fee_rate}
-        
+            return {
+                "maker": self.spot_maker_fee_rate,
+                "taker": self.spot_taker_fee_rate,
+            }
+
         # Find the appropriate tier
         tier = self.fee_tier_thresholds[0]
         for threshold in self.fee_tier_thresholds:
@@ -451,24 +486,24 @@ class FeeCalculator:
                 tier = threshold
             else:
                 break
-        
+
         return tier
-    
+
     def update_volume_tier(self, monthly_volume: float):
         """
         Update the fee calculator with current monthly trading volume.
-        
+
         Args:
             monthly_volume: Monthly trading volume in USD
         """
         self.current_volume = monthly_volume
         self.current_tier = self._get_fee_tier(monthly_volume)
-        
+
         # Update fee rates based on current tier
         if not self.enable_futures:
             self.maker_fee_rate = self.current_tier["maker"]
             self.taker_fee_rate = self.current_tier["taker"]
-            
+
             logger.info(
                 f"Updated fee tier based on ${monthly_volume:,.2f} volume: "
                 f"Maker: {self.maker_fee_rate:.4%}, Taker: {self.taker_fee_rate:.4%}"
@@ -488,11 +523,10 @@ class FeeCalculator:
             "current_taker_fee_rate": self.taker_fee_rate,
             "futures_fee_rate": self.futures_fee_rate,
             "active_fee_rate": (
-                self.futures_fee_rate if self.enable_futures
-                else self.taker_fee_rate
+                self.futures_fee_rate if self.enable_futures else self.taker_fee_rate
             ),
             "current_volume": self.current_volume,
-            "current_tier": self.current_tier
+            "current_tier": self.current_tier,
         }
 
 

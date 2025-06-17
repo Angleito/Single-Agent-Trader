@@ -46,7 +46,7 @@ export class LLMDecisionCard {
               <span class="action-text">HOLD</span>
               <span class="action-subtext">Awaiting market analysis...</span>
             </div>
-            
+
             <div class="confidence-meter">
               <div class="confidence-label">Confidence Level</div>
               <div class="confidence-bar">
@@ -153,9 +153,9 @@ export class LLMDecisionCard {
         left: 0;
         right: 0;
         height: 1px;
-        background: linear-gradient(90deg, 
-          transparent 0%, 
-          rgba(59, 130, 246, 0.5) 50%, 
+        background: linear-gradient(90deg,
+          transparent 0%,
+          rgba(59, 130, 246, 0.5) 50%,
           transparent 100%);
         opacity: 0.8;
       }

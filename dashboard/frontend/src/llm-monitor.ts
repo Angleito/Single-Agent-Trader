@@ -637,7 +637,7 @@ class LLMMonitorDashboard {
           .charts-container {
             grid-template-columns: 1fr;
           }
-          
+
           .metrics-grid {
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
           }

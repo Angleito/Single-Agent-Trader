@@ -52,7 +52,9 @@ class SentimentAnalysis(BaseModel):
 
     symbol: str
     overall_sentiment: str  # "bullish", "bearish", "neutral"
-    sentiment_score: float = Field(ge=-1.0, le=1.0)  # -1 (very bearish) to 1 (very bullish)
+    sentiment_score: float = Field(
+        ge=-1.0, le=1.0
+    )  # -1 (very bearish) to 1 (very bullish)
     confidence: float = Field(ge=0.0, le=1.0)
     source_count: int
     timeframe: str = "24h"
@@ -103,16 +105,14 @@ class SearchCache:
     def set(self, key: str, value: Any, ttl: int | None = None) -> None:
         """Set cached value with TTL."""
         expires_at = time.time() + (ttl or self.default_ttl)
-        self.cache[key] = {
-            "value": value,
-            "expires_at": expires_at
-        }
+        self.cache[key] = {"value": value, "expires_at": expires_at}
 
     def clear_expired(self) -> int:
         """Clear expired entries and return count removed."""
         current_time = time.time()
         expired_keys = [
-            key for key, entry in self.cache.items()
+            key
+            for key, entry in self.cache.items()
             if entry["expires_at"] <= current_time
         ]
         for key in expired_keys:
@@ -134,7 +134,8 @@ class RateLimiter:
 
         # Remove old requests outside the window
         self.requests = [
-            req_time for req_time in self.requests
+            req_time
+            for req_time in self.requests
             if current_time - req_time < self.window_seconds
         ]
 
@@ -153,7 +154,7 @@ class RateLimiter:
 class OmniSearchClient:
     """
     MCP-based OmniSearch client for financial data and news searching.
-    
+
     Provides intelligent web searching capabilities with caching, rate limiting,
     and financial-specific result processing for enhanced trading decisions.
     """
@@ -165,12 +166,18 @@ class OmniSearchClient:
         enable_cache: bool = True,
         cache_ttl: int = 900,
         rate_limit_requests: int = 100,
-        rate_limit_window: int = 3600
+        rate_limit_window: int = 3600,
     ):
         """Initialize the OmniSearch client."""
         # Server configuration
-        self.server_url = server_url or getattr(settings.omnisearch, 'server_url', 'https://api.omnisearch.dev/v1')
-        self.api_key = api_key or (settings.omnisearch.api_key.get_secret_value() if settings.omnisearch.api_key else None)
+        self.server_url = server_url or getattr(
+            settings.omnisearch, "server_url", "https://api.omnisearch.dev/v1"
+        )
+        self.api_key = api_key or (
+            settings.omnisearch.api_key.get_secret_value()
+            if settings.omnisearch.api_key
+            else None
+        )
 
         # Client state
         self._session: aiohttp.ClientSession | None = None
@@ -197,15 +204,16 @@ class OmniSearchClient:
             headers = self._get_headers()
 
             async with self._session.get(
-                f"{self.server_url}/health",
-                headers=headers
+                f"{self.server_url}/health", headers=headers
             ) as response:
                 if response.status == 200:
                     self._connected = True
                     logger.info("✅ OmniSearch: Successfully connected")
                     return True
                 else:
-                    logger.warning(f"OmniSearch server returned status {response.status}")
+                    logger.warning(
+                        f"OmniSearch server returned status {response.status}"
+                    )
                     return False
 
         except Exception as e:
@@ -233,17 +241,17 @@ class OmniSearchClient:
         query: str,
         limit: int = 5,
         timeframe: str = "24h",
-        include_sentiment: bool = True
+        include_sentiment: bool = True,
     ) -> list[FinancialNewsResult]:
         """
         Search for financial news related to the query.
-        
+
         Args:
             query: Search query (e.g., "Bitcoin ETF approval", "Ethereum regulation")
             limit: Maximum number of results to return
             timeframe: Time range for news ("1h", "24h", "7d", "30d")
             include_sentiment: Whether to include sentiment analysis
-            
+
         Returns:
             List of financial news results with metadata
         """
@@ -266,8 +274,8 @@ class OmniSearchClient:
                     "q": query,
                     "limit": limit,
                     "timeframe": timeframe,
-                    "include_sentiment": str(include_sentiment).lower()
-                }
+                    "include_sentiment": str(include_sentiment).lower(),
+                },
             )
 
             # Process results into structured format
@@ -279,7 +287,7 @@ class OmniSearchClient:
                     snippet=item.get("snippet", ""),
                     source=item.get("source", ""),
                     published_date=self._parse_date(item.get("published_date")),
-                    relevance_score=item.get("relevance_score", 0.0)
+                    relevance_score=item.get("relevance_score", 0.0),
                 )
 
                 financial_result = FinancialNewsResult(
@@ -287,7 +295,7 @@ class OmniSearchClient:
                     sentiment=item.get("sentiment"),
                     mentioned_symbols=item.get("mentioned_symbols", []),
                     news_category=item.get("category"),
-                    impact_level=item.get("impact_level")
+                    impact_level=item.get("impact_level"),
                 )
                 financial_results.append(financial_result)
 
@@ -309,10 +317,10 @@ class OmniSearchClient:
     async def search_crypto_sentiment(self, symbol: str) -> SentimentAnalysis:
         """
         Analyze sentiment for a specific cryptocurrency.
-        
+
         Args:
             symbol: Crypto symbol (e.g., "BTC", "ETH", "BTC-USD")
-            
+
         Returns:
             Comprehensive sentiment analysis
         """
@@ -324,7 +332,9 @@ class OmniSearchClient:
         if self.cache:
             cached_result = self.cache.get(cache_key)
             if cached_result:
-                logger.debug(f"OmniSearch: Cache hit for crypto sentiment: {base_symbol}")
+                logger.debug(
+                    f"OmniSearch: Cache hit for crypto sentiment: {base_symbol}"
+                )
                 return SentimentAnalysis(**cached_result)
 
         # Rate limiting
@@ -337,8 +347,8 @@ class OmniSearchClient:
                     "symbol": base_symbol,
                     "include_social": "true",
                     "include_news": "true",
-                    "include_technical": "true"
-                }
+                    "include_technical": "true",
+                },
             )
 
             sentiment_data = results.get("sentiment", {})
@@ -353,7 +363,7 @@ class OmniSearchClient:
                 social_sentiment=sentiment_data.get("social_sentiment"),
                 technical_sentiment=sentiment_data.get("technical_sentiment"),
                 key_drivers=sentiment_data.get("key_drivers", []),
-                risk_factors=sentiment_data.get("risk_factors", [])
+                risk_factors=sentiment_data.get("risk_factors", []),
             )
 
             # Cache result
@@ -374,7 +384,7 @@ class OmniSearchClient:
     async def search_nasdaq_sentiment(self) -> SentimentAnalysis:
         """
         Analyze overall NASDAQ/stock market sentiment.
-        
+
         Returns:
             NASDAQ market sentiment analysis
         """
@@ -396,8 +406,8 @@ class OmniSearchClient:
                 params={
                     "market": "nasdaq",
                     "include_indices": "true",
-                    "include_sectors": "true"
-                }
+                    "include_sectors": "true",
+                },
             )
 
             sentiment_data = results.get("sentiment", {})
@@ -412,7 +422,7 @@ class OmniSearchClient:
                 social_sentiment=sentiment_data.get("social_sentiment"),
                 technical_sentiment=sentiment_data.get("technical_sentiment"),
                 key_drivers=sentiment_data.get("key_drivers", []),
-                risk_factors=sentiment_data.get("risk_factors", [])
+                risk_factors=sentiment_data.get("risk_factors", []),
             )
 
             # Cache result (shorter TTL for market sentiment)
@@ -431,19 +441,16 @@ class OmniSearchClient:
             return await self._get_fallback_sentiment("NASDAQ")
 
     async def search_market_correlation(
-        self,
-        crypto_symbol: str,
-        nasdaq_symbol: str = "QQQ",
-        timeframe: str = "30d"
+        self, crypto_symbol: str, nasdaq_symbol: str = "QQQ", timeframe: str = "30d"
     ) -> MarketCorrelation:
         """
         Analyze correlation between crypto and traditional markets.
-        
+
         Args:
             crypto_symbol: Crypto symbol (e.g., "BTC", "ETH")
             nasdaq_symbol: NASDAQ symbol to correlate with (default: "QQQ")
             timeframe: Analysis timeframe ("7d", "30d", "90d")
-            
+
         Returns:
             Market correlation analysis
         """
@@ -457,7 +464,9 @@ class OmniSearchClient:
         if self.cache:
             cached_result = self.cache.get(cache_key)
             if cached_result:
-                logger.debug(f"OmniSearch: Cache hit for correlation {crypto_base}-{nasdaq_base}")
+                logger.debug(
+                    f"OmniSearch: Cache hit for correlation {crypto_base}-{nasdaq_base}"
+                )
                 return MarketCorrelation(**cached_result)
 
         # Rate limiting
@@ -470,8 +479,8 @@ class OmniSearchClient:
                     "symbol1": crypto_base,
                     "symbol2": nasdaq_base,
                     "timeframe": timeframe,
-                    "include_beta": "true"
-                }
+                    "include_beta": "true",
+                },
             )
 
             correlation_data = results.get("correlation", {})
@@ -501,7 +510,7 @@ class OmniSearchClient:
                 strength=strength,
                 direction=direction,
                 beta=correlation_data.get("beta"),
-                r_squared=correlation_data.get("r_squared")
+                r_squared=correlation_data.get("r_squared"),
             )
 
             # Cache result
@@ -516,14 +525,18 @@ class OmniSearchClient:
             return correlation
 
         except Exception as e:
-            logger.error(f"Market correlation search failed for {crypto_base}-{nasdaq_base}: {e}")
-            return await self._get_fallback_correlation(crypto_base, nasdaq_base, timeframe)
+            logger.error(
+                f"Market correlation search failed for {crypto_base}-{nasdaq_base}: {e}"
+            )
+            return await self._get_fallback_correlation(
+                crypto_base, nasdaq_base, timeframe
+            )
 
     def _get_headers(self) -> dict[str, str]:
         """Get HTTP headers for API requests."""
         headers = {
             "Content-Type": "application/json",
-            "User-Agent": "AI-Trading-Bot/1.0"
+            "User-Agent": "AI-Trading-Bot/1.0",
         }
 
         if self.api_key:
@@ -532,17 +545,15 @@ class OmniSearchClient:
         return headers
 
     async def _search_with_fallback(
-        self,
-        endpoint: str,
-        params: dict[str, Any]
+        self, endpoint: str, params: dict[str, Any]
     ) -> dict[str, Any]:
         """
         Execute search with fallback handling.
-        
+
         Args:
             endpoint: API endpoint to call
             params: Query parameters
-            
+
         Returns:
             Search results or fallback data
         """
@@ -554,9 +565,7 @@ class OmniSearchClient:
 
         try:
             async with self._session.get(
-                url,
-                headers=headers,
-                params=params
+                url, headers=headers, params=params
             ) as response:
                 if response.status == 200:
                     return await response.json()
@@ -567,17 +576,15 @@ class OmniSearchClient:
                     logger.warning(f"OmniSearch API returned status {response.status}")
                     raise Exception(f"API error: {response.status}")
 
-        except TimeoutError:
+        except TimeoutError as e:
             logger.warning(f"OmniSearch request timed out for {endpoint}")
-            raise Exception("Request timeout")
+            raise Exception("Request timeout") from e
         except aiohttp.ClientError as e:
             logger.warning(f"OmniSearch network error: {e}")
-            raise Exception(f"Network error: {e}")
+            raise Exception(f"Network error: {e}") from e
 
     async def _get_fallback_news(
-        self,
-        query: str,
-        limit: int
+        self, query: str, limit: int
     ) -> list[FinancialNewsResult]:
         """Provide fallback news results when API is unavailable."""
         logger.info(f"Using fallback news results for: {query}")
@@ -613,14 +620,11 @@ class OmniSearchClient:
             confidence=0.1,  # Low confidence for fallback
             source_count=0,
             key_drivers=["API unavailable - using fallback neutral sentiment"],
-            risk_factors=["Limited sentiment data available"]
+            risk_factors=["Limited sentiment data available"],
         )
 
     async def _get_fallback_correlation(
-        self,
-        crypto_symbol: str,
-        nasdaq_symbol: str,
-        timeframe: str
+        self, crypto_symbol: str, nasdaq_symbol: str, timeframe: str
     ) -> MarketCorrelation:
         """Provide fallback correlation when API is unavailable."""
         logger.info(f"Using fallback correlation for: {crypto_symbol}-{nasdaq_symbol}")
@@ -631,7 +635,7 @@ class OmniSearchClient:
             correlation_coefficient=0.0,
             timeframe=timeframe,
             strength="weak",
-            direction="neutral"
+            direction="neutral",
         )
 
     def _parse_date(self, date_str: str | None) -> datetime | None:
@@ -645,7 +649,7 @@ class OmniSearchClient:
                 "%Y-%m-%dT%H:%M:%SZ",
                 "%Y-%m-%dT%H:%M:%S.%fZ",
                 "%Y-%m-%d %H:%M:%S",
-                "%Y-%m-%d"
+                "%Y-%m-%d",
             ]:
                 try:
                     return datetime.strptime(date_str, fmt).replace(tzinfo=UTC)
@@ -666,9 +670,11 @@ class OmniSearchClient:
             "server_url": self.server_url,
             "cache_enabled": self.cache is not None,
             "cache_size": len(self.cache.cache) if self.cache else 0,
-            "rate_limit_remaining": max(0, self.rate_limiter.max_requests - len(self.rate_limiter.requests)),
+            "rate_limit_remaining": max(
+                0, self.rate_limiter.max_requests - len(self.rate_limiter.requests)
+            ),
             "local_storage": str(self.local_storage_path),
-            "timestamp": datetime.now(UTC).isoformat()
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
 
@@ -681,23 +687,33 @@ async def main():
         # Connect to service
         connected = await client.connect()
         if not connected:
-            logger.warning("Could not connect to OmniSearch service, using fallback mode")
+            logger.warning(
+                "Could not connect to OmniSearch service, using fallback mode"
+            )
 
         # Test financial news search
-        news_results = await client.search_financial_news("Bitcoin ETF approval", limit=3)
+        news_results = await client.search_financial_news(
+            "Bitcoin ETF approval", limit=3
+        )
         print(f"Found {len(news_results)} news results")
 
         # Test crypto sentiment
         btc_sentiment = await client.search_crypto_sentiment("BTC-USD")
-        print(f"BTC sentiment: {btc_sentiment.overall_sentiment} ({btc_sentiment.sentiment_score:.2f})")
+        print(
+            f"BTC sentiment: {btc_sentiment.overall_sentiment} ({btc_sentiment.sentiment_score:.2f})"
+        )
 
         # Test NASDAQ sentiment
         nasdaq_sentiment = await client.search_nasdaq_sentiment()
-        print(f"NASDAQ sentiment: {nasdaq_sentiment.overall_sentiment} ({nasdaq_sentiment.sentiment_score:.2f})")
+        print(
+            f"NASDAQ sentiment: {nasdaq_sentiment.overall_sentiment} ({nasdaq_sentiment.sentiment_score:.2f})"
+        )
 
         # Test market correlation
         correlation = await client.search_market_correlation("BTC", "QQQ")
-        print(f"BTC-QQQ correlation: {correlation.direction} {correlation.strength} ({correlation.correlation_coefficient:.3f})")
+        print(
+            f"BTC-QQQ correlation: {correlation.direction} {correlation.strength} ({correlation.correlation_coefficient:.3f})"
+        )
 
         # Health check
         health = await client.health_check()

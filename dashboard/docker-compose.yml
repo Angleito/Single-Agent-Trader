@@ -1,6 +1,6 @@
 services:
   dashboard-backend:
-    build: 
+    build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: dashboard-backend

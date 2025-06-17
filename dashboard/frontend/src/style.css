@@ -49,32 +49,32 @@ html {
   --bg-elevated: #242424;
   --bg-hover: #2a2a2a;
   --bg-active: #333333;
-  
+
   /* Gradient Backgrounds */
   --gradient-primary: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
   --gradient-secondary: linear-gradient(135deg, #1f1f1f 0%, #2a2a2a 100%);
   --gradient-accent: linear-gradient(135deg, #00aaff 0%, #00ff88 100%);
   --gradient-danger: linear-gradient(135deg, #ff0044 0%, #ff6644 100%);
-  
+
   /* Text Colors */
   --text-primary: #e0e0e0;
   --text-secondary: #b0b0b0;
   --text-muted: #808080;
   --text-disabled: #606060;
   --text-white: #ffffff;
-  
+
   /* Border Colors with Alpha */
   --border-color: rgba(255, 255, 255, 0.05);
   --border-light: rgba(255, 255, 255, 0.08);
   --border-heavy: rgba(255, 255, 255, 0.03);
   --border-glass: rgba(255, 255, 255, 0.1);
-  
+
   /* Brand & Accent Colors */
   --accent-primary: #00aaff;
   --accent-primary-hover: #0088cc;
   --accent-secondary: #00ff88;
   --accent-secondary-hover: #00cc66;
-  
+
   /* Trading Colors */
   --bull-color: #00ff88;
   --bull-bg: rgba(0, 255, 136, 0.1);
@@ -85,7 +85,7 @@ html {
   --neutral-color: #ffaa00;
   --neutral-bg: rgba(255, 170, 0, 0.1);
   --neutral-glow: rgba(255, 170, 0, 0.4);
-  
+
   /* Status Colors */
   --success: #00ff88;
   --success-bg: rgba(0, 255, 136, 0.1);
@@ -95,14 +95,14 @@ html {
   --danger-bg: rgba(255, 0, 68, 0.1);
   --info: #00aaff;
   --info-bg: rgba(0, 170, 255, 0.1);
-  
+
   /* Layout Dimensions */
   --header-height: 64px;
   --status-bar-height: 40px;
   --footer-height: 56px;
   --sidebar-width: 320px;
   --sidebar-width-collapsed: 280px;
-  
+
   /* Spacing */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
@@ -110,13 +110,13 @@ html {
   --spacing-lg: 24px;
   --spacing-xl: 32px;
   --spacing-2xl: 48px;
-  
+
   /* Border Radius */
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
   --radius-xl: 12px;
-  
+
   /* Shadows with Glow Effects */
   --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.6), 0 2px 4px rgba(0, 0, 0, 0.4);
@@ -124,13 +124,13 @@ html {
   --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.8), 0 10px 20px rgba(0, 0, 0, 0.6);
   --shadow-glow: 0 0 20px rgba(0, 170, 255, 0.2);
   --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-  
+
   /* Transitions with Custom Timing */
   --transition-fast: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-normal: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-bounce: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-  
+
   /* Typography */
   --font-family-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif;
   --font-family-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
@@ -148,7 +148,7 @@ html {
   --line-height-tight: 1.25;
   --line-height-normal: 1.5;
   --line-height-relaxed: 1.75;
-  
+
   /* Font Setup */
   font-family: var(--font-family-sans);
   line-height: var(--line-height-normal);
@@ -160,7 +160,7 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
-  
+
   /* Scrollbar Styling */
   --scrollbar-width: 8px;
   --scrollbar-track: var(--bg-tertiary);
@@ -265,7 +265,7 @@ body::before {
 /* =============================================================================
    LOADING SCREEN
    ============================================================================= */
-   
+
 #loading {
   position: fixed;
   top: 0;
@@ -1864,12 +1864,12 @@ body::before {
     --spacing-lg: 20px;
     --spacing-xl: 28px;
   }
-  
+
   .stats-grid {
     grid-template-columns: 1fr;
     gap: var(--spacing-sm);
   }
-  
+
   .stat-value {
     font-size: var(--font-size-lg);
   }
@@ -1880,7 +1880,7 @@ body::before {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;
   }
-  
+
   .sidebar-left {
     order: 2;
     grid-column: 1;
@@ -1890,17 +1890,17 @@ body::before {
     gap: 1px;
     background: var(--border-color);
   }
-  
+
   .sidebar-right {
     display: none;
   }
-  
+
   .chart-section {
     order: 1;
     grid-column: 1;
     grid-row: 1;
   }
-  
+
   .chart-container {
     min-height: 400px;
   }
@@ -1914,42 +1914,42 @@ body::before {
     --spacing-lg: 16px;
     --spacing-xl: 24px;
   }
-  
+
   .header-content {
     padding: 0 var(--spacing-md);
   }
-  
+
   .dashboard-title {
     font-size: var(--font-size-xl);
   }
-  
+
   .header-subtitle {
     display: none;
   }
-  
+
   .last-update {
     display: none;
   }
-  
+
   .status-bar {
     padding: 0 var(--spacing-md);
     gap: var(--spacing-lg);
   }
-  
+
   .sidebar-left {
     grid-template-columns: 1fr;
   }
-  
+
   .chart-header {
     padding: var(--spacing-sm) var(--spacing-md);
   }
-  
+
   .footer-content {
     flex-direction: column;
     gap: var(--spacing-sm);
     padding: var(--spacing-sm) var(--spacing-md);
   }
-  
+
   .footer-left,
   .footer-center,
   .footer-right {
@@ -1962,38 +1962,38 @@ body::before {
     --spacing-md: 12px;
     --spacing-lg: 14px;
   }
-  
+
   .header-left {
     flex-direction: column;
     align-items: flex-start;
     gap: var(--spacing-xs);
   }
-  
+
   .header-right {
     flex-direction: column;
     align-items: flex-end;
     gap: var(--spacing-xs);
   }
-  
+
   .status-bar {
     gap: var(--spacing-md);
     overflow-x: scroll;
   }
-  
+
   .chart-controls {
     flex-wrap: wrap;
     gap: var(--spacing-xs);
   }
-  
+
   .modal-content {
     margin: var(--spacing-md);
     width: calc(100% - var(--spacing-xl));
   }
-  
+
   .modal-footer {
     flex-direction: column;
   }
-  
+
   .btn {
     width: 100%;
     justify-content: center;
@@ -2143,15 +2143,15 @@ body::before {
     --footer-height: 64px;
     --sidebar-width: 380px;
   }
-  
+
   .dashboard-main {
     gap: 2px;
   }
-  
+
   .stat-value {
     font-size: var(--font-size-2xl);
   }
-  
+
   .chart-container {
     min-height: 600px;
   }
@@ -2167,23 +2167,23 @@ body::before {
     color: black !important;
     box-shadow: none !important;
   }
-  
+
   .dashboard-header,
   .status-bar,
   .dashboard-footer,
   .modal {
     display: none !important;
   }
-  
+
   .dashboard-main {
     grid-template-columns: 1fr !important;
   }
-  
+
   .sidebar-left,
   .sidebar-right {
     display: none !important;
   }
-  
+
   .chart-section {
     page-break-inside: avoid;
   }
@@ -2203,15 +2203,15 @@ body::before {
   .llm-decision-section {
     padding: var(--spacing-sm);
   }
-  
+
   .llm-decision-card {
     padding: var(--spacing-md);
   }
-  
+
   .llm-decision-card .action-text {
     font-size: 2rem;
   }
-  
+
   .llm-decision-card .context-grid,
   .llm-decision-card .indicators-grid {
     grid-template-columns: 1fr 1fr;
@@ -2334,7 +2334,7 @@ body::before {
   .performance-modal {
     padding: 0;
   }
-  
+
   .performance-content {
     width: 100vw;
     height: 100vh;
@@ -2443,9 +2443,9 @@ body::before {
 
 /* Performance-optimized loading states */
 .loading-shimmer {
-  background: linear-gradient(90deg, 
-    transparent 0%, 
-    rgba(255,255,255,0.1) 50%, 
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(255,255,255,0.1) 50%,
     transparent 100%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
@@ -2488,4 +2488,3 @@ body::before {
   display: grid;
   contain: layout;
 }
-

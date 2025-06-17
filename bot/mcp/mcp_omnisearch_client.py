@@ -10,13 +10,10 @@ import json
 import logging
 import subprocess
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
-
-from ..config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +48,9 @@ class SentimentAnalysis(BaseModel):
 
     symbol: str
     overall_sentiment: str  # "bullish", "bearish", "neutral"
-    sentiment_score: float = Field(ge=-1.0, le=1.0)  # -1 (very bearish) to 1 (very bullish)
+    sentiment_score: float = Field(
+        ge=-1.0, le=1.0
+    )  # -1 (very bearish) to 1 (very bullish)
     confidence: float = Field(ge=0.0, le=1.0)
     source_count: int
     timeframe: str = "24h"
@@ -85,7 +84,7 @@ class MarketCorrelation(BaseModel):
 class MCPOmniSearchClient:
     """
     MCP-OmniSearch client for enhanced market intelligence.
-    
+
     Connects to the MCP-OmniSearch server via subprocess and MCP protocol
     to provide comprehensive search, AI responses, and content processing.
     """
@@ -94,12 +93,12 @@ class MCPOmniSearchClient:
         self,
         server_path: str | None = None,
         enable_cache: bool = True,
-        cache_ttl: int = 900
+        cache_ttl: int = 900,
     ):
         """Initialize the MCP-OmniSearch client."""
         # Server configuration
         self.server_path = server_path or "/app/bot/mcp/omnisearch-server/dist/index.js"
-        
+
         # Client state
         self._process: subprocess.Popen | None = None
         self._connected = False
@@ -108,7 +107,7 @@ class MCPOmniSearchClient:
         # Cache configuration
         self.enable_cache = enable_cache
         self.cache_ttl = cache_ttl
-        self._cache: Dict[str, Dict[str, Any]] = {}
+        self._cache: dict[str, dict[str, Any]] = {}
 
         logger.info(f"🔍 MCP-OmniSearch Client: Initialized for {self.server_path}")
 
@@ -122,13 +121,13 @@ class MCPOmniSearchClient:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                bufsize=0
+                bufsize=0,
             )
 
             # Initialize the connection
             await self._send_initialize()
             self._connected = True
-            
+
             logger.info("✅ MCP-OmniSearch: Successfully connected")
             return True
 
@@ -143,7 +142,7 @@ class MCPOmniSearchClient:
                 self._process.terminate()
                 self._process.wait(timeout=5)
                 self._process = None
-            
+
             self._connected = False
             logger.info("Disconnected from MCP-OmniSearch server")
         except Exception as e:
@@ -157,40 +156,35 @@ class MCPOmniSearchClient:
             "method": "initialize",
             "params": {
                 "protocolVersion": "2024-11-05",
-                "capabilities": {
-                    "tools": {}
-                },
-                "clientInfo": {
-                    "name": "ai-trading-bot",
-                    "version": "1.0.0"
-                }
-            }
+                "capabilities": {"tools": {}},
+                "clientInfo": {"name": "ai-trading-bot", "version": "1.0.0"},
+            },
         }
-        
+
         await self._send_message(init_message)
         response = await self._read_message()
-        
+
         if response.get("error"):
             raise Exception(f"MCP initialization failed: {response['error']}")
 
-    async def _send_message(self, message: Dict[str, Any]) -> None:
+    async def _send_message(self, message: dict[str, Any]) -> None:
         """Send a message to the MCP server."""
         if not self._process or not self._process.stdin:
             raise Exception("MCP server not connected")
-        
+
         message_str = json.dumps(message) + "\n"
         self._process.stdin.write(message_str)
         self._process.stdin.flush()
 
-    async def _read_message(self) -> Dict[str, Any]:
+    async def _read_message(self) -> dict[str, Any]:
         """Read a message from the MCP server."""
         if not self._process or not self._process.stdout:
             raise Exception("MCP server not connected")
-        
+
         line = self._process.stdout.readline()
         if not line:
             raise Exception("MCP server connection closed")
-        
+
         return json.loads(line.strip())
 
     def _get_next_id(self) -> int:
@@ -198,24 +192,23 @@ class MCPOmniSearchClient:
         self._request_id += 1
         return self._request_id
 
-    async def _call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+    async def _call_tool(
+        self, tool_name: str, arguments: dict[str, Any]
+    ) -> dict[str, Any]:
         """Call a tool on the MCP server."""
         message = {
             "jsonrpc": "2.0",
             "id": self._get_next_id(),
             "method": "tools/call",
-            "params": {
-                "name": tool_name,
-                "arguments": arguments
-            }
+            "params": {"name": tool_name, "arguments": arguments},
         }
-        
+
         await self._send_message(message)
         response = await self._read_message()
-        
+
         if response.get("error"):
             raise Exception(f"Tool call failed: {response['error']}")
-        
+
         return response.get("result", {})
 
     async def search_financial_news(
@@ -223,30 +216,33 @@ class MCPOmniSearchClient:
         query: str,
         limit: int = 5,
         timeframe: str = "24h",
-        include_sentiment: bool = True
-    ) -> List[FinancialNewsResult]:
+        include_sentiment: bool = True,
+    ) -> list[FinancialNewsResult]:
         """
         Search for financial news using MCP-OmniSearch.
-        
+
         Args:
             query: Search query (e.g., "Bitcoin ETF approval", "Ethereum regulation")
             limit: Maximum number of results to return
             timeframe: Time range for news ("1h", "24h", "7d", "30d")
             include_sentiment: Whether to include sentiment analysis
-            
+
         Returns:
             List of financial news results with metadata
         """
         try:
             # Use Tavily search for financial news
-            result = await self._call_tool("search_tavily", {
-                "query": f"{query} financial news {timeframe}",
-            })
-            
+            result = await self._call_tool(
+                "search_tavily",
+                {
+                    "query": f"{query} financial news {timeframe}",
+                },
+            )
+
             # Process results into financial news format
             financial_results = []
             content = result.get("content", [])
-            
+
             if isinstance(content, list):
                 for item in content[:limit]:
                     if isinstance(item, dict):
@@ -254,23 +250,31 @@ class MCPOmniSearchClient:
                             title=item.get("title", ""),
                             url=item.get("url", ""),
                             snippet=item.get("content", "")[:200],
-                            source=item.get("url", "").split("/")[2] if item.get("url") else "",
-                            relevance_score=item.get("score", 0.0)
+                            source=(
+                                item.get("url", "").split("/")[2]
+                                if item.get("url")
+                                else ""
+                            ),
+                            relevance_score=item.get("score", 0.0),
                         )
-                        
+
                         # Simple sentiment analysis based on keywords
                         sentiment = self._analyze_sentiment(item.get("content", ""))
-                        
+
                         financial_result = FinancialNewsResult(
                             base_result=base_result,
                             sentiment=sentiment if include_sentiment else None,
-                            mentioned_symbols=self._extract_symbols(item.get("content", "")),
+                            mentioned_symbols=self._extract_symbols(
+                                item.get("content", "")
+                            ),
                             news_category="market_news",
-                            impact_level="medium"
+                            impact_level="medium",
                         )
                         financial_results.append(financial_result)
-            
-            logger.info(f"🔍 MCP-OmniSearch: Found {len(financial_results)} financial news results for '{query}'")
+
+            logger.info(
+                f"🔍 MCP-OmniSearch: Found {len(financial_results)} financial news results for '{query}'"
+            )
             return financial_results
 
         except Exception as e:
@@ -280,34 +284,41 @@ class MCPOmniSearchClient:
     async def search_crypto_sentiment(self, symbol: str) -> SentimentAnalysis:
         """
         Analyze sentiment for a specific cryptocurrency using AI response.
-        
+
         Args:
             symbol: Crypto symbol (e.g., "BTC", "ETH", "BTC-USD")
-            
+
         Returns:
             Comprehensive sentiment analysis
         """
         # Normalize symbol
         base_symbol = symbol.split("-")[0].upper()
-        
+
         try:
             # Use Perplexity AI for sentiment analysis
-            result = await self._call_tool("ai_perplexity", {
-                "query": f"What is the current market sentiment for {base_symbol} cryptocurrency? Include bullish/bearish indicators, news sentiment, and technical analysis sentiment. Provide a numerical sentiment score from -1 (very bearish) to 1 (very bullish)."
-            })
-            
+            result = await self._call_tool(
+                "ai_perplexity",
+                {
+                    "query": f"What is the current market sentiment for {base_symbol} cryptocurrency? Include bullish/bearish indicators, news sentiment, and technical analysis sentiment. Provide a numerical sentiment score from -1 (very bearish) to 1 (very bullish)."
+                },
+            )
+
             content = result.get("content", [])
             response_text = ""
-            
+
             if isinstance(content, list) and content:
-                response_text = content[0].get("text", "") if isinstance(content[0], dict) else str(content[0])
+                response_text = (
+                    content[0].get("text", "")
+                    if isinstance(content[0], dict)
+                    else str(content[0])
+                )
             elif isinstance(content, str):
                 response_text = content
-            
+
             # Parse AI response for sentiment
             sentiment_score = self._extract_sentiment_score(response_text)
             overall_sentiment = self._score_to_sentiment(sentiment_score)
-            
+
             sentiment = SentimentAnalysis(
                 symbol=base_symbol,
                 overall_sentiment=overall_sentiment,
@@ -315,10 +326,12 @@ class MCPOmniSearchClient:
                 confidence=0.7,  # Medium confidence for AI-based analysis
                 source_count=1,
                 key_drivers=self._extract_key_drivers(response_text),
-                risk_factors=self._extract_risk_factors(response_text)
+                risk_factors=self._extract_risk_factors(response_text),
             )
-            
-            logger.info(f"🔍 MCP-OmniSearch: {base_symbol} sentiment - {sentiment.overall_sentiment} (score: {sentiment.sentiment_score:.2f})")
+
+            logger.info(
+                f"🔍 MCP-OmniSearch: {base_symbol} sentiment - {sentiment.overall_sentiment} (score: {sentiment.sentiment_score:.2f})"
+            )
             return sentiment
 
         except Exception as e:
@@ -328,28 +341,35 @@ class MCPOmniSearchClient:
     async def search_nasdaq_sentiment(self) -> SentimentAnalysis:
         """
         Analyze overall NASDAQ/stock market sentiment.
-        
+
         Returns:
             NASDAQ market sentiment analysis
         """
         try:
             # Use Kagi FastGPT for quick market sentiment
-            result = await self._call_tool("ai_kagi_fastgpt", {
-                "query": "What is the current NASDAQ and overall stock market sentiment? Include key market indicators, news sentiment, and provide a sentiment score from -1 (very bearish) to 1 (very bullish)."
-            })
-            
+            result = await self._call_tool(
+                "ai_kagi_fastgpt",
+                {
+                    "query": "What is the current NASDAQ and overall stock market sentiment? Include key market indicators, news sentiment, and provide a sentiment score from -1 (very bearish) to 1 (very bullish)."
+                },
+            )
+
             content = result.get("content", [])
             response_text = ""
-            
+
             if isinstance(content, list) and content:
-                response_text = content[0].get("text", "") if isinstance(content[0], dict) else str(content[0])
+                response_text = (
+                    content[0].get("text", "")
+                    if isinstance(content[0], dict)
+                    else str(content[0])
+                )
             elif isinstance(content, str):
                 response_text = content
-            
+
             # Parse AI response for sentiment
             sentiment_score = self._extract_sentiment_score(response_text)
             overall_sentiment = self._score_to_sentiment(sentiment_score)
-            
+
             sentiment = SentimentAnalysis(
                 symbol="NASDAQ",
                 overall_sentiment=overall_sentiment,
@@ -357,10 +377,12 @@ class MCPOmniSearchClient:
                 confidence=0.7,
                 source_count=1,
                 key_drivers=self._extract_key_drivers(response_text),
-                risk_factors=self._extract_risk_factors(response_text)
+                risk_factors=self._extract_risk_factors(response_text),
             )
-            
-            logger.info(f"🔍 MCP-OmniSearch: NASDAQ sentiment - {sentiment.overall_sentiment} (score: {sentiment.sentiment_score:.2f})")
+
+            logger.info(
+                f"🔍 MCP-OmniSearch: NASDAQ sentiment - {sentiment.overall_sentiment} (score: {sentiment.sentiment_score:.2f})"
+            )
             return sentiment
 
         except Exception as e:
@@ -368,19 +390,16 @@ class MCPOmniSearchClient:
             return self._get_fallback_sentiment("NASDAQ")
 
     async def search_market_correlation(
-        self,
-        crypto_symbol: str,
-        nasdaq_symbol: str = "QQQ",
-        timeframe: str = "30d"
+        self, crypto_symbol: str, nasdaq_symbol: str = "QQQ", timeframe: str = "30d"
     ) -> MarketCorrelation:
         """
         Analyze correlation between crypto and traditional markets.
-        
+
         Args:
             crypto_symbol: Crypto symbol (e.g., "BTC", "ETH")
             nasdaq_symbol: NASDAQ symbol to correlate with (default: "QQQ")
             timeframe: Analysis timeframe ("7d", "30d", "90d")
-            
+
         Returns:
             Market correlation analysis
         """
@@ -390,11 +409,14 @@ class MCPOmniSearchClient:
 
         try:
             # Use search to find correlation information
-            result = await self._call_tool("search_kagi", {
-                "query": f"{crypto_base} {nasdaq_base} correlation analysis {timeframe} market relationship",
-                "language": "en"
-            })
-            
+            await self._call_tool(
+                "search_kagi",
+                {
+                    "query": f"{crypto_base} {nasdaq_base} correlation analysis {timeframe} market relationship",
+                    "language": "en",
+                },
+            )
+
             # For now, return a neutral correlation as we'd need specialized financial APIs
             # for accurate correlation calculations
             correlation = MarketCorrelation(
@@ -403,25 +425,47 @@ class MCPOmniSearchClient:
                 correlation_coefficient=0.0,
                 timeframe=timeframe,
                 strength="weak",
-                direction="neutral"
+                direction="neutral",
             )
-            
-            logger.info(f"🔍 MCP-OmniSearch: {crypto_base}-{nasdaq_base} correlation - neutral weak (0.000)")
+
+            logger.info(
+                f"🔍 MCP-OmniSearch: {crypto_base}-{nasdaq_base} correlation - neutral weak (0.000)"
+            )
             return correlation
 
         except Exception as e:
-            logger.error(f"Market correlation search failed for {crypto_base}-{nasdaq_base}: {e}")
+            logger.error(
+                f"Market correlation search failed for {crypto_base}-{nasdaq_base}: {e}"
+            )
             return self._get_fallback_correlation(crypto_base, nasdaq_base, timeframe)
 
     def _analyze_sentiment(self, text: str) -> str:
         """Simple keyword-based sentiment analysis."""
-        positive_words = ["bullish", "positive", "growth", "increase", "up", "gains", "rally", "surge"]
-        negative_words = ["bearish", "negative", "decline", "decrease", "down", "losses", "crash", "fall"]
-        
+        positive_words = [
+            "bullish",
+            "positive",
+            "growth",
+            "increase",
+            "up",
+            "gains",
+            "rally",
+            "surge",
+        ]
+        negative_words = [
+            "bearish",
+            "negative",
+            "decline",
+            "decrease",
+            "down",
+            "losses",
+            "crash",
+            "fall",
+        ]
+
         text_lower = text.lower()
         pos_count = sum(1 for word in positive_words if word in text_lower)
         neg_count = sum(1 for word in negative_words if word in text_lower)
-        
+
         if pos_count > neg_count:
             return "positive"
         elif neg_count > pos_count:
@@ -429,29 +473,29 @@ class MCPOmniSearchClient:
         else:
             return "neutral"
 
-    def _extract_symbols(self, text: str) -> List[str]:
+    def _extract_symbols(self, text: str) -> list[str]:
         """Extract crypto symbols from text."""
         symbols = []
         common_symbols = ["BTC", "ETH", "ADA", "SOL", "DOGE", "XRP", "MATIC", "AVAX"]
-        
+
         text_upper = text.upper()
         for symbol in common_symbols:
             if symbol in text_upper:
                 symbols.append(symbol)
-        
+
         return symbols
 
     def _extract_sentiment_score(self, text: str) -> float:
         """Extract sentiment score from AI response text."""
         import re
-        
+
         # Look for numerical sentiment scores
         patterns = [
             r"sentiment score.*?(-?\d+\.?\d*)",
             r"score.*?(-?\d+\.?\d*)",
-            r"(-?\d+\.?\d*).*?sentiment"
+            r"(-?\d+\.?\d*).*?sentiment",
         ]
-        
+
         for pattern in patterns:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
@@ -461,7 +505,7 @@ class MCPOmniSearchClient:
                     return max(-1.0, min(1.0, score))
                 except ValueError:
                     continue
-        
+
         # Fallback: keyword-based scoring
         sentiment = self._analyze_sentiment(text)
         if sentiment == "positive":
@@ -480,34 +524,49 @@ class MCPOmniSearchClient:
         else:
             return "neutral"
 
-    def _extract_key_drivers(self, text: str) -> List[str]:
+    def _extract_key_drivers(self, text: str) -> list[str]:
         """Extract key market drivers from text."""
         drivers = []
         driver_keywords = [
-            "ETF", "regulation", "institutional", "adoption", "technology", "partnership",
-            "earnings", "fed", "interest rates", "inflation", "macro"
+            "ETF",
+            "regulation",
+            "institutional",
+            "adoption",
+            "technology",
+            "partnership",
+            "earnings",
+            "fed",
+            "interest rates",
+            "inflation",
+            "macro",
         ]
-        
+
         text_lower = text.lower()
         for keyword in driver_keywords:
             if keyword.lower() in text_lower:
                 drivers.append(keyword)
-        
+
         return drivers[:3]  # Limit to top 3
 
-    def _extract_risk_factors(self, text: str) -> List[str]:
+    def _extract_risk_factors(self, text: str) -> list[str]:
         """Extract risk factors from text."""
         risks = []
         risk_keywords = [
-            "volatility", "regulation", "security", "hack", "market crash",
-            "liquidity", "manipulation", "uncertainty"
+            "volatility",
+            "regulation",
+            "security",
+            "hack",
+            "market crash",
+            "liquidity",
+            "manipulation",
+            "uncertainty",
         ]
-        
+
         text_lower = text.lower()
         for keyword in risk_keywords:
             if keyword.lower() in text_lower:
                 risks.append(keyword)
-        
+
         return risks[:3]  # Limit to top 3
 
     def _get_fallback_sentiment(self, symbol: str) -> SentimentAnalysis:
@@ -519,14 +578,11 @@ class MCPOmniSearchClient:
             confidence=0.1,
             source_count=0,
             key_drivers=["MCP server unavailable"],
-            risk_factors=["Limited sentiment data available"]
+            risk_factors=["Limited sentiment data available"],
         )
 
     def _get_fallback_correlation(
-        self,
-        crypto_symbol: str,
-        nasdaq_symbol: str,
-        timeframe: str
+        self, crypto_symbol: str, nasdaq_symbol: str, timeframe: str
     ) -> MarketCorrelation:
         """Provide fallback correlation when analysis fails."""
         return MarketCorrelation(
@@ -535,17 +591,17 @@ class MCPOmniSearchClient:
             correlation_coefficient=0.0,
             timeframe=timeframe,
             strength="weak",
-            direction="neutral"
+            direction="neutral",
         )
 
-    async def health_check(self) -> Dict[str, Any]:
+    async def health_check(self) -> dict[str, Any]:
         """Check the health and status of the MCP-OmniSearch client."""
         return {
             "connected": self._connected,
             "server_path": self.server_path,
             "cache_enabled": self.enable_cache,
             "process_alive": self._process is not None and self._process.poll() is None,
-            "timestamp": datetime.now(UTC).isoformat()
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
 
@@ -562,16 +618,22 @@ async def main():
             return
 
         # Test financial news search
-        news_results = await client.search_financial_news("Bitcoin ETF approval", limit=3)
+        news_results = await client.search_financial_news(
+            "Bitcoin ETF approval", limit=3
+        )
         print(f"Found {len(news_results)} news results")
 
         # Test crypto sentiment
         btc_sentiment = await client.search_crypto_sentiment("BTC-USD")
-        print(f"BTC sentiment: {btc_sentiment.overall_sentiment} ({btc_sentiment.sentiment_score:.2f})")
+        print(
+            f"BTC sentiment: {btc_sentiment.overall_sentiment} ({btc_sentiment.sentiment_score:.2f})"
+        )
 
         # Test NASDAQ sentiment
         nasdaq_sentiment = await client.search_nasdaq_sentiment()
-        print(f"NASDAQ sentiment: {nasdaq_sentiment.overall_sentiment} ({nasdaq_sentiment.sentiment_score:.2f})")
+        print(
+            f"NASDAQ sentiment: {nasdaq_sentiment.overall_sentiment} ({nasdaq_sentiment.sentiment_score:.2f})"
+        )
 
         # Health check
         health = await client.health_check()

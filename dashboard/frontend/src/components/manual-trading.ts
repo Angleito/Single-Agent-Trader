@@ -194,7 +194,7 @@ export class ManualTradingInterface {
                   </select>
                 </div>
               </div>
-              
+
               <div class="form-row">
                 <div class="form-group">
                   <label for="position-size">Position Size (%)</label>
@@ -230,7 +230,7 @@ export class ManualTradingInterface {
                 `
                 }
               </div>
-              
+
               ${
                 isFutures
                   ? `
@@ -329,7 +329,7 @@ export class ManualTradingInterface {
             <button class="tab-btn active" data-tab="queue">Command Queue</button>
             <button class="tab-btn" data-tab="history">Trade History</button>
           </div>
-          
+
           <div class="tab-content active" id="queue-tab">
             <div class="command-queue">
               <div class="queue-header">
@@ -341,7 +341,7 @@ export class ManualTradingInterface {
               </div>
             </div>
           </div>
-          
+
           <div class="tab-content" id="history-tab">
             <div class="trade-history">
               <div class="history-header">

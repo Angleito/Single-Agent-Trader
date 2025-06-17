@@ -359,17 +359,17 @@
     left: 12px;
     max-width: none;
   }
-  
+
   .notification {
     padding: 12px;
     font-size: 13px;
   }
-  
+
   .offline-indicator {
     padding: 6px;
     font-size: 13px;
   }
-  
+
   .missing-data-warnings {
     left: 12px;
     right: 12px;
@@ -383,38 +383,38 @@
     background: #1f2937;
     color: #f9fafb;
   }
-  
+
   .notification-info {
     background: #1e3a8a;
   }
-  
+
   .notification-warning {
     background: #92400e;
   }
-  
+
   .notification-error {
     background: #991b1b;
   }
-  
+
   .component-error {
     background: #7f1d1d;
     color: #fca5a5;
     border-color: #dc2626;
   }
-  
+
   .component-loading {
     background: #374151;
   }
-  
+
   .error-boundary {
     background: #7f1d1d;
     border-color: #dc2626;
   }
-  
+
   .error-boundary-title {
     color: #fca5a5;
   }
-  
+
   .error-boundary-message {
     color: #f87171;
   }

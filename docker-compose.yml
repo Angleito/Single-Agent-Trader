@@ -9,7 +9,7 @@ services:
     image: bluefin-sdk-service:latest
     container_name: bluefin-service
     restart: unless-stopped
-    
+
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
@@ -20,24 +20,24 @@ services:
       - HOST=0.0.0.0
       - PORT=8080
       - LOG_LEVEL=info
-    
+
     ports:
       - "8081:8080"  # External access for debugging
-    
+
     # Volume mounts for logs
     volumes:
       - ./logs/bluefin:/app/logs
-    
+
     networks:
       - trading-network
-    
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 15s
-    
+
     deploy:
       resources:
         limits:
@@ -46,7 +46,7 @@ services:
         reservations:
           memory: 256M
           cpus: '0.1'
-    
+
     logging:
       driver: "json-file"
       options:
@@ -65,16 +65,16 @@ services:
     image: ai-trading-bot:coinbase-${VERSION:-latest}
     container_name: ai-trading-bot
     restart: unless-stopped
-    
+
     # Override the default command - TRADING MODE WITH 1-MINUTE INTERVALS
     # Note: dry-run mode is controlled by SYSTEM__DRY_RUN environment variable
     # Note: Symbol should match the exchange type (BTC-USD for Coinbase, SUI-PERP for Bluefin)
     command: ["python", "-m", "bot.main", "live", "--symbol", "${TRADING__SYMBOL:-BTC-USD}", "--interval", "1m", "--force", "--no-dry-run"]
-    
+
     # Environment variables from .env file
     env_file:
       - .env
-    
+
     # Docker-specific environment overrides (minimal set to avoid conflicts with .env)
     environment:
       - PYTHONUNBUFFERED=1
@@ -110,14 +110,14 @@ services:
       # OmniSearch Configuration
       - OMNISEARCH__ENABLED=true
       - OMNISEARCH__SERVER_URL=http://mcp-omnisearch:8767
-      
+
     # Volume mounts for persistence and configuration (cleaned up overlapping mounts)
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
       - ./config:/app/config:ro  # Read-only config mount
       - ./bot:/app/bot:ro  # Mount bot code with fixes
-      
+
     # Health check configuration
     healthcheck:
       test: ["CMD-SHELL", "/app/healthcheck.sh"]
@@ -125,7 +125,7 @@ services:
       timeout: 15s
       retries: 3
       start_period: 30s
-      
+
     # Resource limits for safety
     deploy:
       resources:
@@ -135,19 +135,19 @@ services:
         reservations:
           memory: 512M
           cpus: '0.25'
-          
+
     # Logging configuration
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-        
-    
+
+
     # Connect to shared network for dashboard communication
     networks:
       - trading-network
-    
+
     # Service dependencies
     depends_on:
       - bluefin-service
@@ -162,7 +162,7 @@ services:
     image: mcp-omnisearch-server:latest
     container_name: mcp-omnisearch-server
     restart: unless-stopped
-    
+
     environment:
       - NODE_ENV=production
       # Search Provider API Keys (optional - only providers with keys will be enabled)
@@ -174,26 +174,26 @@ services:
       - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY:-}
       - MCP_SERVER_PORT=8767
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    
+
     env_file:
       - .env
-      
+
     volumes:
       - ./logs/mcp:/app/logs
-      
+
     ports:
       - "8767:8767"
-      
+
     healthcheck:
       test: ["CMD", "node", "-e", "console.log('MCP OmniSearch Ready')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
-      
+
     networks:
       - trading-network
-      
+
     deploy:
       resources:
         limits:
@@ -202,7 +202,7 @@ services:
         reservations:
           memory: 256M
           cpus: '0.1'
-          
+
     logging:
       driver: "json-file"
       options:
@@ -217,30 +217,30 @@ services:
     image: mcp-memory-server:latest
     container_name: mcp-memory-server
     restart: unless-stopped
-    
+
     environment:
       - MCP_SERVER_PORT=8765
       - MEM0_API_KEY=${MEM0_API_KEY:-}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - MEMORY_RETENTION_DAYS=${MCP_MEMORY_RETENTION_DAYS:-90}
-      
+
     volumes:
       - ./data/mcp_memory:/app/data
       - ./logs/mcp:/app/logs
-      
+
     ports:
       - "8765:8765"
-      
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8765/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
-      
+
     networks:
       - trading-network
-      
+
     deploy:
       resources:
         limits:
@@ -249,7 +249,7 @@ services:
         reservations:
           memory: 256M
           cpus: '0.1'
-          
+
     logging:
       driver: "json-file"
       options:
@@ -258,7 +258,7 @@ services:
 
   # Dashboard Backend Service
   dashboard-backend:
-    build: 
+    build:
       context: ./dashboard/backend
       dockerfile: Dockerfile
     container_name: dashboard-backend

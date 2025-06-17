@@ -2,7 +2,7 @@
 
 /**
  * Comprehensive Test Runner for AI Trading Bot Dashboard
- * 
+ *
  * Orchestrates all integration tests including WebSocket, API, UI, and Docker validation
  */
 
@@ -29,7 +29,7 @@ function log(level, message, data = null) {
     const timestamp = new Date().toISOString();
     const logMessage = `[${timestamp}] [${level.padEnd(5)}] ${message}`;
     console.log(logMessage);
-    
+
     if (data && typeof data === 'object') {
         console.log(JSON.stringify(data, null, 2));
     } else if (data) {
@@ -56,7 +56,7 @@ function logWarning(message, data = null) {
 // Execute shell command with promise
 function execCommand(command, options = {}) {
     return new Promise((resolve, reject) => {
-        exec(command, { 
+        exec(command, {
             timeout: options.timeout || 30000,
             cwd: options.cwd || process.cwd(),
             env: { ...process.env, ...options.env }
@@ -77,27 +77,27 @@ function runNodeScript(scriptPath, timeout = 30000) {
             stdio: ['pipe', 'pipe', 'pipe'],
             cwd: __dirname
         });
-        
+
         let stdout = '';
         let stderr = '';
-        
+
         child.stdout.on('data', (data) => {
             stdout += data.toString();
             // Forward output in real-time
             process.stdout.write(data);
         });
-        
+
         child.stderr.on('data', (data) => {
             stderr += data.toString();
             // Forward errors in real-time
             process.stderr.write(data);
         });
-        
+
         const timer = setTimeout(() => {
             child.kill('SIGTERM');
             reject(new Error(`Test script ${scriptPath} timed out after ${timeout}ms`));
         }, timeout);
-        
+
         child.on('close', (code) => {
             clearTimeout(timer);
             if (code === 0) {
@@ -106,7 +106,7 @@ function runNodeScript(scriptPath, timeout = 30000) {
                 reject(new Error(`Test script ${scriptPath} exited with code ${code}`));
             }
         });
-        
+
         child.on('error', (error) => {
             clearTimeout(timer);
             reject(error);
@@ -118,13 +118,13 @@ function runNodeScript(scriptPath, timeout = 30000) {
 async function runWebSocketTests() {
     logInfo('Starting WebSocket integration tests...');
     TEST_STATE.currentSuite = 'websocket';
-    
+
     try {
         const result = await runNodeScript(
-            path.join(__dirname, 'websocket-test.js'), 
+            path.join(__dirname, 'websocket-test.js'),
             CONFIG.testSuites.websocket.timeout
         );
-        
+
         logSuccess('WebSocket tests completed successfully');
         TEST_STATE.results.websocket = { success: true, exitCode: result.exitCode };
         TEST_STATE.passedTests++;
@@ -140,13 +140,13 @@ async function runWebSocketTests() {
 async function runAPITests() {
     logInfo('Starting API integration tests...');
     TEST_STATE.currentSuite = 'api';
-    
+
     try {
         const result = await runNodeScript(
-            path.join(__dirname, 'api-test.js'), 
+            path.join(__dirname, 'api-test.js'),
             CONFIG.testSuites.api.timeout
         );
-        
+
         logSuccess('API tests completed successfully');
         TEST_STATE.results.api = { success: true, exitCode: result.exitCode };
         TEST_STATE.passedTests++;
@@ -162,13 +162,13 @@ async function runAPITests() {
 async function runDockerValidation() {
     logInfo('Starting Docker environment validation...');
     TEST_STATE.currentSuite = 'docker';
-    
+
     try {
         const result = await runNodeScript(
-            path.join(__dirname, 'docker-validator.js'), 
+            path.join(__dirname, 'docker-validator.js'),
             CONFIG.testSuites.docker.timeout
         );
-        
+
         logSuccess('Docker validation completed successfully');
         TEST_STATE.results.docker = { success: true, exitCode: result.exitCode };
         TEST_STATE.passedTests++;
@@ -184,33 +184,33 @@ async function runDockerValidation() {
 async function runUITests() {
     logInfo('Starting UI component tests...');
     TEST_STATE.currentSuite = 'ui';
-    
+
     try {
         // Check if UI test file exists and is accessible
         const uiTestPath = path.join(__dirname, 'ui-test.html');
         if (!fs.existsSync(uiTestPath)) {
             throw new Error('UI test file not found');
         }
-        
+
         // Since UI tests run in browser, we'll check if the test page is accessible
         const frontendUrl = CONFIG.services.frontend.url;
         const testUrl = `${frontendUrl}/test/ui-test.html`;
-        
+
         // Use curl to check if the UI test page loads
         const curlResult = await execCommand(`curl -s -f "${frontendUrl}" | head -10`);
-        
+
         if (curlResult.stdout.includes('html') || curlResult.stdout.includes('HTML')) {
             logSuccess('Frontend is serving content, UI tests environment ready');
-            
+
             // Copy UI test file to frontend public directory if it exists
             const frontendPublicDir = path.join(__dirname, '../frontend/public/test');
             if (!fs.existsSync(frontendPublicDir)) {
                 fs.mkdirSync(frontendPublicDir, { recursive: true });
             }
-            
+
             fs.copyFileSync(uiTestPath, path.join(frontendPublicDir, 'ui-test.html'));
             logInfo('UI test file copied to frontend public directory');
-            
+
             TEST_STATE.results.ui = { success: true, testUrl: testUrl };
             TEST_STATE.passedTests++;
             return true;
@@ -227,29 +227,29 @@ async function runUITests() {
 
 async function runMockDataGeneration() {
     logInfo('Generating mock test data...');
-    
+
     try {
         // Generate mock trading session
         const sessionResult = await execCommand(
             `node ${path.join(__dirname, 'mock-data-generator.js')} session ${CONFIG.mockData.sessionDuration}`
         );
-        
+
         logSuccess('Mock trading session generated', sessionResult.stdout);
-        
+
         // Generate individual test data samples
         const llmDecision = await execCommand(
             `node ${path.join(__dirname, 'mock-data-generator.js')} llm-decision BTC-USD`
         );
-        
+
         logInfo('Sample LLM decision generated', JSON.parse(llmDecision.stdout));
-        
+
         // Generate OHLCV data
         const ohlcvData = await execCommand(
             `node ${path.join(__dirname, 'mock-data-generator.js')} ohlcv BTC-USD 5m 20`
         );
-        
+
         logInfo('Sample OHLCV data generated', JSON.parse(ohlcvData.stdout).slice(0, 3));
-        
+
         return true;
     } catch (error) {
         logError('Mock data generation failed', error.message);
@@ -259,16 +259,16 @@ async function runMockDataGeneration() {
 
 async function checkPrerequisites() {
     logInfo('Checking test prerequisites...');
-    
+
     const checks = [
         { name: 'Node.js', command: 'node --version' },
         { name: 'Docker', command: 'docker --version' },
         { name: 'Docker Compose', command: 'docker-compose --version' },
         { name: 'curl', command: 'curl --version | head -1' }
     ];
-    
+
     let allChecksPassed = true;
-    
+
     for (const check of checks) {
         try {
             const result = await execCommand(check.command);
@@ -278,24 +278,24 @@ async function checkPrerequisites() {
             allChecksPassed = false;
         }
     }
-    
+
     return allChecksPassed;
 }
 
 async function waitForServices() {
     logInfo('Waiting for services to be ready...');
-    
+
     const maxWaitTime = 120000; // 2 minutes
     const checkInterval = 5000; // 5 seconds
     let waitTime = 0;
-    
+
     while (waitTime < maxWaitTime) {
         try {
             // Check backend health
             const backendHealth = await execCommand(
                 `curl -s -f ${CONFIG.services.backend.url}/health`
             );
-            
+
             if (backendHealth.stdout.includes('healthy')) {
                 logSuccess('Backend service is ready');
                 return true;
@@ -303,15 +303,15 @@ async function waitForServices() {
         } catch (error) {
             // Service not ready yet
         }
-        
+
         await new Promise(resolve => setTimeout(resolve, checkInterval));
         waitTime += checkInterval;
-        
+
         if (waitTime % 20000 === 0) {
             logInfo(`Still waiting for services... (${waitTime/1000}s elapsed)`);
         }
     }
-    
+
     logWarning('Services did not become ready within timeout');
     return false;
 }
@@ -319,7 +319,7 @@ async function waitForServices() {
 async function generateFinalReport() {
     const endTime = Date.now();
     const duration = endTime - TEST_STATE.startTime;
-    
+
     const report = {
         testRun: {
             timestamp: new Date().toISOString(),
@@ -345,41 +345,41 @@ async function generateFinalReport() {
             avgSuiteDuration: duration / Object.keys(TEST_STATE.results).length
         }
     };
-    
+
     // Save detailed report
     const reportDir = path.join(__dirname, 'test-reports');
     if (!fs.existsSync(reportDir)) {
         fs.mkdirSync(reportDir, { recursive: true });
     }
-    
+
     const reportFile = path.join(reportDir, `integration-test-report-${Date.now()}.json`);
     fs.writeFileSync(reportFile, JSON.stringify(report, null, 2));
-    
+
     // Generate HTML report
     const htmlReport = generateHTMLReport(report);
     const htmlReportFile = path.join(reportDir, `integration-test-report-${Date.now()}.html`);
     fs.writeFileSync(htmlReportFile, htmlReport);
-    
+
     logInfo('='.repeat(60));
     logInfo('FINAL TEST REPORT');
     logInfo('='.repeat(60));
-    
+
     logInfo(`Test Duration: ${Math.round(duration / 1000)}s`);
     logInfo(`Total Test Suites: ${report.summary.totalSuites}`);
     logInfo(`Passed: ${report.summary.passedSuites}`);
     logInfo(`Failed: ${report.summary.failedSuites}`);
     logInfo(`Success Rate: ${report.summary.successRate}%`);
-    
+
     logInfo('\nDetailed Results:');
     for (const [suiteName, result] of Object.entries(TEST_STATE.results)) {
         const status = result.success ? 'PASS' : 'FAIL';
         const icon = result.success ? '✓' : '✗';
         logInfo(`  ${icon} ${suiteName}: ${status}`);
     }
-    
+
     logInfo(`\nDetailed report saved: ${reportFile}`);
     logInfo(`HTML report saved: ${htmlReportFile}`);
-    
+
     return report;
 }
 
@@ -416,7 +416,7 @@ function generateHTMLReport(report) {
             <p><strong>Generated:</strong> ${report.testRun.timestamp}</p>
             <p><strong>Duration:</strong> ${Math.round(report.testRun.duration / 1000)}s</p>
         </div>
-        
+
         <div class="summary">
             <div class="metric">
                 <div class="metric-value">${report.summary.totalSuites}</div>
@@ -435,7 +435,7 @@ function generateHTMLReport(report) {
                 <div class="metric-label">Success Rate</div>
             </div>
         </div>
-        
+
         <div class="results">
             <h2>Test Results</h2>
             ${Object.entries(report.results).map(([suite, result]) => `
@@ -447,12 +447,12 @@ function generateHTMLReport(report) {
                 </div>
             `).join('')}
         </div>
-        
+
         <div class="environment">
             <h2>Environment Information</h2>
             <pre>${JSON.stringify(report.environment, null, 2)}</pre>
         </div>
-        
+
         <div class="raw-data">
             <h2>Raw Test Data</h2>
             <pre>${JSON.stringify(report.results, null, 2)}</pre>
@@ -467,7 +467,7 @@ async function runAllTests() {
     logInfo('='.repeat(60));
     logInfo('AI Trading Bot Dashboard - Comprehensive Integration Tests');
     logInfo('='.repeat(60));
-    
+
     try {
         // Check prerequisites
         const prerequisitesOk = await checkPrerequisites();
@@ -475,17 +475,17 @@ async function runAllTests() {
             logError('Prerequisites check failed. Please install missing dependencies.');
             process.exit(1);
         }
-        
+
         // Wait for services to be ready
         const servicesReady = await waitForServices();
         if (!servicesReady) {
             logWarning('Services may not be fully ready, but proceeding with tests...');
         }
-        
+
         // Generate mock data
         logInfo('Preparing test data...');
         await runMockDataGeneration();
-        
+
         // Run test suites
         const testSuites = [
             { name: 'Docker Validation', fn: runDockerValidation, enabled: CONFIG.testSuites.docker.enabled },
@@ -493,34 +493,34 @@ async function runAllTests() {
             { name: 'WebSocket Tests', fn: runWebSocketTests, enabled: CONFIG.testSuites.websocket.enabled },
             { name: 'UI Tests', fn: runUITests, enabled: CONFIG.testSuites.ui.enabled }
         ];
-        
+
         logInfo(`Running ${testSuites.filter(suite => suite.enabled).length} test suites...`);
-        
+
         for (const suite of testSuites) {
             if (suite.enabled) {
                 logInfo('-'.repeat(40));
                 logInfo(`Starting: ${suite.name}`);
-                
+
                 try {
                     await suite.fn();
                     logSuccess(`${suite.name} completed`);
                 } catch (error) {
                     logError(`${suite.name} failed`, error.message);
                 }
-                
+
                 TEST_STATE.totalTests++;
             } else {
                 logInfo(`Skipping: ${suite.name} (disabled)`);
                 TEST_STATE.skippedTests++;
             }
         }
-        
+
         // Generate final report
         const report = await generateFinalReport();
-        
+
         // Determine overall success
         const overallSuccess = report.summary.successRate >= CONFIG.thresholds.minimumPassRate;
-        
+
         if (overallSuccess) {
             logSuccess(`All integration tests completed! Success rate: ${report.summary.successRate}%`);
             process.exit(0);
@@ -528,7 +528,7 @@ async function runAllTests() {
             logError(`Integration tests failed. Success rate: ${report.summary.successRate}% (minimum required: ${CONFIG.thresholds.minimumPassRate}%)`);
             process.exit(1);
         }
-        
+
     } catch (error) {
         logError('Test execution failed', error.message);
         process.exit(1);

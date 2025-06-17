@@ -61,7 +61,7 @@ import pandas as pd
 market_data = {
     'scalping': pd.DataFrame({
         'open': [100, 101, 102],
-        'high': [101, 102, 103], 
+        'high': [101, 102, 103],
         'low': [99, 100, 101],
         'close': [101, 102, 101],
         'volume': [1000, 1100, 1200]
@@ -248,7 +248,7 @@ from bot.indicators import unified_framework
 class AdaptiveStrategyManager:
     def __init__(self):
         self.framework = unified_framework
-    
+
     async def get_market_signals(self, strategy_type, market_data):
         return await self.framework.calculate_for_strategy(
             strategy_type, market_data
@@ -263,7 +263,7 @@ class LLMAgent:
         indicators = await calculate_indicators_for_strategy(
             self.strategy_type, market_data
         )
-        
+
         # Use indicators in decision making
         return self.process_with_indicators(indicators)
 ```

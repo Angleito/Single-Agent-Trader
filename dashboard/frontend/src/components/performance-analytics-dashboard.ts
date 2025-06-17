@@ -333,7 +333,7 @@ export class PerformanceAnalyticsDashboard {
                   </select>
                 </div>
               </div>
-              
+
               <div class="trade-stats-grid">
                 <div class="stat-item">
                   <span class="stat-label">Best Trade</span>
@@ -415,7 +415,7 @@ export class PerformanceAnalyticsDashboard {
                   </div>
                 </div>
               </div>
-              
+
               <div class="drawdown-periods-list" id="drawdown-periods-list">
                 <!-- Drawdown periods will be populated here -->
               </div>

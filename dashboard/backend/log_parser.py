@@ -69,6 +69,7 @@ class AIDecisionLog(ParsedLogEntry):
 
     trade_action: TradeAction
     reasoning: str
+    container_name: str = "ai-trading-bot"
     confidence: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -91,6 +92,7 @@ class TradingLoopLog(ParsedLogEntry):
     loop_number: int
     price: float
     action: TradeAction
+    container_name: str = "ai-trading-bot"
     confidence: float | None = None
     risk_status: str | None = None
     symbol: str | None = None
@@ -117,6 +119,7 @@ class SystemStatusLog(ParsedLogEntry):
 
     component: str
     status: str
+    container_name: str = "ai-trading-bot"
     details: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -139,6 +142,7 @@ class ErrorLog(ParsedLogEntry):
     error_type: str
     error_message: str
     component: str
+    container_name: str = "ai-trading-bot"
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -159,6 +163,7 @@ class PerformanceLog(ParsedLogEntry):
 
     metric_name: str
     metric_value: float
+    container_name: str = "ai-trading-bot"
     unit: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -439,7 +444,7 @@ class DockerLogParser:
     def stream_logs(self, callback: Callable[[ParsedLogEntry], None]) -> None:
         """Stream live logs from the container."""
 
-        def _stream_worker():
+        def _stream_worker() -> None:
             try:
                 # Start docker logs in follow mode
                 cmd = ["docker", "logs", "-f", "--tail", "0", self.container_name]

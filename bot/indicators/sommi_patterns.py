@@ -242,15 +242,15 @@ class SommiPatterns:
     def _determine_resample_rule(self, index: pd.DatetimeIndex, multiplier: int) -> str:
         """
         Determine appropriate resampling rule based on index frequency.
-        
+
         Args:
             index: DatetimeIndex to analyze
             multiplier: Multiplier for the timeframe
-            
+
         Returns:
             Resampling rule string (e.g., '4T', '60S', '1H')
         """
-        
+
         freq = pd.infer_freq(index)
         if freq is None:
             # Try to determine frequency from index differences
@@ -277,7 +277,7 @@ class SommiPatterns:
                 else:
                     # Default to 1-minute base with multiplier
                     base_freq = "1T"
-                
+
                 # Extract numeric part and unit from base frequency
                 match = re.match(r"(\d*)([A-Z]+)", base_freq)
                 if match:
@@ -290,8 +290,10 @@ class SommiPatterns:
             else:
                 # Fallback for single data point
                 resample_rule = f"{multiplier}T"
-            
-            logger.debug(f"Inferred frequency from time difference, using {resample_rule}")
+
+            logger.debug(
+                f"Inferred frequency from time difference, using {resample_rule}"
+            )
         else:
             # Extract numeric part and unit
             match = re.match(r"(\d*)([A-Z]+)", freq)
@@ -302,9 +304,11 @@ class SommiPatterns:
                 resample_rule = f"{new_num}{unit_part}"
             else:
                 resample_rule = f"{multiplier}T"
-            
-            logger.debug(f"Using detected frequency {freq}, resampling with {resample_rule}")
-        
+
+            logger.debug(
+                f"Using detected frequency {freq}, resampling with {resample_rule}"
+            )
+
         return resample_rule
 
     def calculate_heikin_ashi_candles(self, ohlc_data: pd.DataFrame) -> pd.DataFrame:
@@ -753,7 +757,9 @@ class SommiPatterns:
                 return pd.DataFrame()
 
             # Use the same frequency detection logic as calculate_higher_timeframe_wt
-            resample_rule = self._determine_resample_rule(price_data.index, self.htf_multiplier)
+            resample_rule = self._determine_resample_rule(
+                price_data.index, self.htf_multiplier
+            )
 
             htf_data = (
                 price_data.resample(resample_rule)

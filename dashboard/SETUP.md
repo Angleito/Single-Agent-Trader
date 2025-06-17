@@ -139,7 +139,7 @@ For production deployment:
 server {
     listen 80;
     server_name your-domain.com;
-    
+
     location / {
         proxy_pass http://localhost:8000;
         proxy_http_version 1.1;

@@ -347,7 +347,7 @@ class SelfImprovementEngine:
 
         # Find optimal leverage
         best_leverage = None
-        best_score = 0  # Combination of win rate and avg PnL
+        best_score = 0.0  # Combination of win rate and avg PnL
 
         for leverage, stats in leverage_stats.items():
             if stats["count"] >= 3:

@@ -27,7 +27,6 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from llm_log_parser import AlertThresholds, create_llm_log_parser
 from rate_limiter import rate_limit_middleware
 
@@ -47,12 +46,16 @@ BLUEFIN_SERVICE_API_KEY = os.getenv("BLUEFIN_SERVICE_API_KEY", "")
 
 class BluefinServiceClient:
     """HTTP client for communicating with the Bluefin SDK service."""
-    
-    def __init__(self, base_url: str = BLUEFIN_SERVICE_URL, api_key: str = BLUEFIN_SERVICE_API_KEY):
+
+    def __init__(
+        self,
+        base_url: str = BLUEFIN_SERVICE_URL,
+        api_key: str = BLUEFIN_SERVICE_API_KEY,
+    ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.session = None
-        
+
     async def _get_session(self):
         """Get or create aiohttp session."""
         if self.session is None or self.session.closed:
@@ -60,16 +63,16 @@ class BluefinServiceClient:
             if self.api_key:
                 headers["Authorization"] = f"Bearer {self.api_key}"
             headers["Content-Type"] = "application/json"
-            
+
             timeout = aiohttp.ClientTimeout(total=10)  # 10 second timeout
             self.session = aiohttp.ClientSession(headers=headers, timeout=timeout)
         return self.session
-    
+
     async def close(self):
         """Close the HTTP session."""
         if self.session and not self.session.closed:
             await self.session.close()
-    
+
     async def health_check(self) -> dict:
         """Check if Bluefin service is healthy."""
         try:
@@ -81,16 +84,16 @@ class BluefinServiceClient:
                     return {
                         "status": "unhealthy",
                         "error": f"HTTP {response.status}",
-                        "message": await response.text()
+                        "message": await response.text(),
                     }
         except Exception as e:
             logger.error(f"Bluefin health check failed: {e}")
             return {
                 "status": "unreachable",
                 "error": str(e),
-                "service_url": self.base_url
+                "service_url": self.base_url,
             }
-    
+
     async def get_account_info(self) -> dict:
         """Get account information from Bluefin service."""
         try:
@@ -101,15 +104,14 @@ class BluefinServiceClient:
                 else:
                     raise HTTPException(
                         status_code=response.status,
-                        detail=f"Bluefin service error: {await response.text()}"
+                        detail=f"Bluefin service error: {await response.text()}",
                     )
         except aiohttp.ClientError as e:
             logger.error(f"Failed to get Bluefin account info: {e}")
             raise HTTPException(
-                status_code=503,
-                detail=f"Bluefin service unavailable: {str(e)}"
+                status_code=503, detail=f"Bluefin service unavailable: {str(e)}"
             )
-    
+
     async def get_positions(self) -> dict:
         """Get current positions from Bluefin service."""
         try:
@@ -120,15 +122,14 @@ class BluefinServiceClient:
                 else:
                     raise HTTPException(
                         status_code=response.status,
-                        detail=f"Bluefin service error: {await response.text()}"
+                        detail=f"Bluefin service error: {await response.text()}",
                     )
         except aiohttp.ClientError as e:
             logger.error(f"Failed to get Bluefin positions: {e}")
             raise HTTPException(
-                status_code=503,
-                detail=f"Bluefin service unavailable: {str(e)}"
+                status_code=503, detail=f"Bluefin service unavailable: {str(e)}"
             )
-    
+
     async def get_orders(self) -> dict:
         """Get current orders from Bluefin service."""
         try:
@@ -139,52 +140,54 @@ class BluefinServiceClient:
                 else:
                     raise HTTPException(
                         status_code=response.status,
-                        detail=f"Bluefin service error: {await response.text()}"
+                        detail=f"Bluefin service error: {await response.text()}",
                     )
         except aiohttp.ClientError as e:
             logger.error(f"Failed to get Bluefin orders: {e}")
             raise HTTPException(
-                status_code=503,
-                detail=f"Bluefin service unavailable: {str(e)}"
+                status_code=503, detail=f"Bluefin service unavailable: {str(e)}"
             )
-    
+
     async def get_market_ticker(self, symbol: str) -> dict:
         """Get market ticker data from Bluefin service."""
         try:
             session = await self._get_session()
-            async with session.get(f"{self.base_url}/market/ticker", params={"symbol": symbol}) as response:
+            async with session.get(
+                f"{self.base_url}/market/ticker", params={"symbol": symbol}
+            ) as response:
                 if response.status == 200:
                     return await response.json()
                 else:
                     raise HTTPException(
                         status_code=response.status,
-                        detail=f"Bluefin service error: {await response.text()}"
+                        detail=f"Bluefin service error: {await response.text()}",
                     )
         except aiohttp.ClientError as e:
             logger.error(f"Failed to get Bluefin market ticker: {e}")
             raise HTTPException(
-                status_code=503,
-                detail=f"Bluefin service unavailable: {str(e)}"
+                status_code=503, detail=f"Bluefin service unavailable: {str(e)}"
             )
-    
+
     async def place_order(self, order_data: dict) -> dict:
         """Place an order via Bluefin service."""
         try:
             session = await self._get_session()
-            async with session.post(f"{self.base_url}/orders", json=order_data) as response:
+            async with session.post(
+                f"{self.base_url}/orders", json=order_data
+            ) as response:
                 if response.status in [200, 201]:
                     return await response.json()
                 else:
                     raise HTTPException(
                         status_code=response.status,
-                        detail=f"Bluefin order error: {await response.text()}"
+                        detail=f"Bluefin order error: {await response.text()}",
                     )
         except aiohttp.ClientError as e:
             logger.error(f"Failed to place Bluefin order: {e}")
             raise HTTPException(
-                status_code=503,
-                detail=f"Bluefin service unavailable: {str(e)}"
+                status_code=503, detail=f"Bluefin service unavailable: {str(e)}"
             )
+
 
 # Global Bluefin service client
 bluefin_client = BluefinServiceClient()
@@ -194,7 +197,7 @@ bluefin_client = BluefinServiceClient()
 class ConnectionManager:
     """
     Enhanced WebSocket connection manager with message persistence and replay capabilities.
-    
+
     Features:
     - Message categorization (trading, indicator, system, log)
     - Configurable replay buffer sizes per category
@@ -205,28 +208,30 @@ class ConnectionManager:
 
     def __init__(self):
         self.active_connections: set[WebSocket] = set()
-        
+
         # Enhanced message storage with categorization
         self.message_buffers = {
-            "trading": [],      # Trading decisions and executions
-            "indicator": [],    # Technical indicator data
-            "system": [],       # System status and health
-            "log": [],         # General log messages
-            "ai": [],          # AI/LLM decision messages
+            "trading": [],  # Trading decisions and executions
+            "indicator": [],  # Technical indicator data
+            "system": [],  # System status and health
+            "log": [],  # General log messages
+            "ai": [],  # AI/LLM decision messages
         }
-        
+
         # Buffer size limits per category
         self.buffer_limits = {
-            "trading": 500,     # Keep more trading history
+            "trading": 500,  # Keep more trading history
             "indicator": 1000,  # Keep recent indicator data
-            "system": 200,      # System status messages
-            "log": 1000,        # General logs
-            "ai": 300,         # AI decision history
+            "system": 200,  # System status messages
+            "log": 1000,  # General logs
+            "ai": 300,  # AI decision history
         }
-        
+
         # Connection tracking for personalized replay
-        self.connection_metadata = {}  # websocket -> {connected_at, last_message_id, categories}
-        
+        self.connection_metadata = (
+            {}
+        )  # websocket -> {connected_at, last_message_id, categories}
+
         # Performance tracking
         self.stats = {
             "total_messages": 0,
@@ -239,67 +244,74 @@ class ConnectionManager:
         """Categorize message based on type and content."""
         msg_type = message.get("type", "").lower()
         source = message.get("source", "").lower()
-        
+
         # Trading-related messages
-        if any(keyword in msg_type for keyword in ["trade", "order", "position", "execution"]):
+        if any(
+            keyword in msg_type
+            for keyword in ["trade", "order", "position", "execution"]
+        ):
             return "trading"
         if any(keyword in source for keyword in ["trading", "exchange", "order"]):
             return "trading"
-            
+
         # AI/LLM messages
         if any(keyword in msg_type for keyword in ["ai", "llm", "decision"]):
             return "ai"
         if "llm" in source or "agent" in source:
             return "ai"
-            
+
         # Indicator messages
         if any(keyword in msg_type for keyword in ["indicator", "signal", "technical"]):
             return "indicator"
         if "indicator" in source or "signal" in source:
             return "indicator"
-            
+
         # System messages
-        if any(keyword in msg_type for keyword in ["system", "health", "status", "error"]):
+        if any(
+            keyword in msg_type for keyword in ["system", "health", "status", "error"]
+        ):
             return "system"
         if "system" in source or "health" in source:
             return "system"
-            
+
         # Default to log category
         return "log"
 
     async def connect(self, websocket: WebSocket, replay_categories: list[str] = None):
         """
         Accept WebSocket connection and send buffered messages by category.
-        
+
         Args:
             websocket: WebSocket connection
             replay_categories: List of categories to replay (default: all)
         """
         await websocket.accept()
         self.active_connections.add(websocket)
-        
+
         # Initialize connection metadata
         self.connection_metadata[websocket] = {
             "connected_at": datetime.now().isoformat(),
             "categories": replay_categories or list(self.message_buffers.keys()),
             "messages_sent": 0,
         }
-        
+
         logger.info(
             f"WebSocket connection established. Total connections: {len(self.active_connections)}"
         )
-        
+
         # Send replay messages by category
         await self._send_replay_messages(websocket, replay_categories)
-        
+
         # Update stats
         self.stats["connections_served"] += 1
 
-    async def _send_replay_messages(self, websocket: WebSocket, categories: list[str] = None):
+    async def _send_replay_messages(
+        self, websocket: WebSocket, categories: list[str] = None
+    ):
         """Send buffered messages to new connection, organized by category."""
         categories = categories or list(self.message_buffers.keys())
         total_sent = 0
-        
+
         # Send a connection status message first
         status_message = {
             "timestamp": datetime.now().isoformat(),
@@ -309,42 +321,44 @@ class ConnectionManager:
             "categories_available": list(self.message_buffers.keys()),
             "categories_requested": categories,
         }
-        
+
         try:
             await websocket.send_text(json.dumps(status_message))
             total_sent += 1
         except Exception as e:
             logger.error(f"Error sending connection status: {e}")
             return
-        
+
         # Send messages by category with limits
         replay_limits = {
-            "trading": 50,      # Last 50 trading events
-            "indicator": 20,    # Last 20 indicator updates
-            "system": 10,       # Last 10 system messages
-            "log": 30,         # Last 30 log entries
-            "ai": 25,          # Last 25 AI decisions
+            "trading": 50,  # Last 50 trading events
+            "indicator": 20,  # Last 20 indicator updates
+            "system": 10,  # Last 10 system messages
+            "log": 30,  # Last 30 log entries
+            "ai": 25,  # Last 25 AI decisions
         }
-        
+
         for category in categories:
             if category in self.message_buffers:
                 buffer = self.message_buffers[category]
                 limit = replay_limits.get(category, 20)
                 messages_to_send = buffer[-limit:] if buffer else []
-                
+
                 for message in messages_to_send:
                     try:
                         # Add replay marker
                         replay_message = message.copy()
                         replay_message["is_replay"] = True
                         replay_message["replay_category"] = category
-                        
+
                         await websocket.send_text(json.dumps(replay_message))
                         total_sent += 1
                     except Exception as e:
-                        logger.error(f"Error sending replay message from {category}: {e}")
+                        logger.error(
+                            f"Error sending replay message from {category}: {e}"
+                        )
                         break
-        
+
         # Send replay completion message
         completion_message = {
             "timestamp": datetime.now().isoformat(),
@@ -354,27 +368,27 @@ class ConnectionManager:
             "total_messages": total_sent,
             "categories": categories,
         }
-        
+
         try:
             await websocket.send_text(json.dumps(completion_message))
         except Exception as e:
             logger.error(f"Error sending replay completion: {e}")
-        
+
         # Update connection metadata
         if websocket in self.connection_metadata:
             self.connection_metadata[websocket]["messages_sent"] = total_sent
-        
+
         # Update stats
         self.stats["total_replay_messages"] += total_sent
 
     def disconnect(self, websocket: WebSocket):
         """Remove WebSocket connection and cleanup metadata."""
         self.active_connections.discard(websocket)
-        
+
         # Clean up connection metadata
         if websocket in self.connection_metadata:
             del self.connection_metadata[websocket]
-        
+
         logger.info(
             f"WebSocket connection closed. Total connections: {len(self.active_connections)}"
         )
@@ -382,11 +396,13 @@ class ConnectionManager:
     async def broadcast(self, message: dict):
         """
         Enhanced broadcast with message categorization and persistence.
-        
+
         Args:
             message: Message dictionary to broadcast
         """
-        if not self.active_connections and not message.get("persist_when_no_connections", True):
+        if not self.active_connections and not message.get(
+            "persist_when_no_connections", True
+        ):
             return
 
         # Validate and enhance message structure
@@ -394,20 +410,22 @@ class ConnectionManager:
             if not isinstance(message, dict):
                 logger.warning(f"Invalid message type for broadcast: {type(message)}")
                 return
-                
+
             # Ensure required fields
             if "timestamp" not in message:
                 message["timestamp"] = datetime.now().isoformat()
-                
+
             if "type" not in message:
                 message["type"] = "unknown"
-            
+
             # Add message ID for tracking
-            message["message_id"] = f"{int(time.time() * 1000000)}"  # Microsecond timestamp
-                
+            message["message_id"] = (
+                f"{int(time.time() * 1000000)}"  # Microsecond timestamp
+            )
+
             # Test JSON serialization
             json.dumps(message)
-            
+
         except (TypeError, ValueError) as e:
             logger.error(f"Invalid message for broadcast: {e}")
             # Create a safe fallback message
@@ -416,19 +434,19 @@ class ConnectionManager:
                 "type": "error",
                 "message": "Invalid message format",
                 "source": "dashboard-api",
-                "message_id": f"{int(time.time() * 1000000)}"
+                "message_id": f"{int(time.time() * 1000000)}",
             }
 
         # Categorize and store message
         category = self._categorize_message(message)
         buffer = self.message_buffers[category]
         limit = self.buffer_limits[category]
-        
+
         # Add to appropriate buffer
         buffer.append(message)
         if len(buffer) > limit:
             buffer.pop(0)  # Remove oldest message
-        
+
         # Update statistics
         self.stats["total_messages"] += 1
         self.stats["messages_by_category"][category] += 1
@@ -451,7 +469,7 @@ class ConnectionManager:
         """Get recent messages from a specific category."""
         if category not in self.message_buffers:
             return []
-        
+
         buffer = self.message_buffers[category]
         return buffer[-limit:] if buffer else []
 
@@ -460,7 +478,9 @@ class ConnectionManager:
         return {
             **self.stats,
             "active_connections": len(self.active_connections),
-            "buffer_sizes": {cat: len(buf) for cat, buf in self.message_buffers.items()},
+            "buffer_sizes": {
+                cat: len(buf) for cat, buf in self.message_buffers.items()
+            },
             "buffer_limits": self.buffer_limits,
         }
 
@@ -489,7 +509,9 @@ class LogStreamer:
         self.process: subprocess.Popen | None = None
         self.running = False
         self.file_watchers = []
-        self.use_file_based = os.getenv("USE_FILE_BASED_LOGS", "false").lower() == "true"
+        self.use_file_based = (
+            os.getenv("USE_FILE_BASED_LOGS", "false").lower() == "true"
+        )
 
     async def start(self):
         """Start log streaming in background"""
@@ -510,10 +532,12 @@ class LogStreamer:
         """Start Docker socket-based log streaming"""
         try:
             # Check if docker command is available
-            result = subprocess.run(["docker", "--version"], capture_output=True, text=True, timeout=5)
+            result = subprocess.run(
+                ["docker", "--version"], capture_output=True, text=True, timeout=5
+            )
             if result.returncode != 0:
                 raise Exception("Docker command not available")
-                
+
             # Start docker logs process
             self.process = subprocess.Popen(
                 ["docker", "logs", "-f", "--tail", "100", self.container_name],
@@ -541,17 +565,19 @@ class LogStreamer:
                 "/app/trading-logs/llm_completions.log",
                 "/app/llm-logs/llm_completions.log",
             ]
-            
+
             for log_path in log_paths:
                 if os.path.exists(log_path):
                     asyncio.create_task(self._watch_log_file(log_path))
                     self.file_watchers.append(log_path)
                     logger.info(f"Started watching log file: {log_path}")
-            
+
             if not self.file_watchers:
                 logger.warning("No log files found to watch")
             else:
-                logger.info(f"Started file-based log streaming for {len(self.file_watchers)} files")
+                logger.info(
+                    f"Started file-based log streaming for {len(self.file_watchers)} files"
+                )
 
         except Exception as e:
             logger.error(f"Failed to start file-based log streaming: {e}")
@@ -564,11 +590,11 @@ class LogStreamer:
             if not os.path.exists(file_path):
                 logger.warning(f"Log file not found: {file_path}")
                 return
-                
-            with open(file_path, 'r') as f:
+
+            with open(file_path) as f:
                 # Go to end of file
                 f.seek(0, 2)
-                
+
                 while self.running:
                     line = f.readline()
                     if line:
@@ -580,19 +606,19 @@ class LogStreamer:
                             "source": f"file-{os.path.basename(file_path)}",
                             "file_path": file_path,
                         }
-                        
+
                         # Extract log level if present
                         line_upper = line.upper()
                         for level in ["ERROR", "WARN", "INFO", "DEBUG"]:
                             if level in line_upper:
                                 log_entry["level"] = level
                                 break
-                        
+
                         await manager.broadcast(log_entry)
                     else:
                         # No new data, sleep briefly
                         await asyncio.sleep(0.5)
-                        
+
         except Exception as e:
             logger.error(f"Error watching log file {file_path}: {e}")
 
@@ -655,6 +681,7 @@ async def lifespan(app: FastAPI):
     try:
         # Use file-based log streaming for better reliability
         log_streamer.use_file_based = True
+
         # Start log streamer in background with delay to avoid startup blocking
         async def start_log_streaming_delayed():
             await asyncio.sleep(2)  # Wait 2 seconds before starting
@@ -663,7 +690,7 @@ async def lifespan(app: FastAPI):
                 logger.info("File-based log streaming started successfully")
             except Exception as e:
                 logger.warning(f"Failed to start file-based log streaming: {e}")
-        
+
         asyncio.create_task(start_log_streaming_delayed())
         logger.info("Log streamer initialization scheduled (file-based)")
     except Exception as e:
@@ -684,8 +711,12 @@ async def lifespan(app: FastAPI):
         # Set up callback to broadcast LLM events to WebSocket clients
         def llm_event_callback(event_data):
             # Map event types to WebSocket message types
-            ws_event_type = "llm_decision" if event_data.get("event_type") == "trading_decision" else "llm_event"
-            
+            ws_event_type = (
+                "llm_decision"
+                if event_data.get("event_type") == "trading_decision"
+                else "llm_event"
+            )
+
             # Extract key fields for easier frontend consumption
             formatted_event = {
                 "timestamp": event_data.get("timestamp"),
@@ -693,28 +724,34 @@ async def lifespan(app: FastAPI):
                 "event_type": event_data.get("event_type"),
                 "source": "llm_parser",
             }
-            
+
             # Add specific fields based on event type
             if event_data.get("event_type") == "trading_decision":
-                formatted_event.update({
-                    "action": event_data.get("action"),
-                    "size_pct": event_data.get("size_pct"),
-                    "rationale": event_data.get("rationale"),
-                    "symbol": event_data.get("symbol"),
-                    "current_price": event_data.get("current_price"),
-                    "indicators": event_data.get("indicators", {}),
-                    "session_id": event_data.get("session_id"),
-                })
+                formatted_event.update(
+                    {
+                        "action": event_data.get("action"),
+                        "size_pct": event_data.get("size_pct"),
+                        "rationale": event_data.get("rationale"),
+                        "symbol": event_data.get("symbol"),
+                        "current_price": event_data.get("current_price"),
+                        "indicators": event_data.get("indicators", {}),
+                        "session_id": event_data.get("session_id"),
+                    }
+                )
             elif event_data.get("event_type") == "performance_metrics":
-                formatted_event.update({
-                    "total_completions": event_data.get("total_completions"),
-                    "avg_response_time_ms": event_data.get("avg_response_time_ms"),
-                    "total_cost_estimate_usd": event_data.get("total_cost_estimate_usd"),
-                })
-            
+                formatted_event.update(
+                    {
+                        "total_completions": event_data.get("total_completions"),
+                        "avg_response_time_ms": event_data.get("avg_response_time_ms"),
+                        "total_cost_estimate_usd": event_data.get(
+                            "total_cost_estimate_usd"
+                        ),
+                    }
+                )
+
             # Always include full data for detailed views
             formatted_event["data"] = event_data
-            
+
             # Schedule the broadcast in a thread-safe way
             try:
                 loop = asyncio.get_event_loop()
@@ -722,7 +759,9 @@ async def lifespan(app: FastAPI):
                     asyncio.create_task(manager.broadcast(formatted_event))
                 else:
                     # If no event loop is running, we'll skip this broadcast
-                    logger.debug("No running event loop for LLM callback, skipping broadcast")
+                    logger.debug(
+                        "No running event loop for LLM callback, skipping broadcast"
+                    )
             except RuntimeError:
                 # No event loop in current thread, skip broadcast
                 logger.debug("No event loop in current thread for LLM callback")
@@ -769,7 +808,9 @@ app = FastAPI(
 
 # Add CORS middleware
 # Get allowed origins from environment or use defaults
-allowed_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+allowed_origins = os.getenv(
+    "CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
+).split(",")
 allow_credentials = os.getenv("CORS_ALLOW_CREDENTIALS", "false").lower() == "true"
 
 app.add_middleware(
@@ -779,7 +820,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=[
         "Accept",
-        "Accept-Language", 
+        "Accept-Language",
         "Content-Language",
         "Content-Type",
         "Authorization",
@@ -788,15 +829,16 @@ app.add_middleware(
         "Access-Control-Request-Method",
         "Access-Control-Request-Headers",
         "Cache-Control",
-        "Pragma"
+        "Pragma",
     ],
     expose_headers=[
         "Content-Type",
-        "Content-Length", 
+        "Content-Length",
         "Access-Control-Allow-Origin",
-        "Access-Control-Allow-Headers"
+        "Access-Control-Allow-Headers",
     ],
 )
+
 
 # Add rate limiting middleware
 @app.middleware("http")
@@ -804,27 +846,28 @@ async def rate_limiting(request, call_next):
     """Apply rate limiting to all requests"""
     return await rate_limit_middleware(request, call_next)
 
+
 # Add middleware for JSON response handling and security
 @app.middleware("http")
 async def add_json_headers(request, call_next):
     """Add proper JSON headers and security headers to all responses"""
     response = await call_next(request)
-    
+
     # Add JSON content type for API responses
-    if request.url.path.startswith('/api/') or request.url.path.startswith('/udf/'):
+    if request.url.path.startswith("/api/") or request.url.path.startswith("/udf/"):
         response.headers["Content-Type"] = "application/json"
-    
+
     # Add security headers
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
-    
+
     # Add CORS headers for WebSocket upgrades
     if request.headers.get("connection", "").lower() == "upgrade":
         response.headers["Access-Control-Allow-Origin"] = "*"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    
+
     return response
 
 
@@ -839,8 +882,8 @@ async def handle_options(path: str):
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
             "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
-            "Access-Control-Max-Age": "86400"
-        }
+            "Access-Control-Max-Age": "86400",
+        },
     )
 
 
@@ -852,14 +895,16 @@ async def websocket_endpoint(websocket: WebSocket):
     origin = websocket.headers.get("origin")
     user_agent = websocket.headers.get("user-agent", "Unknown")
     host = websocket.headers.get("host", "Unknown")
-    
-    logger.info(f"WebSocket connection attempt - Origin: {origin}, Host: {host}, User-Agent: {user_agent}")
-    
+
+    logger.info(
+        f"WebSocket connection attempt - Origin: {origin}, Host: {host}, User-Agent: {user_agent}"
+    )
+
     try:
         # Accept connection with detailed logging
         await manager.connect(websocket)
         logger.info(f"WebSocket connection established successfully from {origin}")
-        
+
         # Send initial connection confirmation
         welcome_message = {
             "timestamp": datetime.now().isoformat(),
@@ -868,33 +913,37 @@ async def websocket_endpoint(websocket: WebSocket):
             "server_info": {
                 "version": "1.0.0",
                 "endpoints": ["/ws", "/api/ws"],
-                "features": ["real_time_logs", "llm_monitoring", "trading_data"]
-            }
+                "features": ["real_time_logs", "llm_monitoring", "trading_data"],
+            },
         }
         await websocket.send_text(json.dumps(welcome_message))
-        
+
         while True:
             # Keep connection alive and handle client messages
             data = await websocket.receive_text()
-            logger.debug(f"Received WebSocket message: {data[:100]}{'...' if len(data) > 100 else ''}")
+            logger.debug(
+                f"Received WebSocket message: {data[:100]}{'...' if len(data) > 100 else ''}"
+            )
 
             # Parse and validate client message
             try:
-                parsed_data = json.loads(data) if data.strip().startswith('{') else {"raw": data}
+                parsed_data = (
+                    json.loads(data) if data.strip().startswith("{") else {"raw": data}
+                )
             except json.JSONDecodeError as e:
                 logger.warning(f"Invalid JSON from client: {e}")
                 parsed_data = {"raw": data, "error": "invalid_json"}
 
             # Handle specific message types
             message_type = parsed_data.get("type", "unknown")
-            
+
             # Echo back or handle client commands with proper error handling
             try:
                 if message_type == "ping":
                     response = {
                         "timestamp": datetime.now().isoformat(),
                         "type": "pong",
-                        "message": "Server is alive"
+                        "message": "Server is alive",
                     }
                 elif message_type == "subscribe":
                     # Handle subscription requests
@@ -902,7 +951,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         "timestamp": datetime.now().isoformat(),
                         "type": "subscription_confirmed",
                         "subscriptions": parsed_data.get("channels", []),
-                        "message": f"Subscribed to {len(parsed_data.get('channels', []))} channels"
+                        "message": f"Subscribed to {len(parsed_data.get('channels', []))} channels",
                     }
                 else:
                     # Default echo response
@@ -910,11 +959,11 @@ async def websocket_endpoint(websocket: WebSocket):
                         "timestamp": datetime.now().isoformat(),
                         "type": "echo",
                         "message": f"Server received: {message_type}",
-                        "parsed": parsed_data
+                        "parsed": parsed_data,
                     }
-                
+
                 await websocket.send_text(json.dumps(response))
-                
+
             except Exception as e:
                 logger.error(f"Failed to send WebSocket response: {e}")
                 # Try to send a simple error message
@@ -923,7 +972,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         "timestamp": datetime.now().isoformat(),
                         "type": "error",
                         "message": "Failed to process message",
-                        "error_details": str(e)
+                        "error_details": str(e),
                     }
                     await websocket.send_text(json.dumps(error_response))
                 except Exception:
@@ -944,7 +993,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     "timestamp": datetime.now().isoformat(),
                     "type": "connection_error",
                     "message": "WebSocket connection error occurred",
-                    "error": str(e)
+                    "error": str(e),
                 }
                 await websocket.send_text(json.dumps(error_msg))
         except Exception:
@@ -1001,7 +1050,9 @@ async def get_status():
         # Get basic system info with graceful fallback
         system_uptime = "unknown"
         try:
-            uptime_result = subprocess.run(["uptime"], capture_output=True, text=True, timeout=3)
+            uptime_result = subprocess.run(
+                ["uptime"], capture_output=True, text=True, timeout=3
+            )
             if uptime_result.returncode == 0:
                 system_uptime = uptime_result.stdout.strip()
         except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
@@ -1036,7 +1087,7 @@ async def get_status():
             "websocket_connections": len(manager.active_connections),
             "log_buffer_size": len(manager.message_buffers.get("log", [])),
             "log_streamer_running": log_streamer.running,
-            "error": str(e)
+            "error": str(e),
         }
 
 
@@ -1047,7 +1098,7 @@ async def get_trading_data():
         # Try to get container stats with graceful fallback
         cpu_usage = "N/A"
         memory_usage = "N/A"
-        
+
         try:
             stats_result = subprocess.run(
                 [
@@ -1087,7 +1138,7 @@ async def get_trading_data():
         exchange_type = os.getenv("EXCHANGE__EXCHANGE_TYPE", "coinbase").lower()
         trading_mode = "futures" if futures_enabled else "spot"
         account_type = "CFM" if futures_enabled else "CBI"
-        
+
         # Try to get real Bluefin data if using Bluefin exchange
         bluefin_data = {}
         if exchange_type == "bluefin":
@@ -1100,37 +1151,37 @@ async def get_trading_data():
                         account_info = await bluefin_client.get_account_info()
                         positions = await bluefin_client.get_positions()
                         orders = await bluefin_client.get_orders()
-                        
+
                         bluefin_data = {
                             "account_info": account_info,
                             "positions": positions.get("positions", []),
                             "orders": orders.get("orders", []),
-                            "service_status": "connected"
+                            "service_status": "connected",
                         }
                     except Exception as e:
                         logger.warning(f"Could not fetch Bluefin data: {e}")
                         bluefin_data = {
                             "service_status": "data_fetch_failed",
-                            "error": str(e)
+                            "error": str(e),
                         }
                 else:
                     bluefin_data = {
                         "service_status": "unhealthy",
-                        "error": health.get("error", "Service unhealthy")
+                        "error": health.get("error", "Service unhealthy"),
                     }
             except Exception as e:
                 logger.error(f"Bluefin service error: {e}")
-                bluefin_data = {
-                    "service_status": "unreachable",
-                    "error": str(e)
-                }
-        
+                bluefin_data = {"service_status": "unreachable", "error": str(e)}
+
         # Use real Bluefin data if available, otherwise use mock data
-        if exchange_type == "bluefin" and bluefin_data.get("service_status") == "connected":
+        if (
+            exchange_type == "bluefin"
+            and bluefin_data.get("service_status") == "connected"
+        ):
             account_info = bluefin_data.get("account_info", {})
             positions = bluefin_data.get("positions", [])
             orders = bluefin_data.get("orders", [])
-            
+
             # Extract real position data
             current_position = {}
             if positions:
@@ -1159,7 +1210,7 @@ async def get_trading_data():
                     "liquidation_price": "0.0",
                     "margin_used": "0.0",
                 }
-            
+
             # Extract account data
             account_data = {
                 "balance": str(account_info.get("balance", "0.0")),
@@ -1172,23 +1223,27 @@ async def get_trading_data():
                 "network": account_info.get("network", "mainnet"),
                 "address": account_info.get("address", "unknown"),
             }
-            
+
             # Recent trades from orders
             recent_trades = []
             for order in orders[:5]:  # Last 5 orders
                 if order.get("status") == "filled":
-                    recent_trades.append({
-                        "timestamp": order.get("created_at", datetime.now().isoformat()),
-                        "symbol": order.get("symbol", "BTC-PERP"),
-                        "side": order.get("side", "buy"),
-                        "quantity": str(order.get("size", "0.0")),
-                        "price": str(order.get("price", "0.0")),
-                        "status": "filled",
-                        "trade_type": "futures",
-                        "leverage": order.get("leverage", 1),
-                        "order_id": order.get("id", "unknown"),
-                    })
-            
+                    recent_trades.append(
+                        {
+                            "timestamp": order.get(
+                                "created_at", datetime.now().isoformat()
+                            ),
+                            "symbol": order.get("symbol", "BTC-PERP"),
+                            "side": order.get("side", "buy"),
+                            "quantity": str(order.get("size", "0.0")),
+                            "price": str(order.get("price", "0.0")),
+                            "status": "filled",
+                            "trade_type": "futures",
+                            "leverage": order.get("leverage", 1),
+                            "order_id": order.get("id", "unknown"),
+                        }
+                    )
+
         else:
             # Mock trading data - fallback when Bluefin not available or using Coinbase
             symbol_suffix = "-PERP" if exchange_type == "bluefin" else "-USD"
@@ -1204,7 +1259,7 @@ async def get_trading_data():
                 "liquidation_price": "58500.00" if futures_enabled else None,
                 "margin_used": "650.00" if futures_enabled else None,
             }
-            
+
             account_currency = "USDC" if exchange_type == "bluefin" else "USD"
             account_data = {
                 "balance": "10000.00",
@@ -1215,7 +1270,7 @@ async def get_trading_data():
                 "margin_ratio": "15.0%" if futures_enabled else None,
                 "available_margin": "8500.00" if futures_enabled else None,
             }
-            
+
             recent_trades = [
                 {
                     "timestamp": datetime.now().isoformat(),
@@ -1228,7 +1283,7 @@ async def get_trading_data():
                     "leverage": 5 if futures_enabled else None,
                 }
             ]
-        
+
         # Mock trading data - in real implementation, this would come from the bot
         trading_data = {
             "timestamp": datetime.now().isoformat(),
@@ -1293,7 +1348,7 @@ async def get_trading_data():
                 "memory_usage": "N/A",
                 "last_update": datetime.now().isoformat(),
             },
-            "error": str(e)
+            "error": str(e),
         }
 
 
@@ -1306,20 +1361,20 @@ async def get_trading_mode():
         exchange_type = os.getenv("EXCHANGE__EXCHANGE_TYPE", "coinbase").lower()
         leverage = int(os.getenv("TRADING__LEVERAGE", "5"))
         max_futures_leverage = int(os.getenv("TRADING__MAX_FUTURES_LEVERAGE", "20"))
-        
+
         # Get fee rates
         spot_maker_fee = float(os.getenv("TRADING__SPOT_MAKER_FEE_RATE", "0.006"))
         spot_taker_fee = float(os.getenv("TRADING__SPOT_TAKER_FEE_RATE", "0.012"))
         futures_fee = float(os.getenv("TRADING__FUTURES_FEE_RATE", "0.0015"))
-        
+
         # Default to basic tier for spot trading
         current_volume = 0  # In real implementation, this would come from exchange API
         fee_tier = "Basic"
-        
+
         # Exchange-specific configuration
         exchange_config = {}
         bluefin_health = None
-        
+
         if exchange_type == "bluefin":
             # Get Bluefin service health and configuration
             try:
@@ -1332,41 +1387,43 @@ async def get_trading_mode():
                             "service_url": bluefin_client.base_url,
                             "service_status": "connected",
                             "network": account_info.get("network", "mainnet"),
-                            "account_address": account_info.get("address", "unknown")
+                            "account_address": account_info.get("address", "unknown"),
                         }
                     except Exception as e:
                         logger.warning(f"Could not get Bluefin account info: {e}")
                         exchange_config = {
                             "service_url": bluefin_client.base_url,
                             "service_status": "service_healthy_but_no_account",
-                            "error": str(e)
+                            "error": str(e),
                         }
                 else:
                     exchange_config = {
                         "service_url": bluefin_client.base_url,
                         "service_status": "unhealthy",
-                        "error": bluefin_health.get("error", "Unknown error")
+                        "error": bluefin_health.get("error", "Unknown error"),
                     }
             except Exception as e:
                 logger.error(f"Error checking Bluefin service: {e}")
                 exchange_config = {
                     "service_url": bluefin_client.base_url,
                     "service_status": "unreachable",
-                    "error": str(e)
+                    "error": str(e),
                 }
-        
+
         # Bluefin-specific trading features
         if exchange_type == "bluefin":
             supported_symbols = {
                 "spot": [],  # Bluefin is DEX focused on perpetuals
-                "futures": ["BTC-PERP", "ETH-PERP", "SOL-PERP", "SUI-PERP"]
+                "futures": ["BTC-PERP", "ETH-PERP", "SOL-PERP", "SUI-PERP"],
             }
         else:
             supported_symbols = {
-                "spot": ["BTC-USD", "ETH-USD", "SOL-USD"] if not futures_enabled else [],
+                "spot": (
+                    ["BTC-USD", "ETH-USD", "SOL-USD"] if not futures_enabled else []
+                ),
                 "futures": ["BTC-USD", "ETH-USD"] if futures_enabled else [],
             }
-        
+
         return {
             "timestamp": datetime.now().isoformat(),
             "trading_mode": "futures" if futures_enabled else "spot",
@@ -1411,7 +1468,11 @@ async def get_trading_mode():
 async def get_logs(limit: int = 100):
     """Get recent logs from buffer"""
     try:
-        logs = manager.message_buffers.get("log", [])[-limit:] if manager.message_buffers.get("log") else []
+        logs = (
+            manager.message_buffers.get("log", [])[-limit:]
+            if manager.message_buffers.get("log")
+            else []
+        )
         return {
             "timestamp": datetime.now().isoformat(),
             "total_logs": len(manager.message_buffers.get("log", [])),
@@ -1459,7 +1520,7 @@ async def get_llm_status():
                     "decision_distribution": {},
                     "last_decision": None,
                 },
-                "error": "LLM monitoring not available"
+                "error": "LLM monitoring not available",
             }
 
         # Get aggregated metrics for different time windows with error handling
@@ -1473,30 +1534,32 @@ async def get_llm_status():
 
         # Calculate derived metrics from available data with safety checks
         try:
-            total_decisions = len(llm_parser.decisions) if hasattr(llm_parser, 'decisions') else 0
+            (len(llm_parser.decisions) if hasattr(llm_parser, "decisions") else 0)
             recent_decisions = []
-            if hasattr(llm_parser, 'decisions') and llm_parser.decisions:
+            if hasattr(llm_parser, "decisions") and llm_parser.decisions:
                 recent_decisions = [
-                    d for d in llm_parser.decisions 
+                    d
+                    for d in llm_parser.decisions
                     if d.timestamp >= datetime.now() - timedelta(hours=1)
                 ]
-            
+
             # Calculate decision distribution
             decision_distribution = {}
-            if hasattr(llm_parser, 'decisions') and llm_parser.decisions:
+            if hasattr(llm_parser, "decisions") and llm_parser.decisions:
                 for decision in llm_parser.decisions:
-                    action = getattr(decision, 'action', 'unknown')
-                    decision_distribution[action] = decision_distribution.get(action, 0) + 1
+                    action = getattr(decision, "action", "unknown")
+                    decision_distribution[action] = (
+                        decision_distribution.get(action, 0) + 1
+                    )
         except Exception as e:
             logger.warning(f"Failed to calculate decision metrics: {e}")
-            total_decisions = 0
             recent_decisions = []
             decision_distribution = {}
 
         # Get last decision safely
         last_decision = None
         try:
-            if hasattr(llm_parser, 'decisions') and llm_parser.decisions:
+            if hasattr(llm_parser, "decisions") and llm_parser.decisions:
                 last_decision = llm_parser.decisions[-1].to_dict()
         except Exception as e:
             logger.warning(f"Failed to get last decision: {e}")
@@ -1504,24 +1567,27 @@ async def get_llm_status():
         # Get active alerts safely
         active_alerts_count = 0
         try:
-            if hasattr(llm_parser, 'alerts') and llm_parser.alerts:
-                active_alerts_count = len([
-                    a for a in llm_parser.alerts
-                    if a.timestamp >= datetime.now() - timedelta(hours=1)
-                ])
+            if hasattr(llm_parser, "alerts") and llm_parser.alerts:
+                active_alerts_count = len(
+                    [
+                        a
+                        for a in llm_parser.alerts
+                        if a.timestamp >= datetime.now() - timedelta(hours=1)
+                    ]
+                )
         except Exception as e:
             logger.warning(f"Failed to count active alerts: {e}")
 
         return {
             "timestamp": datetime.now().isoformat(),
             "monitoring_active": True,
-            "log_file": str(getattr(llm_parser, 'log_file', 'unknown')),
+            "log_file": str(getattr(llm_parser, "log_file", "unknown")),
             "total_parsed": {
-                "requests": len(getattr(llm_parser, 'requests', [])),
-                "responses": len(getattr(llm_parser, 'responses', [])),
-                "decisions": len(getattr(llm_parser, 'decisions', [])),
-                "alerts": len(getattr(llm_parser, 'alerts', [])),
-                "performance_metrics": len(getattr(llm_parser, 'metrics', [])),
+                "requests": len(getattr(llm_parser, "requests", [])),
+                "responses": len(getattr(llm_parser, "responses", [])),
+                "decisions": len(getattr(llm_parser, "decisions", [])),
+                "alerts": len(getattr(llm_parser, "alerts", [])),
+                "performance_metrics": len(getattr(llm_parser, "metrics", [])),
             },
             "metrics": {
                 "1_hour": metrics_1h,
@@ -1561,7 +1627,7 @@ async def get_llm_status():
                 "decision_distribution": {},
                 "last_decision": None,
             },
-            "error": str(e)
+            "error": str(e),
         }
 
 
@@ -1584,7 +1650,7 @@ async def get_llm_metrics(
         }
 
         time_delta = window_map.get(time_window, timedelta(hours=24))
-        
+
         # Get metrics with error handling
         metrics = {}
         if llm_parser:
@@ -1598,7 +1664,7 @@ async def get_llm_metrics(
                     "success_rate": 0.0,
                     "avg_response_time_ms": 0.0,
                     "total_cost_usd": 0.0,
-                    "error": str(e)
+                    "error": str(e),
                 }
         else:
             metrics = {
@@ -1607,7 +1673,7 @@ async def get_llm_metrics(
                 "success_rate": 0.0,
                 "avg_response_time_ms": 0.0,
                 "total_cost_usd": 0.0,
-                "error": "LLM parser not available"
+                "error": "LLM parser not available",
             }
 
         return {
@@ -1628,7 +1694,7 @@ async def get_llm_metrics(
                 "success_rate": 0.0,
                 "avg_response_time_ms": 0.0,
                 "total_cost_usd": 0.0,
-                "error": str(e)
+                "error": str(e),
             },
         }
 
@@ -1663,33 +1729,35 @@ async def get_llm_activity(limit: int = Query(50, ge=1, le=500)):
             "limit": limit,
             "total_events": 0,
             "activity": [],
-            "error": str(e)
+            "error": str(e),
         }
 
 
 @app.get("/llm/decisions")
 async def get_llm_decisions(
     limit: int = Query(50, ge=1, le=500),
-    action_filter: str | None = Query(None, description="Filter by action: LONG, SHORT, CLOSE, HOLD"),
+    action_filter: str | None = Query(
+        None, description="Filter by action: LONG, SHORT, CLOSE, HOLD"
+    ),
 ):
     """Get recent LLM trading decisions"""
     try:
         decisions = llm_parser.decisions
-        
+
         # Apply action filter if specified
         if action_filter:
             decisions = [d for d in decisions if d.action == action_filter.upper()]
-        
+
         # Get most recent decisions
         recent_decisions = decisions[-limit:] if len(decisions) > limit else decisions
         recent_decisions.reverse()  # Most recent first
-        
+
         # Calculate statistics
         action_counts = {}
         for decision in decisions:
             action = decision.action
             action_counts[action] = action_counts.get(action, 0) + 1
-        
+
         return {
             "timestamp": datetime.now().isoformat(),
             "total_decisions": len(decisions),
@@ -1697,7 +1765,7 @@ async def get_llm_decisions(
             "action_distribution": action_counts,
             "decisions": [d.to_dict() for d in recent_decisions],
         }
-    
+
     except Exception as e:
         logger.error(f"Error getting LLM decisions: {e}")
         raise HTTPException(
@@ -1972,26 +2040,27 @@ async def restart_bot():
 
 # Enhanced Message Management and Bot Control APIs
 
+
 @app.get("/api/messages/{category}")
 async def get_messages_by_category(
     category: str,
     limit: int = Query(default=100, ge=1, le=1000),
-    offset: int = Query(default=0, ge=0)
+    offset: int = Query(default=0, ge=0),
 ):
     """
     Get messages from a specific category with pagination.
-    
+
     Categories: trading, indicator, system, log, ai
     """
     if category not in manager.message_buffers:
         raise HTTPException(
-            status_code=404, 
-            detail=f"Category '{category}' not found. Available: {list(manager.message_buffers.keys())}"
+            status_code=404,
+            detail=f"Category '{category}' not found. Available: {list(manager.message_buffers.keys())}",
         )
-    
+
     messages = manager.get_messages_by_category(category, limit + offset)
-    paginated_messages = messages[offset:offset + limit] if messages else []
-    
+    paginated_messages = messages[offset : offset + limit] if messages else []
+
     return {
         "category": category,
         "messages": paginated_messages,
@@ -1999,7 +2068,7 @@ async def get_messages_by_category(
         "returned": len(paginated_messages),
         "offset": offset,
         "limit": limit,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
     }
 
 
@@ -2010,7 +2079,7 @@ async def get_message_statistics():
     return {
         **stats,
         "timestamp": datetime.now().isoformat(),
-        "uptime_seconds": time.time() - (stats.get("start_time", time.time()))
+        "uptime_seconds": time.time() - (stats.get("start_time", time.time())),
     }
 
 
@@ -2018,31 +2087,31 @@ async def get_message_statistics():
 async def broadcast_message(message: dict):
     """
     Broadcast a custom message to all connected WebSocket clients.
-    
+
     Useful for testing and manual notifications.
     """
     try:
         # Validate message structure
         if not isinstance(message, dict):
             raise HTTPException(status_code=400, detail="Message must be a JSON object")
-        
+
         # Add source and validation
         enhanced_message = {
             **message,
             "source": "dashboard-api",
             "manual_broadcast": True,
-            "api_timestamp": datetime.now().isoformat()
+            "api_timestamp": datetime.now().isoformat(),
         }
-        
+
         await manager.broadcast(enhanced_message)
-        
+
         return {
             "status": "success",
             "message": "Message broadcasted successfully",
             "active_connections": len(manager.active_connections),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
-    
+
     except Exception as e:
         logger.error(f"Error broadcasting message: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -2050,8 +2119,10 @@ async def broadcast_message(message: dict):
 
 # Bot Control Command Queue System
 
+
 class BotCommand:
     """Represents a command to be sent to the trading bot."""
+
     def __init__(self, command_type: str, parameters: dict = None, priority: int = 5):
         self.id = f"cmd_{int(time.time() * 1000000)}"
         self.command_type = command_type
@@ -2061,6 +2132,7 @@ class BotCommand:
         self.status = "pending"  # pending, sent, acknowledged, failed
         self.attempts = 0
         self.max_attempts = 3
+
 
 # Global command queue
 bot_command_queue = []
@@ -2076,7 +2148,7 @@ async def emergency_stop_bot():
     try:
         command = BotCommand("emergency_stop", priority=1)
         bot_command_queue.insert(0, command)  # Insert at front for highest priority
-        
+
         # Broadcast emergency notification
         emergency_message = {
             "type": "emergency_stop",
@@ -2084,19 +2156,19 @@ async def emergency_stop_bot():
             "message": "Emergency stop command issued",
             "source": "dashboard-api",
             "priority": "critical",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
-        
+
         await manager.broadcast(emergency_message)
-        
+
         return {
             "status": "success",
             "command_id": command.id,
             "message": "Emergency stop command queued",
             "queue_position": 0,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
-    
+
     except Exception as e:
         logger.error(f"Error issuing emergency stop: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -2108,23 +2180,25 @@ async def pause_trading():
     try:
         command = BotCommand("pause_trading", priority=2)
         bot_command_queue.append(command)
-        
-        await manager.broadcast({
-            "type": "trading_pause",
-            "command_id": command.id,
-            "message": "Trading pause command issued",
-            "source": "dashboard-api",
-            "timestamp": datetime.now().isoformat()
-        })
-        
+
+        await manager.broadcast(
+            {
+                "type": "trading_pause",
+                "command_id": command.id,
+                "message": "Trading pause command issued",
+                "source": "dashboard-api",
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
+
         return {
             "status": "success",
             "command_id": command.id,
             "message": "Trading pause command queued",
             "queue_size": len(bot_command_queue),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
-    
+
     except Exception as e:
         logger.error(f"Error pausing trading: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -2136,23 +2210,25 @@ async def resume_trading():
     try:
         command = BotCommand("resume_trading", priority=2)
         bot_command_queue.append(command)
-        
-        await manager.broadcast({
-            "type": "trading_resume",
-            "command_id": command.id,
-            "message": "Trading resume command issued",
-            "source": "dashboard-api",
-            "timestamp": datetime.now().isoformat()
-        })
-        
+
+        await manager.broadcast(
+            {
+                "type": "trading_resume",
+                "command_id": command.id,
+                "message": "Trading resume command issued",
+                "source": "dashboard-api",
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
+
         return {
             "status": "success",
             "command_id": command.id,
             "message": "Trading resume command queued",
             "queue_size": len(bot_command_queue),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
-    
+
     except Exception as e:
         logger.error(f"Error resuming trading: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -2162,7 +2238,7 @@ async def resume_trading():
 async def update_risk_limits(
     max_position_size: float = Query(None, ge=0.01, le=100.0),
     stop_loss_percentage: float = Query(None, ge=0.1, le=50.0),
-    max_daily_loss: float = Query(None, ge=1.0, le=10000.0)
+    max_daily_loss: float = Query(None, ge=1.0, le=10000.0),
 ):
     """Update risk management parameters."""
     try:
@@ -2173,31 +2249,33 @@ async def update_risk_limits(
             parameters["stop_loss_percentage"] = stop_loss_percentage
         if max_daily_loss is not None:
             parameters["max_daily_loss"] = max_daily_loss
-        
+
         if not parameters:
             raise HTTPException(status_code=400, detail="No risk parameters provided")
-        
+
         command = BotCommand("update_risk_limits", parameters, priority=3)
         bot_command_queue.append(command)
-        
-        await manager.broadcast({
-            "type": "risk_limits_update",
-            "command_id": command.id,
-            "parameters": parameters,
-            "message": "Risk limits update command issued",
-            "source": "dashboard-api",
-            "timestamp": datetime.now().isoformat()
-        })
-        
+
+        await manager.broadcast(
+            {
+                "type": "risk_limits_update",
+                "command_id": command.id,
+                "parameters": parameters,
+                "message": "Risk limits update command issued",
+                "source": "dashboard-api",
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
+
         return {
             "status": "success",
             "command_id": command.id,
             "message": "Risk limits update command queued",
             "parameters": parameters,
             "queue_size": len(bot_command_queue),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
-    
+
     except Exception as e:
         logger.error(f"Error updating risk limits: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -2208,26 +2286,26 @@ async def manual_trade_command(
     action: str = Query(..., pattern="^(buy|sell|close)$"),
     symbol: str = Query(..., min_length=3, max_length=20),
     size_percentage: float = Query(..., ge=0.1, le=100.0),
-    reason: str = Query(default="Manual trade from dashboard")
+    reason: str = Query(default="Manual trade from dashboard"),
 ):
     """
     Issue a manual trading command.
-    
+
     WARNING: This will execute real trades if bot is in live mode!
     """
     try:
         # Get current exchange type to customize parameters
         exchange_type = os.getenv("EXCHANGE__EXCHANGE_TYPE", "coinbase").lower()
-        
+
         parameters = {
             "action": action,
             "symbol": symbol,
             "size_percentage": size_percentage,
             "reason": reason,
             "manual_trade": True,
-            "exchange_type": exchange_type
+            "exchange_type": exchange_type,
         }
-        
+
         # Add Bluefin-specific parameters if using Bluefin
         if exchange_type == "bluefin":
             # Check if Bluefin service is available
@@ -2236,27 +2314,29 @@ async def manual_trade_command(
                 if health.get("status") != "healthy":
                     raise HTTPException(
                         status_code=503,
-                        detail=f"Bluefin service is not healthy: {health.get('error', 'Unknown error')}"
+                        detail=f"Bluefin service is not healthy: {health.get('error', 'Unknown error')}",
                     )
                 parameters["bluefin_service_available"] = True
             except Exception as e:
                 logger.error(f"Bluefin service check failed: {e}")
                 parameters["bluefin_service_available"] = False
                 parameters["bluefin_error"] = str(e)
-        
+
         command = BotCommand("manual_trade", parameters, priority=4)
         bot_command_queue.append(command)
-        
-        await manager.broadcast({
-            "type": "manual_trade_command",
-            "command_id": command.id,
-            "parameters": parameters,
-            "message": f"Manual trade command issued: {action} {size_percentage}% {symbol} on {exchange_type}",
-            "source": "dashboard-api",
-            "warning": "This may execute real trades!",
-            "timestamp": datetime.now().isoformat()
-        })
-        
+
+        await manager.broadcast(
+            {
+                "type": "manual_trade_command",
+                "command_id": command.id,
+                "parameters": parameters,
+                "message": f"Manual trade command issued: {action} {size_percentage}% {symbol} on {exchange_type}",
+                "source": "dashboard-api",
+                "warning": "This may execute real trades!",
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
+
         return {
             "status": "success",
             "command_id": command.id,
@@ -2264,9 +2344,9 @@ async def manual_trade_command(
             "parameters": parameters,
             "queue_size": len(bot_command_queue),
             "warning": "This command may execute real trades if bot is in live mode!",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
-    
+
     except Exception as e:
         logger.error(f"Error issuing manual trade: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -2284,12 +2364,12 @@ async def get_command_queue():
                 "priority": cmd.priority,
                 "created_at": cmd.created_at,
                 "status": cmd.status,
-                "attempts": cmd.attempts
+                "attempts": cmd.attempts,
             }
             for cmd in bot_command_queue
         ],
         "history_size": len(command_history),
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
     }
 
 
@@ -2300,7 +2380,7 @@ async def get_command_history(limit: int = Query(default=50, ge=1, le=500)):
         "history": command_history[-limit:],
         "total_executed": len(command_history),
         "returned": min(limit, len(command_history)),
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
     }
 
 
@@ -2312,32 +2392,38 @@ async def cancel_command(command_id: str):
         for i, cmd in enumerate(bot_command_queue):
             if cmd.id == command_id:
                 removed_cmd = bot_command_queue.pop(i)
-                
+
                 # Add to history as cancelled
-                command_history.append({
-                    "id": removed_cmd.id,
-                    "type": removed_cmd.command_type,
-                    "status": "cancelled",
-                    "cancelled_at": datetime.now().isoformat(),
-                    "created_at": removed_cmd.created_at
-                })
-                
-                await manager.broadcast({
-                    "type": "command_cancelled",
-                    "command_id": command_id,
-                    "message": f"Command {command_id} cancelled",
-                    "source": "dashboard-api",
-                    "timestamp": datetime.now().isoformat()
-                })
-                
+                command_history.append(
+                    {
+                        "id": removed_cmd.id,
+                        "type": removed_cmd.command_type,
+                        "status": "cancelled",
+                        "cancelled_at": datetime.now().isoformat(),
+                        "created_at": removed_cmd.created_at,
+                    }
+                )
+
+                await manager.broadcast(
+                    {
+                        "type": "command_cancelled",
+                        "command_id": command_id,
+                        "message": f"Command {command_id} cancelled",
+                        "source": "dashboard-api",
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
+
                 return {
                     "status": "success",
                     "message": f"Command {command_id} cancelled successfully",
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now().isoformat(),
                 }
-        
-        raise HTTPException(status_code=404, detail=f"Command {command_id} not found in queue")
-    
+
+        raise HTTPException(
+            status_code=404, detail=f"Command {command_id} not found in queue"
+        )
+
     except Exception as e:
         logger.error(f"Error cancelling command: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -2347,50 +2433,64 @@ async def cancel_command(command_id: str):
 # These routes provide the same functionality as the root-level routes
 # but with API prefix for better organization and frontend consistency
 
+
 @app.get("/api/status")
 async def get_api_status():
     """API endpoint for bot status"""
     return await get_status()
+
 
 @app.get("/api/health")
 async def get_api_health():
     """API endpoint for health check"""
     return await health_check()
 
+
 @app.get("/api/trading-data")
 async def get_api_trading_data():
     """API endpoint for trading data"""
     return await get_trading_data()
+
 
 @app.get("/api/trading-mode")
 async def get_api_trading_mode():
     """API endpoint for trading mode"""
     return await get_trading_mode()
 
+
 @app.get("/api/logs")
 async def get_api_logs(limit: int = 100):
     """API endpoint for logs"""
     return await get_logs(limit)
+
 
 @app.get("/api/llm/status")
 async def get_api_llm_status():
     """API endpoint for LLM status"""
     return await get_llm_status()
 
+
 @app.get("/api/llm/metrics")
-async def get_api_llm_metrics(time_window: str | None = Query(None, description="Time window: 1h, 24h, 7d, or all")):
+async def get_api_llm_metrics(
+    time_window: str | None = Query(
+        None, description="Time window: 1h, 24h, 7d, or all"
+    )
+):
     """API endpoint for LLM metrics"""
     return await get_llm_metrics(time_window)
+
 
 @app.get("/api/llm/activity")
 async def get_api_llm_activity(limit: int = Query(50, ge=1, le=500)):
     """API endpoint for LLM activity"""
     return await get_llm_activity(limit)
 
+
 @app.post("/api/control/restart")
 async def get_api_restart_bot():
     """API endpoint for bot restart"""
     return await restart_bot()
+
 
 # Health check endpoint
 @app.get("/health")
@@ -2410,7 +2510,7 @@ async def websocket_test():
     environment = os.getenv("ENVIRONMENT", "development")
     if environment == "production":
         raise HTTPException(status_code=404, detail="Not found")
-    
+
     return {
         "websocket_available": True,
         "endpoint": "/ws",
@@ -2656,7 +2756,7 @@ async def websocket_status():
         "active_connections": len(manager.active_connections),
         "buffer_size": len(manager.message_buffers.get("log", [])),
         "log_streamer_running": log_streamer.running if log_streamer else False,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
     }
 
 
@@ -2669,7 +2769,7 @@ async def get_bluefin_health():
         return {
             "timestamp": datetime.now().isoformat(),
             "service_url": bluefin_client.base_url,
-            "health": health
+            "health": health,
         }
     except Exception as e:
         logger.error(f"Error checking Bluefin health: {e}")
@@ -2681,10 +2781,7 @@ async def get_bluefin_account():
     """Get Bluefin account information"""
     try:
         account_info = await bluefin_client.get_account_info()
-        return {
-            "timestamp": datetime.now().isoformat(),
-            "account": account_info
-        }
+        return {"timestamp": datetime.now().isoformat(), "account": account_info}
     except HTTPException:
         raise  # Re-raise HTTP exceptions from the client
     except Exception as e:
@@ -2697,10 +2794,7 @@ async def get_bluefin_positions():
     """Get current Bluefin positions"""
     try:
         positions = await bluefin_client.get_positions()
-        return {
-            "timestamp": datetime.now().isoformat(),
-            "positions": positions
-        }
+        return {"timestamp": datetime.now().isoformat(), "positions": positions}
     except HTTPException:
         raise  # Re-raise HTTP exceptions from the client
     except Exception as e:
@@ -2713,10 +2807,7 @@ async def get_bluefin_orders():
     """Get current Bluefin orders"""
     try:
         orders = await bluefin_client.get_orders()
-        return {
-            "timestamp": datetime.now().isoformat(),
-            "orders": orders
-        }
+        return {"timestamp": datetime.now().isoformat(), "orders": orders}
     except HTTPException:
         raise  # Re-raise HTTP exceptions from the client
     except Exception as e:
@@ -2732,7 +2823,7 @@ async def get_bluefin_market_ticker(symbol: str):
         return {
             "timestamp": datetime.now().isoformat(),
             "symbol": symbol,
-            "ticker": ticker
+            "ticker": ticker,
         }
     except HTTPException:
         raise  # Re-raise HTTP exceptions from the client
@@ -2750,29 +2841,30 @@ async def place_bluefin_order(order_data: dict):
         for field in required_fields:
             if field not in order_data:
                 raise HTTPException(
-                    status_code=400,
-                    detail=f"Missing required field: {field}"
+                    status_code=400, detail=f"Missing required field: {field}"
                 )
-        
+
         # Add source information
         order_data["source"] = "dashboard-api"
         order_data["timestamp"] = datetime.now().isoformat()
-        
+
         result = await bluefin_client.place_order(order_data)
-        
+
         # Broadcast order placement
-        await manager.broadcast({
-            "type": "bluefin_order_placed",
-            "order_data": order_data,
-            "result": result,
-            "source": "dashboard-api",
-            "timestamp": datetime.now().isoformat()
-        })
-        
+        await manager.broadcast(
+            {
+                "type": "bluefin_order_placed",
+                "order_data": order_data,
+                "result": result,
+                "source": "dashboard-api",
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
+
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "success",
-            "order": result
+            "order": result,
         }
     except HTTPException:
         raise  # Re-raise HTTP exceptions from the client

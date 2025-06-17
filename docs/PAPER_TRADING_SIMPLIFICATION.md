@@ -9,7 +9,7 @@ We have simplified the paper trading / dry run configuration to use a single, cl
 ### Before (Confusing)
 The system had multiple environment variables that could conflict:
 - `DRY_RUN`
-- `SYSTEM__DRY_RUN` 
+- `SYSTEM__DRY_RUN`
 - `ENABLE_PAPER_TRADING`
 - `USE_PAPER_TRADING`
 - `FORCE_LIVE_TRADING`

@@ -68,7 +68,7 @@ class DivergenceDetector:
         min_fractal_distance: int = 5,
         max_lookback_bars: int = 60,
         use_limits: bool = True,
-    ):
+    ) -> None:
         """
         Initialize the divergence detector.
 

@@ -803,7 +803,7 @@ While the bot currently handles one symbol at a time, you can run multiple insta
 # Terminal 1: BTC trading
 TRADING__SYMBOL=BTC-USD docker-compose up btc-bot
 
-# Terminal 2: ETH trading  
+# Terminal 2: ETH trading
 TRADING__SYMBOL=ETH-USD docker-compose up eth-bot
 ```
 
@@ -841,17 +841,17 @@ import pandas as pd
 
 def analyze_strategy_performance():
     settings = create_settings()
-    
+
     # Load trading data
     market_data = MarketDataProvider(settings.trading.symbol, settings.trading.interval)
     df = market_data.to_dataframe(1000)  # Last 1000 candles
-    
+
     # Calculate your custom metrics
     returns = df['close'].pct_change()
     sharpe_ratio = returns.mean() / returns.std() * (252 ** 0.5)  # Annualized
-    
+
     print(f"Sharpe Ratio: {sharpe_ratio:.2f}")
-    
+
     # Add more custom analysis...
 
 if __name__ == "__main__":
@@ -867,7 +867,7 @@ Set up webhooks to receive notifications:
 # Slack webhook
 SYSTEM__ALERT_WEBHOOK_URL=https://hooks.slack.com/services/...
 
-# Discord webhook  
+# Discord webhook
 SYSTEM__ALERT_WEBHOOK_URL=https://discord.com/api/webhooks/...
 ```
 
@@ -886,7 +886,7 @@ def log_trade_to_database(trade: TradeAction):
         user="bot_user",
         password="your_password"
     )
-    
+
     cursor = conn.cursor()
     cursor.execute(
         "INSERT INTO trades (symbol, action, size_pct, price, timestamp) VALUES (%s, %s, %s, %s, %s)",

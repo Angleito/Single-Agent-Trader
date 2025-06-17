@@ -12,18 +12,18 @@
             background-color: #1a1a1a;
             color: #ffffff;
         }
-        
+
         .test-container {
             max-width: 1200px;
             margin: 0 auto;
         }
-        
+
         h1, h2 {
             color: #4CAF50;
             border-bottom: 2px solid #4CAF50;
             padding-bottom: 10px;
         }
-        
+
         .test-section {
             margin: 30px 0;
             padding: 20px;
@@ -31,14 +31,14 @@
             border-radius: 8px;
             border-left: 4px solid #4CAF50;
         }
-        
+
         .test-results {
             margin: 20px 0;
             padding: 15px;
             background-color: #333333;
             border-radius: 5px;
         }
-        
+
         .test-item {
             display: flex;
             justify-content: space-between;
@@ -48,7 +48,7 @@
             background-color: #404040;
             border-radius: 4px;
         }
-        
+
         .test-status {
             padding: 5px 15px;
             border-radius: 20px;
@@ -56,22 +56,22 @@
             text-transform: uppercase;
             font-size: 12px;
         }
-        
+
         .status-pass {
             background-color: #4CAF50;
             color: white;
         }
-        
+
         .status-fail {
             background-color: #f44336;
             color: white;
         }
-        
+
         .status-pending {
             background-color: #ff9800;
             color: white;
         }
-        
+
         .connection-indicator {
             width: 20px;
             height: 20px;
@@ -79,27 +79,27 @@
             display: inline-block;
             margin-right: 10px;
         }
-        
+
         .connected {
             background-color: #4CAF50;
             box-shadow: 0 0 10px #4CAF50;
         }
-        
+
         .disconnected {
             background-color: #f44336;
         }
-        
+
         .connecting {
             background-color: #ff9800;
             animation: pulse 1s infinite;
         }
-        
+
         @keyframes pulse {
             0% { opacity: 1; }
             50% { opacity: 0.5; }
             100% { opacity: 1; }
         }
-        
+
         .log-output {
             background-color: #000000;
             color: #00ff00;
@@ -112,7 +112,7 @@
             white-space: pre-wrap;
             margin: 15px 0;
         }
-        
+
         .data-display {
             background-color: #2a2a2a;
             padding: 15px;
@@ -120,13 +120,13 @@
             margin: 15px 0;
             border: 1px solid #444;
         }
-        
+
         .chart-placeholder {
             width: 100%;
             height: 200px;
-            background: linear-gradient(45deg, #333 25%, transparent 25%), 
-                        linear-gradient(-45deg, #333 25%, transparent 25%), 
-                        linear-gradient(45deg, transparent 75%, #333 75%), 
+            background: linear-gradient(45deg, #333 25%, transparent 25%),
+                        linear-gradient(-45deg, #333 25%, transparent 25%),
+                        linear-gradient(45deg, transparent 75%, #333 75%),
                         linear-gradient(-45deg, transparent 75%, #333 75%);
             background-size: 20px 20px;
             background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
@@ -138,7 +138,7 @@
             font-size: 18px;
             border-radius: 5px;
         }
-        
+
         .metric-card {
             background-color: #333;
             padding: 20px;
@@ -147,26 +147,26 @@
             text-align: center;
             border: 1px solid #555;
         }
-        
+
         .metric-value {
             font-size: 24px;
             font-weight: bold;
             color: #4CAF50;
         }
-        
+
         .metric-label {
             font-size: 14px;
             color: #aaa;
             margin-top: 5px;
         }
-        
+
         .grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 20px;
             margin: 20px 0;
         }
-        
+
         .button {
             background-color: #4CAF50;
             color: white;
@@ -177,28 +177,28 @@
             font-size: 14px;
             margin: 5px;
         }
-        
+
         .button:hover {
             background-color: #45a049;
         }
-        
+
         .button:disabled {
             background-color: #666;
             cursor: not-allowed;
         }
-        
+
         .error {
             color: #f44336;
         }
-        
+
         .warning {
             color: #ff9800;
         }
-        
+
         .success {
             color: #4CAF50;
         }
-        
+
         .loading {
             display: inline-block;
             width: 20px;
@@ -208,7 +208,7 @@
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
-        
+
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
@@ -218,7 +218,7 @@
 <body>
     <div class="test-container">
         <h1>🚀 AI Trading Bot Dashboard - UI Integration Tests</h1>
-        
+
         <!-- Connection Status Section -->
         <div class="test-section">
             <h2>🔗 Connection Status</h2>
@@ -277,7 +277,7 @@
         <!-- Mock Data Display -->
         <div class="test-section">
             <h2>📊 Live Data Display</h2>
-            
+
             <!-- Trading Metrics -->
             <div class="grid">
                 <div class="metric-card">
@@ -297,12 +297,12 @@
                     <div class="metric-label">Win Rate</div>
                 </div>
             </div>
-            
+
             <!-- Chart Placeholder -->
             <div class="chart-placeholder" id="trading-chart">
                 📈 TradingView Chart Loading...
             </div>
-            
+
             <!-- Current Position -->
             <div class="data-display">
                 <h3>Current Position</h3>
@@ -400,15 +400,15 @@
         function updateConnectionIndicator(elementId, status) {
             const indicator = document.getElementById(elementId);
             const statusElement = document.getElementById(elementId.replace('-indicator', '-status'));
-            
+
             indicator.className = `connection-indicator ${status}`;
-            
+
             const statusText = {
                 'connected': 'Connected',
                 'disconnected': 'Disconnected',
                 'connecting': 'Connecting...'
             };
-            
+
             if (statusElement) {
                 statusElement.textContent = statusText[status] || status;
             }
@@ -420,7 +420,7 @@
                 element.textContent = status;
                 element.className = `test-status status-${status.toLowerCase()}`;
             }
-            
+
             // Update test results
             testResults[testName] = (status === 'Pass');
             updateTestSummary();
@@ -493,7 +493,7 @@
         async function testAPIConnection() {
             log('Testing API connection...');
             updateConnectionIndicator('api-indicator', 'connecting');
-            
+
             try {
                 const response = await fetch(`${CONFIG.API_BASE_URL}/health`);
                 if (response.ok) {
@@ -516,20 +516,20 @@
         function testWebSocketConnection() {
             log('Testing WebSocket connection...');
             updateConnectionIndicator('ws-indicator', 'connecting');
-            
+
             if (websocket) {
                 websocket.close();
             }
-            
+
             try {
                 websocket = new WebSocket(CONFIG.WS_URL);
-                
+
                 websocket.onopen = function(event) {
                     log('WebSocket connection established');
                     updateConnectionIndicator('ws-indicator', 'connected');
                     testResults.websocketConnection = true;
                     updateTestStatus('websocketHandler', 'Pass');
-                    
+
                     // Send test message
                     const testMessage = JSON.stringify({
                         type: 'ui_test',
@@ -538,37 +538,37 @@
                     });
                     websocket.send(testMessage);
                 };
-                
+
                 websocket.onmessage = function(event) {
                     messageCount++;
                     lastMessageTime = new Date();
-                    
+
                     try {
                         const message = JSON.parse(event.data);
                         log(`Received: ${message.type || 'unknown'} message`);
-                        
+
                         // Update data flow indicator
                         updateConnectionIndicator('data-indicator', 'connected');
                         testResults.dataFlow = true;
-                        
+
                         // Handle different message types
                         if (message.type === 'llm_decision') {
                             displayLLMDecision(message);
                         } else if (message.type === 'echo') {
                             log(`Echo response: ${message.message}`);
                         }
-                        
+
                     } catch (error) {
                         log(`Failed to parse WebSocket message: ${error.message}`, 'WARN');
                     }
                 };
-                
+
                 websocket.onerror = function(error) {
                     log(`WebSocket error: ${error.message || 'Unknown error'}`, 'ERROR');
                     updateConnectionIndicator('ws-indicator', 'disconnected');
                     testResults.websocketConnection = false;
                 };
-                
+
                 websocket.onclose = function(event) {
                     log(`WebSocket connection closed: ${event.code}`);
                     updateConnectionIndicator('ws-indicator', 'disconnected');
@@ -576,7 +576,7 @@
                         updateTestStatus('websocketHandler', 'Fail');
                     }
                 };
-                
+
             } catch (error) {
                 log(`WebSocket connection failed: ${error.message}`, 'ERROR');
                 updateConnectionIndicator('ws-indicator', 'disconnected');
@@ -586,20 +586,20 @@
 
         async function testTradingViewIntegration() {
             log('Testing TradingView integration...');
-            
+
             try {
                 // Test TradingView config endpoint
                 const configResponse = await fetch(`${CONFIG.API_BASE_URL}/udf/config`);
                 if (configResponse.ok) {
                     const config = await configResponse.json();
                     log(`TradingView config loaded: ${config.exchanges?.length || 0} exchanges`);
-                    
+
                     // Simulate chart loading
                     const chartElement = document.getElementById('trading-chart');
                     chartElement.innerHTML = '📈 TradingView Chart Loaded Successfully';
                     chartElement.style.background = 'linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)';
                     chartElement.style.color = '#fff';
-                    
+
                     updateTestStatus('tradingViewIntegration', 'Pass');
                     return true;
                 } else {
@@ -614,7 +614,7 @@
 
         function testUIComponents() {
             log('Testing UI components...');
-            
+
             // Test status indicators
             try {
                 const indicators = document.querySelectorAll('.connection-indicator');
@@ -628,7 +628,7 @@
                 log(`Status indicators test failed: ${error.message}`, 'ERROR');
                 updateTestStatus('statusIndicators', 'Fail');
             }
-            
+
             // Test performance charts
             try {
                 const chartElement = document.getElementById('trading-chart');
@@ -642,7 +642,7 @@
                 log(`Performance charts test failed: ${error.message}`, 'ERROR');
                 updateTestStatus('performanceCharts', 'Fail');
             }
-            
+
             // Test LLM decision card
             try {
                 const llmElement = document.getElementById('llm-decision-display');
@@ -661,14 +661,14 @@
         function displayLLMDecision(message) {
             const element = document.getElementById('llm-decision-display');
             const decision = message.data || message;
-            
+
             const actionColor = {
                 'LONG': '#4CAF50',
                 'SHORT': '#f44336',
                 'CLOSE': '#ff9800',
                 'HOLD': '#2196F3'
             };
-            
+
             element.innerHTML = `
                 <div style="margin-bottom: 15px;">
                     <span style="font-size: 18px; font-weight: bold; color: ${actionColor[decision.action] || '#fff'};">
@@ -698,13 +698,13 @@
             document.getElementById('unrealized-pnl').textContent = `$${data.account.unrealized_pnl}`;
             document.getElementById('total-trades').textContent = data.performance.total_trades;
             document.getElementById('win-rate').textContent = `${data.performance.win_rate}%`;
-            
+
             const positionElement = document.getElementById('current-position');
             if (data.current_position) {
                 positionElement.innerHTML = `
-                    <strong>${data.current_position.symbol}</strong> - 
-                    ${data.current_position.side.toUpperCase()} 
-                    ${data.current_position.size} 
+                    <strong>${data.current_position.symbol}</strong> -
+                    ${data.current_position.side.toUpperCase()}
+                    ${data.current_position.size}
                     (P&L: $${data.current_position.unrealized_pnl})
                 `;
             }
@@ -714,32 +714,32 @@
             log('Generating mock trading data...');
             const mockData = generateMockTradingData();
             updateTradingData(mockData);
-            
+
             // Generate mock LLM decision
             const mockDecision = generateMockLLMDecision();
             displayLLMDecision(mockDecision);
-            
+
             log('Mock data generated successfully');
         }
 
         async function runUITests() {
             log('Starting comprehensive UI tests...');
-            
+
             // Test all components
             testUIComponents();
-            
+
             // Test API connection
             await testAPIConnection();
-            
+
             // Test WebSocket connection
             testWebSocketConnection();
-            
+
             // Test TradingView integration
             await testTradingViewIntegration();
-            
+
             // Generate mock data
             generateMockData();
-            
+
             log('UI tests completed');
             updateTestSummary();
         }
@@ -760,7 +760,7 @@
                     failed: Object.values(testResults).filter(r => !r).length
                 }
             };
-            
+
             log('=== UI TEST REPORT ===');
             log(`Total Tests: ${report.summary.total}`);
             log(`Passed: ${report.summary.passed}`);
@@ -768,10 +768,10 @@
             log(`Success Rate: ${Math.round((report.summary.passed / report.summary.total) * 100)}%`);
             log(`Messages Received: ${messageCount}`);
             log('======================');
-            
+
             // Save to localStorage for retrieval by test script
             localStorage.setItem('uiTestReport', JSON.stringify(report));
-            
+
             return report;
         }
 
@@ -790,19 +790,19 @@
 
         // Initialize tests
         const startTime = Date.now();
-        
+
         // Run initial tests when page loads
         window.addEventListener('load', function() {
             log('UI Integration Test page loaded');
             updateTestSummary();
-            
+
             // Auto-run basic connectivity tests
             setTimeout(() => {
                 testAPIConnection();
                 testWebSocketConnection();
                 testUIComponents();
             }, 1000);
-            
+
             // Set up periodic data updates
             setInterval(fetchLatestData, CONFIG.UPDATE_INTERVAL);
         });

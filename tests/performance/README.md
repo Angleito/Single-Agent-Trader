@@ -7,7 +7,7 @@ This directory contains comprehensive performance testing tools for the AI Tradi
 ### 1. Benchmark Suite (`benchmark_suite.py`)
 Comprehensive performance benchmarks for all critical components:
 - Indicator calculation performance
-- LLM response time benchmarks  
+- LLM response time benchmarks
 - Market data processing speed tests
 - Memory usage profiling
 - Database operation benchmarks
@@ -101,7 +101,7 @@ async def analyze_market(market_state):
     # Your async code here
     pass
 
-# Sync decorator  
+# Sync decorator
 @track_sync("indicator_calculation")
 def calculate_indicators(df):
     # Your sync code here
@@ -111,7 +111,7 @@ def calculate_indicators(df):
 ### Advanced Usage
 ```python
 from bot.performance_monitor import (
-    PerformanceMonitor, 
+    PerformanceMonitor,
     PerformanceThresholds
 )
 
@@ -191,7 +191,7 @@ print(f"Health Score: {summary['health_score']}")
 
 ### If Load Tests Fail
 1. **High Error Rate**: Improve error handling, add circuit breakers
-2. **High Latency**: Optimize bottlenecks, add async processing  
+2. **High Latency**: Optimize bottlenecks, add async processing
 3. **Memory Issues**: Implement cleanup, use memory pools
 4. **CPU Issues**: Optimize algorithms, distribute load
 
@@ -261,7 +261,7 @@ python tests/performance/load_tests.py
 
 ### Performance Issues
 1. **Check System Resources**: Ensure adequate CPU/memory
-2. **Network Connectivity**: Verify stable internet connection  
+2. **Network Connectivity**: Verify stable internet connection
 3. **Background Processes**: Close unnecessary applications
 4. **Test Environment**: Use consistent testing conditions
 

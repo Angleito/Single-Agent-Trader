@@ -7,7 +7,7 @@
     <meta name="description" content="AI Trading Bot Dashboard - Real-time crypto trading monitoring and analysis" />
     <meta name="theme-color" content="#1a1a1a" />
     <title>AI Trading Bot Dashboard</title>
-    
+
     <!-- Minimal Service Worker Cleanup -->
     <script>
       // Fast service worker cleanup
@@ -33,7 +33,7 @@
           'https://charting-library.tradingview-widget.com/tv.js',
           'https://s3.tradingview.com/charting_library/bundles/tv.js'
         ];
-        
+
         // Enhanced loading function with timeout and retry logic
         function loadTradingViewWithRetry(attemptIndex = 0) {
           if (attemptIndex >= maxAttempts) {
@@ -41,10 +41,10 @@
             window.tradingViewError = true;
             return;
           }
-          
+
           const src = cdnSources[attemptIndex % cdnSources.length];
           console.log(`Loading TradingView from CDN (attempt ${attemptIndex + 1}/${maxAttempts}):`, src);
-          
+
           // Remove any existing failed scripts
           const existingScripts = document.querySelectorAll('script[src*="tradingview"]');
           existingScripts.forEach(script => {
@@ -52,29 +52,29 @@
               script.remove();
             }
           });
-          
+
           const script = document.createElement('script');
           script.src = src;
           script.async = true;
           script.crossOrigin = 'anonymous';
-          
+
           // Extended timeout for each attempt (30 seconds)
           const timeout = setTimeout(() => {
             console.warn(`TradingView script load timeout from ${src} (30s)`);
             script.remove();
-            
+
             // Exponential backoff before retry
             const delay = Math.min(1000 * Math.pow(2, attemptIndex), 5000);
             setTimeout(() => {
               loadTradingViewWithRetry(attemptIndex + 1);
             }, delay);
           }, 30000);
-          
+
           script.onload = function() {
             clearTimeout(timeout);
             console.log(`✅ TradingView loaded successfully from ${src}`);
             window.tradingViewLoaded = true;
-            
+
             // Additional verification that the library is fully loaded
             setTimeout(() => {
               if (window.TradingView && window.TradingView.widget && typeof window.TradingView.widget === 'function') {
@@ -84,22 +84,22 @@
               }
             }, 1000);
           };
-          
+
           script.onerror = function(error) {
             clearTimeout(timeout);
             console.error(`❌ Failed to load TradingView from ${src}:`, error);
             script.remove();
-            
+
             // Exponential backoff before retry
             const delay = Math.min(1000 * Math.pow(2, attemptIndex), 5000);
             setTimeout(() => {
               loadTradingViewWithRetry(attemptIndex + 1);
             }, delay);
           };
-          
+
           document.head.appendChild(script);
         }
-        
+
         // Network connectivity check and initial load
         function initializeTradingViewLoading() {
           if (!navigator.onLine) {
@@ -107,10 +107,10 @@
             window.tradingViewError = true;
             return;
           }
-          
+
           // Test basic connectivity before attempting load
-          fetch('https://www.google.com/favicon.ico', { 
-            method: 'HEAD', 
+          fetch('https://www.google.com/favicon.ico', {
+            method: 'HEAD',
             mode: 'no-cors',
             cache: 'no-cache'
           }).then(() => {
@@ -121,7 +121,7 @@
             loadTradingViewWithRetry(0);
           });
         }
-        
+
         // Enhanced network monitoring
         window.addEventListener('online', function() {
           console.log('🌐 Network connection restored');
@@ -133,30 +133,30 @@
             setTimeout(() => initializeTradingViewLoading(), 1000);
           }
         });
-        
+
         window.addEventListener('offline', function() {
           console.warn('🌐 Network connection lost');
         });
-        
+
         // Monitor page visibility changes
         document.addEventListener('visibilitychange', function() {
-          if (document.visibilityState === 'visible' && 
-              !window.TradingView && 
-              !window.tradingViewLoaded && 
-              !window.tradingViewError && 
+          if (document.visibilityState === 'visible' &&
+              !window.TradingView &&
+              !window.tradingViewLoaded &&
+              !window.tradingViewError &&
               navigator.onLine) {
             console.log('👁️ Page became visible, checking TradingView status...');
             setTimeout(() => initializeTradingViewLoading(), 500);
           }
         });
-        
+
         // Start the enhanced loading process
         initializeTradingViewLoading();
-        
+
         console.log('📊 TradingView enhanced loading system initialized');
       })();
     </script>
-    
+
     <!-- Preload critical resources -->
     <link rel="preconnect" href="https://api.coinbase.com">
     <link rel="preconnect" href="https://ws-feed.pro.coinbase.com">
@@ -229,7 +229,7 @@
           <div id="llm-decision-container" class="llm-decision-section">
             <!-- LLM Decision Card will be rendered here by JavaScript -->
           </div>
-          
+
           <!-- Left Sidebar - Quick Stats & AI Log -->
           <aside class="sidebar-left" role="complementary" aria-label="Trading statistics and AI decisions">
             <!-- Quick Stats Panel -->
@@ -303,10 +303,10 @@
               </div>
             </div>
             <div class="chart-container">
-              <div id="tradingview-chart" 
-                   class="tradingview-widget" 
+              <div id="tradingview-chart"
+                   class="tradingview-widget"
                    data-chart-widget="tradingview"
-                   role="img" 
+                   role="img"
                    aria-label="TradingView price chart">
                 <!-- TradingView widget will be rendered here -->
               </div>
@@ -492,7 +492,7 @@
         </div>
       </div>
     </div>
-    
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

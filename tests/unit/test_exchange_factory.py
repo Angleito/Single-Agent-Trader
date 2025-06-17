@@ -1,11 +1,11 @@
 """Unit tests for exchange factory."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import SecretStr
 
-from bot.config import ExchangeSettings, Settings, SystemSettings
 from bot.exchange.base import BaseExchange
 from bot.exchange.bluefin import BluefinClient
 from bot.exchange.coinbase import CoinbaseClient
@@ -16,7 +16,7 @@ class TestExchangeFactory:
     """Test cases for the exchange factory."""
 
     @patch("bot.exchange.factory.CoinbaseClient")
-    def test_create_coinbase_exchange(self, mock_coinbase_client):
+    def test_create_coinbase_exchange(self, mock_coinbase_client: Any) -> None:
         """Test that ExchangeFactory correctly creates Coinbase exchange when exchange_type='coinbase'."""
         # Mock the CoinbaseClient instance
         mock_instance = MagicMock(spec=CoinbaseClient)
@@ -25,7 +25,9 @@ class TestExchangeFactory:
         mock_coinbase_client.return_value = mock_instance
 
         # Create exchange with explicit type
-        exchange = ExchangeFactory.create_exchange(exchange_type="coinbase", dry_run=False)
+        exchange = ExchangeFactory.create_exchange(
+            exchange_type="coinbase", dry_run=False
+        )
 
         # Verify CoinbaseClient was instantiated
         mock_coinbase_client.assert_called_once_with(
@@ -42,7 +44,7 @@ class TestExchangeFactory:
         assert isinstance(exchange, BaseExchange)
 
     @patch("bot.exchange.factory.BluefinClient")
-    def test_create_bluefin_exchange(self, mock_bluefin_client):
+    def test_create_bluefin_exchange(self, mock_bluefin_client: Any) -> None:
         """Test that ExchangeFactory correctly creates Bluefin exchange when exchange_type='bluefin'."""
         # Mock the BluefinClient instance
         mock_instance = MagicMock(spec=BluefinClient)
@@ -67,7 +69,7 @@ class TestExchangeFactory:
         assert exchange == mock_instance
         assert isinstance(exchange, BaseExchange)
 
-    def test_invalid_exchange_type_raises_error(self):
+    def test_invalid_exchange_type_raises_error(self) -> None:
         """Test that ExchangeFactory raises ValueError for invalid exchange types."""
         with pytest.raises(ValueError) as exc_info:
             ExchangeFactory.create_exchange(exchange_type="invalid_exchange")
@@ -77,7 +79,9 @@ class TestExchangeFactory:
 
     @patch("bot.exchange.factory.settings")
     @patch("bot.exchange.factory.CoinbaseClient")
-    def test_uses_settings_when_no_explicit_type(self, mock_coinbase_client, mock_settings):
+    def test_uses_settings_when_no_explicit_type(
+        self, mock_coinbase_client: Any, mock_settings: Any
+    ) -> None:
         """Test that the factory uses settings.exchange.exchange_type when no explicit type is provided."""
         # Mock settings
         mock_settings.exchange.exchange_type = "coinbase"
@@ -106,7 +110,9 @@ class TestExchangeFactory:
 
     @patch("bot.exchange.factory.settings")
     @patch("bot.exchange.factory.BluefinClient")
-    def test_bluefin_uses_settings_private_key(self, mock_bluefin_client, mock_settings):
+    def test_bluefin_uses_settings_private_key(
+        self, mock_bluefin_client, mock_settings
+    ):
         """Test that Bluefin creation uses private key from settings when not provided."""
         # Mock settings
         mock_settings.exchange.exchange_type = "bluefin"
@@ -221,10 +227,10 @@ class TestExchangeFactory:
 
         # Create exchange
         ExchangeFactory.create_exchange(
-            exchange_type="bluefin", 
+            exchange_type="bluefin",
             dry_run=False,
             private_key="test_key",
-            network="testnet"
+            network="testnet",
         )
 
         # Verify logging
@@ -272,10 +278,9 @@ class TestExchangeFactory:
         # Create exchange with explicit dry_run=False
         with patch("bot.exchange.factory.settings") as mock_settings:
             mock_settings.system.dry_run = True  # Settings say dry_run=True
-            
-            exchange = ExchangeFactory.create_exchange(
-                exchange_type="coinbase",
-                dry_run=False  # But we override with False
+
+            ExchangeFactory.create_exchange(
+                exchange_type="coinbase", dry_run=False  # But we override with False
             )
 
             # Verify dry_run=False was used

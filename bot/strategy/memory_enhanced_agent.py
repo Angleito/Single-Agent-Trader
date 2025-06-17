@@ -104,11 +104,16 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             pattern_insights = await self._get_pattern_insights()
 
             # Get sentiment-enhanced context combining memory and web search
-            sentiment_enhanced_context = await self._get_sentiment_enhanced_context(market_state)
+            sentiment_enhanced_context = await self._get_sentiment_enhanced_context(
+                market_state
+            )
 
             # Enhance the prompt with memory and sentiment context
             enhanced_market_state = self._enhance_with_memory(
-                market_state, memory_context, pattern_insights, sentiment_enhanced_context
+                market_state,
+                memory_context,
+                pattern_insights,
+                sentiment_enhanced_context,
             )
 
             # Get decision using enhanced context
@@ -134,7 +139,8 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
 
                 # Log success rates of similar trades
                 successful_similar = sum(
-                    1 for exp in similar_experiences
+                    1
+                    for exp in similar_experiences
                     if exp.outcome and exp.outcome.get("success", False)
                 )
                 logger.debug(
@@ -284,7 +290,11 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             return "Pattern analysis temporarily unavailable."
 
     def _enhance_with_memory(
-        self, market_state: MarketState, memory_context: str, pattern_insights: str, sentiment_enhanced_context: str = ""
+        self,
+        market_state: MarketState,
+        memory_context: str,
+        pattern_insights: str,
+        sentiment_enhanced_context: str = "",
     ) -> MarketState:
         """
         Enhance market state with memory and sentiment context.
@@ -393,8 +403,11 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                 "memory_server_connected": (
                     self.memory_server._connected if self.memory_server else False
                 ),
-                "sentiment_analysis_enabled": hasattr(self, '_omnisearch_client') and self._omnisearch_client is not None,
-                "sentiment_learning_active": self._memory_available and hasattr(self, '_omnisearch_client') and self._omnisearch_client is not None,
+                "sentiment_analysis_enabled": hasattr(self, "_omnisearch_client")
+                and self._omnisearch_client is not None,
+                "sentiment_learning_active": self._memory_available
+                and hasattr(self, "_omnisearch_client")
+                and self._omnisearch_client is not None,
             }
         )
 
@@ -414,14 +427,18 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
 
         try:
             # Get financial sentiment if OmniSearch is available
-            if hasattr(self, '_omnisearch_client') and self._omnisearch_client:
-                sentiment_context = await self._get_financial_sentiment_context(market_state)
+            if hasattr(self, "_omnisearch_client") and self._omnisearch_client:
+                sentiment_context = await self._get_financial_sentiment_context(
+                    market_state
+                )
                 if sentiment_context:
                     context_sections.append(sentiment_context)
 
             # Get correlation analysis between historical patterns and sentiment
             if self.memory_server:
-                correlation_analysis = await self._analyze_sentiment_pattern_correlation(market_state)
+                correlation_analysis = (
+                    await self._analyze_sentiment_pattern_correlation(market_state)
+                )
                 if correlation_analysis:
                     context_sections.append(correlation_analysis)
 
@@ -450,7 +467,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
         Returns:
             Formatted sentiment context string
         """
-        if not hasattr(self, '_omnisearch_client') or not self._omnisearch_client:
+        if not hasattr(self, "_omnisearch_client") or not self._omnisearch_client:
             return ""
 
         try:
@@ -458,27 +475,45 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             context_lines = []
 
             # Get crypto sentiment
-            crypto_sentiment = await self._omnisearch_client.search_crypto_sentiment(base_symbol)
+            crypto_sentiment = await self._omnisearch_client.search_crypto_sentiment(
+                base_symbol
+            )
             if crypto_sentiment:
-                context_lines.append(f"=== {base_symbol} Financial Sentiment Context ===")
-                context_lines.append(f"Current Sentiment: {crypto_sentiment.overall_sentiment.upper()} ({crypto_sentiment.sentiment_score:+.2f})")
+                context_lines.append(
+                    f"=== {base_symbol} Financial Sentiment Context ==="
+                )
+                context_lines.append(
+                    f"Current Sentiment: {crypto_sentiment.overall_sentiment.upper()} ({crypto_sentiment.sentiment_score:+.2f})"
+                )
                 context_lines.append(f"Confidence: {crypto_sentiment.confidence:.1%}")
 
                 if crypto_sentiment.key_drivers:
-                    context_lines.append(f"Key Drivers: {', '.join(crypto_sentiment.key_drivers[:3])}")
+                    context_lines.append(
+                        f"Key Drivers: {', '.join(crypto_sentiment.key_drivers[:3])}"
+                    )
                 if crypto_sentiment.risk_factors:
-                    context_lines.append(f"Risk Factors: {', '.join(crypto_sentiment.risk_factors[:3])}")
+                    context_lines.append(
+                        f"Risk Factors: {', '.join(crypto_sentiment.risk_factors[:3])}"
+                    )
 
             # Get market correlation
             try:
-                correlation = await self._omnisearch_client.search_market_correlation(base_symbol, "QQQ")
+                correlation = await self._omnisearch_client.search_market_correlation(
+                    base_symbol, "QQQ"
+                )
                 if correlation:
-                    context_lines.append(f"Market Correlation: {correlation.direction.upper()} {correlation.strength.upper()} ({correlation.correlation_coefficient:+.3f})")
+                    context_lines.append(
+                        f"Market Correlation: {correlation.direction.upper()} {correlation.strength.upper()} ({correlation.correlation_coefficient:+.3f})"
+                    )
 
                     if abs(correlation.correlation_coefficient) > 0.5:
-                        correlation_impact = "High correlation - expect macro market influence"
+                        correlation_impact = (
+                            "High correlation - expect macro market influence"
+                        )
                     else:
-                        correlation_impact = "Low correlation - crypto moving independently"
+                        correlation_impact = (
+                            "Low correlation - crypto moving independently"
+                        )
                     context_lines.append(f"Correlation Impact: {correlation_impact}")
             except Exception as e:
                 logger.debug(f"Correlation analysis failed: {e}")
@@ -489,7 +524,9 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             logger.warning(f"Failed to get financial sentiment context: {e}")
             return ""
 
-    async def _analyze_sentiment_pattern_correlation(self, market_state: MarketState) -> str:
+    async def _analyze_sentiment_pattern_correlation(
+        self, market_state: MarketState
+    ) -> str:
         """
         Analyze correlation between historical patterns and sentiment data.
 
@@ -504,7 +541,9 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
 
         try:
             # Get recent experiences with sentiment data
-            recent_experiences = await self._get_recent_experiences_with_sentiment(market_state, limit=20)
+            recent_experiences = await self._get_recent_experiences_with_sentiment(
+                market_state, limit=20
+            )
 
             if len(recent_experiences) < 5:
                 return "=== Sentiment-Pattern Correlation ===\nInsufficient data for correlation analysis"
@@ -515,26 +554,33 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             # Group by sentiment and analyze success rates
             sentiment_groups = {}
             for exp in recent_experiences:
-                sentiment_data = exp.market_state_snapshot.get('sentiment_data', {})
+                sentiment_data = exp.market_state_snapshot.get("sentiment_data", {})
                 if sentiment_data:
-                    sentiment = sentiment_data.get('overall_sentiment', 'neutral')
+                    sentiment = sentiment_data.get("overall_sentiment", "neutral")
                     if sentiment not in sentiment_groups:
-                        sentiment_groups[sentiment] = {'total': 0, 'successful': 0}
+                        sentiment_groups[sentiment] = {"total": 0, "successful": 0}
 
-                    sentiment_groups[sentiment]['total'] += 1
-                    if exp.outcome and exp.outcome.get('success', False):
-                        sentiment_groups[sentiment]['successful'] += 1
+                    sentiment_groups[sentiment]["total"] += 1
+                    if exp.outcome and exp.outcome.get("success", False):
+                        sentiment_groups[sentiment]["successful"] += 1
 
             # Calculate success rates by sentiment
             for sentiment, data in sentiment_groups.items():
-                if data['total'] >= 3:  # Only show if we have enough samples
-                    success_rate = data['successful'] / data['total'] * 100
-                    correlation_lines.append(f"{sentiment.upper()} sentiment: {success_rate:.1f}% success rate ({data['successful']}/{data['total']} trades)")
+                if data["total"] >= 3:  # Only show if we have enough samples
+                    success_rate = data["successful"] / data["total"] * 100
+                    correlation_lines.append(
+                        f"{sentiment.upper()} sentiment: {success_rate:.1f}% success rate ({data['successful']}/{data['total']} trades)"
+                    )
 
             # Find best performing sentiment conditions
             if sentiment_groups:
-                best_sentiment = max(sentiment_groups.items(), key=lambda x: x[1]['successful'] / max(x[1]['total'], 1))
-                correlation_lines.append(f"Best performing sentiment: {best_sentiment[0].upper()}")
+                best_sentiment = max(
+                    sentiment_groups.items(),
+                    key=lambda x: x[1]["successful"] / max(x[1]["total"], 1),
+                )
+                correlation_lines.append(
+                    f"Best performing sentiment: {best_sentiment[0].upper()}"
+                )
 
             return "\n".join(correlation_lines)
 
@@ -557,7 +603,9 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
 
         try:
             # Get recent experiences with sentiment data
-            recent_experiences = await self._get_recent_experiences_with_sentiment(market_state, limit=10)
+            recent_experiences = await self._get_recent_experiences_with_sentiment(
+                market_state, limit=10
+            )
 
             if len(recent_experiences) < 3:
                 return "=== Sentiment Trends ===\nInsufficient data for trend analysis"
@@ -567,9 +615,9 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             # Extract sentiment scores over time
             sentiment_scores = []
             for exp in recent_experiences:
-                sentiment_data = exp.market_state_snapshot.get('sentiment_data', {})
-                if sentiment_data and 'sentiment_score' in sentiment_data:
-                    sentiment_scores.append(sentiment_data['sentiment_score'])
+                sentiment_data = exp.market_state_snapshot.get("sentiment_data", {})
+                if sentiment_data and "sentiment_score" in sentiment_data:
+                    sentiment_scores.append(sentiment_data["sentiment_score"])
 
             if len(sentiment_scores) >= 3:
                 # Calculate trend direction
@@ -593,7 +641,9 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             logger.warning(f"Failed to analyze sentiment trends: {e}")
             return ""
 
-    async def _get_recent_experiences_with_sentiment(self, market_state: MarketState, limit: int = 20) -> list[TradingExperience]:
+    async def _get_recent_experiences_with_sentiment(
+        self, market_state: MarketState, limit: int = 20
+    ) -> list[TradingExperience]:
         """
         Get recent trading experiences that include sentiment data.
 
@@ -620,12 +670,14 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             )
 
             # Query for similar experiences
-            all_experiences = await self.memory_server.query_similar_experiences(market_state, query)
+            all_experiences = await self.memory_server.query_similar_experiences(
+                market_state, query
+            )
 
             # Filter for experiences with sentiment data
             sentiment_experiences = []
             for exp in all_experiences:
-                if exp.market_state_snapshot.get('sentiment_data'):
+                if exp.market_state_snapshot.get("sentiment_data"):
                     sentiment_experiences.append(exp)
                     if len(sentiment_experiences) >= limit:
                         break
@@ -636,7 +688,9 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             logger.warning(f"Failed to get recent experiences with sentiment: {e}")
             return []
 
-    async def _store_sentiment_data_for_learning(self, market_state: MarketState, trade_action: TradeAction) -> None:
+    async def _store_sentiment_data_for_learning(
+        self, market_state: MarketState, trade_action: TradeAction
+    ) -> None:
         """
         Store sentiment analysis results with trading experiences for future learning.
 
@@ -644,7 +698,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             market_state: Current market state
             trade_action: Trading decision made
         """
-        if not hasattr(self, '_omnisearch_client') or not self._omnisearch_client:
+        if not hasattr(self, "_omnisearch_client") or not self._omnisearch_client:
             return
 
         try:
@@ -652,25 +706,29 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             sentiment_data = {}
 
             # Get current sentiment data
-            crypto_sentiment = await self._omnisearch_client.search_crypto_sentiment(base_symbol)
+            crypto_sentiment = await self._omnisearch_client.search_crypto_sentiment(
+                base_symbol
+            )
             if crypto_sentiment:
                 sentiment_data = {
-                    'overall_sentiment': crypto_sentiment.overall_sentiment,
-                    'sentiment_score': crypto_sentiment.sentiment_score,
-                    'confidence': crypto_sentiment.confidence,
-                    'key_drivers': crypto_sentiment.key_drivers[:3],
-                    'risk_factors': crypto_sentiment.risk_factors[:3],
-                    'timestamp': datetime.now(UTC).isoformat()
+                    "overall_sentiment": crypto_sentiment.overall_sentiment,
+                    "sentiment_score": crypto_sentiment.sentiment_score,
+                    "confidence": crypto_sentiment.confidence,
+                    "key_drivers": crypto_sentiment.key_drivers[:3],
+                    "risk_factors": crypto_sentiment.risk_factors[:3],
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
 
             # Get correlation data
             try:
-                correlation = await self._omnisearch_client.search_market_correlation(base_symbol, "QQQ")
+                correlation = await self._omnisearch_client.search_market_correlation(
+                    base_symbol, "QQQ"
+                )
                 if correlation:
-                    sentiment_data['market_correlation'] = {
-                        'coefficient': correlation.correlation_coefficient,
-                        'strength': correlation.strength,
-                        'direction': correlation.direction
+                    sentiment_data["market_correlation"] = {
+                        "coefficient": correlation.correlation_coefficient,
+                        "strength": correlation.strength,
+                        "direction": correlation.direction,
                     }
             except Exception as e:
                 logger.debug(f"Could not get correlation data: {e}")
@@ -678,18 +736,20 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             # Store in market state snapshot for memory server
             if sentiment_data and self.memory_server:
                 # Create a temporary market state snapshot with sentiment data
-                market_snapshot = {
-                    'symbol': market_state.symbol,
-                    'price': float(market_state.current_price),
-                    'sentiment_data': sentiment_data,
-                    'timestamp': datetime.now(UTC).isoformat()
+                {
+                    "symbol": market_state.symbol,
+                    "price": float(market_state.current_price),
+                    "sentiment_data": sentiment_data,
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
 
                 # Store this for the next memory creation
                 # This will be picked up when the trading experience is created
                 self._pending_sentiment_data = sentiment_data
 
-                logger.debug(f"Stored sentiment data for learning: {sentiment_data.get('overall_sentiment', 'unknown')} sentiment")
+                logger.debug(
+                    f"Stored sentiment data for learning: {sentiment_data.get('overall_sentiment', 'unknown')} sentiment"
+                )
 
         except Exception as e:
             logger.warning(f"Failed to store sentiment data for learning: {e}")

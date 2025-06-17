@@ -50,33 +50,33 @@ check_docker_compose() {
 # Function to create necessary directories
 create_directories() {
     print_status "Creating necessary directories..."
-    
+
     mkdir -p logs data
     mkdir -p backend/logs backend/data
     mkdir -p nginx/conf.d
-    
+
     print_success "Directories created"
 }
 
 # Function to build services
 build_services() {
     print_status "Building Docker services..."
-    
+
     cd ..  # Go to project root
     docker-compose build --no-cache
     cd dashboard
-    
+
     print_success "Services built successfully"
 }
 
 # Function to start development environment
 start_dev() {
     print_status "Starting development environment..."
-    
+
     cd ..  # Go to project root
     docker-compose up -d ai-trading-bot dashboard-backend dashboard-frontend
     cd dashboard
-    
+
     print_success "Development environment started"
     print_status "Dashboard available at:"
     echo "  - Frontend: http://localhost:3000"
@@ -87,11 +87,11 @@ start_dev() {
 # Function to start production environment
 start_prod() {
     print_status "Starting production environment..."
-    
+
     cd ..  # Go to project root
     docker-compose --profile production up -d
     cd dashboard
-    
+
     print_success "Production environment started"
     print_status "Dashboard available at:"
     echo "  - Main access: http://localhost:8080"
@@ -101,20 +101,20 @@ start_prod() {
 # Function to stop services
 stop_services() {
     print_status "Stopping services..."
-    
+
     cd ..  # Go to project root
     docker-compose down
     cd dashboard
-    
+
     print_success "Services stopped"
 }
 
 # Function to view logs
 view_logs() {
     local service=${1:-""}
-    
+
     cd ..  # Go to project root
-    
+
     if [ -z "$service" ]; then
         print_status "Showing logs for all services..."
         docker-compose logs -f
@@ -122,14 +122,14 @@ view_logs() {
         print_status "Showing logs for $service..."
         docker-compose logs -f "$service"
     fi
-    
+
     cd dashboard
 }
 
 # Function to show status
 show_status() {
     print_status "Service status:"
-    
+
     cd ..  # Go to project root
     docker-compose ps
     cd dashboard
@@ -138,12 +138,12 @@ show_status() {
 # Function to clean up
 cleanup() {
     print_status "Cleaning up Docker resources..."
-    
+
     cd ..  # Go to project root
     docker-compose down -v
     docker system prune -f
     cd dashboard
-    
+
     print_success "Cleanup completed"
 }
 
@@ -175,7 +175,7 @@ show_help() {
 # Main script logic
 main() {
     local command=${1:-"help"}
-    
+
     case $command in
         "setup")
             check_docker

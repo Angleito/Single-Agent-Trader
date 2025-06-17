@@ -68,7 +68,9 @@ class MarketDataProvider:
     COINBASE_WS_URL = "wss://advanced-trade-ws.coinbase.com"
     COINBASE_REST_URL = "https://api.coinbase.com"
 
-    def __init__(self, symbol: str = None, interval: str = None):
+    def __init__(
+        self, symbol: str | None = None, interval: str | None = None
+    ) -> None:
         """
         Initialize the market data provider.
 
@@ -90,15 +92,15 @@ class MarketDataProvider:
         self._tick_cache: list[dict[str, Any]] = []
         self._cache_timestamps: dict[str, datetime] = {}
         self._cache_ttl = timedelta(seconds=settings.data.data_cache_ttl_seconds)
-        self._last_update: datetime | None = None
+        self._last_update: Optional[datetime] = None
 
         # API clients
-        self._rest_client: CoinbaseAdvancedTrader | None = None
-        self._session: aiohttp.ClientSession | None = None
+        self._rest_client: Optional[CoinbaseAdvancedTrader] = None
+        self._session: Optional[aiohttp.ClientSession] = None
 
         # WebSocket connection management
         self._ws_connection = None
-        self._ws_task: asyncio.Task | None = None
+        self._ws_task: Optional[asyncio.Task] = None
         self._reconnect_attempts = 0
         self._max_reconnect_attempts = settings.exchange.websocket_reconnect_attempts
         self._is_connected = False
@@ -113,24 +115,26 @@ class MarketDataProvider:
 
         # Track WebSocket data reception
         self._websocket_data_received = False
-        self._first_websocket_data_time: datetime | None = None
+        self._first_websocket_data_time: Optional[datetime] = None
 
         logger.info(
             f"Initialized MarketDataProvider for {self.symbol} at {self.interval}"
         )
         if self._data_symbol != self.symbol:
-            logger.info(f"Using {self._data_symbol} for historical data (trading: {self.symbol})")
+            logger.info(
+                f"Using {self._data_symbol} for historical data (trading: {self.symbol})"
+            )
 
     def _get_data_symbol(self, symbol: str) -> str:
         """
         Get the appropriate symbol for fetching historical data.
-        
+
         For futures contracts, we need to use the underlying spot symbol
         since Coinbase provides historical data for spot pairs, not futures.
-        
+
         Args:
             symbol: Trading symbol (could be spot or futures)
-            
+
         Returns:
             Symbol to use for data fetching
         """
@@ -138,16 +142,18 @@ class MarketDataProvider:
         from ..exchange.futures_contract_mapper import FuturesContractMapper
 
         # Check if this looks like a futures contract (contains month/expiry info)
-        if '-' in symbol and len(symbol.split('-')) >= 3:
+        if "-" in symbol and len(symbol.split("-")) >= 3:
             # This is likely a futures contract, convert to spot
             spot_symbol = FuturesContractMapper.futures_to_spot_symbol(symbol)
-            logger.debug(f"Converted futures symbol {symbol} to spot symbol {spot_symbol} for data fetching")
+            logger.debug(
+                f"Converted futures symbol {symbol} to spot symbol {spot_symbol} for data fetching"
+            )
             return spot_symbol
 
         # This is already a spot symbol
         return symbol
 
-    def _build_websocket_jwt(self) -> str | None:
+    def _build_websocket_jwt(self) -> Optional[str]:
         """
         Build JWT token for WebSocket authentication using SDK's built-in jwt_generator.
 
@@ -325,17 +331,17 @@ class MarketDataProvider:
         start_time: datetime,
         end_time: datetime,
         granularity: str,
-        required_candles: int
+        required_candles: int,
     ) -> list[MarketData]:
         """
         Fetch historical data in multiple batches to get around API limits.
-        
+
         Args:
             start_time: Start time for data
             end_time: End time for data
             granularity: Candle granularity
             required_candles: Total number of candles needed
-            
+
         Returns:
             List of MarketData objects covering the full time range
         """
@@ -347,7 +353,9 @@ class MarketDataProvider:
 
         # Calculate the actual start time if not provided
         if start_time is None:
-            start_time = end_time - timedelta(seconds=interval_seconds * required_candles)
+            start_time = end_time - timedelta(
+                seconds=interval_seconds * required_candles
+            )
 
         # Work backwards from end_time in batches
         current_end = end_time
@@ -355,21 +363,31 @@ class MarketDataProvider:
 
         for batch_num in range(batches_needed):
             # Calculate start time for this batch
-            candles_in_batch = min(batch_size, required_candles - (batch_num * batch_size))
-            batch_start = current_end - timedelta(seconds=interval_seconds * candles_in_batch)
+            candles_in_batch = min(
+                batch_size, required_candles - (batch_num * batch_size)
+            )
+            batch_start = current_end - timedelta(
+                seconds=interval_seconds * candles_in_batch
+            )
 
             # Ensure we don't go before the requested start time
             if batch_start < start_time:
                 batch_start = start_time
 
-            logger.info(f"Fetching batch {batch_num + 1}/{batches_needed}: {batch_start} to {current_end}")
+            logger.info(
+                f"Fetching batch {batch_num + 1}/{batches_needed}: {batch_start} to {current_end}"
+            )
 
             try:
                 # Fetch this batch
-                batch_data = await self._fetch_single_batch(batch_start, current_end, granularity)
+                batch_data = await self._fetch_single_batch(
+                    batch_start, current_end, granularity
+                )
                 if batch_data:
                     all_data.extend(batch_data)
-                    logger.info(f"Batch {batch_num + 1} completed: {len(batch_data)} candles")
+                    logger.info(
+                        f"Batch {batch_num + 1} completed: {len(batch_data)} candles"
+                    )
                 else:
                     logger.warning(f"Batch {batch_num + 1} returned no data")
 
@@ -398,20 +416,19 @@ class MarketDataProvider:
                 seen_timestamps.add(data_point.timestamp)
 
         # Update cache with the combined data
-        self._ohlcv_cache = unique_data[-self.candle_limit:]
+        self._ohlcv_cache = unique_data[-self.candle_limit :]
         self._last_update = datetime.now(UTC)
         self._cache_timestamps["ohlcv"] = self._last_update
 
-        logger.info(f"Successfully fetched {len(unique_data)} candles across {batches_needed} batches")
+        logger.info(
+            f"Successfully fetched {len(unique_data)} candles across {batches_needed} batches"
+        )
         self._validate_data_sufficiency(len(unique_data))
 
         return unique_data
 
     async def _fetch_single_batch(
-        self,
-        start_time: datetime,
-        end_time: datetime,
-        granularity: str
+        self, start_time: datetime, end_time: datetime, granularity: str
     ) -> list[MarketData]:
         """Fetch a single batch of historical data."""
         try:
@@ -425,7 +442,9 @@ class MarketDataProvider:
 
             async with self._session.get(url, params=params) as response:
                 if response.status != 200:
-                    raise Exception(f"API request failed with status {response.status}: {await response.text()}")
+                    raise Exception(
+                        f"API request failed with status {response.status}: {await response.text()}"
+                    )
 
                 data = await response.json()
                 candles = data.get("candles", [])
@@ -449,9 +468,9 @@ class MarketDataProvider:
 
     async def fetch_historical_data(
         self,
-        start_time: datetime | None = None,
-        end_time: datetime | None = None,
-        granularity: str | None = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+        granularity: Optional[str] = None,
     ) -> list[MarketData]:
         """
         Fetch historical OHLCV data from Coinbase REST API.
@@ -476,7 +495,9 @@ class MarketDataProvider:
 
         # If we need more than 300 candles, we'll fetch in batches
         if required_candles > 300:
-            return await self._fetch_historical_data_batched(start_time, end_time, granularity, required_candles)
+            return await self._fetch_historical_data_batched(
+                start_time, end_time, granularity, required_candles
+            )
 
         max_candles = min(required_candles, 300)  # Use 300 to be safe with API limits
 
@@ -588,7 +609,7 @@ class MarketDataProvider:
                 return self._ohlcv_cache
             raise
 
-    async def fetch_latest_price(self) -> Decimal | None:
+    async def fetch_latest_price(self) -> Optional[Decimal]:
         """
         Fetch the latest price for the symbol from Coinbase REST API.
 
@@ -623,7 +644,7 @@ class MarketDataProvider:
         # Fall back to cached OHLCV data
         return self.get_latest_price()
 
-    async def fetch_orderbook(self, level: int = 2) -> dict[str, Any] | None:
+    async def fetch_orderbook(self, level: int = 2) -> Optional[dict[str, Any]]:
         """
         Fetch order book data from Coinbase REST API.
 
@@ -980,7 +1001,7 @@ class MarketDataProvider:
             logger.error(f"Error handling trade update: {e}")
             logger.debug(f"Trade message: {json.dumps(message, indent=2)}")
 
-    def get_latest_ohlcv(self, limit: int | None = None) -> list[MarketData]:
+    def get_latest_ohlcv(self, limit: Optional[int] = None) -> list[MarketData]:
         """
         Get the latest OHLCV data.
 
@@ -995,7 +1016,7 @@ class MarketDataProvider:
 
         return self._ohlcv_cache[-limit:].copy()
 
-    def get_latest_price(self) -> Decimal | None:
+    def get_latest_price(self) -> Optional[Decimal]:
         """
         Get the most recent price from cache.
 
@@ -1012,7 +1033,7 @@ class MarketDataProvider:
 
         return None
 
-    def to_dataframe(self, limit: int | None = None) -> pd.DataFrame:
+    def to_dataframe(self, limit: Optional[int] = None) -> pd.DataFrame:
         """
         Convert OHLCV data to pandas DataFrame for indicator calculations.
 
@@ -1391,7 +1412,7 @@ class MarketDataProvider:
         self._first_websocket_data_time = None
         logger.info("All cached data cleared")
 
-    def get_tick_data(self, limit: int | None = None) -> list[dict[str, Any]]:
+    def get_tick_data(self, limit: Optional[int] = None) -> list[dict[str, Any]]:
         """
         Get recent tick/trade data.
 
@@ -1415,7 +1436,7 @@ class MarketDataClient:
     with additional convenience methods and error handling.
     """
 
-    def __init__(self, symbol: str = None, interval: str = None):
+    def __init__(self, symbol: Optional[str] = None, interval: Optional[str] = None) -> None:
         """
         Initialize the market data client.
 
@@ -1426,12 +1447,12 @@ class MarketDataClient:
         self.provider = MarketDataProvider(symbol, interval)
         self._initialized = False
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "MarketDataClient":
         """Async context manager entry."""
         await self.connect()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Async context manager exit."""
         await self.disconnect()
 
@@ -1450,7 +1471,7 @@ class MarketDataClient:
             logger.info("MarketDataClient disconnected")
 
     async def get_historical_data(
-        self, lookback_hours: int = 24, granularity: str | None = None
+        self, lookback_hours: int = 24, granularity: Optional[str] = None
     ) -> pd.DataFrame:
         """
         Get historical data as a pandas DataFrame.
@@ -1474,7 +1495,7 @@ class MarketDataClient:
 
         return self._to_dataframe(data)
 
-    async def get_current_price(self) -> Decimal | None:
+    async def get_current_price(self) -> Optional[Decimal]:
         """
         Get the current market price.
 
@@ -1486,7 +1507,7 @@ class MarketDataClient:
 
         return await self.provider.fetch_latest_price()
 
-    async def get_orderbook_snapshot(self, level: int = 2) -> dict[str, Any] | None:
+    async def get_orderbook_snapshot(self, level: int = 2) -> Optional[dict[str, Any]]:
         """
         Get a snapshot of the current order book.
 
@@ -1501,7 +1522,7 @@ class MarketDataClient:
 
         return await self.provider.fetch_orderbook(level)
 
-    def get_latest_ohlcv_dataframe(self, limit: int | None = None) -> pd.DataFrame:
+    def get_latest_ohlcv_dataframe(self, limit: Optional[int] = None) -> pd.DataFrame:
         """
         Get latest OHLCV data as DataFrame.
 
@@ -1579,7 +1600,7 @@ class MarketDataClient:
 
 # Factory function for easy client creation
 def create_market_data_client(
-    symbol: str = None, interval: str = None
+    symbol: Optional[str] = None, interval: Optional[str] = None
 ) -> MarketDataClient:
     """
     Factory function to create a MarketDataClient instance.

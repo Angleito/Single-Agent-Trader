@@ -93,7 +93,7 @@ class CipherA:
         stc_fast_length: int = 23,
         stc_slow_length: int = 50,
         stc_factor: float = 0.5,
-    ):
+    ) -> None:
         """
         Initialize Cipher A with all integrated components.
 
@@ -899,7 +899,7 @@ class CipherB:
         mfi_length: int = 14,
         wave_length: int = 10,
         wave_mult: float = 3.7,
-    ):
+    ) -> None:
         """
         Initialize Cipher B with all integrated components.
 
@@ -1781,12 +1781,14 @@ class VuManChuIndicators:
     stablecoin dominance technical analysis.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the indicator calculator with all components."""
         self.cipher_a = CipherA()
         self.cipher_b = CipherB()
 
-    def calculate_all(self, df: pd.DataFrame, dominance_candles=None) -> pd.DataFrame:
+    def calculate_all(
+        self, df: pd.DataFrame, dominance_candles: pd.DataFrame | None = None
+    ) -> pd.DataFrame:
         """
         Calculate all indicators for the given DataFrame.
 
@@ -2170,12 +2172,16 @@ class VuManChuIndicators:
                                     int: "int64",
                                     float: "float64",
                                     bool: "bool",
-                                    str: "object"
+                                    str: "object",
                                 }
-                                result[col] = pd.Series(dtype=dtype_map[val_type], index=result.index)
+                                result[col] = pd.Series(
+                                    dtype=dtype_map[val_type], index=result.index
+                                )
                             else:
                                 # For complex types, use object dtype
-                                result[col] = pd.Series(dtype="object", index=result.index)
+                                result[col] = pd.Series(
+                                    dtype="object", index=result.index
+                                )
 
                 # Set the latest values
                 for col, val in {

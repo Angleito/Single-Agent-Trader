@@ -10,42 +10,42 @@ services:
     image: ai-trading-bot:latest
     container_name: ai-trading-bot
     restart: unless-stopped
-    
+
     # Security: Run as non-root user
     user: "1000:1000"
-    
+
     # Security: Read-only root filesystem
     read_only: true
-    
+
     # Security: No new privileges
     security_opt:
       - no-new-privileges:true
-    
+
     # Security: Drop all capabilities except required ones
     cap_drop:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
-    
+
     volumes:
       # Only necessary writable directories
       - ./logs:/app/logs:rw
       - ./data:/app/data:rw
       - /tmp:/tmp:rw
-    
+
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
       - ENVIRONMENT=production
       - LOG_LEVEL=${LOG_LEVEL:-warning}
-    
+
     env_file:
       - .env
-    
+
     # Internal network only
     networks:
       - trading-network-secure
-    
+
     # Resource limits
     deploy:
       resources:
@@ -55,7 +55,7 @@ services:
         reservations:
           memory: 1G
           cpus: '1.0'
-    
+
     # Health monitoring
     healthcheck:
       test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
@@ -63,7 +63,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-    
+
     logging:
       driver: "json-file"
       options:
@@ -79,22 +79,22 @@ services:
     image: dashboard-backend:latest
     container_name: dashboard-backend
     restart: unless-stopped
-    
+
     # Security configurations
     user: "1000:1000"
     read_only: true
     security_opt:
       - no-new-privileges:true
-    
+
     cap_drop:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
-    
+
     volumes:
       - /tmp:/tmp:rw
       - bot-logs:/app/logs:ro
-    
+
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
@@ -104,10 +104,10 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-warning}
       - RATE_LIMIT_ENABLED=true
       - RATE_LIMIT_PER_MINUTE=60
-    
+
     networks:
       - trading-network-secure
-    
+
     deploy:
       resources:
         limits:
@@ -116,13 +116,13 @@ services:
         reservations:
           memory: 256M
           cpus: '0.25'
-    
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-    
+
     logging:
       driver: "json-file"
       options:
@@ -137,29 +137,29 @@ services:
     image: dashboard-frontend:latest
     container_name: dashboard-frontend
     restart: unless-stopped
-    
+
     # Security configurations
     user: "1000:1000"
     read_only: true
     security_opt:
       - no-new-privileges:true
-    
+
     cap_drop:
       - ALL
     cap_add:
       - CHOWN
       - SETUID
       - SETGID
-    
+
     volumes:
       - /tmp:/tmp:rw
-    
+
     environment:
       - NODE_ENV=production
-    
+
     networks:
       - trading-network-secure
-    
+
     deploy:
       resources:
         limits:
@@ -168,13 +168,13 @@ services:
         reservations:
           memory: 128M
           cpus: '0.1'
-    
+
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
       interval: 30s
       timeout: 10s
       retries: 3
-    
+
     logging:
       driver: "json-file"
       options:
@@ -186,30 +186,30 @@ services:
     image: nginx:alpine
     container_name: nginx-proxy
     restart: unless-stopped
-    
+
     # Security configurations
     user: "101:101"  # nginx user
     read_only: true
     security_opt:
       - no-new-privileges:true
-    
+
     cap_drop:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
-    
+
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx-cache:/var/cache/nginx:rw
       - /var/run:/var/run:rw
-    
+
     ports:
       - "80:80"
       - "443:443"
-    
+
     networks:
       - trading-network-secure
-    
+
     deploy:
       resources:
         limits:
@@ -218,11 +218,11 @@ services:
         reservations:
           memory: 64M
           cpus: '0.1'
-    
+
     depends_on:
       - dashboard-frontend
       - dashboard-backend
-    
+
     logging:
       driver: "json-file"
       options:

@@ -6,11 +6,11 @@ services:
     image: ai-trading-bot:latest
     container_name: ai-trading-bot-prod
     restart: always
-    
+
     # Environment variables from .env file (optional)
     # env_file:
     #   - .env.production
-    
+
     # Production environment overrides
     environment:
       - PYTHONUNBUFFERED=1
@@ -27,13 +27,13 @@ services:
       - LLM__ENABLE_PERFORMANCE_TRACKING=${LLM_ENABLE_PERFORMANCE_TRACKING:-false}
       - LLM__ENABLE_LANGCHAIN_CALLBACKS=${LLM_ENABLE_LANGCHAIN_CALLBACKS:-false}
       - LLM__LOG_MARKET_CONTEXT=${LLM_LOG_MARKET_CONTEXT:-false}
-      
+
     # Production volume mounts (read-only where possible)
     volumes:
       - trading-logs:/app/logs
       - trading-data:/app/data
       - ./config:/app/config:ro
-      
+
     # Health check configuration
     healthcheck:
       test: ["CMD-SHELL", "/app/healthcheck.sh"]
@@ -41,7 +41,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-      
+
     # Production resource limits
     deploy:
       resources:
@@ -51,24 +51,24 @@ services:
         reservations:
           memory: 1G
           cpus: '0.5'
-          
+
     # Logging configuration with rotation
     logging:
       driver: "json-file"
       options:
         max-size: "50m"
         max-file: "5"
-        
+
     # Production command
     command: ["python", "-m", "bot.main", "live"]
-    
+
     # Security options
     security_opt:
       - no-new-privileges:true
     read_only: false  # Bot needs to write to logs and data
     tmpfs:
       - /tmp:noexec,nosuid,size=100m
-    
+
     networks:
       - trading-network
 
@@ -77,17 +77,17 @@ services:
     image: dashboard-backend:latest
     container_name: dashboard-backend-prod
     restart: always
-    
+
     ports:
       - "127.0.0.1:8000:8000"  # Bind to localhost only for security
-      
+
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - dashboard-logs:/app/logs
       - dashboard-data:/app/data
       - trading-logs:/app/trading-logs:ro
       - trading-data:/app/trading-data:ro
-      
+
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
@@ -96,18 +96,18 @@ services:
       - API_HOST=0.0.0.0
       - API_PORT=8000
       - TRADING_BOT_CONTAINER=ai-trading-bot-prod
-      
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 60s
       timeout: 10s
       retries: 3
       start_period: 30s
-      
+
     depends_on:
       ai-trading-bot:
         condition: service_healthy
-        
+
     deploy:
       resources:
         limits:
@@ -116,19 +116,19 @@ services:
         reservations:
           memory: 512M
           cpus: '0.25'
-          
+
     logging:
       driver: "json-file"
       options:
         max-size: "50m"
         max-file: "3"
-        
+
     security_opt:
       - no-new-privileges:true
     read_only: false
     tmpfs:
       - /tmp:noexec,nosuid,size=100m
-      
+
     networks:
       - trading-network
 
@@ -137,16 +137,16 @@ services:
     image: dashboard-frontend:latest
     container_name: dashboard-frontend-prod
     restart: always
-    
+
     environment:
       - NODE_ENV=production
       - VITE_API_URL=http://dashboard-backend:8000
       - VITE_WS_URL=ws://dashboard-backend:8000
-      
+
     depends_on:
       dashboard-backend:
         condition: service_healthy
-        
+
     deploy:
       resources:
         limits:
@@ -155,20 +155,20 @@ services:
         reservations:
           memory: 128M
           cpus: '0.1'
-          
+
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "2"
-        
+
     security_opt:
       - no-new-privileges:true
     read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,size=50m
       - /var/cache/nginx:noexec,nosuid,size=50m
-      
+
     networks:
       - trading-network
 
@@ -177,20 +177,20 @@ services:
     image: nginx:alpine
     container_name: nginx-prod
     restart: always
-    
+
     ports:
       - "80:80"
       - "443:443"
-      
+
     volumes:
       - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./config/nginx/conf.d:/etc/nginx/conf.d:ro
       - ./ssl:/etc/nginx/ssl:ro  # SSL certificates
-      
+
     depends_on:
       - dashboard-backend
       - dashboard-frontend
-      
+
     deploy:
       resources:
         limits:
@@ -199,20 +199,20 @@ services:
         reservations:
           memory: 64M
           cpus: '0.1'
-          
+
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-        
+
     security_opt:
       - no-new-privileges:true
     read_only: true
     tmpfs:
       - /var/cache/nginx:noexec,nosuid,size=100m
       - /var/run:noexec,nosuid,size=50m
-      
+
     networks:
       - trading-network
 
@@ -225,7 +225,7 @@ volumes:
       type: none
       o: bind
       device: /opt/trading-bot/logs
-      
+
   trading-data:
     name: trading-bot-data-prod
     driver: local
@@ -233,7 +233,7 @@ volumes:
       type: none
       o: bind
       device: /opt/trading-bot/data
-      
+
   dashboard-logs:
     name: dashboard-logs-prod
     driver: local
@@ -241,7 +241,7 @@ volumes:
       type: none
       o: bind
       device: /opt/trading-bot/dashboard/logs
-      
+
   dashboard-data:
     name: dashboard-data-prod
     driver: local

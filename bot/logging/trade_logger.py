@@ -18,7 +18,7 @@ from ..types import MarketState, TradeAction
 class TradeLogger:
     """
     Specialized logger for structured trade and memory events.
-    
+
     Logs trading activities in both human-readable and JSON formats
     for easy analysis and debugging of the memory-enhanced trading system.
     """
@@ -33,9 +33,15 @@ class TradeLogger:
         self.memory_logger = logging.getLogger("bot.memory")
 
         # JSON log files
-        self.decisions_file = self.log_dir / f"decisions_{datetime.now(UTC).strftime('%Y%m%d')}.jsonl"
-        self.outcomes_file = self.log_dir / f"outcomes_{datetime.now(UTC).strftime('%Y%m%d')}.jsonl"
-        self.memory_file = self.log_dir / f"memory_{datetime.now(UTC).strftime('%Y%m%d')}.jsonl"
+        self.decisions_file = (
+            self.log_dir / f"decisions_{datetime.now(UTC).strftime('%Y%m%d')}.jsonl"
+        )
+        self.outcomes_file = (
+            self.log_dir / f"outcomes_{datetime.now(UTC).strftime('%Y%m%d')}.jsonl"
+        )
+        self.memory_file = (
+            self.log_dir / f"memory_{datetime.now(UTC).strftime('%Y%m%d')}.jsonl"
+        )
 
     def log_trade_decision(
         self,
@@ -46,7 +52,7 @@ class TradeLogger:
     ) -> None:
         """
         Log a trading decision with full context.
-        
+
         Args:
             market_state: Current market conditions
             trade_action: Decision made by the system
@@ -59,19 +65,47 @@ class TradeLogger:
         indicators = {}
         if market_state.indicators:
             indicators = {
-                "rsi": float(market_state.indicators.rsi) if market_state.indicators.rsi else None,
-                "cipher_a_dot": float(market_state.indicators.cipher_a_dot) if market_state.indicators.cipher_a_dot else None,
-                "cipher_b_wave": float(market_state.indicators.cipher_b_wave) if market_state.indicators.cipher_b_wave else None,
-                "cipher_b_money_flow": float(market_state.indicators.cipher_b_money_flow) if market_state.indicators.cipher_b_money_flow else None,
-                "ema_trend": "UP" if (market_state.indicators.ema_fast and market_state.indicators.ema_slow and
-                                     market_state.indicators.ema_fast > market_state.indicators.ema_slow) else "DOWN",
+                "rsi": (
+                    float(market_state.indicators.rsi)
+                    if market_state.indicators.rsi
+                    else None
+                ),
+                "cipher_a_dot": (
+                    float(market_state.indicators.cipher_a_dot)
+                    if market_state.indicators.cipher_a_dot
+                    else None
+                ),
+                "cipher_b_wave": (
+                    float(market_state.indicators.cipher_b_wave)
+                    if market_state.indicators.cipher_b_wave
+                    else None
+                ),
+                "cipher_b_money_flow": (
+                    float(market_state.indicators.cipher_b_money_flow)
+                    if market_state.indicators.cipher_b_money_flow
+                    else None
+                ),
+                "ema_trend": (
+                    "UP"
+                    if (
+                        market_state.indicators.ema_fast
+                        and market_state.indicators.ema_slow
+                        and market_state.indicators.ema_fast
+                        > market_state.indicators.ema_slow
+                    )
+                    else "DOWN"
+                ),
             }
 
         dominance = {}
         if market_state.dominance_data:
             dominance = {
-                "stablecoin_dominance": float(market_state.dominance_data.stablecoin_dominance),
-                "dominance_24h_change": float(market_state.dominance_data.dominance_24h_change),
+                "stablecoin_dominance": float(
+                    market_state.dominance_data.stablecoin_dominance
+                ),
+                "dominance_24h_change": float(
+                    market_state.dominance_data.dominance_24h_change
+                ),
             }
 
         # Create structured log entry
@@ -83,7 +117,11 @@ class TradeLogger:
             "position": {
                 "side": market_state.current_position.side,
                 "size": float(market_state.current_position.size),
-                "unrealized_pnl": float(market_state.current_position.unrealized_pnl) if market_state.current_position.unrealized_pnl else 0,
+                "unrealized_pnl": (
+                    float(market_state.current_position.unrealized_pnl)
+                    if market_state.current_position.unrealized_pnl
+                    else 0
+                ),
             },
             "decision": {
                 "action": trade_action.action,
@@ -94,7 +132,9 @@ class TradeLogger:
             "indicators": indicators,
             "dominance": dominance,
             "memory_used": memory_context is not None,
-            "similar_experiences": len(memory_context.get("experiences", [])) if memory_context else 0,
+            "similar_experiences": (
+                len(memory_context.get("experiences", [])) if memory_context else 0
+            ),
         }
 
         # Log to file
@@ -121,7 +161,7 @@ class TradeLogger:
     ) -> None:
         """
         Log memory query operations.
-        
+
         Args:
             query_params: Parameters used for the query
             results: Similar experiences found
@@ -153,7 +193,7 @@ class TradeLogger:
     ) -> None:
         """
         Log the outcome of a completed trade.
-        
+
         Args:
             experience_id: Memory experience ID
             entry_price: Price at trade entry
@@ -191,7 +231,7 @@ class TradeLogger:
     def log_pattern_statistics(self, pattern_stats: dict[str, dict[str, Any]]) -> None:
         """
         Log pattern performance statistics.
-        
+
         Args:
             pattern_stats: Statistics for identified patterns
         """
@@ -227,7 +267,7 @@ class TradeLogger:
     ) -> None:
         """
         Log position progress updates.
-        
+
         Args:
             trade_id: Active trade identifier
             current_price: Current market price
@@ -252,7 +292,7 @@ class TradeLogger:
     ) -> None:
         """
         Log memory storage operations.
-        
+
         Args:
             experience_id: Experience being stored
             action: Trade action taken

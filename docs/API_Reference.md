@@ -25,7 +25,7 @@ The main orchestrator class that coordinates all trading activities.
 class TradingEngine:
     """
     Main trading engine that orchestrates all components.
-    
+
     Manages the complete trading loop including:
     - Market data ingestion
     - Technical indicator calculation
@@ -34,7 +34,7 @@ class TradingEngine:
     - Trade execution
     - Position tracking and monitoring
     """
-    
+
     def __init__(
         self,
         symbol: str = "BTC-USD",
@@ -44,30 +44,30 @@ class TradingEngine:
     ):
         """
         Initialize the trading engine.
-        
+
         Args:
             symbol: Trading symbol (e.g., "BTC-USD", "ETH-USD")
             interval: Candle interval for analysis ("1m", "5m", "15m", "1h", "4h", "1d")
             config_file: Optional configuration file path
             dry_run: Whether to run in dry-run mode (no real trades)
         """
-    
+
     async def run(self) -> None:
         """
         Main trading loop entry point.
-        
+
         Orchestrates the complete trading process with error handling
         and graceful shutdown capabilities.
-        
+
         Raises:
             RuntimeError: If critical components fail to initialize
             Exception: For unexpected errors during operation
         """
-    
+
     def get_performance_metrics(self) -> Dict[str, Any]:
         """
         Get current performance metrics.
-        
+
         Returns:
             Dict containing:
             - trade_count: Total number of trades executed
@@ -77,11 +77,11 @@ class TradingEngine:
             - current_position: Current position information
             - uptime: Engine uptime in seconds
         """
-    
+
     def get_risk_status(self) -> Dict[str, Any]:
         """
         Get current risk management status.
-        
+
         Returns:
             Dict containing:
             - daily_pnl: Today's profit/loss
@@ -104,7 +104,7 @@ async def run_trading_bot():
         interval="5m",
         dry_run=True  # Start safely
     )
-    
+
     # Run the trading loop
     await engine.run()
 
@@ -120,61 +120,61 @@ Handles real-time and historical market data from Coinbase.
 class MarketDataProvider:
     """
     Provides real-time and historical market data from Coinbase.
-    
+
     Features:
     - Real-time WebSocket data streaming
     - Historical OHLCV data fetching
     - Data caching and validation
     - Multiple timeframe support
     """
-    
+
     def __init__(self, symbol: str, interval: str):
         """
         Initialize market data provider.
-        
+
         Args:
             symbol: Trading pair symbol (e.g., "BTC-USD")
             interval: Data interval ("1m", "5m", "15m", "1h", "4h", "1d")
         """
-    
+
     async def connect(self) -> bool:
         """
         Connect to market data sources.
-        
+
         Returns:
             True if connection successful, False otherwise
         """
-    
+
     def get_latest_ohlcv(self, limit: int = 100) -> List[OHLCV]:
         """
         Get latest OHLCV data points.
-        
+
         Args:
             limit: Maximum number of data points to return
-            
+
         Returns:
             List of OHLCV data points, most recent last
-            
+
         Raises:
             ValueError: If limit is invalid
             ConnectionError: If not connected to data source
         """
-    
+
     def to_dataframe(self, limit: int = 200) -> pd.DataFrame:
         """
         Convert OHLCV data to pandas DataFrame.
-        
+
         Args:
             limit: Number of recent candles to include
-            
+
         Returns:
             DataFrame with columns: timestamp, open, high, low, close, volume
         """
-    
+
     def get_data_status(self) -> Dict[str, Any]:
         """
         Get current data connection and cache status.
-        
+
         Returns:
             Dict containing:
             - connected: Boolean connection status
@@ -182,11 +182,11 @@ class MarketDataProvider:
             - cached_candles: Number of cached data points
             - data_quality: Quality assessment of recent data
         """
-    
+
     def subscribe_to_updates(self, callback: Callable[[OHLCV], None]) -> None:
         """
         Subscribe to real-time data updates.
-        
+
         Args:
             callback: Function to call with new data points
         """
@@ -201,14 +201,14 @@ import asyncio
 async def monitor_market_data():
     # Create provider
     provider = MarketDataProvider("BTC-USD", "1m")
-    
+
     # Connect to data source
     await provider.connect()
-    
+
     # Get latest data
     data = provider.get_latest_ohlcv(50)
     print(f"Latest price: ${data[-1].close}")
-    
+
     # Convert to DataFrame for analysis
     df = provider.to_dataframe(100)
     print(f"Data shape: {df.shape}")
@@ -224,68 +224,68 @@ Calculates technical indicators including VuManChu Cipher A & B.
 class IndicatorCalculator:
     """
     Calculate technical indicators for market analysis.
-    
+
     Includes:
     - VuManChu Cipher A (trend analysis)
     - VuManChu Cipher B (momentum analysis)
     - Standard indicators (EMA, RSI, VWAP, etc.)
     """
-    
+
     def calculate_all(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Calculate all indicators for the given DataFrame.
-        
+
         Args:
             df: DataFrame with OHLCV data
-            
+
         Returns:
             DataFrame with additional indicator columns
-            
+
         Raises:
             ValueError: If DataFrame format is invalid
             InsufficientDataError: If not enough data for calculations
         """
-    
+
     def calculate_cipher_a(self, df: pd.DataFrame) -> pd.Series:
         """
         Calculate VuManChu Cipher A indicator.
-        
+
         Args:
             df: DataFrame with OHLCV data
-            
+
         Returns:
             Series with Cipher A values (-1, 0, 1 for sell, neutral, buy)
         """
-    
+
     def calculate_cipher_b(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Calculate VuManChu Cipher B indicator.
-        
+
         Args:
             df: DataFrame with OHLCV data
-            
+
         Returns:
             DataFrame with columns: wave, money_flow, momentum
         """
-    
+
     def get_latest_state(self, df_with_indicators: pd.DataFrame) -> Dict[str, float]:
         """
         Get the latest indicator state.
-        
+
         Args:
             df_with_indicators: DataFrame with calculated indicators
-            
+
         Returns:
             Dict with latest values for all indicators
         """
-    
+
     def validate_data_sufficiency(self, df: pd.DataFrame) -> bool:
         """
         Check if DataFrame has sufficient data for indicator calculations.
-        
+
         Args:
             df: DataFrame to validate
-            
+
         Returns:
             True if sufficient data, False otherwise
         """
@@ -302,11 +302,11 @@ async def analyze_indicators():
     provider = MarketDataProvider("BTC-USD", "1m")
     await provider.connect()
     df = provider.to_dataframe(200)
-    
+
     # Calculate indicators
     calc = IndicatorCalculator()
     df_with_indicators = calc.calculate_all(df)
-    
+
     # Get latest state
     state = calc.get_latest_state(df_with_indicators)
     print(f"Cipher A: {state.get('cipher_a')}")
@@ -324,12 +324,12 @@ AI-powered trading decision engine using LangChain.
 class LLMAgent:
     """
     LangChain-powered AI agent for trading decisions.
-    
+
     Uses large language models to analyze market conditions
     and generate trading actions based on technical indicators
     and market state.
     """
-    
+
     def __init__(
         self,
         model_provider: str = "openai",
@@ -338,48 +338,48 @@ class LLMAgent:
     ):
         """
         Initialize LLM agent.
-        
+
         Args:
             model_provider: LLM provider ("openai", "anthropic", "ollama")
             model_name: Specific model name
             temperature: Model temperature for response creativity
         """
-    
+
     async def analyze_market(self, market_state: MarketState) -> TradeAction:
         """
         Analyze market conditions and generate trading decision.
-        
+
         Args:
             market_state: Current market state with price and indicators
-            
+
         Returns:
             TradeAction with decision (LONG/SHORT/CLOSE/HOLD) and parameters
-            
+
         Raises:
             LLMError: If LLM request fails
             ValidationError: If response format is invalid
         """
-    
+
     def is_available(self) -> bool:
         """
         Check if LLM agent is available and functional.
-        
+
         Returns:
             True if agent is ready, False otherwise
         """
-    
+
     def test_connection(self) -> bool:
         """
         Test connection to LLM provider.
-        
+
         Returns:
             True if connection successful, False otherwise
         """
-    
+
     def get_status(self) -> Dict[str, Any]:
         """
         Get current LLM agent status.
-        
+
         Returns:
             Dict containing:
             - llm_available: Boolean availability status
@@ -389,11 +389,11 @@ class LLMAgent:
             - error_count: Number of failed requests
             - cache_hit_rate: Percentage of cached responses used
         """
-    
+
     def update_prompt_template(self, template: str) -> None:
         """
         Update the prompt template used for market analysis.
-        
+
         Args:
             template: New prompt template string
         """
@@ -408,12 +408,12 @@ from bot.types import MarketState, IndicatorData
 async def get_trading_decision():
     # Create LLM agent
     agent = LLMAgent(model_provider="openai", model_name="gpt-4o")
-    
+
     # Check availability
     if not agent.is_available():
         print("LLM agent not available")
         return
-    
+
     # Create market state (normally from market data)
     market_state = MarketState(
         symbol="BTC-USD",
@@ -429,7 +429,7 @@ async def get_trading_decision():
         ),
         current_position=None
     )
-    
+
     # Get trading decision
     action = await agent.analyze_market(market_state)
     print(f"Recommended action: {action.action}")
@@ -447,22 +447,22 @@ Comprehensive risk management and position sizing.
 class RiskManager:
     """
     Comprehensive risk management system.
-    
+
     Features:
     - Position sizing calculations
     - Daily/weekly/monthly loss limits
     - Stop-loss and take-profit validation
     - Risk-adjusted position management
     """
-    
+
     def __init__(self, position_manager: Optional[PositionManager] = None):
         """
         Initialize risk manager.
-        
+
         Args:
             position_manager: Optional position manager for tracking
         """
-    
+
     def evaluate_risk(
         self,
         trade_action: TradeAction,
@@ -471,19 +471,19 @@ class RiskManager:
     ) -> Tuple[bool, TradeAction, str]:
         """
         Evaluate and potentially modify trade action based on risk rules.
-        
+
         Args:
             trade_action: Proposed trade action
             current_position: Current position state
             current_price: Current market price
-            
+
         Returns:
             Tuple of:
             - approved: Whether trade is approved
             - modified_action: Potentially modified trade action
             - reason: Explanation of decision
         """
-    
+
     def calculate_position_size(
         self,
         action: str,
@@ -493,31 +493,31 @@ class RiskManager:
     ) -> Decimal:
         """
         Calculate appropriate position size based on risk parameters.
-        
+
         Args:
             action: Trade action ("LONG" or "SHORT")
             account_balance: Available account balance
             current_price: Current asset price
             risk_percent: Risk percentage for this trade
-            
+
         Returns:
             Calculated position size in base currency units
         """
-    
+
     def check_daily_limits(self) -> Tuple[bool, float]:
         """
         Check if daily loss limits have been exceeded.
-        
+
         Returns:
             Tuple of:
             - within_limits: Whether within daily limits
             - usage_percent: Percentage of daily limit used
         """
-    
+
     def get_risk_metrics(self) -> Dict[str, Any]:
         """
         Get comprehensive risk metrics.
-        
+
         Returns:
             Dict containing:
             - daily_pnl: Today's profit/loss
@@ -530,11 +530,11 @@ class RiskManager:
             - account_balance: Current account balance
             - risk_score: Overall risk assessment (LOW/MEDIUM/HIGH/CRITICAL)
         """
-    
+
     def update_daily_pnl(self, realized_pnl: Decimal, unrealized_pnl: Decimal) -> None:
         """
         Update daily P&L tracking.
-        
+
         Args:
             realized_pnl: Realized profit/loss from closed positions
             unrealized_pnl: Unrealized profit/loss from open positions
@@ -551,7 +551,7 @@ from decimal import Decimal
 def manage_trade_risk():
     # Create risk manager
     risk_manager = RiskManager()
-    
+
     # Proposed trade action
     trade_action = TradeAction(
         action="LONG",
@@ -560,7 +560,7 @@ def manage_trade_risk():
         stop_loss_pct=2.0,
         rationale="Strong bullish signals"
     )
-    
+
     # Current position (empty)
     current_position = Position(
         symbol="BTC-USD",
@@ -568,17 +568,17 @@ def manage_trade_risk():
         size=Decimal('0'),
         timestamp=datetime.utcnow()
     )
-    
+
     # Evaluate risk
     approved, modified_action, reason = risk_manager.evaluate_risk(
         trade_action, current_position, Decimal("50000")
     )
-    
+
     if approved:
         print(f"Trade approved: {modified_action.action} {modified_action.size_pct}%")
     else:
         print(f"Trade rejected: {reason}")
-    
+
     # Get risk metrics
     metrics = risk_manager.get_risk_metrics()
     print(f"Daily P&L usage: {metrics['daily_usage_pct']:.1f}%")
@@ -593,25 +593,25 @@ Coinbase Advanced Trade API integration.
 class CoinbaseClient:
     """
     Coinbase Advanced Trade API client.
-    
+
     Handles:
     - Order placement and management
     - Account balance queries
     - Position tracking
     - Market data requests
     """
-    
+
     def __init__(self):
         """Initialize Coinbase client with settings from configuration."""
-    
+
     async def connect(self) -> bool:
         """
         Connect to Coinbase API and validate credentials.
-        
+
         Returns:
             True if connection successful, False otherwise
         """
-    
+
     async def execute_trade_action(
         self,
         trade_action: TradeAction,
@@ -620,57 +620,57 @@ class CoinbaseClient:
     ) -> Optional[Order]:
         """
         Execute a trade action on Coinbase.
-        
+
         Args:
             trade_action: Trade action to execute
             symbol: Trading symbol
             current_price: Current market price
-            
+
         Returns:
             Order object if successful, None if failed
-            
+
         Raises:
             ExchangeError: If order placement fails
             InsufficientFundsError: If account has insufficient funds
         """
-    
+
     async def get_account_balance(self) -> Decimal:
         """
         Get current account balance.
-        
+
         Returns:
             Available balance in USD
-            
+
         Raises:
             ExchangeError: If balance request fails
         """
-    
+
     async def get_positions(self, symbol: Optional[str] = None) -> List[Position]:
         """
         Get current open positions.
-        
+
         Args:
             symbol: Optional symbol filter
-            
+
         Returns:
             List of current positions
         """
-    
+
     async def cancel_all_orders(self, symbol: str) -> Dict[str, Any]:
         """
         Cancel all open orders for a symbol.
-        
+
         Args:
             symbol: Trading symbol
-            
+
         Returns:
             Dict with cancellation results
         """
-    
+
     def get_connection_status(self) -> Dict[str, Any]:
         """
         Get current connection status.
-        
+
         Returns:
             Dict containing:
             - connected: Boolean connection status
@@ -678,7 +678,7 @@ class CoinbaseClient:
             - rate_limit_remaining: Remaining API rate limit
             - last_request_time: Timestamp of last API request
         """
-    
+
     async def place_limit_order(
         self,
         symbol: str,
@@ -688,17 +688,17 @@ class CoinbaseClient:
     ) -> Optional[Order]:
         """
         Place a limit order.
-        
+
         Args:
             symbol: Trading symbol
             side: Order side ("buy" or "sell")
             size: Order size
             price: Limit price
-            
+
         Returns:
             Order object if successful, None if failed
         """
-    
+
     async def place_market_order(
         self,
         symbol: str,
@@ -707,12 +707,12 @@ class CoinbaseClient:
     ) -> Optional[Order]:
         """
         Place a market order.
-        
+
         Args:
             symbol: Trading symbol
-            side: Order side ("buy" or "sell") 
+            side: Order side ("buy" or "sell")
             size: Order size
-            
+
         Returns:
             Order object if successful, None if failed
         """
@@ -728,17 +728,17 @@ from decimal import Decimal
 async def execute_trade():
     # Create client
     client = CoinbaseClient()
-    
+
     # Connect to exchange
     connected = await client.connect()
     if not connected:
         print("Failed to connect to Coinbase")
         return
-    
+
     # Check account balance
     balance = await client.get_account_balance()
     print(f"Account balance: ${balance}")
-    
+
     # Create trade action
     trade_action = TradeAction(
         action="LONG",
@@ -747,12 +747,12 @@ async def execute_trade():
         stop_loss_pct=1.5,
         rationale="Test trade"
     )
-    
+
     # Execute trade
     order = await client.execute_trade_action(
         trade_action, "BTC-USD", Decimal("50000")
     )
-    
+
     if order:
         print(f"Order placed: {order.id}")
     else:
@@ -883,7 +883,7 @@ manager = ConfigManager()
 
 # Switch profiles with backup
 new_settings = manager.switch_profile(
-    settings, 
+    settings,
     TradingProfile.AGGRESSIVE,
     save_current=True
 )
@@ -1135,40 +1135,40 @@ from typing import Optional
 class CustomMACDStrategy(BaseStrategy):
     """
     Custom MACD-based trading strategy.
-    
+
     Enters long when MACD crosses above signal line
     and RSI is not overbought.
     """
-    
+
     def __init__(self, rsi_threshold: float = 70):
         super().__init__()
         self.rsi_threshold = rsi_threshold
         self.name = "Custom MACD Strategy"
-    
+
     def analyze(self, market_state: MarketState) -> TradeAction:
         """
         Analyze market and generate trading decision.
-        
+
         Args:
             market_state: Current market conditions
-            
+
         Returns:
             TradeAction with trading decision
         """
         indicators = market_state.indicators
-        
+
         # Check for MACD bullish crossover
         macd_bullish = (
             indicators.macd > indicators.macd_signal and
             indicators.macd > 0
         )
-        
+
         # Check RSI not overbought
         rsi_ok = indicators.rsi < self.rsi_threshold
-        
+
         # Current position
         position = market_state.current_position
-        
+
         if position and position.side != "FLAT":
             # Check exit conditions
             if position.side == "LONG":
@@ -1191,7 +1191,7 @@ class CustomMACDStrategy(BaseStrategy):
                     stop_loss_pct=1.5,
                     rationale=f"MACD bullish crossover, RSI={indicators.rsi:.1f}"
                 )
-        
+
         # Default to hold
         return TradeAction(
             action="HOLD",
@@ -1217,75 +1217,75 @@ from bot.indicators.vumanchu import IndicatorCalculator
 
 class CustomIndicatorCalculator(IndicatorCalculator):
     """Extended indicator calculator with custom indicators."""
-    
+
     def calculate_custom_momentum(
-        self, 
-        df: pd.DataFrame, 
+        self,
+        df: pd.DataFrame,
         fast_period: int = 12,
         slow_period: int = 26
     ) -> pd.Series:
         """
         Calculate custom momentum indicator.
-        
+
         Args:
             df: DataFrame with OHLCV data
             fast_period: Fast EMA period
             slow_period: Slow EMA period
-            
+
         Returns:
             Series with momentum values
         """
         # Calculate EMAs
         ema_fast = df['close'].ewm(span=fast_period).mean()
         ema_slow = df['close'].ewm(span=slow_period).mean()
-        
+
         # Calculate momentum
         momentum = (ema_fast - ema_slow) / ema_slow * 100
-        
+
         return momentum
-    
+
     def calculate_volume_profile(
-        self, 
-        df: pd.DataFrame, 
+        self,
+        df: pd.DataFrame,
         period: int = 20
     ) -> pd.DataFrame:
         """
         Calculate volume profile indicator.
-        
+
         Args:
             df: DataFrame with OHLCV data
             period: Lookback period
-            
+
         Returns:
             DataFrame with volume profile data
         """
         volume_sma = df['volume'].rolling(window=period).mean()
         volume_ratio = df['volume'] / volume_sma
-        
+
         # Price-volume relationship
         price_change = df['close'].pct_change()
         volume_price_correlation = price_change.rolling(window=period).corr(
             df['volume'].pct_change()
         )
-        
+
         return pd.DataFrame({
             'volume_ratio': volume_ratio,
             'volume_sma': volume_sma,
             'vp_correlation': volume_price_correlation
         })
-    
+
     def calculate_all_extended(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calculate all indicators including custom ones."""
         # Calculate standard indicators
         df_with_indicators = self.calculate_all(df)
-        
+
         # Add custom indicators
         df_with_indicators['custom_momentum'] = self.calculate_custom_momentum(df)
-        
+
         volume_profile = self.calculate_volume_profile(df)
         for col in volume_profile.columns:
             df_with_indicators[col] = volume_profile[col]
-        
+
         return df_with_indicators
 
 # Usage
@@ -1306,14 +1306,14 @@ from bot.types import TradeAction, MarketState
 class EventDrivenTradingBot:
     """
     Event-driven trading bot with custom event handlers.
-    
+
     Supports custom event handling for:
     - Trade executions
     - Market condition changes
     - Risk limit breaches
     - System health events
     """
-    
+
     def __init__(self):
         self.engine = TradingEngine()
         self.event_handlers: Dict[str, list] = {
@@ -1324,11 +1324,11 @@ class EventDrivenTradingBot:
             'market_condition_change': [],
             'system_health_change': []
         }
-    
+
     def on(self, event: str, handler: Callable):
         """
         Register event handler.
-        
+
         Args:
             event: Event name
             handler: Callable event handler
@@ -1336,11 +1336,11 @@ class EventDrivenTradingBot:
         if event not in self.event_handlers:
             self.event_handlers[event] = []
         self.event_handlers[event].append(handler)
-    
+
     def emit(self, event: str, data: Any):
         """
         Emit event to all registered handlers.
-        
+
         Args:
             event: Event name
             data: Event data
@@ -1351,23 +1351,23 @@ class EventDrivenTradingBot:
                 handler(data)
             except Exception as e:
                 print(f"Error in event handler: {e}")
-    
+
     async def run_with_events(self):
         """Run trading bot with event emission."""
         # Override engine methods to emit events
         original_execute_trade = self.engine._execute_trade
-        
+
         async def execute_trade_with_events(trade_action, current_price):
             # Execute original trade
             result = await original_execute_trade(trade_action, current_price)
-            
+
             # Emit events
             self.emit('trade_executed', {
                 'action': trade_action,
                 'price': current_price,
                 'result': result
             })
-            
+
             if trade_action.action in ['LONG', 'SHORT']:
                 self.emit('position_opened', {
                     'side': trade_action.action,
@@ -1378,12 +1378,12 @@ class EventDrivenTradingBot:
                 self.emit('position_closed', {
                     'price': current_price
                 })
-            
+
             return result
-        
+
         # Replace method
         self.engine._execute_trade = execute_trade_with_events
-        
+
         # Run engine
         await self.engine.run()
 
@@ -1433,17 +1433,17 @@ from decimal import Decimal
 class PortfolioTradingBot:
     """
     Multi-symbol portfolio trading bot.
-    
+
     Manages trading across multiple symbols with:
     - Portfolio-level risk management
     - Position correlation analysis
     - Dynamic allocation adjustment
     """
-    
+
     def __init__(self, symbols: List[str], base_allocation: Dict[str, float]):
         """
         Initialize portfolio bot.
-        
+
         Args:
             symbols: List of trading symbols
             base_allocation: Base allocation percentages per symbol
@@ -1452,64 +1452,64 @@ class PortfolioTradingBot:
         self.base_allocation = base_allocation
         self.engines: Dict[str, TradingEngine] = {}
         self.portfolio_balance = Decimal('0')
-        
+
         # Initialize engines for each symbol
         for symbol in symbols:
             self.engines[symbol] = TradingEngine(
                 symbol=symbol,
                 dry_run=True  # Start safely
             )
-    
+
     async def initialize_portfolio(self):
         """Initialize all trading engines."""
         for symbol, engine in self.engines.items():
             await engine._initialize_components()
             print(f"✅ Initialized {symbol} trading engine")
-    
+
     def calculate_portfolio_risk(self) -> Dict[str, float]:
         """
         Calculate portfolio-level risk metrics.
-        
+
         Returns:
             Dict with portfolio risk metrics
         """
         total_exposure = Decimal('0')
         symbol_exposures = {}
-        
+
         for symbol, engine in self.engines.items():
             position = engine.current_position
             if position.side != "FLAT":
                 exposure = abs(position.size * position.entry_price)
                 symbol_exposures[symbol] = float(exposure)
                 total_exposure += exposure
-        
+
         return {
             'total_exposure': float(total_exposure),
             'symbol_exposures': symbol_exposures,
             'portfolio_utilization': float(total_exposure / max(self.portfolio_balance, 1))
         }
-    
+
     def adjust_position_sizes(self, base_action: TradeAction, symbol: str) -> TradeAction:
         """
         Adjust position size based on portfolio constraints.
-        
+
         Args:
             base_action: Original trade action
             symbol: Trading symbol
-            
+
         Returns:
             Adjusted trade action
         """
         if base_action.action == "HOLD":
             return base_action
-        
+
         # Get current portfolio risk
         portfolio_risk = self.calculate_portfolio_risk()
-        
+
         # Calculate maximum allowed position size for this symbol
         max_allocation = self.base_allocation.get(symbol, 0.2)  # Default 20%
         current_utilization = portfolio_risk['portfolio_utilization']
-        
+
         # Reduce size if portfolio is highly utilized
         if current_utilization > 0.8:  # 80% utilization
             adjustment_factor = 0.5  # Reduce by 50%
@@ -1517,12 +1517,12 @@ class PortfolioTradingBot:
             adjustment_factor = 0.75  # Reduce by 25%
         else:
             adjustment_factor = 1.0  # No adjustment
-        
+
         adjusted_size = min(
             base_action.size_pct * adjustment_factor,
             max_allocation * 100  # Convert to percentage
         )
-        
+
         return TradeAction(
             action=base_action.action,
             size_pct=adjusted_size,
@@ -1530,13 +1530,13 @@ class PortfolioTradingBot:
             stop_loss_pct=base_action.stop_loss_pct,
             rationale=f"Portfolio-adjusted: {base_action.rationale}"
         )
-    
+
     async def run_portfolio_trading(self):
         """Run portfolio trading across all symbols."""
         await self.initialize_portfolio()
-        
+
         print(f"🎯 Starting portfolio trading with {len(self.symbols)} symbols")
-        
+
         # Create tasks for all symbols
         tasks = []
         for symbol in self.symbols:
@@ -1545,7 +1545,7 @@ class PortfolioTradingBot:
                 name=f"trading_{symbol}"
             )
             tasks.append(task)
-        
+
         # Run all trading engines concurrently
         try:
             await asyncio.gather(*tasks)
@@ -1554,17 +1554,17 @@ class PortfolioTradingBot:
             # Cancel all tasks
             for task in tasks:
                 task.cancel()
-    
+
     async def run_symbol_trading(self, symbol: str):
         """Run trading for a specific symbol with portfolio constraints."""
         engine = self.engines[symbol]
-        
+
         while True:
             try:
                 # Get market analysis (simplified - normally would use full engine logic)
                 # market_state = await engine.get_market_state()
                 # base_action = await engine.llm_agent.analyze_market(market_state)
-                
+
                 # For demo, create dummy action
                 base_action = TradeAction(
                     action="HOLD",
@@ -1573,16 +1573,16 @@ class PortfolioTradingBot:
                     stop_loss_pct=1.5,
                     rationale="Demo action"
                 )
-                
+
                 # Adjust for portfolio constraints
                 adjusted_action = self.adjust_position_sizes(base_action, symbol)
-                
+
                 if adjusted_action.action != "HOLD":
                     print(f"📊 {symbol}: {adjusted_action.action} {adjusted_action.size_pct}%")
-                
+
                 # Sleep before next iteration
                 await asyncio.sleep(60)  # 1 minute intervals
-                
+
             except Exception as e:
                 print(f"Error trading {symbol}: {e}")
                 await asyncio.sleep(30)  # Wait before retry
@@ -1616,38 +1616,38 @@ import numpy as np
 
 class ExtendedIndicatorCalculator(IndicatorCalculator):
     """Extended calculator with custom indicators."""
-    
+
     def calculate_custom_rsi_divergence(
-        self, 
-        df: pd.DataFrame, 
+        self,
+        df: pd.DataFrame,
         rsi_period: int = 14,
         lookback: int = 20
     ) -> pd.Series:
         """
         Detect RSI divergence patterns.
-        
+
         Args:
             df: OHLCV DataFrame
             rsi_period: RSI calculation period
             lookback: Lookback period for divergence detection
-            
+
         Returns:
             Series with divergence signals (-1, 0, 1)
         """
         # Calculate RSI
         rsi = self.calculate_rsi(df['close'], rsi_period)
-        
+
         # Find price peaks and troughs
         price_peaks = df['high'].rolling(window=lookback, center=True).max() == df['high']
         price_troughs = df['low'].rolling(window=lookback, center=True).min() == df['low']
-        
+
         # Find RSI peaks and troughs
         rsi_peaks = rsi.rolling(window=lookback, center=True).max() == rsi
         rsi_troughs = rsi.rolling(window=lookback, center=True).min() == rsi
-        
+
         # Detect divergences
         divergence = pd.Series(0, index=df.index)
-        
+
         # Bullish divergence: price makes lower low, RSI makes higher low
         for i in range(lookback, len(df)):
             if price_troughs.iloc[i]:
@@ -1658,48 +1658,48 @@ class ExtendedIndicatorCalculator(IndicatorCalculator):
                     if (df['low'].iloc[i] < df['low'].loc[prev_idx] and
                         rsi.iloc[i] > rsi.loc[prev_idx]):
                         divergence.iloc[i] = 1  # Bullish divergence
-        
+
         return divergence
-    
+
     def calculate_market_structure(
-        self, 
-        df: pd.DataFrame, 
+        self,
+        df: pd.DataFrame,
         swing_period: int = 10
     ) -> pd.DataFrame:
         """
         Analyze market structure (higher highs, lower lows, etc.).
-        
+
         Args:
             df: OHLCV DataFrame
             swing_period: Period for swing detection
-            
+
         Returns:
             DataFrame with market structure analysis
         """
         # Detect swing highs and lows
         swing_highs = df['high'].rolling(window=swing_period*2+1, center=True).max() == df['high']
         swing_lows = df['low'].rolling(window=swing_period*2+1, center=True).min() == df['low']
-        
+
         # Classify market structure
         structure = pd.DataFrame(index=df.index)
         structure['swing_high'] = swing_highs
         structure['swing_low'] = swing_lows
         structure['trend'] = 'sideways'
-        
+
         # Determine trend based on swing points
         high_values = df.loc[swing_highs, 'high']
         low_values = df.loc[swing_lows, 'low']
-        
+
         # Simple trend classification
         if len(high_values) >= 2 and len(low_values) >= 2:
             recent_highs = high_values.tail(2)
             recent_lows = low_values.tail(2)
-            
+
             if recent_highs.iloc[-1] > recent_highs.iloc[-2] and recent_lows.iloc[-1] > recent_lows.iloc[-2]:
                 structure['trend'] = 'uptrend'
             elif recent_highs.iloc[-1] < recent_highs.iloc[-2] and recent_lows.iloc[-1] < recent_lows.iloc[-2]:
                 structure['trend'] = 'downtrend'
-        
+
         return structure
 
 # Register custom calculator
@@ -1726,69 +1726,69 @@ import json
 
 class CustomLLMProvider:
     """Custom LLM provider implementation."""
-    
+
     def __init__(self, api_url: str, api_key: str):
         self.api_url = api_url
         self.api_key = api_key
         self.client = httpx.AsyncClient()
-    
+
     async def generate_response(self, prompt: str) -> str:
         """Generate response from custom LLM."""
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
-        
+
         payload = {
             "prompt": prompt,
             "max_tokens": 1000,
             "temperature": 0.1
         }
-        
+
         response = await self.client.post(
             self.api_url,
             headers=headers,
             json=payload
         )
-        
+
         response.raise_for_status()
         result = response.json()
         return result.get("text", "")
 
 class CustomLLMAgent(LLMAgent):
     """LLM agent with custom provider."""
-    
+
     def __init__(self, custom_provider: CustomLLMProvider):
         self.provider = custom_provider
         self.model_provider = "custom"
         self.model_name = "custom-model"
-    
+
     async def analyze_market(self, market_state: MarketState) -> TradeAction:
         """Analyze market using custom LLM."""
         # Build prompt
         prompt = self._build_market_prompt(market_state)
-        
+
         # Get LLM response
         response = await self.provider.generate_response(prompt)
-        
+
         # Parse response to TradeAction
         action = self._parse_response(response)
-        
+
         return action
-    
+
     def _build_market_prompt(self, market_state: MarketState) -> str:
         """Build trading prompt for custom LLM."""
         return f"""
         Analyze the following market data and provide a trading decision:
-        
+
         Symbol: {market_state.symbol}
         Current Price: ${market_state.current_price}
         RSI: {market_state.indicators.rsi}
         Cipher A: {market_state.indicators.cipher_a}
-        
+
         Respond with JSON: {{"action": "LONG|SHORT|CLOSE|HOLD", "size_pct": 0-30, "rationale": "reason"}}
         """
-    
+
     def _parse_response(self, response: str) -> TradeAction:
         """Parse LLM response to TradeAction."""
         try:
@@ -1834,12 +1834,12 @@ import numpy as np
 
 class AdvancedRiskManager(RiskManager):
     """Advanced risk management with custom strategies."""
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.volatility_window = 20
         self.correlation_threshold = 0.7
-        
+
     def calculate_position_size_kelly(
         self,
         win_rate: float,
@@ -1849,33 +1849,33 @@ class AdvancedRiskManager(RiskManager):
     ) -> Decimal:
         """
         Calculate position size using Kelly Criterion.
-        
+
         Args:
             win_rate: Historical win rate (0-1)
             avg_win: Average winning trade amount
-            avg_loss: Average losing trade amount  
+            avg_loss: Average losing trade amount
             account_balance: Current account balance
-            
+
         Returns:
             Optimal position size based on Kelly Criterion
         """
         if avg_loss <= 0:
             return Decimal('0')
-        
+
         # Kelly formula: f = (bp - q) / b
         # where b = avg_win/avg_loss, p = win_rate, q = 1-win_rate
         b = avg_win / avg_loss
         p = win_rate
         q = 1 - win_rate
-        
+
         kelly_fraction = (b * p - q) / b
-        
+
         # Cap Kelly fraction at 25% for safety
         kelly_fraction = min(kelly_fraction, 0.25)
         kelly_fraction = max(kelly_fraction, 0)  # No negative sizing
-        
+
         return account_balance * Decimal(str(kelly_fraction))
-    
+
     def calculate_volatility_adjusted_size(
         self,
         base_size: Decimal,
@@ -1884,17 +1884,17 @@ class AdvancedRiskManager(RiskManager):
     ) -> Decimal:
         """
         Adjust position size based on market volatility.
-        
+
         Args:
             base_size: Base position size
             current_volatility: Current market volatility
             baseline_volatility: Baseline volatility for comparison
-            
+
         Returns:
             Volatility-adjusted position size
         """
         volatility_ratio = current_volatility / baseline_volatility
-        
+
         # Reduce size as volatility increases
         if volatility_ratio > 2.0:
             adjustment = 0.5  # Halve position size
@@ -1904,9 +1904,9 @@ class AdvancedRiskManager(RiskManager):
             adjustment = 1.25  # Increase by 25%
         else:
             adjustment = 1.0
-        
+
         return base_size * Decimal(str(adjustment))
-    
+
     def evaluate_correlation_risk(
         self,
         new_symbol: str,
@@ -1914,36 +1914,36 @@ class AdvancedRiskManager(RiskManager):
     ) -> Tuple[bool, str]:
         """
         Evaluate correlation risk with existing positions.
-        
+
         Args:
             new_symbol: Symbol for new position
             existing_positions: List of current positions
-            
+
         Returns:
             Tuple of (allowed, reason)
         """
         if not existing_positions:
             return True, "No existing positions"
-        
+
         # Simplified correlation check (in practice, would use historical data)
         high_correlation_pairs = {
             ("BTC-USD", "ETH-USD"): 0.8,
             ("ETH-USD", "SOL-USD"): 0.7,
         }
-        
+
         for position in existing_positions:
             if position.side == "FLAT":
                 continue
-                
+
             # Check correlation
             pair = tuple(sorted([new_symbol, position.symbol]))
             correlation = high_correlation_pairs.get(pair, 0.3)  # Default low correlation
-            
+
             if correlation > self.correlation_threshold:
                 return False, f"High correlation ({correlation:.2f}) with {position.symbol}"
-        
+
         return True, "Correlation risk acceptable"
-    
+
     def dynamic_stop_loss(
         self,
         entry_price: Decimal,
@@ -1953,36 +1953,36 @@ class AdvancedRiskManager(RiskManager):
     ) -> Decimal:
         """
         Calculate dynamic stop loss based on market conditions.
-        
+
         Args:
             entry_price: Position entry price
             current_price: Current market price
             volatility: Current market volatility
             time_in_trade: Time in trade (minutes)
-            
+
         Returns:
             Dynamic stop loss price
         """
         # Base stop loss (2% default)
         base_stop_pct = 0.02
-        
+
         # Adjust based on volatility
         volatility_adjustment = volatility * 2  # Scale volatility
         adjusted_stop_pct = base_stop_pct + volatility_adjustment
-        
+
         # Adjust based on time in trade (trailing stop)
         if time_in_trade > 240:  # 4 hours
             # Tighten stop loss for long-held positions
             adjusted_stop_pct *= 0.8
-        
+
         # Cap at reasonable levels
         adjusted_stop_pct = min(adjusted_stop_pct, 0.05)  # Max 5%
         adjusted_stop_pct = max(adjusted_stop_pct, 0.01)  # Min 1%
-        
+
         stop_loss_price = entry_price * (1 - Decimal(str(adjusted_stop_pct)))
-        
+
         return stop_loss_price
-    
+
     def evaluate_risk_advanced(
         self,
         trade_action: TradeAction,
@@ -1992,13 +1992,13 @@ class AdvancedRiskManager(RiskManager):
     ) -> Tuple[bool, TradeAction, str]:
         """
         Advanced risk evaluation with volatility and correlation checks.
-        
+
         Args:
             trade_action: Proposed trade action
             current_position: Current position
             current_price: Current market price
             market_volatility: Current market volatility
-            
+
         Returns:
             Tuple of (approved, modified_action, reason)
         """
@@ -2006,19 +2006,19 @@ class AdvancedRiskManager(RiskManager):
         approved, modified_action, reason = self.evaluate_risk(
             trade_action, current_position, current_price
         )
-        
+
         if not approved:
             return approved, modified_action, reason
-        
+
         # Additional advanced checks
-        
+
         # 1. Volatility adjustment
         if trade_action.action in ["LONG", "SHORT"]:
             original_size = Decimal(str(modified_action.size_pct))
             adjusted_size = self.calculate_volatility_adjusted_size(
                 original_size, market_volatility
             )
-            
+
             if adjusted_size != original_size:
                 modified_action = TradeAction(
                     action=modified_action.action,
@@ -2028,13 +2028,13 @@ class AdvancedRiskManager(RiskManager):
                     rationale=f"Volatility-adjusted: {modified_action.rationale}"
                 )
                 reason += f" (volatility-adjusted from {original_size}%)"
-        
+
         # 2. Time-based restrictions (example: no trading in first 30 min of market)
         from datetime import datetime
         current_hour = datetime.now().hour
         if current_hour == 9 and datetime.now().minute < 30:  # Market open
             return False, modified_action, "No trading in first 30 minutes"
-        
+
         return True, modified_action, reason
 
 # Usage in trading engine
@@ -2096,7 +2096,7 @@ print(f"Ready: {readiness['ready']}")
       "disk_usage_percent": 45.2
     },
     "apis": {
-      "status": "healthy", 
+      "status": "healthy",
       "coinbase_status": "connected",
       "llm_status": "available",
       "response_time_ms": 150
@@ -2182,11 +2182,11 @@ from bot.health import HealthCheckEndpoints
 
 class CustomMonitoringIntegration:
     """Custom monitoring integration with external systems."""
-    
+
     def __init__(self, health_endpoints: HealthCheckEndpoints):
         self.health_endpoints = health_endpoints
         self.metrics_buffer = []
-        
+
     def collect_metrics(self) -> Dict[str, Any]:
         """Collect comprehensive metrics."""
         return {
@@ -2196,21 +2196,21 @@ class CustomMonitoringIntegration:
             'metrics': self.health_endpoints.get_metrics(),
             'config_status': self.health_endpoints.get_configuration_status()
         }
-    
+
     def send_to_datadog(self, metrics: Dict[str, Any]):
         """Send metrics to Datadog."""
         # Implementation would use Datadog client
         print(f"Sending to Datadog: {metrics['timestamp']}")
-    
+
     def send_to_newrelic(self, metrics: Dict[str, Any]):
         """Send metrics to New Relic."""
         # Implementation would use New Relic client
         print(f"Sending to New Relic: {metrics['timestamp']}")
-    
+
     def send_to_custom_endpoint(self, metrics: Dict[str, Any], endpoint_url: str):
         """Send metrics to custom HTTP endpoint."""
         import requests
-        
+
         try:
             response = requests.post(
                 endpoint_url,
@@ -2221,31 +2221,31 @@ class CustomMonitoringIntegration:
             print(f"✅ Metrics sent to {endpoint_url}")
         except Exception as e:
             print(f"❌ Failed to send metrics: {e}")
-    
+
     async def run_monitoring_loop(self, interval: int = 60):
         """Run continuous monitoring loop."""
         while True:
             try:
                 # Collect metrics
                 metrics = self.collect_metrics()
-                
+
                 # Send to various monitoring systems
                 self.send_to_datadog(metrics)
                 self.send_to_newrelic(metrics)
                 self.send_to_custom_endpoint(
-                    metrics, 
+                    metrics,
                     "https://monitoring.yourcompany.com/metrics"
                 )
-                
+
                 # Buffer for analysis
                 self.metrics_buffer.append(metrics)
-                
+
                 # Keep only last 100 measurements
                 if len(self.metrics_buffer) > 100:
                     self.metrics_buffer.pop(0)
-                
+
                 await asyncio.sleep(interval)
-                
+
             except Exception as e:
                 print(f"Monitoring error: {e}")
                 await asyncio.sleep(30)  # Wait before retry
@@ -2278,7 +2278,7 @@ class ValidationError(TradingBotError):
 
 class APIError(TradingBotError):
     """API-related errors."""
-    
+
     def __init__(self, message: str, status_code: int = None, response: str = None):
         super().__init__(message)
         self.status_code = status_code
@@ -2338,7 +2338,7 @@ from functools import wraps
 
 class RetryConfig:
     """Configuration for retry behavior."""
-    
+
     def __init__(
         self,
         max_attempts: int = 3,
@@ -2355,75 +2355,75 @@ class RetryConfig:
 
 def with_retry(config: RetryConfig):
     """Decorator for automatic retry with exponential backoff."""
-    
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args, **kwargs) -> Any:
             last_exception = None
-            
+
             for attempt in range(1, config.max_attempts + 1):
                 try:
                     return await func(*args, **kwargs)
-                    
+
                 except config.retryable_exceptions as e:
                     last_exception = e
-                    
+
                     if attempt == config.max_attempts:
                         logging.error(f"Final attempt failed for {func.__name__}: {e}")
                         raise
-                    
+
                     # Calculate delay with exponential backoff
                     delay = min(
                         config.base_delay * (config.exponential_base ** (attempt - 1)),
                         config.max_delay
                     )
-                    
+
                     logging.warning(
                         f"Attempt {attempt}/{config.max_attempts} failed for {func.__name__}: {e}. "
                         f"Retrying in {delay:.1f}s"
                     )
-                    
+
                     await asyncio.sleep(delay)
-                    
+
                 except Exception as e:
                     # Non-retryable exception
                     logging.error(f"Non-retryable error in {func.__name__}: {e}")
                     raise
-            
+
             # This should never be reached, but just in case
             raise last_exception
-        
+
         return wrapper
     return decorator
 
 # Usage examples
 class RobustExchangeClient:
     """Exchange client with error recovery."""
-    
+
     @with_retry(RetryConfig(max_attempts=3, base_delay=2.0))
     async def place_order_with_retry(self, order_params):
         """Place order with automatic retry."""
         # This will automatically retry on API errors
         return await self.exchange_client.place_order(order_params)
-    
+
     @with_retry(RetryConfig(max_attempts=5, base_delay=1.0))
     async def get_account_balance_with_retry(self):
         """Get balance with retry for temporary network issues."""
         return await self.exchange_client.get_account_balance()
-    
+
     async def execute_trade_with_fallback(self, trade_action):
         """Execute trade with comprehensive error handling."""
         try:
             # Try primary execution method
             return await self.place_order_with_retry(trade_action)
-            
+
         except InsufficientFundsError:
             # Handle by reducing position size
             logging.warning("Insufficient funds, reducing position size")
             reduced_action = trade_action.copy()
             reduced_action.size_pct *= 0.5
             return await self.place_order_with_retry(reduced_action)
-            
+
         except ExchangeError as e:
             if e.status_code == 429:  # Rate limit
                 logging.warning("Rate limited, waiting before retry")
@@ -2431,7 +2431,7 @@ class RobustExchangeClient:
                 return await self.place_order_with_retry(trade_action)
             else:
                 raise
-                
+
         except Exception as e:
             # Log error and switch to dry-run mode
             logging.error(f"Unexpected error, switching to dry-run: {e}")
@@ -2440,7 +2440,7 @@ class RobustExchangeClient:
 
 class CircuitBreaker:
     """Circuit breaker pattern for API calls."""
-    
+
     def __init__(
         self,
         failure_threshold: int = 5,
@@ -2450,11 +2450,11 @@ class CircuitBreaker:
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
         self.expected_exception = expected_exception
-        
+
         self.failure_count = 0
         self.last_failure_time = 0
         self.state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
-    
+
     async def call(self, func: Callable, *args, **kwargs):
         """Execute function with circuit breaker protection."""
         if self.state == "OPEN":
@@ -2462,25 +2462,25 @@ class CircuitBreaker:
                 self.state = "HALF_OPEN"
             else:
                 raise Exception("Circuit breaker is OPEN")
-        
+
         try:
             result = await func(*args, **kwargs)
-            
+
             # Success - reset circuit breaker
             if self.state == "HALF_OPEN":
                 self.state = "CLOSED"
                 self.failure_count = 0
-            
+
             return result
-            
+
         except self.expected_exception as e:
             self.failure_count += 1
             self.last_failure_time = time.time()
-            
+
             if self.failure_count >= self.failure_threshold:
                 self.state = "OPEN"
                 logging.error(f"Circuit breaker opened after {self.failure_count} failures")
-            
+
             raise
 ```
 
@@ -2500,27 +2500,27 @@ import pandas as pd
 
 class OptimizedDataManager:
     """Optimized data management for large datasets."""
-    
+
     def __init__(self, max_cache_size: int = 1000):
         self.max_cache_size = max_cache_size
         self._cache: Dict[str, Any] = {}
         self._cache_order = []  # For LRU eviction
-    
+
     def cache_data(self, key: str, data: Any):
         """Cache data with LRU eviction."""
         # Remove if already exists
         if key in self._cache:
             self._cache_order.remove(key)
-        
+
         # Add to cache
         self._cache[key] = data
         self._cache_order.append(key)
-        
+
         # Evict oldest if over limit
         while len(self._cache) > self.max_cache_size:
             oldest_key = self._cache_order.pop(0)
             del self._cache[oldest_key]
-    
+
     def get_cached_data(self, key: str) -> Any:
         """Get cached data and update access order."""
         if key in self._cache:
@@ -2529,28 +2529,28 @@ class OptimizedDataManager:
             self._cache_order.append(key)
             return self._cache[key]
         return None
-    
+
     def optimize_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         """Optimize DataFrame memory usage."""
         # Convert object columns to category where appropriate
         for col in df.select_dtypes(include=['object']).columns:
             if df[col].nunique() / len(df) < 0.5:  # Less than 50% unique values
                 df[col] = df[col].astype('category')
-        
+
         # Downcast numeric types
         for col in df.select_dtypes(include=['int']).columns:
             df[col] = pd.to_numeric(df[col], downcast='integer')
-        
+
         for col in df.select_dtypes(include=['float']).columns:
             df[col] = pd.to_numeric(df[col], downcast='float')
-        
+
         return df
-    
+
     def periodic_cleanup(self):
         """Perform periodic memory cleanup."""
         # Force garbage collection
         gc.collect()
-        
+
         # Clear old cache entries
         if len(self._cache) > self.max_cache_size * 0.8:
             keys_to_remove = self._cache_order[:len(self._cache_order)//4]
@@ -2562,42 +2562,42 @@ class OptimizedDataManager:
 # Memory monitoring
 class MemoryMonitor:
     """Monitor and manage memory usage."""
-    
+
     def __init__(self, warning_threshold_mb: int = 800, critical_threshold_mb: int = 1500):
         self.warning_threshold = warning_threshold_mb * 1024 * 1024  # Convert to bytes
         self.critical_threshold = critical_threshold_mb * 1024 * 1024
-    
+
     def get_memory_usage(self) -> int:
         """Get current memory usage in bytes."""
         import psutil
         import os
-        
+
         process = psutil.Process(os.getpid())
         return process.memory_info().rss
-    
+
     def check_memory_usage(self) -> str:
         """Check memory usage and return status."""
         usage = self.get_memory_usage()
-        
+
         if usage > self.critical_threshold:
             return "CRITICAL"
         elif usage > self.warning_threshold:
             return "WARNING"
         else:
             return "OK"
-    
+
     def cleanup_if_needed(self):
         """Perform cleanup if memory usage is high."""
         status = self.check_memory_usage()
-        
+
         if status in ["WARNING", "CRITICAL"]:
             logging.warning(f"High memory usage detected: {status}")
             gc.collect()
-            
+
             if status == "CRITICAL":
                 # More aggressive cleanup
                 self._emergency_cleanup()
-    
+
     def _emergency_cleanup(self):
         """Emergency memory cleanup procedures."""
         # Clear any large data structures
@@ -2617,38 +2617,38 @@ import time
 
 class AsyncOptimizer:
     """Optimize async operations for better performance."""
-    
+
     def __init__(self, max_concurrent: int = 10):
         self.max_concurrent = max_concurrent
         self.semaphore = asyncio.Semaphore(max_concurrent)
-    
+
     async def batch_requests(
-        self, 
-        requests: List[Coroutine], 
+        self,
+        requests: List[Coroutine],
         batch_size: int = 5
     ) -> List[Any]:
         """Execute requests in batches to avoid overwhelming APIs."""
         results = []
-        
+
         for i in range(0, len(requests), batch_size):
             batch = requests[i:i + batch_size]
             batch_results = await asyncio.gather(*batch, return_exceptions=True)
             results.extend(batch_results)
-            
+
             # Small delay between batches to be nice to APIs
             if i + batch_size < len(requests):
                 await asyncio.sleep(0.1)
-        
+
         return results
-    
+
     async def limited_request(self, coro: Coroutine) -> Any:
         """Execute request with concurrency limiting."""
         async with self.semaphore:
             return await coro
-    
+
     async def timeout_request(
-        self, 
-        coro: Coroutine, 
+        self,
+        coro: Coroutine,
         timeout: float = 30.0
     ) -> Any:
         """Execute request with timeout."""
@@ -2660,7 +2660,7 @@ class AsyncOptimizer:
 # Connection pooling
 class OptimizedHTTPClient:
     """Optimized HTTP client with connection pooling."""
-    
+
     def __init__(self):
         self.connector = aiohttp.TCPConnector(
             limit=100,              # Total connection pool size
@@ -2670,15 +2670,15 @@ class OptimizedHTTPClient:
             keepalive_timeout=60,   # Keep connections alive
             enable_cleanup_closed=True
         )
-        
+
         self.timeout = aiohttp.ClientTimeout(
             total=30,       # Total timeout
             connect=10,     # Connection timeout
             sock_read=20    # Socket read timeout
         )
-        
+
         self.session = None
-    
+
     async def get_session(self) -> aiohttp.ClientSession:
         """Get or create HTTP session."""
         if self.session is None or self.session.closed:
@@ -2687,26 +2687,26 @@ class OptimizedHTTPClient:
                 timeout=self.timeout
             )
         return self.session
-    
+
     async def close(self):
         """Close HTTP session and cleanup."""
         if self.session and not self.session.closed:
             await self.session.close()
-        
+
         # Close connector
         await self.connector.close()
 
 # Performance monitoring
 class PerformanceProfiler:
     """Profile performance of trading operations."""
-    
+
     def __init__(self):
         self.metrics = {}
-    
+
     def time_operation(self, operation_name: str):
         """Context manager for timing operations."""
         return TimingContext(operation_name, self.metrics)
-    
+
     def get_performance_report(self) -> Dict[str, Any]:
         """Get performance metrics report."""
         report = {}
@@ -2722,16 +2722,16 @@ class PerformanceProfiler:
 
 class TimingContext:
     """Context manager for timing operations."""
-    
+
     def __init__(self, operation_name: str, metrics: Dict):
         self.operation_name = operation_name
         self.metrics = metrics
         self.start_time = None
-    
+
     def __enter__(self):
         self.start_time = time.time()
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.start_time:
             duration = time.time() - self.start_time
@@ -2746,36 +2746,36 @@ async def optimized_trading_loop():
     """Trading loop with performance optimization."""
     optimizer = AsyncOptimizer(max_concurrent=5)
     http_client = OptimizedHTTPClient()
-    
+
     try:
         while True:
             with profiler.time_operation('market_data_fetch'):
                 # Fetch market data
                 market_data = await fetch_market_data()
-            
+
             with profiler.time_operation('indicator_calculation'):
                 # Calculate indicators
                 indicators = calculate_indicators(market_data)
-            
+
             with profiler.time_operation('llm_analysis'):
                 # Get LLM decision (with timeout)
                 decision = await optimizer.timeout_request(
                     get_llm_decision(indicators),
                     timeout=10.0
                 )
-            
+
             # Trade execution with concurrency limit
             if decision.action != "HOLD":
                 with profiler.time_operation('trade_execution'):
                     await optimizer.limited_request(
                         execute_trade(decision)
                     )
-            
+
             await asyncio.sleep(60)  # Wait before next iteration
-            
+
     finally:
         await http_client.close()
-        
+
         # Print performance report
         report = profiler.get_performance_report()
         for operation, stats in report.items():
@@ -2806,21 +2806,21 @@ class BotInstance:
 
 class BotCluster:
     """Manage multiple trading bot instances."""
-    
+
     def __init__(self):
         self.instances: Dict[str, BotInstance] = {}
         self.coordinator_running = False
-    
+
     async def start_instance(
-        self, 
-        bot_id: str, 
-        symbol: str, 
+        self,
+        bot_id: str,
+        symbol: str,
         interval: str = "1m"
     ) -> bool:
         """Start a new bot instance."""
         if bot_id in self.instances:
             return False
-        
+
         # Start new process for bot instance
         process = await asyncio.create_subprocess_exec(
             "python", "-m", "bot.main", "live",
@@ -2828,7 +2828,7 @@ class BotCluster:
             "--interval", interval,
             "--instance-id", bot_id
         )
-        
+
         # Track instance
         instance = BotInstance(
             id=bot_id,
@@ -2838,33 +2838,33 @@ class BotCluster:
             pid=process.pid,
             last_heartbeat=time.time()
         )
-        
+
         self.instances[bot_id] = instance
         return True
-    
+
     async def stop_instance(self, bot_id: str) -> bool:
         """Stop a bot instance."""
         if bot_id not in self.instances:
             return False
-        
+
         instance = self.instances[bot_id]
-        
+
         # Send graceful shutdown signal
         os.kill(instance.pid, signal.SIGTERM)
-        
+
         # Wait for shutdown
         await asyncio.sleep(5)
-        
+
         # Force kill if still running
         try:
             os.kill(instance.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass  # Process already terminated
-        
+
         # Remove from tracking
         del self.instances[bot_id]
         return True
-    
+
     async def monitor_instances(self):
         """Monitor all running instances."""
         while self.coordinator_running:
@@ -2876,27 +2876,27 @@ class BotCluster:
                     # Process died
                     instance.status = "error"
                     print(f"Instance {bot_id} died unexpectedly")
-                    
+
                     # Restart if configured
                     if should_restart_instance(instance):
                         await self.restart_instance(bot_id)
-            
+
             await asyncio.sleep(30)  # Check every 30 seconds
-    
+
     async def restart_instance(self, bot_id: str):
         """Restart a failed instance."""
         if bot_id not in self.instances:
             return
-        
+
         instance = self.instances[bot_id]
         print(f"Restarting instance {bot_id}")
-        
+
         # Stop old instance
         await self.stop_instance(bot_id)
-        
+
         # Start new instance
         await self.start_instance(bot_id, instance.symbol, instance.interval)
-    
+
     def get_cluster_status(self) -> Dict[str, Any]:
         """Get status of all instances in cluster."""
         return {
@@ -2916,33 +2916,33 @@ class BotCluster:
 # Load balancing for API requests
 class LoadBalancer:
     """Load balance API requests across multiple endpoints."""
-    
+
     def __init__(self, endpoints: List[str]):
         self.endpoints = endpoints
         self.current_index = 0
         self.endpoint_stats = {endpoint: {"requests": 0, "errors": 0} for endpoint in endpoints}
-    
+
     def get_next_endpoint(self) -> str:
         """Get next endpoint using round-robin."""
         endpoint = self.endpoints[self.current_index]
         self.current_index = (self.current_index + 1) % len(self.endpoints)
         return endpoint
-    
+
     def get_best_endpoint(self) -> str:
         """Get endpoint with lowest error rate."""
         best_endpoint = None
         best_score = float('inf')
-        
+
         for endpoint in self.endpoints:
             stats = self.endpoint_stats[endpoint]
             error_rate = stats["errors"] / max(stats["requests"], 1)
-            
+
             if error_rate < best_score:
                 best_score = error_rate
                 best_endpoint = endpoint
-        
+
         return best_endpoint or self.endpoints[0]
-    
+
     def record_request(self, endpoint: str, success: bool):
         """Record request outcome for endpoint."""
         self.endpoint_stats[endpoint]["requests"] += 1
@@ -2953,27 +2953,27 @@ class LoadBalancer:
 async def run_multi_instance_cluster():
     """Run a cluster of trading bot instances."""
     cluster = BotCluster()
-    
+
     # Start instances for different symbols
     await cluster.start_instance("btc-1m", "BTC-USD", "1m")
     await cluster.start_instance("eth-1m", "ETH-USD", "1m")
     await cluster.start_instance("btc-5m", "BTC-USD", "5m")
-    
+
     # Start monitoring
     cluster.coordinator_running = True
     monitor_task = asyncio.create_task(cluster.monitor_instances())
-    
+
     try:
         # Run indefinitely
         while True:
             status = cluster.get_cluster_status()
             print(f"Cluster status: {status['running_instances']}/{status['total_instances']} running")
             await asyncio.sleep(60)
-            
+
     finally:
         cluster.coordinator_running = False
         await monitor_task
-        
+
         # Stop all instances
         for bot_id in list(cluster.instances.keys()):
             await cluster.stop_instance(bot_id)

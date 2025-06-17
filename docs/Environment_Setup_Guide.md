@@ -113,15 +113,15 @@ settings = setup_configuration(profile=TradingProfile.CONSERVATIVE)
 # Switch profiles with backup
 config_manager = ConfigManager()
 new_settings = config_manager.switch_profile(
-    settings, 
-    TradingProfile.AGGRESSIVE, 
+    settings,
+    TradingProfile.AGGRESSIVE,
     save_current=True
 )
 ```
 
 **Available Profiles:**
 - `conservative`: Low risk, low leverage (2x), 1% daily loss limit
-- `moderate`: Balanced risk, medium leverage (5x), 3% daily loss limit  
+- `moderate`: Balanced risk, medium leverage (5x), 3% daily loss limit
 - `aggressive`: High risk, high leverage (10x), 5% daily loss limit
 - `custom`: User-defined parameters
 
