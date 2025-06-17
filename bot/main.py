@@ -180,15 +180,20 @@ class TradingEngine:
 
         # Initialize components (market data will be initialized after exchange connection)
         self.market_data: MarketDataProviderType = None
+        self.logger.debug("About to initialize VuManChu indicators...")
         self.indicator_calc = VuManChuIndicators()
+        self.logger.debug("VuManChu indicators initialized successfully")
         self.actual_trading_symbol = symbol  # Will be updated if futures are enabled
 
         # Initialize MCP memory components if enabled
+        self.logger.debug("About to initialize MCP memory components...")
         self.memory_server = None
         self.experience_manager = None
         self._memory_available = False
+        self.logger.debug("MCP memory components initialized")
 
         # Initialize OmniSearch client if enabled
+        self.logger.debug("About to initialize OmniSearch client...")
         self.omnisearch_client = None
         if self.settings.omnisearch.enabled:
             self.logger.info("OmniSearch integration enabled, initializing client...")

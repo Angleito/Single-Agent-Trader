@@ -28,8 +28,10 @@ services:
       - dashboard-network  # Only use dashboard network
     environment:
       # Standalone API URLs (direct backend access)
-      - VITE_API_URL=http://localhost:8000
-      - VITE_WS_URL=ws://localhost:8000/ws
+      - VITE_API_BASE_URL=http://dashboard-backend:8000/api
+      - VITE_API_URL=http://dashboard-backend:8000/api
+      - VITE_WS_URL=ws://dashboard-backend:8000/ws
+      - VITE_DOCKER_ENV=true
       - VITE_STANDALONE_MODE=true
 
   dashboard-frontend-prod:

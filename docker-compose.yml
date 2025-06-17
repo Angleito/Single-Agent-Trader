@@ -415,7 +415,8 @@ services:
       - NODE_ENV=production
       # Use localhost URLs for browser-based frontend communication (direct backend access)
       # Frontend runs in browser and needs to access containerized backend via host
-      - VITE_API_URL=http://localhost:8000
+      - VITE_API_BASE_URL=http://localhost:8000/api
+      - VITE_API_URL=http://localhost:8000/api
       - VITE_WS_URL=ws://localhost:8000/ws
       - VITE_DOCKER_ENV=true
     restart: unless-stopped

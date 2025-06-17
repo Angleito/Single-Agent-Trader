@@ -5,13 +5,13 @@
 
 set -e
 
-# Default values
-DEFAULT_API_URL=""
-DEFAULT_WS_URL=""
-DEFAULT_DOCKER_ENV="false"
+# Default values for container environment
+DEFAULT_API_URL="/api"
+DEFAULT_WS_URL="/api/ws"
+DEFAULT_DOCKER_ENV="true"
 
-# Get environment variables with defaults
-API_URL="${VITE_API_URL:-$DEFAULT_API_URL}"
+# Get environment variables with defaults (support both VITE_API_URL and VITE_API_BASE_URL)
+API_URL="${VITE_API_URL:-${VITE_API_BASE_URL:-$DEFAULT_API_URL}}"
 WS_URL="${VITE_WS_URL:-$DEFAULT_WS_URL}"
 DOCKER_ENV="${VITE_DOCKER_ENV:-$DEFAULT_DOCKER_ENV}"
 
@@ -27,6 +27,7 @@ echo "   DOCKER_ENV: ${DOCKER_ENV}"
 ENV_JS="
 window.__RUNTIME_CONFIG__ = {
   API_URL: '${API_URL}',
+  API_BASE_URL: '${API_URL}',
   WS_URL: '${WS_URL}',
   DOCKER_ENV: '${DOCKER_ENV}'
 };
@@ -47,12 +48,19 @@ else
   echo "❌ index.html not found, skipping injection"
 fi
 
-# Set global variables for the JavaScript to access
+# Set global variables for the JavaScript to access (multiple naming patterns for compatibility)
 cat > /usr/share/nginx/html/env-config.js << EOF
-// Runtime environment configuration
+// Runtime environment configuration with multiple naming patterns
 window.__API_URL__ = '${API_URL}';
+window.__API_BASE_URL__ = '${API_URL}';
 window.__WS_URL__ = '${WS_URL}';
 window.__DOCKER_ENV__ = '${DOCKER_ENV}';
+
+// Vite-style environment variables for compatibility
+window.__VITE_API_URL__ = '${API_URL}';
+window.__VITE_API_BASE_URL__ = '${API_URL}';
+window.__VITE_WS_URL__ = '${WS_URL}';
+window.__VITE_DOCKER_ENV__ = '${DOCKER_ENV}';
 EOF
 
 echo "✅ Runtime environment injection completed"

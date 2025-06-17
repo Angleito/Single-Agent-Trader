@@ -843,29 +843,53 @@ app = FastAPI(
 
 # Add CORS middleware
 # Get allowed origins from environment or use comprehensive defaults
+#
+# Environment variables for CORS customization:
+# - CORS_ORIGINS: Comma-separated list of allowed origins
+# - FRONTEND_URL: Primary frontend URL for fallback scenarios  
+# - CORS_DEFAULT_ORIGIN: Default origin when no other fallback applies
+# - CORS_ALLOW_CREDENTIALS: Enable/disable credentials (default: true)
+# - ENVIRONMENT: When set to 'development', allows '*' origin for WebSocket upgrades
 default_origins = ",".join(
     [
         # Development frontend
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "https://localhost:3000",
+        "https://127.0.0.1:3000",
         # Production frontend
         "http://localhost:3001",
         "http://127.0.0.1:3001",
+        "https://localhost:3001",
+        "https://127.0.0.1:3001",
         # Nginx proxy
         "http://localhost:8080",
         "http://127.0.0.1:8080",
-        # Production port 80
+        "https://localhost:8080",
+        "https://127.0.0.1:8080",
+        # Production port 80/443
         "http://localhost:80",
         "http://127.0.0.1:80",
-        # Docker internal network
+        "https://localhost:443",
+        "https://127.0.0.1:443",
+        "http://localhost",
+        "https://localhost",
+        # Docker internal network - comprehensive container names
         "http://dashboard-frontend:8080",
         "http://dashboard-frontend-prod:8080",
+        "http://cursorprod-dashboard-frontend:8080",
+        "http://cursorprod_dashboard_frontend:8080",
+        "https://dashboard-frontend:8080",
+        "https://dashboard-frontend-prod:8080",
         # Container-to-container communication
         "http://dashboard-backend:8000",
+        "http://cursorprod-dashboard-backend:8000",
+        "http://cursorprod_dashboard_backend:8000",
         # Alternative localhost variations
         "http://0.0.0.0:3000",
         "http://0.0.0.0:3001",
         "http://0.0.0.0:8080",
+        "http://0.0.0.0:80",
         # WebSocket-specific origins (for browser connections)
         "ws://localhost:8000",
         "ws://127.0.0.1:8000",
@@ -873,10 +897,14 @@ default_origins = ",".join(
         # HTTPS/WSS variants for production
         "wss://localhost:8000",
         "wss://127.0.0.1:8000",
+        "wss://0.0.0.0:8000",
         # Direct browser access to backend port
         "http://localhost:8000",
         "http://127.0.0.1:8000",
         "http://0.0.0.0:8000",
+        "https://localhost:8000",
+        "https://127.0.0.1:8000",
+        "https://0.0.0.0:8000",
     ]
 )
 
@@ -962,8 +990,18 @@ async def add_json_headers(request, call_next):
             ):
                 allow_origin = origin
             # Check for docker internal network origins
-            elif origin.startswith("http://dashboard-frontend") or origin.startswith(
-                "http://dashboard-backend"
+            elif any(
+                origin.startswith(prefix)
+                for prefix in [
+                    "http://dashboard-frontend",
+                    "https://dashboard-frontend",
+                    "http://dashboard-backend",
+                    "https://dashboard-backend",
+                    "http://cursorprod-dashboard-frontend",
+                    "https://cursorprod-dashboard-frontend",
+                    "http://cursorprod_dashboard_frontend",
+                    "https://cursorprod_dashboard_frontend",
+                ]
             ):
                 allow_origin = origin
 
@@ -978,9 +1016,12 @@ async def add_json_headers(request, call_next):
             if os.getenv("ENVIRONMENT", "development") == "development":
                 response.headers["Access-Control-Allow-Origin"] = "*"
             else:
-                response.headers["Access-Control-Allow-Origin"] = (
-                    "http://localhost:3000"
+                # Dynamic fallback based on request origin or environment
+                fallback_origin = (
+                    origin or
+                    os.getenv("FRONTEND_URL", "http://localhost:3000")
                 )
+                response.headers["Access-Control-Allow-Origin"] = fallback_origin
 
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, UPGRADE"
         response.headers["Access-Control-Allow-Headers"] = (
@@ -996,10 +1037,42 @@ async def handle_options(path: str, request: Request):
     """Handle CORS preflight requests"""
     origin = request.headers.get("origin")
 
-    # Determine the appropriate origin to allow
-    allow_origin = "http://localhost:3000"  # Default fallback
+    # Determine the appropriate origin to allow with dynamic fallback
     if origin and origin in allowed_origins:
         allow_origin = origin
+    elif origin and any(
+        origin.startswith(prefix)
+        for prefix in [
+            "http://localhost:",
+            "http://127.0.0.1:",
+            "https://localhost:",
+            "https://127.0.0.1:",
+        ]
+    ):
+        # Allow localhost/127.0.0.1 variations for development
+        allow_origin = origin
+    elif origin and any(
+        origin.startswith(prefix)
+        for prefix in [
+            "http://dashboard-frontend",
+            "https://dashboard-frontend",
+            "http://dashboard-backend",
+            "https://dashboard-backend",
+            "http://cursorprod-dashboard-frontend",
+            "https://cursorprod-dashboard-frontend",
+            "http://cursorprod_dashboard_frontend",
+            "https://cursorprod_dashboard_frontend",
+        ]
+    ):
+        # Allow Docker container networking
+        allow_origin = origin
+    else:
+        # Dynamic fallback based on environment variables or sensible defaults
+        allow_origin = (
+            origin or
+            os.getenv("FRONTEND_URL") or
+            os.getenv("CORS_DEFAULT_ORIGIN", "http://localhost:3000")
+        )
 
     headers = {
         "Access-Control-Allow-Origin": allow_origin,

@@ -97,9 +97,9 @@ services:
       - /app/node_modules  # Anonymous volume for node_modules
     environment:
       - NODE_ENV=development
-      - VITE_API_BASE_URL=http://localhost:8000
+      # Development URLs (direct backend access)
       - VITE_API_URL=http://localhost:8000
-      - VITE_WS_URL=ws://localhost:8000
+      - VITE_WS_URL=ws://localhost:8000/ws
       - CHOKIDAR_USEPOLLING=true  # For file watching in Docker
       - FAST_REFRESH=true
     restart: unless-stopped
