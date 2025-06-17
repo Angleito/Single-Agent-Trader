@@ -7,7 +7,7 @@ readme = "README.md"
 packages = [{include = "bot"}]
 
 [tool.poetry.dependencies]
-python = ">=3.12,<3.14"
+python = "^3.12"
 pip = "^24.0.0"
 setuptools = "^69.0.0"
 pandas = "^2.2.0"
@@ -47,6 +47,7 @@ mypy = "^1.8.0"
 types-requests = "^2.31.0"
 memory-profiler = "^0.61.0"
 safety = "^3.5.2"
+bandit = "^1.7.0"
 
 [tool.poetry.scripts]
 ai-trading-bot = "bot.main:cli"

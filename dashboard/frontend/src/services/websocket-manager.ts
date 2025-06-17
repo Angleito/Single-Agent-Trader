@@ -923,7 +923,7 @@ export class WebSocketManager {
   /**
    * Log debug messages
    */
-  private log(message: string): void {
+  private log(_message: string): void {
     if (this.config.debug) {
       // DEBUG: WebSocket manager debug logging
       // console.log(`[WebSocketManager] ${message}`)

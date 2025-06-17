@@ -64,6 +64,7 @@ jobs:
     
     - name: Verify Black installation
       run: |
+        poetry show black
         poetry run black --version
     
     - name: Run Black formatting check

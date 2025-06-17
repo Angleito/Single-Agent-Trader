@@ -580,7 +580,7 @@ export class PerformanceOptimizer {
 
     // Monitor network changes
     if ('connection' in navigator) {
-      ;(
+      (
         navigator as unknown as {
           connection: { addEventListener: (event: string, callback: () => void) => void }
         }
