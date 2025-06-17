@@ -111,7 +111,10 @@ class RiskManager:
                 modified_action, self._account_balance, current_price
             )
 
-            if modified_action.size_pct == 0 and trade_action.action in ["LONG", "SHORT"]:
+            if modified_action.size_pct == 0 and trade_action.action in [
+                "LONG",
+                "SHORT",
+            ]:
                 return (
                     False,
                     self._get_hold_action("Position too small after fee adjustment"),
@@ -119,7 +122,9 @@ class RiskManager:
                 )
 
             # Validate trade profitability after fees
-            position_value = self._account_balance * Decimal(str(modified_action.size_pct / 100))
+            position_value = self._account_balance * Decimal(
+                str(modified_action.size_pct / 100)
+            )
             is_profitable, profit_reason = fee_calculator.validate_trade_profitability(
                 modified_action, position_value, current_price
             )
@@ -132,7 +137,9 @@ class RiskManager:
                 )
 
             # Calculate risk metrics (now with fees included)
-            risk_metrics = self._calculate_position_risk(modified_action, current_price, trade_fees)
+            risk_metrics = self._calculate_position_risk(
+                modified_action, current_price, trade_fees
+            )
 
             # Check if risk is acceptable
             if risk_metrics["max_loss_usd"] > self._get_max_acceptable_loss():
@@ -314,7 +321,8 @@ class RiskManager:
 
         # Recalculate risk/reward ratio with fees
         risk_reward_ratio = (
-            float(max_gain_usd / max_loss_usd) if max_loss_usd > 0
+            float(max_gain_usd / max_loss_usd)
+            if max_loss_usd > 0
             else trade_action.take_profit_pct / trade_action.stop_loss_pct
         )
 
@@ -414,10 +422,10 @@ class RiskManager:
     def _validate_mandatory_stop_loss(self, trade_action: TradeAction) -> bool:
         """
         Validate that stop loss is mandatory for LONG/SHORT actions.
-        
+
         Args:
             trade_action: Trade action to validate
-            
+
         Returns:
             True if stop loss requirements are met
         """
@@ -442,7 +450,9 @@ class RiskManager:
                 )
                 return False
 
-            logger.info(f"✅ Stop loss validation passed: {trade_action.stop_loss_pct}%")
+            logger.info(
+                f"✅ Stop loss validation passed: {trade_action.stop_loss_pct}%"
+            )
             return True
 
         return True

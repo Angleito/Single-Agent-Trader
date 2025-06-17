@@ -319,7 +319,6 @@ class CoinbaseClient(BaseExchange):
                 "Use --dry-run flag for paper trading."
             )
 
-
     async def connect(self) -> bool:
         """
         Connect and authenticate with Coinbase.
@@ -457,7 +456,9 @@ class CoinbaseClient(BaseExchange):
                 try:
                     await self.get_monthly_volume()
                 except Exception as e:
-                    logger.warning(f"Failed to get monthly volume during initialization: {e}")
+                    logger.warning(
+                        f"Failed to get monthly volume during initialization: {e}"
+                    )
 
             return True
 
@@ -570,7 +571,7 @@ class CoinbaseClient(BaseExchange):
                             "quote_currency": "USD",
                             "trading_disabled": False,
                             "display_name": "BTC Futures - Jun 2025",
-                        }
+                        },
                     ]
                 }
             else:
@@ -705,8 +706,8 @@ class CoinbaseClient(BaseExchange):
         # Map spot symbols to actual futures contracts
         # Coinbase uses abbreviated symbols with date suffixes
         futures_mappings = {
-            'ETH-USD': 'ET-27JUN25-CDE',
-            'BTC-USD': 'BT-27JUN25-CDE',  # Assuming similar pattern
+            "ETH-USD": "ET-27JUN25-CDE",
+            "BTC-USD": "BT-27JUN25-CDE",  # Assuming similar pattern
         }
 
         if base_symbol in futures_mappings:
@@ -715,7 +716,7 @@ class CoinbaseClient(BaseExchange):
             return futures_symbol
 
         # For other symbols, try to find dated contracts
-        base_currency = base_symbol.split('-')[0]
+        base_currency = base_symbol.split("-")[0]
 
         # Try to get cached contract first
         if self._futures_contract_manager:
@@ -724,7 +725,11 @@ class CoinbaseClient(BaseExchange):
                 return cached_contract
 
             # Fetch current active contract
-            active_contract = await self._futures_contract_manager.get_active_futures_contract(base_currency)
+            active_contract = (
+                await self._futures_contract_manager.get_active_futures_contract(
+                    base_currency
+                )
+            )
             if active_contract:
                 return active_contract
 
@@ -763,7 +768,9 @@ class CoinbaseClient(BaseExchange):
                 return await self._close_position(actual_symbol)
 
             elif trade_action.action in ["LONG", "SHORT"]:
-                return await self._open_position(trade_action, actual_symbol, current_price)
+                return await self._open_position(
+                    trade_action, actual_symbol, current_price
+                )
 
             else:
                 logger.error(f"Unknown action: {trade_action.action}")
@@ -839,12 +846,14 @@ class CoinbaseClient(BaseExchange):
 
             # Calculate quantity for futures - ALWAYS USE 1 CONTRACT
             # Check if this is an actual futures contract (ends with -CDE)
-            if symbol.endswith('-CDE'):
+            if symbol.endswith("-CDE"):
                 # Real futures contracts use CONTRACT COUNT, not ETH amount
                 # Each contract = 0.1 ETH (nano futures)
                 # FIXED: Always trade exactly 1 contract
                 num_contracts = 1
-                quantity = Decimal("1")  # For CDE contracts, quantity is the number of contracts
+                quantity = Decimal(
+                    "1"
+                )  # For CDE contracts, quantity is the number of contracts
                 logger.info(f"Futures contract {symbol}: FIXED 1 contract (0.1 ETH)")
             else:
                 # Spot with leverage: use nano contract sizing
@@ -864,19 +873,22 @@ class CoinbaseClient(BaseExchange):
 
             # Check CFM balance and transfer if needed
             if futures_account.futures_balance < margin_required:
-                transfer_amount = margin_required - futures_account.futures_balance + Decimal("10")  # Add buffer
+                transfer_amount = (
+                    margin_required - futures_account.futures_balance + Decimal("10")
+                )  # Add buffer
                 logger.info(
                     f"CFM balance ${futures_account.futures_balance} < margin required ${margin_required}. "
                     f"Transferring ${transfer_amount} from CBI to CFM..."
                 )
 
                 transfer_success = await self.transfer_cash_to_futures(
-                    amount=transfer_amount,
-                    reason="AUTO_REBALANCE"
+                    amount=transfer_amount, reason="AUTO_REBALANCE"
                 )
 
                 if not transfer_success:
-                    logger.error("Failed to transfer funds to CFM. Cannot open futures position.")
+                    logger.error(
+                        "Failed to transfer funds to CFM. Cannot open futures position."
+                    )
                     return None
 
                 # Wait a bit for transfer to settle
@@ -910,21 +922,35 @@ class CoinbaseClient(BaseExchange):
 
             if order:
                 # Place stop loss and take profit orders - CRITICAL for risk management
-                logger.info(f"Placing protective orders: SL={trade_action.stop_loss_pct}%, TP={trade_action.take_profit_pct}%")
+                logger.info(
+                    f"Placing protective orders: SL={trade_action.stop_loss_pct}%, TP={trade_action.take_profit_pct}%"
+                )
 
                 try:
-                    stop_loss_order = await self._place_stop_loss(order, trade_action, current_price)
+                    stop_loss_order = await self._place_stop_loss(
+                        order, trade_action, current_price
+                    )
                     if stop_loss_order:
-                        logger.info(f"✅ Stop loss order placed successfully: {stop_loss_order.id}")
+                        logger.info(
+                            f"✅ Stop loss order placed successfully: {stop_loss_order.id}"
+                        )
                     else:
-                        logger.error(f"❌ CRITICAL: Stop loss order failed for position {order.id}")
+                        logger.error(
+                            f"❌ CRITICAL: Stop loss order failed for position {order.id}"
+                        )
                         # Consider canceling the main order if stop loss fails
 
-                    take_profit_order = await self._place_take_profit(order, trade_action, current_price)
+                    take_profit_order = await self._place_take_profit(
+                        order, trade_action, current_price
+                    )
                     if take_profit_order:
-                        logger.info(f"✅ Take profit order placed successfully: {take_profit_order.id}")
+                        logger.info(
+                            f"✅ Take profit order placed successfully: {take_profit_order.id}"
+                        )
                     else:
-                        logger.warning(f"⚠️ Take profit order failed for position {order.id}")
+                        logger.warning(
+                            f"⚠️ Take profit order failed for position {order.id}"
+                        )
 
                 except Exception as e:
                     logger.error(f"❌ CRITICAL ERROR placing protective orders: {e}")
@@ -974,21 +1000,35 @@ class CoinbaseClient(BaseExchange):
 
         if order:
             # Place stop loss and take profit orders - CRITICAL for risk management
-            logger.info(f"Placing protective orders: SL={trade_action.stop_loss_pct}%, TP={trade_action.take_profit_pct}%")
+            logger.info(
+                f"Placing protective orders: SL={trade_action.stop_loss_pct}%, TP={trade_action.take_profit_pct}%"
+            )
 
             try:
-                stop_loss_order = await self._place_stop_loss(order, trade_action, current_price)
+                stop_loss_order = await self._place_stop_loss(
+                    order, trade_action, current_price
+                )
                 if stop_loss_order:
-                    logger.info(f"✅ Stop loss order placed successfully: {stop_loss_order.id}")
+                    logger.info(
+                        f"✅ Stop loss order placed successfully: {stop_loss_order.id}"
+                    )
                 else:
-                    logger.error(f"❌ CRITICAL: Stop loss order failed for position {order.id}")
+                    logger.error(
+                        f"❌ CRITICAL: Stop loss order failed for position {order.id}"
+                    )
                     # Consider canceling the main order if stop loss fails
 
-                take_profit_order = await self._place_take_profit(order, trade_action, current_price)
+                take_profit_order = await self._place_take_profit(
+                    order, trade_action, current_price
+                )
                 if take_profit_order:
-                    logger.info(f"✅ Take profit order placed successfully: {take_profit_order.id}")
+                    logger.info(
+                        f"✅ Take profit order placed successfully: {take_profit_order.id}"
+                    )
                 else:
-                    logger.warning(f"⚠️ Take profit order failed for position {order.id}")
+                    logger.warning(
+                        f"⚠️ Take profit order failed for position {order.id}"
+                    )
 
             except Exception as e:
                 logger.error(f"❌ CRITICAL ERROR placing protective orders: {e}")
@@ -1095,9 +1135,9 @@ class CoinbaseClient(BaseExchange):
                     # Handle the new SDK response format
                     resp = result.success_response
                     if isinstance(resp, dict):
-                        order_id = resp.get('order_id')
+                        order_id = resp.get("order_id")
                     else:
-                        order_id = resp.order_id if hasattr(resp, 'order_id') else None
+                        order_id = resp.order_id if hasattr(resp, "order_id") else None
 
                     order = Order(
                         id=order_id
@@ -1505,7 +1545,7 @@ class CoinbaseClient(BaseExchange):
             client_order_id = f"ai-bot-{uuid.uuid4().hex[:8]}"
 
             # Round quantity appropriately
-            if symbol.endswith('-CDE'):
+            if symbol.endswith("-CDE"):
                 # For futures contracts, quantity must be whole number (contracts)
                 rounded_quantity = int(quantity)
             else:
@@ -1518,11 +1558,11 @@ class CoinbaseClient(BaseExchange):
                 "side": side,
                 "order_configuration": {
                     "market_market_ioc": {"base_size": str(rounded_quantity)}
-                }
+                },
             }
 
             # Only add leverage for spot symbols, not for actual futures contracts
-            if not symbol.endswith('-CDE'):
+            if not symbol.endswith("-CDE"):
                 order_data["leverage"] = str(leverage)
 
             # Add reduce_only only if True
@@ -1546,9 +1586,9 @@ class CoinbaseClient(BaseExchange):
                     # Handle the new SDK response format
                     resp = result.success_response
                     if isinstance(resp, dict):
-                        order_id = resp.get('order_id')
+                        order_id = resp.get("order_id")
                     else:
-                        order_id = resp.order_id if hasattr(resp, 'order_id') else None
+                        order_id = resp.order_id if hasattr(resp, "order_id") else None
 
                     order = Order(
                         id=order_id
@@ -1981,8 +2021,7 @@ class CoinbaseClient(BaseExchange):
 
                 # Schedule a new sweep
                 await self._retry_request(
-                    self._client.schedule_futures_sweep,
-                    usd_amount=str(amount)
+                    self._client.schedule_futures_sweep, usd_amount=str(amount)
                 )
 
                 logger.info(f"Successfully scheduled futures sweep for ${amount}")
@@ -1991,9 +2030,13 @@ class CoinbaseClient(BaseExchange):
                 await asyncio.sleep(3)
 
                 # Check if transfer completed
-                balance_resp = await self._retry_request(self._client.get_futures_balance_summary)
-                if hasattr(balance_resp, 'balance_summary'):
-                    cfm_balance = Decimal(balance_resp.balance_summary.cfm_usd_balance['value'])
+                balance_resp = await self._retry_request(
+                    self._client.get_futures_balance_summary
+                )
+                if hasattr(balance_resp, "balance_summary"):
+                    cfm_balance = Decimal(
+                        balance_resp.balance_summary.cfm_usd_balance["value"]
+                    )
                     if cfm_balance > 0:
                         logger.info(f"Transfer completed. CFM balance: ${cfm_balance}")
                         return True
@@ -2038,12 +2081,14 @@ class CoinbaseClient(BaseExchange):
             positions = []
             for pos_data in positions_list:
                 # Handle object attributes
-                if hasattr(pos_data, 'product_id'):
+                if hasattr(pos_data, "product_id"):
                     product_id = pos_data.product_id
                     num_contracts = int(pos_data.number_of_contracts)
                     side = pos_data.side
                     avg_entry_price = Decimal(str(pos_data.avg_entry_price))
-                    unrealized_pnl = Decimal(str(getattr(pos_data, 'unrealized_pnl', '0')))
+                    unrealized_pnl = Decimal(
+                        str(getattr(pos_data, "unrealized_pnl", "0"))
+                    )
                 else:
                     # Handle dict format
                     product_id = pos_data.get("product_id")
@@ -2170,7 +2215,9 @@ class CoinbaseClient(BaseExchange):
             logger.error(f"Failed to cancel order {order_id}: {e}")
             return False
 
-    async def cancel_all_orders(self, symbol: str | None = None, status: str | None = None) -> bool:
+    async def cancel_all_orders(
+        self, symbol: str | None = None, status: str | None = None
+    ) -> bool:
         """
         Cancel all open orders, optionally filtered by symbol.
 
@@ -2304,9 +2351,7 @@ class CoinbaseClient(BaseExchange):
             "auth_method": self.auth_method,
             "has_credentials": has_credentials,
             "dry_run": self.dry_run,
-            "trading_mode": (
-                "PAPER TRADING" if self.dry_run else "LIVE TRADING"
-            ),
+            "trading_mode": ("PAPER TRADING" if self.dry_run else "LIVE TRADING"),
             "last_health_check": (
                 self._last_health_check.isoformat() if self._last_health_check else None
             ),
@@ -2379,10 +2424,10 @@ class CoinbaseClient(BaseExchange):
     async def get_monthly_volume(self, force_refresh: bool = False) -> Decimal:
         """
         Get 30-day trading volume for fee tier calculation.
-        
+
         Args:
             force_refresh: Force refresh of volume data
-            
+
         Returns:
             Monthly trading volume in USD
         """
@@ -2414,7 +2459,7 @@ class CoinbaseClient(BaseExchange):
                 fills_response = await self._retry_request(
                     self._client.get_fills,
                     start_sequence_timestamp=start_date.isoformat(),
-                    end_sequence_timestamp=end_date.isoformat()
+                    end_sequence_timestamp=end_date.isoformat(),
                 )
 
                 if isinstance(fills_response, dict) and "fills" in fills_response:
@@ -2435,6 +2480,7 @@ class CoinbaseClient(BaseExchange):
 
             # Update fee calculator with current volume
             from ..fee_calculator import fee_calculator
+
             fee_calculator.update_volume_tier(float(volume))
 
             # Determine fee tier
@@ -2454,7 +2500,9 @@ class CoinbaseClient(BaseExchange):
             elif volume >= 10000:
                 tier = "Active"
 
-            logger.info(f"Updated monthly trading volume: ${volume:,.2f} (Tier: {tier})")
+            logger.info(
+                f"Updated monthly trading volume: ${volume:,.2f} (Tier: {tier})"
+            )
             return volume
 
         except Exception as e:
@@ -2464,7 +2512,7 @@ class CoinbaseClient(BaseExchange):
     def get_current_fee_rates(self) -> dict[str, float]:
         """
         Get current fee rates based on volume tier.
-        
+
         Returns:
             Dictionary with maker and taker fee rates
         """
@@ -2475,5 +2523,5 @@ class CoinbaseClient(BaseExchange):
             "taker": fee_calculator.taker_fee_rate,
             "futures": fee_calculator.futures_fee_rate,
             "volume": float(self._monthly_volume),
-            "tier": fee_calculator.current_tier
+            "tier": fee_calculator.current_tier,
         }
