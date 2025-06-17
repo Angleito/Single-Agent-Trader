@@ -7,7 +7,7 @@ readme = "README.md"
 packages = [{include = "bot"}]
 
 [tool.poetry.dependencies]
-python = "^3.13"
+python = "^3.12"
 pip = "^24.0.0"
 setuptools = "^69.0.0"
 pandas = "^2.2.0"
@@ -58,7 +58,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.black]
 line-length = 88
-target-version = ['py313']
+target-version = ['py312']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
@@ -98,7 +98,7 @@ ignore = [
 "__init__.py" = ["F401"]
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.12"
 check_untyped_defs = false
 disallow_any_generics = false
 disallow_incomplete_defs = false
