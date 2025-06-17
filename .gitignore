@@ -287,3 +287,38 @@ scratch/
 notes.txt
 TODO.txt
 personal/
+
+# AI Assistant Files
+CLAUDE.md
+.claude/
+.cursorignore
+.cursor/
+*.ai
+.ai/
+.aider*
+.github/copilot*
+
+# Additional IDE/Editor Files  
+.nova/
+.sublime-project
+.sublime-workspace
+
+# Additional Testing Artifacts
+.mutmut-cache
+.dmypy.json
+.pyre/
+
+# Additional Temporary Files
+*.bak
+*.orig
+*.rej
+.cache/
+
+# Additional Log Patterns
+*.log.*
+logs/**/*.log
+
+# Additional Security Files
+*.env.local
+*.env.production  
+*.env.development
