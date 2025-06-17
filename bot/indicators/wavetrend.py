@@ -64,7 +64,7 @@ class WaveTrend:
         # Initialize performance tracking
         self._calculation_count = 0
         self._total_calculation_time = 0.0
-        self._last_data_quality_check = None
+        self._last_data_quality_check: dict[str, Any] | None = None
 
         logger.info(
             "WaveTrend indicator initialized",

@@ -52,7 +52,7 @@ class CipherBSignal:
     value: float
     index: int
     timestamp: pd.Timestamp | None = None
-    conditions: dict[str, Any] = None
+    conditions: dict[str, Any] | None = None
     divergence_info: DivergenceSignal | None = None
 
 
@@ -639,7 +639,10 @@ class CipherBSignals:
                 stoch_k = df_stoch["stoch_rsi_k"]
                 stoch_regular_divs = (
                     self.divergence_detector.detect_regular_divergences(
-                        stoch_k, df["close"], 80, 20  # Standard stoch levels
+                        stoch_k,
+                        df["close"],
+                        80,
+                        20,  # Standard stoch levels
                     )
                 )
                 stoch_hidden_divs = self.divergence_detector.detect_hidden_divergences(
@@ -955,7 +958,7 @@ class CipherBSignals:
                 )
 
             # Get latest signals (last 10 bars)
-            latest_signals = {}
+            latest_signals: dict[str, list[dict[str, Any]]] = {}
             recent_signals = [s for s in signals if s.index >= len(df) - 10]
             for signal in recent_signals:
                 signal_type_key = signal.signal_type.value

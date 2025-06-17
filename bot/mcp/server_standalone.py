@@ -12,7 +12,7 @@ import logging
 import os
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
@@ -28,7 +28,7 @@ class MemoryStore:
     """Simple in-memory storage for experiences."""
 
     def __init__(self) -> None:
-        self.memories: Dict[str, Dict[str, Any]] = {}
+        self.memories: dict[str, dict[str, Any]] = {}
         self.storage_path = Path("/app/data")
         self.storage_path.mkdir(parents=True, exist_ok=True)
         self._load_from_disk()
@@ -43,7 +43,7 @@ class MemoryStore:
             except Exception as e:
                 logger.error(f"Failed to load {file_path}: {e}")
 
-    def save(self, memory_id: str, data: Dict[str, Any]) -> None:
+    def save(self, memory_id: str, data: dict[str, Any]) -> None:
         """Save a memory to storage."""
         data["id"] = memory_id
         data["timestamp"] = datetime.now(UTC).isoformat()
@@ -57,15 +57,15 @@ class MemoryStore:
         except Exception as e:
             logger.error(f"Failed to persist memory {memory_id}: {e}")
 
-    def get(self, memory_id: str) -> Dict[str, Any] | None:
+    def get(self, memory_id: str) -> dict[str, Any] | None:
         """Get a memory by ID."""
         return self.memories.get(memory_id)
 
-    def list_all(self) -> List[Dict[str, Any]]:
+    def list_all(self) -> list[dict[str, Any]]:
         """List all memories."""
         return list(self.memories.values())
 
-    def query(self, criteria: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def query(self, criteria: dict[str, Any]) -> list[dict[str, Any]]:
         """Query memories based on criteria."""
         # Simple implementation - return all for now
         # In production, implement similarity search
@@ -84,7 +84,7 @@ memory_store = MemoryStore()
 
 
 @app.get("/health")
-async def health_check() -> Dict[str, Any]:
+async def health_check() -> dict[str, Any]:
     """Health check endpoint."""
     return {
         "status": "healthy",
@@ -95,8 +95,10 @@ async def health_check() -> Dict[str, Any]:
 
 @app.post("/experience")
 async def store_experience(
-    market_state: Dict[str, Any], trade_action: Dict[str, Any], additional_context: Dict[str, Any] | None = None
-) -> Dict[str, str]:
+    market_state: dict[str, Any],
+    trade_action: dict[str, Any],
+    additional_context: dict[str, Any] | None = None,
+) -> dict[str, str]:
     """Store a new trading experience."""
     try:
         import uuid
@@ -120,7 +122,7 @@ async def store_experience(
 
 
 @app.get("/experience/{experience_id}")
-async def get_experience(experience_id: str) -> Dict[str, Any]:
+async def get_experience(experience_id: str) -> dict[str, Any]:
     """Retrieve a specific experience."""
     experience = memory_store.get(experience_id)
     if not experience:
@@ -129,7 +131,9 @@ async def get_experience(experience_id: str) -> Dict[str, Any]:
 
 
 @app.post("/query")
-async def query_experiences(market_state: Dict[str, Any], query_params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+async def query_experiences(
+    market_state: dict[str, Any], query_params: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Query similar experiences."""
     try:
         experiences = memory_store.query(query_params or {})
@@ -140,7 +144,7 @@ async def query_experiences(market_state: Dict[str, Any], query_params: Dict[str
 
 
 @app.get("/memories")
-async def list_memories() -> Dict[str, Any]:
+async def list_memories() -> dict[str, Any]:
     """List all stored memories."""
     memories = memory_store.list_all()
     return {"count": len(memories), "memories": memories}

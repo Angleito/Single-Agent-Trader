@@ -11,7 +11,7 @@ import time
 import traceback
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Any, List, Optional, Dict, Union
+from typing import Any, Literal, cast
 
 try:
     # Prefer the new official SDK import path first
@@ -64,13 +64,23 @@ except ImportError:
     # Fallback to the deprecated coinbase-advanced-trader package if present
     try:
         from coinbase_advanced_trader.client import (
-            CoinbaseAdvancedTrader,  # type: ignore
+            CoinbaseAdvancedTrader as _FallbackTrader,  # type: ignore
         )
         from coinbase_advanced_trader.exceptions import (  # type: ignore
-            CoinbaseAPIException,
-            CoinbaseAuthenticationException,
-            CoinbaseConnectionException,
+            CoinbaseAPIException as _FallbackAPIException,
         )
+        from coinbase_advanced_trader.exceptions import (
+            CoinbaseAuthenticationException as _FallbackAuthException,
+        )
+        from coinbase_advanced_trader.exceptions import (
+            CoinbaseConnectionException as _FallbackConnectionException,
+        )
+
+        # Use fallback imports
+        CoinbaseAdvancedTrader = _FallbackTrader  # type: ignore[misc]
+        CoinbaseAPIException = _FallbackAPIException  # type: ignore[misc]
+        CoinbaseAuthenticationException = _FallbackAuthException  # type: ignore[misc]
+        CoinbaseConnectionException = _FallbackConnectionException  # type: ignore[misc]
 
         COINBASE_AVAILABLE = True
     except ImportError:  # pragma: no cover
@@ -79,13 +89,13 @@ except ImportError:
             def __init__(self, **kwargs):
                 pass
 
-        class CoinbaseAPIException(Exception):
+        class CoinbaseAPIException(Exception):  # type: ignore[no-redef]
             pass
 
-        class CoinbaseConnectionException(Exception):
+        class CoinbaseConnectionException(Exception):  # type: ignore[no-redef]
             pass
 
-        class CoinbaseAuthenticationException(Exception):
+        class CoinbaseAuthenticationException(Exception):  # type: ignore[no-redef]
             pass
 
         COINBASE_AVAILABLE = False
@@ -114,13 +124,501 @@ from .futures_utils import FuturesContractManager
 logger = logging.getLogger(__name__)
 
 
+class CoinbaseResponseValidator:
+    """
+    Validator for Coinbase API response schemas to prevent data corruption.
+
+    Validates API responses for required fields, data types, and consistency
+    before processing to prevent corruption-based trading losses.
+    """
+
+    def __init__(self, failure_callback=None):
+        """
+        Initialize the response validator.
+
+        Args:
+            failure_callback: Optional callback function for validation failures
+        """
+        self.response_count = 0
+        self.validation_failures = 0
+        self.failure_callback = failure_callback
+
+    def validate_account_response(self, response: dict) -> bool:
+        """
+        Validate account response structure.
+
+        Args:
+            response: Account API response
+
+        Returns:
+            True if valid, False otherwise
+        """
+        try:
+            self.response_count += 1
+
+            # Check if response is dict
+            if not isinstance(response, dict):
+                logger.warning("Account response is not a dictionary")
+                return False
+
+            # Check for accounts array
+            if "accounts" not in response:
+                logger.warning("Account response missing 'accounts' field")
+                return False
+
+            accounts = response["accounts"]
+            if not isinstance(accounts, list):
+                logger.warning("Account 'accounts' field is not a list")
+                return False
+
+            # Validate individual accounts
+            for account in accounts:
+                if not self._validate_account_data(account):
+                    return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error validating account response: {e}")
+            return False
+
+    def validate_balance_response(self, response: dict | object) -> bool:
+        """
+        Validate balance response structure.
+
+        Args:
+            response: Balance API response (dict or object)
+
+        Returns:
+            True if valid, False otherwise
+        """
+        try:
+            self.response_count += 1
+
+            # Handle both dict and object responses
+            if hasattr(response, "balance_summary"):
+                # Object format from CDP SDK
+                balance_summary = response.balance_summary
+                if not hasattr(balance_summary, "cfm_usd_balance"):
+                    logger.warning("Balance response missing cfm_usd_balance")
+                    return False
+
+                balance_data = balance_summary.cfm_usd_balance
+                if not hasattr(balance_data, "value"):
+                    logger.warning("Balance data missing 'value' field")
+                    return False
+
+                # Validate balance value
+                try:
+                    balance_value = Decimal(str(balance_data.value))
+                    if balance_value < 0:
+                        logger.warning(f"Invalid negative balance: {balance_value}")
+                        return False
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Invalid balance value format: {e}")
+                    return False
+
+            elif isinstance(response, dict):
+                # Dict format
+                if "balance" not in response:
+                    logger.warning("Balance response missing 'balance' field")
+                    return False
+
+                try:
+                    balance_value = Decimal(str(response["balance"]))
+                    if balance_value < 0:
+                        logger.warning(f"Invalid negative balance: {balance_value}")
+                        return False
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Invalid balance value format: {e}")
+                    return False
+            else:
+                logger.warning(
+                    "Balance response is neither dict nor object with balance_summary"
+                )
+                return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error validating balance response: {e}")
+            return False
+
+    def validate_order_response(self, response: dict | object) -> bool:
+        """
+        Validate order response structure.
+
+        Args:
+            response: Order API response
+
+        Returns:
+            True if valid, False otherwise
+        """
+        try:
+            self.response_count += 1
+
+            # Handle both dict and object responses
+            order_data = None
+            if hasattr(response, "order"):
+                order_data = response.order
+            elif isinstance(response, dict):
+                order_data = response
+            else:
+                logger.warning("Order response format not recognized")
+                return False
+
+            # Validate required order fields
+            required_fields = ["order_id", "status", "side"]
+            for field in required_fields:
+                if hasattr(order_data, field):
+                    continue  # Object format
+                elif isinstance(order_data, dict) and field in order_data:
+                    continue  # Dict format
+                else:
+                    logger.warning(f"Order response missing required field: {field}")
+                    return False
+
+            # Validate order status
+            if hasattr(order_data, "status"):
+                status = order_data.status
+            else:
+                status = order_data.get("status")
+
+            valid_statuses = ["OPEN", "FILLED", "CANCELLED", "PENDING", "REJECTED"]
+            if status not in valid_statuses:
+                logger.warning(f"Invalid order status: {status}")
+                return False
+
+            # Validate side
+            if hasattr(order_data, "side"):
+                side = order_data.side
+            else:
+                side = order_data.get("side")
+
+            if side not in ["BUY", "SELL"]:
+                logger.warning(f"Invalid order side: {side}")
+                return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error validating order response: {e}")
+            return False
+
+    def validate_position_response(self, response: dict | object) -> bool:
+        """
+        Validate positions response structure.
+
+        Args:
+            response: Positions API response
+
+        Returns:
+            True if valid, False otherwise
+        """
+        try:
+            self.response_count += 1
+
+            # Handle different response formats
+            positions_list = None
+            if hasattr(response, "positions"):
+                positions_list = response.positions
+            elif isinstance(response, dict) and "positions" in response:
+                positions_list = response["positions"]
+            elif isinstance(response, list):
+                positions_list = response
+            else:
+                logger.warning("Positions response format not recognized")
+                return False
+
+            if not isinstance(positions_list, list):
+                logger.warning("Positions data is not a list")
+                return False
+
+            # Validate individual positions
+            for position in positions_list:
+                if not self._validate_position_data(position):
+                    return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error validating position response: {e}")
+            return False
+
+    def _validate_account_data(self, account: dict) -> bool:
+        """
+        Validate individual account data.
+
+        Args:
+            account: Account data object
+
+        Returns:
+            True if valid, False otherwise
+        """
+        try:
+            # Check for required fields
+            required_fields = ["uuid", "name", "currency"]
+            for field in required_fields:
+                if field not in account:
+                    logger.warning(f"Account missing required field: {field}")
+                    return False
+
+            # Validate UUID format (basic check)
+            uuid_str = account["uuid"]
+            if not isinstance(uuid_str, str) or len(uuid_str) != 36:
+                logger.warning(f"Invalid account UUID format: {uuid_str}")
+                return False
+
+            # Validate currency
+            currency = account["currency"]
+            if not isinstance(currency, str) or len(currency) < 2:
+                logger.warning(f"Invalid currency format: {currency}")
+                return False
+
+            # Validate balance if present
+            if "balance" in account:
+                try:
+                    balance = Decimal(str(account["balance"]))
+                    if balance < 0:
+                        logger.warning(f"Invalid negative account balance: {balance}")
+                        return False
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Invalid account balance format: {e}")
+                    return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error validating account data: {e}")
+            return False
+
+    def _validate_position_data(self, position: dict | object) -> bool:
+        """
+        Validate individual position data.
+
+        Args:
+            position: Position data object
+
+        Returns:
+            True if valid, False otherwise
+        """
+        try:
+            # Handle both dict and object formats
+            if hasattr(position, "product_id"):
+                # Object format
+                product_id = position.product_id
+                side = getattr(position, "side", None)
+                size = getattr(position, "number_of_contracts", 0)
+            else:
+                # Dict format
+                product_id = position.get("product_id")  # type: ignore[attr-defined]
+                side = position.get("side")  # type: ignore[attr-defined]
+                size = position.get("number_of_contracts", 0)  # type: ignore[attr-defined]
+
+            # Validate product ID
+            if not product_id or not isinstance(product_id, str):
+                logger.warning(f"Invalid position product_id: {product_id}")
+                return False
+
+            # Validate side if present
+            if side and side not in ["LONG", "SHORT"]:
+                logger.warning(f"Invalid position side: {side}")
+                return False
+
+            # Validate size
+            try:
+                size_decimal = Decimal(str(size))
+                if size_decimal < 0:
+                    logger.warning(f"Invalid negative position size: {size_decimal}")
+                    return False
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Invalid position size format: {e}")
+                return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error validating position data: {e}")
+            return False
+
+    def get_validation_stats(self) -> dict[str, Any]:
+        """
+        Get validation statistics.
+
+        Returns:
+            Dictionary with validation metrics
+        """
+        success_rate = (
+            (
+                (self.response_count - self.validation_failures)
+                / self.response_count
+                * 100
+            )
+            if self.response_count > 0
+            else 100.0
+        )
+
+        return {
+            "total_responses": self.response_count,
+            "validation_failures": self.validation_failures,
+            "success_rate_pct": success_rate,
+        }
+
+    def _validate_exchange_response(self, response: dict | object) -> bool:
+        """
+        Validate generic exchange response for data integrity.
+
+        Args:
+            response: Exchange API response
+
+        Returns:
+            True if valid, False otherwise
+        """
+        try:
+            if not response:
+                logger.warning("Empty exchange response received")
+                return False
+
+            # Basic type validation
+            if not isinstance(response, dict | object):
+                logger.warning(f"Invalid response type: {type(response)}")
+                return False
+
+            # Check for error indicators in response
+            if isinstance(response, dict):
+                if "error" in response or "errors" in response:
+                    logger.warning(
+                        f"Error in response: {response.get('error', response.get('errors'))}"
+                    )
+                    return False
+
+                # Check for success indicators
+                if "success" in response and not response["success"]:
+                    logger.warning("Response indicates failure")
+                    return False
+
+            # Check object attributes
+            elif hasattr(response, "success") and not response.success:
+                logger.warning("Response object indicates failure")
+                return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error validating exchange response: {e}")
+            return False
+
+    def validate_order_creation_response(self, response: dict | object) -> bool:
+        """
+        Validate order creation response.
+
+        Args:
+            response: Order creation API response
+
+        Returns:
+            True if valid, False otherwise
+        """
+        try:
+            self.response_count += 1
+
+            # Basic response validation
+            if not self._validate_exchange_response(response):
+                self.validation_failures += 1
+                if self.failure_callback:
+                    self.failure_callback(
+                        "order_response_validation",
+                        "Order creation response validation failed",
+                        "medium",
+                    )
+                return False
+
+            # Order-specific validation
+            order_data = None
+            if hasattr(response, "success_response"):
+                order_data = response.success_response
+            elif hasattr(response, "order_id"):
+                order_data = response
+            elif isinstance(response, dict):
+                order_data = response
+
+            if not order_data:
+                logger.warning("Order creation response missing order data")
+                self.validation_failures += 1
+                return False
+
+            # Check for order ID
+            order_id = None
+            if isinstance(order_data, dict):
+                order_id = order_data.get("order_id")
+            elif hasattr(order_data, "order_id"):
+                order_id = order_data.order_id
+
+            if not order_id:
+                logger.warning("Order creation response missing order_id")
+                self.validation_failures += 1
+                if self.failure_callback:
+                    self.failure_callback(
+                        "missing_order_id",
+                        "Order creation response missing order_id",
+                        "high",
+                    )
+                return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error validating order creation response: {e}")
+            self.validation_failures += 1
+            return False
+
+    def validate_order_cancellation_response(self, response: dict | object) -> bool:
+        """
+        Validate order cancellation response.
+
+        Args:
+            response: Order cancellation API response
+
+        Returns:
+            True if valid, False otherwise
+        """
+        try:
+            self.response_count += 1
+
+            # Basic response validation
+            if not self._validate_exchange_response(response):
+                self.validation_failures += 1
+                return False
+
+            # Check for success indicators
+            success_confirmed = False
+            if isinstance(response, dict):
+                success_confirmed = (
+                    response.get("success", False)
+                    or "cancelled" in str(response).lower()
+                )
+            elif hasattr(response, "success"):
+                success_confirmed = response.success
+
+            if not success_confirmed:
+                logger.warning("Order cancellation response does not confirm success")
+                self.validation_failures += 1
+                return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error validating order cancellation response: {e}")
+            self.validation_failures += 1
+            return False
+
+
 class CoinbaseRateLimiter:
     """Rate limiter for Coinbase API requests."""
 
     def __init__(self, max_requests: int = 10, window_seconds: int = 60):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
-        self.requests: List[float] = []
+        self.requests: list[float] = []
         self._lock = asyncio.Lock()
 
     async def acquire(self) -> None:
@@ -209,12 +707,20 @@ class CoinbaseClient(BaseExchange):
         if provided_legacy or (settings_legacy and not provided_cdp):
             # Use legacy authentication
             self.auth_method = "legacy"
-            self.api_key = api_key or (settings.exchange.cb_api_key.get_secret_value() if settings.exchange.cb_api_key else None)
-            self.api_secret = (
-                api_secret or (settings.exchange.cb_api_secret.get_secret_value() if settings.exchange.cb_api_secret else None)
+            self.api_key = api_key or (
+                settings.exchange.cb_api_key.get_secret_value()
+                if settings.exchange.cb_api_key
+                else None
             )
-            self.passphrase = (
-                passphrase or (settings.exchange.cb_passphrase.get_secret_value() if settings.exchange.cb_passphrase else None)
+            self.api_secret = api_secret or (
+                settings.exchange.cb_api_secret.get_secret_value()
+                if settings.exchange.cb_api_secret
+                else None
+            )
+            self.passphrase = passphrase or (
+                settings.exchange.cb_passphrase.get_secret_value()
+                if settings.exchange.cb_passphrase
+                else None
             )
             self.cdp_api_key_name = None
             self.cdp_private_key = None
@@ -225,12 +731,15 @@ class CoinbaseClient(BaseExchange):
             self.api_key = None
             self.api_secret = None
             self.passphrase = None
-            self.cdp_api_key_name = (
-                cdp_api_key_name
-                or (settings.exchange.cdp_api_key_name.get_secret_value() if settings.exchange.cdp_api_key_name else None)
+            self.cdp_api_key_name = cdp_api_key_name or (
+                settings.exchange.cdp_api_key_name.get_secret_value()
+                if settings.exchange.cdp_api_key_name
+                else None
             )
-            self.cdp_private_key = (
-                cdp_private_key or (settings.exchange.cdp_private_key.get_secret_value() if settings.exchange.cdp_private_key else None)
+            self.cdp_private_key = cdp_private_key or (
+                settings.exchange.cdp_private_key.get_secret_value()
+                if settings.exchange.cdp_private_key
+                else None
             )
         else:
             # No credentials provided - will work in dry run mode only
@@ -244,9 +753,9 @@ class CoinbaseClient(BaseExchange):
         self.sandbox = settings.exchange.cb_sandbox
 
         # Client will be initialized when needed
-        self._client: Optional[Any] = None
+        self._client: Any | None = None
         self._connected = False  # Use _connected from parent class
-        self._last_health_check: Optional[datetime] = None
+        self._last_health_check: datetime | None = None
 
         # Rate limiting
         self._rate_limiter = CoinbaseRateLimiter(
@@ -254,32 +763,35 @@ class CoinbaseClient(BaseExchange):
             window_seconds=settings.exchange.rate_limit_window_seconds,
         )
 
+        # Response validation
+        self._response_validator = CoinbaseResponseValidator()
+
         # Retry configuration
         self._max_retries = 3
         self._retry_delay = 1.0
         self._retry_backoff = 2.0
 
         # Futures trading configuration
-        self.enable_futures = settings.trading.enable_futures
+        self._enable_futures = settings.trading.enable_futures
         self.futures_account_type = settings.trading.futures_account_type
         self.auto_cash_transfer = settings.trading.auto_cash_transfer
         self.max_futures_leverage = settings.trading.max_futures_leverage
 
         # Cached futures account info
-        self._futures_account_info: Optional[Any] = None
-        self._last_margin_check: Optional[datetime] = None
+        self._futures_account_info: Any | None = None
+        self._last_margin_check: datetime | None = None
 
         # Portfolio management
-        self._portfolios: Dict[str, Any] = {}
-        self._futures_portfolio_id: Optional[str] = None
-        self._default_portfolio_id: Optional[str] = None
+        self._portfolios: dict[str, Any] = {}
+        self._futures_portfolio_id: str | None = None
+        self._default_portfolio_id: str | None = None
 
         # Futures contract management
-        self._futures_contract_manager: Optional[Any] = None
+        self._futures_contract_manager: Any | None = None
 
         # Volume tracking for fee tiers
         self._monthly_volume = Decimal("0")
-        self._last_volume_check: Optional[datetime] = None
+        self._last_volume_check: datetime | None = None
         self._volume_check_interval = timedelta(hours=1)
 
         # Compose a concise init message to avoid line length issues
@@ -318,6 +830,15 @@ class CoinbaseClient(BaseExchange):
                 "⚠️  LIVE TRADING MODE ENABLED - Real money will be used! "
                 "Use --dry-run flag for paper trading."
             )
+
+    def set_failure_callback(self, callback):
+        """
+        Set failure callback for validation errors.
+
+        Args:
+            callback: Function to call on validation failures
+        """
+        self._response_validator.failure_callback = callback
 
     async def connect(self) -> bool:
         """
@@ -477,6 +998,8 @@ class CoinbaseClient(BaseExchange):
         """Test the connection with a simple API call."""
         try:
             await self._rate_limiter.acquire()
+            if self._client is None:
+                raise ExchangeConnectionError("Client not initialized")
             accounts = self._client.get_accounts()
             logger.debug(
                 f"Connection test successful, found {len(accounts.get('accounts', []))} accounts"
@@ -521,6 +1044,8 @@ class CoinbaseClient(BaseExchange):
                 return True
 
             await self._rate_limiter.acquire()
+            if self._client is None:
+                return False
             self._client.get_accounts()
             self._last_health_check = datetime.utcnow()
             return True
@@ -623,23 +1148,33 @@ class CoinbaseClient(BaseExchange):
 
             # Try to get portfolios using the REST API
             try:
+                if self._client is None:
+                    logger.error("Client not initialized")
+                    return
+
                 # First try the standard portfolios endpoint
                 portfolios_response = await self._retry_request(
                     lambda: self._client.get("/api/v3/brokerage/portfolios")
                 )
 
                 if isinstance(portfolios_response, dict):
-                    self._portfolios = portfolios_response.get("portfolios", [])
+                    portfolios_list = portfolios_response.get("portfolios", [])
+                    # Convert list to dict indexed by portfolio ID
+                    self._portfolios = {
+                        portfolio.get("id", f"portfolio_{i}"): portfolio
+                        for i, portfolio in enumerate(portfolios_list)
+                        if isinstance(portfolio, dict)
+                    }
                 else:
-                    self._portfolios = []
+                    self._portfolios = {}
 
             except Exception as e:
                 logger.debug(f"Could not fetch portfolios via API: {e}")
-                self._portfolios = []
+                self._portfolios = {}
 
             # If we have portfolios, try to identify the futures portfolio
             if self._portfolios:
-                for portfolio in self._portfolios:
+                for portfolio in self._portfolios.values():
                     portfolio_name = portfolio.get("name", "").lower()
                     portfolio_type = portfolio.get("type", "").lower()
                     portfolio_id = portfolio.get("uuid") or portfolio.get("id")
@@ -667,7 +1202,7 @@ class CoinbaseClient(BaseExchange):
 
         except Exception as e:
             logger.warning(f"Failed to load portfolios: {e}")
-            self._portfolios = []
+            self._portfolios = {}
 
     async def get_portfolios(self) -> list[dict[str, Any]]:
         """
@@ -676,9 +1211,9 @@ class CoinbaseClient(BaseExchange):
         Returns:
             List of portfolio dictionaries
         """
-        if self._portfolios is None:
+        if not self._portfolios:
             await self._load_portfolios()
-        return self._portfolios or []
+        return list(self._portfolios.values())
 
     def get_futures_portfolio_id(self) -> str | None:
         """
@@ -905,7 +1440,10 @@ class CoinbaseClient(BaseExchange):
             )
 
             # Determine order side
-            side = "BUY" if trade_action.action == "LONG" else "SELL"
+            side = cast(
+                Literal["BUY", "SELL"],
+                "BUY" if trade_action.action == "LONG" else "SELL",
+            )
 
             # Place futures market order
             order = await self.place_futures_market_order(
@@ -991,7 +1529,9 @@ class CoinbaseClient(BaseExchange):
         )
 
         # Determine order side (BUY/SELL for spot)
-        side = "BUY" if trade_action.action == "LONG" else "SELL"
+        side = cast(
+            Literal["BUY", "SELL"], "BUY" if trade_action.action == "LONG" else "SELL"
+        )
 
         # Place market order
         order = await self.place_market_order(
@@ -1054,7 +1594,9 @@ class CoinbaseClient(BaseExchange):
             return None
 
         # Determine opposite side
-        side = "SELL" if position.side == "LONG" else "BUY"
+        side = cast(
+            Literal["BUY", "SELL"], "SELL" if position.side == "LONG" else "BUY"
+        )
 
         # Place market order to close
         return await self.place_market_order(
@@ -1062,7 +1604,7 @@ class CoinbaseClient(BaseExchange):
         )
 
     async def place_market_order(
-        self, symbol: str, side: str, quantity: Decimal
+        self, symbol: str, side: Literal["BUY", "SELL"], quantity: Decimal
     ) -> Order | None:
         """
         Place a market order.
@@ -1083,7 +1625,7 @@ class CoinbaseClient(BaseExchange):
             return Order(
                 id=f"paper_{int(datetime.utcnow().timestamp() * 1000)}",
                 symbol=symbol,
-                side=side,
+                side=cast(Literal["BUY", "SELL"], side),
                 type="MARKET",
                 quantity=quantity,
                 status=OrderStatus.FILLED,
@@ -1123,6 +1665,10 @@ class CoinbaseClient(BaseExchange):
                     f"Using default portfolio ID: {self._default_portfolio_id}"
                 )
 
+            if self._client is None:
+                logger.error("Client not initialized")
+                return None
+
             logger.info(f"Placing {side} market order: {quantity} {symbol}")
             result = await self._retry_request(
                 self._client.create_order, client_order_id, **order_data
@@ -1130,6 +1676,13 @@ class CoinbaseClient(BaseExchange):
 
             # Parse the response - handle CDP API response object
             try:
+                # Validate response before processing
+                if not self._response_validator.validate_order_creation_response(
+                    result
+                ):
+                    logger.error("Order creation response validation failed")
+                    raise ExchangeOrderError("Invalid response from exchange")
+
                 # CDP API returns a response object with success/success_response
                 if hasattr(result, "success") and result.success:
                     # Handle the new SDK response format
@@ -1143,7 +1696,7 @@ class CoinbaseClient(BaseExchange):
                         id=order_id
                         or f"cb_{int(datetime.utcnow().timestamp() * 1000)}",
                         symbol=symbol,
-                        side=side,
+                        side=cast(Literal["BUY", "SELL"], side),
                         type="MARKET",
                         quantity=quantity,
                         status=OrderStatus.PENDING,
@@ -1161,7 +1714,7 @@ class CoinbaseClient(BaseExchange):
                         id=order_id
                         or f"cb_{int(datetime.utcnow().timestamp() * 1000)}",
                         symbol=symbol,
-                        side=side,
+                        side=cast(Literal["BUY", "SELL"], side),
                         type="MARKET",
                         quantity=quantity,
                         status=OrderStatus.PENDING,
@@ -1181,7 +1734,7 @@ class CoinbaseClient(BaseExchange):
                             id=order_id
                             or f"cb_{int(datetime.utcnow().timestamp() * 1000)}",
                             symbol=symbol,
-                            side=side,
+                            side=cast(Literal["BUY", "SELL"], side),
                             type="MARKET",
                             quantity=quantity,
                             status=OrderStatus.PENDING,
@@ -1211,7 +1764,11 @@ class CoinbaseClient(BaseExchange):
             raise ExchangeOrderError(f"Failed to place market order: {e}") from e
 
     async def place_limit_order(
-        self, symbol: str, side: str, quantity: Decimal, price: Decimal
+        self,
+        symbol: str,
+        side: Literal["BUY", "SELL"],
+        quantity: Decimal,
+        price: Decimal,
     ) -> Order | None:
         """
         Place a limit order.
@@ -1232,7 +1789,7 @@ class CoinbaseClient(BaseExchange):
             return Order(
                 id=f"paper_limit_{int(datetime.utcnow().timestamp() * 1000)}",
                 symbol=symbol,
-                side=side,
+                side=cast(Literal["BUY", "SELL"], side),
                 type="LIMIT",
                 quantity=quantity,
                 price=price,
@@ -1268,6 +1825,10 @@ class CoinbaseClient(BaseExchange):
                 },
             }
 
+            if self._client is None:
+                logger.error("Client not initialized")
+                return None
+
             logger.info(f"Placing {side} limit order: {quantity} {symbol} @ {price}")
             result = await self._retry_request(
                 self._client.create_order, client_order_id, **order_data
@@ -1282,7 +1843,7 @@ class CoinbaseClient(BaseExchange):
                     id=order_id
                     or f"cb_limit_{int(datetime.utcnow().timestamp() * 1000)}",
                     symbol=symbol,
-                    side=side,
+                    side=cast(Literal["BUY", "SELL"], side),
                     type="LIMIT",
                     quantity=quantity,
                     price=price,
@@ -1329,10 +1890,10 @@ class CoinbaseClient(BaseExchange):
 
         if base_order.side == "BUY":  # Long position
             stop_price = current_price * (1 - Decimal(str(sl_pct)))
-            side = "SELL"
+            side = cast(Literal["BUY", "SELL"], "SELL")
         else:  # Short position
             stop_price = current_price * (1 + Decimal(str(sl_pct)))
-            side = "BUY"
+            side = cast(Literal["BUY", "SELL"], "BUY")
 
         return await self._place_stop_order(
             symbol=base_order.symbol,
@@ -1360,10 +1921,10 @@ class CoinbaseClient(BaseExchange):
 
         if base_order.side == "BUY":  # Long position
             limit_price = current_price * (1 + Decimal(str(tp_pct)))
-            side = "SELL"
+            side = cast(Literal["BUY", "SELL"], "SELL")
         else:  # Short position
             limit_price = current_price * (1 - Decimal(str(tp_pct)))
-            side = "BUY"
+            side = cast(Literal["BUY", "SELL"], "BUY")
 
         return await self.place_limit_order(
             symbol=base_order.symbol,
@@ -1373,7 +1934,11 @@ class CoinbaseClient(BaseExchange):
         )
 
     async def _place_stop_order(
-        self, symbol: str, side: str, quantity: Decimal, stop_price: Decimal
+        self,
+        symbol: str,
+        side: Literal["BUY", "SELL"],
+        quantity: Decimal,
+        stop_price: Decimal,
     ) -> Order | None:
         """
         Place a stop order (implemented as stop-limit).
@@ -1394,7 +1959,7 @@ class CoinbaseClient(BaseExchange):
             return Order(
                 id=f"paper_stop_{int(datetime.utcnow().timestamp() * 1000)}",
                 symbol=symbol,
-                side=side,
+                side=cast(Literal["BUY", "SELL"], side),
                 type="STOP",
                 quantity=quantity,
                 stop_price=stop_price,
@@ -1421,8 +1986,8 @@ class CoinbaseClient(BaseExchange):
                 limit_price = stop_price * (1 - Decimal(str(slippage_pct)))
 
             # Round prices to 2 decimal places for Coinbase futures
-            stop_price = round(float(stop_price), 2)
-            limit_price = round(float(limit_price), 2)
+            stop_price_float = round(float(stop_price), 2)
+            limit_price_float = round(float(limit_price), 2)
 
             # Generate a unique client order ID
             import uuid
@@ -1436,8 +2001,8 @@ class CoinbaseClient(BaseExchange):
                 "order_configuration": {
                     "stop_limit_stop_limit_gtc": {
                         "base_size": str(quantity),
-                        "limit_price": str(limit_price),
-                        "stop_price": str(stop_price),
+                        "limit_price": str(limit_price_float),
+                        "stop_price": str(stop_price_float),
                         "stop_direction": (
                             "STOP_DIRECTION_STOP_DOWN"
                             if side == "SELL"
@@ -1447,8 +2012,12 @@ class CoinbaseClient(BaseExchange):
                 },
             }
 
+            if self._client is None:
+                logger.error("Client not initialized")
+                return None
+
             logger.info(
-                f"Placing {side} stop order: {quantity} {symbol} stop @ {stop_price}, limit @ {limit_price}"
+                f"Placing {side} stop order: {quantity} {symbol} stop @ {stop_price_float}, limit @ {limit_price_float}"
             )
             result = await self._retry_request(
                 self._client.create_order, client_order_id, **order_data
@@ -1463,11 +2032,11 @@ class CoinbaseClient(BaseExchange):
                     id=order_id
                     or f"cb_stop_{int(datetime.utcnow().timestamp() * 1000)}",
                     symbol=symbol,
-                    side=side,
+                    side=cast(Literal["BUY", "SELL"], side),
                     type="STOP_LIMIT",
                     quantity=quantity,
-                    price=limit_price,
-                    stop_price=stop_price,
+                    price=Decimal(str(limit_price_float)),
+                    stop_price=Decimal(str(stop_price_float)),
                     status=OrderStatus.OPEN,
                     timestamp=datetime.utcnow(),
                     filled_quantity=Decimal("0"),
@@ -1495,9 +2064,9 @@ class CoinbaseClient(BaseExchange):
     async def place_futures_market_order(
         self,
         symbol: str,
-        side: str,
+        side: Literal["BUY", "SELL"],
         quantity: Decimal,
-        leverage: int = None,
+        leverage: int | None = None,
         reduce_only: bool = False,
     ) -> Order | None:
         """
@@ -1521,7 +2090,7 @@ class CoinbaseClient(BaseExchange):
             return Order(
                 id=f"paper_futures_{int(datetime.utcnow().timestamp() * 1000)}",
                 symbol=symbol,
-                side=side,
+                side=cast(Literal["BUY", "SELL"], side),
                 type="MARKET",
                 quantity=quantity,
                 status=OrderStatus.FILLED,
@@ -1547,10 +2116,11 @@ class CoinbaseClient(BaseExchange):
             # Round quantity appropriately
             if symbol.endswith("-CDE"):
                 # For futures contracts, quantity must be whole number (contracts)
-                rounded_quantity = int(quantity)
+                rounded_quantity_int = int(quantity)
+                rounded_quantity = str(rounded_quantity_int)
             else:
                 # For spot/leverage, use decimal precision
-                rounded_quantity = round(float(quantity), 6)
+                rounded_quantity = str(round(float(quantity), 6))
 
             # Place the futures order using Coinbase Advanced Trader
             order_data = {
@@ -1567,9 +2137,13 @@ class CoinbaseClient(BaseExchange):
 
             # Add reduce_only only if True
             if reduce_only:
-                order_data["reduce_only"] = reduce_only
+                order_data["reduce_only"] = True
 
             # Don't add portfolio ID for futures - Coinbase handles the routing automatically
+
+            if self._client is None:
+                logger.error("Client not initialized")
+                return None
 
             logger.info(
                 f"Placing FUTURES {side} market order: {quantity} {symbol} (leverage: {leverage}x)"
@@ -1594,7 +2168,7 @@ class CoinbaseClient(BaseExchange):
                         id=order_id
                         or f"cb_futures_{int(datetime.utcnow().timestamp() * 1000)}",
                         symbol=symbol,
-                        side=side,
+                        side=cast(Literal["BUY", "SELL"], side),
                         type="MARKET",
                         quantity=quantity,
                         status=OrderStatus.PENDING,
@@ -1612,7 +2186,7 @@ class CoinbaseClient(BaseExchange):
                         id=order_id
                         or f"cb_futures_{int(datetime.utcnow().timestamp() * 1000)}",
                         symbol=symbol,
-                        side=side,
+                        side=cast(Literal["BUY", "SELL"], side),
                         type="MARKET",
                         quantity=quantity,
                         status=OrderStatus.PENDING,
@@ -1632,7 +2206,7 @@ class CoinbaseClient(BaseExchange):
                             id=order_id
                             or f"cb_futures_{int(datetime.utcnow().timestamp() * 1000)}",
                             symbol=symbol,
-                            side=side,
+                            side=cast(Literal["BUY", "SELL"], side),
                             type="MARKET",
                             quantity=quantity,
                             status=OrderStatus.PENDING,
@@ -1717,6 +2291,10 @@ class CoinbaseClient(BaseExchange):
             Spot account balance in USD
         """
         try:
+            if self._client is None:
+                logger.error("Client not initialized")
+                return Decimal("0")
+
             accounts_data = await self._retry_request(self._client.get_accounts)
 
             # Find USD balance in spot accounts
@@ -1978,7 +2556,9 @@ class CoinbaseClient(BaseExchange):
             )
 
     async def transfer_cash_to_futures(
-        self, amount: Decimal, reason: str = "MANUAL"
+        self,
+        amount: Decimal,
+        reason: Literal["MARGIN_CALL", "MANUAL", "AUTO_REBALANCE"] = "MANUAL",
     ) -> bool:
         """
         Transfer cash from spot to futures account for margin.
@@ -2201,6 +2781,13 @@ class CoinbaseClient(BaseExchange):
                 self._client.cancel_orders, order_ids=[order_id]
             )
 
+            # Validate response before processing
+            if not self._response_validator.validate_order_cancellation_response(
+                result
+            ):
+                logger.error("Order cancellation response validation failed")
+                return False
+
             # Check if cancellation was successful
             cancelled_orders = result.get("results", [])
             for cancelled in cancelled_orders:
@@ -2403,13 +2990,17 @@ class CoinbaseClient(BaseExchange):
         self, symbol: str, side: str, quantity: Decimal
     ) -> Order | None:
         """Legacy method for backward compatibility."""
-        return await self.place_market_order(symbol, side, quantity)
+        return await self.place_market_order(
+            symbol, cast(Literal["BUY", "SELL"], side), quantity
+        )
 
     async def _place_limit_order(
         self, symbol: str, side: str, quantity: Decimal, price: Decimal
     ) -> Order | None:
         """Legacy method for backward compatibility."""
-        return await self.place_limit_order(symbol, side, quantity, price)
+        return await self.place_limit_order(
+            symbol, cast(Literal["BUY", "SELL"], side), quantity, price
+        )
 
     @property
     def supports_futures(self) -> bool:
@@ -2525,3 +3116,8 @@ class CoinbaseClient(BaseExchange):
             "volume": float(self._monthly_volume),
             "tier": fee_calculator.current_tier,
         }
+
+    @property
+    def enable_futures(self) -> bool:
+        """Check if futures trading is enabled for this exchange instance."""
+        return self._enable_futures

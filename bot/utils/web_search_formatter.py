@@ -23,11 +23,7 @@ try:
         MomentumAlignment,
         RiskSentiment,
     )
-    from ..services.financial_sentiment import (
-        CryptoIndicators,
-        NasdaqIndicators,
-        SentimentResult,
-    )
+    from ..services.financial_sentiment import SentimentResult
 except ImportError:
     # Create mock classes for testing/standalone usage
     class SentimentResult:

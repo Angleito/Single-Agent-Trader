@@ -5,8 +5,6 @@
     "module": "ESNext",
     "lib": ["ES2020", "DOM", "DOM.Iterable", "WebWorker"],
     "skipLibCheck": true,
-
-    /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
@@ -14,21 +12,15 @@
     "noEmit": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-
-    /* Type checking */
     "strict": false,
     "strictNullChecks": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true,
-
-    /* Path mapping */
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
       "@/types": ["src/types.ts"]
     },
-
-    /* Global declarations */
     "types": ["node"]
   },
   "include": [

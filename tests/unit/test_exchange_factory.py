@@ -280,7 +280,8 @@ class TestExchangeFactory:
             mock_settings.system.dry_run = True  # Settings say dry_run=True
 
             ExchangeFactory.create_exchange(
-                exchange_type="coinbase", dry_run=False  # But we override with False
+                exchange_type="coinbase",
+                dry_run=False,  # But we override with False
             )
 
             # Verify dry_run=False was used

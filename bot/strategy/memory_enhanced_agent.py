@@ -97,9 +97,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             # Use cache if enabled, but with memory-enhanced computation
             if self._cache_enabled and self._cache and self._chain is not None:
                 result = await self._cache.get_or_compute(
-                    market_state, 
-                    self._get_memory_enhanced_decision, 
-                    market_state
+                    market_state, self._get_memory_enhanced_decision, market_state
                 )
             else:
                 # Original memory-enhanced path without caching
@@ -115,13 +113,15 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             # Fall back to base implementation
             return await super().analyze_market(market_state)
 
-    async def _get_memory_enhanced_decision(self, market_state: MarketState) -> TradeAction:
+    async def _get_memory_enhanced_decision(
+        self, market_state: MarketState
+    ) -> TradeAction:
         """
         Get memory-enhanced decision (used by cache system).
-        
+
         Args:
             market_state: Current market state
-            
+
         Returns:
             TradeAction with memory and sentiment enhancement
         """

@@ -64,7 +64,6 @@ class TestErrorHandlingIntegration:
             ),
             patch.multiple("bot.main.LLMAgent", is_available=Mock(return_value=True)),
         ):
-
             engine = TradingEngine(symbol="BTC-USD", interval="1m", dry_run=True)
 
             # Should raise exception during initialization
@@ -85,7 +84,6 @@ class TestErrorHandlingIntegration:
                 ),
             ),
         ):
-
             engine = TradingEngine(symbol="BTC-USD", interval="1m", dry_run=True)
 
             # Should handle exchange connection failure
@@ -127,7 +125,6 @@ class TestErrorHandlingIntegration:
                 ),
             ),
         ):
-
             engine = TradingEngine(symbol="BTC-USD", interval="1m", dry_run=True)
             await engine._initialize_components()
 

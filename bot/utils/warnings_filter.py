@@ -334,7 +334,7 @@ def initialize_early_warning_suppression() -> None:
     """
     # Set warning registry to capture import-time warnings
     if not hasattr(sys.modules[__name__], "__warningregistry__"):
-        setattr(sys.modules[__name__], "__warningregistry__", {})
+        sys.modules[__name__].__warningregistry__ = {}
 
     # Comprehensive message-based filtering including LangChain
     message_patterns = [

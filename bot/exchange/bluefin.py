@@ -9,7 +9,7 @@ import asyncio
 import logging
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Optional, List, Dict, Literal, cast
+from typing import Any, Literal, cast
 
 from ..config import settings
 from ..types import (
@@ -32,7 +32,7 @@ try:
     from .bluefin_client import BluefinServiceClient
 except ImportError:
     # Fallback if BluefinServiceClient is not available
-    class BluefinServiceClient:
+    class BluefinServiceClient:  # type: ignore
         def __init__(self):
             pass
 
@@ -60,7 +60,7 @@ class BluefinRateLimiter:
     def __init__(self, max_requests: int = 30, window_seconds: int = 60):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
-        self.requests: List[float] = []
+        self.requests: list[float] = []
         self._lock = asyncio.Lock()
 
     async def acquire(self) -> None:
@@ -138,7 +138,7 @@ class BluefinClient(BaseExchange):
         # Extract private key string value, handling SecretStr if needed
         if private_key:
             # If passed directly as a parameter, use it
-            self.private_key = private_key
+            self.private_key: str | None = private_key
         elif settings.exchange.bluefin_private_key:
             # Extract from SecretStr settings
             self.private_key = settings.exchange.bluefin_private_key.get_secret_value()
@@ -168,9 +168,9 @@ class BluefinClient(BaseExchange):
         )
 
         # Cached data
-        self._account_address: Optional[str] = None
-        self._leverage_settings: Dict[str, Any] = {}
-        self._contract_info: Dict[str, Any] = {}
+        self._account_address: str | None = None
+        self._leverage_settings: dict[str, Any] = {}
+        self._contract_info: dict[str, Any] = {}
 
         logger.info(
             f"Initialized BluefinClient (network={network}, " f"dry_run={dry_run})"
@@ -452,7 +452,9 @@ class BluefinClient(BaseExchange):
             )
 
             # Place market order
-            order = await self.place_market_order(symbol, side, quantity)
+            order = await self.place_market_order(
+                symbol, cast(Literal["BUY", "SELL"], side), quantity
+            )
 
             if order:
                 # Set leverage for the position
@@ -515,14 +517,16 @@ class BluefinClient(BaseExchange):
             side = ORDER_SIDE.SELL if position.side == "LONG" else ORDER_SIDE.BUY
 
             # Place market order to close
-            return await self.place_market_order(symbol, side, abs(position.size))
+            return await self.place_market_order(
+                symbol, cast(Literal["BUY", "SELL"], side), abs(position.size)
+            )
 
         except Exception as e:
             logger.error(f"Failed to close position: {e}")
             return None
 
     async def place_market_order(
-        self, symbol: str, side: str, quantity: Decimal
+        self, symbol: str, side: Literal["BUY", "SELL"], quantity: Decimal
     ) -> Order | None:
         """
         Place a market order.
@@ -598,7 +602,11 @@ class BluefinClient(BaseExchange):
                 raise ExchangeOrderError(f"Failed to place market order: {e}") from e
 
     async def place_limit_order(
-        self, symbol: str, side: str, quantity: Decimal, price: Decimal
+        self,
+        symbol: str,
+        side: Literal["BUY", "SELL"],
+        quantity: Decimal,
+        price: Decimal,
     ) -> Order | None:
         """
         Place a limit order.
@@ -920,7 +928,10 @@ class BluefinClient(BaseExchange):
         # Note: Bluefin may require specific stop order implementation
         # For now, using limit order as placeholder
         return await self.place_limit_order(
-            base_order.symbol, side, base_order.quantity, limit_price
+            base_order.symbol,
+            cast(Literal["BUY", "SELL"], side),
+            base_order.quantity,
+            limit_price,
         )
 
     async def _place_take_profit(
@@ -943,7 +954,10 @@ class BluefinClient(BaseExchange):
         limit_price = self._round_to_tick(limit_price, tick_size)
 
         return await self.place_limit_order(
-            base_order.symbol, side, base_order.quantity, limit_price
+            base_order.symbol,
+            cast(Literal["BUY", "SELL"], side),
+            base_order.quantity,
+            limit_price,
         )
 
     def _round_to_tick(self, value: Decimal, tick_size: Decimal) -> Decimal:
@@ -1103,7 +1117,7 @@ class BluefinClient(BaseExchange):
     async def place_futures_market_order(
         self,
         symbol: str,
-        side: str,
+        side: Literal["BUY", "SELL"],
         quantity: Decimal,
         leverage: int | None = None,
         reduce_only: bool = False,
@@ -1115,7 +1129,8 @@ class BluefinClient(BaseExchange):
 
         return await self.place_market_order(symbol, side, quantity)
 
-    async def enable_futures(self) -> bool:
+    @property
+    def enable_futures(self) -> bool:
         """Enable futures trading. Bluefin only does futures, so always returns True."""
         return True
 

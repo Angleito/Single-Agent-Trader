@@ -9,7 +9,7 @@ services:
     image: bluefin-sdk-service:latest
     container_name: bluefin-service
     restart: unless-stopped
-    
+
     # SECURITY HARDENING - Container Security
     user: "1000:1000"  # Run as non-root user
     read_only: true     # Read-only root filesystem
@@ -77,7 +77,7 @@ services:
     image: ai-trading-bot:coinbase-${VERSION:-latest}
     container_name: ai-trading-bot
     restart: unless-stopped
-    
+
     # SECURITY HARDENING - Container Security
     user: "1000:1000"  # Run as non-root user
     read_only: true     # Read-only root filesystem
@@ -188,7 +188,7 @@ services:
     image: mcp-omnisearch-server:latest
     container_name: mcp-omnisearch-server
     restart: unless-stopped
-    
+
     # SECURITY HARDENING - Container Security
     user: "1000:1000"  # Run as non-root user
     read_only: true     # Read-only root filesystem
@@ -253,7 +253,7 @@ services:
     image: mcp-memory-server:latest
     container_name: mcp-memory-server
     restart: unless-stopped
-    
+
     # SECURITY HARDENING - Container Security
     user: "1000:1000"  # Run as non-root user
     read_only: true     # Read-only root filesystem
@@ -310,8 +310,8 @@ services:
     container_name: dashboard-backend
     ports:
       - "127.0.0.1:8000:8000"  # SECURITY: Bind to localhost only
-    
-    # SECURITY HARDENING - Container Security  
+
+    # SECURITY HARDENING - Container Security
     user: "1000:1000"  # Run as non-root user
     read_only: true     # Read-only root filesystem
     security_opt:
@@ -388,7 +388,7 @@ services:
     container_name: dashboard-frontend
     ports:
       - "127.0.0.1:3000:8080"  # SECURITY: Bind to localhost only
-    
+
     # SECURITY HARDENING - Container Security
     user: "1000:1000"  # Run as non-root user
     read_only: true     # Read-only root filesystem
@@ -431,7 +431,7 @@ services:
     container_name: dashboard-frontend-prod
     ports:
       - "127.0.0.1:3001:8080"  # SECURITY: Bind to localhost only
-    
+
     # SECURITY HARDENING - Container Security
     user: "1000:1000"  # Run as non-root user
     read_only: true     # Read-only root filesystem
@@ -473,7 +473,7 @@ services:
     container_name: dashboard-nginx
     ports:
       - "127.0.0.1:8080:80"  # SECURITY: Bind to localhost only
-    
+
     # SECURITY HARDENING - Container Security
     user: "101:101"    # Run as nginx user
     read_only: true     # Read-only root filesystem

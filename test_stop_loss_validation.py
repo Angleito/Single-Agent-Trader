@@ -4,7 +4,7 @@ Test script to validate stop loss functionality in the trading bot.
 
 This script creates test scenarios to verify that:
 1. Stop losses are mandatory for LONG/SHORT trades
-2. Invalid stop loss percentages are rejected  
+2. Invalid stop loss percentages are rejected
 3. Stop loss orders are placed correctly
 """
 
@@ -16,10 +16,10 @@ from pathlib import Path
 # Add the project root to the path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from bot.risk import RiskManager
-from bot.types import TradeAction, Position
-from bot.position_manager import PositionManager
 from datetime import datetime
+
+from bot.risk import RiskManager
+from bot.types import Position, TradeAction
 
 
 def test_mandatory_stop_loss_validation():
@@ -55,7 +55,7 @@ def test_mandatory_stop_loss_validation():
     # Test 2: Test Pydantic validation by catching the error
     print("\n2️⃣ Testing Pydantic validation rejects 0% stop loss")
     try:
-        invalid_long = TradeAction(
+        TradeAction(
             action="LONG",
             size_pct=5,
             stop_loss_pct=0,  # Invalid!
@@ -63,7 +63,7 @@ def test_mandatory_stop_loss_validation():
             rationale="Invalid long trade - no stop loss",
         )
         print("   Result: ❌ UNEXPECTED - Trade action was created!")
-        assert False, "Pydantic should have rejected this!"
+        raise AssertionError("Pydantic should have rejected this!")
     except Exception as e:
         print("   Result: ✅ REJECTED by Pydantic validation")
         print(f"   Error: {str(e)[:100]}...")

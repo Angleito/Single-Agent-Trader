@@ -7,7 +7,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, Field, model_validator, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 if TYPE_CHECKING:
     pass
@@ -19,7 +19,7 @@ class TradeAction(BaseModel):
     action: Literal["LONG", "SHORT", "CLOSE", "HOLD"] = Field(
         description="Trading action to take"
     )
-    size_pct: int = Field(
+    size_pct: float = Field(
         ge=0, le=100, description="Position size as percentage of available capital"
     )
     take_profit_pct: float = Field(
@@ -32,8 +32,8 @@ class TradeAction(BaseModel):
         max_length=200, description="Brief explanation for the trading decision"
     )
 
-    @model_validator(mode='after')
-    def validate_trade_action(self) -> 'TradeAction':
+    @model_validator(mode="after")
+    def validate_trade_action(self) -> TradeAction:
         """Validate the entire trade action for consistency."""
         action = self.action
         take_profit_pct = self.take_profit_pct
@@ -106,10 +106,7 @@ class Position(BaseModel):
     liquidation_price: Decimal | None = None
     margin_health: MarginHealthStatus | None = None
 
-    model_config = ConfigDict(
-        use_enum_values=True,
-        arbitrary_types_allowed=True
-    )
+    model_config = ConfigDict(use_enum_values=True, arbitrary_types_allowed=True)
 
 
 class MarketData(BaseModel):
@@ -123,9 +120,7 @@ class MarketData(BaseModel):
     close: Decimal
     volume: Decimal
 
-    model_config = ConfigDict(
-        arbitrary_types_allowed=True
-    )
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class IndicatorData(BaseModel):
@@ -154,9 +149,7 @@ class IndicatorData(BaseModel):
         None  # Will be list[DominanceCandleData] at runtime
     )
 
-    model_config = ConfigDict(
-        use_enum_values=True
-    )
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class MarketState(BaseModel):
@@ -178,9 +171,7 @@ class MarketState(BaseModel):
         None  # Will be list[DominanceCandleData] at runtime
     )
 
-    model_config = ConfigDict(
-        arbitrary_types_allowed=True
-    )
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class OrderStatus(str, Enum):
@@ -208,10 +199,7 @@ class Order(BaseModel):
     timestamp: datetime
     filled_quantity: Decimal = Decimal("0")
 
-    model_config = ConfigDict(
-        use_enum_values=True,
-        arbitrary_types_allowed=True
-    )
+    model_config = ConfigDict(use_enum_values=True, arbitrary_types_allowed=True)
 
 
 class MarginInfo(BaseModel):
@@ -233,9 +221,7 @@ class MarginInfo(BaseModel):
     overnight_margin_requirement: Decimal
     is_overnight_position: bool = False
 
-    model_config = ConfigDict(
-        arbitrary_types_allowed=True
-    )
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class FuturesAccountInfo(BaseModel):
@@ -265,10 +251,7 @@ class FuturesAccountInfo(BaseModel):
 
     timestamp: datetime
 
-    model_config = ConfigDict(
-        use_enum_values=True,
-        arbitrary_types_allowed=True
-    )
+    model_config = ConfigDict(use_enum_values=True, arbitrary_types_allowed=True)
 
 
 class FuturesOrder(BaseModel):
@@ -292,10 +275,7 @@ class FuturesOrder(BaseModel):
     post_only: bool = False  # True for maker-only orders
     time_in_force: Literal["GTC", "IOC", "FOK"] = "GTC"
 
-    model_config = ConfigDict(
-        use_enum_values=True,
-        arbitrary_types_allowed=True
-    )
+    model_config = ConfigDict(use_enum_values=True, arbitrary_types_allowed=True)
 
 
 class RiskMetrics(BaseModel):
@@ -315,9 +295,7 @@ class RiskMetrics(BaseModel):
     margin_health_status: MarginHealthStatus | None = None
     liquidation_risk_level: float | None = None  # 0.0 to 1.0
 
-    model_config = ConfigDict(
-        arbitrary_types_allowed=True
-    )
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class CashTransferRequest(BaseModel):
@@ -329,10 +307,7 @@ class CashTransferRequest(BaseModel):
     currency: str = "USD"
     reason: Literal["MARGIN_CALL", "MANUAL", "AUTO_REBALANCE"] = "MANUAL"
 
-    model_config = ConfigDict(
-        use_enum_values=True,
-        arbitrary_types_allowed=True
-    )
+    model_config = ConfigDict(use_enum_values=True, arbitrary_types_allowed=True)
 
 
 class FuturesMarketState(BaseModel):
@@ -353,13 +328,25 @@ class FuturesMarketState(BaseModel):
     next_funding_time: datetime | None = None
     open_interest: Decimal | None = None
 
-    model_config = ConfigDict(
-        arbitrary_types_allowed=True
-    )
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
+class StablecoinDominance(BaseModel):
+    """Stablecoin market dominance data."""
+
+    timestamp: datetime
+    stablecoin_dominance: float
+    usdt_dominance: float
+    usdc_dominance: float
+    dominance_24h_change: float
+    dominance_rsi: float
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 # Type aliases for common data structures
 OHLCV = dict[str, Any]  # Raw OHLCV data from exchange
+OHLCVData = MarketData  # Alias for backward compatibility
 IndicatorValues = dict[str, float]  # Calculated indicator values
 MarketSnapshot = dict[str, Any]  # Complete market snapshot
 FuturesSnapshot = dict[str, Any]  # Futures-specific market snapshot

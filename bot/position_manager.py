@@ -12,7 +12,7 @@ import threading
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Literal
 
 import aiofiles
 
@@ -34,8 +34,8 @@ class PositionManager:
 
     def __init__(
         self,
-        data_dir: Optional[Path] = None,
-        paper_trading_account: Optional[PaperTradingAccount] = None,
+        data_dir: Path | None = None,
+        paper_trading_account: PaperTradingAccount | None = None,
         use_fifo: bool = True,
     ) -> None:
         """
@@ -73,11 +73,21 @@ class PositionManager:
         self.positions_file = self.data_dir / "positions.json"
         self.history_file = self.data_dir / "position_history.json"
 
+        # Enhanced validation tracking
+        self._validation_errors = 0
+        self._last_validation_check: datetime | None = None
+        self._position_consistency_errors: list[dict[str, Any]] = []
+        self._max_position_value = Decimal("50000")  # Maximum position value in USD
+
         # Load persisted state
         self._load_state()
 
         logger.info(
-            f"Initialized PositionManager with {len(self._positions)} active positions"
+            f"Initialized Enhanced PositionManager with {len(self._positions)} active positions\n"
+            f"  • FIFO tracking: {'enabled' if self.use_fifo else 'disabled'}\n"
+            f"  • Paper trading: {'enabled' if self.paper_account else 'disabled'}\n"
+            f"  • Enhanced validation: enabled\n"
+            f"  • Max position value: ${self._max_position_value:,.2f}"
         )
         if self.paper_account:
             account_status = self.paper_account.get_account_status()
@@ -179,7 +189,11 @@ class PositionManager:
             return new_position.copy()
 
     def update_position_from_exchange(
-        self, symbol: str, side: str, size: Decimal, entry_price: Decimal
+        self,
+        symbol: str,
+        side: Literal["LONG", "SHORT", "FLAT"],
+        size: Decimal,
+        entry_price: Decimal,
     ) -> Position:
         """
         Update position state based on actual exchange position data.
@@ -212,12 +226,14 @@ class PositionManager:
 
             # Update FIFO manager if enabled
             if self.use_fifo:
-                self.fifo_manager.reconcile_position_from_exchange(
-                    symbol=symbol,
-                    side=side,
-                    size=size,
-                    entry_price=entry_price,
-                )
+                if side in ["LONG", "SHORT"]:
+                    side_literal: Literal["LONG", "SHORT"] = side  # type: ignore
+                    self.fifo_manager.reconcile_position_from_exchange(
+                        symbol=symbol,
+                        side=side_literal,
+                        size=size,
+                        entry_price=entry_price,
+                    )
 
             # Persist state
             self._save_state()
@@ -391,7 +407,9 @@ class PositionManager:
 
             return False, "Position within acceptable risk"
 
-    def get_daily_pnl(self, target_date: datetime = None) -> dict[str, float]:
+    def get_daily_pnl(
+        self, target_date: datetime | None = None
+    ) -> dict[str, str | float]:
         """
         Get P&L for a specific day.
 
@@ -429,7 +447,7 @@ class PositionManager:
                 "realized_pnl": float(daily_realized),
                 "unrealized_pnl": float(daily_unrealized),
                 "total_pnl": float(daily_realized + daily_unrealized),
-                "trades_count": trades_count,
+                "trades_count": float(trades_count),
             }
 
     def get_position_summary(self) -> dict[str, Any]:
@@ -480,7 +498,7 @@ class PositionManager:
         """
         # Convert order side to position side
         if order.side == "BUY":
-            order_side = "LONG"
+            order_side: Literal["LONG", "SHORT"] = "LONG"
             order_size = order.filled_quantity
         else:  # SELL
             order_side = "SHORT"
@@ -530,20 +548,23 @@ class PositionManager:
                 )
             else:
                 # Position continues with new size
-                new_side = "LONG" if new_size > 0 else "SHORT"
+                new_side: Literal["LONG", "SHORT"] = "LONG" if new_size > 0 else "SHORT"
 
                 # Calculate weighted average entry price if adding to position
                 if (current_pos.side == "LONG" and order_side == "LONG") or (
                     current_pos.side == "SHORT" and order_side == "SHORT"
                 ):
                     # Adding to position
-                    total_cost = (current_pos.size * current_pos.entry_price) + (
-                        abs(order_size) * fill_price
-                    )
-                    new_entry_price = total_cost / abs(new_size)
+                    if current_pos.entry_price is not None:
+                        total_cost = (current_pos.size * current_pos.entry_price) + (
+                            abs(order_size) * fill_price
+                        )
+                        new_entry_price = total_cost / abs(new_size)
+                    else:
+                        new_entry_price = fill_price
                 else:
                     # Reducing position - keep original entry price
-                    new_entry_price = current_pos.entry_price
+                    new_entry_price = current_pos.entry_price or fill_price
 
                 new_position = Position(
                     symbol=order.symbol,
@@ -820,7 +841,7 @@ class PositionManager:
             "active_positions": len(self._positions),
         }
 
-    def get_tax_lots_report(self, symbol: str) -> Optional[dict]:
+    def get_tax_lots_report(self, symbol: str) -> dict | None:
         """
         Get FIFO tax lots report for a symbol.
 
@@ -913,3 +934,272 @@ class PositionManager:
                 self.paper_account.reset_account()
             self._save_state()
             logger.warning("All positions have been reset")
+
+    def validate_position_integrity(
+        self, symbol: str, current_price: Decimal
+    ) -> dict[str, Any]:
+        """
+        Comprehensive position integrity validation.
+
+        Args:
+            symbol: Trading symbol to validate
+            current_price: Current market price
+
+        Returns:
+            Dictionary with validation results
+        """
+        position = self.get_position(symbol)
+        validation_result: dict[str, Any] = {
+            "symbol": symbol,
+            "valid": True,
+            "errors": [],
+            "warnings": [],
+            "timestamp": datetime.now(),
+        }
+
+        try:
+            # Check position size consistency
+            if position.side != "FLAT":
+                if position.size <= 0:
+                    validation_result["errors"].append(
+                        f"Invalid position size: {position.size} for {position.side} position"
+                    )
+                    validation_result["valid"] = False
+
+                # Check position value limits
+                if position.entry_price:
+                    position_value = position.size * position.entry_price
+                    if position_value > self._max_position_value:
+                        validation_result["errors"].append(
+                            f"Position value ${position_value:.2f} exceeds maximum ${self._max_position_value:.2f}"
+                        )
+                        validation_result["valid"] = False
+
+                # Validate entry price sanity
+                if position.entry_price and current_price:
+                    price_deviation = (
+                        abs(current_price - position.entry_price) / current_price
+                    )
+                    if price_deviation > Decimal("0.3"):  # 30% deviation warning
+                        validation_result["warnings"].append(
+                            f"Entry price deviation {price_deviation*100:.1f}% from current market"
+                        )
+
+                # Check P&L calculation consistency
+                if position.entry_price:
+                    expected_pnl = self._calculate_expected_unrealized_pnl(
+                        position, current_price
+                    )
+                    pnl_diff = abs(position.unrealized_pnl - expected_pnl)
+                    tolerance = abs(expected_pnl * Decimal("0.05"))  # 5% tolerance
+
+                    if pnl_diff > tolerance and tolerance > 0:
+                        validation_result["warnings"].append(
+                            f"P&L calculation drift: expected {expected_pnl}, got {position.unrealized_pnl}"
+                        )
+
+            # Record validation results
+            if not validation_result["valid"]:
+                self._validation_errors += 1
+                self._position_consistency_errors.append(validation_result.copy())
+
+                # Keep only recent errors
+                cutoff_time = datetime.now() - timedelta(hours=24)
+                self._position_consistency_errors = [
+                    err
+                    for err in self._position_consistency_errors
+                    if err["timestamp"] >= cutoff_time
+                ]
+
+            self._last_validation_check = datetime.now()
+
+            return validation_result
+
+        except Exception as e:
+            logger.error(f"Position validation error for {symbol}: {e}")
+            validation_result["valid"] = False
+            validation_result["errors"].append(f"Validation exception: {e}")
+            return validation_result
+
+    def _calculate_expected_unrealized_pnl(
+        self, position: Position, current_price: Decimal
+    ) -> Decimal:
+        """Calculate expected unrealized P&L for validation."""
+        if position.side == "FLAT" or not position.entry_price:
+            return Decimal("0")
+
+        price_diff = current_price - position.entry_price
+
+        if position.side == "LONG":
+            return position.size * price_diff
+        else:  # SHORT
+            return position.size * (-price_diff)
+
+    def get_validation_status(self) -> dict[str, Any]:
+        """
+        Get position validation status and health metrics.
+
+        Returns:
+            Dictionary with validation status
+        """
+        return {
+            "validation_errors_count": self._validation_errors,
+            "last_validation_check": (
+                self._last_validation_check.isoformat()
+                if self._last_validation_check
+                else None
+            ),
+            "recent_consistency_errors": len(self._position_consistency_errors),
+            "position_health_score": self._calculate_position_health_score(),
+            "max_position_value": float(self._max_position_value),
+            "active_positions_count": len(
+                [p for p in self._positions.values() if p.side != "FLAT"]
+            ),
+        }
+
+    def _calculate_position_health_score(self) -> float:
+        """Calculate overall position health score (0-100)."""
+        try:
+            # Base score
+            score = 100.0
+
+            # Deduct for validation errors
+            score -= min(50, self._validation_errors * 10)
+
+            # Deduct for recent consistency errors
+            recent_errors = len(self._position_consistency_errors)
+            score -= min(30, recent_errors * 5)
+
+            # Deduct for stale validation checks
+            if self._last_validation_check:
+                hours_since_check = (
+                    datetime.now() - self._last_validation_check
+                ).total_seconds() / 3600
+                if hours_since_check > 1:
+                    score -= min(20, hours_since_check * 2)
+            else:
+                score -= 30  # No validation check yet
+
+            return max(0.0, score)
+
+        except Exception as e:
+            logger.error(f"Health score calculation error: {e}")
+            return 0.0
+
+    def perform_comprehensive_validation(
+        self, market_prices: dict[str, Decimal]
+    ) -> dict[str, Any]:
+        """
+        Perform comprehensive validation on all positions.
+
+        Args:
+            market_prices: Dictionary of symbol -> current price
+
+        Returns:
+            Comprehensive validation report
+        """
+        validation_report: dict[str, Any] = {
+            "timestamp": datetime.now(),
+            "positions_checked": 0,
+            "positions_valid": 0,
+            "total_errors": 0,
+            "total_warnings": 0,
+            "position_details": {},
+        }
+
+        try:
+            for symbol, position in self._positions.items():
+                if position.side == "FLAT":
+                    continue
+
+                current_price = market_prices.get(symbol)
+                if not current_price:
+                    logger.warning(
+                        f"No market price available for validation of {symbol}"
+                    )
+                    continue
+
+                validation_result = self.validate_position_integrity(
+                    symbol, current_price
+                )
+                validation_report["position_details"][symbol] = validation_result
+                validation_report["positions_checked"] += 1
+
+                if validation_result["valid"]:
+                    validation_report["positions_valid"] += 1
+
+                validation_report["total_errors"] += len(validation_result["errors"])
+                validation_report["total_warnings"] += len(
+                    validation_result["warnings"]
+                )
+
+            # Calculate overall health
+            if validation_report["positions_checked"] > 0:
+                validation_report["overall_health"] = (
+                    validation_report["positions_valid"]
+                    / validation_report["positions_checked"]
+                    * 100
+                )
+            else:
+                validation_report["overall_health"] = 100.0
+
+            logger.info(
+                f"Position validation complete: {validation_report['positions_valid']}/{validation_report['positions_checked']} valid "
+                f"({validation_report['overall_health']:.1f}% health)"
+            )
+
+            return validation_report
+
+        except Exception as e:
+            logger.error(f"Comprehensive validation error: {e}")
+            validation_report["error"] = str(e)
+            return validation_report
+
+    def auto_correct_position_inconsistencies(
+        self, symbol: str, current_price: Decimal
+    ) -> bool:
+        """
+        Attempt to auto-correct minor position inconsistencies.
+
+        Args:
+            symbol: Trading symbol
+            current_price: Current market price
+
+        Returns:
+            True if corrections were made
+        """
+        try:
+            position = self.get_position(symbol)
+            if position.side == "FLAT":
+                return False
+
+            corrections_made = False
+
+            # Auto-correct unrealized P&L if it's inconsistent
+            if position.entry_price:
+                expected_pnl = self._calculate_expected_unrealized_pnl(
+                    position, current_price
+                )
+                pnl_diff = abs(position.unrealized_pnl - expected_pnl)
+                tolerance = abs(expected_pnl * Decimal("0.05"))  # 5% tolerance
+
+                if pnl_diff > tolerance and tolerance > 0:
+                    logger.warning(
+                        f"Auto-correcting P&L for {symbol}: {position.unrealized_pnl} -> {expected_pnl}"
+                    )
+
+                    with self._lock:
+                        if symbol in self._positions:
+                            self._positions[symbol].unrealized_pnl = expected_pnl
+                            self._positions[symbol].timestamp = datetime.now(UTC)
+                            corrections_made = True
+
+            if corrections_made:
+                self._save_state()
+                logger.info(f"Position inconsistencies corrected for {symbol}")
+
+            return corrections_made
+
+        except Exception as e:
+            logger.error(f"Auto-correction error for {symbol}: {e}")
+            return False

@@ -226,7 +226,7 @@ class WebSocketConnectivityTester:
             start_time = time.time()
 
             # Create multiple connections
-            for i in range(count):
+            for _ in range(count):
                 ws = await websockets.connect(url)
                 websockets_list.append(ws)
 

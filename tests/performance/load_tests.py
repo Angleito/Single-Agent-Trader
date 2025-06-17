@@ -27,7 +27,7 @@ from bot.indicators.vumanchu import VuManChuIndicators
 # Import bot components
 from bot.risk import RiskManager
 from bot.strategy.llm_agent import LLMAgent
-from bot.types import IndicatorData, MarketState, OHLCVData, Position
+from bot.types import IndicatorData, MarketData, MarketState, Position
 from bot.validator import TradeValidator
 
 logger = logging.getLogger(__name__)
@@ -102,7 +102,7 @@ class MarketDataSimulator:
         self.data_buffer = []
         self.running = False
 
-    def generate_tick_data(self, count: int = 1000) -> list[OHLCVData]:
+    def generate_tick_data(self, count: int = 1000) -> list[MarketData]:
         """
         Generate synthetic tick data for testing.
 
@@ -129,7 +129,8 @@ class MarketDataSimulator:
             close_price = self.current_price
             volume = random.uniform(1000, 10000)
 
-            tick_data = OHLCVData(
+            tick_data = MarketData(
+                symbol=self.symbol,
                 timestamp=current_time - timedelta(seconds=count - i),
                 open=Decimal(str(open_price)),
                 high=Decimal(str(high)),
@@ -166,7 +167,7 @@ class MarketDataSimulator:
         """Stop the data stream."""
         self.running = False
 
-    def get_latest_data(self, limit: int = 100) -> list[OHLCVData]:
+    def get_latest_data(self, limit: int = 100) -> list[MarketData]:
         """Get the latest market data."""
         return self.data_buffer[-limit:] if self.data_buffer else []
 
@@ -411,6 +412,7 @@ class LoadTestSuite:
             )
 
             test_indicators = IndicatorData(
+                timestamp=datetime.utcnow(),
                 cipher_a_dot=random.uniform(-2, 2),
                 cipher_b_wave=random.uniform(-1, 1),
                 cipher_b_money_flow=random.uniform(30, 70),

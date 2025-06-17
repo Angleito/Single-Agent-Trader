@@ -178,12 +178,12 @@ class CipherA:
     async def calculate_async(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Asynchronous version of calculate() for real-time processing.
-        
+
         Runs indicator calculations in background tasks to prevent blocking.
-        
+
         Args:
             df: DataFrame with OHLCV data
-            
+
         Returns:
             DataFrame with comprehensive Cipher A indicators
         """
@@ -194,39 +194,43 @@ class CipherA:
     async def calculate_streaming(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Optimized streaming calculation for real-time updates.
-        
+
         Uses parallel execution and caching for better performance.
-        
+
         Args:
             df: DataFrame with OHLCV data
-            
+
         Returns:
             DataFrame with indicators calculated in parallel
         """
         # Validate input data quickly
         if df.empty or len(df) < 50:  # Minimum for basic calculations
             return await self.calculate_async(df)
-        
+
         # Run calculations in parallel using gather for better performance
         try:
             # Create tasks for independent calculations
             tasks = []
-            
+
             # Task 1: Core indicators (WaveTrend, RSI)
             tasks.append(asyncio.create_task(self._calculate_core_indicators_async(df)))
-            
+
             # Task 2: EMA Ribbon system
             tasks.append(asyncio.create_task(self._calculate_ema_ribbon_async(df)))
-            
+
             # Task 3: Advanced indicators (RSI+MFI, Stochastic RSI)
-            tasks.append(asyncio.create_task(self._calculate_advanced_indicators_async(df)))
-            
+            tasks.append(
+                asyncio.create_task(self._calculate_advanced_indicators_async(df))
+            )
+
             # Task 4: Signal patterns (can depend on core indicators)
             # This will run after core indicators complete
-            
+
             # Execute core tasks in parallel
-            core_result, ema_result, advanced_result = await asyncio.gather(*tasks, return_exceptions=True)
-            
+            core_result, ema_result, advanced_result = await asyncio.gather(
+                *tasks, return_exceptions=True
+            )
+
             # Handle any exceptions
             if isinstance(core_result, Exception):
                 logger.error(f"Core indicators calculation failed: {core_result}")
@@ -235,21 +239,23 @@ class CipherA:
                 logger.error(f"EMA ribbon calculation failed: {ema_result}")
                 return await self.calculate_async(df)  # Fallback
             if isinstance(advanced_result, Exception):
-                logger.error(f"Advanced indicators calculation failed: {advanced_result}")
+                logger.error(
+                    f"Advanced indicators calculation failed: {advanced_result}"
+                )
                 return await self.calculate_async(df)  # Fallback
-            
+
             # Combine results
             result = df.copy()
             result.update(core_result)
             result.update(ema_result)
             result.update(advanced_result)
-            
+
             # Calculate signal patterns based on combined data
             signal_result = await self._calculate_signal_patterns_async(result)
             result.update(signal_result)
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(f"Parallel indicator calculation failed: {e}")
             # Fallback to sequential calculation
@@ -257,6 +263,7 @@ class CipherA:
 
     async def _calculate_core_indicators_async(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calculate core indicators (WaveTrend, RSI) in thread pool."""
+
         def _calc_core():
             result = df.copy()
             # Calculate WaveTrend oscillator
@@ -268,13 +275,24 @@ class CipherA:
                 if rsi_values is not None
                 else pd.Series(50.0, index=result.index)
             )
-            return result[["wt1", "wt2", "rsi", "wt_overbought", "wt_oversold", "wt_cross_up", "wt_cross_down"]]
-        
+            return result[
+                [
+                    "wt1",
+                    "wt2",
+                    "rsi",
+                    "wt_overbought",
+                    "wt_oversold",
+                    "wt_cross_up",
+                    "wt_cross_down",
+                ]
+            ]
+
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, _calc_core)
 
     async def _calculate_ema_ribbon_async(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calculate EMA ribbon system in thread pool."""
+
         def _calc_ema():
             result = df.copy()
             result = self.ema_ribbon.calculate_ema_ribbon(result)
@@ -285,46 +303,54 @@ class CipherA:
                 result["ema_ribbon_bullish"] = result["ribbon_bullish"]
             if "ribbon_bearish" in result.columns:
                 result["ema_ribbon_bearish"] = result["ribbon_bearish"]
-            
+
             # Return only EMA-related columns
-            ema_cols = [col for col in result.columns if col.startswith("ema") or "ribbon" in col]
+            ema_cols = [
+                col
+                for col in result.columns
+                if col.startswith("ema") or "ribbon" in col
+            ]
             return result[ema_cols]
-        
+
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, _calc_ema)
 
-    async def _calculate_advanced_indicators_async(self, df: pd.DataFrame) -> pd.DataFrame:
+    async def _calculate_advanced_indicators_async(
+        self, df: pd.DataFrame
+    ) -> pd.DataFrame:
         """Calculate advanced indicators (RSI+MFI, Stochastic RSI, STC) in thread pool."""
+
         def _calc_advanced():
             result = df.copy()
-            
+
             # RSI+MFI combined indicator
             rsimfi_values = self.rsimfi.calculate_rsimfi(
                 result, period=self.rsimfi_period, multiplier=self.rsimfi_multiplier
             )
             result["rsimfi"] = rsimfi_values.astype("float64")
-            
+
             # Stochastic RSI
             result = self.stochastic_rsi.calculate(result)
-            
+
             # Schaff Trend Cycle
             result = self.schaff_trend_cycle.calculate(result)
-            
+
             # Return only advanced indicator columns
             advanced_cols = ["rsimfi", "stoch_rsi_k", "stoch_rsi_d", "stc"]
             return result[[col for col in advanced_cols if col in result.columns]]
-        
+
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, _calc_advanced)
 
     async def _calculate_signal_patterns_async(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calculate signal patterns and divergences in thread pool."""
+
         def _calc_signals():
             result = df.copy()
-            
+
             # Calculate all advanced Cipher A signal patterns
             result = self.cipher_a_signals.get_all_cipher_a_signals(result)
-            
+
             # Calculate divergence signals
             try:
                 wt_regular_divs = self.divergence_detector.detect_regular_divergences(
@@ -352,17 +378,37 @@ class CipherA:
 
                 # Process WT divergences
                 for div in wt_regular_divs + wt_hidden_divs:
-                    if div.divergence_type in [DivergenceType.BULLISH_REGULAR, DivergenceType.BULLISH_HIDDEN]:
-                        result.loc[result.index[div.end_idx], "wt_divergence_bullish"] = True
-                    elif div.divergence_type in [DivergenceType.BEARISH_REGULAR, DivergenceType.BEARISH_HIDDEN]:
-                        result.loc[result.index[div.end_idx], "wt_divergence_bearish"] = True
+                    if div.divergence_type in [
+                        DivergenceType.BULLISH_REGULAR,
+                        DivergenceType.BULLISH_HIDDEN,
+                    ]:
+                        result.loc[
+                            result.index[div.end_idx], "wt_divergence_bullish"
+                        ] = True
+                    elif div.divergence_type in [
+                        DivergenceType.BEARISH_REGULAR,
+                        DivergenceType.BEARISH_HIDDEN,
+                    ]:
+                        result.loc[
+                            result.index[div.end_idx], "wt_divergence_bearish"
+                        ] = True
 
                 # Process RSI divergences
                 for div in rsi_regular_divs + rsi_hidden_divs:
-                    if div.divergence_type in [DivergenceType.BULLISH_REGULAR, DivergenceType.BULLISH_HIDDEN]:
-                        result.loc[result.index[div.end_idx], "rsi_divergence_bullish"] = True
-                    elif div.divergence_type in [DivergenceType.BEARISH_REGULAR, DivergenceType.BEARISH_HIDDEN]:
-                        result.loc[result.index[div.end_idx], "rsi_divergence_bearish"] = True
+                    if div.divergence_type in [
+                        DivergenceType.BULLISH_REGULAR,
+                        DivergenceType.BULLISH_HIDDEN,
+                    ]:
+                        result.loc[
+                            result.index[div.end_idx], "rsi_divergence_bullish"
+                        ] = True
+                    elif div.divergence_type in [
+                        DivergenceType.BEARISH_REGULAR,
+                        DivergenceType.BEARISH_HIDDEN,
+                    ]:
+                        result.loc[
+                            result.index[div.end_idx], "rsi_divergence_bearish"
+                        ] = True
 
             except Exception as e:
                 logger.warning(f"Error calculating divergences: {e}")
@@ -371,12 +417,26 @@ class CipherA:
                 result["wt_divergence_bearish"] = pd.Series(False, index=result.index)
                 result["rsi_divergence_bullish"] = pd.Series(False, index=result.index)
                 result["rsi_divergence_bearish"] = pd.Series(False, index=result.index)
-            
+
             # Return signal-related columns
-            signal_cols = [col for col in result.columns if any(x in col for x in 
-                          ["diamond", "yellow", "cross", "bull", "bear", "divergence", "cipher_a"])]
+            signal_cols = [
+                col
+                for col in result.columns
+                if any(
+                    x in col
+                    for x in [
+                        "diamond",
+                        "yellow",
+                        "cross",
+                        "bull",
+                        "bear",
+                        "divergence",
+                        "cipher_a",
+                    ]
+                )
+            ]
             return result[signal_cols]
-        
+
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, _calc_signals)
 
@@ -2522,7 +2582,7 @@ class VuManChuIndicators:
             latest_dominance = dominance_candles[-1].close if dominance_candles else 0
 
             # Calculate sentiment score
-            sentiment_score = 0
+            sentiment_score = 0.0
             sentiment_factors = []
 
             # Cipher signals on dominance (inverted logic - rising dominance is bearish for crypto)

@@ -264,7 +264,7 @@ class LLMSettings(BaseModel):
     anthropic_base_url: AnyHttpUrl | None = Field(
         default=None, description="Custom Anthropic API base URL"
     )
-    ollama_base_url: AnyHttpUrl = Field(
+    ollama_base_url: str = Field(
         default="http://localhost:11434", description="Ollama base URL for local models"
     )
 
@@ -810,7 +810,7 @@ class DataSettings(BaseModel):
 
     # Storage Configuration
     data_storage_path: Path = Field(
-        default=Path("data"), description="Path for data storage"
+        default_factory=lambda: Path("data"), description="Path for data storage"
     )
     keep_historical_days: int = Field(
         default=30, ge=1, le=365, description="Days of historical data to keep"
@@ -1077,16 +1077,14 @@ class Settings(BaseSettings):
     )
 
     @computed_field
-    @property
     def is_production(self) -> bool:
         """Check if running in production environment."""
         return self.system.environment == Environment.PRODUCTION
 
     @computed_field
-    @property
     def requires_api_keys(self) -> bool:
         """Check if API keys are required for current configuration."""
-        return (
+        return bool(
             not self.system.dry_run or self.system.environment == Environment.PRODUCTION
         )
 

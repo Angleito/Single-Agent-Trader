@@ -2126,7 +2126,6 @@ class DominanceCandleBuilder:
                         curr_candle.ema_slow,
                     ]
                 ):
-
                     # Bullish crossover: fast EMA crosses above slow EMA
                     if (
                         prev_candle.ema_fast <= prev_candle.ema_slow

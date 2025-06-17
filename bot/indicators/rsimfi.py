@@ -703,7 +703,7 @@ class RSIMFIIndicator:
         Returns:
             Dictionary with analysis summary
         """
-        summary = {"total_data_points": len(df)}
+        summary: dict[str, Any] = {"total_data_points": len(df)}
 
         # RSI+MFI value statistics
         if "rsimfi" in df.columns:

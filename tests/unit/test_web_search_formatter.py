@@ -13,12 +13,7 @@ from bot.utils.web_search_formatter import (
 
 # Import or mock the dependencies based on availability
 try:
-    from bot.analysis.market_context import (
-        CorrelationAnalysis,
-        MarketRegime,
-        MomentumAlignment,
-        RiskSentiment,
-    )
+    from bot.analysis.market_context import CorrelationAnalysis
     from bot.services.financial_sentiment import SentimentResult
 except ImportError:
     # Create mock classes for testing if imports fail

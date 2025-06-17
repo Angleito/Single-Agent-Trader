@@ -33,6 +33,12 @@ def pytest_configure(config: pytest.Config) -> None:
         "markers", "external: mark test as requiring external services"
     )
     config.addinivalue_line("markers", "omnisearch: mark test as OmniSearch related")
+    config.addinivalue_line(
+        "markers", "requires_omnisearch: mark test as requiring OmniSearch API"
+    )
+    config.addinivalue_line(
+        "markers", "requires_network: mark test as requiring network access"
+    )
 
 
 def pytest_collection_modifyitems(
@@ -765,17 +771,6 @@ def market_scenario(request: pytest.FixtureRequest) -> dict[str, Any]:
         },
     }
     return scenarios[request.param]
-
-
-# Skip markers for external dependencies - additional markers
-def pytest_configure_additional(config: pytest.Config) -> None:
-    """Register additional custom markers."""
-    config.addinivalue_line(
-        "markers", "requires_omnisearch: mark test as requiring OmniSearch API"
-    )
-    config.addinivalue_line(
-        "markers", "requires_network: mark test as requiring network access"
-    )
 
 
 # Custom assertions

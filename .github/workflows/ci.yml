@@ -76,7 +76,7 @@ jobs:
         fi
         if [ ! -f "$VENV_PATH/bin/ruff" ]; then
           echo "Ruff executable not found, forcing reinstallation..."
-          poetry run pip install --force-reinstall ruff  
+          poetry run pip install --force-reinstall ruff
         fi
 
     - name: Verify Black installation

@@ -11,7 +11,7 @@ services:
       # - /var/run/docker.sock:/var/run/docker.sock:ro  # DANGEROUS - Removed for security
       - ./backend/logs:/app/logs
       - ./backend/data:/app/data
-    
+
     # SECURITY HARDENING - Container Security
     user: "1000:1000"  # Run as non-root user
     read_only: true     # Read-only root filesystem
@@ -62,7 +62,7 @@ services:
     container_name: dashboard-frontend
     ports:
       - "127.0.0.1:3000:8080"  # SECURITY: Bind to localhost only
-    
+
     # SECURITY HARDENING - Container Security
     user: "1000:1000"  # Run as non-root user
     read_only: true     # Read-only root filesystem
@@ -106,7 +106,7 @@ services:
     container_name: dashboard-frontend-prod
     ports:
       - "127.0.0.1:80:8080"  # SECURITY: Bind to localhost only
-    
+
     # SECURITY HARDENING - Container Security
     user: "1000:1000"  # Run as non-root user
     read_only: true     # Read-only root filesystem
@@ -148,7 +148,7 @@ services:
     container_name: dashboard-nginx
     ports:
       - "127.0.0.1:8080:80"  # SECURITY: Bind to localhost only
-    
+
     # SECURITY HARDENING - Container Security
     user: "101:101"    # Run as nginx user
     read_only: true     # Read-only root filesystem

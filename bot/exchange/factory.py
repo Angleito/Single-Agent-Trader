@@ -20,7 +20,10 @@ class ExchangeFactory:
 
     @staticmethod
     def create_exchange(
-        exchange_type: str | None = None, dry_run: bool | None = None, **kwargs
+        settings_obj=None,
+        exchange_type: str | None = None,
+        dry_run: bool | None = None,
+        **kwargs,
     ) -> BaseExchange:
         """
         Create an exchange client based on configuration.
@@ -38,11 +41,14 @@ class ExchangeFactory:
             ValueError: If exchange type is not supported
         """
         # Use config defaults if not specified
+        if settings_obj is None:
+            settings_obj = settings
+
         if exchange_type is None:
-            exchange_type = getattr(settings.exchange, "exchange_type", "coinbase")
+            exchange_type = getattr(settings_obj.exchange, "exchange_type", "coinbase")
 
         if dry_run is None:
-            dry_run = settings.system.dry_run
+            dry_run = settings_obj.system.dry_run
 
         exchange_type = exchange_type.lower()
 
@@ -101,9 +107,8 @@ class ExchangeFactory:
             else:
                 private_key = None
 
-        network = kwargs.get("network") or getattr(
-            settings.exchange, "bluefin_network", "mainnet"
-        )
+        network_setting = getattr(settings.exchange, "bluefin_network", "mainnet")
+        network = kwargs.get("network") or network_setting
 
         # Create client
         client = BluefinClient(

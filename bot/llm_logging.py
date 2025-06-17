@@ -106,7 +106,9 @@ class ChatCompletionLogger:
         from logging.handlers import RotatingFileHandler
 
         file_handler = RotatingFileHandler(
-            self.log_file, maxBytes=50 * 1024 * 1024, backupCount=5  # 50MB
+            self.log_file,
+            maxBytes=50 * 1024 * 1024,
+            backupCount=5,  # 50MB
         )
 
         # JSON formatter for structured logging

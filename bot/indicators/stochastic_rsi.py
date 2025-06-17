@@ -67,6 +67,11 @@ class StochasticRSI:
         self.use_log = use_log
         self.use_avg = use_avg
 
+        # Initialize performance tracking
+        self._calculation_count = 0
+        self._total_calculation_time = 0.0
+        self._last_data_quality_check: dict[str, Any] | None = None
+
     def calculate_stoch_rsi(
         self,
         src: pd.Series,

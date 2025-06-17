@@ -82,7 +82,7 @@ import time
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 # Third-party imports
 import click
@@ -97,6 +97,14 @@ from .command_consumer import CommandConsumer
 from .config import Settings, create_settings
 from .data.dominance import DominanceCandleBuilder, DominanceDataProvider
 from .data.market import MarketDataProvider
+
+if TYPE_CHECKING:
+    from .data.bluefin_market import BluefinMarketDataProvider
+
+    # Union type for all possible market data providers
+    MarketDataProviderType = MarketDataProvider | BluefinMarketDataProvider | None
+else:
+    MarketDataProviderType = MarketDataProvider | None
 from .exchange.factory import ExchangeFactory
 from .indicators.vumanchu import VuManChuIndicators
 from .learning.experience_manager import ExperienceManager
@@ -165,7 +173,7 @@ class TradingEngine:
             )
 
         # Initialize components (market data will be initialized after exchange connection)
-        self.market_data: MarketDataProvider | None = None
+        self.market_data: MarketDataProviderType = None
         self.indicator_calc = VuManChuIndicators()
         self.actual_trading_symbol = symbol  # Will be updated if futures are enabled
 
@@ -273,6 +281,12 @@ class TradingEngine:
             dry_run=self.dry_run,
         )
 
+        # Connect exchange validation failures to circuit breaker
+        if hasattr(self.exchange_client, "set_failure_callback"):
+            self.exchange_client.set_failure_callback(
+                self.risk_manager.circuit_breaker.record_failure
+            )
+
         # Initialize dominance data provider if enabled
         self.dominance_provider = None
         if self.settings.dominance.enable_dominance_data:
@@ -301,8 +315,8 @@ class TradingEngine:
         self.start_time = datetime.now(UTC)
 
         # Trading interval control
-        self.last_trade_time: Optional[datetime] = None
-        self.last_candle_analysis_time: Optional[datetime] = (
+        self.last_trade_time: datetime | None = None
+        self.last_candle_analysis_time: datetime | None = (
             None  # Track when we last analyzed a candle
         )
         self.trading_enabled = False  # Will be enabled after data validation
@@ -475,6 +489,37 @@ class TradingEngine:
         except Exception as e:
             self.logger.error(f"Error closing positions: {e}")
 
+    def _ensure_market_data_available(self) -> bool:
+        """
+        Ensure market data provider is initialized and connected.
+
+        Returns:
+            True if market data is available and connected, False otherwise
+        """
+        if self.market_data is None:
+            self.logger.error("Market data provider not initialized")
+            return False
+
+        if not self.market_data.is_connected():
+            self.logger.warning("Market data provider not connected")
+            return False
+
+        return True
+
+    def _get_market_data_provider(self):
+        """
+        Get the market data provider with proper type safety.
+
+        Returns:
+            The market data provider instance
+
+        Raises:
+            RuntimeError: If market data provider is not initialized
+        """
+        if self.market_data is None:
+            raise RuntimeError("Market data provider not initialized")
+        return self.market_data
+
     def _can_trade_now(self) -> bool:
         """
         Check if trading is currently allowed based on data availability and timing.
@@ -491,9 +536,8 @@ class TradingEngine:
         if not self.data_validation_complete:
             return False
 
-        # Check if we have fresh market data
-        if not self.market_data.is_connected():
-            self.logger.debug("📊 Market data not connected, skipping trade check")
+        # Check if market data is available
+        if not self._ensure_market_data_available():
             return False
 
         # Get latest candle to check if a new one has completed
@@ -502,7 +546,9 @@ class TradingEngine:
             import inspect
 
             latest_data = []
-            if hasattr(self.market_data, "get_latest_ohlcv"):
+            if self.market_data is not None and hasattr(
+                self.market_data, "get_latest_ohlcv"
+            ):
                 method = self.market_data.get_latest_ohlcv
                 if inspect.iscoroutinefunction(method):
                     # Can't await in non-async method, defer to caller
@@ -645,8 +691,11 @@ class TradingEngine:
             self._display_startup_summary()
 
             # Log initial data status for debugging
-            data_status = self.market_data.get_data_status()
-            self.logger.info(f"Initial market data status: {data_status}")
+            if self.market_data is not None:
+                data_status = self.market_data.get_data_status()
+                self.logger.info(f"Initial market data status: {data_status}")
+            else:
+                self.logger.warning("Market data not initialized during startup")
 
             # Start main trading loop
             await self._main_trading_loop()
@@ -773,6 +822,9 @@ class TradingEngine:
             self.market_data = MarketDataProvider(market_data_symbol, self.interval)
             console.print(f"    Using Coinbase market data for {market_data_symbol}")
 
+        # Ensure market_data is properly initialized before connecting
+        if self.market_data is None:
+            raise RuntimeError("Market data provider was not properly initialized")
         await self.market_data.connect()
 
         # Verify LLM agent is available
@@ -913,10 +965,15 @@ class TradingEngine:
             elapsed_time = (datetime.now(UTC) - wait_start).total_seconds()
             if elapsed_time > max_wait_time:
                 # Get detailed status before failing
-                status = self.market_data.get_data_status()
-                self.logger.error(
-                    f"Timeout waiting for initial market data. Status: {status}"
-                )
+                if self.market_data is not None:
+                    status = self.market_data.get_data_status()
+                    self.logger.error(
+                        f"Timeout waiting for initial market data. Status: {status}"
+                    )
+                else:
+                    self.logger.error(
+                        "Timeout waiting for initial market data. Market data provider not initialized"
+                    )
                 raise RuntimeError(
                     f"Timeout waiting for initial market data after {max_wait_time}s"
                 )
@@ -925,7 +982,9 @@ class TradingEngine:
             import inspect
 
             data = []
-            if hasattr(self.market_data, "get_latest_ohlcv"):
+            if self.market_data is not None and hasattr(
+                self.market_data, "get_latest_ohlcv"
+            ):
                 method = self.market_data.get_latest_ohlcv
                 try:
                     if inspect.iscoroutinefunction(method):
@@ -1009,7 +1068,11 @@ class TradingEngine:
                         )
 
             # Check for WebSocket data
-            if self.market_data.has_websocket_data() and not websocket_data_received:
+            if (
+                self.market_data is not None
+                and self.market_data.has_websocket_data()
+                and not websocket_data_received
+            ):
                 self.logger.info("📡 WebSocket is receiving real-time market data")
                 websocket_data_received = True
 
@@ -1037,8 +1100,10 @@ class TradingEngine:
                 try:
                     from .data.realtime_market import RealtimeMarketDataProvider
 
-                    if RealtimeMarketDataProvider and isinstance(
-                        self.market_data, RealtimeMarketDataProvider
+                    if (
+                        RealtimeMarketDataProvider
+                        and self.market_data is not None
+                        and isinstance(self.market_data, RealtimeMarketDataProvider)
                     ):
                         # Real-time provider status
                         status = self.market_data.get_status()
@@ -1055,7 +1120,13 @@ class TradingEngine:
                         )
                     else:
                         # Standard provider status
-                        status = self.market_data.get_data_status()
+                        if self.market_data is not None:
+                            status = self.market_data.get_data_status()
+                        else:
+                            status = {
+                                "connected": False,
+                                "websocket_data_received": False,
+                            }
                         interval_seconds = self._get_interval_seconds(self.interval)
                         candles_per_24h = (24 * 60 * 60) // interval_seconds
                         hours_available = (
@@ -1091,8 +1162,10 @@ class TradingEngine:
         try:
             from .data.realtime_market import RealtimeMarketDataProvider
 
-            if RealtimeMarketDataProvider and isinstance(
-                self.market_data, RealtimeMarketDataProvider
+            if (
+                RealtimeMarketDataProvider
+                and self.market_data is not None
+                and isinstance(self.market_data, RealtimeMarketDataProvider)
             ):
                 # Real-time provider status
                 data_status = self.market_data.get_status()
@@ -1120,7 +1193,10 @@ class TradingEngine:
             self.market_data, RealtimeMarketDataProvider
         ):
             # Standard provider status
-            data_status = self.market_data.get_data_status()
+            if self.market_data is None:
+                data_status = {"websocket_data_received": False}
+            else:
+                data_status = self.market_data.get_data_status()
             ws_status = (
                 "✓ Receiving data"
                 if data_status.get("websocket_data_received", False)
@@ -1208,6 +1284,12 @@ class TradingEngine:
                 loop_count += 1
 
                 # Check if we have fresh market data
+                if self.market_data is None:
+                    self.logger.error(
+                        "Market data provider not initialized, cannot continue trading"
+                    )
+                    break
+
                 if not self.market_data.is_connected():
                     self.logger.warning(
                         "Market data connection lost, checking reconnection status..."
@@ -1223,7 +1305,8 @@ class TradingEngine:
                     else:
                         # Only attempt manual reconnection if WebSocket handler isn't trying
                         self.logger.warning("Attempting manual reconnection...")
-                        await self.market_data.connect()
+                        if self.market_data is not None:
+                            await self.market_data.connect()
                         continue
 
                 # Get latest market data - handle different provider types
@@ -1239,24 +1322,34 @@ class TradingEngine:
                     RealtimeMarketDataProvider = None
                     is_realtime_provider = False
 
-                if is_realtime_provider:
+                if is_realtime_provider and self.market_data is not None:
                     # Real-time provider - get candles for the current trading interval
                     interval_seconds = self._get_interval_seconds(self.interval)
-                    latest_data = self.market_data.get_candle_history(
-                        interval_seconds, limit=200
-                    )
 
-                    # If we don't have enough historical data, try to get completed candles
-                    if len(latest_data) < 50:  # Need at least 50 candles for indicators
-                        # Force completion of current candles and retry
-                        self.market_data.tick_aggregator.force_complete_candles(
-                            self.symbol
-                        )
+                    # Type check: ensure we have the right provider type
+                    if hasattr(self.market_data, "get_candle_history"):
                         latest_data = self.market_data.get_candle_history(
                             interval_seconds, limit=200
                         )
 
-                elif hasattr(self.market_data, "get_latest_ohlcv"):
+                        # If we don't have enough historical data, try to get completed candles
+                        if len(latest_data) < 50 and hasattr(
+                            self.market_data, "tick_aggregator"
+                        ):
+                            # Force completion of current candles and retry
+                            self.market_data.tick_aggregator.force_complete_candles(
+                                self.symbol
+                            )
+                            latest_data = self.market_data.get_candle_history(
+                                interval_seconds, limit=200
+                            )
+                    else:
+                        # Fallback to standard provider method
+                        latest_data = []
+
+                elif self.market_data is not None and hasattr(
+                    self.market_data, "get_latest_ohlcv"
+                ):
                     method = self.market_data.get_latest_ohlcv
                     try:
                         if inspect.iscoroutinefunction(method):
@@ -1321,13 +1414,17 @@ class TradingEngine:
                     )
 
                 # Calculate technical indicators - handle different provider types
-                if is_realtime_provider:
-                    # Real-time provider - use specific interval
-                    interval_seconds = self._get_interval_seconds(self.interval)
-                    df = self.market_data.to_dataframe(interval_seconds, limit=200)
-                else:
-                    # Standard provider
-                    df = self.market_data.to_dataframe(limit=200)
+                if self.market_data is None:
+                    self.logger.error(
+                        "Market data provider not available for indicator calculation"
+                    )
+                    continue
+
+                # At this point, market_data is guaranteed to be non-None
+                market_data_provider = self.market_data
+
+                # All providers use standard to_dataframe signature
+                df = market_data_provider.to_dataframe(limit=200)
 
                 # Initialize dominance candles
                 dominance_candles = None
@@ -1707,13 +1804,20 @@ class TradingEngine:
 
                 # Periodic status logging (every 2 minutes)
                 if (datetime.now(UTC) - last_status_log).total_seconds() > 120:
-                    data_status = self.market_data.get_data_status()
-                    self.logger.info(
-                        f"🔄 Trading Status: Loop #{loop_count} | "
-                        f"WebSocket: {'✓' if data_status.get('websocket_connected') else '✗'} | "
-                        f"Latest Price: ${data_status.get('latest_price', 'N/A')} | "
-                        f"OmniSearch: {'✓ Active' if hasattr(self, 'omnisearch_client') else '✗ Disabled'}"
-                    )
+                    if self.market_data is not None:
+                        data_status = self.market_data.get_data_status()
+                        self.logger.info(
+                            f"🔄 Trading Status: Loop #{loop_count} | "
+                            f"WebSocket: {'✓' if data_status.get('websocket_connected') else '✗'} | "
+                            f"Latest Price: ${data_status.get('latest_price', 'N/A')} | "
+                            f"OmniSearch: {'✓ Active' if hasattr(self, 'omnisearch_client') else '✗ Disabled'}"
+                        )
+                    else:
+                        self.logger.info(
+                            f"🔄 Trading Status: Loop #{loop_count} | "
+                            f"Market Data: ✗ Not Initialized | "
+                            f"OmniSearch: {'✓ Active' if hasattr(self, 'omnisearch_client') else '✗ Disabled'}"
+                        )
                     last_status_log = datetime.now(UTC)
 
                 # Calculate sleep time to maintain update frequency
@@ -1736,6 +1840,35 @@ class TradingEngine:
                 continue
 
         self.logger.info("Trading loop stopped")
+
+    async def _execute_trade_action(self, trade_action: TradeAction) -> bool:
+        """
+        Execute a trade action with current market data (simplified wrapper).
+
+        This method is used for manual trades and emergency actions where
+        we only have the trade action and need to fetch current market data.
+
+        Args:
+            trade_action: Trade action to execute
+
+        Returns:
+            bool: True if trade was executed successfully, False otherwise
+        """
+        try:
+            # Get current price from market data
+            if not self.data_manager or not self.data_manager.current_price:
+                self.logger.error("Market data not available for trade execution")
+                return False
+
+            current_price = self.data_manager.current_price
+
+            # Execute trade with current price and no experience tracking
+            await self._execute_trade(trade_action, current_price)
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error executing trade action: {e}")
+            return False
 
     async def _execute_trade(
         self,

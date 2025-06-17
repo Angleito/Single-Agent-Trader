@@ -252,7 +252,7 @@ class DivergenceDetector:
         indicator_fractals = self.find_fractals(indicator_series, top_limit, bot_limit)
         price_fractals = self.find_fractals(price_series)
 
-        divergences = []
+        divergences: list[DivergenceSignal] = []
 
         # Detect bullish regular divergences (bottom fractals)
         bullish_divs = self._detect_bullish_regular_divergences(
@@ -276,7 +276,7 @@ class DivergenceDetector:
         price_series: pd.Series,
     ) -> list[DivergenceSignal]:
         """Detect bullish regular divergences using bottom fractals."""
-        divergences = []
+        divergences: list[DivergenceSignal] = []
 
         # Get bottom fractals only
         indicator_bottoms = [
@@ -339,7 +339,7 @@ class DivergenceDetector:
         price_series: pd.Series,
     ) -> list[DivergenceSignal]:
         """Detect bearish regular divergences using top fractals."""
-        divergences = []
+        divergences: list[DivergenceSignal] = []
 
         # Get top fractals only
         indicator_tops = [
@@ -412,7 +412,7 @@ class DivergenceDetector:
         indicator_fractals = self.find_fractals(indicator_series)
         price_fractals = self.find_fractals(price_series)
 
-        divergences = []
+        divergences: list[DivergenceSignal] = []
 
         # Detect hidden bullish divergences
         hidden_bullish = self._detect_hidden_bullish_divergences(
@@ -436,7 +436,7 @@ class DivergenceDetector:
         price_series: pd.Series,
     ) -> list[DivergenceSignal]:
         """Detect hidden bullish divergences (price higher lows, indicator lower lows)."""
-        divergences = []
+        divergences: list[DivergenceSignal] = []
 
         indicator_bottoms = [
             f for f in indicator_fractals if f.fractal_type == FractalType.BOTTOM
@@ -494,7 +494,7 @@ class DivergenceDetector:
         price_series: pd.Series,
     ) -> list[DivergenceSignal]:
         """Detect hidden bearish divergences (price lower highs, indicator higher highs)."""
-        divergences = []
+        divergences: list[DivergenceSignal] = []
 
         indicator_tops = [
             f for f in indicator_fractals if f.fractal_type == FractalType.TOP

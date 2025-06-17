@@ -18,7 +18,6 @@ try:
         RiskSentiment,
         SentimentLevel,
     )
-    from bot.config import settings
     from bot.mcp.omnisearch_client import (
         FinancialNewsResult,
         MarketCorrelation,
@@ -32,7 +31,6 @@ try:
         NasdaqIndicators,
         SentimentResult,
     )
-    from bot.strategy.llm_agent import LLMAgent
     from bot.utils.web_search_formatter import WebSearchFormatter
 except ImportError as e:
     pytest.skip(f"Required modules not available: {e}", allow_module_level=True)
@@ -1045,7 +1043,6 @@ class TestFullOmniSearchLLMIntegration:
                 omnisearch_client, "search_market_correlation"
             ) as mock_correlation,
         ):
-
             # Setup mocks
             mock_connect.return_value = True
 
@@ -1255,7 +1252,6 @@ class TestFullOmniSearchLLMIntegration:
                 omnisearch_client, "search_crypto_sentiment"
             ) as mock_sentiment,
         ):
-
             mock_connect.return_value = True
             mock_news.return_value = []
             mock_sentiment.return_value = SentimentAnalysis(

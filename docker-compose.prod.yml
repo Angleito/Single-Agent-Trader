@@ -6,7 +6,7 @@ services:
     image: ai-trading-bot:latest
     container_name: ai-trading-bot-prod
     restart: always
-    
+
     # ENHANCED SECURITY HARDENING
     user: "1000:1000"  # Run as non-root user
     read_only: true     # Read-only root filesystem
@@ -85,7 +85,7 @@ services:
     image: dashboard-backend:latest
     container_name: dashboard-backend-prod
     restart: always
-    
+
     # ENHANCED SECURITY HARDENING
     user: "1000:1000"  # Run as non-root user
     read_only: true     # Read-only root filesystem
@@ -154,7 +154,7 @@ services:
     image: dashboard-frontend:latest
     container_name: dashboard-frontend-prod
     restart: always
-    
+
     # ENHANCED SECURITY HARDENING
     user: "1000:1000"  # Run as non-root user
     read_only: true     # Read-only root filesystem
@@ -199,7 +199,7 @@ services:
     image: nginx:alpine
     container_name: nginx-prod
     restart: always
-    
+
     # ENHANCED SECURITY HARDENING
     user: "101:101"    # Run as nginx user
     read_only: true     # Read-only root filesystem

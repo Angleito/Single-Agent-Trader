@@ -441,7 +441,6 @@ class TestCompleteTradingFlow:
                 is_connected=Mock(return_value=True),
             ),
         ):
-
             engine = TradingEngine(symbol="BTC-USD", interval="1m", dry_run=True)
 
             # Reset positions to ensure clean state for test

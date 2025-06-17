@@ -132,7 +132,7 @@ class CipherASignals:
         self._calculation_count = 0
         self._total_calculation_time = 0.0
         self._signal_generation_count = 0
-        self._last_data_quality_check = None
+        self._last_data_quality_check: float | None = None
 
         logger.info(
             "Cipher A Signals calculator initialized",
@@ -1441,7 +1441,7 @@ class CipherASignals:
         Returns:
             Dictionary with complete signal summary
         """
-        summary = {
+        summary: dict[str, Any] = {
             "total_data_points": len(df),
             "signal_counts": {},
             "signal_frequencies": {},

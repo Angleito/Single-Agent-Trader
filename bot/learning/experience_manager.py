@@ -551,8 +551,14 @@ class ExperienceManager:
                 "trade_id": trade.trade_id,
                 "symbol": trade.entry_order.symbol,
                 "side": trade.entry_order.side,
-                "entry_price": float(trade.entry_order.price) if trade.entry_order.price else 0.0,
-                "size": float(trade.entry_order.quantity) if trade.entry_order.quantity else 0.0,
+                "entry_price": (
+                    float(trade.entry_order.price) if trade.entry_order.price else 0.0
+                ),
+                "size": (
+                    float(trade.entry_order.quantity)
+                    if trade.entry_order.quantity
+                    else 0.0
+                ),
                 "unrealized_pnl": float(trade.unrealized_pnl),
                 "duration_hours": (datetime.now(UTC) - trade.entry_time).total_seconds()
                 / 3600,

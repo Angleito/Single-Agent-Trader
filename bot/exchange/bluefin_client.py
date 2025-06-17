@@ -90,6 +90,10 @@ class BluefinServiceClient:
         Returns:
             Account data dictionary
         """
+        if self._session is None:
+            logger.error("Session not initialized - call connect() first")
+            return {}
+
         try:
             async with self._session.get(f"{self.service_url}/account") as resp:
                 if resp.status == 200:
@@ -120,6 +124,10 @@ class BluefinServiceClient:
         Returns:
             List of position dictionaries
         """
+        if self._session is None:
+            logger.error("Session not initialized - call connect() first")
+            return []
+
         try:
             async with self._session.get(f"{self.service_url}/positions") as resp:
                 if resp.status == 200:
@@ -158,6 +166,10 @@ class BluefinServiceClient:
         Returns:
             Order response dictionary
         """
+        if self._session is None:
+            logger.error("Session not initialized - call connect() first")
+            return {"status": "error", "message": "Session not initialized"}
+
         try:
             async with self._session.post(
                 f"{self.service_url}/orders", json=order_data
@@ -196,6 +208,10 @@ class BluefinServiceClient:
         Returns:
             True if successful
         """
+        if self._session is None:
+            logger.error("Session not initialized - call connect() first")
+            return False
+
         try:
             async with self._session.delete(
                 f"{self.service_url}/orders/{order_id}"
@@ -215,6 +231,10 @@ class BluefinServiceClient:
         Returns:
             Ticker data dictionary
         """
+        if self._session is None:
+            logger.error("Session not initialized - call connect() first")
+            return {"price": "0"}
+
         try:
             async with self._session.get(
                 f"{self.service_url}/market/ticker", params={"symbol": symbol}
@@ -238,6 +258,10 @@ class BluefinServiceClient:
         Returns:
             True if successful
         """
+        if self._session is None:
+            logger.error("Session not initialized - call connect() first")
+            return False
+
         try:
             async with self._session.post(
                 f"{self.service_url}/leverage",
@@ -258,6 +282,10 @@ class BluefinServiceClient:
         Returns:
             List of candlestick arrays [timestamp, open, high, low, close, volume]
         """
+        if self._session is None:
+            logger.error("Session not initialized - call connect() first")
+            return []
+
         try:
             async with self._session.get(
                 f"{self.service_url}/market/candles", params=params

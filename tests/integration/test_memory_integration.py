@@ -12,8 +12,8 @@ from bot.mcp.memory_server import MCPMemoryServer
 from bot.strategy.memory_enhanced_agent import MemoryEnhancedLLMAgent
 from bot.types import (
     IndicatorData,
+    MarketData,
     MarketState,
-    OHLCVData,
     Position,
     StablecoinDominance,
     TradeAction,
@@ -53,7 +53,8 @@ def sample_market_state():
         timestamp=datetime.now(UTC),
         current_price=Decimal("50000"),
         ohlcv_data=[
-            OHLCVData(
+            MarketData(
+                symbol="BTC-USD",
                 timestamp=datetime.now(UTC) - timedelta(minutes=3),
                 open=Decimal("49800"),
                 high=Decimal("50100"),
@@ -63,9 +64,10 @@ def sample_market_state():
             )
         ],
         indicators=IndicatorData(
+            timestamp=datetime.now(UTC),
             rsi=45.0,
-            ema_fast=Decimal("49900"),
-            ema_slow=Decimal("49800"),
+            ema_fast=49900.0,
+            ema_slow=49800.0,
             cipher_a_dot=5.0,
             cipher_b_wave=-10.0,
             cipher_b_money_flow=48.0,
@@ -79,7 +81,12 @@ def sample_market_state():
             dominance_24h_change=-0.5,
             dominance_rsi=40.0,
         ),
-        current_position=Position(symbol="BTC-USD", side="FLAT"),
+        current_position=Position(
+            symbol="BTC-USD",
+            side="FLAT",
+            size=Decimal("0"),
+            timestamp=datetime.now(UTC),
+        ),
     )
 
 

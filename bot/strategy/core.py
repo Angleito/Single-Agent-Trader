@@ -1,13 +1,19 @@
 """
-Core strategy logic and fallback rule-based trading.
+Core strategy logic and fallback rule-based trading with enterprise-grade error handling.
 
 This module provides fallback trading logic when LLM is unavailable
-and core strategy utilities.
+and core strategy utilities. Includes error boundaries, circuit breakers,
+and comprehensive recovery mechanisms.
 """
 
 import logging
+from typing import Any
 
 from ..config import settings
+from ..error_handling import (
+    ErrorBoundary,
+)
+from ..system_monitor import error_recovery_manager, system_monitor
 from ..types import IndicatorData, MarketState, TradeAction
 
 logger = logging.getLogger(__name__)
@@ -15,19 +21,96 @@ logger = logging.getLogger(__name__)
 
 class CoreStrategy:
     """
-    Core strategy implementation with rule-based trading logic.
+    Core strategy implementation with rule-based trading logic and enterprise-grade error handling.
 
     Provides fallback trading decisions and strategy utilities
-    that can operate independently of LLM components.
+    that can operate independently of LLM components. Includes error boundaries,
+    automatic recovery, and comprehensive failure handling.
     """
 
     def __init__(self):
-        """Initialize the core strategy."""
+        """Initialize the core strategy with error handling capabilities."""
         self.max_size_pct = settings.trading.max_size_pct
         self.default_tp_pct = 2.0
         self.default_sl_pct = 1.5
 
-        logger.info("Initialized CoreStrategy")
+        # Error handling components
+        self._error_boundary = ErrorBoundary(
+            component_name="core_strategy",
+            fallback_behavior=self._strategy_error_fallback,
+            max_retries=2,
+            retry_delay=1.0,
+        )
+
+        # Strategy health tracking
+        self._analysis_error_count = 0
+        self._last_successful_analysis = None
+        self._total_analyses = 0
+        self._failed_analyses = 0
+
+        # Register health check with system monitor
+        system_monitor.register_component(
+            "core_strategy",
+            self._health_check,
+            [
+                error_recovery_manager._get_recovery_action(
+                    "strategy_reset", self._reset_strategy_state
+                )
+            ],
+        )
+
+        logger.info("Initialized CoreStrategy with error handling")
+
+    async def _strategy_error_fallback(self, error: Exception, context: dict) -> None:
+        """Fallback behavior for strategy errors."""
+        logger.warning(f"Strategy error fallback triggered: {error}")
+
+        # Increment error count
+        self._analysis_error_count += 1
+
+        # Attempt specific recovery based on error type
+        if "indicator" in str(error).lower():
+            await error_recovery_manager.recover_from_error(
+                "data_error",
+                {"component": "indicators", "error": str(error)},
+                "core_strategy",
+            )
+        else:
+            await error_recovery_manager.recover_from_error(
+                "strategy_error",
+                {"error": str(error), "context": context},
+                "core_strategy",
+            )
+
+    async def _health_check(self) -> bool:
+        """Health check for core strategy component."""
+        try:
+            # Check if too many recent failures
+            error_rate = self._failed_analyses / max(self._total_analyses, 1)
+
+            # Consider unhealthy if error rate > 50% or too many consecutive errors
+            is_healthy = error_rate < 0.5 and self._analysis_error_count < 5
+
+            if not is_healthy:
+                logger.warning(
+                    f"Strategy health check failed: error_rate={error_rate:.2%}, "
+                    f"consecutive_errors={self._analysis_error_count}"
+                )
+
+            return is_healthy
+
+        except Exception as e:
+            logger.error(f"Strategy health check error: {e}")
+            return False
+
+    async def _reset_strategy_state(self, component_name: str, health: Any) -> None:
+        """Recovery action to reset strategy state."""
+        logger.info("Resetting core strategy state")
+
+        self._analysis_error_count = 0
+        self._failed_analyses = max(0, self._failed_analyses - 1)
+
+        logger.info("Core strategy state reset completed")
 
     def analyze_market(self, market_state: MarketState) -> TradeAction:
         """

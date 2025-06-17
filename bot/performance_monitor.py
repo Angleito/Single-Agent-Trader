@@ -581,7 +581,6 @@ class BottleneckAnalyzer:
         for metric_name in latency_metrics:
             stats = self.metrics_collector.get_metric_statistics(metric_name, duration)
             if stats and stats["count"] > 5:  # Require minimum sample size
-
                 # Check for high latency
                 if stats["p95"] > stats["mean"] * 2:
                     analysis["bottlenecks"].append(
@@ -619,7 +618,6 @@ class BottleneckAnalyzer:
         for metric_name in resource_metrics:
             stats = self.metrics_collector.get_metric_statistics(metric_name, duration)
             if stats and stats["count"] > 5:
-
                 # Check for resource exhaustion
                 if metric_name == "resource.memory_usage_mb" and stats["max"] > 1024:
                     analysis["bottlenecks"].append(

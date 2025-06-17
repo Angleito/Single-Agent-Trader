@@ -66,7 +66,7 @@ class EMAribbon:
         # Initialize performance tracking
         self._calculation_count = 0
         self._total_calculation_time = 0.0
-        self._signal_history = []
+        self._signal_history: list[dict[str, Any]] = []
         self._last_data_quality_check = None
 
         logger.info(
@@ -900,9 +900,9 @@ class EMAribbon:
                     "active_signals": active_signals,
                     "ribbon_direction": values.get("ribbon_direction", 0),
                     "ribbon_strength": (
-                        float(values.get("ribbon_strength", 0))
+                        float(values.get("ribbon_strength", 0) or 0)
                         if values.get("ribbon_strength") is not None
-                        else 0
+                        else 0.0
                     ),
                     "overall_signal": values.get("ribbon_overall_signal", 0),
                 },
@@ -1090,7 +1090,7 @@ class EMAribbon:
         Returns:
             Dictionary with signal counts and statistics
         """
-        summary = {"total_data_points": len(df)}
+        summary: dict[str, Any] = {"total_data_points": len(df)}
 
         # Count different signal types
         signal_columns = [

@@ -738,7 +738,7 @@ class SchaffTrendCycle:
         else:
             return "Bearish territory"
 
-    def get_trade_suggestions(self, df: pd.DataFrame) -> list[dict[str, str | float]]:
+    def get_trade_suggestions(self, df: pd.DataFrame) -> list[dict[str, Any]]:
         """
         Generate trade suggestions based on STC analysis.
 
@@ -952,7 +952,7 @@ class SchaffTrendCycle:
         Returns:
             Dictionary with calculation summary
         """
-        summary = {"total_data_points": len(df)}
+        summary: dict[str, Any] = {"total_data_points": len(df)}
 
         # STC value statistics
         if "stc" in df.columns:

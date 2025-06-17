@@ -6,7 +6,7 @@ import logging
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 import aiohttp
 import pandas as pd
@@ -52,6 +52,364 @@ from ..types import MarketData
 logger = logging.getLogger(__name__)
 
 
+class WebSocketMessageValidator:
+    """
+    Validator for WebSocket message schemas to prevent data corruption.
+
+    Validates incoming WebSocket messages for required fields, data types,
+    and anomaly detection before processing.
+    """
+
+    def __init__(self):
+        """Initialize the validator."""
+        self.message_count = 0
+        self.validation_failures = 0
+
+    def validate_ticker_message(self, message: dict) -> bool:
+        """
+        Validate ticker message structure.
+
+        Args:
+            message: WebSocket ticker message
+
+        Returns:
+            True if valid, False otherwise
+        """
+        try:
+            # Check required top-level fields
+            required_fields = ["channel", "timestamp", "events"]
+            if not all(field in message for field in required_fields):
+                logger.warning(
+                    f"Ticker message missing required fields: {required_fields}"
+                )
+                return False
+
+            # Validate channel
+            if message["channel"] != "ticker":
+                logger.warning(f"Invalid ticker channel: {message['channel']}")
+                return False
+
+            # Validate timestamp
+            try:
+                datetime.fromisoformat(message["timestamp"].replace("Z", "+00:00"))
+            except (ValueError, AttributeError) as e:
+                logger.warning(f"Invalid ticker timestamp: {e}")
+                return False
+
+            # Validate message timing
+            if not self.validate_message_timing(message):
+                return False
+
+            # Validate events array
+            events = message.get("events", [])
+            if not isinstance(events, list) or len(events) == 0:
+                logger.warning("Ticker message has no events")
+                return False
+
+            # Validate ticker events
+            for event in events:
+                if not self._validate_ticker_event(event):
+                    return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error validating ticker message: {e}")
+            return False
+
+    def validate_trade_message(self, message: dict) -> bool:
+        """
+        Validate trade message structure.
+
+        Args:
+            message: WebSocket trade message
+
+        Returns:
+            True if valid, False otherwise
+        """
+        try:
+            # Check required fields
+            required_fields = ["channel", "events"]
+            if not all(field in message for field in required_fields):
+                logger.warning(
+                    f"Trade message missing required fields: {required_fields}"
+                )
+                return False
+
+            # Validate channel
+            if message["channel"] != "market_trades":
+                logger.warning(f"Invalid trade channel: {message['channel']}")
+                return False
+
+            # Validate message timing
+            if not self.validate_message_timing(message):
+                return False
+
+            # Validate events
+            events = message.get("events", [])
+            if not isinstance(events, list):
+                logger.warning("Trade events is not a list")
+                return False
+
+            for event in events:
+                if not self._validate_trade_event(event):
+                    return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error validating trade message: {e}")
+            return False
+
+    def _validate_ticker_event(self, event: dict) -> bool:
+        """
+        Validate individual ticker event.
+
+        Args:
+            event: Ticker event data
+
+        Returns:
+            True if valid, False otherwise
+        """
+        try:
+            event_type = event.get("type")
+            if event_type not in ["snapshot", "update"]:
+                logger.warning(f"Invalid ticker event type: {event_type}")
+                return False
+
+            tickers = event.get("tickers", [])
+            if not isinstance(tickers, list):
+                logger.warning("Ticker event has no tickers array")
+                return False
+
+            for ticker in tickers:
+                if not self._validate_ticker_data(ticker):
+                    return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error validating ticker event: {e}")
+            return False
+
+    def _validate_ticker_data(self, ticker: dict) -> bool:
+        """
+        Validate ticker data fields.
+
+        Args:
+            ticker: Ticker data
+
+        Returns:
+            True if valid, False otherwise
+        """
+        try:
+            # Check required fields
+            required_fields = ["product_id", "price"]
+            if not all(field in ticker for field in required_fields):
+                logger.warning(f"Ticker missing required fields: {required_fields}")
+                return False
+
+            # Validate price
+            try:
+                price = Decimal(str(ticker["price"]))
+                if price <= 0:
+                    logger.warning(f"Invalid ticker price: {price}")
+                    return False
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Invalid ticker price format: {e}")
+                return False
+
+            # Advanced data quality validation
+            if not self.validate_data_quality(ticker, ticker["product_id"]):
+                return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error validating ticker data: {e}")
+            return False
+
+    def _validate_trade_event(self, event: dict) -> bool:
+        """
+        Validate trade event data.
+
+        Args:
+            event: Trade event data
+
+        Returns:
+            True if valid, False otherwise
+        """
+        try:
+            event_type = event.get("type")
+            if event_type not in ["snapshot", "update"]:
+                logger.warning(f"Invalid trade event type: {event_type}")
+                return False
+
+            trades = event.get("trades", [])
+            if not isinstance(trades, list):
+                logger.warning("Trade event has no trades array")
+                return False
+
+            for trade in trades:
+                if not self._validate_trade_data(trade):
+                    return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error validating trade event: {e}")
+            return False
+
+    def _validate_trade_data(self, trade: dict) -> bool:
+        """
+        Validate individual trade data.
+
+        Args:
+            trade: Trade data
+
+        Returns:
+            True if valid, False otherwise
+        """
+        try:
+            # Check required fields
+            required_fields = ["product_id", "price", "size", "side"]
+            if not all(field in trade for field in required_fields):
+                logger.warning(f"Trade missing required fields: {required_fields}")
+                return False
+
+            # Validate price and size
+            try:
+                price = Decimal(str(trade["price"]))
+                size = Decimal(str(trade["size"]))
+
+                if price <= 0:
+                    logger.warning(f"Invalid trade price: {price}")
+                    return False
+
+                if size <= 0:
+                    logger.warning(f"Invalid trade size: {size}")
+                    return False
+
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Invalid trade data format: {e}")
+                return False
+
+            # Validate side
+            if trade["side"] not in ["BUY", "SELL"]:
+                logger.warning(f"Invalid trade side: {trade['side']}")
+                return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error validating trade data: {e}")
+            return False
+
+    def get_validation_stats(self) -> dict[str, Any]:
+        """
+        Get validation statistics.
+
+        Returns:
+            Dictionary with validation metrics
+        """
+        success_rate = (
+            ((self.message_count - self.validation_failures) / self.message_count * 100)
+            if self.message_count > 0
+            else 100.0
+        )
+
+        return {
+            "total_messages": self.message_count,
+            "validation_failures": self.validation_failures,
+            "success_rate_pct": success_rate,
+        }
+
+    def validate_data_quality(self, price_data: dict, symbol: str) -> bool:
+        """
+        Advanced data quality validation for price data.
+
+        Args:
+            price_data: Price data to validate
+            symbol: Trading symbol for context
+
+        Returns:
+            True if data quality is acceptable
+        """
+        try:
+            price = Decimal(str(price_data.get("price", 0)))
+
+            # Check for suspicious price values
+            if price <= 0:
+                logger.warning(f"Invalid price value: {price}")
+                return False
+
+            # Check for unrealistic prices based on symbol
+            if symbol.startswith("BTC"):
+                # Bitcoin price should be within reasonable bounds
+                if price < Decimal("1000") or price > Decimal("500000"):
+                    logger.warning(f"Suspicious BTC price: {price}")
+                    return False
+            elif symbol.startswith("ETH"):
+                # Ethereum price bounds
+                if price < Decimal("10") or price > Decimal("50000"):
+                    logger.warning(f"Suspicious ETH price: {price}")
+                    return False
+
+            # Check for excessive decimal precision (market manipulation indicator)
+            price_str = str(price)
+            if "." in price_str:
+                decimal_places = len(price_str.split(".")[1])
+                if decimal_places > 8:  # More than 8 decimal places is unusual
+                    logger.warning(
+                        f"Excessive precision in price: {decimal_places} decimals"
+                    )
+                    return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error in data quality validation: {e}")
+            return False
+
+    def validate_message_timing(self, message: dict) -> bool:
+        """
+        Validate message timing to detect stale or future data.
+
+        Args:
+            message: WebSocket message with timestamp
+
+        Returns:
+            True if timing is acceptable
+        """
+        try:
+            timestamp_str = message.get("timestamp")
+            if not timestamp_str:
+                return True  # No timestamp to validate
+
+            message_time = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+            current_time = datetime.now(UTC)
+
+            # Check for messages from the future (more than 5 seconds)
+            if message_time > current_time + timedelta(seconds=5):
+                logger.warning(
+                    f"Future timestamp detected: {message_time} vs {current_time}"
+                )
+                return False
+
+            # Check for very stale messages (more than 30 seconds old)
+            if current_time - message_time > timedelta(seconds=30):
+                logger.warning(
+                    f"Stale message detected: {message_time} vs {current_time}"
+                )
+                return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error validating message timing: {e}")
+            return False
+
+
 class MarketDataProvider:
     """
     Handles real-time market data ingestion from Coinbase REST API and WebSocket.
@@ -68,9 +426,7 @@ class MarketDataProvider:
     COINBASE_WS_URL = "wss://advanced-trade-ws.coinbase.com"
     COINBASE_REST_URL = "https://api.coinbase.com"
 
-    def __init__(
-        self, symbol: str | None = None, interval: str | None = None
-    ) -> None:
+    def __init__(self, symbol: str | None = None, interval: str | None = None) -> None:
         """
         Initialize the market data provider.
 
@@ -92,15 +448,15 @@ class MarketDataProvider:
         self._tick_cache: list[dict[str, Any]] = []
         self._cache_timestamps: dict[str, datetime] = {}
         self._cache_ttl = timedelta(seconds=settings.data.data_cache_ttl_seconds)
-        self._last_update: Optional[datetime] = None
+        self._last_update: datetime | None = None
 
         # API clients
-        self._rest_client: Optional[CoinbaseAdvancedTrader] = None
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._rest_client: CoinbaseAdvancedTrader | None = None
+        self._session: aiohttp.ClientSession | None = None
 
         # WebSocket connection management
         self._ws_connection = None
-        self._ws_task: Optional[asyncio.Task] = None
+        self._ws_task: asyncio.Task | None = None
         self._reconnect_attempts = 0
         self._max_reconnect_attempts = settings.exchange.websocket_reconnect_attempts
         self._is_connected = False
@@ -108,7 +464,7 @@ class MarketDataProvider:
 
         # Non-blocking message processing
         self._message_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
-        self._processing_task: Optional[asyncio.Task] = None
+        self._processing_task: asyncio.Task | None = None
         self._running = False
 
         # Subscribers for real-time updates
@@ -118,9 +474,12 @@ class MarketDataProvider:
         self._max_price_deviation = 0.1  # 10% max price deviation
         self._min_volume = Decimal("0")
 
+        # WebSocket message validator
+        self._ws_validator = WebSocketMessageValidator()
+
         # Track WebSocket data reception
         self._websocket_data_received = False
-        self._first_websocket_data_time: Optional[datetime] = None
+        self._first_websocket_data_time: datetime | None = None
 
         logger.info(
             f"Initialized MarketDataProvider for {self.symbol} at {self.interval}"
@@ -158,7 +517,7 @@ class MarketDataProvider:
         # This is already a spot symbol
         return symbol
 
-    def _build_websocket_jwt(self) -> Optional[str]:
+    def _build_websocket_jwt(self) -> str | None:
         """
         Build JWT token for WebSocket authentication using SDK's built-in jwt_generator.
 
@@ -308,17 +667,16 @@ class MarketDataProvider:
 
         # Initialize Coinbase REST client if credentials are available
         # Check for legacy credentials
-        has_legacy_credentials = all(
-            [
-                settings.exchange.cb_api_key,
-                settings.exchange.cb_api_secret,
-                settings.exchange.cb_passphrase,
-            ]
+        has_legacy_credentials = (
+            settings.exchange.cb_api_key is not None
+            and settings.exchange.cb_api_secret is not None
+            and settings.exchange.cb_passphrase is not None
         )
 
         # Check for CDP credentials
-        has_cdp_credentials = all(
-            [settings.exchange.cdp_api_key_name, settings.exchange.cdp_private_key]
+        has_cdp_credentials = (
+            settings.exchange.cdp_api_key_name is not None
+            and settings.exchange.cdp_private_key is not None
         )
 
         if has_legacy_credentials:
@@ -482,9 +840,9 @@ class MarketDataProvider:
 
     async def fetch_historical_data(
         self,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-        granularity: Optional[str] = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        granularity: str | None = None,
     ) -> list[MarketData]:
         """
         Fetch historical OHLCV data from Coinbase REST API.
@@ -623,7 +981,7 @@ class MarketDataProvider:
                 return self._ohlcv_cache
             raise
 
-    async def fetch_latest_price(self) -> Optional[Decimal]:
+    async def fetch_latest_price(self) -> Decimal | None:
         """
         Fetch the latest price for the symbol from Coinbase REST API.
 
@@ -658,7 +1016,7 @@ class MarketDataProvider:
         # Fall back to cached OHLCV data
         return self.get_latest_price()
 
-    async def fetch_orderbook(self, level: int = 2) -> Optional[dict[str, Any]]:
+    async def fetch_orderbook(self, level: int = 2) -> dict[str, Any] | None:
         """
         Fetch order book data from Coinbase REST API.
 
@@ -715,10 +1073,10 @@ class MarketDataProvider:
         - Level 1 order book updates (if needed)
         """
         self._running = True
-        
+
         # Start non-blocking message processor
         self._processing_task = asyncio.create_task(self._process_websocket_messages())
-        
+
         # Start WebSocket handler
         self._ws_task = asyncio.create_task(self._websocket_handler())
         logger.info("WebSocket connection and message processor started")
@@ -828,7 +1186,7 @@ class MarketDataProvider:
                             self._message_queue.put_nowait(parsed_message)
                         except asyncio.QueueEmpty:
                             pass
-                            
+
                 except json.JSONDecodeError as e:
                     logger.warning(f"Failed to parse WebSocket message: {e}")
                 except Exception as e:
@@ -837,20 +1195,18 @@ class MarketDataProvider:
     async def _process_websocket_messages(self) -> None:
         """
         Non-blocking WebSocket message processor using asyncio queue.
-        
+
         Processes messages in background without blocking WebSocket reception.
         """
         while self._running:
             try:
                 # Get message without blocking for too long
-                message = await asyncio.wait_for(
-                    self._message_queue.get(), timeout=0.1
-                )
-                
+                message = await asyncio.wait_for(self._message_queue.get(), timeout=0.1)
+
                 # Process message in background task to avoid blocking
                 asyncio.create_task(self._handle_websocket_message_async(message))
-                
-            except asyncio.TimeoutError:
+
+            except TimeoutError:
                 # No message available, continue loop
                 continue
             except Exception as e:
@@ -860,7 +1216,7 @@ class MarketDataProvider:
     async def _handle_websocket_message_async(self, message: dict[str, Any]) -> None:
         """
         Handle WebSocket message asynchronously without blocking the queue processor.
-        
+
         Args:
             message: Parsed WebSocket message
         """
@@ -871,11 +1227,14 @@ class MarketDataProvider:
 
     async def _handle_websocket_message(self, message: dict[str, Any]) -> None:
         """
-        Handle incoming WebSocket messages.
+        Handle incoming WebSocket messages with validation.
 
         Args:
             message: Parsed WebSocket message
         """
+        # Increment message counter for validation stats
+        self._ws_validator.message_count += 1
+
         # Handle different message formats from Coinbase Advanced Trading API
         channel = message.get("channel")
         msg_type = message.get("type")  # Note: not all messages have 'type'
@@ -892,9 +1251,19 @@ class MarketDataProvider:
                 counter = events[0].get("heartbeat_counter", "unknown")
                 logger.debug(f"Heartbeat #{counter} received")
         elif channel == "ticker":
-            await self._handle_ticker_update(message)
+            # Validate ticker message before processing
+            if self._ws_validator.validate_ticker_message(message):
+                await self._handle_ticker_update(message)
+            else:
+                self._ws_validator.validation_failures += 1
+                logger.warning("Rejected invalid ticker message")
         elif channel == "market_trades":
-            await self._handle_trade_update(message)
+            # Validate trade message before processing
+            if self._ws_validator.validate_trade_message(message):
+                await self._handle_trade_update(message)
+            else:
+                self._ws_validator.validation_failures += 1
+                logger.warning("Rejected invalid trade message")
         elif msg_type == "error":
             logger.error(f"WebSocket error: {message.get('message', 'Unknown error')}")
             # Log the full error message for debugging
@@ -1067,7 +1436,7 @@ class MarketDataProvider:
             logger.error(f"Error handling trade update: {e}")
             logger.debug(f"Trade message: {json.dumps(message, indent=2)}")
 
-    def get_latest_ohlcv(self, limit: Optional[int] = None) -> list[MarketData]:
+    def get_latest_ohlcv(self, limit: int | None = None) -> list[MarketData]:
         """
         Get the latest OHLCV data.
 
@@ -1082,7 +1451,7 @@ class MarketDataProvider:
 
         return self._ohlcv_cache[-limit:].copy()
 
-    def get_latest_price(self) -> Optional[Decimal]:
+    def get_latest_price(self) -> Decimal | None:
         """
         Get the most recent price from cache.
 
@@ -1099,7 +1468,7 @@ class MarketDataProvider:
 
         return None
 
-    def to_dataframe(self, limit: Optional[int] = None) -> pd.DataFrame:
+    def to_dataframe(self, limit: int | None = None) -> pd.DataFrame:
         """
         Convert OHLCV data to pandas DataFrame for indicator calculations.
 
@@ -1166,15 +1535,19 @@ class MarketDataProvider:
             try:
                 if asyncio.iscoroutinefunction(callback):
                     # Create task for async callback
-                    task = asyncio.create_task(self._safe_callback_async(callback, data))
+                    task = asyncio.create_task(
+                        self._safe_callback_async(callback, data)
+                    )
                     tasks.append(task)
                 else:
                     # Create task for sync callback
                     task = asyncio.create_task(self._safe_callback_sync(callback, data))
                     tasks.append(task)
             except Exception as e:
-                logger.error(f"Error creating subscriber task for {callback.__name__}: {e}")
-        
+                logger.error(
+                    f"Error creating subscriber task for {callback.__name__}: {e}"
+                )
+
         # Don't wait for all tasks to complete - fire and forget for non-blocking behavior
         # Tasks will run in background without blocking the caller
 
@@ -1461,6 +1834,44 @@ class MarketDataProvider:
             logger.error(f"Error validating market data: {e}")
             return False
 
+    def _validate_price_data(
+        self, new_price: Decimal, last_price: Decimal | None
+    ) -> bool:
+        """
+        Validate price data for anomalies.
+
+        Args:
+            new_price: New price to validate
+            last_price: Previous price for comparison
+
+        Returns:
+            True if price is valid, False otherwise
+        """
+        try:
+            if last_price is None or last_price <= 0:
+                return True
+
+            # Check for excessive price deviation (>20% change)
+            change_pct = abs(new_price - last_price) / last_price
+            if change_pct > 0.20:  # 20% max change
+                logger.warning(
+                    f"Suspicious price change: {change_pct:.2%} from {last_price} to {new_price}"
+                )
+                return False
+
+            # Check for price spikes (>50% in single update)
+            if change_pct > 0.50:
+                logger.error(
+                    f"Extreme price spike detected: {change_pct:.2%} change - rejecting data"
+                )
+                return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error validating price data: {e}")
+            return True  # Default to allowing data on validation error
+
     def _validate_data_sufficiency(self, candle_count: int) -> None:
         """
         Validate that we have sufficient data for reliable indicator calculations.
@@ -1503,7 +1914,7 @@ class MarketDataProvider:
         self._first_websocket_data_time = None
         logger.info("All cached data cleared")
 
-    def get_tick_data(self, limit: Optional[int] = None) -> list[dict[str, Any]]:
+    def get_tick_data(self, limit: int | None = None) -> list[dict[str, Any]]:
         """
         Get recent tick/trade data.
 
@@ -1527,7 +1938,7 @@ class MarketDataClient:
     with additional convenience methods and error handling.
     """
 
-    def __init__(self, symbol: Optional[str] = None, interval: Optional[str] = None) -> None:
+    def __init__(self, symbol: str | None = None, interval: str | None = None) -> None:
         """
         Initialize the market data client.
 
@@ -1562,7 +1973,7 @@ class MarketDataClient:
             logger.info("MarketDataClient disconnected")
 
     async def get_historical_data(
-        self, lookback_hours: int = 24, granularity: Optional[str] = None
+        self, lookback_hours: int = 24, granularity: str | None = None
     ) -> pd.DataFrame:
         """
         Get historical data as a pandas DataFrame.
@@ -1586,7 +1997,7 @@ class MarketDataClient:
 
         return self._to_dataframe(data)
 
-    async def get_current_price(self) -> Optional[Decimal]:
+    async def get_current_price(self) -> Decimal | None:
         """
         Get the current market price.
 
@@ -1598,7 +2009,7 @@ class MarketDataClient:
 
         return await self.provider.fetch_latest_price()
 
-    async def get_orderbook_snapshot(self, level: int = 2) -> Optional[dict[str, Any]]:
+    async def get_orderbook_snapshot(self, level: int = 2) -> dict[str, Any] | None:
         """
         Get a snapshot of the current order book.
 
@@ -1613,7 +2024,7 @@ class MarketDataClient:
 
         return await self.provider.fetch_orderbook(level)
 
-    def get_latest_ohlcv_dataframe(self, limit: Optional[int] = None) -> pd.DataFrame:
+    def get_latest_ohlcv_dataframe(self, limit: int | None = None) -> pd.DataFrame:
         """
         Get latest OHLCV data as DataFrame.
 
@@ -1691,7 +2102,7 @@ class MarketDataClient:
 
 # Factory function for easy client creation
 def create_market_data_client(
-    symbol: Optional[str] = None, interval: Optional[str] = None
+    symbol: str | None = None, interval: str | None = None
 ) -> MarketDataClient:
     """
     Factory function to create a MarketDataClient instance.

@@ -85,7 +85,9 @@ class BluefinSDKService:
             # Initialize Bluefin client
             logger.info(f"Initializing Bluefin client on {self.network}")
             self.client = BluefinClient(
-                True, network, self.private_key  # On-chain transactions
+                True,
+                network,
+                self.private_key,  # On-chain transactions
             )
 
             # Initialize the client

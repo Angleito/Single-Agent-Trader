@@ -112,7 +112,7 @@ class TradeValidator:
         Raises:
             ValidationError: If action cannot be validated
         """
-        validated = action.copy()
+        validated = action.model_copy()
 
         # Validate action type
         if validated.action not in self.valid_actions:
@@ -185,7 +185,7 @@ class TradeValidator:
         Returns:
             Modified trade action after applying business rules
         """
-        validated = action.copy()
+        validated = action.model_copy()
 
         # ENFORCE SINGLE POSITION RULE
         if current_position and current_position.side != "FLAT":
@@ -296,7 +296,7 @@ class TradeValidator:
         return cleaned.strip()
 
     def get_validation_summary(
-        self, original: str | dict, validated: TradeAction
+        self, original: str | dict[str, Any], validated: TradeAction
     ) -> dict[str, Any]:
         """
         Get a summary of validation changes.
@@ -308,10 +308,11 @@ class TradeValidator:
         Returns:
             Dictionary with validation summary
         """
+        modifications: list[dict[str, Any]] = []
         summary = {
             "original_type": type(original).__name__,
-            "validated_action": validated.dict(),
-            "modifications": [],
+            "validated_action": validated.model_dump(),
+            "modifications": modifications,
             "validation_successful": True,
         }
 
@@ -330,7 +331,7 @@ class TradeValidator:
                     original_value = original_parsed[key]
                     validated_value = getattr(validated, key)
                     if original_value != validated_value:
-                        summary["modifications"].append(
+                        modifications.append(
                             {
                                 "field": key,
                                 "original": original_value,

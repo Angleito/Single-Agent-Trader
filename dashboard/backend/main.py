@@ -110,7 +110,7 @@ class BluefinServiceClient:
             logger.error(f"Failed to get Bluefin account info: {e}")
             raise HTTPException(
                 status_code=503, detail=f"Bluefin service unavailable: {str(e)}"
-            )
+            ) from e
 
     async def get_positions(self) -> dict:
         """Get current positions from Bluefin service."""
@@ -128,7 +128,7 @@ class BluefinServiceClient:
             logger.error(f"Failed to get Bluefin positions: {e}")
             raise HTTPException(
                 status_code=503, detail=f"Bluefin service unavailable: {str(e)}"
-            )
+            ) from e
 
     async def get_orders(self) -> dict:
         """Get current orders from Bluefin service."""
@@ -146,7 +146,7 @@ class BluefinServiceClient:
             logger.error(f"Failed to get Bluefin orders: {e}")
             raise HTTPException(
                 status_code=503, detail=f"Bluefin service unavailable: {str(e)}"
-            )
+            ) from e
 
     async def get_market_ticker(self, symbol: str) -> dict:
         """Get market ticker data from Bluefin service."""
@@ -166,7 +166,7 @@ class BluefinServiceClient:
             logger.error(f"Failed to get Bluefin market ticker: {e}")
             raise HTTPException(
                 status_code=503, detail=f"Bluefin service unavailable: {str(e)}"
-            )
+            ) from e
 
     async def place_order(self, order_data: dict) -> dict:
         """Place an order via Bluefin service."""
@@ -186,7 +186,7 @@ class BluefinServiceClient:
             logger.error(f"Failed to place Bluefin order: {e}")
             raise HTTPException(
                 status_code=503, detail=f"Bluefin service unavailable: {str(e)}"
-            )
+            ) from e
 
 
 # Global Bluefin service client
@@ -1635,7 +1635,7 @@ async def get_llm_status():
 async def get_llm_metrics(
     time_window: str | None = Query(
         None, description="Time window: 1h, 24h, 7d, or all"
-    )
+    ),
 ):
     """Get detailed LLM performance metrics"""
     try:
@@ -1937,7 +1937,7 @@ async def get_llm_cost_analysis():
 
 @app.get("/llm/export")
 async def export_llm_data(
-    format: str = Query("json", description="Export format: json")
+    format: str = Query("json", description="Export format: json"),
 ):
     """Export all LLM data for analysis"""
     try:
@@ -2114,7 +2114,7 @@ async def broadcast_message(message: dict):
 
     except Exception as e:
         logger.error(f"Error broadcasting message: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # Bot Control Command Queue System
@@ -2171,7 +2171,7 @@ async def emergency_stop_bot():
 
     except Exception as e:
         logger.error(f"Error issuing emergency stop: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/bot/commands/pause-trading")
@@ -2201,7 +2201,7 @@ async def pause_trading():
 
     except Exception as e:
         logger.error(f"Error pausing trading: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/bot/commands/resume-trading")
@@ -2231,7 +2231,7 @@ async def resume_trading():
 
     except Exception as e:
         logger.error(f"Error resuming trading: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/bot/commands/update-risk-limits")
@@ -2278,7 +2278,7 @@ async def update_risk_limits(
 
     except Exception as e:
         logger.error(f"Error updating risk limits: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/bot/commands/manual-trade")
@@ -2349,7 +2349,7 @@ async def manual_trade_command(
 
     except Exception as e:
         logger.error(f"Error issuing manual trade: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.get("/api/bot/commands/queue")
@@ -2426,7 +2426,7 @@ async def cancel_command(command_id: str):
 
     except Exception as e:
         logger.error(f"Error cancelling command: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # API Routes (prefixed with /api for consistency)
@@ -2474,7 +2474,7 @@ async def get_api_llm_status():
 async def get_api_llm_metrics(
     time_window: str | None = Query(
         None, description="Time window: 1h, 24h, 7d, or all"
-    )
+    ),
 ):
     """API endpoint for LLM metrics"""
     return await get_llm_metrics(time_window)
@@ -2773,7 +2773,7 @@ async def get_bluefin_health():
         }
     except Exception as e:
         logger.error(f"Error checking Bluefin health: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.get("/api/bluefin/account")
@@ -2786,7 +2786,7 @@ async def get_bluefin_account():
         raise  # Re-raise HTTP exceptions from the client
     except Exception as e:
         logger.error(f"Error getting Bluefin account: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.get("/api/bluefin/positions")
@@ -2799,7 +2799,7 @@ async def get_bluefin_positions():
         raise  # Re-raise HTTP exceptions from the client
     except Exception as e:
         logger.error(f"Error getting Bluefin positions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.get("/api/bluefin/orders")
@@ -2812,7 +2812,7 @@ async def get_bluefin_orders():
         raise  # Re-raise HTTP exceptions from the client
     except Exception as e:
         logger.error(f"Error getting Bluefin orders: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.get("/api/bluefin/market/{symbol}")
@@ -2829,7 +2829,7 @@ async def get_bluefin_market_ticker(symbol: str):
         raise  # Re-raise HTTP exceptions from the client
     except Exception as e:
         logger.error(f"Error getting Bluefin market ticker: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/bluefin/orders")
@@ -2870,7 +2870,7 @@ async def place_bluefin_order(order_data: dict):
         raise  # Re-raise HTTP exceptions from the client
     except Exception as e:
         logger.error(f"Error placing Bluefin order: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # Error handlers

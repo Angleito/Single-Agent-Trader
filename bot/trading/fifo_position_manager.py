@@ -9,6 +9,7 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from threading import Lock
+from typing import Any, Literal
 
 import aiofiles
 
@@ -24,7 +25,7 @@ class FIFOPositionManager:
     def __init__(self, state_file: Path | None = None):
         """Initialize the FIFO position manager."""
         self._positions: dict[str, FIFOPosition] = {}
-        self._position_history: list[dict] = []
+        self._position_history: list[dict[str, Any]] = []
         self._lock = Lock()
         self._state_file = state_file
 
@@ -46,9 +47,10 @@ class FIFOPositionManager:
                     timestamp=datetime.now(),
                 )
 
+            side_literal: Literal["LONG", "SHORT", "FLAT"] = fifo_pos.side  # type: ignore
             return Position(
                 symbol=symbol,
-                side=fifo_pos.side,
+                side=side_literal,
                 size=fifo_pos.total_quantity,
                 entry_price=fifo_pos.average_price,
                 unrealized_pnl=Decimal("0"),  # Calculated separately
@@ -169,7 +171,7 @@ class FIFOPositionManager:
                     positions[symbol] = self.get_position(symbol)
             return positions
 
-    def get_tax_lots_report(self, symbol: str) -> dict:
+    def get_tax_lots_report(self, symbol: str) -> dict[str, Any]:
         """Get detailed tax lot report for a symbol."""
         with self._lock:
             fifo_pos = self.get_fifo_position(symbol)
@@ -182,7 +184,10 @@ class FIFOPositionManager:
                 fifo_pos = self._positions.get(symbol)
                 return fifo_pos.total_realized_pnl if fifo_pos else Decimal("0")
             else:
-                return sum(pos.total_realized_pnl for pos in self._positions.values())
+                total_pnl = Decimal("0")
+                for pos in self._positions.values():
+                    total_pnl += pos.total_realized_pnl
+                return total_pnl
 
     async def _save_state_async(self) -> None:
         """Save position state to file asynchronously."""
@@ -190,7 +195,7 @@ class FIFOPositionManager:
             return
 
         try:
-            state = {"positions": {}, "history": self._position_history}
+            state: dict[str, Any] = {"positions": {}, "history": self._position_history}
 
             # Serialize FIFO positions
             for symbol, fifo_pos in self._positions.items():
@@ -233,7 +238,7 @@ class FIFOPositionManager:
             return
 
         try:
-            state = {"positions": {}, "history": self._position_history}
+            state: dict[str, Any] = {"positions": {}, "history": self._position_history}
 
             # Serialize FIFO positions
             for symbol, fifo_pos in self._positions.items():
@@ -270,7 +275,11 @@ class FIFOPositionManager:
             logger.error(f"Failed to save position state (sync): {e}")
 
     def reconcile_position_from_exchange(
-        self, symbol: str, side: str, size: Decimal, entry_price: Decimal
+        self,
+        symbol: str,
+        side: Literal["LONG", "SHORT"],
+        size: Decimal,
+        entry_price: Decimal,
     ) -> None:
         """
         Reconcile FIFO position from exchange position data.
