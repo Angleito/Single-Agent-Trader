@@ -36,6 +36,15 @@ class TradingJSONEncoder(json.JSONEncoder):
             return obj.__dict__
         elif hasattr(obj, 'model_dump'):  # pydantic v2 models
             return obj.model_dump()
+        # Handle numpy integer types
+        elif hasattr(obj, 'dtype') and 'int' in str(obj.dtype):
+            return int(obj)
+        # Handle numpy float types
+        elif hasattr(obj, 'dtype') and 'float' in str(obj.dtype):
+            return float(obj)
+        # Handle pandas Series and numpy arrays
+        elif hasattr(obj, 'tolist'):
+            return obj.tolist()
         return super().default(obj)
 
 
