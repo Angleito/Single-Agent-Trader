@@ -723,7 +723,7 @@ def validate_configuration_legacy(settings: Settings) -> dict[str, Any]:
             results["warnings"].extend(env_issues)
 
         # Trading environment validation
-        if hasattr(settings, 'validate_trading_environment'):
+        if hasattr(settings, "validate_trading_environment"):
             trading_warnings = settings.validate_trading_environment()
             if trading_warnings:
                 results["warnings"].extend(trading_warnings)

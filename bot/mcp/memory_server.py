@@ -95,6 +95,7 @@ class MCPMemoryServer:
 
         # Session for async HTTP requests
         self._session: aiohttp.ClientSession | None = None
+        self._session_closed = False
         self._connected = False
 
         # Local persistence
@@ -109,8 +110,12 @@ class MCPMemoryServer:
     async def connect(self) -> bool:
         """Connect to the MCP memory server."""
         try:
-            if self._session is None:
-                self._session = aiohttp.ClientSession()
+            if self._session is None or self._session.closed:
+                logger.debug("Creating HTTP session for MCP memory server")
+                timeout = aiohttp.ClientTimeout(total=30)
+                self._session = aiohttp.ClientSession(timeout=timeout)
+                self._session_closed = False
+                logger.debug("HTTP session created for MCP memory server")
 
             # Test connection
             headers = (
@@ -139,11 +144,17 @@ class MCPMemoryServer:
             return False
 
     async def disconnect(self) -> None:
-        """Disconnect from the MCP memory server."""
-        if self._session:
-            await self._session.close()
-            self._session = None
+        """Disconnect from the MCP memory server and cleanup resources."""
+        logger.debug("Disconnecting from MCP memory server")
         self._connected = False
+
+        if self._session and not self._session.closed:
+            logger.debug("Closing HTTP session for MCP memory server")
+            await self._session.close()
+            self._session_closed = True
+            logger.debug("HTTP session closed for MCP memory server")
+
+        self._session = None
 
         # Save cache locally
         await self._save_local_cache()
@@ -745,7 +756,8 @@ class MCPMemoryServer:
 
     async def _store_remote(self, experience: TradingExperience) -> None:
         """Store experience on remote MCP server."""
-        if not self._session:
+        if not self._session or self._session.closed:
+            logger.warning("HTTP session not available for remote storage")
             return
 
         headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
@@ -765,7 +777,8 @@ class MCPMemoryServer:
 
     async def _update_remote(self, experience: TradingExperience) -> None:
         """Update experience on remote MCP server."""
-        if not self._session:
+        if not self._session or self._session.closed:
+            logger.warning("HTTP session not available for remote update")
             return
 
         headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
@@ -795,6 +808,15 @@ class MCPMemoryServer:
             logger.warning(f"Remote update network error: {e}")
         except Exception as e:
             logger.error(f"Remote update error: {e}")
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        await self.connect()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.disconnect()
 
     async def _save_experience_local(self, experience: TradingExperience) -> None:
         """Save experience to local storage."""

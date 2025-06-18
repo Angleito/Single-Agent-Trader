@@ -19,6 +19,10 @@ from ..trading_types import (
     Position,
     TradeAction,
 )
+from ..utils.symbol_utils import (
+    to_bluefin_perp,
+    validate_symbol,
+)
 from .base import (
     BaseExchange,
     ExchangeAuthError,
@@ -376,16 +380,33 @@ class BluefinClient(BaseExchange):
             return None
 
     def _convert_symbol(self, symbol: str) -> str:
-        """Convert standard symbol to Bluefin perpetual format."""
-        # Map common symbols to Bluefin perpetual contracts
-        symbol_map = {
-            "BTC-USD": "BTC-PERP",
-            "ETH-USD": "ETH-PERP",
-            "SOL-USD": "SOL-PERP",
-            "SUI-USD": "SUI-PERP",
-        }
+        """Convert standard symbol to Bluefin perpetual format using symbol utilities."""
+        try:
+            # Validate the symbol first
+            if not validate_symbol(symbol):
+                logger.warning(
+                    f"Invalid symbol format: {symbol}, attempting conversion anyway"
+                )
 
-        return symbol_map.get(symbol, symbol)
+            # Convert to Bluefin perpetual format
+            bluefin_symbol = to_bluefin_perp(symbol)
+            logger.debug(
+                f"Converted symbol {symbol} to Bluefin format: {bluefin_symbol}"
+            )
+            return bluefin_symbol
+
+        except Exception as e:
+            logger.error(f"Failed to convert symbol {symbol}: {e}")
+            # Fallback to original behavior for backward compatibility
+            symbol_map = {
+                "BTC-USD": "BTC-PERP",
+                "ETH-USD": "ETH-PERP",
+                "SOL-USD": "SOL-PERP",
+                "SUI-USD": "SUI-PERP",
+            }
+            fallback_symbol = symbol_map.get(symbol, symbol)
+            logger.warning(f"Using fallback conversion: {symbol} -> {fallback_symbol}")
+            return fallback_symbol
 
     async def _open_position(
         self, trade_action: TradeAction, symbol: str, current_price: Decimal

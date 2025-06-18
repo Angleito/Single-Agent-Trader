@@ -88,7 +88,7 @@ OVERRIDE AUTHORITY: You can trade with mixed Cipher B if momentum is very strong
         try:
             # Create a safe input dict with defaults for all required fields
             safe_input = self._create_safe_input_dict(llm_input)
-            
+
             # Use the compressed prompt template
             formatted_prompt = self.core_prompt.format(**safe_input)
 
@@ -120,11 +120,9 @@ OVERRIDE AUTHORITY: You can trade with mixed Cipher B if momentum is very strong
             "symbol": llm_input.get("symbol", "BTC-USD"),
             "current_price": llm_input.get("current_price", "N/A"),
             "current_position": llm_input.get("current_position", "FLAT"),
-            
             # Margin and risk info
             "margin_health": llm_input.get("margin_health", "HEALTHY"),
             "available_margin": llm_input.get("available_margin", "N/A"),
-            
             # Indicators
             "cipher_a_dot": llm_input.get("cipher_a_dot", "N/A"),
             "cipher_b_wave": llm_input.get("cipher_b_wave", "N/A"),
@@ -132,32 +130,34 @@ OVERRIDE AUTHORITY: You can trade with mixed Cipher B if momentum is very strong
             "rsi": llm_input.get("rsi", "N/A"),
             "ema_fast": llm_input.get("ema_fast", "N/A"),
             "ema_slow": llm_input.get("ema_slow", "N/A"),
-            
             # Cipher B alignment
-            "cipher_b_alignment": llm_input.get("cipher_b_alignment", "No Cipher B alignment data available"),
-            
+            "cipher_b_alignment": llm_input.get(
+                "cipher_b_alignment", "No Cipher B alignment data available"
+            ),
             # Dominance data
             "usdt_dominance": llm_input.get("usdt_dominance", "N/A"),
             "stablecoin_dominance": llm_input.get("stablecoin_dominance", "N/A"),
             "dominance_trend": llm_input.get("dominance_trend", "N/A"),
             "dominance_rsi": llm_input.get("dominance_rsi", "N/A"),
             "market_sentiment": llm_input.get("market_sentiment", "UNKNOWN"),
-            
             # Context data
-            "dominance_candles_analysis": llm_input.get("dominance_candles_analysis", "No dominance candle data available"),
-            "financial_context": llm_input.get("financial_context", "No financial context available"),
+            "dominance_candles_analysis": llm_input.get(
+                "dominance_candles_analysis", "No dominance candle data available"
+            ),
+            "financial_context": llm_input.get(
+                "financial_context", "No financial context available"
+            ),
             "ohlcv_tail": llm_input.get("ohlcv_tail", "No recent price data available"),
-            
             # Trading constraints
             "max_size_pct": llm_input.get("max_size_pct", 10),
             "max_leverage": llm_input.get("max_leverage", 5),
         }
-        
+
         # Add any additional fields from the original input
         for key, value in llm_input.items():
             if key not in safe_input:
                 safe_input[key] = value
-                
+
         return safe_input
 
     def _compress_memory_context(self, memory_context: str) -> str:

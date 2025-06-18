@@ -181,6 +181,57 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                 f"({successful_similar/len(similar_experiences)*100:.1f}%)"
             )
 
+        # Store memory context for external logging access
+        self._last_memory_context = {
+            "experiences": [
+                {
+                    "experience_id": exp.experience_id,
+                    "action": exp.action,
+                    "outcome": exp.outcome,
+                    "patterns": getattr(exp, "patterns", []),
+                    "timestamp": exp.timestamp.isoformat() if exp.timestamp else None,
+                }
+                for exp in similar_experiences
+            ],
+            "pattern_insights": pattern_insights,
+            "sentiment_context": sentiment_enhanced_context,
+            "memory_context_formatted": memory_context,
+        }
+
+        # Log memory context for structured trade logging
+        if similar_experiences:
+            self.trade_logger.log_memory_query(
+                query_params={
+                    "symbol": market_state.symbol,
+                    "current_price": float(market_state.current_price),
+                    "indicators": (
+                        {
+                            "rsi": getattr(market_state.indicators, "rsi", None),
+                            "cipher_a_dot": getattr(
+                                market_state.indicators, "cipher_a_dot", None
+                            ),
+                            "cipher_b_wave": getattr(
+                                market_state.indicators, "cipher_b_wave", None
+                            ),
+                        }
+                        if market_state.indicators
+                        else {}
+                    ),
+                },
+                results=[
+                    {
+                        "experience_id": exp.experience_id,
+                        "action": exp.action,
+                        "similarity": 0.8,  # Placeholder, actual similarity would come from memory server
+                        "success": (
+                            exp.outcome.get("success", False) if exp.outcome else False
+                        ),
+                    }
+                    for exp in similar_experiences
+                ],
+                execution_time_ms=0.0,  # Would be measured in actual implementation
+            )
+
         return result
 
     async def _retrieve_relevant_memories(

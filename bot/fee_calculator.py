@@ -85,7 +85,9 @@ class FeeCalculator:
         try:
             # Check for zero or negative position value
             if position_value <= 0:
-                logger.warning("Position value must be positive for fee calculation")
+                logger.debug(
+                    "Position value must be positive for fee calculation"
+                )  # Reduced from warning to debug
                 return TradeFees(
                     entry_fee=Decimal("0"),
                     exit_fee=Decimal("0"),
@@ -376,9 +378,9 @@ class FeeCalculator:
 
             # Check for zero position value to prevent division by zero
             if position_value == 0:
-                logger.warning(
+                logger.debug(
                     "Position value cannot be zero for minimum profitable move calculation"
-                )
+                )  # Reduced from warning to debug
                 return Decimal("0.001")  # 0.1% fallback
 
             # Check for zero leverage to prevent division by zero
@@ -436,10 +438,12 @@ class FeeCalculator:
             stop_loss_decimal = Decimal(str(trade_action.stop_loss_pct / 100))
 
             # Check if take profit is sufficient
-            if take_profit_decimal < min_move * 2:  # 2x safety margin
+            if (
+                take_profit_decimal < min_move * 1.2
+            ):  # 1.2x safety margin (more aggressive for active trading)
                 return (
                     False,
-                    f"Take profit {trade_action.take_profit_pct:.2f}% too low to cover fees (min: {float(min_move * 2):.4%})",
+                    f"Take profit {trade_action.take_profit_pct:.2f}% too low to cover fees (min: {float(min_move * 1.2):.4%})",
                 )
 
             # Check if stop loss gives reasonable risk/reward
@@ -451,7 +455,9 @@ class FeeCalculator:
                 )
 
             risk_reward_ratio = float(take_profit_decimal / stop_loss_decimal)
-            if risk_reward_ratio < 1.5:  # Minimum 1.5:1 ratio after fees
+            if (
+                risk_reward_ratio < 1.0
+            ):  # Minimum 1:1 ratio after fees (more aggressive for active trading)
                 return (
                     False,
                     f"Risk/reward ratio {risk_reward_ratio:.2f} too low after accounting for fees",

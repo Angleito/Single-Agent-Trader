@@ -24,7 +24,6 @@ from ..analysis.market_context import (
 )
 from ..services.financial_sentiment import SentimentResult
 
-
 logger = logging.getLogger(__name__)
 
 

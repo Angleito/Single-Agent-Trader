@@ -13,6 +13,7 @@ real trading conditions including:
 import json
 import logging
 import threading
+import time
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
@@ -231,7 +232,7 @@ class PaperTradingAccount:
                     return None
 
                 # Calculate trade size based on action
-                trade_size = self._calculate_trade_size(action, current_price)
+                trade_size = self._calculate_trade_size(action, current_price, symbol)
                 if trade_size <= 0:
                     logger.warning(f"Invalid trade size calculated: {trade_size}")
                     return None
@@ -291,14 +292,12 @@ class PaperTradingAccount:
                 return self._create_failed_order(action, symbol, f"ERROR: {str(e)}")
 
     def _calculate_trade_size(
-        self, action: TradeAction, current_price: Decimal
+        self, action: TradeAction, current_price: Decimal, symbol: str
     ) -> Decimal:
         """Calculate trade size based on action parameters."""
         if action.action == "CLOSE":
             # Close existing position
-            existing_position = self._find_open_position(
-                action.symbol if hasattr(action, "symbol") else None
-            )
+            existing_position = self._find_open_position(symbol)
             return existing_position.size if existing_position else Decimal("0")
 
         # Calculate position size based on percentage of equity
@@ -423,6 +422,9 @@ class PaperTradingAccount:
                 logger.info(
                     f"📈 Paper Trading: Opened {action.action} position | {size} {symbol} @ ${price} | Trade ID: {trade_id}"
                 )
+
+            # Save state immediately after opening position
+            self._save_state()
             return order
 
         return self._create_failed_order(action, symbol, "INVALID_ACTION")
@@ -483,6 +485,9 @@ class PaperTradingAccount:
             f"P&L: ${realized_pnl:.2f} ({'+' if realized_pnl > 0 else ''}{realized_pnl/trade_to_close.entry_price*100:.2f}%) | "
             f"{'✅ WIN' if realized_pnl > 0 else '❌ LOSS'}"
         )
+
+        # Save state immediately after closing position
+        self._save_state()
         return order
 
     def _find_open_position(self, symbol: str) -> PaperTrade | None:
@@ -736,6 +741,144 @@ class PaperTradingAccount:
         # Annualized Sharpe ratio (assuming 252 trading days)
         return (mean_return * 252 / std_return) if std_return > 0 else 0
 
+    def get_performance_metrics_for_monitor(self) -> list[dict[str, Any]]:
+        """
+        Get performance metrics formatted for the PerformanceMonitor system.
+
+        Returns:
+            List of metric dictionaries with name, value, timestamp, unit, and tags
+        """
+        with self._lock:
+            metrics = []
+            timestamp = datetime.now(UTC)
+            account_status = self.get_account_status()
+
+            # Core financial metrics
+            metrics.extend(
+                [
+                    {
+                        "name": "paper_trading.equity",
+                        "value": account_status["equity"],
+                        "timestamp": timestamp,
+                        "unit": "dollars",
+                        "tags": {"mode": "paper", "account": "trading"},
+                    },
+                    {
+                        "name": "paper_trading.balance",
+                        "value": account_status["current_balance"],
+                        "timestamp": timestamp,
+                        "unit": "dollars",
+                        "tags": {"mode": "paper", "account": "trading"},
+                    },
+                    {
+                        "name": "paper_trading.total_pnl",
+                        "value": account_status["total_pnl"],
+                        "timestamp": timestamp,
+                        "unit": "dollars",
+                        "tags": {"mode": "paper", "account": "trading"},
+                    },
+                    {
+                        "name": "paper_trading.roi_percent",
+                        "value": account_status["roi_percent"],
+                        "timestamp": timestamp,
+                        "unit": "percent",
+                        "tags": {"mode": "paper", "account": "trading"},
+                    },
+                    {
+                        "name": "paper_trading.drawdown_percent",
+                        "value": account_status["current_drawdown"],
+                        "timestamp": timestamp,
+                        "unit": "percent",
+                        "tags": {"mode": "paper", "account": "trading"},
+                    },
+                    {
+                        "name": "paper_trading.max_drawdown_percent",
+                        "value": account_status["max_drawdown"],
+                        "timestamp": timestamp,
+                        "unit": "percent",
+                        "tags": {"mode": "paper", "account": "trading"},
+                    },
+                ]
+            )
+
+            # Trading activity metrics
+            metrics.extend(
+                [
+                    {
+                        "name": "paper_trading.open_positions",
+                        "value": account_status["open_positions"],
+                        "timestamp": timestamp,
+                        "unit": "count",
+                        "tags": {"mode": "paper", "type": "positions"},
+                    },
+                    {
+                        "name": "paper_trading.total_trades",
+                        "value": account_status["total_trades"],
+                        "timestamp": timestamp,
+                        "unit": "count",
+                        "tags": {"mode": "paper", "type": "trades"},
+                    },
+                    {
+                        "name": "paper_trading.margin_used",
+                        "value": account_status["margin_used"],
+                        "timestamp": timestamp,
+                        "unit": "dollars",
+                        "tags": {"mode": "paper", "type": "margin"},
+                    },
+                    {
+                        "name": "paper_trading.margin_available",
+                        "value": account_status["margin_available"],
+                        "timestamp": timestamp,
+                        "unit": "dollars",
+                        "tags": {"mode": "paper", "type": "margin"},
+                    },
+                ]
+            )
+
+            # Calculate win rate if we have closed trades
+            if self.closed_trades:
+                winning_trades = len(
+                    [
+                        t
+                        for t in self.closed_trades
+                        if t.realized_pnl and t.realized_pnl > 0
+                    ]
+                )
+                win_rate = (winning_trades / len(self.closed_trades)) * 100
+
+                metrics.append(
+                    {
+                        "name": "paper_trading.win_rate_percent",
+                        "value": win_rate,
+                        "timestamp": timestamp,
+                        "unit": "percent",
+                        "tags": {"mode": "paper", "type": "performance"},
+                    }
+                )
+
+                # Average trade duration in hours
+                durations = []
+                for trade in self.closed_trades:
+                    if trade.exit_time and trade.entry_time:
+                        duration = (
+                            trade.exit_time - trade.entry_time
+                        ).total_seconds() / 3600
+                        durations.append(duration)
+
+                if durations:
+                    avg_duration = sum(durations) / len(durations)
+                    metrics.append(
+                        {
+                            "name": "paper_trading.avg_trade_duration_hours",
+                            "value": avg_duration,
+                            "timestamp": timestamp,
+                            "unit": "hours",
+                            "tags": {"mode": "paper", "type": "performance"},
+                        }
+                    )
+
+            return metrics
+
     def generate_daily_report(self, date: str = None) -> str:
         """Generate a daily performance report."""
         target_date = date or datetime.now(UTC).date().isoformat()
@@ -775,66 +918,292 @@ class PaperTradingAccount:
         return report
 
     def _save_state(self) -> None:
-        """Save current state to files."""
+        """Save current state to files with robust error handling and logging."""
+        save_start_time = time.perf_counter()
+
+        # Use file-level locking to prevent race conditions
+        with self._lock:
+            try:
+                logger.info("📝 Starting paper trading state save...")
+
+                # Ensure data directory exists with proper permissions
+                try:
+                    self.data_dir.mkdir(parents=True, exist_ok=True)
+                    # Check write permissions
+                    test_file = self.data_dir / ".write_test"
+                    test_file.write_text("test")
+                    test_file.unlink()
+                except PermissionError as e:
+                    raise OSError(f"Permission denied writing to {self.data_dir}: {e}") from e
+                except Exception as e:
+                    raise OSError(f"Cannot access data directory {self.data_dir}: {e}") from e
+
+                # Save account state with detailed error context
+                try:
+                    account_data = {
+                        "starting_balance": str(self.starting_balance),
+                        "current_balance": str(self.current_balance),
+                        "equity": str(self.equity),
+                        "margin_used": str(self.margin_used),
+                        "trade_counter": self.trade_counter,
+                        "session_start_time": self.session_start_time.isoformat(),
+                        "peak_equity": str(self.peak_equity),
+                        "max_drawdown": str(self.max_drawdown),
+                        "last_save_time": datetime.now(UTC).isoformat(),
+                    }
+
+                    # Write to temporary file first, then rename for atomic operation
+                    temp_account_file = self.account_file.with_suffix(".tmp")
+                    with open(temp_account_file, "w") as f:
+                        json.dump(account_data, f, indent=2)
+                    temp_account_file.rename(self.account_file)
+                    logger.info(
+                        f"✅ Account state saved: balance=${self.current_balance}, trades={self.trade_counter}"
+                    )
+
+                except Exception as e:
+                    logger.error(
+                        f"❌ Failed to save account state to {self.account_file}: {type(e).__name__}: {e}"
+                    )
+                    raise OSError(f"Account save failed: {e}") from e
+
+                # Save trades with enhanced serialization error handling
+                try:
+                    trades_data = {
+                        "open_trades": {
+                            trade_id: asdict(trade)
+                            for trade_id, trade in self.open_trades.items()
+                        },
+                        "closed_trades": [
+                            asdict(trade) for trade in self.closed_trades
+                        ],
+                        "save_metadata": {
+                            "save_time": datetime.now(UTC).isoformat(),
+                            "open_count": len(self.open_trades),
+                            "closed_count": len(self.closed_trades),
+                        },
+                    }
+
+                    # Enhanced serialization with better error handling
+                    def serialize_value(obj):
+                        try:
+                            if isinstance(obj, datetime):
+                                return obj.isoformat()
+                            elif isinstance(obj, Decimal):
+                                return str(obj)
+                            elif obj is None:
+                                return None
+                            else:
+                                # Test if object is JSON serializable
+                                json.dumps(obj)
+                                return obj
+                        except (TypeError, ValueError) as e:
+                            logger.warning(
+                                f"⚠️ Serialization issue with {type(obj).__name__} '{obj}': {e}"
+                            )
+                            return str(obj)  # Fallback to string representation
+
+                    def serialize_dict(d):
+                        if isinstance(d, dict):
+                            return {k: serialize_dict(v) for k, v in d.items()}
+                        elif isinstance(d, list):
+                            return [serialize_dict(item) for item in d]
+                        else:
+                            return serialize_value(d)
+
+                    trades_data = serialize_dict(trades_data)
+
+                    # Atomic write for trades file
+                    temp_trades_file = self.trades_file.with_suffix(".tmp")
+                    with open(temp_trades_file, "w") as f:
+                        json.dump(trades_data, f, indent=2)
+                    temp_trades_file.rename(self.trades_file)
+                    logger.info(
+                        f"✅ Trades saved: {len(self.open_trades)} open, {len(self.closed_trades)} closed"
+                    )
+
+                except Exception as e:
+                    logger.error(
+                        f"❌ Failed to save trades to {self.trades_file}: {type(e).__name__}: {e}"
+                    )
+                    raise OSError(f"Trades save failed: {e}") from e
+
+                # Save performance data with error handling
+                try:
+                    performance_data = {
+                        date: asdict(metrics)
+                        for date, metrics in self.daily_metrics.items()
+                    }
+                    performance_data = serialize_dict(performance_data)
+                    performance_data["save_metadata"] = {
+                        "save_time": datetime.now(UTC).isoformat(),
+                        "metrics_count": len(self.daily_metrics),
+                    }
+
+                    # Atomic write for performance file
+                    temp_perf_file = self.performance_file.with_suffix(".tmp")
+                    with open(temp_perf_file, "w") as f:
+                        json.dump(performance_data, f, indent=2)
+                    temp_perf_file.rename(self.performance_file)
+                    logger.info(
+                        f"✅ Performance data saved: {len(self.daily_metrics)} daily metrics"
+                    )
+
+                except Exception as e:
+                    logger.error(
+                        f"❌ Failed to save performance data to {self.performance_file}: {type(e).__name__}: {e}"
+                    )
+                    raise OSError(f"Performance save failed: {e}") from e
+
+                # Save session trades for dashboard access
+                try:
+                    self.save_session_trades()
+                except Exception as e:
+                    logger.warning(
+                        f"⚠️ Failed to save session trades (non-critical): {e}"
+                    )
+                    # Don't fail the entire save operation for this
+
+                # Calculate and log save performance
+                save_duration = (time.perf_counter() - save_start_time) * 1000
+                logger.info(
+                    f"💾 Paper trading state saved successfully in {save_duration:.1f}ms"
+                )
+
+                # Clean up any temporary files that might have been left behind
+                for temp_file in self.data_dir.glob("*.tmp"):
+                    try:
+                        temp_file.unlink()
+                    except Exception:
+                        pass  # Ignore cleanup errors
+
+            except OSError as e:
+                # IO-specific errors (permissions, disk space, etc.)
+                logger.error(
+                    f"🚨 CRITICAL: Paper trading state save failed due to IO error: {e}"
+                )
+                logger.error(f"🚨 Data directory: {self.data_dir}")
+                logger.error(
+                    f"🚨 Files: account={self.account_file.exists()}, trades={self.trades_file.exists()}, perf={self.performance_file.exists()}"
+                )
+                raise  # Re-raise IO errors as they're critical
+
+            except Exception as e:
+                # Catch-all for unexpected errors
+                logger.error(
+                    f"🚨 CRITICAL: Unexpected error during paper trading state save: {type(e).__name__}: {e}"
+                )
+                logger.error(
+                    f"🚨 Account state: balance={self.current_balance}, trades={self.trade_counter}"
+                )
+                logger.error(
+                    f"🚨 Data state: open_trades={len(self.open_trades)}, closed_trades={len(self.closed_trades)}"
+                )
+
+                # Log stack trace for debugging
+                import traceback
+
+                logger.error(f"🚨 Stack trace:\n{traceback.format_exc()}")
+
+                raise  # Re-raise unexpected errors
+
+    def save_session_trades(self) -> None:
+        """Save session trades to session_trades.json file for dashboard access."""
         try:
-            # Save account state
-            account_data = {
-                "starting_balance": str(self.starting_balance),
-                "current_balance": str(self.current_balance),
-                "equity": str(self.equity),
-                "margin_used": str(self.margin_used),
-                "trade_counter": self.trade_counter,
-                "session_start_time": self.session_start_time.isoformat(),
-                "peak_equity": str(self.peak_equity),
-                "max_drawdown": str(self.max_drawdown),
-            }
+            session_trades_file = self.data_dir / "session_trades.json"
 
-            with open(self.account_file, "w") as f:
-                json.dump(account_data, f, indent=2)
+            # Get all trades (both open and closed) for this session
+            session_trades = []
 
-            # Save trades
-            trades_data = {
-                "open_trades": {
-                    trade_id: asdict(trade)
-                    for trade_id, trade in self.open_trades.items()
+            # Add open trades with error handling
+            for trade in self.open_trades.values():
+                try:
+                    session_trades.append(
+                        {
+                            "id": trade.id,
+                            "symbol": trade.symbol,
+                            "side": trade.side,
+                            "entry_time": trade.entry_time.isoformat(),
+                            "exit_time": None,
+                            "entry_price": float(trade.entry_price),
+                            "exit_price": None,
+                            "size": float(trade.size),
+                            "realized_pnl": None,
+                            "unrealized_pnl": float(
+                                trade.calculate_unrealized_pnl(trade.entry_price)
+                            ),  # Placeholder
+                            "fees": float(trade.fees),
+                            "status": trade.status,
+                            "duration_hours": None,
+                        }
+                    )
+                except Exception as e:
+                    logger.warning(f"⚠️ Error serializing open trade {trade.id}: {e}")
+                    continue
+
+            # Add closed trades with error handling
+            for trade in self.closed_trades:
+                try:
+                    duration_hours = None
+                    if trade.exit_time:
+                        duration_hours = (
+                            trade.exit_time - trade.entry_time
+                        ).total_seconds() / 3600
+
+                    session_trades.append(
+                        {
+                            "id": trade.id,
+                            "symbol": trade.symbol,
+                            "side": trade.side,
+                            "entry_time": trade.entry_time.isoformat(),
+                            "exit_time": (
+                                trade.exit_time.isoformat() if trade.exit_time else None
+                            ),
+                            "entry_price": float(trade.entry_price),
+                            "exit_price": (
+                                float(trade.exit_price) if trade.exit_price else None
+                            ),
+                            "size": float(trade.size),
+                            "realized_pnl": (
+                                float(trade.realized_pnl)
+                                if trade.realized_pnl
+                                else None
+                            ),
+                            "unrealized_pnl": 0.0,  # Closed trades have no unrealized P&L
+                            "fees": float(trade.fees),
+                            "status": trade.status,
+                            "duration_hours": duration_hours,
+                        }
+                    )
+                except Exception as e:
+                    logger.warning(f"⚠️ Error serializing closed trade {trade.id}: {e}")
+                    continue
+
+            # Add metadata for debugging
+            session_data = {
+                "trades": session_trades,
+                "metadata": {
+                    "save_time": datetime.now(UTC).isoformat(),
+                    "total_trades": len(session_trades),
+                    "open_count": len(self.open_trades),
+                    "closed_count": len(self.closed_trades),
                 },
-                "closed_trades": [asdict(trade) for trade in self.closed_trades],
             }
 
-            # Convert datetime and Decimal objects for JSON serialization
-            def serialize_value(obj):
-                if isinstance(obj, datetime):
-                    return obj.isoformat()
-                elif isinstance(obj, Decimal):
-                    return str(obj)
-                return obj
+            # Atomic write for session trades
+            temp_session_file = session_trades_file.with_suffix(".tmp")
+            with open(temp_session_file, "w") as f:
+                json.dump(session_data, f, indent=2)
+            temp_session_file.rename(session_trades_file)
 
-            def serialize_dict(d):
-                if isinstance(d, dict):
-                    return {k: serialize_dict(v) for k, v in d.items()}
-                elif isinstance(d, list):
-                    return [serialize_dict(item) for item in d]
-                else:
-                    return serialize_value(d)
-
-            trades_data = serialize_dict(trades_data)
-
-            with open(self.trades_file, "w") as f:
-                json.dump(trades_data, f, indent=2)
-
-            # Save performance data
-            performance_data = {
-                date: asdict(metrics) for date, metrics in self.daily_metrics.items()
-            }
-            performance_data = serialize_dict(performance_data)
-
-            with open(self.performance_file, "w") as f:
-                json.dump(performance_data, f, indent=2)
-
-            logger.debug("Paper trading state saved successfully")
+            logger.info(
+                f"📊 Session trades saved: {len(session_trades)} trades to {session_trades_file}"
+            )
 
         except Exception as e:
-            logger.error(f"Failed to save paper trading state: {e}")
+            logger.error(
+                f"❌ Failed to save session trades to {session_trades_file}: {type(e).__name__}: {e}"
+            )
 
     def _load_state(self) -> None:
         """Load state from files."""

@@ -214,12 +214,18 @@ class CommandConsumer:
             success, message = await self._execute_command(command)
 
             # Update statistics
-            self.stats["commands_processed"] = (self.stats.get("commands_processed", 0) or 0) + 1
+            self.stats["commands_processed"] = (
+                self.stats.get("commands_processed", 0) or 0
+            ) + 1
             if success:
-                self.stats["commands_succeeded"] = (self.stats.get("commands_succeeded", 0) or 0) + 1
+                self.stats["commands_succeeded"] = (
+                    self.stats.get("commands_succeeded", 0) or 0
+                ) + 1
                 self.stats["last_command_time"] = datetime.now().isoformat()
             else:
-                self.stats["commands_failed"] = (self.stats.get("commands_failed", 0) or 0) + 1
+                self.stats["commands_failed"] = (
+                    self.stats.get("commands_failed", 0) or 0
+                ) + 1
 
             # Report status back to dashboard
             status = "completed" if success else "failed"
@@ -233,7 +239,9 @@ class CommandConsumer:
             logger.error(
                 f"Error processing command {cmd_data.get('id', 'unknown')}: {e}"
             )
-            await self._report_command_status(cmd_data.get("id", "unknown"), "failed", str(e))
+            await self._report_command_status(
+                cmd_data.get("id", "unknown"), "failed", str(e)
+            )
 
     def _validate_command(self, command: BotCommand) -> bool:
         """Validate command before execution."""

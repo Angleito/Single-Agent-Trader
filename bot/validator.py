@@ -111,28 +111,30 @@ class TradeValidator:
             Dictionary with normalized action field
         """
         normalized = data.copy()
-        
+
         if "action" in normalized:
             action = str(normalized["action"]).upper().strip()
-            
+
             # Map common variations to standard actions
             action_mappings = {
                 "BUY": "LONG",
-                "SELL": "SHORT", 
+                "SELL": "SHORT",
                 "EXIT": "CLOSE",
                 "CLOSE_POSITION": "CLOSE",
                 "STAY": "HOLD",
                 "WAIT": "HOLD",
-                "NO_ACTION": "HOLD"
+                "NO_ACTION": "HOLD",
             }
-            
+
             if action in action_mappings:
                 original_action = normalized["action"]
                 normalized["action"] = action_mappings[action]
-                logger.info(f"Normalized action '{original_action}' to '{normalized['action']}'")
+                logger.info(
+                    f"Normalized action '{original_action}' to '{normalized['action']}'"
+                )
             else:
                 normalized["action"] = action
-                
+
         return normalized
 
     def _validate_trade_action(
@@ -200,7 +202,9 @@ class TradeValidator:
 
         # Validate leverage for futures trading
         if validated.leverage < 1:
-            logger.warning(f"Invalid leverage {validated.leverage}, setting to default 1")
+            logger.warning(
+                f"Invalid leverage {validated.leverage}, setting to default 1"
+            )
             validated.leverage = 1
         elif validated.leverage > 100:
             logger.warning(f"Excessive leverage {validated.leverage}, capping to 100")

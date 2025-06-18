@@ -371,3 +371,30 @@ scratch_*.py
 debug_*.py
 test_*.md
 development_notes.md
+
+# Paper Trading and Performance Data Files
+data/paper_trading/
+data/trades/
+data/performance/
+data/session_trades.json
+data/account.json
+data/trades.json
+data/performance.json
+logs/trades/
+paper_trading_*.json
+session_*.json
+account_*.json
+performance_*.json
+trade_*.json
+
+# Structured Trade Logging Files
+logs/trades/*.jsonl
+decisions_*.jsonl
+outcomes_*.jsonl
+memory_*.jsonl
+
+# Memory and MCP Data Files
+data/mcp_memory/
+mcp_data/
+trading_experiences/
+memory_*.json

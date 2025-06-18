@@ -17,11 +17,29 @@ from typing import Any, Literal
 import aiofiles
 
 from .config import settings
+from .error_handling import (
+    exception_handler,
+)
 from .paper_trading import PaperTradingAccount
 from .trading.fifo_position_manager import FIFOPositionManager
 from .trading_types import Order, Position
 
 logger = logging.getLogger(__name__)
+
+
+class PositionManagerError(Exception):
+    """Base exception for position manager errors."""
+    pass
+
+
+class PositionValidationError(PositionManagerError):
+    """Exception raised when position validation fails."""
+    pass
+
+
+class PositionStateError(PositionManagerError):
+    """Exception raised when position state operations fail."""
+    pass
 
 
 class PositionManager:
@@ -627,8 +645,37 @@ class PositionManager:
 
             logger.debug("Position state saved successfully")
 
+        except (OSError, PermissionError) as e:
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "operation": "save_position_state_async",
+                    "positions_count": len(self._positions),
+                    "file_operation_error": True,
+                },
+                component="PositionManager",
+                operation="_save_state_async",
+            )
+        except (json.JSONEncodeError, ValueError) as e:
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "operation": "save_position_state_async",
+                    "json_serialization_error": True,
+                },
+                component="PositionManager",
+                operation="_save_state_async",
+            )
         except Exception as e:
-            logger.error(f"Failed to save position state: {e}")
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "operation": "save_position_state_async",
+                    "unexpected_save_error": True,
+                },
+                component="PositionManager",
+                operation="_save_state_async",
+            )
 
     def _save_state_sync(self) -> None:
         """Save current state to files synchronously (fallback method)."""
@@ -673,8 +720,37 @@ class PositionManager:
 
             logger.debug("Position state saved successfully (sync)")
 
+        except (OSError, PermissionError) as e:
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "operation": "save_position_state_sync",
+                    "positions_count": len(self._positions),
+                    "file_operation_error": True,
+                },
+                component="PositionManager",
+                operation="_save_state_sync",
+            )
+        except (json.JSONEncodeError, ValueError) as e:
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "operation": "save_position_state_sync",
+                    "json_serialization_error": True,
+                },
+                component="PositionManager",
+                operation="_save_state_sync",
+            )
         except Exception as e:
-            logger.error(f"Failed to save position state (sync): {e}")
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "operation": "save_position_state_sync",
+                    "unexpected_save_error": True,
+                },
+                component="PositionManager",
+                operation="_save_state_sync",
+            )
 
     def _save_state(self) -> None:
         """Save current state to files (non-blocking when called from async context)."""
@@ -695,22 +771,82 @@ class PositionManager:
                 # No event loop running, do synchronous save
                 self._save_state_sync()
         except Exception as e:
-            logger.error(f"Failed to save state: {e}")
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "operation": "save_state_coordinator",
+                    "initializing": getattr(self, "_initializing", False),
+                },
+                component="PositionManager",
+                operation="_save_state",
+            )
 
     def _handle_save_error(self, task: asyncio.Task) -> None:
         """Handle errors from async save task."""
         try:
             task.result()
         except Exception as e:
-            logger.error(f"Async save failed: {e}")
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "operation": "async_save_error_handler",
+                    "save_task_failed": True,
+                },
+                component="PositionManager",
+                operation="_handle_save_error",
+            )
 
     def _load_state(self) -> None:
         """Load state from files."""
         try:
             # Load active positions
             if self.positions_file.exists():
-                with open(self.positions_file) as f:
-                    positions_data = json.load(f)
+                try:
+                    with open(self.positions_file) as f:
+                        content = f.read().strip()
+                        if not content:
+                            logger.info(
+                                "Positions file is empty, starting with clean state"
+                            )
+                            positions_data = {}
+                        else:
+                            positions_data = json.loads(content)
+                except json.JSONDecodeError as e:
+                    exception_handler.log_exception_with_context(
+                        e,
+                        {
+                            "operation": "load_positions_file",
+                            "file_path": str(self.positions_file),
+                            "json_decode_error": True,
+                        },
+                        component="PositionManager",
+                        operation="_load_state",
+                    )
+                    positions_data = {}
+                except (OSError, PermissionError) as e:
+                    exception_handler.log_exception_with_context(
+                        e,
+                        {
+                            "operation": "load_positions_file",
+                            "file_path": str(self.positions_file),
+                            "file_operation_error": True,
+                        },
+                        component="PositionManager",
+                        operation="_load_state",
+                    )
+                    positions_data = {}
+                except Exception as e:
+                    exception_handler.log_exception_with_context(
+                        e,
+                        {
+                            "operation": "load_positions_file",
+                            "file_path": str(self.positions_file),
+                            "unexpected_load_error": True,
+                        },
+                        component="PositionManager",
+                        operation="_load_state",
+                    )
+                    positions_data = {}
 
                 for symbol, pos_data in positions_data.items():
                     self._positions[symbol] = Position(
@@ -731,8 +867,52 @@ class PositionManager:
 
             # Load position history
             if self.history_file.exists():
-                with open(self.history_file) as f:
-                    history_data = json.load(f)
+                try:
+                    with open(self.history_file) as f:
+                        content = f.read().strip()
+                        if not content:
+                            logger.info(
+                                "Position history file is empty, starting with clean history"
+                            )
+                            history_data = []
+                        else:
+                            history_data = json.loads(content)
+                except json.JSONDecodeError as e:
+                    exception_handler.log_exception_with_context(
+                        e,
+                        {
+                            "operation": "load_history_file",
+                            "file_path": str(self.history_file),
+                            "json_decode_error": True,
+                        },
+                        component="PositionManager",
+                        operation="_load_state",
+                    )
+                    history_data = []
+                except (OSError, PermissionError) as e:
+                    exception_handler.log_exception_with_context(
+                        e,
+                        {
+                            "operation": "load_history_file",
+                            "file_path": str(self.history_file),
+                            "file_operation_error": True,
+                        },
+                        component="PositionManager",
+                        operation="_load_state",
+                    )
+                    history_data = []
+                except Exception as e:
+                    exception_handler.log_exception_with_context(
+                        e,
+                        {
+                            "operation": "load_history_file",
+                            "file_path": str(self.history_file),
+                            "unexpected_load_error": True,
+                        },
+                        component="PositionManager",
+                        operation="_load_state",
+                    )
+                    history_data = []
 
                 for pos_data in history_data:
                     self._position_history.append(
@@ -756,7 +936,15 @@ class PositionManager:
                 )
 
         except Exception as e:
-            logger.error(f"Failed to load position state: {e}")
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "operation": "load_position_state",
+                    "unexpected_load_error": True,
+                },
+                component="PositionManager",
+                operation="_load_state",
+            )
             # Continue with empty state
 
     def get_paper_trading_performance(self, days: int = 7) -> dict[str, Any]:
@@ -1026,8 +1214,30 @@ class PositionManager:
 
             return validation_result
 
+        except (ValueError, TypeError, ArithmeticError) as e:
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "symbol": symbol,
+                    "current_price": str(current_price),
+                    "validation_calculation_error": True,
+                },
+                component="PositionManager",
+                operation="validate_position_integrity",
+            )
+            validation_result["valid"] = False
+            validation_result["errors"].append(f"Validation calculation error: {e}")
+            return validation_result
         except Exception as e:
-            logger.error(f"Position validation error for {symbol}: {e}")
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "symbol": symbol,
+                    "unexpected_validation_error": True,
+                },
+                component="PositionManager",
+                operation="validate_position_integrity",
+            )
             validation_result["valid"] = False
             validation_result["errors"].append(f"Validation exception: {e}")
             return validation_result
@@ -1093,8 +1303,27 @@ class PositionManager:
 
             return max(0.0, score)
 
+        except (ValueError, TypeError, ArithmeticError) as e:
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "operation": "calculate_position_health_score",
+                    "calculation_error": True,
+                },
+                component="PositionManager",
+                operation="_calculate_position_health_score",
+            )
+            return 0.0
         except Exception as e:
-            logger.error(f"Health score calculation error: {e}")
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "operation": "calculate_position_health_score",
+                    "unexpected_calculation_error": True,
+                },
+                component="PositionManager",
+                operation="_calculate_position_health_score",
+            )
             return 0.0
 
     def perform_comprehensive_validation(
@@ -1161,8 +1390,29 @@ class PositionManager:
 
             return validation_report
 
+        except (ValueError, KeyError, TypeError) as e:
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "operation": "comprehensive_validation",
+                    "positions_checked": validation_report.get("positions_checked", 0),
+                    "validation_processing_error": True,
+                },
+                component="PositionManager",
+                operation="perform_comprehensive_validation",
+            )
+            validation_report["error"] = str(e)
+            return validation_report
         except Exception as e:
-            logger.error(f"Comprehensive validation error: {e}")
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "operation": "comprehensive_validation",
+                    "unexpected_validation_error": True,
+                },
+                component="PositionManager",
+                operation="perform_comprehensive_validation",
+            )
             validation_report["error"] = str(e)
             return validation_report
 
@@ -1211,6 +1461,26 @@ class PositionManager:
 
             return corrections_made
 
+        except (ValueError, TypeError, ArithmeticError) as e:
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "symbol": symbol,
+                    "current_price": str(current_price),
+                    "auto_correction_calculation_error": True,
+                },
+                component="PositionManager",
+                operation="auto_correct_position_inconsistencies",
+            )
+            return False
         except Exception as e:
-            logger.error(f"Auto-correction error for {symbol}: {e}")
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "symbol": symbol,
+                    "unexpected_correction_error": True,
+                },
+                component="PositionManager",
+                operation="auto_correct_position_inconsistencies",
+            )
             return False

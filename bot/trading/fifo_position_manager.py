@@ -365,7 +365,18 @@ class FIFOPositionManager:
             return
 
         try:
-            state = json.loads(self._state_file.read_text())
+            content = self._state_file.read_text().strip()
+            if not content:
+                logger.info("FIFO positions file is empty, starting with clean state")
+                return
+
+            try:
+                state = json.loads(content)
+            except json.JSONDecodeError as e:
+                logger.warning(
+                    f"Invalid JSON in FIFO positions file: {e}. Starting with clean state"
+                )
+                return
 
             # Restore position history
             self._position_history = state.get("history", [])
@@ -408,3 +419,4 @@ class FIFOPositionManager:
 
         except Exception as e:
             logger.error(f"Failed to load position state: {e}")
+            # Continue with empty state

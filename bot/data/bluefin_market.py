@@ -47,6 +47,11 @@ class BluefinMarketDataProvider:
         self.interval = interval or settings.trading.interval
         self.candle_limit = settings.data.candle_limit
 
+        # Generate provider ID for logging context
+        import time
+
+        self.provider_id = f"bluefin-market-{int(time.time())}"
+
         # Data cache
         self._ohlcv_cache: list[MarketData] = []
         self._price_cache: dict[str, Any] = {}
@@ -58,6 +63,7 @@ class BluefinMarketDataProvider:
 
         # HTTP session for API calls
         self._session: aiohttp.ClientSession | None = None
+        self._session_closed = False
 
         # Connection state
         self._is_connected = False
@@ -103,8 +109,8 @@ class BluefinMarketDataProvider:
         self._last_candle_timestamp: datetime | None = None
 
         # Bluefin API configuration - use environment-specific endpoints
-        network = os.getenv('EXCHANGE__BLUEFIN_NETWORK', 'mainnet').lower()
-        if network == 'testnet':
+        network = os.getenv("EXCHANGE__BLUEFIN_NETWORK", "mainnet").lower()
+        if network == "testnet":
             self._api_base_url = "https://dapi-testnet.bluefin.io"
             self._ws_url = "wss://dapi-testnet.bluefin.io"
             self._notification_ws_url = "wss://notifications-testnet.bluefin.io"
@@ -114,12 +120,35 @@ class BluefinMarketDataProvider:
             self._notification_ws_url = "wss://notifications.bluefin.io"
 
         logger.info(
-            f"Initialized BluefinMarketDataProvider for {self.symbol} at {self.interval}"
+            "Initialized BluefinMarketDataProvider",
+            extra={
+                "provider_id": self.provider_id,
+                "symbol": self.symbol,
+                "interval": self.interval,
+                "candle_limit": self.candle_limit,
+                "network": network,
+                "use_mock_data": self._use_mock_data,
+                "api_base_url": self._api_base_url,
+                "ws_url": self._ws_url,
+            },
         )
+
         if self._use_mock_data:
-            logger.info("Using mock data for Bluefin market data")
+            logger.info(
+                "Using mock data for Bluefin market data",
+                extra={
+                    "provider_id": self.provider_id,
+                    "reason": "dry_run_mode_without_real_data",
+                },
+            )
         else:
-            logger.info("Using real Bluefin market data via WebSocket")
+            logger.info(
+                "Using real Bluefin market data via WebSocket",
+                extra={
+                    "provider_id": self.provider_id,
+                    "data_source": "live_websocket",
+                },
+            )
 
     def _convert_symbol(self, symbol: str) -> str:
         """Convert standard symbol to Bluefin perpetual format."""
@@ -135,16 +164,61 @@ class BluefinMarketDataProvider:
 
     async def connect(self, fetch_historical: bool = True) -> None:
         """
-        Establish connection to Bluefin data feeds.
+        Establish connection to Bluefin data feeds with comprehensive error handling.
 
         Args:
             fetch_historical: Whether to fetch historical data during connection
+
+        Raises:
+            BluefinConnectionError: When connection setup fails
+            BluefinDataError: When initial data fetch fails
         """
+        logger.info(
+            "Starting Bluefin market data connection",
+            extra={
+                "provider_id": self.provider_id,
+                "symbol": self.symbol,
+                "interval": self.interval,
+                "fetch_historical": fetch_historical,
+                "use_mock_data": self._use_mock_data,
+            },
+        )
         try:
-            # Initialize HTTP session
-            self._session = aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=settings.exchange.api_timeout)
-            )
+            # Initialize HTTP session with proper management
+            if self._session is None or self._session.closed:
+                timeout_value = settings.exchange.api_timeout
+                logger.debug(
+                    "Creating HTTP session for Bluefin market data provider",
+                    extra={
+                        "provider_id": self.provider_id,
+                        "timeout": timeout_value,
+                        "api_base_url": self._api_base_url,
+                    },
+                )
+
+                try:
+                    self._session = aiohttp.ClientSession(
+                        timeout=aiohttp.ClientTimeout(total=timeout_value)
+                    )
+                    self._session_closed = False
+                    logger.debug(
+                        "HTTP session created successfully",
+                        extra={"provider_id": self.provider_id},
+                    )
+                except Exception as e:
+                    error_msg = f"Failed to initialize HTTP session: {str(e)}"
+                    logger.error(
+                        "HTTP session initialization failed",
+                        extra={
+                            "provider_id": self.provider_id,
+                            "error_type": type(e).__name__,
+                            "error_message": str(e),
+                            "timeout": timeout_value,
+                        },
+                    )
+                    from ..exchange.bluefin_client import BluefinServiceConnectionError
+
+                    raise BluefinServiceConnectionError(error_msg) from e
 
             if self._use_mock_data:
                 logger.info("Starting mock data generation")
@@ -258,10 +332,14 @@ class BluefinMarketDataProvider:
             await self._ws.close()
             self._ws = None
 
-        # Close HTTP session
+        # Close HTTP session with proper cleanup
         if self._session and not self._session.closed:
+            logger.debug("Closing HTTP session for Bluefin market data provider")
             await self._session.close()
+            self._session_closed = True
+            logger.debug("HTTP session closed successfully")
 
+        self._session = None
         logger.info("Disconnected from Bluefin market data feeds")
 
     async def fetch_historical_data(
@@ -907,24 +985,30 @@ class BluefinMarketDataProvider:
             Current price or None if unavailable
         """
         try:
-            # Use Bluefin service for ticker data
+            # Use Bluefin service for ticker data with proper session management
             from ..exchange.bluefin_client import BluefinServiceClient
-            
-            service_client = BluefinServiceClient()
-            await service_client.connect()
-            
-            ticker_data = await service_client.get_market_ticker(self.symbol)
-            
-            if ticker_data and "price" in ticker_data:
-                price = Decimal(str(ticker_data["price"]))
-                # Update cache
-                self._price_cache["price"] = price
-                self._cache_timestamps["price"] = datetime.now(UTC)
-                logger.info(f"Fetched Bluefin ticker price: {price} for {self.symbol}")
-                return price
-            else:
-                logger.warning(f"No price data in ticker response: {ticker_data}")
-                return None
+
+            # Get the correct service URL and API key for connection
+            service_url = os.getenv(
+                "BLUEFIN_SERVICE_URL", "http://bluefin-service:8080"
+            )
+            api_key = os.getenv("BLUEFIN_SERVICE_API_KEY")
+
+            async with BluefinServiceClient(service_url, api_key) as service_client:
+                ticker_data = await service_client.get_market_ticker(self.symbol)
+
+                if ticker_data and "price" in ticker_data:
+                    price = Decimal(str(ticker_data["price"]))
+                    # Update cache
+                    self._price_cache["price"] = price
+                    self._cache_timestamps["price"] = datetime.now(UTC)
+                    logger.info(
+                        f"Fetched Bluefin ticker price: {price} for {self.symbol}"
+                    )
+                    return price
+                else:
+                    logger.warning(f"No price data in ticker response: {ticker_data}")
+                    return None
 
         except Exception as e:
             logger.error(f"Error fetching Bluefin ticker price via service: {e}")
@@ -938,8 +1022,8 @@ class BluefinMarketDataProvider:
         Returns:
             Current price or None if unavailable
         """
-        if not self._session:
-            logger.warning("HTTP session not initialized for direct API call")
+        if not self._session or self._session.closed:
+            logger.warning("HTTP session not initialized or closed for direct API call")
             return None
 
         try:
@@ -993,62 +1077,70 @@ class BluefinMarketDataProvider:
             List of MarketData objects
         """
         try:
-            # Use Bluefin service for candle data
+            # Use Bluefin service for candle data with proper session management
             from ..exchange.bluefin_client import BluefinServiceClient
-            
-            service_client = BluefinServiceClient()
-            await service_client.connect()
-            
-            # Convert interval to Bluefin format
-            interval_map = {
-                "1m": "1m",
-                "3m": "3m", 
-                "5m": "5m",
-                "15m": "15m",
-                "30m": "30m",
-                "1h": "1h",
-                "2h": "2h",
-                "4h": "4h",
-                "1d": "1d",
-                "1w": "1w",
-                "15s": "15s",  # For high-frequency trading
-            }
 
-            bluefin_interval = interval_map.get(interval, "5m")
+            # Get the correct service URL and API key for connection
+            service_url = os.getenv(
+                "BLUEFIN_SERVICE_URL", "http://bluefin-service:8080"
+            )
+            api_key = os.getenv("BLUEFIN_SERVICE_API_KEY")
 
-            # Prepare request parameters
-            params = {
-                "symbol": symbol,
-                "interval": bluefin_interval,
-                "limit": limit,
-                "startTime": int(start_time.timestamp() * 1000),
-                "endTime": int(end_time.timestamp() * 1000),
-            }
-            
-            candle_data = await service_client.get_candlestick_data(params)
-            
-            # Parse candle data into MarketData objects
-            candles = []
-            for candle in candle_data:
-                if isinstance(candle, list) and len(candle) >= 6:
-                    market_data = MarketData(
-                        symbol=symbol,
-                        timestamp=datetime.fromtimestamp(candle[0] / 1000, UTC),
-                        open=Decimal(str(candle[1])),
-                        high=Decimal(str(candle[2])),
-                        low=Decimal(str(candle[3])),
-                        close=Decimal(str(candle[4])),
-                        volume=Decimal(str(candle[5])),
-                    )
-                    candles.append(market_data)
-            
-            logger.info(f"Successfully fetched {len(candles)} candles from Bluefin service")
-            return candles
+            async with BluefinServiceClient(service_url, api_key) as service_client:
+                # Convert interval to Bluefin format
+                interval_map = {
+                    "1m": "1m",
+                    "3m": "3m",
+                    "5m": "5m",
+                    "15m": "15m",
+                    "30m": "30m",
+                    "1h": "1h",
+                    "2h": "2h",
+                    "4h": "4h",
+                    "1d": "1d",
+                    "1w": "1w",
+                    "15s": "15s",  # For high-frequency trading
+                }
+
+                bluefin_interval = interval_map.get(interval, "5m")
+
+                # Prepare request parameters
+                params = {
+                    "symbol": symbol,
+                    "interval": bluefin_interval,
+                    "limit": limit,
+                    "startTime": int(start_time.timestamp() * 1000),
+                    "endTime": int(end_time.timestamp() * 1000),
+                }
+
+                candle_data = await service_client.get_candlestick_data(params)
+
+                # Parse candle data into MarketData objects
+                candles = []
+                for candle in candle_data:
+                    if isinstance(candle, list) and len(candle) >= 6:
+                        market_data = MarketData(
+                            symbol=symbol,
+                            timestamp=datetime.fromtimestamp(candle[0] / 1000, UTC),
+                            open=Decimal(str(candle[1])),
+                            high=Decimal(str(candle[2])),
+                            low=Decimal(str(candle[3])),
+                            close=Decimal(str(candle[4])),
+                            volume=Decimal(str(candle[5])),
+                        )
+                        candles.append(market_data)
+
+                logger.info(
+                    f"Successfully fetched {len(candles)} candles from Bluefin service"
+                )
+                return candles
 
         except Exception as e:
             logger.error(f"Error fetching Bluefin candles via service: {e}")
             # Fall back to direct API call
-            return await self._fetch_bluefin_candles_direct(symbol, interval, start_time, end_time, limit)
+            return await self._fetch_bluefin_candles_direct(
+                symbol, interval, start_time, end_time, limit
+            )
 
     async def _fetch_bluefin_candles_direct(
         self,
@@ -1071,8 +1163,8 @@ class BluefinMarketDataProvider:
         Returns:
             List of MarketData objects
         """
-        if not self._session:
-            logger.warning("HTTP session not initialized for direct API call")
+        if not self._session or self._session.closed:
+            logger.warning("HTTP session not initialized or closed for direct API call")
             return self._generate_mock_historical_data(symbol, interval, limit)
 
         try:
@@ -1147,7 +1239,9 @@ class BluefinMarketDataProvider:
                         )
                         candles.append(market_data)
 
-                logger.info(f"Successfully fetched {len(candles)} candles from Bluefin directly")
+                logger.info(
+                    f"Successfully fetched {len(candles)} candles from Bluefin directly"
+                )
                 return candles
 
         except aiohttp.ClientError as e:

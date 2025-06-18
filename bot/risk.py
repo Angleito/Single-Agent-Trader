@@ -584,20 +584,23 @@ class RiskManager:
                     "Insufficient funds for fees",
                 )
 
-            # 💹 Validate trade profitability after fees
-            position_value = self._account_balance * Decimal(
-                str(modified_action.size_pct / 100)
-            )
-            is_profitable, profit_reason = fee_calculator.validate_trade_profitability(
-                modified_action, position_value, current_price
-            )
-
-            if not is_profitable:
-                return (
-                    False,
-                    self._get_hold_action(f"Trade not profitable: {profit_reason}"),
-                    "Fee profitability",
+            # 💹 Validate trade profitability after fees (skip for HOLD/CLOSE actions)
+            if modified_action.action not in ["HOLD", "CLOSE"]:
+                position_value = self._account_balance * Decimal(
+                    str(modified_action.size_pct / 100)
                 )
+                is_profitable, profit_reason = (
+                    fee_calculator.validate_trade_profitability(
+                        modified_action, position_value, current_price
+                    )
+                )
+
+                if not is_profitable:
+                    return (
+                        False,
+                        self._get_hold_action(f"Trade not profitable: {profit_reason}"),
+                        "Fee profitability",
+                    )
 
             # 📊 Calculate comprehensive risk metrics
             risk_metrics = self._calculate_position_risk(
@@ -812,8 +815,8 @@ class RiskManager:
         Returns:
             Maximum loss in USD
         """
-        # Risk maximum 5% of account per trade (increased for testing)
-        max_loss_pct = Decimal("0.05")
+        # Risk maximum 8% of account per trade (increased from 5% for more trading opportunities)
+        max_loss_pct = Decimal("0.08")
         return self._account_balance * max_loss_pct
 
     def _reduce_position_size(
