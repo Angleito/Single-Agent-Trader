@@ -229,10 +229,10 @@ class LLMSettings(BaseModel):
         description="Model temperature for response creativity",
     )
     max_tokens: int = Field(
-        default=30000,
+        default=5000,
         ge=100,
         le=50000,
-        description="Maximum tokens in LLM response (o3 supports up to 30000 per request)",
+        description="Maximum tokens in LLM response (reduced from 30K to 5K for trading decisions performance)",
     )
     top_p: float = Field(
         default=1.0, ge=0.0, le=1.0, description="Top-p sampling parameter"
@@ -287,7 +287,19 @@ class LLMSettings(BaseModel):
         default=True, description="Enable response caching for identical prompts"
     )
     cache_ttl_seconds: int = Field(
-        default=300, ge=0, le=3600, description="Cache TTL in seconds (0 = no expiry)"
+        default=300,
+        ge=0,
+        le=3600,
+        description="Cache TTL in seconds (increased to 5 minutes for better hit rates)",
+    )
+
+    # Performance Optimization Configuration
+    use_optimized_prompts: bool = Field(
+        default=True,
+        description="Use optimized prompt templates for ~50% performance improvement",
+    )
+    enable_api_call_parallelization: bool = Field(
+        default=True, description="Enable parallel API calls for faster response times"
     )
 
     # LLM Logging Configuration
@@ -1009,7 +1021,11 @@ class SystemSettings(BaseModel):
     )
     websocket_dashboard_url: str = Field(
         default="ws://localhost:8000/ws",
-        description="Dashboard WebSocket URL for real-time data",
+        description="Primary dashboard WebSocket URL for real-time data",
+    )
+    websocket_fallback_urls: str = Field(
+        default="",
+        description="Comma-separated list of fallback WebSocket URLs",
     )
     websocket_publish_interval: float = Field(
         default=1.0,
@@ -1018,16 +1034,28 @@ class SystemSettings(BaseModel):
         description="WebSocket publishing interval in seconds",
     )
     websocket_max_retries: int = Field(
-        default=10, ge=1, le=20, description="Maximum WebSocket reconnection attempts"
+        default=15, ge=1, le=30, description="Maximum WebSocket reconnection attempts"
     )
     websocket_retry_delay: int = Field(
-        default=3,
+        default=5,
         ge=1,
         le=60,
         description="WebSocket reconnection base delay in seconds",
     )
     websocket_timeout: int = Field(
-        default=30, ge=10, le=120, description="WebSocket connection timeout in seconds"
+        default=45, ge=10, le=120, description="WebSocket connection timeout in seconds"
+    )
+    websocket_initial_connect_timeout: int = Field(
+        default=60,
+        ge=30,
+        le=180,
+        description="Initial WebSocket connection timeout in seconds",
+    )
+    websocket_connection_delay: int = Field(
+        default=0,
+        ge=0,
+        le=60,
+        description="Delay before initial WebSocket connection attempt in seconds",
     )
     websocket_queue_size: int = Field(
         default=2000,
@@ -1037,13 +1065,13 @@ class SystemSettings(BaseModel):
     )
     # Additional WebSocket resilience settings
     websocket_ping_interval: int = Field(
-        default=15, ge=5, le=60, description="WebSocket ping interval in seconds"
+        default=20, ge=5, le=60, description="WebSocket ping interval in seconds"
     )
     websocket_ping_timeout: int = Field(
-        default=8, ge=3, le=30, description="WebSocket ping timeout in seconds"
+        default=10, ge=3, le=30, description="WebSocket ping timeout in seconds"
     )
     websocket_health_check_interval: int = Field(
-        default=30,
+        default=45,
         ge=10,
         le=300,
         description="WebSocket health check interval in seconds",

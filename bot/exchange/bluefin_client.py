@@ -10,15 +10,12 @@ import logging
 import os
 import random
 import time
-import traceback
 from typing import Any
 
 import aiohttp  # type: ignore
 from aiohttp import ClientError, ClientTimeout, TCPConnector
 
 from ..error_handling import (
-    ErrorContext,
-    ErrorSeverity,
     exception_handler,
 )
 
@@ -109,7 +106,9 @@ class BluefinServiceClient:
 
         # Enhanced connection health tracking
         self.last_health_check = 0
-        self.health_check_interval = 30  # Check health every 30 seconds (reduced from 60)
+        self.health_check_interval = (
+            30  # Check health every 30 seconds (reduced from 60)
+        )
         self.consecutive_failures = 0
         self.max_consecutive_failures = 3
 
@@ -187,7 +186,7 @@ class BluefinServiceClient:
             # Circuit breaker timeout expired, attempt to close
             logger.info(
                 "Circuit breaker timeout expired, attempting to close circuit",
-                extra={"client_id": self.client_id}
+                extra={"client_id": self.client_id},
             )
             self.circuit_open = False
             self.consecutive_failures = 0
@@ -198,7 +197,7 @@ class BluefinServiceClient:
         if self.consecutive_failures > 0:
             logger.info(
                 f"Operation succeeded, resetting failure count from {self.consecutive_failures}",
-                extra={"client_id": self.client_id}
+                extra={"client_id": self.client_id},
             )
             self.consecutive_failures = 0
 
@@ -212,13 +211,13 @@ class BluefinServiceClient:
             logger.warning(
                 f"Circuit breaker opened due to {self.consecutive_failures} consecutive failures. "
                 f"Will retry after {self.circuit_recovery_timeout}s",
-                extra={"client_id": self.client_id}
+                extra={"client_id": self.client_id},
             )
 
     def _calculate_retry_delay(self, attempt: int) -> float:
         """Calculate retry delay with exponential backoff and jitter."""
         # Exponential backoff: base * (2 ^ attempt)
-        delay = min(self._base_retry_delay * (2 ** attempt), self._max_retry_delay)
+        delay = min(self._base_retry_delay * (2**attempt), self._max_retry_delay)
 
         # Add jitter to prevent thundering herd
         jitter = delay * self._jitter_factor * random.random()
@@ -231,11 +230,11 @@ class BluefinServiceClient:
         if self._is_circuit_open():
             logger.warning(
                 "Circuit breaker is open, skipping request",
-                extra={"client_id": self.client_id}
+                extra={"client_id": self.client_id},
             )
             raise BluefinServiceConnectionError(
                 "Circuit breaker is open - service temporarily unavailable",
-                service_url=self.service_url
+                service_url=self.service_url,
             )
 
         last_exception = None
@@ -259,8 +258,8 @@ class BluefinServiceClient:
                             "attempt": attempt + 1,
                             "max_retries": self._max_retries,
                             "delay": delay,
-                            "error_type": type(e).__name__
-                        }
+                            "error_type": type(e).__name__,
+                        },
                     )
                     await asyncio.sleep(delay)
                 else:
@@ -269,8 +268,8 @@ class BluefinServiceClient:
                         extra={
                             "client_id": self.client_id,
                             "total_attempts": self._max_retries,
-                            "error_type": type(e).__name__
-                        }
+                            "error_type": type(e).__name__,
+                        },
                     )
             except Exception as e:
                 exception_handler.log_exception_with_context(
@@ -279,7 +278,9 @@ class BluefinServiceClient:
                         "client_id": self.client_id,
                         "attempt": attempt + 1,
                         "non_retryable_error": True,
-                        "function_name": func.__name__ if hasattr(func, "__name__") else "unknown",
+                        "function_name": (
+                            func.__name__ if hasattr(func, "__name__") else "unknown"
+                        ),
                     },
                     component="BluefinServiceClient",
                     operation="_retry_request",
@@ -305,8 +306,8 @@ class BluefinServiceClient:
                 extra={
                     "client_id": self.client_id,
                     "session_age": current_time - self._session_created_at,
-                    "max_age": self._session_max_age
-                }
+                    "max_age": self._session_max_age,
+                },
             )
             return True
 
@@ -317,8 +318,8 @@ class BluefinServiceClient:
                 extra={
                     "client_id": self.client_id,
                     "request_count": self._session_request_count,
-                    "max_requests": self._max_requests_per_session
-                }
+                    "max_requests": self._max_requests_per_session,
+                },
             )
             return True
 
@@ -351,8 +352,8 @@ class BluefinServiceClient:
             extra={
                 "client_id": self.client_id,
                 "pool_size": self._connection_pool_size,
-                "keep_alive_timeout": self._keep_alive_timeout
-            }
+                "keep_alive_timeout": self._keep_alive_timeout,
+            },
         )
 
         return session
@@ -362,8 +363,11 @@ class BluefinServiceClient:
         current_time = time.time()
 
         # Skip health check if done recently and connection appears healthy
-        if (current_time - self.last_health_check < self.health_check_interval and
-            self._connected and not self._should_recreate_session()):
+        if (
+            current_time - self.last_health_check < self.health_check_interval
+            and self._connected
+            and not self._should_recreate_session()
+        ):
             return self._connected
 
         try:
@@ -386,8 +390,8 @@ class BluefinServiceClient:
                     extra={
                         "client_id": self.client_id,
                         "status_code": resp.status,
-                        "connected": self._connected
-                    }
+                        "connected": self._connected,
+                    },
                 )
 
                 return self._connected
@@ -430,7 +434,7 @@ class BluefinServiceClient:
                     await self._session.close()
                     logger.debug(
                         "Closed existing session for recreation",
-                        extra={"client_id": self.client_id}
+                        extra={"client_id": self.client_id},
                     )
                 except Exception as e:
                     exception_handler.log_exception_with_context(
@@ -464,8 +468,8 @@ class BluefinServiceClient:
                     "client_id": self.client_id,
                     "service_url": self.service_url,
                     "session_age": time.time() - self._session_created_at,
-                    "request_count": self._session_request_count
-                }
+                    "request_count": self._session_request_count,
+                },
             )
 
             # Check service health (health endpoint doesn't require auth)
@@ -479,7 +483,9 @@ class BluefinServiceClient:
                 },
             )
 
-            async with self._session.get(health_url, timeout=self.quick_timeout) as resp:
+            async with self._session.get(
+                health_url, timeout=self.quick_timeout
+            ) as resp:
                 self._session_request_count += 1
 
                 if resp.status == 200:
@@ -704,32 +710,32 @@ class BluefinServiceClient:
                 method="POST",
                 endpoint="/orders",
                 operation="place_order",
-                json_data=order_data
+                json_data=order_data,
             )
             return {"status": "success", "order": result}
 
         except BluefinServiceAuthError as e:
             logger.error(
                 f"Authentication failed placing order: {e}",
-                extra={"client_id": self.client_id, "operation": "place_order"}
+                extra={"client_id": self.client_id, "operation": "place_order"},
             )
             return {"status": "error", "message": "Authentication failed"}
 
         except BluefinServiceRateLimitError as e:
             logger.error(
                 f"Rate limited placing order: {e}",
-                extra={"client_id": self.client_id, "operation": "place_order"}
+                extra={"client_id": self.client_id, "operation": "place_order"},
             )
             return {
                 "status": "error",
                 "message": f"Rate limit exceeded, retry after {e.retry_after}s",
-                "retry_after": e.retry_after
+                "retry_after": e.retry_after,
             }
 
         except BluefinServiceConnectionError as e:
             logger.error(
                 f"Connection error placing order: {e}",
-                extra={"client_id": self.client_id, "operation": "place_order"}
+                extra={"client_id": self.client_id, "operation": "place_order"},
             )
             return {"status": "error", "message": f"Connection error: {str(e)}"}
 
@@ -761,20 +767,23 @@ class BluefinServiceClient:
             await self._make_request_with_retry(
                 method="DELETE",
                 endpoint=f"/orders/{order_id}",
-                operation="cancel_order"
+                operation="cancel_order",
             )
             return True
 
-        except (BluefinServiceAuthError, BluefinServiceRateLimitError,
-                BluefinServiceConnectionError) as e:
+        except (
+            BluefinServiceAuthError,
+            BluefinServiceRateLimitError,
+            BluefinServiceConnectionError,
+        ) as e:
             logger.error(
                 f"Service error canceling order {order_id}: {e}",
                 extra={
                     "client_id": self.client_id,
                     "operation": "cancel_order",
                     "order_id": order_id,
-                    "error_type": type(e).__name__
-                }
+                    "error_type": type(e).__name__,
+                },
             )
             return False
 
@@ -807,20 +816,23 @@ class BluefinServiceClient:
                 method="GET",
                 endpoint="/market/ticker",
                 operation="get_market_ticker",
-                params={"symbol": symbol}
+                params={"symbol": symbol},
             )
             return result
 
-        except (BluefinServiceAuthError, BluefinServiceRateLimitError,
-                BluefinServiceConnectionError) as e:
+        except (
+            BluefinServiceAuthError,
+            BluefinServiceRateLimitError,
+            BluefinServiceConnectionError,
+        ) as e:
             logger.error(
                 f"Service error getting ticker for {symbol}: {e}",
                 extra={
                     "client_id": self.client_id,
                     "operation": "get_market_ticker",
                     "symbol": symbol,
-                    "error_type": type(e).__name__
-                }
+                    "error_type": type(e).__name__,
+                },
             )
             return {"price": "0", "error": str(e)}
 
@@ -854,12 +866,15 @@ class BluefinServiceClient:
                 method="POST",
                 endpoint="/leverage",
                 operation="set_leverage",
-                json_data={"symbol": symbol, "leverage": leverage}
+                json_data={"symbol": symbol, "leverage": leverage},
             )
             return True
 
-        except (BluefinServiceAuthError, BluefinServiceRateLimitError,
-                BluefinServiceConnectionError) as e:
+        except (
+            BluefinServiceAuthError,
+            BluefinServiceRateLimitError,
+            BluefinServiceConnectionError,
+        ) as e:
             logger.error(
                 f"Service error setting leverage for {symbol}: {e}",
                 extra={
@@ -867,8 +882,8 @@ class BluefinServiceClient:
                     "operation": "set_leverage",
                     "symbol": symbol,
                     "leverage": leverage,
-                    "error_type": type(e).__name__
-                }
+                    "error_type": type(e).__name__,
+                },
             )
             return False
 
@@ -908,7 +923,7 @@ class BluefinServiceClient:
                 method="GET",
                 endpoint="/market/candles",
                 operation="get_candlestick_data",
-                params=params
+                params=params,
             )
 
             candles = result.get("candles", [])
@@ -920,8 +935,8 @@ class BluefinServiceClient:
                     extra={
                         "client_id": self.client_id,
                         "operation": "get_candlestick_data",
-                        "candle_count": len(candles)
-                    }
+                        "candle_count": len(candles),
+                    },
                 )
                 return candles
             else:
@@ -930,8 +945,8 @@ class BluefinServiceClient:
                     extra={
                         "client_id": self.client_id,
                         "operation": "get_candlestick_data",
-                        "raw_candle_count": len(candles)
-                    }
+                        "raw_candle_count": len(candles),
+                    },
                 )
                 return []
 
@@ -941,8 +956,8 @@ class BluefinServiceClient:
                 extra={
                     "client_id": self.client_id,
                     "operation": "get_candlestick_data",
-                    "error_type": type(e).__name__
-                }
+                    "error_type": type(e).__name__,
+                },
             )
             return []
         except BluefinServiceConnectionError as e:
@@ -951,8 +966,8 @@ class BluefinServiceClient:
                 extra={
                     "client_id": self.client_id,
                     "operation": "get_candlestick_data",
-                    "error_type": type(e).__name__
-                }
+                    "error_type": type(e).__name__,
+                },
             )
             return []
         except Exception as e:
@@ -999,18 +1014,18 @@ class BluefinServiceClient:
         if self._is_circuit_open():
             logger.warning(
                 "Circuit breaker is open, skipping request",
-                extra={"client_id": self.client_id, "operation": operation}
+                extra={"client_id": self.client_id, "operation": operation},
             )
             raise BluefinServiceConnectionError(
                 "Circuit breaker is open - service temporarily unavailable",
-                service_url=self.service_url
+                service_url=self.service_url,
             )
 
         # Ensure we have a healthy connection
         if not await self._check_connection_health():
             logger.error(
                 "Connection health check failed before request",
-                extra={"client_id": self.client_id, "operation": operation}
+                extra={"client_id": self.client_id, "operation": operation},
             )
             raise BluefinServiceConnectionError(
                 "Connection unhealthy", service_url=self.service_url
@@ -1106,7 +1121,10 @@ class BluefinServiceClient:
                             wait_time = min(retry_after, 30)  # Cap wait time at 30s
                             logger.info(
                                 f"Waiting {wait_time}s for rate limit reset",
-                                extra={"client_id": self.client_id, "operation": operation}
+                                extra={
+                                    "client_id": self.client_id,
+                                    "operation": operation,
+                                },
                             )
                             await asyncio.sleep(wait_time)
                             continue

@@ -23,11 +23,13 @@ logger = logging.getLogger(__name__)
 
 class BluefinWebSocketError(Exception):
     """Base exception for Bluefin WebSocket errors."""
+
     pass
 
 
 class BluefinWebSocketConnectionError(BluefinWebSocketError):
     """Exception raised when WebSocket connection fails."""
+
     pass
 
 
@@ -86,7 +88,9 @@ class BluefinWebSocketClient:
         # Subscription tracking
         self._subscribed_channels: set[str] = set()
         self._subscription_id = 1
-        self._pending_subscriptions: dict[int, str] = {}  # Track pending subscription requests
+        self._pending_subscriptions: dict[int, str] = (
+            {}
+        )  # Track pending subscription requests
 
         # Tasks
         self._connection_task: asyncio.Task | None = None
@@ -285,7 +289,7 @@ class BluefinWebSocketClient:
             "params": {
                 "channel": "globalUpdates",
                 "symbol": self.symbol,  # Symbol like "SUI-PERP"
-            }
+            },
         }
         self._pending_subscriptions[global_id] = f"globalUpdates:{self.symbol}"
         await self._send_message(global_subscription)
@@ -299,7 +303,7 @@ class BluefinWebSocketClient:
             "params": {
                 "channel": "ticker",
                 "symbol": self.symbol,
-            }
+            },
         }
         self._pending_subscriptions[ticker_id] = f"ticker:{self.symbol}"
         await self._send_message(ticker_subscription)
@@ -314,11 +318,13 @@ class BluefinWebSocketClient:
                 "channel": "kline",
                 "symbol": self.symbol,
                 "interval": self.interval,  # Format: "1m", "5m", etc.
-            }
+            },
         }
         self._pending_subscriptions[kline_id] = f"kline:{self.symbol}@{self.interval}"
         await self._send_message(kline_subscription)
-        logger.info(f"Subscribing to kline data for {self.symbol}@{self.interval} (ID: {kline_id})")
+        logger.info(
+            f"Subscribing to kline data for {self.symbol}@{self.interval} (ID: {kline_id})"
+        )
 
         # Subscribe to trade data for real-time price updates
         trade_id = self._get_next_subscription_id()
@@ -328,7 +334,7 @@ class BluefinWebSocketClient:
             "params": {
                 "channel": "trade",
                 "symbol": self.symbol,
-            }
+            },
         }
         self._pending_subscriptions[trade_id] = f"trade:{self.symbol}"
         await self._send_message(trade_subscription)
@@ -366,7 +372,9 @@ class BluefinWebSocketClient:
                     {
                         "symbol": self.symbol,
                         "message_count": self._message_count,
-                        "raw_message_length": len(message) if isinstance(message, str) else 0,
+                        "raw_message_length": (
+                            len(message) if isinstance(message, str) else 0
+                        ),
                     },
                     component="BluefinWebSocketClient",
                     operation="message_handler",
@@ -412,7 +420,9 @@ class BluefinWebSocketClient:
                 if sub_id in self._pending_subscriptions:
                     channel = self._pending_subscriptions.pop(sub_id)
                     self._subscribed_channels.add(channel)
-                    logger.info(f"Subscription confirmed: {channel} (ID: {sub_id}, result: {data['result']})")
+                    logger.info(
+                        f"Subscription confirmed: {channel} (ID: {sub_id}, result: {data['result']})"
+                    )
                 else:
                     logger.debug(f"Subscription {sub_id} confirmed: {data['result']}")
                 return
@@ -421,7 +431,9 @@ class BluefinWebSocketClient:
                 # Subscription error
                 if sub_id in self._pending_subscriptions:
                     channel = self._pending_subscriptions.pop(sub_id)
-                    logger.error(f"Subscription failed: {channel} (ID: {sub_id}, error: {data['error']})")
+                    logger.error(
+                        f"Subscription failed: {channel} (ID: {sub_id}, error: {data['error']})"
+                    )
                 else:
                     logger.error(f"Subscription {sub_id} failed: {data['error']}")
                 return
@@ -502,7 +514,9 @@ class BluefinWebSocketClient:
                 e,
                 {
                     "symbol": self.symbol,
-                    "trade_data_keys": list(data.keys()) if isinstance(data, dict) else [],
+                    "trade_data_keys": (
+                        list(data.keys()) if isinstance(data, dict) else []
+                    ),
                     "trade_processing_error": True,
                 },
                 component="BluefinWebSocketClient",
@@ -555,7 +569,9 @@ class BluefinWebSocketClient:
                 e,
                 {
                     "symbol": self.symbol,
-                    "ticker_data_keys": list(data.keys()) if isinstance(data, dict) else [],
+                    "ticker_data_keys": (
+                        list(data.keys()) if isinstance(data, dict) else []
+                    ),
                     "ticker_processing_error": True,
                 },
                 component="BluefinWebSocketClient",
@@ -633,7 +649,9 @@ class BluefinWebSocketClient:
                 e,
                 {
                     "symbol": self.symbol,
-                    "ticker_count": len(data.get("data", [])) if isinstance(data, dict) else 0,
+                    "ticker_count": (
+                        len(data.get("data", [])) if isinstance(data, dict) else 0
+                    ),
                     "bluefin_ticker_processing_error": True,
                 },
                 component="BluefinWebSocketClient",
@@ -704,7 +722,9 @@ class BluefinWebSocketClient:
                 e,
                 {
                     "symbol": self.symbol,
-                    "trades_count": len(data.get("data", [])) if isinstance(data, dict) else 0,
+                    "trades_count": (
+                        len(data.get("data", [])) if isinstance(data, dict) else 0
+                    ),
                     "bluefin_trades_processing_error": True,
                 },
                 component="BluefinWebSocketClient",
@@ -818,7 +838,9 @@ class BluefinWebSocketClient:
                                 {
                                     "symbol": self.symbol,
                                     "callback_error": True,
-                                    "has_async_callback": asyncio.iscoroutinefunction(self.on_candle_update),
+                                    "has_async_callback": asyncio.iscoroutinefunction(
+                                        self.on_candle_update
+                                    ),
                                 },
                                 component="BluefinWebSocketClient",
                                 operation="handle_bluefin_kline_update",
@@ -833,7 +855,9 @@ class BluefinWebSocketClient:
                 e,
                 {
                     "symbol": self.symbol,
-                    "kline_data_type": type(data.get("data")) if isinstance(data, dict) else None,
+                    "kline_data_type": (
+                        type(data.get("data")) if isinstance(data, dict) else None
+                    ),
                     "kline_processing_error": True,
                 },
                 component="BluefinWebSocketClient",
@@ -902,7 +926,9 @@ class BluefinWebSocketClient:
                         {
                             "symbol": self.symbol,
                             "callback_error": True,
-                            "has_async_callback": asyncio.iscoroutinefunction(self.on_candle_update),
+                            "has_async_callback": asyncio.iscoroutinefunction(
+                                self.on_candle_update
+                            ),
                         },
                         component="BluefinWebSocketClient",
                         operation="create_new_candle",
@@ -1107,7 +1133,9 @@ class BluefinWebSocketClient:
                 operation="send_message",
             )
             self._connected = False
-            raise BluefinWebSocketConnectionError("WebSocket connection lost during message send") from e
+            raise BluefinWebSocketConnectionError(
+                "WebSocket connection lost during message send"
+            ) from e
         except (OSError, ConnectionError) as e:
             exception_handler.log_exception_with_context(
                 e,
@@ -1119,7 +1147,9 @@ class BluefinWebSocketClient:
                 component="BluefinWebSocketClient",
                 operation="send_message",
             )
-            raise BluefinWebSocketConnectionError(f"Network error sending message: {e}") from e
+            raise BluefinWebSocketConnectionError(
+                f"Network error sending message: {e}"
+            ) from e
         except Exception as e:
             exception_handler.log_exception_with_context(
                 e,

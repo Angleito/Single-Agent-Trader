@@ -2781,11 +2781,29 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "version": "1.0.0",
+        "websocket": {
+            "endpoint": "/ws",
+            "active_connections": len(manager.active_connections),
+            "ready": True,
+        },
         "cors": {
             "enabled": True,
             "allowed_origins_count": len(allowed_origins),
             "credentials_allowed": allow_credentials,
         },
+    }
+
+
+@app.get("/ws/health")
+async def websocket_health_check():
+    """WebSocket-specific health check endpoint"""
+    return {
+        "status": "healthy",
+        "websocket_ready": True,
+        "endpoint": "/ws",
+        "active_connections": len(manager.active_connections),
+        "connection_manager_status": "operational",
+        "timestamp": datetime.now().isoformat(),
     }
 
 

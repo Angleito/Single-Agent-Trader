@@ -126,17 +126,20 @@ services:
       # MCP Memory Configuration (disabled for testing)
       - MCP_ENABLED=${MCP_ENABLED:-false}
       # - MCP_SERVER_URL=http://mcp-memory:8765
-      # WebSocket Publishing Configuration - Enable real-time dashboard updates with enhanced resilience
+      # WebSocket Publishing Configuration - Enhanced connection resilience for dashboard integration
       - SYSTEM__ENABLE_WEBSOCKET_PUBLISHING=${SYSTEM__ENABLE_WEBSOCKET_PUBLISHING:-true}
       - SYSTEM__WEBSOCKET_DASHBOARD_URL=${SYSTEM__WEBSOCKET_DASHBOARD_URL:-ws://dashboard-backend:8000/ws}
+      - SYSTEM__WEBSOCKET_FALLBACK_URLS=${SYSTEM__WEBSOCKET_FALLBACK_URLS:-ws://localhost:8000/ws,ws://127.0.0.1:8000/ws}
       - SYSTEM__WEBSOCKET_PUBLISH_INTERVAL=${SYSTEM__WEBSOCKET_PUBLISH_INTERVAL:-1.0}
-      - SYSTEM__WEBSOCKET_MAX_RETRIES=${SYSTEM__WEBSOCKET_MAX_RETRIES:-10}
-      - SYSTEM__WEBSOCKET_RETRY_DELAY=${SYSTEM__WEBSOCKET_RETRY_DELAY:-3}
-      - SYSTEM__WEBSOCKET_TIMEOUT=${SYSTEM__WEBSOCKET_TIMEOUT:-30}
+      - SYSTEM__WEBSOCKET_MAX_RETRIES=${SYSTEM__WEBSOCKET_MAX_RETRIES:-15}
+      - SYSTEM__WEBSOCKET_RETRY_DELAY=${SYSTEM__WEBSOCKET_RETRY_DELAY:-5}
+      - SYSTEM__WEBSOCKET_TIMEOUT=${SYSTEM__WEBSOCKET_TIMEOUT:-45}
+      - SYSTEM__WEBSOCKET_INITIAL_CONNECT_TIMEOUT=${SYSTEM__WEBSOCKET_INITIAL_CONNECT_TIMEOUT:-60}
       - SYSTEM__WEBSOCKET_QUEUE_SIZE=${SYSTEM__WEBSOCKET_QUEUE_SIZE:-500}
-      - SYSTEM__WEBSOCKET_PING_INTERVAL=${SYSTEM__WEBSOCKET_PING_INTERVAL:-15}
-      - SYSTEM__WEBSOCKET_PING_TIMEOUT=${SYSTEM__WEBSOCKET_PING_TIMEOUT:-8}
-      - SYSTEM__WEBSOCKET_HEALTH_CHECK_INTERVAL=${SYSTEM__WEBSOCKET_HEALTH_CHECK_INTERVAL:-30}
+      - SYSTEM__WEBSOCKET_PING_INTERVAL=${SYSTEM__WEBSOCKET_PING_INTERVAL:-20}
+      - SYSTEM__WEBSOCKET_PING_TIMEOUT=${SYSTEM__WEBSOCKET_PING_TIMEOUT:-10}
+      - SYSTEM__WEBSOCKET_HEALTH_CHECK_INTERVAL=${SYSTEM__WEBSOCKET_HEALTH_CHECK_INTERVAL:-45}
+      - SYSTEM__WEBSOCKET_CONNECTION_DELAY=${SYSTEM__WEBSOCKET_CONNECTION_DELAY:-10}
       # Logging Level
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       # OmniSearch Configuration
@@ -183,11 +186,14 @@ services:
           - ai-trading-bot
           - trading-bot
 
-    # Service dependencies
+    # Service dependencies with health check conditions for robust startup
     depends_on:
-      - bluefin-service
-      - mcp-omnisearch
-    #   - mcp-memory  # Temporarily disabled
+      bluefin-service:
+        condition: service_healthy
+      mcp-omnisearch:
+        condition: service_healthy
+    #   mcp-memory:  # Temporarily disabled
+    #     condition: service_healthy
 
   # MCP OmniSearch Server for Enhanced Market Intelligence
   mcp-omnisearch:

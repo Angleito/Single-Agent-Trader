@@ -92,9 +92,7 @@ class LLMAgent:
         self._cache = get_llm_cache() if self._cache_enabled else None
 
         # Performance optimization: Optimized prompt templates
-        self._use_optimized_prompts = getattr(
-            settings, "llm_use_optimized_prompts", True
-        )
+        self._use_optimized_prompts = settings.llm.use_optimized_prompts
         self._optimized_prompt_template = (
             get_optimized_prompt_template() if self._use_optimized_prompts else None
         )

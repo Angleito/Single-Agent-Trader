@@ -1371,7 +1371,7 @@ class DashboardApp {
         })
       } else if (status === 'error') {
         this.ui.log('error', 'WebSocket connection error', 'WebSocket')
-        
+
         // Use modal manager for connection errors
         this.modalManager.showErrorModal(
           `connection-error-${Date.now()}`,
@@ -1400,7 +1400,7 @@ class DashboardApp {
             ]
           }
         )
-        
+
         this.statusIndicators?.addAlert({
           type: 'error',
           title: 'Connection Error',
@@ -1510,7 +1510,7 @@ class DashboardApp {
     this.websocket.onError((error: Event | Error) => {
       console.error('WebSocket error:', error)
       const errorMessage = error instanceof Error ? error.message : 'WebSocket connection error'
-      
+
       // Use modal manager for WebSocket errors with auto-close
       this.modalManager.showErrorModal(
         `websocket-error-${Date.now()}`,

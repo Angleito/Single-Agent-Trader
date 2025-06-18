@@ -46,6 +46,7 @@ class SchaffTrendCycle:
         factor: float = 0.5,
         overbought: float = 75.0,
         oversold: float = 25.0,
+        gap_threshold_multiplier: float = None,
     ):
         """
         Initialize Schaff Trend Cycle parameters.
@@ -57,6 +58,11 @@ class SchaffTrendCycle:
             factor: Smoothing factor for recursive calculations (tcfactor in Pine Script)
             overbought: Overbought threshold level
             oversold: Oversold threshold level
+            gap_threshold_multiplier: Multiplier for time gap detection threshold.
+                None (default) uses auto-detection based on interval:
+                - High frequency (≤60s): 10x multiplier
+                - Medium frequency (≤300s): 5x multiplier
+                - Low frequency (>300s): 3x multiplier
         """
         self.length = length
         self.fast_length = fast_length
@@ -64,6 +70,7 @@ class SchaffTrendCycle:
         self.factor = factor
         self.overbought = overbought
         self.oversold = oversold
+        self.gap_threshold_multiplier = gap_threshold_multiplier
 
         # State variables for recursive calculations
         self._prev_delta: float | None = None
@@ -85,6 +92,7 @@ class SchaffTrendCycle:
                     "factor": factor,
                     "overbought": overbought,
                     "oversold": oversold,
+                    "gap_threshold_multiplier": gap_threshold_multiplier,
                 },
             },
         )
@@ -930,7 +938,26 @@ class SchaffTrendCycle:
             time_diffs = pd.Series(df.index).diff().dropna()
             if len(time_diffs) > 0:
                 median_diff = time_diffs.median()
-                large_gaps = (time_diffs > median_diff * 3).sum()
+
+                # Dynamic threshold based on interval or user-specified multiplier
+                median_seconds = (
+                    median_diff.total_seconds()
+                    if hasattr(median_diff, "total_seconds")
+                    else 0
+                )
+
+                if self.gap_threshold_multiplier is not None:
+                    threshold_multiplier = self.gap_threshold_multiplier
+                else:
+                    # Auto-detect appropriate threshold based on median interval
+                    if median_seconds <= 60:  # High frequency (≤60s)
+                        threshold_multiplier = 10
+                    elif median_seconds <= 300:  # Medium frequency (≤300s)
+                        threshold_multiplier = 5
+                    else:  # Low frequency (>300s)
+                        threshold_multiplier = 3
+
+                large_gaps = (time_diffs > median_diff * threshold_multiplier).sum()
                 if large_gaps > 0:
                     logger.warning(
                         "Large time gaps detected in Schaff Trend Cycle input data",
@@ -939,6 +966,8 @@ class SchaffTrendCycle:
                             "issue": "large_time_gaps",
                             "gap_count": int(large_gaps),
                             "median_diff": str(median_diff),
+                            "threshold_multiplier": threshold_multiplier,
+                            "median_seconds": median_seconds,
                         },
                     )
 
@@ -1024,6 +1053,7 @@ class SchaffTrendCycle:
                 "factor": self.factor,
                 "overbought": self.overbought,
                 "oversold": self.oversold,
+                "gap_threshold_multiplier": self.gap_threshold_multiplier,
             },
             "last_data_quality_check": self._last_data_quality_check,
         }

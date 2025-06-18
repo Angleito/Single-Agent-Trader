@@ -934,9 +934,13 @@ class PaperTradingAccount:
                     test_file.write_text("test")
                     test_file.unlink()
                 except PermissionError as e:
-                    raise OSError(f"Permission denied writing to {self.data_dir}: {e}") from e
+                    raise OSError(
+                        f"Permission denied writing to {self.data_dir}: {e}"
+                    ) from e
                 except Exception as e:
-                    raise OSError(f"Cannot access data directory {self.data_dir}: {e}") from e
+                    raise OSError(
+                        f"Cannot access data directory {self.data_dir}: {e}"
+                    ) from e
 
                 # Save account state with detailed error context
                 try:

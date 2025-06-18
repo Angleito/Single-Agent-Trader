@@ -29,16 +29,19 @@ logger = logging.getLogger(__name__)
 
 class PositionManagerError(Exception):
     """Base exception for position manager errors."""
+
     pass
 
 
 class PositionValidationError(PositionManagerError):
     """Exception raised when position validation fails."""
+
     pass
 
 
 class PositionStateError(PositionManagerError):
     """Exception raised when position state operations fail."""
+
     pass
 
 

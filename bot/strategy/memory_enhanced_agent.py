@@ -5,7 +5,9 @@ This module extends the base LLM agent with memory capabilities,
 allowing it to learn from past experiences and improve over time.
 """
 
+import asyncio
 import logging
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -57,6 +59,10 @@ class MemoryEnhancedLLMAgent(LLMAgent):
         # Initialize trade logger
         self.trade_logger = TradeLogger()
 
+        # Performance optimization settings
+        self._enable_api_parallelization = settings.llm.enable_api_call_parallelization
+        self._use_optimized_prompts = settings.llm.use_optimized_prompts
+
         # Enhanced prompt template for memory and sentiment context
         self._memory_prompt_addon = """
 
@@ -76,7 +82,9 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
 
         logger.info(
             f"🧠 Memory-Enhanced LLM Agent: Initialized "
-            f"(memory={'✅ enabled' if self._memory_available else '❌ disabled'})"
+            f"(memory={'✅ enabled' if self._memory_available else '❌ disabled'}, "
+            f"optimized_prompts={'✅ enabled' if self._use_optimized_prompts else '❌ disabled'}, "
+            f"api_parallelization={'✅ enabled' if self._enable_api_parallelization else '❌ disabled'})"
         )
 
     async def analyze_market(self, market_state: MarketState) -> TradeAction:
@@ -125,19 +133,36 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
         Returns:
             TradeAction with memory and sentiment enhancement
         """
+        overall_start_time = time.time()
         # Retrieve relevant past experiences
         similar_experiences = await self._retrieve_relevant_memories(market_state)
 
         # Generate memory context for the prompt
         memory_context = self._format_memory_context(similar_experiences)
 
-        # Get pattern insights if available
-        pattern_insights = await self._get_pattern_insights()
+        # PERFORMANCE OPTIMIZATION: Parallel processing of pattern insights and sentiment context
+        if self._enable_api_parallelization:
+            # These are independent operations that can be executed concurrently
+            pattern_insights, sentiment_enhanced_context = await asyncio.gather(
+                self._get_pattern_insights(),
+                self._get_sentiment_enhanced_context(market_state),
+                return_exceptions=True,
+            )
 
-        # Get sentiment-enhanced context combining memory and web search
-        sentiment_enhanced_context = await self._get_sentiment_enhanced_context(
-            market_state
-        )
+            # Handle exceptions in parallel operations
+            if isinstance(pattern_insights, Exception):
+                logger.debug(f"Pattern insights failed: {pattern_insights}")
+                pattern_insights = "No pattern insights available"
+
+            if isinstance(sentiment_enhanced_context, Exception):
+                logger.debug(f"Sentiment context failed: {sentiment_enhanced_context}")
+                sentiment_enhanced_context = ""
+        else:
+            # Sequential execution if parallelization is disabled
+            pattern_insights = await self._get_pattern_insights()
+            sentiment_enhanced_context = await self._get_sentiment_enhanced_context(
+                market_state
+            )
 
         # Enhance the prompt with memory and sentiment context
         enhanced_market_state = self._enhance_with_memory(
@@ -231,6 +256,21 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                 ],
                 execution_time_ms=0.0,  # Would be measured in actual implementation
             )
+
+        # Log overall performance metrics
+        total_execution_time = time.time() - overall_start_time
+        optimization_mode = []
+        if self._use_optimized_prompts:
+            optimization_mode.append("optimized_prompts")
+        if self._enable_api_parallelization:
+            optimization_mode.append("parallel_apis")
+
+        logger.info(
+            f"🚀 Memory-Enhanced Decision Complete: {total_execution_time:.3f}s | "
+            f"Action: {result.action} | "
+            f"Optimizations: {'+'.join(optimization_mode) if optimization_mode else 'none'} | "
+            f"Experiences: {len(similar_experiences)}"
+        )
 
         return result
 
@@ -550,14 +590,62 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             return ""
 
         try:
+            start_time = time.time()
             base_symbol = market_state.symbol.split("-")[0]
             context_lines = []
 
-            # Get crypto sentiment
-            crypto_sentiment = await self._omnisearch_client.search_crypto_sentiment(
-                base_symbol
-            )
-            if crypto_sentiment:
+            # PERFORMANCE OPTIMIZATION: Parallel API calls using asyncio.gather()
+            # Check if parallelization is enabled in configuration
+            if self._enable_api_parallelization:
+                # Define async functions for parallel execution
+                async def get_crypto_sentiment():
+                    try:
+                        return await self._omnisearch_client.search_crypto_sentiment(
+                            base_symbol
+                        )
+                    except Exception as e:
+                        logger.debug(f"Crypto sentiment search failed: {e}")
+                        return None
+
+                async def get_market_correlation():
+                    try:
+                        return await self._omnisearch_client.search_market_correlation(
+                            base_symbol, "QQQ"
+                        )
+                    except Exception as e:
+                        logger.debug(f"Market correlation search failed: {e}")
+                        return None
+
+                # Execute both API calls in parallel - This is the key performance improvement
+                crypto_sentiment, correlation = await asyncio.gather(
+                    get_crypto_sentiment(),
+                    get_market_correlation(),
+                    return_exceptions=True,
+                )
+            else:
+                # Fallback to sequential API calls if parallelization is disabled
+                try:
+                    crypto_sentiment = (
+                        await self._omnisearch_client.search_crypto_sentiment(
+                            base_symbol
+                        )
+                    )
+                except Exception as e:
+                    logger.debug(f"Crypto sentiment search failed: {e}")
+                    crypto_sentiment = None
+
+                try:
+                    correlation = (
+                        await self._omnisearch_client.search_market_correlation(
+                            base_symbol, "QQQ"
+                        )
+                    )
+                except Exception as e:
+                    logger.debug(f"Market correlation search failed: {e}")
+                    correlation = None
+
+            # Process crypto sentiment results
+            if crypto_sentiment and not isinstance(crypto_sentiment, Exception):
                 context_lines.append(
                     f"=== {base_symbol} Financial Sentiment Context ==="
                 )
@@ -575,27 +663,30 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                         f"Risk Factors: {', '.join(crypto_sentiment.risk_factors[:3])}"
                     )
 
-            # Get market correlation
-            try:
-                correlation = await self._omnisearch_client.search_market_correlation(
-                    base_symbol, "QQQ"
+            # Process correlation results
+            if correlation and not isinstance(correlation, Exception):
+                context_lines.append(
+                    f"Market Correlation: {correlation.direction.upper()} {correlation.strength.upper()} ({correlation.correlation_coefficient:+.3f})"
                 )
-                if correlation:
-                    context_lines.append(
-                        f"Market Correlation: {correlation.direction.upper()} {correlation.strength.upper()} ({correlation.correlation_coefficient:+.3f})"
-                    )
 
-                    if abs(correlation.correlation_coefficient) > 0.5:
-                        correlation_impact = (
-                            "High correlation - expect macro market influence"
-                        )
-                    else:
-                        correlation_impact = (
-                            "Low correlation - crypto moving independently"
-                        )
-                    context_lines.append(f"Correlation Impact: {correlation_impact}")
-            except Exception as e:
-                logger.debug(f"Correlation analysis failed: {e}")
+                if abs(correlation.correlation_coefficient) > 0.5:
+                    correlation_impact = (
+                        "High correlation - expect macro market influence"
+                    )
+                else:
+                    correlation_impact = "Low correlation - crypto moving independently"
+                context_lines.append(f"Correlation Impact: {correlation_impact}")
+
+            # Log performance metrics
+            execution_time = time.time() - start_time
+            method_type = (
+                "parallel" if self._enable_api_parallelization else "sequential"
+            )
+            logger.debug(
+                f"⚡ Sentiment context ({method_type}): {execution_time:.3f}s | "
+                f"Sentiment: {'✅' if crypto_sentiment and not isinstance(crypto_sentiment, Exception) else '❌'} | "
+                f"Correlation: {'✅' if correlation and not isinstance(correlation, Exception) else '❌'}"
+            )
 
             return "\n".join(context_lines) if context_lines else ""
 
@@ -784,11 +875,57 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             base_symbol = market_state.symbol.split("-")[0]
             sentiment_data = {}
 
-            # Get current sentiment data
-            crypto_sentiment = await self._omnisearch_client.search_crypto_sentiment(
-                base_symbol
-            )
-            if crypto_sentiment:
+            # PERFORMANCE OPTIMIZATION: Parallel API calls for sentiment data storage
+            if self._enable_api_parallelization:
+                # Run sentiment and correlation calls in parallel to reduce latency
+                async def get_sentiment_for_storage():
+                    try:
+                        return await self._omnisearch_client.search_crypto_sentiment(
+                            base_symbol
+                        )
+                    except Exception as e:
+                        logger.debug(f"Crypto sentiment for storage failed: {e}")
+                        return None
+
+                async def get_correlation_for_storage():
+                    try:
+                        return await self._omnisearch_client.search_market_correlation(
+                            base_symbol, "QQQ"
+                        )
+                    except Exception as e:
+                        logger.debug(f"Market correlation for storage failed: {e}")
+                        return None
+
+                # Execute both storage API calls in parallel - Key performance improvement
+                crypto_sentiment, correlation = await asyncio.gather(
+                    get_sentiment_for_storage(),
+                    get_correlation_for_storage(),
+                    return_exceptions=True,
+                )
+            else:
+                # Fallback to sequential calls
+                try:
+                    crypto_sentiment = (
+                        await self._omnisearch_client.search_crypto_sentiment(
+                            base_symbol
+                        )
+                    )
+                except Exception as e:
+                    logger.debug(f"Crypto sentiment for storage failed: {e}")
+                    crypto_sentiment = None
+
+                try:
+                    correlation = (
+                        await self._omnisearch_client.search_market_correlation(
+                            base_symbol, "QQQ"
+                        )
+                    )
+                except Exception as e:
+                    logger.debug(f"Market correlation for storage failed: {e}")
+                    correlation = None
+
+            # Process sentiment data
+            if crypto_sentiment and not isinstance(crypto_sentiment, Exception):
                 sentiment_data = {
                     "overall_sentiment": crypto_sentiment.overall_sentiment,
                     "sentiment_score": crypto_sentiment.sentiment_score,
@@ -798,19 +935,13 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                     "timestamp": datetime.now(UTC).isoformat(),
                 }
 
-            # Get correlation data
-            try:
-                correlation = await self._omnisearch_client.search_market_correlation(
-                    base_symbol, "QQQ"
-                )
-                if correlation:
-                    sentiment_data["market_correlation"] = {
-                        "coefficient": correlation.correlation_coefficient,
-                        "strength": correlation.strength,
-                        "direction": correlation.direction,
-                    }
-            except Exception as e:
-                logger.debug(f"Could not get correlation data: {e}")
+            # Process correlation data
+            if correlation and not isinstance(correlation, Exception):
+                sentiment_data["market_correlation"] = {
+                    "coefficient": correlation.correlation_coefficient,
+                    "strength": correlation.strength,
+                    "direction": correlation.direction,
+                }
 
             # Store in market state snapshot for memory server
             if sentiment_data and self.memory_server:

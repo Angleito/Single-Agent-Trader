@@ -60,7 +60,7 @@ wait_for_service() {
     local attempt=1
 
     print_status "INFO" "Waiting for $service_name to be ready on $host:$port..."
-    
+
     while [ $attempt -le $max_attempts ]; do
         if nc -z "$host" "$port" 2>/dev/null; then
             print_status "SUCCESS" "$service_name is ready on $host:$port"
@@ -69,7 +69,7 @@ wait_for_service() {
         sleep 1
         ((attempt++))
     done
-    
+
     print_status "FAILED" "$service_name not ready on $host:$port after ${max_attempts}s"
     return 1
 }
@@ -78,9 +78,9 @@ wait_for_service() {
 test_http_upgrade() {
     local url=$1
     local test_name=$2
-    
+
     print_status "INFO" "Testing HTTP WebSocket upgrade: $test_name"
-    
+
     # Test HTTP connection upgrade
     local response
     response=$(curl -s -w "%{http_code}" \
@@ -90,9 +90,9 @@ test_http_upgrade() {
         -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
         --max-time $TIMEOUT \
         "$url" 2>/dev/null || echo "000")
-    
+
     local http_code="${response: -3}"
-    
+
     if [ "$http_code" = "101" ]; then
         print_status "SUCCESS" "$test_name - HTTP upgrade successful (101 Switching Protocols)"
         return 0
@@ -112,9 +112,9 @@ test_http_upgrade() {
 test_websocket_wscat() {
     local ws_url=$1
     local test_name=$2
-    
+
     print_status "INFO" "Testing WebSocket connection with wscat: $test_name"
-    
+
     # Create a temporary script to test WebSocket
     local temp_script=$(mktemp)
     cat > "$temp_script" << 'EOF'
@@ -158,7 +158,7 @@ EOF
     if command_exists node && [ -f package.json ]; then
         local result
         result=$(timeout $TIMEOUT node "$temp_script" "$ws_url" $TIMEOUT 2>&1 || echo "FAILED")
-        
+
         if [[ "$result" == *"CONNECTED"* ]]; then
             print_status "SUCCESS" "$test_name - WebSocket connection established"
             rm -f "$temp_script"
@@ -179,9 +179,9 @@ EOF
 test_cors_preflight() {
     local url=$1
     local test_name=$2
-    
+
     print_status "INFO" "Testing CORS preflight: $test_name"
-    
+
     local response
     response=$(curl -s -w "%{http_code}" \
         -X OPTIONS \
@@ -190,9 +190,9 @@ test_cors_preflight() {
         -H "Access-Control-Request-Headers: upgrade,connection,sec-websocket-key,sec-websocket-version" \
         --max-time $TIMEOUT \
         "$url" 2>/dev/null || echo "000")
-    
+
     local http_code="${response: -3}"
-    
+
     if [ "$http_code" = "200" ] || [ "$http_code" = "204" ]; then
         print_status "SUCCESS" "$test_name - CORS preflight successful ($http_code)"
         return 0
@@ -208,18 +208,18 @@ test_cors_preflight() {
 # Function to test container networking
 test_container_networking() {
     print_status "INFO" "Testing container networking..."
-    
+
     # Check if we're running in a container
     if [ -f /.dockerenv ]; then
         print_status "INFO" "Running inside container - testing internal networking"
-        
+
         # Test container-to-container communication
         if nc -z dashboard-backend 8000 2>/dev/null; then
             print_status "SUCCESS" "Container networking - dashboard-backend:8000 reachable"
         else
             print_status "FAILED" "Container networking - dashboard-backend:8000 not reachable"
         fi
-        
+
         if nc -z dashboard-nginx 80 2>/dev/null; then
             print_status "SUCCESS" "Container networking - dashboard-nginx:80 reachable"
         else
@@ -227,14 +227,14 @@ test_container_networking() {
         fi
     else
         print_status "INFO" "Running outside container - testing Docker services"
-        
+
         # Check if Docker services are running
         if docker ps --format "table {{.Names}}" 2>/dev/null | grep -q "dashboard-backend"; then
             print_status "SUCCESS" "Container networking - dashboard-backend container is running"
         else
             print_status "SKIPPED" "Container networking - dashboard-backend container not running"
         fi
-        
+
         if docker ps --format "table {{.Names}}" 2>/dev/null | grep -q "dashboard-nginx"; then
             print_status "SUCCESS" "Container networking - dashboard-nginx container is running"
         else
@@ -245,83 +245,83 @@ test_container_networking() {
 
 # Function to run all tests
 run_all_tests() {
-    echo "===========================================" 
+    echo "==========================================="
     echo "WebSocket Connectivity Test Suite"
     echo "==========================================="
     echo ""
-    
+
     # Check required tools
     print_status "INFO" "Checking required tools..."
-    
+
     if ! command_exists curl; then
         print_status "FAILED" "curl is required but not installed"
         exit 1
     fi
-    
+
     if ! command_exists nc; then
         print_status "SKIPPED" "netcat (nc) not available - some tests will be skipped"
     fi
-    
+
     if ! command_exists node; then
         print_status "SKIPPED" "Node.js not available - WebSocket connection tests will be skipped"
     fi
-    
+
     echo ""
     print_status "INFO" "Starting connectivity tests..."
     echo ""
-    
+
     # Test 1: Direct backend HTTP upgrade
     if nc -z localhost $BACKEND_PORT 2>/dev/null; then
         test_http_upgrade "http://localhost:$BACKEND_PORT/ws" "Direct backend WebSocket (HTTP upgrade)"
     else
         print_status "FAILED" "Direct backend not reachable on localhost:$BACKEND_PORT"
     fi
-    
+
     # Test 2: Nginx proxy HTTP upgrade
     if nc -z localhost $NGINX_PORT 2>/dev/null; then
         test_http_upgrade "http://localhost:$NGINX_PORT/api/ws" "Nginx proxy WebSocket (HTTP upgrade)"
     else
         print_status "FAILED" "Nginx proxy not reachable on localhost:$NGINX_PORT"
     fi
-    
+
     # Test 3: Direct backend WebSocket connection
     if command_exists node && nc -z localhost $BACKEND_PORT 2>/dev/null; then
         test_websocket_wscat "ws://localhost:$BACKEND_PORT/ws" "Direct backend WebSocket (full connection)"
     else
         print_status "SKIPPED" "Direct backend WebSocket test - service not ready or Node.js unavailable"
     fi
-    
+
     # Test 4: Nginx proxy WebSocket connection
     if command_exists node && nc -z localhost $NGINX_PORT 2>/dev/null; then
         test_websocket_wscat "ws://localhost:$NGINX_PORT/api/ws" "Nginx proxy WebSocket (full connection)"
     else
         print_status "SKIPPED" "Nginx proxy WebSocket test - service not ready or Node.js unavailable"
     fi
-    
+
     # Test 5: CORS preflight tests
     if nc -z localhost $BACKEND_PORT 2>/dev/null; then
         test_cors_preflight "http://localhost:$BACKEND_PORT/ws" "Direct backend CORS preflight"
     fi
-    
+
     if nc -z localhost $NGINX_PORT 2>/dev/null; then
         test_cors_preflight "http://localhost:$NGINX_PORT/api/ws" "Nginx proxy CORS preflight"
     fi
-    
+
     # Test 6: Container networking
     test_container_networking
-    
+
     # Test 7: Error handling tests
     echo ""
     print_status "INFO" "Testing error handling..."
-    
+
     # Test invalid endpoint
     test_http_upgrade "http://localhost:$BACKEND_PORT/invalid-ws" "Invalid endpoint handling"
-    
+
     # Test port that should be closed
     test_http_upgrade "http://localhost:9999/ws" "Closed port handling"
-    
+
     echo ""
-    echo "===========================================" 
+    echo "==========================================="
     echo "Test Results Summary"
     echo "==========================================="
     echo -e "${GREEN}Passed: $TESTS_PASSED${NC}"
@@ -329,7 +329,7 @@ run_all_tests() {
     echo -e "${YELLOW}Skipped: $TESTS_SKIPPED${NC}"
     echo "Total: $((TESTS_PASSED + TESTS_FAILED + TESTS_SKIPPED))"
     echo ""
-    
+
     if [ $TESTS_FAILED -gt 0 ]; then
         echo -e "${RED}Some tests failed. Check the output above for details.${NC}"
         return 1
@@ -371,7 +371,7 @@ main() {
                 ;;
         esac
     done
-    
+
     # Run the test suite
     if run_all_tests; then
         exit 0

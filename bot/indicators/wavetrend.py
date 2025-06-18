@@ -44,6 +44,8 @@ class WaveTrend:
         ma_length: int = 4,
         overbought_level: float = 60.0,
         oversold_level: float = -60.0,
+        price_outlier_sigma: float = 5.0,
+        extreme_price_change_threshold: float = 0.25,
     ):
         """
         Initialize WaveTrend parameters.
@@ -54,12 +56,16 @@ class WaveTrend:
             ma_length: Moving average length for wt2 calculation
             overbought_level: Overbought threshold level
             oversold_level: Oversold threshold level
+            price_outlier_sigma: Sigma threshold for price outlier detection (default: 5.0 for crypto)
+            extreme_price_change_threshold: Threshold for extreme price changes (default: 0.25 = 25% for crypto)
         """
         self.channel_length = channel_length
         self.average_length = average_length
         self.ma_length = ma_length
         self.overbought_level = overbought_level
         self.oversold_level = oversold_level
+        self.price_outlier_sigma = price_outlier_sigma
+        self.extreme_price_change_threshold = extreme_price_change_threshold
 
         # Initialize performance tracking
         self._calculation_count = 0
@@ -74,6 +80,8 @@ class WaveTrend:
                 "ma_length": ma_length,
                 "overbought_level": overbought_level,
                 "oversold_level": oversold_level,
+                "price_outlier_sigma": price_outlier_sigma,
+                "extreme_price_change_threshold": extreme_price_change_threshold,
                 "indicator": "wavetrend",
             },
         )
@@ -304,11 +312,11 @@ class WaveTrend:
                 },
             )
 
-        # Check for price range anomalies
+        # Check for price range anomalies using configurable sigma threshold
         price_std = src.std()
         price_mean = src.mean()
         if price_std > 0:
-            outlier_threshold = 3 * price_std
+            outlier_threshold = self.price_outlier_sigma * price_std
             outliers = abs(src - price_mean) > outlier_threshold
             outlier_count = outliers.sum()
 
@@ -324,6 +332,8 @@ class WaveTrend:
                         ),
                         "price_std": round(float(price_std), 4),
                         "price_mean": round(float(price_mean), 4),
+                        "sigma_threshold": self.price_outlier_sigma,
+                        "outlier_threshold": round(float(outlier_threshold), 4),
                     },
                 )
 
@@ -1285,10 +1295,12 @@ class WaveTrend:
                 },
             )
 
-        # Check data continuity (gaps)
+        # Check data continuity (gaps) using configurable threshold
         if len(close_series) > 1:
             price_changes = close_series.pct_change().abs()
-            extreme_changes = (price_changes > 0.1).sum()  # More than 10% change
+            extreme_changes = (
+                price_changes > self.extreme_price_change_threshold
+            ).sum()
             if extreme_changes > 0:
                 logger.warning(
                     "Extreme price changes detected",
@@ -1300,6 +1312,9 @@ class WaveTrend:
                             round(float(price_changes.max()) * 100, 2)
                             if not price_changes.empty
                             else 0
+                        ),
+                        "threshold_pct": round(
+                            self.extreme_price_change_threshold * 100, 1
                         ),
                     },
                 )

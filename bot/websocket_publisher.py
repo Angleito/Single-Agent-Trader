@@ -57,17 +57,29 @@ class WebSocketPublisher:
         self.dashboard_url = getattr(
             settings.system, "websocket_dashboard_url", "ws://dashboard-backend:8000/ws"
         )
+        # Parse fallback URLs
+        fallback_urls_str = getattr(settings.system, "websocket_fallback_urls", "")
+        self.fallback_urls = [
+            url.strip() for url in fallback_urls_str.split(",") if url.strip()
+        ]
+
         self.publish_interval = getattr(
             settings.system, "websocket_publish_interval", 1.0
         )
-        self.max_retries = getattr(settings.system, "websocket_max_retries", 5)
+        self.max_retries = getattr(settings.system, "websocket_max_retries", 15)
         self.retry_delay = getattr(settings.system, "websocket_retry_delay", 5)
-        self.connection_timeout = getattr(settings.system, "websocket_timeout", 30)
-        self.ping_interval = getattr(settings.system, "websocket_ping_interval", 15)
-        self.ping_timeout = getattr(settings.system, "websocket_ping_timeout", 8)
+        self.connection_timeout = getattr(settings.system, "websocket_timeout", 45)
+        self.initial_connect_timeout = getattr(
+            settings.system, "websocket_initial_connect_timeout", 60
+        )
+        self.connection_delay = getattr(
+            settings.system, "websocket_connection_delay", 0
+        )
+        self.ping_interval = getattr(settings.system, "websocket_ping_interval", 20)
+        self.ping_timeout = getattr(settings.system, "websocket_ping_timeout", 10)
         self.queue_size = getattr(settings.system, "websocket_queue_size", 500)
         self.health_check_interval = getattr(
-            settings.system, "websocket_health_check_interval", 30
+            settings.system, "websocket_health_check_interval", 45
         )
 
         self._ws: WebSocketClientProtocol | None = None
@@ -86,6 +98,8 @@ class WebSocketPublisher:
         self._queue_worker_task: asyncio.Task | None = None
         self._connection_start_time = None
         self._consecutive_failures = 0
+        self._current_url = self.dashboard_url
+        self._url_index = 0  # Track which URL we're currently trying
 
         # Queue monitoring
         self._queue_stats = {
@@ -102,16 +116,32 @@ class WebSocketPublisher:
             "error",
         }
 
-        logger.info(f"WebSocketPublisher initialized - URL: {self.dashboard_url}")
+        logger.info(
+            f"WebSocketPublisher initialized - Primary URL: {self.dashboard_url}"
+        )
+        if self.fallback_urls:
+            logger.info(f"Fallback URLs configured: {', '.join(self.fallback_urls)}")
+        if self.connection_delay > 0:
+            logger.info(f"Connection delay configured: {self.connection_delay}s")
 
     async def initialize(self) -> bool:
-        """Initialize WebSocket connection to dashboard."""
+        """Initialize WebSocket connection to dashboard with diagnostics and delay."""
         if not self._publish_enabled:
             logger.info("WebSocket publishing disabled in settings")
             return False
 
+        # Apply connection delay if configured
+        if self.connection_delay > 0:
+            logger.info(
+                f"Applying connection delay of {self.connection_delay}s for service startup"
+            )
+            await asyncio.sleep(self.connection_delay)
+
+        # Run network diagnostics before connecting
+        await self._run_network_diagnostics()
+
         try:
-            await self._connect()
+            await self._connect_with_fallback()
             if self._connected:
                 logger.info("WebSocket publisher initialized successfully")
                 # Start automatic reconnection monitoring
@@ -133,6 +163,9 @@ class WebSocketPublisher:
                         await self._reconnect()
                     except Exception as e:
                         logger.error(f"Auto-reconnect failed: {e}")
+                        # Reset URL index to try primary URL again after failures
+                        self._url_index = 0
+                        self._current_url = self.dashboard_url
 
                 # Check connection status every 10 seconds
                 await asyncio.sleep(10)
@@ -143,16 +176,100 @@ class WebSocketPublisher:
                 logger.error(f"Error in auto-reconnect manager: {e}")
                 await asyncio.sleep(30)  # Wait longer on unexpected errors
 
-    async def _connect(self) -> None:
-        """Establish WebSocket connection to dashboard with improved parameters."""
+    async def _run_network_diagnostics(self) -> None:
+        """Run network diagnostics to check connectivity to dashboard service."""
         try:
-            logger.info(f"Connecting to dashboard WebSocket at {self.dashboard_url}")
+            logger.info("Running network diagnostics for dashboard connectivity...")
+
+            # Test DNS resolution and basic connectivity
+            urls_to_test = [self.dashboard_url] + self.fallback_urls
+
+            for url in urls_to_test[:3]:  # Test first 3 URLs
+                try:
+                    # Convert WebSocket URL to HTTP for testing
+                    http_url = (
+                        url.replace("ws://", "http://")
+                        .replace("wss://", "https://")
+                        .replace("/ws", "/health")
+                    )
+
+                    # Try to connect to health endpoint
+                    import aiohttp
+
+                    async with aiohttp.ClientSession(
+                        timeout=aiohttp.ClientTimeout(total=5)
+                    ) as session:
+                        try:
+                            async with session.get(http_url) as response:
+                                if response.status in [
+                                    200,
+                                    404,
+                                ]:  # 404 is OK - service is up
+                                    logger.info(
+                                        f"✓ Network connectivity to {http_url} confirmed"
+                                    )
+                                else:
+                                    logger.warning(
+                                        f"⚠ Network connectivity to {http_url} returned status {response.status}"
+                                    )
+                        except Exception as e:
+                            logger.warning(
+                                f"✗ Network connectivity to {http_url} failed: {e}"
+                            )
+
+                except Exception as e:
+                    logger.debug(f"Network diagnostic failed for {url}: {e}")
+
+        except Exception as e:
+            logger.warning(f"Network diagnostics failed: {e}")
+
+    async def _connect_with_fallback(self) -> None:
+        """Try to connect using primary URL and fallback URLs if needed."""
+        urls_to_try = [self.dashboard_url] + self.fallback_urls
+
+        for i, url in enumerate(urls_to_try):
+            try:
+                logger.info(
+                    f"Attempting WebSocket connection to {url} (attempt {i+1}/{len(urls_to_try)})"
+                )
+                self._current_url = url
+                self._url_index = i
+
+                await self._connect_to_url(url)
+
+                if self._connected:
+                    logger.info(f"✓ Successfully connected to {url}")
+                    return
+
+            except Exception as e:
+                logger.warning(f"✗ Connection to {url} failed: {e}")
+
+                if i < len(urls_to_try) - 1:
+                    logger.info("Trying next fallback URL...")
+                    await asyncio.sleep(2)  # Brief delay between attempts
+                else:
+                    logger.error(
+                        "All WebSocket URLs failed, no more fallbacks available"
+                    )
+                    raise Exception("All WebSocket connection attempts failed") from None
+
+    async def _connect_to_url(self, url: str) -> None:
+        """Connect to a specific WebSocket URL."""
+        try:
+            logger.info(f"Connecting to dashboard WebSocket at {url}")
             self._connection_start_time = time.time()
+
+            # Use initial connection timeout for first attempt, regular timeout for retries
+            timeout = (
+                self.initial_connect_timeout
+                if self._retry_count == 0
+                else self.connection_timeout
+            )
 
             # Enhanced connection parameters for better stability
             self._ws = await websockets.connect(
-                self.dashboard_url,
-                timeout=self.connection_timeout,
+                url,
+                timeout=timeout,
                 ping_interval=self.ping_interval,  # Configurable ping interval
                 ping_timeout=self.ping_timeout,  # Configurable ping timeout
                 close_timeout=5,  # Quick close timeout
@@ -216,7 +333,7 @@ class WebSocketPublisher:
         await asyncio.sleep(delay)
 
         try:
-            await self._connect()
+            await self._connect_with_fallback()
         except Exception as e:
             logger.error(f"Reconnection attempt {self._retry_count} failed: {e}")
             # If we've failed multiple times, check if URL is reachable
@@ -643,27 +760,41 @@ class WebSocketPublisher:
                 self._ws = None
 
     async def _check_endpoint_health(self) -> None:
-        """Check if the WebSocket endpoint is reachable."""
+        """Check if the WebSocket endpoints are reachable."""
         try:
-            # Try a simple HTTP request to the base URL
+            # Try a simple HTTP request to the URLs
             import aiohttp
 
-            base_url = (
-                self.dashboard_url.replace("ws://", "http://")
-                .replace("wss://", "https://")
-                .replace("/ws", "/health")
-            )
+            urls_to_check = [self.dashboard_url] + self.fallback_urls
 
             async with aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as session:
-                async with session.get(base_url) as response:
-                    if response.status == 200:
-                        logger.info("Dashboard endpoint is reachable")
-                    else:
-                        logger.warning(
-                            f"Dashboard endpoint returned status {response.status}"
+                for url in urls_to_check:
+                    try:
+                        base_url = (
+                            url.replace("ws://", "http://")
+                            .replace("wss://", "https://")
+                            .replace("/ws", "/health")
                         )
+
+                        async with session.get(base_url) as response:
+                            if response.status in [
+                                200,
+                                404,
+                            ]:  # 404 is OK - service is up
+                                logger.info(
+                                    f"Dashboard endpoint {base_url} is reachable"
+                                )
+                            else:
+                                logger.warning(
+                                    f"Dashboard endpoint {base_url} returned status {response.status}"
+                                )
+                    except Exception as e:
+                        logger.warning(
+                            f"Dashboard endpoint {url} health check failed: {e}"
+                        )
+
         except Exception as e:
             logger.warning(f"Dashboard endpoint health check failed: {e}")
 

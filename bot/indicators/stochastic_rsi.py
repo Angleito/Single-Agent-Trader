@@ -48,6 +48,7 @@ class StochasticRSI:
         smooth_d: int = 3,
         use_log: bool = False,
         use_avg: bool = False,
+        gap_threshold_multiplier: float = None,
     ):
         """
         Initialize Stochastic RSI parameters.
@@ -59,6 +60,11 @@ class StochasticRSI:
             smooth_d: D line smoothing period
             use_log: Apply logarithmic transformation to source
             use_avg: Use average of K and D lines for K output
+            gap_threshold_multiplier: Multiplier for time gap detection threshold.
+                None (default) uses auto-detection based on interval:
+                - High frequency (≤60s): 10x multiplier
+                - Medium frequency (≤300s): 5x multiplier
+                - Low frequency (>300s): 3x multiplier
         """
         self.stoch_length = stoch_length
         self.rsi_length = rsi_length
@@ -66,6 +72,7 @@ class StochasticRSI:
         self.smooth_d = smooth_d
         self.use_log = use_log
         self.use_avg = use_avg
+        self.gap_threshold_multiplier = gap_threshold_multiplier
 
         # Initialize performance tracking
         self._calculation_count = 0
@@ -582,11 +589,30 @@ class StochasticRSI:
 
         # Check data continuity
         if len(close_series) > 1:
-            # Check for gaps in data (this is a simple heuristic)
+            # Check for gaps in data
             time_diffs = pd.Series(df.index).diff().dropna()
             if len(time_diffs) > 0:
                 median_diff = time_diffs.median()
-                large_gaps = (time_diffs > median_diff * 3).sum()
+
+                # Dynamic threshold based on interval or user-specified multiplier
+                median_seconds = (
+                    median_diff.total_seconds()
+                    if hasattr(median_diff, "total_seconds")
+                    else 0
+                )
+
+                if self.gap_threshold_multiplier is not None:
+                    threshold_multiplier = self.gap_threshold_multiplier
+                else:
+                    # Auto-detect appropriate threshold based on median interval
+                    if median_seconds <= 60:  # High frequency (≤60s)
+                        threshold_multiplier = 10
+                    elif median_seconds <= 300:  # Medium frequency (≤300s)
+                        threshold_multiplier = 5
+                    else:  # Low frequency (>300s)
+                        threshold_multiplier = 3
+
+                large_gaps = (time_diffs > median_diff * threshold_multiplier).sum()
                 if large_gaps > 0:
                     logger.warning(
                         "Large time gaps detected in Stochastic RSI input data",
@@ -595,6 +621,8 @@ class StochasticRSI:
                             "issue": "large_time_gaps",
                             "gap_count": int(large_gaps),
                             "median_diff": str(median_diff),
+                            "threshold_multiplier": threshold_multiplier,
+                            "median_seconds": median_seconds,
                         },
                     )
 
@@ -622,6 +650,7 @@ class StochasticRSI:
                 "smooth_d": self.smooth_d,
                 "use_log": self.use_log,
                 "use_avg": self.use_avg,
+                "gap_threshold_multiplier": self.gap_threshold_multiplier,
             },
             "last_data_quality_check": self._last_data_quality_check,
         }

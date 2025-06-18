@@ -140,14 +140,14 @@ class BluefinSDKService:
         self.circuit_half_open_calls = 0
         self.circuit_state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
         self._cleanup_complete = False
-        
+
         # Failure type tracking for better circuit breaker decisions
         self.failure_types = {
             "connection": 0,
             "timeout": 0,
             "server_error": 0,
             "rate_limit": 0,
-            "auth": 0
+            "auth": 0,
         }
         self.last_failure_reset = time.time()
 
@@ -266,9 +266,9 @@ class BluefinSDKService:
 
         This method specifically handles the case where the Bluefin SDK expects the actual
         enum value (accessed via .value) rather than the enum object itself.
-        
+
         FIXES IMPLEMENTED:
-        - Robust type checking to handle both string and enum objects 
+        - Robust type checking to handle both string and enum objects
         - Multiple fallback approaches for enum attribute access (.value, .name, str())
         - Safe getattr() usage to prevent AttributeError on missing attributes
         - Graceful degradation to string conversion when enum access fails
@@ -369,7 +369,6 @@ class BluefinSDKService:
             )
             return symbol  # Return original symbol as ultimate fallback
 
-
     def _validate_interval(self, interval: str) -> bool:
         """Validate if interval is supported by Bluefin API."""
         if not interval or not isinstance(interval, str):
@@ -418,7 +417,7 @@ class BluefinSDKService:
     def _get_circuit_state(self) -> str:
         """Get current circuit breaker state with transitions."""
         current_time = time.time()
-        
+
         if self.circuit_state == "OPEN":
             if current_time >= self.circuit_open_until:
                 # Transition to HALF_OPEN
@@ -429,39 +428,39 @@ class BluefinSDKService:
                     extra={
                         "service_id": self.service_id,
                         "failure_count": self.failure_count,
-                        "failure_types": self.failure_types
-                    }
+                        "failure_types": self.failure_types,
+                    },
                 )
-        
+
         return self.circuit_state
-        
+
     async def _is_circuit_open(self) -> bool:
         """Check if circuit breaker is open or half-open with call limit."""
         state = self._get_circuit_state()
-        
+
         if state == "OPEN":
             return True
         elif state == "HALF_OPEN":
             if self.circuit_half_open_calls >= self.circuit_half_open_max_calls:
                 logger.warning(
                     "Circuit breaker HALF_OPEN call limit exceeded",
-                    extra={"service_id": self.service_id}
+                    extra={"service_id": self.service_id},
                 )
                 return True
-        
+
         return False
 
     def _record_api_failure(self, failure_type: str = "unknown"):
         """Record API failure for enhanced circuit breaker."""
         self.failure_count += 1
-        
+
         # Track failure type for better diagnostics
         if failure_type in self.failure_types:
             self.failure_types[failure_type] += 1
-        
+
         current_time = time.time()
         state = self._get_circuit_state()
-        
+
         if state == "HALF_OPEN":
             # Failure in half-open state - go back to open
             self.circuit_state = "OPEN"
@@ -472,8 +471,8 @@ class BluefinSDKService:
                     "service_id": self.service_id,
                     "failure_type": failure_type,
                     "total_failures": self.failure_count,
-                    "failure_types": self.failure_types
-                }
+                    "failure_types": self.failure_types,
+                },
             )
         elif state == "CLOSED" and self.failure_count >= self.circuit_failure_threshold:
             # Too many failures - open circuit
@@ -486,17 +485,19 @@ class BluefinSDKService:
                     "failure_threshold": self.circuit_failure_threshold,
                     "recovery_timeout": self.circuit_recovery_timeout,
                     "failure_types": self.failure_types,
-                    "primary_failure_type": max(self.failure_types, key=self.failure_types.get)
-                }
+                    "primary_failure_type": max(
+                        self.failure_types, key=self.failure_types.get
+                    ),
+                },
             )
 
     def _record_api_success(self):
         """Record API success, manage circuit breaker state."""
         state = self._get_circuit_state()
-        
+
         if state == "HALF_OPEN":
             self.circuit_half_open_calls += 1
-            
+
             # If we've had enough successful calls in half-open, close the circuit
             if self.circuit_half_open_calls >= self.circuit_half_open_max_calls:
                 self.circuit_state = "CLOSED"
@@ -506,7 +507,7 @@ class BluefinSDKService:
                 self.failure_types = {key: 0 for key in self.failure_types}
                 logger.info(
                     "Circuit breaker closed after successful recovery",
-                    extra={"service_id": self.service_id}
+                    extra={"service_id": self.service_id},
                 )
         elif self.failure_count > 0:
             # Gradual recovery in closed state
@@ -514,7 +515,7 @@ class BluefinSDKService:
             self.failure_count = max(0, self.failure_count - 1)
             logger.debug(
                 f"API call succeeded, reducing failure count from {old_count} to {self.failure_count}",
-                extra={"service_id": self.service_id}
+                extra={"service_id": self.service_id},
             )
 
     async def _retry_request(self, func, *args, **kwargs):
@@ -522,13 +523,13 @@ class BluefinSDKService:
         if await self._is_circuit_open():
             logger.warning(
                 f"Circuit breaker is {self._get_circuit_state()}, skipping request",
-                extra={"service_id": self.service_id}
+                extra={"service_id": self.service_id},
             )
             return None
 
         last_exception = None
         state = self._get_circuit_state()
-        
+
         # Track half-open calls
         if state == "HALF_OPEN":
             self.circuit_half_open_calls += 1
@@ -542,20 +543,22 @@ class BluefinSDKService:
                 last_exception = e
                 self._record_api_failure("timeout")
                 if attempt < self.max_retries - 1:
-                    delay = self.base_retry_delay * (2**attempt) * random.uniform(0.8, 1.2)
+                    delay = (
+                        self.base_retry_delay * (2**attempt) * random.uniform(0.8, 1.2)
+                    )
                     logger.warning(
                         f"Timeout error (attempt {attempt + 1}/{self.max_retries}), retrying in {delay:.2f}s: {e}",
-                        extra={"service_id": self.service_id}
+                        extra={"service_id": self.service_id},
                     )
                     await asyncio.sleep(delay)
                 else:
                     logger.error(
                         f"Timeout error after {self.max_retries} attempts: {e}",
-                        extra={"service_id": self.service_id}
+                        extra={"service_id": self.service_id},
                     )
             except ClientError as e:
                 last_exception = e
-                
+
                 # Classify the error type
                 if "connection" in str(e).lower():
                     failure_type = "connection"
@@ -567,17 +570,19 @@ class BluefinSDKService:
                     failure_type = "server_error"
                 else:
                     failure_type = "connection"
-                
+
                 self._record_api_failure(failure_type)
-                
+
                 if attempt < self.max_retries - 1:
-                    delay = self.base_retry_delay * (2**attempt) * random.uniform(0.8, 1.2)
+                    delay = (
+                        self.base_retry_delay * (2**attempt) * random.uniform(0.8, 1.2)
+                    )
                     logger.warning(
                         f"Client error (attempt {attempt + 1}/{self.max_retries}), retrying in {delay:.2f}s: {e}",
                         extra={
                             "service_id": self.service_id,
-                            "failure_type": failure_type
-                        }
+                            "failure_type": failure_type,
+                        },
                     )
                     await asyncio.sleep(delay)
                 else:
@@ -585,16 +590,16 @@ class BluefinSDKService:
                         f"Client error after {self.max_retries} attempts: {e}",
                         extra={
                             "service_id": self.service_id,
-                            "failure_type": failure_type
-                        }
+                            "failure_type": failure_type,
+                        },
                     )
             except Exception as e:
                 logger.error(
                     f"Non-retryable error: {e}",
                     extra={
                         "service_id": self.service_id,
-                        "error_type": type(e).__name__
-                    }
+                        "error_type": type(e).__name__,
+                    },
                 )
                 self._record_api_failure("unknown")
                 last_exception = e

@@ -11,11 +11,13 @@ from typing import Literal
 
 class SymbolConversionError(Exception):
     """Exception raised when symbol conversion fails."""
+
     pass
 
 
 class InvalidSymbolError(Exception):
     """Exception raised when symbol is invalid."""
+
     pass
 
 
@@ -178,7 +180,7 @@ class BluefinSymbolConverter:
             except AttributeError:
                 # Continue to fallback approaches
                 pass
-        
+
         # Approach 2: Try with different case variations
         for case_variant in [base.upper(), base.lower(), base.capitalize()]:
             if hasattr(self.market_symbols_enum, case_variant):
@@ -186,17 +188,23 @@ class BluefinSymbolConverter:
                     return getattr(self.market_symbols_enum, case_variant)
                 except AttributeError:
                     continue
-        
+
         # Approach 3: Try to find by value if the enum supports it
         try:
             for attr_name in dir(self.market_symbols_enum):
-                if not attr_name.startswith('_'):
+                if not attr_name.startswith("_"):
                     try:
                         attr_value = getattr(self.market_symbols_enum, attr_name)
                         # Check if the attribute value matches our base currency
-                        if hasattr(attr_value, 'value') and str(attr_value.value).upper() == base.upper():
+                        if (
+                            hasattr(attr_value, "value")
+                            and str(attr_value.value).upper() == base.upper()
+                        ):
                             return attr_value
-                        elif hasattr(attr_value, 'name') and str(attr_value.name).upper() == base.upper():
+                        elif (
+                            hasattr(attr_value, "name")
+                            and str(attr_value.name).upper() == base.upper()
+                        ):
                             return attr_value
                         elif str(attr_value).upper() == base.upper():
                             return attr_value
@@ -206,13 +214,15 @@ class BluefinSymbolConverter:
             # If introspection fails, continue to final error
             pass
 
-        raise SymbolConversionError(f"Unknown symbol: {symbol} (base: {base}) - not found in MARKET_SYMBOLS enum")
+        raise SymbolConversionError(
+            f"Unknown symbol: {symbol} (base: {base}) - not found in MARKET_SYMBOLS enum"
+        )
 
     def from_market_symbol(self, market_symbol) -> str:
         """Convert MARKET_SYMBOLS enum to string representation."""
-        if hasattr(market_symbol, 'name'):
+        if hasattr(market_symbol, "name"):
             return f"{market_symbol.name}-PERP"
-        elif hasattr(market_symbol, 'value'):
+        elif hasattr(market_symbol, "value"):
             return f"{market_symbol.value}-PERP"
         else:
             return f"{str(market_symbol)}-PERP"
