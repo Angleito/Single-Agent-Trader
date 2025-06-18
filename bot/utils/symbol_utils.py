@@ -170,11 +170,43 @@ class BluefinSymbolConverter:
         if not self.market_symbols_enum:
             raise SymbolConversionError("MARKET_SYMBOLS enum not available")
 
-        # Try to get the enum value
+        # Enhanced enum attribute access with multiple fallback approaches
+        # Approach 1: Direct attribute access
         if hasattr(self.market_symbols_enum, base):
-            return getattr(self.market_symbols_enum, base)
+            try:
+                return getattr(self.market_symbols_enum, base)
+            except AttributeError:
+                # Continue to fallback approaches
+                pass
+        
+        # Approach 2: Try with different case variations
+        for case_variant in [base.upper(), base.lower(), base.capitalize()]:
+            if hasattr(self.market_symbols_enum, case_variant):
+                try:
+                    return getattr(self.market_symbols_enum, case_variant)
+                except AttributeError:
+                    continue
+        
+        # Approach 3: Try to find by value if the enum supports it
+        try:
+            for attr_name in dir(self.market_symbols_enum):
+                if not attr_name.startswith('_'):
+                    try:
+                        attr_value = getattr(self.market_symbols_enum, attr_name)
+                        # Check if the attribute value matches our base currency
+                        if hasattr(attr_value, 'value') and str(attr_value.value).upper() == base.upper():
+                            return attr_value
+                        elif hasattr(attr_value, 'name') and str(attr_value.name).upper() == base.upper():
+                            return attr_value
+                        elif str(attr_value).upper() == base.upper():
+                            return attr_value
+                    except (AttributeError, TypeError):
+                        continue
+        except Exception:
+            # If introspection fails, continue to final error
+            pass
 
-        raise SymbolConversionError(f"Unknown symbol: {symbol} (base: {base})")
+        raise SymbolConversionError(f"Unknown symbol: {symbol} (base: {base}) - not found in MARKET_SYMBOLS enum")
 
     def from_market_symbol(self, market_symbol) -> str:
         """Convert MARKET_SYMBOLS enum to string representation."""

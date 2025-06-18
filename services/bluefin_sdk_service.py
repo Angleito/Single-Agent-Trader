@@ -266,6 +266,12 @@ class BluefinSDKService:
 
         This method specifically handles the case where the Bluefin SDK expects the actual
         enum value (accessed via .value) rather than the enum object itself.
+        
+        FIXES IMPLEMENTED:
+        - Robust type checking to handle both string and enum objects 
+        - Multiple fallback approaches for enum attribute access (.value, .name, str())
+        - Safe getattr() usage to prevent AttributeError on missing attributes
+        - Graceful degradation to string conversion when enum access fails
 
         Args:
             symbol: Symbol string like "BTC-PERP", "ETH-PERP", "SUI-PERP"
