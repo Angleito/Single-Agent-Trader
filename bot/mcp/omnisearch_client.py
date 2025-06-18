@@ -484,7 +484,56 @@ class OmniSearchClient:
             )
 
             correlation_data = results.get("correlation", {})
-            correlation_coeff = correlation_data.get("coefficient", 0.0)
+            raw_correlation_coeff = correlation_data.get("coefficient", 0.0)
+            
+            # Debug logging for API response
+            logger.debug(f"API correlation response for {crypto_base}-{nasdaq_base}: {correlation_data}")
+            
+            # Validate and clamp correlation coefficient to valid range
+            try:
+                correlation_coeff = float(raw_correlation_coeff)
+                
+                # Check for extremely large values that might be percentages, timeframe values, or other units
+                if abs(correlation_coeff) > 10.0:
+                    logger.warning(
+                        f"Extremely large correlation value {correlation_coeff} from API for {crypto_base}-{nasdaq_base}. "
+                        f"Timeframe: {timeframe}. Likely incorrect unit or data mixup. Raw API response: {correlation_data}"
+                    )
+                    
+                    # Check if this might be a timeframe value (e.g., 30 from "30d")
+                    timeframe_numeric = None
+                    if timeframe and timeframe.endswith('d'):
+                        try:
+                            timeframe_numeric = int(timeframe[:-1])
+                        except ValueError:
+                            pass
+                    
+                    if timeframe_numeric and abs(correlation_coeff) == timeframe_numeric:
+                        logger.error(
+                            f"Correlation coefficient {correlation_coeff} matches timeframe {timeframe}! "
+                            f"API likely returned timeframe value instead of correlation. Defaulting to 0.0."
+                        )
+                        correlation_coeff = 0.0
+                    elif abs(correlation_coeff) <= 100.0:
+                        # If it looks like a percentage (e.g., 30 meaning 30%), normalize it
+                        correlation_coeff = correlation_coeff / 100.0
+                        logger.warning(f"Normalized correlation from {raw_correlation_coeff} to {correlation_coeff} (divided by 100)")
+                    else:
+                        # For even larger values, default to neutral correlation
+                        logger.warning(f"Value {correlation_coeff} too large even for percentage, defaulting to 0.0")
+                        correlation_coeff = 0.0
+                
+                # Final clamp to valid correlation range [-1, 1]
+                if abs(correlation_coeff) > 1.0:
+                    logger.warning(f"Clamping correlation coefficient {correlation_coeff} to valid range [-1, 1]")
+                    correlation_coeff = max(-1.0, min(1.0, correlation_coeff))
+                        
+            except (ValueError, TypeError) as e:
+                logger.error(
+                    f"Invalid correlation coefficient type {type(raw_correlation_coeff)}: {raw_correlation_coeff} "
+                    f"from API for {crypto_base}-{nasdaq_base}. Using fallback value 0.0. Error: {e}"
+                )
+                correlation_coeff = 0.0
 
             # Determine correlation strength and direction
             abs_corr = abs(correlation_coeff)
@@ -502,6 +551,29 @@ class OmniSearchClient:
             else:
                 direction = "neutral"
 
+            # Validate beta value
+            raw_beta = correlation_data.get("beta")
+            beta = None
+            if raw_beta is not None:
+                try:
+                    beta = float(raw_beta)
+                except (ValueError, TypeError):
+                    logger.warning(f"Invalid beta value {raw_beta} from API. Setting to None.")
+                    beta = None
+            
+            # Validate r_squared value (should be between 0 and 1)
+            raw_r_squared = correlation_data.get("r_squared")
+            r_squared = None
+            if raw_r_squared is not None:
+                try:
+                    r_squared = float(raw_r_squared)
+                    if r_squared < 0.0 or r_squared > 1.0:
+                        logger.warning(f"Invalid r_squared value {r_squared} from API. Should be between 0 and 1. Setting to None.")
+                        r_squared = None
+                except (ValueError, TypeError):
+                    logger.warning(f"Invalid r_squared value {raw_r_squared} from API. Setting to None.")
+                    r_squared = None
+
             correlation = MarketCorrelation(
                 primary_symbol=crypto_base,
                 secondary_symbol=nasdaq_base,
@@ -509,8 +581,8 @@ class OmniSearchClient:
                 timeframe=timeframe,
                 strength=strength,
                 direction=direction,
-                beta=correlation_data.get("beta"),
-                r_squared=correlation_data.get("r_squared"),
+                beta=beta,
+                r_squared=r_squared,
             )
 
             # Cache result

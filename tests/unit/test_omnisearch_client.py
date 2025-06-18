@@ -636,6 +636,89 @@ class TestOmniSearchClient:
         assert correlation.beta == 1.2
 
     @pytest.mark.asyncio
+    async def test_search_market_correlation_invalid_coefficient(self):
+        """Test market correlation search with invalid correlation coefficient."""
+        client = OmniSearchClient()
+        client._connected = True
+        client._session = AsyncMock()
+
+        # Mock API response with invalid correlation coefficient = 30 (timeframe confusion)
+        mock_response = AsyncMock()
+        mock_response.status = 200
+        mock_response.json.return_value = {
+            "correlation": {"coefficient": 30, "beta": 1.2, "r_squared": 0.35}
+        }
+        client._session.get.return_value.__aenter__.return_value = mock_response
+
+        # Mock rate limiter
+        client.rate_limiter.acquire = AsyncMock(return_value=True)
+
+        correlation = await client.search_market_correlation("BTC", "QQQ", "30d")
+
+        # Should detect timeframe confusion and default to 0.0
+        assert correlation.primary_symbol == "BTC"
+        assert correlation.secondary_symbol == "QQQ"
+        assert correlation.correlation_coefficient == 0.0
+        assert correlation.timeframe == "30d"
+        assert correlation.strength == "weak"  # 0.0 should be classified as weak
+        assert correlation.direction == "neutral"
+
+    @pytest.mark.asyncio
+    async def test_search_market_correlation_percentage_value(self):
+        """Test market correlation search with percentage value."""
+        client = OmniSearchClient()
+        client._connected = True
+        client._session = AsyncMock()
+
+        # Mock API response with percentage-like correlation coefficient = 45 (meaning 45%)
+        mock_response = AsyncMock()
+        mock_response.status = 200
+        mock_response.json.return_value = {
+            "correlation": {"coefficient": 45, "beta": 1.1, "r_squared": 0.4}
+        }
+        client._session.get.return_value.__aenter__.return_value = mock_response
+
+        # Mock rate limiter
+        client.rate_limiter.acquire = AsyncMock(return_value=True)
+
+        correlation = await client.search_market_correlation("ETH", "SPY", "7d")
+
+        # Should normalize 45 to 0.45
+        assert correlation.primary_symbol == "ETH"
+        assert correlation.secondary_symbol == "SPY"
+        assert correlation.correlation_coefficient == 0.45
+        assert correlation.timeframe == "7d"
+        assert correlation.strength == "moderate"  # 0.45 should be moderate
+        assert correlation.direction == "positive"
+
+    @pytest.mark.asyncio
+    async def test_search_market_correlation_string_coefficient(self):
+        """Test market correlation search with string correlation coefficient."""
+        client = OmniSearchClient()
+        client._connected = True
+        client._session = AsyncMock()
+
+        # Mock API response with string correlation coefficient
+        mock_response = AsyncMock()
+        mock_response.status = 200
+        mock_response.json.return_value = {
+            "correlation": {"coefficient": "invalid", "beta": 1.0, "r_squared": 0.3}
+        }
+        client._session.get.return_value.__aenter__.return_value = mock_response
+
+        # Mock rate limiter
+        client.rate_limiter.acquire = AsyncMock(return_value=True)
+
+        correlation = await client.search_market_correlation("ADA", "QQQ")
+
+        # Should default to 0.0 for invalid string
+        assert correlation.primary_symbol == "ADA"
+        assert correlation.secondary_symbol == "QQQ"
+        assert correlation.correlation_coefficient == 0.0
+        assert correlation.strength == "weak"
+        assert correlation.direction == "neutral"
+
+    @pytest.mark.asyncio
     async def test_health_check(self):
         """Test health check functionality."""
         client = OmniSearchClient()
