@@ -114,9 +114,11 @@ else:
 from .exchange.factory import ExchangeFactory
 from .indicators.vumanchu import VuManChuIndicators
 from .learning.experience_manager import ExperienceManager
+from .logging.trade_logger import TradeLogger
 from .mcp.memory_server import MCPMemoryServer
 from .mcp.omnisearch_client import OmniSearchClient
 from .paper_trading import PaperTradingAccount
+from .performance_monitor import PerformanceMonitor, PerformanceThresholds
 from .position_manager import PositionManager
 from .risk import RiskManager
 from .strategy.llm_agent import LLMAgent
@@ -352,6 +354,40 @@ class TradingEngine:
         self.trading_enabled = False  # Will be enabled after data validation
         self.data_validation_complete = False
 
+        # Initialize structured trade logger for comprehensive logging
+        self.trade_logger = TradeLogger()
+        self.logger.info("Structured trade logger initialized")
+
+        # Initialize Performance Monitor
+        self.logger.debug("Initializing performance monitoring system...")
+        performance_thresholds = PerformanceThresholds()
+        
+        # Customize thresholds for trading environment
+        if interval in ["1s", "5s", "10s", "15s"]:  # High-frequency trading
+            performance_thresholds.indicator_calculation_ms = 50
+            performance_thresholds.market_data_processing_ms = 25
+            performance_thresholds.trade_execution_ms = 500
+        elif interval in ["1m", "5m"]:  # Medium frequency
+            performance_thresholds.indicator_calculation_ms = 100
+            performance_thresholds.market_data_processing_ms = 50
+            performance_thresholds.trade_execution_ms = 1000
+        else:  # Lower frequency
+            performance_thresholds.indicator_calculation_ms = 200
+            performance_thresholds.market_data_processing_ms = 100
+            performance_thresholds.trade_execution_ms = 2000
+            
+        # Adjust thresholds for paper trading (less strict)
+        if self.dry_run:
+            performance_thresholds.indicator_calculation_ms *= 2
+            performance_thresholds.market_data_processing_ms *= 2
+            performance_thresholds.trade_execution_ms *= 3
+            
+        self.performance_monitor = PerformanceMonitor(performance_thresholds)
+        
+        # Add alert callback for critical performance issues
+        self.performance_monitor.add_alert_callback(self._handle_performance_alert)
+        
+        self.logger.info("Performance monitoring system initialized")
         self.logger.info(f"Initialized TradingEngine for {symbol} at {interval}")
 
     @property
@@ -486,15 +522,17 @@ class TradingEngine:
             if success:
                 self.logger.info("Manual trade executed successfully")
                 if self.websocket_publisher:
-                    await self.websocket_publisher.publish_trade_execution({
-                        "order_id": f"manual_{int(time.time())}",
-                        "symbol": self.symbol,
-                        "side": trade_action.action,
-                        "size": str(trade_action.size_pct),
-                        "price": "market",
-                        "status": "filled",
-                        "manual": True,
-                    })
+                    await self.websocket_publisher.publish_trade_execution(
+                        {
+                            "order_id": f"manual_{int(time.time())}",
+                            "symbol": self.symbol,
+                            "side": trade_action.action,
+                            "size": str(trade_action.size_pct),
+                            "price": "market",
+                            "status": "filled",
+                            "manual": True,
+                        }
+                    )
             else:
                 self.logger.warning("Manual trade execution failed")
 
@@ -518,6 +556,45 @@ class TradingEngine:
                 await self._execute_trade_action(close_action)
         except Exception as e:
             self.logger.error(f"Error closing positions: {e}")
+
+    def _handle_performance_alert(self, alert) -> None:
+        """
+        Handle performance alerts from the monitoring system.
+        
+        Args:
+            alert: PerformanceAlert object containing alert details
+        """
+        try:
+            # Log the alert
+            alert_level = "CRITICAL" if alert.level.value == "critical" else "WARNING"
+            self.logger.warning(f"🚨 PERFORMANCE ALERT [{alert_level}]: {alert.message}")
+            
+            # For critical alerts in paper trading, we might want to slow down execution
+            if self.dry_run and alert.level.value == "critical":
+                if "memory" in alert.metric_name.lower():
+                    self.logger.warning("High memory usage detected in paper trading mode")
+                elif "latency" in alert.metric_name.lower():
+                    self.logger.warning("High latency detected - consider reducing update frequency")
+                    
+            # Publish alert to dashboard if available
+            if hasattr(self, 'websocket_publisher') and self.websocket_publisher:
+                asyncio.create_task(
+                    self.websocket_publisher.publish_system_status(
+                        status="performance_alert",
+                        health=alert.level.value != "critical",
+                        message=alert.message,
+                        additional_data={
+                            "alert_level": alert.level.value,
+                            "metric_name": alert.metric_name,
+                            "current_value": alert.current_value,
+                            "threshold": alert.threshold,
+                            "timestamp": alert.timestamp.isoformat(),
+                        }
+                    )
+                )
+                
+        except Exception as e:
+            self.logger.error(f"Error handling performance alert: {e}")
 
     def _ensure_market_data_available(self) -> bool:
         """
@@ -982,6 +1059,15 @@ class TradingEngine:
                     "    [yellow]⚠ Dashboard command consumer unavailable[/yellow]"
                 )
 
+        # Start performance monitoring
+        console.print("  • Starting performance monitoring...")
+        try:
+            await self.performance_monitor.start_monitoring(resource_monitor_interval=5.0)
+            console.print("    [green]✓ Performance monitoring started[/green]")
+        except Exception as e:
+            console.print(f"    [yellow]⚠ Performance monitoring failed to start: {e}[/yellow]")
+            self.logger.warning(f"Performance monitoring startup failed: {e}")
+
         console.print("[green]✓ All components initialized successfully[/green]")
 
     async def _wait_for_initial_data(self) -> None:
@@ -1309,6 +1395,20 @@ class TradingEngine:
 
         loop_count = 0
         last_status_log = datetime.now(UTC)
+        
+        # Publish initial performance state to dashboard
+        if self.websocket_publisher and self.websocket_publisher.connected:
+            # Get initial price if available
+            initial_price = Decimal("0")
+            try:
+                if self.market_data is not None:
+                    latest_data = await self.market_data.get_latest_ohlcv(limit=1)
+                    if latest_data:
+                        initial_price = latest_data[-1].close
+            except Exception as e:
+                self.logger.debug(f"Could not get initial price for performance metrics: {e}")
+            
+            await self._publish_performance_metrics(initial_price)
 
         while self._running and not self._shutdown_requested:
             try:
@@ -1435,15 +1535,19 @@ class TradingEngine:
                     await asyncio.sleep(5)
                     continue
 
-                current_price = latest_data[-1].close
+                # Track market data processing performance
+                with self.performance_monitor.track_operation("market_data_processing", 
+                                                            {"symbol": self.actual_trading_symbol, 
+                                                             "data_points": str(len(latest_data))}):
+                    current_price = latest_data[-1].close
 
-                # Publish market data to dashboard
-                if self.websocket_publisher:
-                    await self.websocket_publisher.publish_market_data(
-                        symbol=self.actual_trading_symbol,
-                        price=float(current_price),
-                        timestamp=latest_data[-1].timestamp,
-                    )
+                    # Publish market data to dashboard
+                    if self.websocket_publisher:
+                        await self.websocket_publisher.publish_market_data(
+                            symbol=self.actual_trading_symbol,
+                            price=float(current_price),
+                            timestamp=latest_data[-1].timestamp,
+                        )
 
                 # Calculate technical indicators - handle different provider types
                 if self.market_data is None:
@@ -1501,12 +1605,16 @@ class TradingEngine:
                 else:
                     # Calculate indicators with dominance candle support - add error boundary
                     try:
-                        df_with_indicators = self.indicator_calc.calculate_all(
-                            df, dominance_candles=dominance_candles
-                        )
-                        indicator_state = self.indicator_calc.get_latest_state(
-                            df_with_indicators
-                        )
+                        # Track indicator calculation performance
+                        with self.performance_monitor.track_operation("indicator_calculation", 
+                                                                    {"candles": str(len(df)), 
+                                                                     "dominance_available": str(dominance_candles is not None)}):
+                            df_with_indicators = self.indicator_calc.calculate_all(
+                                df, dominance_candles=dominance_candles
+                            )
+                            indicator_state = self.indicator_calc.get_latest_state(
+                                df_with_indicators
+                            )
 
                         # Publish indicator data to dashboard
                         if self.websocket_publisher:
@@ -1691,12 +1799,27 @@ class TradingEngine:
                     f"⚡ Scalping analysis: {self.interval} candle at {latest_candle.timestamp.strftime('%H:%M:%S.%f')[:-3]} - Price: ${current_price}"
                 )
 
-                # Get LLM trading decision
+                # Get LLM trading decision with performance tracking
                 self.logger.debug(
                     f"🤔 Requesting trading decision from "
                     f"{'Memory-Enhanced' if self._memory_available else 'Standard'} LLM Agent"
                 )
-                trade_action = await self.llm_agent.analyze_market(market_state)
+                with self.performance_monitor.track_operation("llm_response", 
+                                                            {"agent_type": "memory_enhanced" if self._memory_available else "standard",
+                                                             "symbol": self.symbol}):
+                    trade_action = await self.llm_agent.analyze_market(market_state)
+
+                # Log structured trade decision with full context
+                memory_context = None
+                if hasattr(self.llm_agent, '_last_memory_context'):
+                    memory_context = self.llm_agent._last_memory_context
+                
+                self.trade_logger.log_trade_decision(
+                    market_state=market_state,
+                    trade_action=trade_action,
+                    experience_id=None,  # Will be updated after MCP recording
+                    memory_context=memory_context
+                )
 
                 # Publish LLM decision to dashboard
                 if self.websocket_publisher:
@@ -1740,6 +1863,15 @@ class TradingEngine:
                                 market_state, trade_action
                             )
                         )
+                        
+                        # Update trade decision log with experience ID
+                        if experience_id:
+                            self.trade_logger.log_trade_decision(
+                                market_state=market_state,
+                                trade_action=trade_action,
+                                experience_id=experience_id,
+                                memory_context=memory_context
+                            )
                     except Exception as e:
                         self.logger.warning(f"Failed to record trading decision: {e}")
 
@@ -1797,6 +1929,9 @@ class TradingEngine:
                 # Display periodic status updates
                 if loop_count % 10 == 0:  # Every 10 loops
                     self._display_status_update(loop_count, current_price, final_action)
+                    
+                    # Publish performance metrics to dashboard
+                    await self._publish_performance_metrics(current_price)
 
                 # Log heartbeat to confirm loop is running
                 if loop_count % 5 == 0:
@@ -1815,6 +1950,9 @@ class TradingEngine:
                             await self.memory_server.get_pattern_statistics()
                         )
                         if pattern_stats:
+                            # Log structured pattern statistics
+                            self.trade_logger.log_pattern_statistics(pattern_stats)
+                            
                             self.logger.info(
                                 "📊 === MCP Pattern Performance Update ==="
                             )
@@ -1851,6 +1989,14 @@ class TradingEngine:
                             f"OmniSearch: {'✓ Active' if hasattr(self, 'omnisearch_client') else '✗ Disabled'}"
                         )
                     last_status_log = datetime.now(UTC)
+
+                # Update paper trading performance periodically (every 10 loops or ~150 seconds)
+                if self.dry_run and self.paper_account and loop_count % 10 == 0:
+                    try:
+                        self.paper_account.update_daily_performance()
+                        self.logger.debug(f"Updated paper trading performance at loop {loop_count}")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to update paper trading performance: {e}")
 
                 # Calculate sleep time to maintain update frequency
                 loop_duration = (datetime.now(UTC) - loop_start).total_seconds()
@@ -1929,6 +2075,13 @@ class TradingEngine:
             self.logger.debug(
                 f"Trade execution started at {datetime.now(UTC).isoformat()}"
             )
+            
+            # Track trade execution performance
+            execution_tags = {
+                "action": trade_action.action,
+                "size_pct": str(trade_action.size_pct),
+                "mode": "paper" if self.dry_run else "live"
+            }
 
             # Check if we already have an open position and the action is LONG or SHORT
             if self.current_position.side != "FLAT" and trade_action.action in [
@@ -1944,17 +2097,18 @@ class TradingEngine:
                 )
                 return
 
-            # Execute trade based on mode (paper trading vs live)
-            if self.dry_run and self.paper_account:
-                # Paper trading execution
-                order = self.paper_account.execute_trade_action(
-                    trade_action, self.symbol, current_price
-                )
-            else:
-                # Live trading execution
-                order = await self.exchange_client.execute_trade_action(
-                    trade_action, self.symbol, current_price
-                )
+            # Execute trade based on mode (paper trading vs live) with performance tracking
+            with self.performance_monitor.track_operation("trade_execution", execution_tags):
+                if self.dry_run and self.paper_account:
+                    # Paper trading execution
+                    order = self.paper_account.execute_trade_action(
+                        trade_action, self.symbol, current_price
+                    )
+                else:
+                    # Live trading execution
+                    order = await self.exchange_client.execute_trade_action(
+                        trade_action, self.symbol, current_price
+                    )
 
             if order:
                 self.trade_count += 1
@@ -1976,20 +2130,26 @@ class TradingEngine:
 
                     # Publish trade execution to dashboard
                     if self.websocket_publisher:
-                        await self.websocket_publisher.publish_trade_execution({
-                            "order_id": order.id,
-                            "symbol": self.actual_trading_symbol,
-                            "side": trade_action.action,
-                            "quantity": float(order.quantity),
-                            "price": float(order.price) if order.price is not None else 0.0,
-                            "status": order.status,
-                            "trade_action": {
-                                "action": trade_action.action,
-                                "size_pct": trade_action.size_pct,
-                                "rationale": trade_action.rationale,
-                                "experience_id": experience_id,
-                            },
-                        })
+                        await self.websocket_publisher.publish_trade_execution(
+                            {
+                                "order_id": order.id,
+                                "symbol": self.actual_trading_symbol,
+                                "side": trade_action.action,
+                                "quantity": float(order.quantity),
+                                "price": (
+                                    float(order.price)
+                                    if order.price is not None
+                                    else 0.0
+                                ),
+                                "status": order.status,
+                                "trade_action": {
+                                    "action": trade_action.action,
+                                    "size_pct": trade_action.size_pct,
+                                    "rationale": trade_action.rationale,
+                                    "experience_id": experience_id,
+                                },
+                            }
+                        )
 
                     # Update position manager
                     if hasattr(order, "filled_quantity") and order.filled_quantity > 0:
@@ -2002,6 +2162,9 @@ class TradingEngine:
                             )
                         )
                         self.current_position = updated_position
+                        
+                        # Publish updated performance metrics after position change
+                        await self._publish_performance_metrics(current_price)
 
                         # Check if this order closed a position
                         if (
@@ -2024,6 +2187,25 @@ class TradingEngine:
                                 self.logger.info(
                                     "✅ MCP Integration: Completed trade tracking for closed position"
                                 )
+                                
+                                # Log structured trade outcome
+                                if experience_id and previous_position.entry_price:
+                                    entry_price = previous_position.entry_price
+                                    exit_price = order.price or current_price
+                                    pnl = previous_position.unrealized_pnl or Decimal("0")
+                                    
+                                    # Calculate duration (approximate - would need actual entry time)
+                                    duration_minutes = 0.0  # Placeholder - would calculate from entry time
+                                    
+                                    self.trade_logger.log_trade_outcome(
+                                        experience_id=experience_id,
+                                        entry_price=entry_price,
+                                        exit_price=exit_price,
+                                        pnl=pnl,
+                                        duration_minutes=duration_minutes,
+                                        insights=f"Position closed: {previous_position.side} -> FLAT"
+                                    )
+                                    
                             except TimeoutError:
                                 self.logger.warning(
                                     "Trade tracking completion timed out after 5 seconds"
@@ -2146,15 +2328,18 @@ class TradingEngine:
             if self.websocket_publisher:
                 # Create position object for the update
                 from .trading_types import Position
+
                 position_update = Position(
                     symbol=self.actual_trading_symbol,
                     side=self.current_position.side,
                     size=self.current_position.size,
                     entry_price=self.current_position.entry_price,
                     unrealized_pnl=pnl,
-                    timestamp=self.current_position.timestamp
+                    timestamp=self.current_position.timestamp,
                 )
-                await self.websocket_publisher.publish_position_update(position=position_update)
+                await self.websocket_publisher.publish_position_update(
+                    position=position_update
+                )
 
             # Update risk manager with P&L
             self.risk_manager.update_daily_pnl(Decimal("0"), pnl)
@@ -2167,21 +2352,35 @@ class TradingEngine:
                     )
                 except Exception as e:
                     self.logger.warning(f"Failed to update trade progress: {e}")
+            
+            # Log position update for ongoing trades (periodic logging, not every tick)
+            if hasattr(self, '_last_position_log_time'):
+                time_since_last_log = (datetime.now(UTC) - self._last_position_log_time).total_seconds()
+                if time_since_last_log >= 300:  # Log every 5 minutes
+                    self._log_position_update(current_price, pnl)
+                    self._last_position_log_time = datetime.now(UTC)
+            else:
+                self._log_position_update(current_price, pnl)
+                self._last_position_log_time = datetime.now(UTC)
         else:
             # Publish flat position to dashboard
             if self.websocket_publisher:
                 # Create flat position object for the update
                 from datetime import UTC, datetime
+
                 from .trading_types import Position
+
                 flat_position = Position(
                     symbol=self.actual_trading_symbol,
                     side="FLAT",
                     size=Decimal("0"),
                     entry_price=None,
                     unrealized_pnl=Decimal("0"),
-                    timestamp=datetime.now(UTC)
+                    timestamp=datetime.now(UTC),
                 )
-                await self.websocket_publisher.publish_position_update(position=flat_position)
+                await self.websocket_publisher.publish_position_update(
+                    position=flat_position
+                )
 
             # This code was moved to the main trading loop
 
@@ -2266,6 +2465,75 @@ class TradingEngine:
         current_time = datetime.now(UTC)
         return current_time.hour == 23 and current_time.minute >= 50
 
+    async def _publish_performance_metrics(self, current_price: Decimal) -> None:
+        """Publish performance metrics to the dashboard via WebSocket."""
+        if not self.websocket_publisher or not self.websocket_publisher.connected:
+            return
+            
+        try:
+            # Collect performance metrics
+            performance_metrics = {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "current_price": float(current_price),
+                "symbol": self.actual_trading_symbol,
+            }
+            
+            # Add position-specific metrics
+            if self.current_position.side != "FLAT":
+                performance_metrics.update({
+                    "position_side": self.current_position.side,
+                    "position_size": float(self.current_position.size),
+                    "entry_price": float(self.current_position.entry_price) if self.current_position.entry_price else None,
+                    "unrealized_pnl": float(self.current_position.unrealized_pnl),
+                })
+            else:
+                performance_metrics.update({
+                    "position_side": "FLAT",
+                    "position_size": 0.0,
+                    "entry_price": None,
+                    "unrealized_pnl": 0.0,
+                })
+            
+            # Add paper trading metrics if available
+            if self.dry_run and self.paper_account:
+                account_status = self.paper_account.get_account_status()
+                performance_metrics.update({
+                    "account_type": "paper",
+                    "account_balance": account_status["current_balance"],
+                    "account_equity": account_status["equity"],
+                    "total_pnl": account_status["total_pnl"],
+                    "roi_percent": account_status["roi_percent"],
+                    "margin_used": account_status["margin_used"],
+                    "margin_available": account_status["margin_available"],
+                    "open_positions": account_status["open_positions"],
+                    "total_trades": account_status["total_trades"],
+                    "max_drawdown": account_status["max_drawdown"],
+                    "peak_equity": account_status["peak_equity"],
+                })
+            else:
+                performance_metrics.update({
+                    "account_type": "live",
+                })
+            
+            # Add trading session metrics
+            uptime_seconds = (datetime.now(UTC) - self.start_time).total_seconds()
+            success_rate = (self.successful_trades / max(self.trade_count, 1)) * 100
+            
+            performance_metrics.update({
+                "session_uptime_seconds": uptime_seconds,
+                "total_trades_session": self.trade_count,
+                "successful_trades_session": self.successful_trades,
+                "success_rate_percent": success_rate,
+            })
+            
+            # Publish to dashboard
+            await self.websocket_publisher.publish_performance_update(performance_metrics)
+            
+            self.logger.debug("Published performance metrics to dashboard")
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to publish performance metrics: {e}")
+
     async def _shutdown(self) -> None:
         """
         Graceful shutdown procedure.
@@ -2349,6 +2617,12 @@ class TradingEngine:
             ):
                 console.print("  • Disconnecting from dominance data...")
                 task = asyncio.create_task(self.dominance_provider.disconnect())  # type: ignore[arg-type]
+                cleanup_tasks.append(task)
+
+            # Stop performance monitoring
+            if hasattr(self, "performance_monitor") and self.performance_monitor is not None:
+                console.print("  • Stopping performance monitoring...")
+                task = asyncio.create_task(self.performance_monitor.stop_monitoring())
                 cleanup_tasks.append(task)
 
             # Wait for all cleanup tasks with a timeout
@@ -2741,6 +3015,31 @@ class TradingEngine:
                 "wt2": 0.0,
             },
         }
+
+    def _log_position_update(self, current_price: Decimal, pnl: Decimal) -> None:
+        """
+        Log position update for ongoing trades.
+        
+        Args:
+            current_price: Current market price
+            pnl: Current unrealized P&L
+        """
+        if self.current_position.side != "FLAT":
+            # Calculate max favorable/adverse excursion placeholders
+            # In a full implementation, these would be tracked over the trade lifetime
+            max_favorable = abs(pnl) if pnl > 0 else Decimal("0")
+            max_adverse = abs(pnl) if pnl < 0 else Decimal("0")
+            
+            # Generate a simple trade ID for tracking
+            trade_id = f"{self.current_position.side}_{self.current_position.size}_{self.symbol}"
+            
+            self.trade_logger.log_position_update(
+                trade_id=trade_id,
+                current_price=current_price,
+                unrealized_pnl=pnl,
+                max_favorable=max_favorable,
+                max_adverse=max_adverse
+            )
 
 
 @click.group()
