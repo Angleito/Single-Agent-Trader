@@ -15,7 +15,7 @@ from bot.strategy.llm_agent import LLMAgent
 from bot.strategy.llm_cache import LLMResponseCache, MarketStateHasher
 from bot.strategy.optimized_prompt import OptimizedPromptTemplate
 from bot.strategy.performance_monitor import LLMPerformanceMonitor
-from bot.types import IndicatorData, MarketState, Position, TradeAction
+from bot.trading_types import IndicatorData, MarketState, Position, TradeAction
 
 
 class TestLLMPerformanceOptimization:

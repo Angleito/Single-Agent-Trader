@@ -29,7 +29,7 @@ class TradeAction(BaseModel):
         ge=0, le=50.0, description="Stop loss level as percentage (0 for HOLD/CLOSE)"
     )
     rationale: str = Field(
-        max_length=200, description="Brief explanation for the trading decision"
+        max_length=500, description="Brief explanation for the trading decision"
     )
 
     @model_validator(mode="after")
@@ -64,8 +64,8 @@ class TradeAction(BaseModel):
         return self
 
     # Optional futures-specific fields
-    leverage: int | None = Field(
-        default=None, ge=1, le=100, description="Leverage for futures positions"
+    leverage: int = Field(
+        default=1, ge=1, le=100, description="Leverage for futures positions"
     )
     reduce_only: bool = Field(
         default=False, description="Whether this is a reduce-only order for futures"

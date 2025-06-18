@@ -56,10 +56,10 @@ from .strategy.core import CoreStrategy
 
 # Strategy components
 from .strategy.llm_agent import LLMAgent
+from .trading_types import MarketData, MarketState, Position, TradeAction
 
 # Training and RAG
 from .train.reader import RAGReader
-from .trading_types import MarketData, MarketState, Position, TradeAction
 from .validator import TradeValidator
 
 __all__ = [

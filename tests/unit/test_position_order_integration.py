@@ -14,7 +14,7 @@ from pathlib import Path
 from bot.order_manager import OrderManager
 from bot.position_manager import PositionManager
 from bot.risk import RiskManager
-from bot.types import Order, OrderStatus, TradeAction
+from bot.trading_types import Order, OrderStatus, TradeAction
 
 
 class TestPositionOrderIntegration(unittest.TestCase):

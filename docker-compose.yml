@@ -96,7 +96,7 @@ services:
     # Override the default command - TRADING MODE WITH 1-MINUTE INTERVALS
     # Note: dry-run mode is controlled by SYSTEM__DRY_RUN environment variable
     # Note: Symbol should match the exchange type (BTC-USD for Coinbase, SUI-PERP for Bluefin)
-    command: ["python", "-m", "bot.main", "live", "--symbol", "BTC-USD", "--interval", "15s", "--force"]
+    command: ["python", "-m", "bot.main", "live", "--symbol", "SUI-PERP", "--interval", "15s", "--force"]
 
     # Environment variables from .env file
     env_file:
@@ -111,8 +111,8 @@ services:
       # System Configuration
       - SYSTEM__DRY_RUN=true   # PAPER TRADING MODE - SAFE
       - SYSTEM__ENVIRONMENT=development  # Development environment for paper trading
-      # Exchange Configuration - Use Coinbase for live trading
-      - EXCHANGE__EXCHANGE_TYPE=coinbase
+      # Exchange Configuration - Use setting from .env file
+      - EXCHANGE__CB_SANDBOX=true  # Force sandbox mode for development
       - BLUEFIN_USE_REAL_DATA=true
       - BLUEFIN_SERVICE_URL=http://bluefin-service:8080
       - BLUEFIN_SERVICE_API_KEY=${BLUEFIN_SERVICE_API_KEY:-}
@@ -126,12 +126,17 @@ services:
       # MCP Memory Configuration (disabled for testing)
       - MCP_ENABLED=false
       # - MCP_SERVER_URL=http://mcp-memory:8765
-      # WebSocket Publishing Configuration - Enable real-time dashboard updates
+      # WebSocket Publishing Configuration - Enable real-time dashboard updates with enhanced resilience
       - SYSTEM__ENABLE_WEBSOCKET_PUBLISHING=${SYSTEM__ENABLE_WEBSOCKET_PUBLISHING:-true}
       - SYSTEM__WEBSOCKET_DASHBOARD_URL=ws://dashboard-backend:8000/ws
       - SYSTEM__WEBSOCKET_PUBLISH_INTERVAL=1.0
-      - SYSTEM__WEBSOCKET_MAX_RETRIES=5
-      - SYSTEM__WEBSOCKET_RETRY_DELAY=5
+      - SYSTEM__WEBSOCKET_MAX_RETRIES=10
+      - SYSTEM__WEBSOCKET_RETRY_DELAY=3
+      - SYSTEM__WEBSOCKET_TIMEOUT=30
+      - SYSTEM__WEBSOCKET_QUEUE_SIZE=500
+      - SYSTEM__WEBSOCKET_PING_INTERVAL=15
+      - SYSTEM__WEBSOCKET_PING_TIMEOUT=8
+      - SYSTEM__WEBSOCKET_HEALTH_CHECK_INTERVAL=30
       # Logging Level
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       # OmniSearch Configuration

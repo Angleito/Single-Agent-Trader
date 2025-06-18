@@ -138,7 +138,7 @@ class TestBacktestEngine:
         """Test trade execution in backtest."""
         engine = BacktestEngine()
 
-        from bot.types import TradeAction
+        from bot.trading_types import TradeAction
 
         # Test opening a position
         long_action = TradeAction(

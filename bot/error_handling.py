@@ -26,13 +26,13 @@ logger = logging.getLogger(__name__)
 class FallbackCallable(Protocol):
     """Protocol for fallback callable functions."""
 
-    def __call__(self, error: Exception, context: "ErrorContext") -> Any: ...
+    def __call__(self, error: Exception, context: ErrorContext) -> Any: ...
 
 
 class AsyncFallbackCallable(Protocol):
     """Protocol for async fallback callable functions."""
 
-    async def __call__(self, error: Exception, context: "ErrorContext") -> Any: ...
+    async def __call__(self, error: Exception, context: ErrorContext) -> Any: ...
 
 
 class ErrorSeverity(Enum):

@@ -27,7 +27,7 @@ from bot.indicators.vumanchu import VuManChuIndicators
 # Import bot components
 from bot.risk import RiskManager
 from bot.strategy.llm_agent import LLMAgent
-from bot.types import IndicatorData, MarketData, MarketState, Position
+from bot.trading_types import IndicatorData, MarketData, MarketState, Position
 from bot.validator import TradeValidator
 
 logger = logging.getLogger(__name__)

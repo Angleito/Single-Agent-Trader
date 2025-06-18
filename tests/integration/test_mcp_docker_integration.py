@@ -15,7 +15,7 @@ import pytest
 
 from bot.data.dominance import DominanceData
 from bot.mcp.memory_server import MCPMemoryServer
-from bot.types import (
+from bot.trading_types import (
     IndicatorData,
     MarketData,
     MarketState,

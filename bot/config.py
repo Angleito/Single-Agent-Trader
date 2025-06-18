@@ -1018,19 +1018,29 @@ class SystemSettings(BaseModel):
         description="WebSocket publishing interval in seconds",
     )
     websocket_max_retries: int = Field(
-        default=3, ge=1, le=10, description="Maximum WebSocket reconnection attempts"
+        default=10, ge=1, le=20, description="Maximum WebSocket reconnection attempts"
     )
     websocket_retry_delay: int = Field(
-        default=5, ge=1, le=60, description="WebSocket reconnection delay in seconds"
+        default=3, ge=1, le=60, description="WebSocket reconnection base delay in seconds"
     )
     websocket_timeout: int = Field(
-        default=10, ge=5, le=60, description="WebSocket connection timeout in seconds"
+        default=30, ge=10, le=120, description="WebSocket connection timeout in seconds"
     )
     websocket_queue_size: int = Field(
-        default=100,
-        ge=10,
-        le=1000,
+        default=500,
+        ge=50,
+        le=2000,
         description="Maximum queued messages during connection issues",
+    )
+    # Additional WebSocket resilience settings
+    websocket_ping_interval: int = Field(
+        default=15, ge=5, le=60, description="WebSocket ping interval in seconds"
+    )
+    websocket_ping_timeout: int = Field(
+        default=8, ge=3, le=30, description="WebSocket ping timeout in seconds"
+    )
+    websocket_health_check_interval: int = Field(
+        default=30, ge=10, le=300, description="WebSocket health check interval in seconds"
     )
 
     @field_validator("alert_email")

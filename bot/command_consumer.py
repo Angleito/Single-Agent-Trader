@@ -79,7 +79,7 @@ class CommandConsumer:
         # Command execution state
         self.trading_paused = False
         self.emergency_stopped = False
-        self.current_risk_limits = {}
+        self.current_risk_limits: dict[str, Any] = {}
 
         # Execution callbacks - these will be set by the main bot
         self.callbacks = {
@@ -91,7 +91,7 @@ class CommandConsumer:
         }
 
         # Statistics
-        self.stats = {
+        self.stats: dict[str, Any] = {
             "commands_processed": 0,
             "commands_succeeded": 0,
             "commands_failed": 0,
@@ -146,7 +146,7 @@ class CommandConsumer:
                 logger.error(f"Error in command polling loop: {e}")
                 await asyncio.sleep(self.poll_interval * 2)  # Back off on errors
 
-    async def stop_polling(self):
+    async def stop_polling(self) -> None:
         """Stop the command polling loop."""
         self.running = False
         logger.info("Command polling stopped")
@@ -214,12 +214,12 @@ class CommandConsumer:
             success, message = await self._execute_command(command)
 
             # Update statistics
-            self.stats["commands_processed"] += 1
+            self.stats["commands_processed"] = (self.stats.get("commands_processed", 0) or 0) + 1
             if success:
-                self.stats["commands_succeeded"] += 1
+                self.stats["commands_succeeded"] = (self.stats.get("commands_succeeded", 0) or 0) + 1
                 self.stats["last_command_time"] = datetime.now().isoformat()
             else:
-                self.stats["commands_failed"] += 1
+                self.stats["commands_failed"] = (self.stats.get("commands_failed", 0) or 0) + 1
 
             # Report status back to dashboard
             status = "completed" if success else "failed"
@@ -233,7 +233,7 @@ class CommandConsumer:
             logger.error(
                 f"Error processing command {cmd_data.get('id', 'unknown')}: {e}"
             )
-            await self._report_command_status(cmd_data.get("id"), "failed", str(e))
+            await self._report_command_status(cmd_data.get("id", "unknown"), "failed", str(e))
 
     def _validate_command(self, command: BotCommand) -> bool:
         """Validate command before execution."""

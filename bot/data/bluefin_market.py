@@ -102,10 +102,16 @@ class BluefinMarketDataProvider:
         self._candle_builder_task: asyncio.Task | None = None
         self._last_candle_timestamp: datetime | None = None
 
-        # Bluefin API configuration
-        self._api_base_url = "https://dapi.api.sui-prod.bluefin.io"
-        self._ws_url = "wss://dapi.api.sui-prod.bluefin.io"
-        self._notification_ws_url = "wss://notifications.api.sui-prod.bluefin.io/"
+        # Bluefin API configuration - use environment-specific endpoints
+        network = os.getenv('EXCHANGE__BLUEFIN_NETWORK', 'mainnet').lower()
+        if network == 'testnet':
+            self._api_base_url = "https://dapi-testnet.bluefin.io"
+            self._ws_url = "wss://dapi-testnet.bluefin.io"
+            self._notification_ws_url = "wss://notifications-testnet.bluefin.io"
+        else:
+            self._api_base_url = "https://dapi.bluefin.io"
+            self._ws_url = "wss://dapi.bluefin.io"
+            self._notification_ws_url = "wss://notifications.bluefin.io"
 
         logger.info(
             f"Initialized BluefinMarketDataProvider for {self.symbol} at {self.interval}"
@@ -895,13 +901,46 @@ class BluefinMarketDataProvider:
 
     async def _fetch_bluefin_ticker_price(self) -> Decimal | None:
         """
-        Fetch real-time ticker price from Bluefin API.
+        Fetch real-time ticker price from Bluefin via service.
+
+        Returns:
+            Current price or None if unavailable
+        """
+        try:
+            # Use Bluefin service for ticker data
+            from ..exchange.bluefin_client import BluefinServiceClient
+            
+            service_client = BluefinServiceClient()
+            await service_client.connect()
+            
+            ticker_data = await service_client.get_market_ticker(self.symbol)
+            
+            if ticker_data and "price" in ticker_data:
+                price = Decimal(str(ticker_data["price"]))
+                # Update cache
+                self._price_cache["price"] = price
+                self._cache_timestamps["price"] = datetime.now(UTC)
+                logger.info(f"Fetched Bluefin ticker price: {price} for {self.symbol}")
+                return price
+            else:
+                logger.warning(f"No price data in ticker response: {ticker_data}")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error fetching Bluefin ticker price via service: {e}")
+            # Fall back to direct API call if service fails
+            return await self._fetch_bluefin_ticker_price_direct()
+
+    async def _fetch_bluefin_ticker_price_direct(self) -> Decimal | None:
+        """
+        Fetch ticker price directly from Bluefin API as fallback.
 
         Returns:
             Current price or None if unavailable
         """
         if not self._session:
-            raise RuntimeError("HTTP session not initialized")
+            logger.warning("HTTP session not initialized for direct API call")
+            return None
 
         try:
             # Make API request for ticker data
@@ -919,35 +958,17 @@ class BluefinMarketDataProvider:
                 data = await response.json()
 
                 # Extract last price from ticker data
-                if isinstance(data, dict):
-                    last_price = data.get(
-                        "lastPrice", data.get("last", data.get("price"))
-                    )
-                    if last_price:
-                        price = Decimal(str(last_price))
-                        # Update cache
-                        self._price_cache["price"] = price
-                        self._cache_timestamps["price"] = datetime.now(UTC)
-                        return price
-                elif isinstance(data, list) and data:
-                    # If multiple tickers returned, find our symbol
-                    for ticker in data:
-                        if ticker.get("symbol") == self.symbol:
-                            last_price = ticker.get(
-                                "lastPrice", ticker.get("last", ticker.get("price"))
-                            )
-                            if last_price:
-                                price = Decimal(str(last_price))
-                                # Update cache
-                                self._price_cache["price"] = price
-                                self._cache_timestamps["price"] = datetime.now(UTC)
-                                return price
+                if isinstance(data, dict) and "price" in data:
+                    price = Decimal(str(data["price"]))
+                    self._price_cache["price"] = price
+                    self._cache_timestamps["price"] = datetime.now(UTC)
+                    return price
 
                 logger.warning(f"No price data found in ticker response: {data}")
                 return None
 
         except Exception as e:
-            logger.error(f"Error fetching Bluefin ticker price: {e}")
+            logger.error(f"Error fetching Bluefin ticker price directly: {e}")
             return None
 
     async def _fetch_bluefin_candles(
@@ -959,7 +980,86 @@ class BluefinMarketDataProvider:
         limit: int,
     ) -> list[MarketData]:
         """
-        Fetch real candle data from Bluefin API.
+        Fetch real candle data from Bluefin via service.
+
+        Args:
+            symbol: Trading symbol (e.g., 'SUI-PERP')
+            interval: Candle interval
+            start_time: Start time for data
+            end_time: End time for data
+            limit: Maximum number of candles
+
+        Returns:
+            List of MarketData objects
+        """
+        try:
+            # Use Bluefin service for candle data
+            from ..exchange.bluefin_client import BluefinServiceClient
+            
+            service_client = BluefinServiceClient()
+            await service_client.connect()
+            
+            # Convert interval to Bluefin format
+            interval_map = {
+                "1m": "1m",
+                "3m": "3m", 
+                "5m": "5m",
+                "15m": "15m",
+                "30m": "30m",
+                "1h": "1h",
+                "2h": "2h",
+                "4h": "4h",
+                "1d": "1d",
+                "1w": "1w",
+                "15s": "15s",  # For high-frequency trading
+            }
+
+            bluefin_interval = interval_map.get(interval, "5m")
+
+            # Prepare request parameters
+            params = {
+                "symbol": symbol,
+                "interval": bluefin_interval,
+                "limit": limit,
+                "startTime": int(start_time.timestamp() * 1000),
+                "endTime": int(end_time.timestamp() * 1000),
+            }
+            
+            candle_data = await service_client.get_candlestick_data(params)
+            
+            # Parse candle data into MarketData objects
+            candles = []
+            for candle in candle_data:
+                if isinstance(candle, list) and len(candle) >= 6:
+                    market_data = MarketData(
+                        symbol=symbol,
+                        timestamp=datetime.fromtimestamp(candle[0] / 1000, UTC),
+                        open=Decimal(str(candle[1])),
+                        high=Decimal(str(candle[2])),
+                        low=Decimal(str(candle[3])),
+                        close=Decimal(str(candle[4])),
+                        volume=Decimal(str(candle[5])),
+                    )
+                    candles.append(market_data)
+            
+            logger.info(f"Successfully fetched {len(candles)} candles from Bluefin service")
+            return candles
+
+        except Exception as e:
+            logger.error(f"Error fetching Bluefin candles via service: {e}")
+            # Fall back to direct API call
+            return await self._fetch_bluefin_candles_direct(symbol, interval, start_time, end_time, limit)
+
+    async def _fetch_bluefin_candles_direct(
+        self,
+        symbol: str,
+        interval: str,
+        start_time: datetime,
+        end_time: datetime,
+        limit: int,
+    ) -> list[MarketData]:
+        """
+        Fetch candle data directly from Bluefin API as fallback.
 
         Args:
             symbol: Trading symbol (e.g., 'SUI-PERP')
@@ -972,7 +1072,8 @@ class BluefinMarketDataProvider:
             List of MarketData objects
         """
         if not self._session:
-            raise RuntimeError("HTTP session not initialized")
+            logger.warning("HTTP session not initialized for direct API call")
+            return self._generate_mock_historical_data(symbol, interval, limit)
 
         try:
             # Convert interval to Bluefin format
@@ -1046,7 +1147,7 @@ class BluefinMarketDataProvider:
                         )
                         candles.append(market_data)
 
-                logger.info(f"Successfully fetched {len(candles)} candles from Bluefin")
+                logger.info(f"Successfully fetched {len(candles)} candles from Bluefin directly")
                 return candles
 
         except aiohttp.ClientError as e:

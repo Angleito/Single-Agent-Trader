@@ -10,7 +10,7 @@ import pytest
 from bot.indicators.vumanchu import VuManChuIndicators
 from bot.risk import RiskManager
 from bot.strategy.core import CoreStrategy
-from bot.types import IndicatorData, MarketState, Position
+from bot.trading_types import IndicatorData, MarketState, Position
 from bot.validator import TradeValidator
 
 
@@ -122,7 +122,7 @@ class TestStrategyFlow:
         risk_manager = strategy_components["risk_manager"]
 
         # Test with a high-risk trade action
-        from bot.types import TradeAction
+        from bot.trading_types import TradeAction
 
         high_risk_action = TradeAction(
             action="LONG",

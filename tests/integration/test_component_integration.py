@@ -20,7 +20,7 @@ from bot.order_manager import OrderManager
 from bot.position_manager import PositionManager
 from bot.risk import RiskManager
 from bot.strategy.core import CoreStrategy
-from bot.types import (
+from bot.trading_types import (
     IndicatorData,
     MarketData,
     MarketState,

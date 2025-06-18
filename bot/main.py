@@ -12,7 +12,7 @@ warnings.resetwarnings()
 try:
     current_module = sys.modules[__name__]
     if not hasattr(current_module, "__warningregistry__"):
-        setattr(current_module, "__warningregistry__", {})
+        current_module.__warningregistry__ = {}  # type: ignore[attr-defined]
 except (AttributeError, TypeError):
     # Some modules don't support setting attributes
     # This is fine, warnings will still be filtered
@@ -96,13 +96,13 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-# from .websocket_publisher import WebSocketPublisher  # TODO: Implement WebSocketPublisher
 from .command_consumer import CommandConsumer
 
 # Local imports
 from .config import Settings, create_settings
 from .data.dominance import DominanceCandleBuilder, DominanceDataProvider
 from .data.market import MarketDataProvider
+from .websocket_publisher import WebSocketPublisher
 
 if TYPE_CHECKING:
     from .data.bluefin_market import BluefinMarketDataProvider
@@ -112,7 +112,6 @@ if TYPE_CHECKING:
 else:
     MarketDataProviderType = MarketDataProvider | None
 from .exchange.factory import ExchangeFactory
-from .exchange.coinbase import CoinbaseClient
 from .indicators.vumanchu import VuManChuIndicators
 from .learning.experience_manager import ExperienceManager
 from .mcp.memory_server import MCPMemoryServer
@@ -238,12 +237,8 @@ class TradingEngine:
         if self.settings.system.enable_websocket_publishing:
             self.logger.info("WebSocket publishing enabled, initializing publisher...")
             try:
-                # TODO: Implement WebSocketPublisher class
-                # self.websocket_publisher = WebSocketPublisher(self.settings)
-                self.logger.warning(
-                    "WebSocketPublisher not yet implemented, skipping initialization"
-                )
-                self.websocket_publisher = None
+                self.websocket_publisher = WebSocketPublisher(self.settings)
+                self.logger.info("WebSocketPublisher initialized successfully")
             except Exception as e:
                 self.logger.error(f"Failed to initialize WebSocket publisher: {e}")
                 self.logger.warning("Continuing without WebSocket publishing")
@@ -265,7 +260,7 @@ class TradingEngine:
                 self.command_consumer = None
 
         # Initialize LLM agent (will be either LLMAgent or MemoryEnhancedLLMAgent)
-        self.llm_agent: LLMAgent | MemoryEnhancedLLMAgent
+        self.llm_agent: Any
 
         if self.settings.mcp.enabled:
             self.logger.info("MCP memory system enabled, initializing components...")
@@ -491,15 +486,15 @@ class TradingEngine:
             if success:
                 self.logger.info("Manual trade executed successfully")
                 if self.websocket_publisher:
-                    await self.websocket_publisher.publish_trade_execution(
-                        order_id=f"manual_{int(time.time())}",
-                        symbol=trade_action.symbol,
-                        side=trade_action.action,
-                        size=str(trade_action.size_pct),
-                        price="market",
-                        status="filled",
-                        manual=True,
-                    )
+                    await self.websocket_publisher.publish_trade_execution({
+                        "order_id": f"manual_{int(time.time())}",
+                        "symbol": self.symbol,
+                        "side": trade_action.action,
+                        "size": str(trade_action.size_pct),
+                        "price": "market",
+                        "status": "filled",
+                        "manual": True,
+                    })
             else:
                 self.logger.warning("Manual trade execution failed")
 
@@ -1714,25 +1709,25 @@ class TradingEngine:
 
                     # Also publish detailed trading decision
                     await self.websocket_publisher.publish_trading_decision(
-                        request_id=f"trade_{int(datetime.now(UTC).timestamp())}",
-                        action=trade_action.action,
-                        confidence=trade_action.size_pct / 100.0,
-                        reasoning=trade_action.rationale,
-                        price=float(current_price),
-                        quantity=trade_action.size_pct / 100.0,
-                        leverage=self.settings.trading.leverage,
-                        indicators={
-                            "cipher_a": indicator_state.get("cipher_a", {}),
-                            "cipher_b": indicator_state.get("cipher_b", {}),
-                            "wave_trend_1": indicator_state.get("wave_trend_1"),
-                            "wave_trend_2": indicator_state.get("wave_trend_2"),
-                            "rsi": indicator_state.get("rsi"),
-                            "stoch_rsi": indicator_state.get("stoch_rsi"),
-                        },
-                        risk_analysis={
-                            "current_price": float(current_price),
-                            "position_size": trade_action.size_pct / 100.0,
-                            "leverage": self.settings.trading.leverage,
+                        trade_action=trade_action,
+                        symbol=self.symbol,
+                        current_price=float(current_price),
+                        context={
+                            "request_id": f"trade_{int(datetime.now(UTC).timestamp())}",
+                            "confidence": trade_action.size_pct / 100.0,
+                            "indicators": {
+                                "cipher_a": indicator_state.get("cipher_a", {}),
+                                "cipher_b": indicator_state.get("cipher_b", {}),
+                                "wave_trend_1": indicator_state.get("wave_trend_1"),
+                                "wave_trend_2": indicator_state.get("wave_trend_2"),
+                                "rsi": indicator_state.get("rsi"),
+                                "stoch_rsi": indicator_state.get("stoch_rsi"),
+                            },
+                            "risk_analysis": {
+                                "current_price": float(current_price),
+                                "position_size": trade_action.size_pct / 100.0,
+                                "leverage": self.settings.trading.leverage,
+                            },
                         },
                     )
 
@@ -1981,20 +1976,20 @@ class TradingEngine:
 
                     # Publish trade execution to dashboard
                     if self.websocket_publisher:
-                        await self.websocket_publisher.publish_trade_execution(
-                            order_id=order.id,
-                            symbol=self.actual_trading_symbol,
-                            side=trade_action.action,
-                            quantity=float(order.quantity),
-                            price=float(order.price),
-                            status=order.status,
-                            trade_action={
+                        await self.websocket_publisher.publish_trade_execution({
+                            "order_id": order.id,
+                            "symbol": self.actual_trading_symbol,
+                            "side": trade_action.action,
+                            "quantity": float(order.quantity),
+                            "price": float(order.price) if order.price is not None else 0.0,
+                            "status": order.status,
+                            "trade_action": {
                                 "action": trade_action.action,
                                 "size_pct": trade_action.size_pct,
                                 "rationale": trade_action.rationale,
                                 "experience_id": experience_id,
                             },
-                        )
+                        })
 
                     # Update position manager
                     if hasattr(order, "filled_quantity") and order.filled_quantity > 0:
@@ -2149,14 +2144,17 @@ class TradingEngine:
 
             # Publish position update to dashboard
             if self.websocket_publisher:
-                await self.websocket_publisher.publish_position_update(
+                # Create position object for the update
+                from .trading_types import Position
+                position_update = Position(
                     symbol=self.actual_trading_symbol,
-                    side=self.current_position.side.lower(),
-                    size=float(self.current_position.size),
-                    entry_price=float(self.current_position.entry_price),
-                    current_price=float(current_price),
-                    unrealized_pnl=float(pnl),
+                    side=self.current_position.side,
+                    size=self.current_position.size,
+                    entry_price=self.current_position.entry_price,
+                    unrealized_pnl=pnl,
+                    timestamp=self.current_position.timestamp
                 )
+                await self.websocket_publisher.publish_position_update(position=position_update)
 
             # Update risk manager with P&L
             self.risk_manager.update_daily_pnl(Decimal("0"), pnl)
@@ -2172,14 +2170,18 @@ class TradingEngine:
         else:
             # Publish flat position to dashboard
             if self.websocket_publisher:
-                await self.websocket_publisher.publish_position_update(
+                # Create flat position object for the update
+                from datetime import UTC, datetime
+                from .trading_types import Position
+                flat_position = Position(
                     symbol=self.actual_trading_symbol,
-                    side="flat",
-                    size=0.0,
-                    entry_price=0.0,
-                    current_price=float(current_price),
-                    unrealized_pnl=0.0,
+                    side="FLAT",
+                    size=Decimal("0"),
+                    entry_price=None,
+                    unrealized_pnl=Decimal("0"),
+                    timestamp=datetime.now(UTC)
                 )
+                await self.websocket_publisher.publish_position_update(position=flat_position)
 
             # This code was moved to the main trading loop
 

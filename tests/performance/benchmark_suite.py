@@ -26,7 +26,7 @@ from bot.config import create_settings
 # Import bot components
 from bot.indicators.vumanchu import CipherA, CipherB, VuManChuIndicators
 from bot.strategy.llm_agent import LLMAgent
-from bot.types import IndicatorData, MarketState, Position
+from bot.trading_types import IndicatorData, MarketState, Position
 
 logger = logging.getLogger(__name__)
 

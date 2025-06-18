@@ -17,7 +17,7 @@ import pytest
 from bot.data.bluefin_market import BluefinMarketDataProvider
 from bot.data.market import MarketDataProvider
 from bot.indicators.vumanchu import CipherA
-from bot.types import MarketData
+from bot.trading_types import MarketData
 
 logger = logging.getLogger(__name__)
 

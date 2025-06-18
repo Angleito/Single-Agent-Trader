@@ -134,25 +134,30 @@ class BluefinWebSocketClient:
         logger.info("Disconnected from Bluefin WebSocket")
 
     async def _connection_handler(self) -> None:
-        """Handle WebSocket connection with automatic reconnection."""
+        """Handle WebSocket connection with enhanced reconnection logic."""
+        consecutive_failures = 0
+        
         while True:
             try:
                 await self._connect_and_subscribe()
                 self._reconnect_attempts = 0
+                consecutive_failures = 0  # Reset on successful connection
 
                 # Handle incoming messages
                 await self._message_handler()
 
             except ConnectionClosed as e:
-                logger.warning(f"WebSocket connection closed: {e}")
+                logger.warning(f"Bluefin WebSocket connection closed: {e}")
                 self._connected = False
                 self._ws = None
+                consecutive_failures += 1
 
             except Exception as e:
-                logger.error(f"WebSocket error: {e}")
+                logger.error(f"Bluefin WebSocket error: {e}")
                 self._connected = False
                 self._ws = None
                 self._error_count += 1
+                consecutive_failures += 1
 
             # Check if we should reconnect
             if self._reconnect_attempts >= self._max_reconnect_attempts:
@@ -160,27 +165,42 @@ class BluefinWebSocketClient:
                 break
 
             self._reconnect_attempts += 1
-            delay = min(
-                self._reconnect_delay * (2 ** (self._reconnect_attempts - 1)), 60
-            )
+            
+            # Enhanced exponential backoff with jitter
+            base_delay = self._reconnect_delay * (2 ** (self._reconnect_attempts - 1))
+            jitter = base_delay * 0.1 * (0.5 - (asyncio.get_event_loop().time() % 1))
+            delay = min(base_delay + jitter, 60)
+            
+            # Additional delay for consecutive failures
+            if consecutive_failures > 3:
+                delay = min(delay * 1.5, 120)
+                logger.warning(f"Multiple consecutive failures ({consecutive_failures}), extending delay")
+            
             logger.info(
-                f"Reconnecting in {delay}s (attempt {self._reconnect_attempts}/{self._max_reconnect_attempts})"
+                f"Reconnecting to Bluefin in {delay:.1f}s (attempt {self._reconnect_attempts}/{self._max_reconnect_attempts})"
             )
 
             await asyncio.sleep(delay)
 
     async def _connect_and_subscribe(self) -> None:
         """Establish WebSocket connection and subscribe to channels."""
-        # Connect to WebSocket
+        # Enhanced connection parameters for better stability
         self._ws = await websockets.connect(
             self.NOTIFICATION_WS_URL,
-            ping_interval=20,
-            ping_timeout=10,
-            close_timeout=10,
+            ping_interval=15,     # More frequent pings
+            ping_timeout=8,       # Shorter timeout to detect issues faster
+            close_timeout=5,      # Quick close timeout
+            max_size=2**20,       # 1MB max message size
+            compression=None,     # Disable compression for performance
+            extra_headers={
+                "User-Agent": "AI-Trading-Bot-Bluefin-Client/1.0",
+                "Accept": "*/*",
+                "Connection": "Upgrade"
+            }
         )
 
         self._connected = True
-        logger.info("WebSocket connection established")
+        logger.info("Bluefin WebSocket connection established")
 
         # Start heartbeat task
         if self._heartbeat_task:
@@ -568,37 +588,82 @@ class BluefinWebSocketClient:
                 logger.error(f"Error in candle aggregator: {e}")
 
     async def _heartbeat_handler(self) -> None:
-        """Send periodic heartbeat/ping messages to keep connection alive."""
+        """Enhanced heartbeat handler with ping/pong monitoring."""
+        last_pong_time = asyncio.get_event_loop().time()
+        ping_failures = 0
+        
         while self._connected and self._ws:
             try:
-                # Send ping every 30 seconds
-                await asyncio.sleep(30)
+                # Send ping every 20 seconds (more frequent)
+                await asyncio.sleep(20)
 
+                if not self._connected or not self._ws:
+                    break
+
+                # Use WebSocket built-in ping for better reliability
+                try:
+                    pong_waiter = await self._ws.ping()
+                    await asyncio.wait_for(pong_waiter, timeout=10)
+                    last_pong_time = asyncio.get_event_loop().time()
+                    ping_failures = 0
+                    logger.debug("Bluefin WebSocket ping successful")
+                    
+                except asyncio.TimeoutError:
+                    ping_failures += 1
+                    logger.warning(f"Bluefin WebSocket ping timeout (failure {ping_failures}/3)")
+                    
+                    if ping_failures >= 3:
+                        logger.error("Multiple ping failures, connection appears dead")
+                        self._connected = False
+                        break
+                    
+                except Exception as e:
+                    ping_failures += 1
+                    logger.warning(f"Bluefin WebSocket ping failed: {e} (failure {ping_failures}/3)")
+                    
+                    if ping_failures >= 3:
+                        logger.error("Multiple ping failures, marking connection as dead")
+                        self._connected = False
+                        break
+
+                # Also send application-level ping
                 ping_message = {
                     "id": self._get_next_subscription_id(),
                     "method": "ping",
+                    "timestamp": asyncio.get_event_loop().time()
                 }
 
                 await self._send_message(ping_message)
-                logger.debug("Sent heartbeat ping")
+                logger.debug("Sent application heartbeat ping")
 
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error sending heartbeat: {e}")
+                logger.error(f"Error in heartbeat handler: {e}")
+                # Don't break on general errors, just log and continue
+                await asyncio.sleep(5)
 
     async def _send_message(self, message: dict[str, Any]) -> None:
         """
-        Send message to WebSocket.
+        Send message to WebSocket with error handling.
 
         Args:
             message: Message to send
         """
         if not self._ws or not self._connected:
-            raise RuntimeError("WebSocket not connected")
+            raise RuntimeError("Bluefin WebSocket not connected")
 
-        await self._ws.send(json.dumps(message))
-        logger.debug(f"Sent message: {message}")
+        try:
+            json_data = json.dumps(message)
+            await self._ws.send(json_data)
+            logger.debug(f"Sent Bluefin message: {message.get('method', message.get('type', 'unknown'))}")
+        except (ConnectionClosed, websockets.exceptions.WebSocketException) as e:
+            logger.warning(f"Failed to send Bluefin message, connection lost: {e}")
+            self._connected = False
+            raise
+        except Exception as e:
+            logger.error(f"Error sending Bluefin message: {e}")
+            raise
 
     async def _wait_for_connection(self, timeout: int = 30) -> bool:
         """

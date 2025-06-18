@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from bot.position_manager import PositionManager
-from bot.types import Order, OrderStatus
+from bot.trading_types import Order, OrderStatus
 
 # Configure logging
 logging.basicConfig(

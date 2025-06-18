@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from bot.position_manager import PositionManager
 from bot.risk import RiskManager
-from bot.types import Order, OrderStatus, TradeAction
+from bot.trading_types import Order, OrderStatus, TradeAction
 from bot.validator import TradeValidator
 
 # Configure logging

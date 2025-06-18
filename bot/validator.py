@@ -83,18 +83,57 @@ class TradeValidator:
             return llm_output
 
         elif isinstance(llm_output, dict):
-            return TradeAction(**llm_output)
+            # Normalize action field before creating TradeAction
+            normalized_dict = self._normalize_action_dict(llm_output)
+            return TradeAction(**normalized_dict)
 
         elif isinstance(llm_output, str):
             # Try to parse as JSON
             try:
                 parsed_json = json.loads(llm_output.strip())
-                return TradeAction(**parsed_json)
+                # Normalize action field before creating TradeAction
+                normalized_dict = self._normalize_action_dict(parsed_json)
+                return TradeAction(**normalized_dict)
             except json.JSONDecodeError as e:
                 raise ValueError(f"Invalid JSON format: {e}") from e
 
         else:
             raise ValueError(f"Unsupported LLM output type: {type(llm_output)}")
+
+    def _normalize_action_dict(self, data: dict[str, Any]) -> dict[str, Any]:
+        """
+        Normalize action field in dictionary to handle common variations.
+
+        Args:
+            data: Dictionary containing action field
+
+        Returns:
+            Dictionary with normalized action field
+        """
+        normalized = data.copy()
+        
+        if "action" in normalized:
+            action = str(normalized["action"]).upper().strip()
+            
+            # Map common variations to standard actions
+            action_mappings = {
+                "BUY": "LONG",
+                "SELL": "SHORT", 
+                "EXIT": "CLOSE",
+                "CLOSE_POSITION": "CLOSE",
+                "STAY": "HOLD",
+                "WAIT": "HOLD",
+                "NO_ACTION": "HOLD"
+            }
+            
+            if action in action_mappings:
+                original_action = normalized["action"]
+                normalized["action"] = action_mappings[action]
+                logger.info(f"Normalized action '{original_action}' to '{normalized['action']}'")
+            else:
+                normalized["action"] = action
+                
+        return normalized
 
     def _validate_trade_action(
         self, action: TradeAction, current_position: Position | None = None
@@ -159,13 +198,21 @@ class TradeValidator:
             )
             validated.stop_loss_pct = self.max_sl_pct
 
+        # Validate leverage for futures trading
+        if validated.leverage < 1:
+            logger.warning(f"Invalid leverage {validated.leverage}, setting to default 1")
+            validated.leverage = 1
+        elif validated.leverage > 100:
+            logger.warning(f"Excessive leverage {validated.leverage}, capping to 100")
+            validated.leverage = 100
+
         # Validate rationale
         if not validated.rationale or len(validated.rationale.strip()) == 0:
             validated.rationale = "No rationale provided"
 
-        if len(validated.rationale) > 200:
-            validated.rationale = validated.rationale[:197] + "..."
-            logger.warning("Rationale truncated to 200 characters")
+        if len(validated.rationale) > 500:
+            validated.rationale = validated.rationale[:497] + "..."
+            logger.warning("Rationale truncated to 500 characters")
 
         # Business rule validations
         validated = self._apply_business_rules(validated, current_position)
@@ -231,9 +278,9 @@ class TradeValidator:
         Returns:
             Safe TradeAction with HOLD
         """
-        # Truncate reason to fit within rationale max_length (200 chars)
+        # Truncate reason to fit within rationale max_length (500 chars)
         # Account for "Validator: " prefix (11 chars)
-        max_reason_length = 200 - 11
+        max_reason_length = 500 - 11
         truncated_reason = (
             reason[:max_reason_length] if len(reason) > max_reason_length else reason
         )
@@ -243,6 +290,7 @@ class TradeValidator:
             size_pct=0,
             take_profit_pct=2.0,
             stop_loss_pct=1.5,
+            leverage=1,
             rationale=f"Validator: {truncated_reason}",
         )
 

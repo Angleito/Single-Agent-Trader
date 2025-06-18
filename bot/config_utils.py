@@ -11,7 +11,7 @@ from typing import Any
 try:
     import requests
 except ImportError:
-    requests = None
+    requests = None  # type: ignore
 
 from .config import Environment, Settings, TradingProfile, create_settings
 
@@ -24,7 +24,7 @@ class StartupValidator:
     def __init__(self, settings: Settings):
         """Initialize startup validator with settings."""
         self.settings = settings
-        self.validation_results = {
+        self.validation_results: dict[str, list[str]] = {
             "environment_vars": [],
             "api_connectivity": [],
             "configuration": [],
@@ -131,7 +131,7 @@ class StartupValidator:
             issues.append(f"Cannot write to data directory: {data_path}")
 
         # Check logs directory
-        log_path = Path(self.settings.system.log_file_path).parent
+        log_path = Path(str(self.settings.system.log_file_path)).parent
         if not self._check_directory_permissions(log_path):
             issues.append(f"Cannot write to logs directory: {log_path}")
 
@@ -704,7 +704,7 @@ def validate_configuration_legacy(settings: Settings) -> dict[str, Any]:
     """Legacy configuration validation for backward compatibility."""
     validator = ConfigValidator()
 
-    results = {
+    results: dict[str, Any] = {
         "valid": True,
         "warnings": [],
         "errors": [],
@@ -723,9 +723,10 @@ def validate_configuration_legacy(settings: Settings) -> dict[str, Any]:
             results["warnings"].extend(env_issues)
 
         # Trading environment validation
-        trading_warnings = settings.validate_trading_environment()
-        if trading_warnings:
-            results["warnings"].extend(trading_warnings)
+        if hasattr(settings, 'validate_trading_environment'):
+            trading_warnings = settings.validate_trading_environment()
+            if trading_warnings:
+                results["warnings"].extend(trading_warnings)
 
         # API connectivity validation
         connectivity = validator.validate_api_connectivity(settings)
@@ -754,7 +755,7 @@ class HealthMonitor:
     def __init__(self, settings: Settings):
         """Initialize health monitor with settings."""
         self.settings = settings
-        self.metrics = {
+        self.metrics: dict[str, Any] = {
             "startup_time": None,
             "last_health_check": None,
             "system_status": "unknown",
@@ -769,7 +770,7 @@ class HealthMonitor:
         """Perform comprehensive health check of all components."""
         logger.info("Performing system health check...")
 
-        health_status = {
+        health_status: dict[str, Any] = {
             "timestamp": datetime.now(UTC).isoformat(),
             "overall_status": "healthy",
             "components": {},
@@ -947,7 +948,7 @@ class HealthMonitor:
         """Collect performance metrics."""
         uptime = (datetime.now(UTC) - self.startup_time).total_seconds()
 
-        metrics = {
+        metrics: dict[str, Any] = {
             "uptime_seconds": uptime,
             "uptime_formatted": self._format_uptime(uptime),
             "checks_performed": 1,  # This would be incremented in real implementation
@@ -1093,12 +1094,6 @@ def setup_configuration(
             )
             profile = TradingProfile.MODERATE
 
-    # Create settings with detected/provided parameters
-    settings_kwargs = {
-        "system__environment": environment,
-        "profile": profile,
-    }
-
     # Load from config file if provided
     if config_file and Path(config_file).exists():
         logger.info(f"Loading configuration from {config_file}")
@@ -1107,7 +1102,10 @@ def setup_configuration(
         if settings.profile != profile:
             settings = settings.apply_profile(profile)
     else:
-        settings = create_settings(**settings_kwargs)
+        # Create settings with detected parameters
+        settings = create_settings()
+        if profile:
+            settings = settings.apply_profile(profile)
 
     # Validate configuration with comprehensive startup validation
     validation_results = validate_configuration(settings)

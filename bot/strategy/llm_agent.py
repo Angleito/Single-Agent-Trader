@@ -452,6 +452,7 @@ FINANCIAL INTELLIGENCE INTEGRATION:
                     size_pct=0,
                     take_profit_pct=2.0,
                     stop_loss_pct=1.0,
+                    leverage=1,
                     rationale="Error in analysis - holding position",
                 )
 
@@ -468,6 +469,7 @@ FINANCIAL INTELLIGENCE INTEGRATION:
                 size_pct=0,
                 take_profit_pct=2.0,
                 stop_loss_pct=1.0,
+                leverage=1,
                 rationale="Error in analysis - holding position",
             )
 

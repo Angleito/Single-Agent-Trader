@@ -10,7 +10,7 @@ from bot.learning.experience_manager import ExperienceManager
 from bot.learning.self_improvement import SelfImprovementEngine
 from bot.mcp.memory_server import MCPMemoryServer
 from bot.strategy.memory_enhanced_agent import MemoryEnhancedLLMAgent
-from bot.types import (
+from bot.trading_types import (
     IndicatorData,
     MarketData,
     MarketState,
