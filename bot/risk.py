@@ -16,7 +16,7 @@ from typing import Any
 from .config import settings
 from .fee_calculator import fee_calculator
 from .position_manager import PositionManager
-from .types import Position, RiskMetrics, TradeAction
+from .trading_types import Position, RiskMetrics, TradeAction
 
 logger = logging.getLogger(__name__)
 

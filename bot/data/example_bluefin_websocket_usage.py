@@ -6,7 +6,7 @@ import logging
 import aiohttp
 
 from bot.data.bluefin_websocket import BluefinWebSocketClient
-from bot.types import MarketData
+from bot.trading_types import MarketData
 
 # Configure logging
 logging.basicConfig(

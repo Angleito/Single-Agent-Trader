@@ -47,7 +47,7 @@ except ImportError:
     COINBASE_AVAILABLE = False
 
 from ..config import settings
-from ..types import MarketData
+from ..trading_types import MarketData
 
 logger = logging.getLogger(__name__)
 

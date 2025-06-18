@@ -294,13 +294,8 @@ export class DashboardWebSocket {
 
     // Use dynamic URL detection if no URL provided
     if (!url && !config.url && !runtimeWsUrl) {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const port = window.location.port
-      const isNginxPort = port === '8080'
-      
-      // Use correct path based on environment
-      const wsPath = isNginxPort ? '/api/ws' : '/ws'
-      url = `${protocol}//${window.location.host}${wsPath}`
+      // Use the proper URL detection method instead of simple host replacement
+      url = this.getDefaultWebSocketUrl()
     }
 
     // Priority: explicit config.url > constructor url > runtime config > default

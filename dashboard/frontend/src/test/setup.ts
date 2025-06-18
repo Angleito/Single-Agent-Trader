@@ -133,12 +133,8 @@ global.PerformanceObserver = vi.fn(() => ({
 })) as unknown as typeof PerformanceObserver
 
 // Add supportedEntryTypes as a static property
-;(global.PerformanceObserver as unknown as { supportedEntryTypes: string[] }).supportedEntryTypes = [
-  'measure',
-  'mark',
-  'resource',
-  'navigation',
-]
+;(global.PerformanceObserver as unknown as { supportedEntryTypes: string[] }).supportedEntryTypes =
+  ['measure', 'mark', 'resource', 'navigation']
 
 // Mock MutationObserver
 global.MutationObserver = vi.fn(() => ({

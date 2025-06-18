@@ -21,7 +21,7 @@ from typing import Any
 
 from .config import settings
 from .fee_calculator import fee_calculator
-from .types import Order, OrderStatus, TradeAction
+from .trading_types import Order, OrderStatus, TradeAction
 
 logger = logging.getLogger(__name__)
 

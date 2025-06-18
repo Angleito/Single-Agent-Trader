@@ -2,7 +2,7 @@
 
 import json
 
-from bot.types import TradeAction
+from bot.trading_types import TradeAction
 from bot.validator import TradeValidator
 
 

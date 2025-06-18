@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from .config import settings
-from .types import Order, OrderStatus
+from .trading_types import Order, OrderStatus
 
 logger = logging.getLogger(__name__)
 

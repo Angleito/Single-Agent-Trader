@@ -12,7 +12,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from ..types import MarketState, TradeAction
+from ..trading_types import MarketState, TradeAction
 
 
 class TradeLogger:

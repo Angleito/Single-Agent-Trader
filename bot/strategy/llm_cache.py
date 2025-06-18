@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..config import settings
-from ..types import MarketState, TradeAction
+from ..trading_types import MarketState, TradeAction
 
 logger = logging.getLogger(__name__)
 
@@ -202,7 +202,7 @@ class LLMResponseCache:
 
         try:
             # Only start if we're in an async context
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             if self._cleanup_task is None:
                 self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
                 self._cleanup_started = True

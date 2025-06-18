@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 from ..config import settings
 from ..logging.trade_logger import TradeLogger
-from ..types import MarketState, TradeAction
+from ..trading_types import MarketState, TradeAction
 
 logger = logging.getLogger(__name__)
 

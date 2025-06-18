@@ -14,7 +14,7 @@ from ..error_handling import (
     ErrorBoundary,
 )
 from ..system_monitor import error_recovery_manager, system_monitor
-from ..types import IndicatorData, MarketState, TradeAction
+from ..trading_types import IndicatorData, MarketState, TradeAction
 
 logger = logging.getLogger(__name__)
 

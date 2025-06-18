@@ -19,7 +19,7 @@ import aiofiles
 from .config import settings
 from .paper_trading import PaperTradingAccount
 from .trading.fifo_position_manager import FIFOPositionManager
-from .types import Order, Position
+from .trading_types import Order, Position
 
 logger = logging.getLogger(__name__)
 

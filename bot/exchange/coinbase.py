@@ -101,7 +101,7 @@ except ImportError:
         COINBASE_AVAILABLE = False
 
 from ..config import settings
-from ..types import (
+from ..trading_types import (
     AccountType,
     CashTransferRequest,
     FuturesAccountInfo,

@@ -13,7 +13,7 @@ import warnings
 current_module = sys.modules[__name__]
 try:
     if not hasattr(current_module, "__warningregistry__"):
-        current_module.__warningregistry__ = {}
+        setattr(current_module, "__warningregistry__", {})
 except (AttributeError, TypeError):
     # Some modules don't support setting attributes
     # This is fine, warnings will still be filtered

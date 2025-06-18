@@ -15,7 +15,7 @@ from ..mcp.memory_server import MCPMemoryServer, MemoryQuery, TradingExperience
 from ..mcp.omnisearch_client import (
     OmniSearchClient,
 )
-from ..types import MarketState, TradeAction
+from ..trading_types import MarketState, TradeAction
 from .llm_agent import LLMAgent
 
 logger = logging.getLogger(__name__)

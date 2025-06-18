@@ -96,7 +96,7 @@ services:
     # Override the default command - TRADING MODE WITH 1-MINUTE INTERVALS
     # Note: dry-run mode is controlled by SYSTEM__DRY_RUN environment variable
     # Note: Symbol should match the exchange type (BTC-USD for Coinbase, SUI-PERP for Bluefin)
-    command: ["python", "-m", "bot.main", "live", "--symbol", "ETH-USD", "--interval", "1m", "--force", "--no-dry-run"]
+    command: ["python", "-m", "bot.main", "live", "--symbol", "BTC-USD", "--interval", "15s", "--force"]
 
     # Environment variables from .env file
     env_file:
@@ -107,10 +107,10 @@ services:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONWARNINGS=ignore::UserWarning,ignore::DeprecationWarning,ignore::SyntaxWarning,ignore::FutureWarning
-      - CONFIG_FILE=/app/config/live_trading_safe.json
+      - CONFIG_FILE=/app/config/spot_trading_config.json
       # System Configuration
-      - SYSTEM__DRY_RUN=false   # LIVE TRADING MODE - REAL MONEY
-      - SYSTEM__ENVIRONMENT=production  # Production environment for live trading
+      - SYSTEM__DRY_RUN=true   # PAPER TRADING MODE - SAFE
+      - SYSTEM__ENVIRONMENT=development  # Development environment for paper trading
       # Exchange Configuration - Use Coinbase for live trading
       - EXCHANGE__EXCHANGE_TYPE=coinbase
       - BLUEFIN_USE_REAL_DATA=true
@@ -413,11 +413,10 @@ services:
     #   - /tmp:noexec,nosuid,size=50m  # Secure temporary filesystem
     environment:
       - NODE_ENV=production
-      # Use localhost URLs for browser-based frontend communication (direct backend access)
-      # Frontend runs in browser and needs to access containerized backend via host
-      - VITE_API_BASE_URL=http://localhost:8000/api
-      - VITE_API_URL=http://localhost:8000/api
-      - VITE_WS_URL=ws://localhost:8000/ws
+      # Use relative URLs for API calls - nginx proxy will handle routing
+      - VITE_API_BASE_URL=/api
+      - VITE_API_URL=/api
+      - VITE_WS_URL=/api/ws
       - VITE_DOCKER_ENV=true
     restart: unless-stopped
     networks:

@@ -16,7 +16,7 @@ import websockets
 from websockets.client import WebSocketClientProtocol
 
 from ..config import settings
-from ..types import MarketData
+from ..trading_types import MarketData
 
 logger = logging.getLogger(__name__)
 

@@ -682,6 +682,23 @@ class ErrorRecoveryManager:
         logger.info("Memory recovery completed")
         return True
 
+    def _get_recovery_action(
+        self,
+        name: str,
+        action: Callable,
+        strategy: RecoveryStrategy = RecoveryStrategy.RESTART_COMPONENT,
+        max_attempts: int = 3,
+        cooldown_seconds: int = 60,
+    ) -> RecoveryAction:
+        """Create a recovery action with the specified parameters."""
+        return RecoveryAction(
+            name=name,
+            strategy=strategy,
+            action=action,
+            max_attempts=max_attempts,
+            cooldown_seconds=cooldown_seconds,
+        )
+
     def get_recovery_statistics(self) -> dict[str, Any]:
         """Get statistics about recovery attempts."""
         if not self.recovery_history:

@@ -16,7 +16,7 @@ import pytest
 
 from bot.indicators.vumanchu import VuManChuIndicators
 from bot.main import TradingEngine
-from bot.types import (
+from bot.trading_types import (
     IndicatorData,
     MarketData,
     MarketState,

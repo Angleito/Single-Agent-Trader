@@ -62,10 +62,10 @@ class TradingSettings(BaseModel):
         default=5, ge=1, le=100, description="Trading leverage multiplier"
     )
     max_size_pct: float = Field(
-        default=5.0,
+        default=20.0,
         ge=0.1,
-        le=20.0,
-        description="Maximum position size as percentage of equity (reduced for scalping)",
+        le=50.0,
+        description="Maximum position size as percentage of equity",
     )
 
     # Futures Trading Configuration

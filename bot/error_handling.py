@@ -5,6 +5,8 @@ This module implements comprehensive error boundaries, recovery patterns, and re
 strategies to ensure the trading bot never fails completely.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import traceback
@@ -13,12 +15,24 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
 from functools import wraps
-from typing import Any
+from typing import Any, Protocol
 
 import aiohttp
 
 # Configure logger
 logger = logging.getLogger(__name__)
+
+
+class FallbackCallable(Protocol):
+    """Protocol for fallback callable functions."""
+
+    def __call__(self, error: Exception, context: "ErrorContext") -> Any: ...
+
+
+class AsyncFallbackCallable(Protocol):
+    """Protocol for async fallback callable functions."""
+
+    async def __call__(self, error: Exception, context: "ErrorContext") -> Any: ...
 
 
 class ErrorSeverity(Enum):
@@ -82,7 +96,7 @@ class ErrorBoundary:
     def __init__(
         self,
         component_name: str,
-        fallback_behavior: Callable | None = None,
+        fallback_behavior: Callable[..., Any] | None = None,
         max_retries: int = 3,
         retry_delay: float = 1.0,
         severity: ErrorSeverity = ErrorSeverity.MEDIUM,
@@ -156,6 +170,9 @@ class ErrorBoundary:
         self, original_error: Exception, context: ErrorContext
     ) -> None:
         """Execute fallback behavior with error context."""
+        if self.fallback_behavior is None:
+            return
+
         if asyncio.iscoroutinefunction(self.fallback_behavior):
             await self.fallback_behavior(original_error, context)
         else:
@@ -183,9 +200,9 @@ class TradeSaga:
 
     def __init__(self, saga_name: str):
         self.saga_name = saga_name
-        self.steps: list[Callable] = []
-        self.compensation_actions: list[Callable] = []
-        self.completed_steps: list[tuple] = []
+        self.steps: list[tuple[Callable[..., Any], str]] = []
+        self.compensation_actions: list[Callable[..., Any] | None] = []
+        self.completed_steps: list[tuple[int, str, Any, datetime]] = []
         self.saga_id = f"{saga_name}_{int(datetime.now(UTC).timestamp() * 1000)}"
         self.start_time: datetime | None = None
         self.end_time: datetime | None = None
@@ -193,8 +210,8 @@ class TradeSaga:
 
     def add_step(
         self,
-        action: Callable,
-        compensation: Callable | None = None,
+        action: Callable[..., Any],
+        compensation: Callable[..., Any] | None = None,
         step_name: str = "",
     ) -> None:
         """Add a step with optional compensation action."""
@@ -310,14 +327,14 @@ class GracefulDegradation:
 
     def __init__(self):
         self.degraded_services: set[str] = set()
-        self.fallback_strategies: dict[str, Callable] = {}
+        self.fallback_strategies: dict[str, Callable[..., Any]] = {}
         self.service_health: dict[str, ServiceHealth] = {}
         self.degradation_thresholds: dict[str, int] = {}
 
     def register_service(
         self,
         service_name: str,
-        fallback_strategy: Callable,
+        fallback_strategy: Callable[..., Any],
         degradation_threshold: int = 3,
     ) -> None:
         """Register a service with its fallback strategy."""
@@ -328,7 +345,7 @@ class GracefulDegradation:
         logger.info(f"Registered service {service_name} with fallback strategy")
 
     async def execute_with_fallback(
-        self, service_name: str, primary_action: Callable, *args, **kwargs
+        self, service_name: str, primary_action: Callable[..., Any], *args, **kwargs
     ) -> Any:
         """Execute action with automatic fallback on failure."""
         service_health = self.service_health.get(service_name)
@@ -541,8 +558,8 @@ class EnhancedExceptionHandler:
             return {"total_exceptions": 0}
 
         # Count exceptions by type
-        exception_counts = {}
-        severity_counts = {}
+        exception_counts: dict[str, int] = {}
+        severity_counts: dict[str, int] = {}
 
         for error_context in self.exception_history:
             exc_type = error_context.error_type

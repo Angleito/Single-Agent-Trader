@@ -14,7 +14,7 @@ import pandas as pd
 import pytest
 
 from bot.main import TradingEngine
-from bot.types import (
+from bot.trading_types import (
     IndicatorData,
     MarketData,
     MarketState,

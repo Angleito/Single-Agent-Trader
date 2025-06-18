@@ -10,7 +10,7 @@ from decimal import Decimal
 from typing import NamedTuple
 
 from .config import settings
-from .types import TradeAction
+from .trading_types import TradeAction
 
 logger = logging.getLogger(__name__)
 

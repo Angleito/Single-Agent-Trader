@@ -27,7 +27,7 @@ except ImportError:
 
 from ..config import settings
 from ..llm_logging import create_llm_logger, create_langchain_callback
-from ..types import MarketState, TradeAction
+from ..trading_types import MarketState, TradeAction
 from ..mcp.omnisearch_client import OmniSearchClient
 from .llm_cache import get_llm_cache
 from .optimized_prompt import get_optimized_prompt_template

@@ -59,7 +59,7 @@ from .strategy.llm_agent import LLMAgent
 
 # Training and RAG
 from .train.reader import RAGReader
-from .types import MarketData, MarketState, Position, TradeAction
+from .trading_types import MarketData, MarketState, Position, TradeAction
 from .validator import TradeValidator
 
 __all__ = [

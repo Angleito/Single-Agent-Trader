@@ -13,7 +13,7 @@ import websockets
 from websockets.client import WebSocketClientProtocol
 from websockets.exceptions import ConnectionClosed
 
-from ..types import MarketData
+from ..trading_types import MarketData
 
 logger = logging.getLogger(__name__)
 

@@ -17,7 +17,13 @@ from ..indicators.vumanchu import VuManChuIndicators
 from ..risk import RiskManager
 from ..strategy.core import CoreStrategy
 from ..strategy.llm_agent import LLMAgent
-from ..types import IndicatorData, MarketData, MarketState, Position, TradeAction
+from ..trading_types import (
+    IndicatorData,
+    MarketData,
+    MarketState,
+    Position,
+    TradeAction,
+)
 from ..validator import TradeValidator
 
 logger = logging.getLogger(__name__)

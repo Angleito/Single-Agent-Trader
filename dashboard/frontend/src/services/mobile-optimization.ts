@@ -764,7 +764,7 @@ export class MobileOptimizationManager {
 
   private optimizeScrolling(): void {
     // Enable momentum scrolling on iOS
-    (document.body.style as any).webkitOverflowScrolling = 'touch'
+    ;(document.body.style as any).webkitOverflowScrolling = 'touch'
 
     // Optimize scroll performance
     document.addEventListener(

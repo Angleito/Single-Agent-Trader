@@ -18,7 +18,7 @@ from ..error_handling import (
     graceful_degradation,
 )
 from ..system_monitor import error_recovery_manager
-from ..types import (
+from ..trading_types import (
     AccountType,
     FuturesAccountInfo,
     MarginInfo,

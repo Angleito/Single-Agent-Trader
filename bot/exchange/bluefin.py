@@ -12,7 +12,7 @@ from decimal import Decimal
 from typing import Any, Literal, cast
 
 from ..config import settings
-from ..types import (
+from ..trading_types import (
     AccountType,
     Order,
     OrderStatus,

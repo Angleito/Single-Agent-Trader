@@ -20,7 +20,7 @@ from pydantic import ValidationError
 
 from bot.config import Environment, Settings, TradingProfile, create_settings
 from bot.main import TradingEngine
-from bot.types import MarketData
+from bot.trading_types import MarketData
 
 
 class TestStartupValidation:

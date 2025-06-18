@@ -12,7 +12,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from .config import settings
-from .types import Position, TradeAction
+from .trading_types import Position, TradeAction
 
 logger = logging.getLogger(__name__)
 

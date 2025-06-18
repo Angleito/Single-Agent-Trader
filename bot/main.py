@@ -12,7 +12,7 @@ warnings.resetwarnings()
 try:
     current_module = sys.modules[__name__]
     if not hasattr(current_module, "__warningregistry__"):
-        current_module.__warningregistry__ = {}
+        setattr(current_module, "__warningregistry__", {})
 except (AttributeError, TypeError):
     # Some modules don't support setting attributes
     # This is fine, warnings will still be filtered
@@ -112,6 +112,7 @@ if TYPE_CHECKING:
 else:
     MarketDataProviderType = MarketDataProvider | None
 from .exchange.factory import ExchangeFactory
+from .exchange.coinbase import CoinbaseClient
 from .indicators.vumanchu import VuManChuIndicators
 from .learning.experience_manager import ExperienceManager
 from .mcp.memory_server import MCPMemoryServer
@@ -121,7 +122,7 @@ from .position_manager import PositionManager
 from .risk import RiskManager
 from .strategy.llm_agent import LLMAgent
 from .strategy.memory_enhanced_agent import MemoryEnhancedLLMAgent
-from .types import IndicatorData, MarketState, Position, TradeAction
+from .trading_types import IndicatorData, MarketState, Position, TradeAction
 from .utils import setup_warnings_suppression
 from .validator import TradeValidator
 

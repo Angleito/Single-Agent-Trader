@@ -15,7 +15,7 @@ from uuid import uuid4
 from ..config import settings
 from ..logging.trade_logger import TradeLogger
 from ..mcp.memory_server import MCPMemoryServer
-from ..types import MarketState, Order, Position, TradeAction
+from ..trading_types import MarketState, Order, Position, TradeAction
 
 logger = logging.getLogger(__name__)
 

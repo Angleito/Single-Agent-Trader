@@ -14,7 +14,7 @@ from typing import Any, Literal
 import aiofiles
 
 from bot.trading.lot import FIFOPosition, LotSale, TradeLot
-from bot.types import Order, OrderStatus, Position
+from bot.trading_types import Order, OrderStatus, Position
 
 logger = logging.getLogger(__name__)
 

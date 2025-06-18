@@ -1129,7 +1129,7 @@ export class DashboardOrchestrator {
 
     // Force garbage collection if available
     if ('gc' in window) {
-      (window as any).gc()
+      ;(window as any).gc()
     }
   }
 
