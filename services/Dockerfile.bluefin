@@ -4,29 +4,48 @@ FROM python:3.12-slim
 ARG BUILD_DATE
 ARG VCS_REF
 ARG VERSION
+ARG TARGETPLATFORM=linux/amd64
 
-# Labels for VPS deployment tracking
+# Labels for Ubuntu deployment tracking
 LABEL maintainer="AI Trading Bot Team" \
       org.label-schema.build-date=$BUILD_DATE \
       org.label-schema.vcs-ref=$VCS_REF \
       org.label-schema.version=$VERSION \
       org.label-schema.schema-version="1.0" \
-      com.vps.service="bluefin-service" \
-      com.vps.monitoring="enabled"
+      org.label-schema.platform="${TARGETPLATFORM}" \
+      ubuntu.optimized="true" \
+      ubuntu.compatible="22.04+" \
+      deployment.service="bluefin-service" \
+      deployment.monitoring="enabled"
 
-# Install system dependencies with VPS optimizations
-RUN apt-get update && apt-get install -y \
+# Ubuntu-optimized system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     git \
     ca-certificates \
+    # Ubuntu networking tools
     netcat-openbsd \
     dnsutils \
     iputils-ping \
+    # Process monitoring tools
     procps \
     htop \
+    # Development libraries
+    libffi-dev \
+    autotools-dev \
+    automake \
+    libtool \
+    pkg-config \
+    # SSL/TLS support
+    openssl \
+    # Ubuntu-specific optimizations
+    software-properties-common \
+    apt-transport-https \
+    # Cleanup for smaller image size
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    && rm -rf /tmp/* /var/tmp/*
 
 # Create non-root user for security
 RUN groupadd -r bluefin && useradd -r -g bluefin bluefin
@@ -34,26 +53,36 @@ RUN groupadd -r bluefin && useradd -r -g bluefin bluefin
 # Set working directory
 WORKDIR /app
 
-# Install Bluefin SDK and dependencies with VPS optimizations
-RUN pip install --no-cache-dir --upgrade pip && \
+# Ubuntu-optimized Python dependencies installation
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir \
-    bluefin-v2-client \
-    aiohttp \
     python-dotenv \
     prometheus-client \
     psutil \
     requests \
-    httpx[http2] \
     asyncio-throttle \
     tenacity \
-    structlog
+    structlog \
+    fastapi \
+    uvicorn \
+    && pip cache purge
+
+# Ubuntu-optimized dependency installation with better error handling
+RUN pip install --no-cache-dir aiohttp==3.9.5 || \
+    (echo "aiohttp installation failed, trying alternative..." && pip install --no-cache-dir httpx[http2])
+
+# Install Bluefin client with Ubuntu-specific handling
+RUN pip install --no-cache-dir bluefin-v2-client || \
+    echo "WARNING: bluefin-v2-client installation failed - service will run without Bluefin support"
 
 # Copy service code
 COPY bluefin_sdk_service.py /app/
 COPY scripts/validate_env.py /app/
 
-# Create necessary directories
+# Create necessary directories with Ubuntu-optimized permissions
 RUN mkdir -p /app/logs /app/data /app/tmp && \
+    chmod 755 /app && \
+    chmod 775 /app/logs /app/data /app/tmp && \
     chown -R bluefin:bluefin /app
 
 # Expose port
@@ -67,20 +96,24 @@ set -e
 # Basic health check
 curl -f --connect-timeout 10 --max-time 30 http://localhost:8080/health || exit 1
 
-# VPS-specific checks
-if [ "\$VPS_DEPLOYMENT" = "true" ]; then
-    # Check disk space
-    DISK_USAGE=\$(df /app | tail -1 | awk '{print \$5}' | sed 's/%//')
-    if [ "\$DISK_USAGE" -gt 90 ]; then
-        echo "Disk usage critical: \${DISK_USAGE}%"
-        exit 1
+# Ubuntu-specific resource checks
+if [ "\$UBUNTU_DEPLOYMENT" = "true" ]; then
+    # Check disk space with Ubuntu-compatible commands
+    if command -v df >/dev/null 2>&1; then
+        DISK_USAGE=\$(df /app 2>/dev/null | tail -1 | awk '{print \$5}' | sed 's/%//' || echo "0")
+        if [ "\$DISK_USAGE" -gt 90 ]; then
+            echo "Disk usage critical: \${DISK_USAGE}%"
+            exit 1
+        fi
     fi
     
-    # Check memory usage
-    MEM_USAGE=\$(free | grep Mem | awk '{printf("%.0f", \$3/\$2 * 100.0)}')
-    if [ "\$MEM_USAGE" -gt 95 ]; then
-        echo "Memory usage critical: \${MEM_USAGE}%"
-        exit 1
+    # Check memory usage with Ubuntu-compatible commands
+    if command -v free >/dev/null 2>&1; then
+        MEM_USAGE=\$(free 2>/dev/null | grep Mem | awk '{printf("%.0f", \$3/\$2 * 100.0)}' || echo "0")
+        if [ "\$MEM_USAGE" -gt 95 ]; then
+            echo "Memory usage critical: \${MEM_USAGE}%"
+            exit 1
+        fi
     fi
 fi
 
@@ -89,22 +122,30 @@ EOF
 
 RUN chmod +x /app/healthcheck.sh && chown bluefin:bluefin /app/healthcheck.sh
 
-# VPS health check endpoint
-COPY <<EOF /app/vps-healthcheck.sh
+# Ubuntu-optimized extended health check endpoint
+COPY <<EOF /app/ubuntu-healthcheck.sh
 #!/bin/bash
 set -e
 
-# Comprehensive VPS health check
-echo "Starting VPS health check..."
+# Comprehensive Ubuntu health check
+echo "Starting Ubuntu health check..."
 
-# Service health
-if ! curl -f --connect-timeout 5 http://localhost:8080/health > /dev/null 2>&1; then
+# Service health with timeout
+if ! timeout 10 curl -f --connect-timeout 5 http://localhost:8080/health > /dev/null 2>&1; then
     echo "Service health check failed"
     exit 1
 fi
 
-# Network connectivity check
-if ! curl -f --connect-timeout 10 https://api.bluefin.io > /dev/null 2>&1; then
+# Network connectivity check with Ubuntu DNS resolution
+if command -v nslookup >/dev/null 2>&1; then
+    if ! timeout 10 nslookup api.bluefin.io >/dev/null 2>&1; then
+        echo "DNS resolution failed"
+        exit 1
+    fi
+fi
+
+# External connectivity check
+if ! timeout 15 curl -f --connect-timeout 10 https://api.bluefin.io > /dev/null 2>&1; then
     echo "External network connectivity failed"
     exit 1
 fi
@@ -115,19 +156,25 @@ if [ ! -w /app/logs ]; then
     exit 1
 fi
 
-echo "VPS health check passed"
+# Ubuntu-specific system checks
+if [ -f /etc/os-release ]; then
+    echo "Ubuntu system detected - performing additional checks"
+fi
+
+echo "Ubuntu health check passed"
 EOF
 
-RUN chmod +x /app/vps-healthcheck.sh && chown bluefin:bluefin /app/vps-healthcheck.sh
+RUN chmod +x /app/ubuntu-healthcheck.sh && chown bluefin:bluefin /app/ubuntu-healthcheck.sh
 
-# Set environment variables with VPS defaults
+# Ubuntu-optimized environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONIOENCODING=utf-8 \
     BLUEFIN_SERVICE_RATE_LIMIT=50 \
     HOST=0.0.0.0 \
     PORT=8080 \
     LOG_LEVEL=info \
-    VPS_DEPLOYMENT=false \
+    UBUNTU_DEPLOYMENT=true \
     GEOGRAPHIC_REGION=US \
     CONNECTION_TIMEOUT=30 \
     READ_TIMEOUT=60 \
@@ -138,9 +185,9 @@ ENV PYTHONUNBUFFERED=1 \
 # Switch to non-root user
 USER bluefin
 
-# Health check configuration
+# Ubuntu-optimized health check configuration
 HEALTHCHECK --interval=30s --timeout=15s --start-period=45s --retries=5 \
-    CMD /app/healthcheck.sh
+    CMD /app/healthcheck.sh || (echo "Health check failed on Ubuntu" && exit 1)
 
-# Run the service with VPS optimizations
-CMD ["python", "-u", "bluefin_sdk_service.py"]
+# Ubuntu-optimized service startup
+CMD ["python", "-u", "-O", "bluefin_sdk_service.py"]

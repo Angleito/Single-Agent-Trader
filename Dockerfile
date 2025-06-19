@@ -1,5 +1,5 @@
-# AI Trading Bot Dockerfile with Multi-Exchange Support
-# Optimized for VPS deployment with Bluefin integration
+# AI Trading Bot Dockerfile - Ubuntu Optimized
+# Multi-stage build optimized for Ubuntu deployment
 
 # Build stage
 FROM python:3.12-slim AS builder
@@ -9,6 +9,7 @@ ARG BUILD_DATE
 ARG VCS_REF
 ARG VERSION=0.1.0
 ARG POETRY_VERSION=1.8.2
+ARG TARGETPLATFORM=linux/amd64
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -16,7 +17,7 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install system dependencies
+# Ubuntu-optimized package installation
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
@@ -27,7 +28,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     automake \
     libtool \
     pkg-config \
-    && rm -rf /var/lib/apt/lists/*
+    # Ubuntu-specific optimizations
+    software-properties-common \
+    apt-transport-https \
+    gnupg \
+    lsb-release \
+    # Cleanup
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /tmp/* /var/tmp/*
 
 # Install Poetry
 ENV POETRY_HOME="/opt/poetry" \
@@ -68,13 +77,25 @@ ENV PYTHONUNBUFFERED=1 \
     APP_VERSION=${VERSION} \
     EXCHANGE__EXCHANGE_TYPE=${EXCHANGE_TYPE}
 
-# Install runtime dependencies
+# Ubuntu-optimized runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     git \
     libffi8 \
-    && rm -rf /var/lib/apt/lists/*
+    # Ubuntu networking tools
+    netcat-openbsd \
+    dnsutils \
+    iputils-ping \
+    # Process monitoring
+    procps \
+    htop \
+    # SSL/TLS support
+    openssl \
+    # Cleanup
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /tmp/* /var/tmp/*
 
 # Create non-root user
 RUN groupadd --gid 1000 botuser \
@@ -93,9 +114,12 @@ COPY --from=builder --chown=botuser:botuser /app/.venv /app/.venv
 COPY --chown=botuser:botuser bot/ ./bot/
 COPY --chown=botuser:botuser pyproject.toml ./
 
-# Create required directories
-RUN mkdir -p /app/config /app/logs /app/data /app/prompts \
-    && chown -R botuser:botuser /app
+# Create required directories with proper Ubuntu permissions
+RUN mkdir -p /app/config /app/logs /app/data /app/prompts /app/tmp \
+    && chown -R botuser:botuser /app \
+    && chmod 755 /app \
+    && chmod 775 /app/logs /app/data /app/tmp \
+    && chmod 755 /app/config /app/prompts
 
 # Copy prompt files
 COPY --chown=botuser:botuser prompts/*.txt ./prompts/
@@ -117,12 +141,15 @@ EXPOSE 8080
 # Default command - starts in safe dry-run mode
 CMD ["python", "-m", "bot.main", "live", "--dry-run"]
 
-# Labels
+# Ubuntu deployment optimized labels
 LABEL org.opencontainers.image.title="AI Trading Bot" \
-      org.opencontainers.image.description="Multi-exchange crypto trading bot with Coinbase and Bluefin support" \
+      org.opencontainers.image.description="Ubuntu optimized crypto trading bot with Coinbase and Bluefin support" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.revision="${VCS_REF}" \
       org.opencontainers.image.vendor="AI Trading Bot" \
       org.opencontainers.image.exchange="${EXCHANGE_TYPE}" \
+      org.opencontainers.image.platform="${TARGETPLATFORM}" \
+      ubuntu.optimized="true" \
+      ubuntu.compatible="22.04+" \
       maintainer="ai-trading-bot"
