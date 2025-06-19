@@ -109,15 +109,15 @@ class BluefinMarketDataProvider:
         self._last_candle_timestamp: datetime | None = None
 
         # Bluefin API configuration - use environment-specific endpoints
-        network = os.getenv("EXCHANGE__BLUEFIN_NETWORK", "mainnet").lower()
-        if network == "testnet":
-            self._api_base_url = "https://dapi-testnet.bluefin.io"
-            self._ws_url = "wss://dapi-testnet.bluefin.io"
-            self._notification_ws_url = "wss://notifications-testnet.bluefin.io"
+        self.network = os.getenv("EXCHANGE__BLUEFIN_NETWORK", "mainnet").lower()
+        if self.network == "testnet":
+            self._api_base_url = "https://dapi.api.sui-staging.bluefin.io"
+            self._ws_url = "wss://dapi.api.sui-staging.bluefin.io"
+            self._notification_ws_url = "wss://notifications.api.sui-staging.bluefin.io"
         else:
-            self._api_base_url = "https://dapi.bluefin.io"
-            self._ws_url = "wss://dapi.bluefin.io"
-            self._notification_ws_url = "wss://notifications.bluefin.io"
+            self._api_base_url = "https://dapi.api.sui-prod.bluefin.io"
+            self._ws_url = "wss://dapi.api.sui-prod.bluefin.io"
+            self._notification_ws_url = "wss://notifications.api.sui-prod.bluefin.io"
 
         logger.info(
             "Initialized BluefinMarketDataProvider",
@@ -126,7 +126,7 @@ class BluefinMarketDataProvider:
                 "symbol": self.symbol,
                 "interval": self.interval,
                 "candle_limit": self.candle_limit,
-                "network": network,
+                "network": self.network,
                 "use_mock_data": self._use_mock_data,
                 "api_base_url": self._api_base_url,
                 "ws_url": self._ws_url,
@@ -1315,6 +1315,7 @@ class BluefinMarketDataProvider:
                 interval=self.interval,
                 candle_limit=self.candle_limit,
                 on_candle_update=self._on_websocket_candle,
+                network=self.network,
             )
 
             # Connect to WebSocket

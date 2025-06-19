@@ -27,6 +27,7 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - BLUEFIN_PRIVATE_KEY=${EXCHANGE__BLUEFIN_PRIVATE_KEY:-}
       - BLUEFIN_NETWORK=${EXCHANGE__BLUEFIN_NETWORK:-mainnet}
+      - EXCHANGE__BLUEFIN_NETWORK=${EXCHANGE__BLUEFIN_NETWORK:-mainnet}
       - BLUEFIN_SERVICE_API_KEY=${BLUEFIN_SERVICE_API_KEY:-}
       - BLUEFIN_SERVICE_RATE_LIMIT=${BLUEFIN_SERVICE_RATE_LIMIT:-100}
       - HOST=0.0.0.0
@@ -98,9 +99,10 @@ services:
     # Note: Symbol should match the exchange type (BTC-USD for Coinbase, SUI-PERP for Bluefin)
     command: ["python", "-m", "bot.main", "live", "--symbol", "SUI-PERP", "--interval", "15s", "--force"]
 
-    # Environment variables from .env file
+    # Environment variables from .env file (optional - uses defaults if missing)
     env_file:
-      - .env
+      - path: .env
+        required: false
 
     # Docker-specific environment overrides (minimal set to avoid conflicts with .env)
     environment:
@@ -113,6 +115,7 @@ services:
       - SYSTEM__ENVIRONMENT=${SYSTEM__ENVIRONMENT:-development}  # Development environment for paper trading
       # Exchange Configuration - Use setting from .env file
       - EXCHANGE__CB_SANDBOX=${EXCHANGE__CB_SANDBOX:-true}  # Use setting from .env file
+      - EXCHANGE__BLUEFIN_NETWORK=${EXCHANGE__BLUEFIN_NETWORK:-mainnet}  # Network configuration for Bluefin
       - BLUEFIN_USE_REAL_DATA=${BLUEFIN_USE_REAL_DATA:-true}
       - BLUEFIN_SERVICE_URL=${BLUEFIN_SERVICE_URL:-http://bluefin-service:8080}
       - BLUEFIN_SERVICE_API_KEY=${BLUEFIN_SERVICE_API_KEY:-}
@@ -123,9 +126,9 @@ services:
       - LLM__ENABLE_PERFORMANCE_TRACKING=${LLM__ENABLE_PERFORMANCE_TRACKING:-true}
       - LLM__ENABLE_LANGCHAIN_CALLBACKS=${LLM__ENABLE_LANGCHAIN_CALLBACKS:-true}
       - LLM__LOG_MARKET_CONTEXT=${LLM__LOG_MARKET_CONTEXT:-true}
-      # MCP Memory Configuration (disabled for testing)
-      - MCP_ENABLED=${MCP_ENABLED:-false}
-      # - MCP_SERVER_URL=http://mcp-memory:8765
+      # MCP Memory Configuration
+      - MCP_ENABLED=${MCP_ENABLED:-true}
+      - MCP_SERVER_URL=http://mcp-memory:8765
       # WebSocket Publishing Configuration - Enhanced connection resilience for dashboard integration
       - SYSTEM__ENABLE_WEBSOCKET_PUBLISHING=${SYSTEM__ENABLE_WEBSOCKET_PUBLISHING:-true}
       - SYSTEM__WEBSOCKET_DASHBOARD_URL=${SYSTEM__WEBSOCKET_DASHBOARD_URL:-ws://dashboard-backend:8000/ws}
@@ -192,8 +195,8 @@ services:
         condition: service_healthy
       mcp-omnisearch:
         condition: service_healthy
-    #   mcp-memory:  # Temporarily disabled
-    #     condition: service_healthy
+      mcp-memory:
+        condition: service_healthy
 
   # MCP OmniSearch Server for Enhanced Market Intelligence
   mcp-omnisearch:
@@ -227,7 +230,8 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
 
     env_file:
-      - .env
+      - path: .env
+        required: false
 
     volumes:
       - ./logs/mcp:/app/logs

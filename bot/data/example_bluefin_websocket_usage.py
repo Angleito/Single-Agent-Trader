@@ -26,12 +26,14 @@ async def on_new_candle(candle: MarketData):
 
 async def main():
     """Example of using BluefinWebSocketClient."""
-    # Create WebSocket client
+    # Create WebSocket client with network parameter
+    # You can also set EXCHANGE__BLUEFIN_NETWORK=testnet in environment
     ws_client = BluefinWebSocketClient(
         symbol="SUI-PERP",
         interval="1m",
         candle_limit=500,
         on_candle_update=on_new_candle,
+        network="mainnet",  # or "testnet" for staging environment
     )
 
     try:
@@ -93,6 +95,7 @@ async def integrate_with_existing_provider():
             on_candle_update=lambda candle: asyncio.create_task(
                 self._notify_subscribers(candle)
             ),
+            network="mainnet",  # or "testnet" - you can also leave it None to use env var
         )
 
         # Connect WebSocket

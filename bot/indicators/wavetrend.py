@@ -292,8 +292,8 @@ class WaveTrend:
                     "shortage": min_required - len(src),
                 },
             )
-            return pd.Series(dtype=float, index=src.index), pd.Series(
-                dtype=float, index=src.index
+            return pd.Series(dtype="float64", index=src.index), pd.Series(
+                dtype="float64", index=src.index
             )
 
         # Data quality validation
@@ -361,8 +361,8 @@ class WaveTrend:
                         "channel_length": ch_len,
                     },
                 )
-                return pd.Series(dtype=float, index=src.index), pd.Series(
-                    dtype=float, index=src.index
+                return pd.Series(dtype="float64", index=src.index), pd.Series(
+                    dtype="float64", index=src.index
                 )
 
             # Clean source data for calculation
@@ -418,8 +418,8 @@ class WaveTrend:
                         "channel_length": ch_len,
                     },
                 )
-                return pd.Series(dtype=float, index=src.index), pd.Series(
-                    dtype=float, index=src.index
+                return pd.Series(dtype="float64", index=src.index), pd.Series(
+                    dtype="float64", index=src.index
                 )
 
             # Ensure ESA is properly formatted and clean
@@ -485,8 +485,8 @@ class WaveTrend:
                         "channel_length": ch_len,
                     },
                 )
-                return pd.Series(dtype=float, index=src.index), pd.Series(
-                    dtype=float, index=src.index
+                return pd.Series(dtype="float64", index=src.index), pd.Series(
+                    dtype="float64", index=src.index
                 )
 
             # Ensure DE is properly formatted and clean
@@ -616,8 +616,8 @@ class WaveTrend:
                         "average_length": avg_len,
                     },
                 )
-                return pd.Series(dtype=float, index=src.index), pd.Series(
-                    dtype=float, index=src.index
+                return pd.Series(dtype="float64", index=src.index), pd.Series(
+                    dtype="float64", index=src.index
                 )
 
             # Replace any remaining NaN values in CI with forward/backward fill
@@ -672,8 +672,8 @@ class WaveTrend:
                         "average_length": avg_len,
                     },
                 )
-                return pd.Series(dtype=float, index=src.index), pd.Series(
-                    dtype=float, index=src.index
+                return pd.Series(dtype="float64", index=src.index), pd.Series(
+                    dtype="float64", index=src.index
                 )
 
             # Ensure TCI is properly formatted and clean
@@ -708,8 +708,8 @@ class WaveTrend:
                         "ma_length": ma_length,
                     },
                 )
-                return pd.Series(dtype=float, index=src.index), pd.Series(
-                    dtype=float, index=src.index
+                return pd.Series(dtype="float64", index=src.index), pd.Series(
+                    dtype="float64", index=src.index
                 )
 
             # Clean WT1 for calculation
@@ -764,8 +764,8 @@ class WaveTrend:
                         "ma_length": ma_length,
                     },
                 )
-                return pd.Series(dtype=float, index=src.index), pd.Series(
-                    dtype=float, index=src.index
+                return pd.Series(dtype="float64", index=src.index), pd.Series(
+                    dtype="float64", index=src.index
                 )
 
             # Ensure WT2 is properly formatted and clean
@@ -843,8 +843,8 @@ class WaveTrend:
             import traceback
 
             logger.error(f"Full traceback: {traceback.format_exc()}")
-            return pd.Series(dtype=float, index=src.index), pd.Series(
-                dtype=float, index=src.index
+            return pd.Series(dtype="float64", index=src.index), pd.Series(
+                dtype="float64", index=src.index
             )
 
     def get_overbought_oversold_conditions(
@@ -882,7 +882,7 @@ class WaveTrend:
                 "Empty WT2 data for overbought/oversold conditions",
                 extra={"indicator": "wavetrend", "issue": "empty_wt2_data"},
             )
-            empty_series = pd.Series(dtype=bool, index=pd.Index([]))
+            empty_series = pd.Series(dtype="bool", index=pd.Index([]))
             return {
                 "overbought": empty_series,
                 "oversold": empty_series,
@@ -949,7 +949,7 @@ class WaveTrend:
                 },
             )
             empty_series = pd.Series(
-                dtype=bool, index=wt2.index if wt2 is not None else pd.Index([])
+                dtype="bool", index=wt2.index if wt2 is not None else pd.Index([])
             )
             return {
                 "overbought": empty_series,
@@ -995,7 +995,7 @@ class WaveTrend:
                     "wt2_empty": wt2 is None or wt2.empty,
                 },
             )
-            empty_series = pd.Series(dtype=bool, index=pd.Index([]))
+            empty_series = pd.Series(dtype="bool", index=pd.Index([]))
             return {
                 "wt1_cross_above_wt2": empty_series,
                 "wt1_cross_below_wt2": empty_series,
@@ -1078,7 +1078,7 @@ class WaveTrend:
                 },
             )
             empty_series = pd.Series(
-                dtype=bool, index=wt1.index if wt1 is not None else pd.Index([])
+                dtype="bool", index=wt1.index if wt1 is not None else pd.Index([])
             )
             return {
                 "wt1_cross_above_wt2": empty_series,

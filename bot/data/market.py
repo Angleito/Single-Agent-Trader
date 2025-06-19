@@ -29,12 +29,15 @@ try:
 
 except ImportError:
     # Mock classes for when Coinbase SDK is not installed
-    class CoinbaseAdvancedTrader:
+    class MockCoinbaseAdvancedTrader:
         def __init__(self, **kwargs):
             pass
 
-    class CoinbaseAPIException(Exception):
+    class MockCoinbaseAPIException(Exception):
         pass
+
+    CoinbaseAdvancedTrader = MockCoinbaseAdvancedTrader  # type: ignore[misc,assignment]
+    CoinbaseAPIException = MockCoinbaseAPIException  # type: ignore[misc,assignment]
 
     # Mock jwt_generator module for when SDK is not available
     class MockJwtGenerator:
@@ -679,7 +682,12 @@ class MarketDataProvider:
             and settings.exchange.cdp_private_key is not None
         )
 
-        if has_legacy_credentials:
+        if (
+            has_legacy_credentials
+            and settings.exchange.cb_api_key
+            and settings.exchange.cb_api_secret
+            and settings.exchange.cb_passphrase
+        ):
             self._rest_client = CoinbaseAdvancedTrader(
                 api_key=settings.exchange.cb_api_key.get_secret_value(),
                 api_secret=settings.exchange.cb_api_secret.get_secret_value(),
@@ -687,7 +695,11 @@ class MarketDataProvider:
                 sandbox=settings.exchange.cb_sandbox,
             )
             logger.info("Initialized REST client with legacy Coinbase credentials")
-        elif has_cdp_credentials:
+        elif (
+            has_cdp_credentials
+            and settings.exchange.cdp_api_key_name
+            and settings.exchange.cdp_private_key
+        ):
             self._rest_client = CoinbaseAdvancedTrader(
                 api_key=settings.exchange.cdp_api_key_name.get_secret_value(),
                 api_secret=settings.exchange.cdp_private_key.get_secret_value(),
@@ -700,7 +712,7 @@ class MarketDataProvider:
 
     async def _fetch_historical_data_batched(
         self,
-        start_time: datetime,
+        start_time: datetime | None,
         end_time: datetime,
         granularity: str,
         required_candles: int,
@@ -806,12 +818,14 @@ class MarketDataProvider:
         try:
             url = f"{self.COINBASE_REST_URL}/api/v3/brokerage/market/products/{self._data_symbol}/candles"
 
-            params = {
+            params: dict[str, int | str] = {
                 "start": int(start_time.timestamp()),
                 "end": int(end_time.timestamp()),
                 "granularity": self._format_granularity(granularity),
             }
 
+            if self._session is None:
+                raise RuntimeError("HTTP session not initialized")
             async with self._session.get(url, params=params) as response:
                 if response.status != 200:
                     raise Exception(
@@ -932,12 +946,14 @@ class MarketDataProvider:
             # Use public API endpoint for historical candles with data symbol
             url = f"{self.COINBASE_REST_URL}/api/v3/brokerage/market/products/{self._data_symbol}/candles"
 
-            params = {
+            params: dict[str, int | str] = {
                 "start": int(start_time.timestamp()),
                 "end": int(end_time.timestamp()),
                 "granularity": self._format_granularity(granularity),
             }
 
+            if self._session is None:
+                raise RuntimeError("HTTP session not initialized")
             async with self._session.get(url, params=params) as response:
                 if response.status != 200:
                     raise Exception(
@@ -995,6 +1011,8 @@ class MarketDataProvider:
         try:
             url = f"{self.COINBASE_REST_URL}/api/v3/brokerage/market/products/{self._data_symbol}"
 
+            if self._session is None:
+                raise RuntimeError("HTTP session not initialized")
             async with self._session.get(url) as response:
                 if response.status != 200:
                     logger.warning(f"Failed to fetch latest price: {response.status}")
@@ -1033,8 +1051,12 @@ class MarketDataProvider:
 
         try:
             url = f"{self.COINBASE_REST_URL}/api/v3/brokerage/market/products/{self.symbol}/book"
-            params = {"limit": min(level * 10, 50)}  # Reasonable limit based on level
+            params: dict[str, int] = {
+                "limit": min(level * 10, 50)
+            }  # Reasonable limit based on level
 
+            if self._session is None:
+                raise RuntimeError("HTTP session not initialized")
             async with self._session.get(url, params=params) as response:
                 if response.status != 200:
                     logger.warning(f"Failed to fetch orderbook: {response.status}")
@@ -1134,7 +1156,8 @@ class MarketDataProvider:
         # Add JWT authentication if available
         if jwt_token:
             for sub in subscriptions:
-                sub["jwt"] = jwt_token
+                if isinstance(sub, dict):
+                    sub["jwt"] = jwt_token
             logger.info("Using CDP JWT authentication for WebSocket")
         else:
             logger.info("Using public WebSocket connection (no authentication)")
@@ -1144,13 +1167,18 @@ class MarketDataProvider:
         async with websockets.connect(
             self.COINBASE_WS_URL, timeout=settings.exchange.websocket_timeout
         ) as websocket:
-            self._ws_connection = websocket
+            self._ws_connection = websocket  # type: ignore[assignment]
 
             # Send all subscriptions
             for i, subscription in enumerate(subscriptions):
                 await websocket.send(json.dumps(subscription))
+                channel_name = (
+                    subscription.get("channel", "unknown")
+                    if isinstance(subscription, dict)
+                    else "unknown"
+                )
                 logger.debug(
-                    f"Sent subscription {i+1}/{len(subscriptions)}: {subscription.get('channel', 'unknown')}"
+                    f"Sent subscription {i+1}/{len(subscriptions)}: {channel_name}"
                 )
                 # Small delay between subscriptions to avoid overwhelming the server
                 await asyncio.sleep(0.1)

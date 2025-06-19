@@ -35,12 +35,14 @@ async def main():
 
     logger.info(f"Starting Bluefin WebSocket client for {symbol}")
 
-    # Create WebSocket client
+    # Create WebSocket client with network specification
+    # Network can be "mainnet" or "testnet", or None to use environment variable
     ws_client = BluefinWebSocketClient(
         symbol=symbol,
         interval=interval,
         candle_limit=500,
         on_candle_update=on_candle_update,
+        network="mainnet",  # Change to "testnet" for staging environment
     )
 
     try:

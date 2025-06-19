@@ -211,9 +211,9 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             "experiences": [
                 {
                     "experience_id": exp.experience_id,
-                    "action": exp.action,
+                    "action": exp.decision.get("action", "UNKNOWN"),
                     "outcome": exp.outcome,
-                    "patterns": getattr(exp, "patterns", []),
+                    "patterns": exp.pattern_tags,
                     "timestamp": exp.timestamp.isoformat() if exp.timestamp else None,
                 }
                 for exp in similar_experiences
@@ -246,7 +246,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                 results=[
                     {
                         "experience_id": exp.experience_id,
-                        "action": exp.action,
+                        "action": exp.decision.get("action", "UNKNOWN"),
                         "similarity": 0.8,  # Placeholder, actual similarity would come from memory server
                         "success": (
                             exp.outcome.get("success", False) if exp.outcome else False
@@ -295,7 +295,11 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                 current_price=market_state.current_price,
                 indicators=self._extract_indicator_dict(market_state),
                 dominance_data=self._extract_dominance_dict(market_state),
-                market_sentiment=market_state.indicators.market_sentiment,
+                market_sentiment=(
+                    market_state.indicators.market_sentiment
+                    if market_state.indicators
+                    else None
+                ),
                 max_results=settings.mcp.max_memories_per_query,
                 min_similarity=settings.mcp.similarity_threshold,
             )
@@ -331,21 +335,21 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             action = exp.decision.get("action", "UNKNOWN")
 
             context_lines.append(f"\n{i+1}. Past {action} trade:")
-            context_lines.append(f"   Market conditions: ${exp.price}")
+            context_lines.append(f"   Market conditions: ${float(exp.price)}")
 
             # Add indicator snapshot
             indicators = []
-            if exp.indicators.get("rsi"):
+            if exp.indicators and exp.indicators.get("rsi"):
                 indicators.append(f"RSI={exp.indicators['rsi']:.1f}")
-            if exp.indicators.get("cipher_b_wave"):
+            if exp.indicators and exp.indicators.get("cipher_b_wave"):
                 indicators.append(f"Wave={exp.indicators['cipher_b_wave']:.1f}")
             if indicators:
                 context_lines.append(f"   Indicators: {', '.join(indicators)}")
 
             # Add outcome if available
             if exp.outcome:
-                success = "SUCCESS" if exp.outcome["success"] else "FAILURE"
-                pnl = exp.outcome["pnl"]
+                success = "SUCCESS" if exp.outcome.get("success", False) else "FAILURE"
+                pnl = exp.outcome.get("pnl", 0.0)
                 duration = exp.trade_duration_minutes or 0
 
                 context_lines.append(
@@ -724,7 +728,9 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             # Group by sentiment and analyze success rates
             sentiment_groups = {}
             for exp in recent_experiences:
-                sentiment_data = exp.market_state_snapshot.get("sentiment_data", {})
+                sentiment_data = (exp.market_state_snapshot or {}).get(
+                    "sentiment_data", {}
+                )
                 if sentiment_data:
                     sentiment = sentiment_data.get("overall_sentiment", "neutral")
                     if sentiment not in sentiment_groups:
@@ -785,7 +791,9 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             # Extract sentiment scores over time
             sentiment_scores = []
             for exp in recent_experiences:
-                sentiment_data = exp.market_state_snapshot.get("sentiment_data", {})
+                sentiment_data = (exp.market_state_snapshot or {}).get(
+                    "sentiment_data", {}
+                )
                 if sentiment_data and "sentiment_score" in sentiment_data:
                     sentiment_scores.append(sentiment_data["sentiment_score"])
 
@@ -833,7 +841,11 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                 current_price=market_state.current_price,
                 indicators=self._extract_indicator_dict(market_state),
                 dominance_data=self._extract_dominance_dict(market_state),
-                market_sentiment=market_state.indicators.market_sentiment,
+                market_sentiment=(
+                    market_state.indicators.market_sentiment
+                    if market_state.indicators
+                    else None
+                ),
                 max_results=limit * 2,  # Get more to filter for sentiment data
                 min_similarity=0.1,  # Very low threshold to get recent experiences
                 time_weight=0.8,  # High time weight to prioritize recent experiences
@@ -847,7 +859,11 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             # Filter for experiences with sentiment data
             sentiment_experiences = []
             for exp in all_experiences:
-                if exp.market_state_snapshot.get("sentiment_data"):
+                if (
+                    hasattr(exp, "market_state_snapshot")
+                    and exp.market_state_snapshot
+                    and exp.market_state_snapshot.get("sentiment_data")
+                ):
                     sentiment_experiences.append(exp)
                     if len(sentiment_experiences) >= limit:
                         break

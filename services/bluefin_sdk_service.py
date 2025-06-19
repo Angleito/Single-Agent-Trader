@@ -4,6 +4,12 @@ Bluefin SDK Service - REST API wrapper for the Bluefin SDK.
 
 This service runs in an isolated Docker container with the Bluefin SDK installed,
 providing a REST API for the main bot to interact with Bluefin DEX.
+
+IMPORTANT INTERVAL LIMITATIONS:
+- Bluefin DEX only supports specific intervals: 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d, 1w, 1M
+- Sub-minute intervals (15s, 30s, etc.) are NOT supported and will be converted to 1m with warnings
+- This conversion results in granularity loss - 15s data becomes 1m aggregated data
+- All interval conversions are logged with warnings to alert users of data granularity changes
 """
 
 import asyncio
@@ -25,6 +31,7 @@ from bluefin_v2_client.interfaces import GetOrderbookRequest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
+    from bot.exchange.bluefin_endpoints import BluefinEndpointConfig, get_rest_api_url
     from bot.utils.secure_logging import create_secure_logger
     from bot.utils.symbol_utils import (
         BluefinSymbolConverter,
@@ -40,6 +47,14 @@ except ImportError:
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
     logger = logging.getLogger(__name__)
+
+    # Fallback endpoint configuration if centralized config not available
+    def get_rest_api_url(network: str = "mainnet") -> str:
+        """Fallback endpoint resolver when centralized config is not available."""
+        if network.lower() == "testnet":
+            return "https://dapi.api.sui-staging.bluefin.io"
+        else:
+            return "https://dapi.api.sui-prod.bluefin.io"
 
     # Create fallback symbol utilities
     class BluefinSymbolConverter:
@@ -268,16 +283,17 @@ class BluefinSDKService:
         enum value (accessed via .value) rather than the enum object itself.
 
         FIXES IMPLEMENTED:
-        - Robust type checking to handle both string and enum objects
+        - Comprehensive type checking to handle string, enum, and mixed types
         - Multiple fallback approaches for enum attribute access (.value, .name, str())
-        - Safe getattr() usage to prevent AttributeError on missing attributes
+        - Safe getattr() usage with explicit exception handling
         - Graceful degradation to string conversion when enum access fails
+        - Proper symbol normalization for SDK compatibility
 
         Args:
             symbol: Symbol string like "BTC-PERP", "ETH-PERP", "SUI-PERP"
 
         Returns:
-            The corresponding MARKET_SYMBOLS enum value (string)
+            The corresponding symbol value suitable for SDK calls (string)
 
         Raises:
             BluefinDataError: When symbol cannot be resolved
@@ -294,62 +310,108 @@ class BluefinSDKService:
         try:
             market_symbol = self._get_market_symbol(symbol)
 
-            # Robust type checking: handle both string and enum types
-            # First check if it's already a string
+            # Enhanced type checking with multiple fallback strategies
+            # Strategy 1: Already a string - return as-is
             if isinstance(market_symbol, str):
-                # It's already a string, return as-is
                 logger.debug(
                     "Market symbol is already a string value",
                     extra={
                         "service_id": self.service_id,
                         "input_symbol": symbol,
                         "market_symbol": market_symbol,
+                        "strategy": "direct_string",
                     },
                 )
                 return market_symbol
 
-            # Check if it's an enum-like object with a value attribute
-            elif hasattr(market_symbol, "value") and not isinstance(market_symbol, str):
-                # It's an enum object, safely extract the value
+            # Strategy 2: Enum-like object - try multiple attribute access methods
+            symbol_value = None
+
+            # Try .value attribute first (most common for enums)
+            if hasattr(market_symbol, "value"):
                 try:
-                    symbol_value = market_symbol.value
+                    symbol_value = getattr(market_symbol, "value", None)
+                    if symbol_value is not None:
+                        logger.debug(
+                            "Extracted enum value from MARKET_SYMBOLS object",
+                            extra={
+                                "service_id": self.service_id,
+                                "input_symbol": symbol,
+                                "market_symbol": str(market_symbol),
+                                "symbol_value": symbol_value,
+                                "value_type": type(symbol_value).__name__,
+                                "strategy": "enum_value_attribute",
+                            },
+                        )
+                        return str(symbol_value)
+                except (AttributeError, TypeError) as attr_err:
                     logger.debug(
-                        "Extracted enum value from MARKET_SYMBOLS object",
+                        "Failed to access .value attribute",
                         extra={
                             "service_id": self.service_id,
                             "input_symbol": symbol,
-                            "market_symbol": str(market_symbol),
-                            "symbol_value": symbol_value,
-                            "value_type": type(symbol_value).__name__,
-                        },
-                    )
-                    return symbol_value
-                except AttributeError as attr_err:
-                    # This handles the "'str' object has no attribute 'value'" error
-                    logger.warning(
-                        "MARKET_SYMBOLS object does not have .value attribute, treating as string",
-                        extra={
-                            "service_id": self.service_id,
-                            "input_symbol": symbol,
-                            "market_symbol": str(market_symbol),
                             "error": str(attr_err),
+                            "strategy": "enum_value_attribute_failed",
                         },
                     )
-                    return str(market_symbol)
-            else:
-                # Unknown type, convert to string
+
+            # Try .name attribute as fallback
+            if hasattr(market_symbol, "name"):
+                try:
+                    symbol_value = getattr(market_symbol, "name", None)
+                    if symbol_value is not None:
+                        logger.debug(
+                            "Extracted enum name from MARKET_SYMBOLS object",
+                            extra={
+                                "service_id": self.service_id,
+                                "input_symbol": symbol,
+                                "market_symbol": str(market_symbol),
+                                "symbol_value": symbol_value,
+                                "strategy": "enum_name_attribute",
+                            },
+                        )
+                        return str(symbol_value)
+                except (AttributeError, TypeError) as attr_err:
+                    logger.debug(
+                        "Failed to access .name attribute",
+                        extra={
+                            "service_id": self.service_id,
+                            "input_symbol": symbol,
+                            "error": str(attr_err),
+                            "strategy": "enum_name_attribute_failed",
+                        },
+                    )
+
+            # Strategy 3: Direct string conversion as final fallback
+            try:
                 symbol_str = str(market_symbol)
-                logger.warning(
-                    "Unknown market symbol type, converting to string",
+                logger.debug(
+                    "Using direct string conversion",
                     extra={
                         "service_id": self.service_id,
                         "input_symbol": symbol,
                         "market_symbol_type": type(market_symbol).__name__,
-                        "market_symbol": str(market_symbol),
                         "converted_value": symbol_str,
+                        "strategy": "direct_string_conversion",
                     },
                 )
+
+                # Clean up the string representation if it contains enum prefixes
+                if "MARKET_SYMBOLS." in symbol_str:
+                    symbol_str = symbol_str.replace("MARKET_SYMBOLS.", "")
+
                 return symbol_str
+
+            except Exception as str_err:
+                logger.warning(
+                    "Failed to convert market symbol to string",
+                    extra={
+                        "service_id": self.service_id,
+                        "input_symbol": symbol,
+                        "error": str(str_err),
+                        "strategy": "direct_string_conversion_failed",
+                    },
+                )
 
         except Exception as e:
             if isinstance(e, BluefinDataError):
@@ -357,24 +419,55 @@ class BluefinSDKService:
 
             # If all else fails, provide a safe fallback
             logger.error(
-                "Critical error in symbol value extraction, using original symbol as fallback",
+                "Critical error in symbol value extraction, using normalized symbol as fallback",
                 extra={
                     "service_id": self.service_id,
                     "input_symbol": symbol,
                     "error_type": type(e).__name__,
                     "error_message": str(e),
                     "traceback": traceback.format_exc(),
-                    "fallback_value": symbol,
+                    "fallback_strategy": "normalized_symbol",
                 },
             )
-            return symbol  # Return original symbol as ultimate fallback
+
+            # Try to normalize the symbol before returning as fallback
+            try:
+                # Extract base currency from symbol if it's in PERP format
+                if "-PERP" in symbol.upper():
+                    base_symbol = symbol.upper().split("-")[0]
+                    logger.debug(
+                        "Using normalized base symbol as fallback",
+                        extra={
+                            "service_id": self.service_id,
+                            "original_symbol": symbol,
+                            "fallback_value": base_symbol,
+                        },
+                    )
+                    return base_symbol
+                else:
+                    return symbol.upper()
+            except Exception as fallback_err:
+                logger.error(
+                    "Even fallback normalization failed, returning original symbol",
+                    extra={
+                        "service_id": self.service_id,
+                        "original_symbol": symbol,
+                        "fallback_error": str(fallback_err),
+                    },
+                )
+                return symbol
 
     def _validate_interval(self, interval: str) -> bool:
-        """Validate if interval is supported by Bluefin API."""
+        """Validate if interval is supported by Bluefin API.
+
+        Returns True only for intervals that are natively supported by Bluefin.
+        This does NOT include unsupported intervals that can be converted.
+        """
         if not interval or not isinstance(interval, str):
             return False
 
-        # Bluefin API supported intervals
+        # Bluefin API officially supported intervals (from API documentation)
+        # Note: Removed "3d" as it's not in the official API docs
         supported = {
             "1m",
             "3m",
@@ -388,7 +481,6 @@ class BluefinSDKService:
             "8h",
             "12h",
             "1d",
-            "3d",
             "1w",
             "1M",
         }
@@ -1659,14 +1751,19 @@ class BluefinSDKService:
             return 60
 
     def _normalize_interval(self, interval: str) -> str:
-        """Normalize interval to Bluefin API supported values."""
+        """Normalize interval to Bluefin API supported values.
+
+        Bluefin DEX officially supports: "1m", "3m", "5m", "15m", "30m", "1h",
+        "2h", "4h", "6h", "8h", "12h", "1d", "1w", "1M"
+
+        Note: Bluefin does NOT support sub-minute intervals like 15s or 30s.
+        These will be mapped to 1m with a warning about data granularity loss.
+        """
         if not interval:
             return "1m"
 
-        # Bluefin API supported intervals: 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d, 3d, 1w, 1M
+        # Bluefin API officially supported intervals (from API documentation)
         supported_intervals = {
-            "15s": "1m",  # 15 seconds -> 1 minute
-            "30s": "1m",  # 30 seconds -> 1 minute
             "1m": "1m",
             "3m": "3m",
             "5m": "5m",
@@ -1679,15 +1776,42 @@ class BluefinSDKService:
             "8h": "8h",
             "12h": "12h",
             "1d": "1d",
-            "3d": "3d",
             "1w": "1w",
             "1M": "1M",
         }
 
-        normalized = supported_intervals.get(interval, "1m")
-        if normalized != interval:
-            logger.info(f"Normalized interval {interval} -> {normalized}")
-        return normalized
+        # Check if interval is directly supported
+        if interval in supported_intervals:
+            return supported_intervals[interval]
+
+        # Handle unsupported sub-minute intervals with explicit warnings
+        sub_minute_intervals = {"15s", "30s", "45s"}
+        if interval in sub_minute_intervals:
+            logger.warning(
+                f"⚠️ GRANULARITY LOSS: Bluefin does not support {interval} intervals. "
+                f"Converting to 1m - this will result in lower data granularity!",
+                extra={
+                    "service_id": self.service_id,
+                    "requested_interval": interval,
+                    "converted_interval": "1m",
+                    "granularity_loss": True,
+                    "impact": "Data points will be aggregated from higher frequency to 1-minute candles",
+                },
+            )
+            return "1m"
+
+        # Handle other unsupported intervals
+        logger.warning(
+            f"Unsupported interval '{interval}' - using default 1m. "
+            f"Supported intervals: {list(supported_intervals.keys())}",
+            extra={
+                "service_id": self.service_id,
+                "requested_interval": interval,
+                "converted_interval": "1m",
+                "supported_intervals": list(supported_intervals.keys()),
+            },
+        )
+        return "1m"
 
     async def _get_candles_via_rest_api(
         self, symbol: str, interval: str, limit: int, start_time: int, end_time: int
@@ -1711,12 +1835,17 @@ class BluefinSDKService:
             return []
 
         async def _make_request():
-            # Use the correct Bluefin REST API endpoint
-            network = self.network.lower()
-            if network == "testnet":
-                api_url = "https://dapi.api.sui-staging.bluefin.io"
-            else:
-                api_url = "https://dapi.api.sui-prod.bluefin.io"
+            # Use the correct Bluefin REST API endpoint from centralized config
+            api_url = get_rest_api_url(self.network.lower())
+
+            logger.debug(
+                f"Using Bluefin REST API endpoint for {self.network} network: {api_url}",
+                extra={
+                    "service_id": self.service_id,
+                    "network": self.network,
+                    "api_url": api_url,
+                },
+            )
 
             # Convert symbol to the string format that the REST API expects
             # Strip any MARKET_SYMBOLS prefix and ensure proper format
@@ -2081,11 +2210,18 @@ async def get_ticker(request):
 
         # Final fallback: REST API for ticker
         try:
-            network = service.network.lower()
-            if network == "testnet":
-                api_url = "https://dapi.api.sui-staging.bluefin.io"
-            else:
-                api_url = "https://dapi.api.sui-prod.bluefin.io"
+            # Use centralized endpoint configuration
+            api_url = get_rest_api_url(service.network.lower())
+
+            logger.debug(
+                f"Using ticker API endpoint for {service.network} network: {api_url}",
+                extra={
+                    "service_id": service.service_id,
+                    "network": service.network,
+                    "api_url": api_url,
+                    "symbol": symbol,
+                },
+            )
 
             # Get ticker via REST API
             symbol_str = str(symbol).replace("MARKET_SYMBOLS.", "")

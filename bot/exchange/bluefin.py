@@ -20,6 +20,8 @@ from ..trading_types import (
     TradeAction,
 )
 from ..utils.symbol_utils import (
+    get_testnet_symbol_fallback,
+    is_bluefin_symbol_supported,
     to_bluefin_perp,
     validate_symbol,
 )
@@ -180,6 +182,43 @@ class BluefinClient(BaseExchange):
             f"Initialized BluefinClient (network={network}, " f"dry_run={dry_run})"
         )
 
+    async def validate_symbol_exists(self, symbol: str) -> bool:
+        """
+        Validate that a symbol exists on Bluefin before making API calls.
+
+        Args:
+            symbol: Trading symbol to validate
+
+        Returns:
+            True if symbol exists, False otherwise
+        """
+        try:
+            # Convert to Bluefin format first
+            bluefin_symbol = self._convert_symbol(symbol)
+
+            # Check against known supported symbols
+            if not is_bluefin_symbol_supported(bluefin_symbol, self.network_name):
+                logger.error(
+                    f"Symbol {bluefin_symbol} not supported on {self.network_name}"
+                )
+                return False
+
+            # For additional validation, we could make an API call to get ticker data
+            # but we'll skip this for now to avoid unnecessary API calls
+            if self.dry_run:
+                # In paper trading, accept all converted symbols
+                logger.debug(f"Paper trading: accepting symbol {bluefin_symbol}")
+                return True
+
+            # For live trading, we rely on the supported symbols list
+            # In the future, we could add a ticker API call here for real-time validation
+            logger.info(f"Symbol {bluefin_symbol} validated for {self.network_name}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Symbol validation failed for {symbol}: {e}")
+            return False
+
     async def connect(self) -> bool:
         """
         Connect and authenticate with Bluefin via service.
@@ -293,15 +332,23 @@ class BluefinClient(BaseExchange):
                     "Service client not available or missing methods - using fallback configuration"
                 )
 
-            # Set up basic contract info for common symbols (fallback or primary)
-            common_symbols = ["BTC-PERP", "ETH-PERP", "SUI-PERP", "SOL-PERP"]
-            for symbol in common_symbols:
+            # Set up contract info based on network and supported symbols
+            if self.network_name.lower() in ["testnet", "staging", "sui_staging"]:
+                from ..utils.symbol_utils import BLUEFIN_TESTNET_SYMBOLS
+
+                symbols_info = BLUEFIN_TESTNET_SYMBOLS
+            else:
+                from ..utils.symbol_utils import BLUEFIN_MAINNET_SYMBOLS
+
+                symbols_info = BLUEFIN_MAINNET_SYMBOLS
+
+            for symbol, info in symbols_info.items():
                 self._contract_info[symbol] = {
                     "base_asset": symbol.split("-")[0],
                     "quote_asset": "USDC",
-                    "min_quantity": Decimal("0.001"),
-                    "max_quantity": Decimal("1000000"),
-                    "tick_size": Decimal("0.01"),
+                    "min_quantity": Decimal(str(info.get("min_trade_size", 0.001))),
+                    "max_quantity": Decimal(str(info.get("max_trade_size", 1000000))),
+                    "tick_size": Decimal(str(info.get("step_size", 0.001))),
                     "min_notional": Decimal("10"),
                 }
 
@@ -310,16 +357,43 @@ class BluefinClient(BaseExchange):
         except Exception as e:
             logger.warning(f"Failed to load contract info: {e}")
             # Set up basic contract info even if service fails
-            common_symbols = ["BTC-PERP", "ETH-PERP", "SUI-PERP", "SOL-PERP"]
-            for symbol in common_symbols:
-                self._contract_info[symbol] = {
-                    "base_asset": symbol.split("-")[0],
-                    "quote_asset": "USDC",
-                    "min_quantity": Decimal("0.001"),
-                    "max_quantity": Decimal("1000000"),
-                    "tick_size": Decimal("0.01"),
-                    "min_notional": Decimal("10"),
-                }
+            try:
+                if self.network_name.lower() in ["testnet", "staging", "sui_staging"]:
+                    from ..utils.symbol_utils import BLUEFIN_TESTNET_SYMBOLS
+
+                    symbols_info = BLUEFIN_TESTNET_SYMBOLS
+                else:
+                    from ..utils.symbol_utils import BLUEFIN_MAINNET_SYMBOLS
+
+                    symbols_info = BLUEFIN_MAINNET_SYMBOLS
+
+                for symbol, info in symbols_info.items():
+                    self._contract_info[symbol] = {
+                        "base_asset": symbol.split("-")[0],
+                        "quote_asset": "USDC",
+                        "min_quantity": Decimal(str(info.get("min_trade_size", 0.001))),
+                        "max_quantity": Decimal(
+                            str(info.get("max_trade_size", 1000000))
+                        ),
+                        "tick_size": Decimal(str(info.get("step_size", 0.001))),
+                        "min_notional": Decimal("10"),
+                    }
+            except ImportError:
+                # Ultimate fallback if imports fail
+                common_symbols = [
+                    "BTC-PERP",
+                    "ETH-PERP",
+                    "SOL-PERP",
+                ]  # Skip SUI-PERP for testnet safety
+                for symbol in common_symbols:
+                    self._contract_info[symbol] = {
+                        "base_asset": symbol.split("-")[0],
+                        "quote_asset": "USDC",
+                        "min_quantity": Decimal("0.001"),
+                        "max_quantity": Decimal("1000000"),
+                        "tick_size": Decimal("0.01"),
+                        "min_notional": Decimal("10"),
+                    }
             logger.info(
                 f"Using fallback contract info for {len(self._contract_info)} symbols"
             )
@@ -390,6 +464,23 @@ class BluefinClient(BaseExchange):
 
             # Convert to Bluefin perpetual format
             bluefin_symbol = to_bluefin_perp(symbol)
+
+            # Check if symbol is supported on current network
+            if not is_bluefin_symbol_supported(bluefin_symbol, self.network_name):
+                if self.network_name.lower() in ["testnet", "staging", "sui_staging"]:
+                    # Get testnet fallback
+                    fallback_symbol = get_testnet_symbol_fallback(bluefin_symbol)
+                    logger.warning(
+                        f"Symbol {bluefin_symbol} not available on {self.network_name}, "
+                        f"using fallback: {fallback_symbol}"
+                    )
+                    bluefin_symbol = fallback_symbol
+                else:
+                    logger.error(
+                        f"Symbol {bluefin_symbol} not supported on {self.network_name}"
+                    )
+                    raise ValueError(f"Unsupported symbol: {bluefin_symbol}")
+
             logger.debug(
                 f"Converted symbol {symbol} to Bluefin format: {bluefin_symbol}"
             )
@@ -405,6 +496,15 @@ class BluefinClient(BaseExchange):
                 "SUI-USD": "SUI-PERP",
             }
             fallback_symbol = symbol_map.get(symbol, symbol)
+
+            # Final check - if even fallback is not supported, use BTC-PERP
+            if not is_bluefin_symbol_supported(fallback_symbol, self.network_name):
+                if self.network_name.lower() in ["testnet", "staging", "sui_staging"]:
+                    fallback_symbol = "BTC-PERP"  # Safe fallback for testnet
+                    logger.warning(
+                        f"All conversions failed, using safe testnet fallback: {fallback_symbol}"
+                    )
+
             logger.warning(f"Using fallback conversion: {symbol} -> {fallback_symbol}")
             return fallback_symbol
 
@@ -1070,6 +1170,8 @@ class BluefinClient(BaseExchange):
             "ETH-PERP": 2500.0,
             "BTC-USD": 45000.0,
             "BTC-PERP": 45000.0,
+            "SOL-USD": 150.0,
+            "SOL-PERP": 150.0,
             "SUI-USD": 3.50,
             "SUI-PERP": 3.50,
         }

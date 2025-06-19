@@ -129,7 +129,7 @@ class RSIMFIIndicator:
                     "shortage": period - len(df),
                 },
             )
-            return pd.Series(dtype=float, index=df.index)
+            return pd.Series(dtype="float64", index=df.index)
 
         # Data quality validation
         self._validate_input_data_quality(df)
@@ -265,7 +265,7 @@ class RSIMFIIndicator:
                 },
             )
 
-            return rsimfi_values.astype(float)
+            return rsimfi_values.astype("float64")
 
         except Exception as e:
             logger.error(
@@ -282,7 +282,7 @@ class RSIMFIIndicator:
                     },
                 },
             )
-            return pd.Series(dtype=float, index=df.index)
+            return pd.Series(dtype="float64", index=df.index)
 
     def get_color_conditions(self, rsimfi_values: pd.Series) -> pd.DataFrame:
         """

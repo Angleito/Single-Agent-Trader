@@ -809,12 +809,17 @@ class MCPMemoryServer:
         except Exception as e:
             logger.error(f"Remote update error: {e}")
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "MCPMemoryServer":
         """Async context manager entry."""
         await self.connect()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any,
+    ) -> None:
         """Async context manager exit."""
         await self.disconnect()
 
@@ -940,10 +945,94 @@ async def main() -> None:
         """Store a new trading experience."""
         try:
             # Convert dicts to proper objects
-            # This would need proper validation in production
+            from datetime import UTC, datetime
+            from decimal import Decimal
+
+            from ..trading_types import (
+                IndicatorData,
+                MarketData,
+                MarketState,
+                Position,
+                TradeAction,
+            )
+
+            # Convert market_state dict to MarketState object
+            market_state_obj = MarketState(
+                symbol=market_state.get("symbol", "BTC-USD"),
+                interval=market_state.get("interval", "1h"),
+                timestamp=datetime.fromisoformat(
+                    market_state.get("timestamp", datetime.now(UTC).isoformat())
+                ),
+                current_price=Decimal(str(market_state.get("current_price", "0"))),
+                ohlcv_data=[
+                    MarketData(
+                        symbol=ohlcv.get("symbol", "BTC-USD"),
+                        timestamp=datetime.fromisoformat(
+                            ohlcv.get("timestamp", datetime.now(UTC).isoformat())
+                        ),
+                        open=Decimal(str(ohlcv.get("open", "0"))),
+                        high=Decimal(str(ohlcv.get("high", "0"))),
+                        low=Decimal(str(ohlcv.get("low", "0"))),
+                        close=Decimal(str(ohlcv.get("close", "0"))),
+                        volume=Decimal(str(ohlcv.get("volume", "0"))),
+                    )
+                    for ohlcv in market_state.get("ohlcv_data", [])
+                ],
+                indicators=IndicatorData(
+                    timestamp=datetime.fromisoformat(
+                        market_state.get("indicators", {}).get(
+                            "timestamp", datetime.now(UTC).isoformat()
+                        )
+                    ),
+                    **{
+                        k: v
+                        for k, v in market_state.get("indicators", {}).items()
+                        if k != "timestamp"
+                    },
+                ),
+                current_position=Position(
+                    symbol=market_state.get("current_position", {}).get(
+                        "symbol", "BTC-USD"
+                    ),
+                    side=market_state.get("current_position", {}).get("side", "FLAT"),
+                    size=Decimal(
+                        str(market_state.get("current_position", {}).get("size", "0"))
+                    ),
+                    entry_price=(
+                        Decimal(
+                            str(
+                                market_state.get("current_position", {}).get(
+                                    "entry_price", "0"
+                                )
+                            )
+                        )
+                        if market_state.get("current_position", {}).get("entry_price")
+                        else None
+                    ),
+                    timestamp=datetime.fromisoformat(
+                        market_state.get("current_position", {}).get(
+                            "timestamp", datetime.now(UTC).isoformat()
+                        )
+                    ),
+                ),
+                dominance_data=market_state.get("dominance_data"),
+                dominance_candles=market_state.get("dominance_candles"),
+            )
+
+            # Convert trade_action dict to TradeAction object
+            trade_action_obj = TradeAction(
+                action=trade_action.get("action", "HOLD"),
+                size_pct=float(trade_action.get("size_pct", 0)),
+                take_profit_pct=float(trade_action.get("take_profit_pct", 0)),
+                stop_loss_pct=float(trade_action.get("stop_loss_pct", 0)),
+                rationale=trade_action.get("rationale", "No rationale provided"),
+                leverage=int(trade_action.get("leverage", 1)),
+                reduce_only=bool(trade_action.get("reduce_only", False)),
+            )
+
             experience_id = await memory_server.store_experience(
-                market_state,  # Would need conversion
-                trade_action,  # Would need conversion
+                market_state_obj,
+                trade_action_obj,
                 additional_context,
             )
             return {"experience_id": experience_id}
@@ -956,26 +1045,115 @@ async def main() -> None:
         experience = memory_server.memory_cache.get(experience_id)
         if not experience:
             raise HTTPException(status_code=404, detail="Experience not found")
-        return experience.dict()
+        return experience.model_dump()
 
     @app.post("/query")
-    async def query_experiences(market_state: dict, query_params: dict | None = None):
+    async def query_experiences(
+        market_state: dict[str, Any], query_params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Query similar experiences."""
         try:
-            # Convert and query
+            # Convert market_state dict to MarketState object
+            from datetime import UTC, datetime
+            from decimal import Decimal
+
+            from ..trading_types import IndicatorData, MarketData, MarketState, Position
+
+            market_state_obj = MarketState(
+                symbol=market_state.get("symbol", "BTC-USD"),
+                interval=market_state.get("interval", "1h"),
+                timestamp=datetime.fromisoformat(
+                    market_state.get("timestamp", datetime.now(UTC).isoformat())
+                ),
+                current_price=Decimal(str(market_state.get("current_price", "0"))),
+                ohlcv_data=[
+                    MarketData(
+                        symbol=ohlcv.get("symbol", "BTC-USD"),
+                        timestamp=datetime.fromisoformat(
+                            ohlcv.get("timestamp", datetime.now(UTC).isoformat())
+                        ),
+                        open=Decimal(str(ohlcv.get("open", "0"))),
+                        high=Decimal(str(ohlcv.get("high", "0"))),
+                        low=Decimal(str(ohlcv.get("low", "0"))),
+                        close=Decimal(str(ohlcv.get("close", "0"))),
+                        volume=Decimal(str(ohlcv.get("volume", "0"))),
+                    )
+                    for ohlcv in market_state.get("ohlcv_data", [])
+                ],
+                indicators=IndicatorData(
+                    timestamp=datetime.fromisoformat(
+                        market_state.get("indicators", {}).get(
+                            "timestamp", datetime.now(UTC).isoformat()
+                        )
+                    ),
+                    **{
+                        k: v
+                        for k, v in market_state.get("indicators", {}).items()
+                        if k != "timestamp"
+                    },
+                ),
+                current_position=Position(
+                    symbol=market_state.get("current_position", {}).get(
+                        "symbol", "BTC-USD"
+                    ),
+                    side=market_state.get("current_position", {}).get("side", "FLAT"),
+                    size=Decimal(
+                        str(market_state.get("current_position", {}).get("size", "0"))
+                    ),
+                    entry_price=(
+                        Decimal(
+                            str(
+                                market_state.get("current_position", {}).get(
+                                    "entry_price", "0"
+                                )
+                            )
+                        )
+                        if market_state.get("current_position", {}).get("entry_price")
+                        else None
+                    ),
+                    timestamp=datetime.fromisoformat(
+                        market_state.get("current_position", {}).get(
+                            "timestamp", datetime.now(UTC).isoformat()
+                        )
+                    ),
+                ),
+                dominance_data=market_state.get("dominance_data"),
+                dominance_candles=market_state.get("dominance_candles"),
+            )
+
+            # Convert query_params dict to MemoryQuery object if provided
+            query_params_obj = None
+            if query_params:
+                from decimal import Decimal
+
+                query_params_obj = MemoryQuery(
+                    current_price=(
+                        Decimal(str(query_params.get("current_price")))
+                        if query_params.get("current_price")
+                        else None
+                    ),
+                    indicators=query_params.get("indicators"),
+                    dominance_data=query_params.get("dominance_data"),
+                    market_sentiment=query_params.get("market_sentiment"),
+                    pattern_tags=query_params.get("pattern_tags"),
+                    max_results=int(query_params.get("max_results", 10)),
+                    min_similarity=float(query_params.get("min_similarity", 0.7)),
+                    time_weight=float(query_params.get("time_weight", 0.2)),
+                )
+
             experiences = await memory_server.query_similar_experiences(
-                market_state,  # Would need conversion
-                query_params,  # Would need conversion
+                market_state_obj,
+                query_params_obj,
             )
             return {
                 "count": len(experiences),
-                "experiences": [exp.dict() for exp in experiences],
+                "experiences": [exp.model_dump() for exp in experiences],
             }
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @app.on_event("shutdown")
-    async def shutdown_event():
+    async def shutdown_event() -> None:
         """Cleanup on shutdown."""
         await memory_server.disconnect()
 

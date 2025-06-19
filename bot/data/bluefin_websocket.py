@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import os
 from collections import deque
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -46,16 +47,13 @@ class BluefinWebSocketClient:
     a rolling buffer for indicator calculations.
     """
 
-    # Bluefin WebSocket endpoints
-    NOTIFICATION_WS_URL = "wss://notifications.api.sui-prod.bluefin.io"
-    DAPI_WS_URL = "wss://dapi.api.sui-prod.bluefin.io"
-
     def __init__(
         self,
         symbol: str,
         interval: str = "1m",
         candle_limit: int = 500,
         on_candle_update: Callable[[MarketData], None | Awaitable[None]] | None = None,
+        network: str | None = None,
     ):
         """
         Initialize the Bluefin WebSocket client.
@@ -65,11 +63,22 @@ class BluefinWebSocketClient:
             interval: Candle interval for aggregation
             candle_limit: Maximum number of candles to maintain in buffer
             on_candle_update: Callback function for candle updates
+            network: Network type ('mainnet' or 'testnet'). If None, uses environment variable
         """
         self.symbol = symbol
         self.interval = interval
         self.candle_limit = candle_limit
         self.on_candle_update = on_candle_update
+
+        # Determine network and set appropriate URLs
+        self.network = network or os.getenv("EXCHANGE__BLUEFIN_NETWORK", "mainnet")
+
+        if self.network.lower() == "testnet":
+            self.NOTIFICATION_WS_URL = "wss://notifications.api.sui-staging.bluefin.io"
+            self.DAPI_WS_URL = "wss://dapi.api.sui-staging.bluefin.io"
+        else:
+            self.NOTIFICATION_WS_URL = "wss://notifications.api.sui-prod.bluefin.io"
+            self.DAPI_WS_URL = "wss://dapi.api.sui-prod.bluefin.io"
 
         # WebSocket connection state
         self._ws: WebSocketClientProtocol | None = None
@@ -103,7 +112,14 @@ class BluefinWebSocketClient:
         self._error_count = 0
 
         logger.info(
-            f"Initialized BluefinWebSocketClient for {symbol} with {interval} candles"
+            f"Initialized BluefinWebSocketClient for {symbol} with {interval} candles on {self.network} network",
+            extra={
+                "symbol": symbol,
+                "interval": interval,
+                "network": self.network,
+                "notification_ws_url": self.NOTIFICATION_WS_URL,
+                "dapi_ws_url": self.DAPI_WS_URL,
+            },
         )
 
     async def connect(self) -> None:
@@ -1393,6 +1409,7 @@ async def integrate_websocket_with_provider(
         interval=interval,
         candle_limit=provider.candle_limit,
         on_candle_update=on_candle_update,
+        network=getattr(provider, "network", None),  # Pass network if available
     )
 
     await ws_client.connect()

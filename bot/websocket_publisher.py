@@ -88,7 +88,7 @@ class WebSocketPublisher:
         self._publish_enabled = getattr(
             settings.system, "enable_websocket_publishing", True
         )
-        self._last_pong_time = None
+        self._last_pong_time: float | None = None
         self._ping_task: asyncio.Task | None = None
         self._connection_monitor_task: asyncio.Task | None = None
         self._message_queue: asyncio.Queue = asyncio.Queue(maxsize=self.queue_size)
@@ -96,7 +96,7 @@ class WebSocketPublisher:
             maxsize=min(self.queue_size // 4, 500)
         )  # Priority queue for critical messages
         self._queue_worker_task: asyncio.Task | None = None
-        self._connection_start_time = None
+        self._connection_start_time: float | None = None
         self._consecutive_failures = 0
         self._current_url = self.dashboard_url
         self._url_index = 0  # Track which URL we're currently trying
@@ -107,7 +107,7 @@ class WebSocketPublisher:
             "messages_dropped": 0,
             "queue_full_events": 0,
             "max_queue_size_seen": 0,
-            "last_queue_warning": 0,
+            "last_queue_warning": 0.0,
         }
         self._priority_message_types = {
             "performance_update",
@@ -291,10 +291,15 @@ class WebSocketPublisher:
             self._last_pong_time = time.time()
 
             # Start monitoring tasks
-            self._start_monitoring_tasks()
+            await self._start_monitoring_tasks()
 
+            connection_time = time.time() - (
+                self._connection_start_time
+                if self._connection_start_time is not None
+                else time.time()
+            )
             logger.info(
-                f"Successfully connected to dashboard WebSocket in {time.time() - self._connection_start_time:.2f}s"
+                f"Successfully connected to dashboard WebSocket in {connection_time:.2f}s"
             )
 
         except (TimeoutError, OSError, InvalidURI) as e:
@@ -544,7 +549,7 @@ class WebSocketPublisher:
     async def publish_system_status(
         self,
         status: str,
-        details: dict[str, Any] = None,
+        details: dict[str, Any] | None = None,
         health: bool = None,
         status_message_text: str = None,
         **kwargs,
@@ -598,7 +603,7 @@ class WebSocketPublisher:
         decision: str = None,
         confidence: float = 0,
         reasoning: str = "",
-        context: dict[str, Any] = None,
+        context: dict[str, Any] | None = None,
     ) -> None:
         """Publish AI trading decision."""
         # Support both 'action' and 'decision' parameters for backward compatibility
@@ -618,7 +623,7 @@ class WebSocketPublisher:
         trade_action: TradeAction,
         symbol: str,
         current_price: float,
-        context: dict[str, Any] = None,
+        context: dict[str, Any] | None = None,
     ) -> None:
         """Publish trading decision."""
         message = {
@@ -649,7 +654,7 @@ class WebSocketPublisher:
         await self._send_message(message)
 
     async def publish_position_update(
-        self, position: Position = None, positions: list[Position] = None
+        self, position: Position | None = None, positions: list[Position] | None = None
     ) -> None:
         """Publish position update."""
         message = {
@@ -672,7 +677,7 @@ class WebSocketPublisher:
         await self._send_message(message)
 
     async def publish_error(
-        self, error_type: str, error_message: str, details: dict[str, Any] = None
+        self, error_type: str, error_message: str, details: dict[str, Any] | None = None
     ) -> None:
         """Publish error notification."""
         message = {
@@ -708,7 +713,7 @@ class WebSocketPublisher:
                     break
 
                 # Check if we've received a pong recently
-                if self._last_pong_time:
+                if self._last_pong_time is not None:
                     time_since_pong = time.time() - self._last_pong_time
                     if time_since_pong > 60:  # 60 seconds without pong
                         logger.warning(

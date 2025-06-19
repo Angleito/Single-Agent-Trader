@@ -12,7 +12,7 @@ import random
 import time
 from typing import Any
 
-import aiohttp  # type: ignore
+import aiohttp
 from aiohttp import ClientError, ClientTimeout, TCPConnector
 
 from ..error_handling import (
@@ -376,11 +376,12 @@ class BluefinServiceClient:
                 await self._ensure_session()
 
             # Quick health check
-            async with self._session.get(
-                f"{self.service_url}/health", timeout=self.quick_timeout
-            ) as resp:
-                self._connected = resp.status == 200
-                self.last_health_check = current_time
+            if self._session is not None:
+                async with self._session.get(
+                    f"{self.service_url}/health", timeout=self.quick_timeout
+                ) as resp:
+                    self._connected = resp.status == 200
+                    self.last_health_check = current_time
 
                 if self._connected:
                     self.consecutive_failures = 0
@@ -483,43 +484,44 @@ class BluefinServiceClient:
                 },
             )
 
-            async with self._session.get(
-                health_url, timeout=self.quick_timeout
-            ) as resp:
-                self._session_request_count += 1
+            if self._session is not None:
+                async with self._session.get(
+                    health_url, timeout=self.quick_timeout
+                ) as resp:
+                    self._session_request_count += 1
 
-                if resp.status == 200:
-                    data = await resp.json()
-                    self._connected = data.get("status") == "healthy"
-                    self.last_health_check = time.time()
-                    self._record_success()
+                    if resp.status == 200:
+                        data = await resp.json()
+                        self._connected = data.get("status") == "healthy"
+                        self.last_health_check = time.time()
+                        self._record_success()
 
-                    logger.info(
-                        "Successfully connected to Bluefin service",
-                        extra={
-                            "client_id": self.client_id,
-                            "service_url": self.service_url,
-                            "service_status": data.get("status"),
-                            "service_initialized": data.get("initialized"),
-                            "service_network": data.get("network"),
-                            "connected": self._connected,
-                        },
-                    )
-                    return self._connected
-                else:
-                    error_text = await resp.text()
-                    self._record_failure()
-                    logger.error(
-                        "Bluefin service health check failed",
-                        extra={
-                            "client_id": self.client_id,
-                            "service_url": self.service_url,
-                            "status_code": resp.status,
-                            "error_response": error_text[:200],
-                            "operation": "health_check",
-                        },
-                    )
-                    return False
+                        logger.info(
+                            "Successfully connected to Bluefin service",
+                            extra={
+                                "client_id": self.client_id,
+                                "service_url": self.service_url,
+                                "service_status": data.get("status"),
+                                "service_initialized": data.get("initialized"),
+                                "service_network": data.get("network"),
+                                "connected": self._connected,
+                            },
+                        )
+                        return self._connected
+                    else:
+                        error_text = await resp.text()
+                        self._record_failure()
+                        logger.error(
+                            "Bluefin service health check failed",
+                            extra={
+                                "client_id": self.client_id,
+                                "service_url": self.service_url,
+                                "status_code": resp.status,
+                                "error_response": error_text[:200],
+                                "operation": "health_check",
+                            },
+                        )
+                        return False
 
         except (ClientError, TimeoutError, OSError) as e:
             self._record_failure()
@@ -989,8 +991,8 @@ class BluefinServiceClient:
         method: str,
         endpoint: str,
         operation: str,
-        json_data: dict | None = None,
-        params: dict | None = None,
+        json_data: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Make HTTP request with enhanced retry logic and comprehensive error handling.
@@ -1052,10 +1054,10 @@ class BluefinServiceClient:
                     },
                 )
 
-                request_kwargs = {}
-                if json_data:
+                request_kwargs: dict[str, Any] = {}
+                if json_data is not None:
                     request_kwargs["json"] = json_data
-                if params:
+                if params is not None:
                     request_kwargs["params"] = params
 
                 # Choose appropriate timeout based on endpoint
@@ -1067,109 +1069,110 @@ class BluefinServiceClient:
                     timeout = self.normal_timeout
                 request_kwargs["timeout"] = timeout
 
-                async with self._session.request(method, url, **request_kwargs) as resp:
-                    self._session_request_count += 1
+                if self._session is not None:
+                    async with self._session.request(
+                        method, url, **request_kwargs
+                    ) as resp:
+                        self._session_request_count += 1
 
-                    if resp.status == 200:
-                        data = await resp.json()
-                        self._record_success()
-                        logger.debug(
-                            "Request successful",
-                            extra={
-                                "client_id": self.client_id,
-                                "operation": operation,
-                                "status_code": resp.status,
-                                "response_size": len(str(data)),
-                                "session_requests": self._session_request_count,
-                            },
-                        )
-                        return data
-
-                    elif resp.status == 401:
-                        error_msg = (
-                            "Authentication failed - check BLUEFIN_SERVICE_API_KEY"
-                        )
-                        logger.error(
-                            "Authentication failed",
-                            extra={
-                                "client_id": self.client_id,
-                                "operation": operation,
-                                "status_code": resp.status,
-                                "endpoint": endpoint,
-                            },
-                        )
-                        raise BluefinServiceAuthError(error_msg)
-
-                    elif resp.status == 429:
-                        retry_after = int(resp.headers.get("Retry-After", "60"))
-                        error_msg = (
-                            f"Rate limit exceeded, retry after {retry_after} seconds"
-                        )
-                        logger.warning(
-                            "Rate limit exceeded",
-                            extra={
-                                "client_id": self.client_id,
-                                "operation": operation,
-                                "status_code": resp.status,
-                                "retry_after": retry_after,
-                                "endpoint": endpoint,
-                            },
-                        )
-
-                        # For rate limiting, wait and retry if we have attempts left
-                        if attempt < self._max_retries - 1:
-                            wait_time = min(retry_after, 30)  # Cap wait time at 30s
-                            logger.info(
-                                f"Waiting {wait_time}s for rate limit reset",
-                                extra={
-                                    "client_id": self.client_id,
-                                    "operation": operation,
-                                },
-                            )
-                            await asyncio.sleep(wait_time)
-                            continue
-                        else:
-                            raise BluefinServiceRateLimitError(
-                                error_msg, retry_after=retry_after
-                            )
-
-                    else:
-                        error_text = await resp.text()
-                        self._record_failure()
-
-                        if attempt < self._max_retries - 1:
-                            delay = self._calculate_retry_delay(attempt)
-                            logger.warning(
-                                f"Request failed, retrying in {delay:.2f}s",
+                        if resp.status == 200:
+                            data = await resp.json()
+                            self._record_success()
+                            logger.debug(
+                                "Request successful",
                                 extra={
                                     "client_id": self.client_id,
                                     "operation": operation,
                                     "status_code": resp.status,
-                                    "error_response": error_text[:200],
-                                    "attempt": attempt + 1,
-                                    "max_retries": self._max_retries,
-                                    "delay": delay,
+                                    "response_size": len(str(data)),
+                                    "session_requests": self._session_request_count,
                                 },
                             )
-                            await asyncio.sleep(delay)
-                            continue
-                        else:
-                            error_msg = f"Request failed: HTTP {resp.status}"
+                            return data
+
+                        elif resp.status == 401:
+                            error_msg = (
+                                "Authentication failed - check BLUEFIN_SERVICE_API_KEY"
+                            )
                             logger.error(
-                                "All retry attempts failed",
+                                "Authentication failed",
                                 extra={
                                     "client_id": self.client_id,
                                     "operation": operation,
                                     "status_code": resp.status,
-                                    "error_response": error_text[:200],
-                                    "total_attempts": attempt + 1,
+                                    "endpoint": endpoint,
                                 },
                             )
-                            raise BluefinServiceConnectionError(
-                                error_msg,
-                                status_code=resp.status,
-                                service_url=self.service_url,
+                            raise BluefinServiceAuthError(error_msg)
+
+                        elif resp.status == 429:
+                            retry_after = int(resp.headers.get("Retry-After", "60"))
+                            error_msg = f"Rate limit exceeded, retry after {retry_after} seconds"
+                            logger.warning(
+                                "Rate limit exceeded",
+                                extra={
+                                    "client_id": self.client_id,
+                                    "operation": operation,
+                                    "status_code": resp.status,
+                                    "retry_after": retry_after,
+                                    "endpoint": endpoint,
+                                },
                             )
+
+                            # For rate limiting, wait and retry if we have attempts left
+                            if attempt < self._max_retries - 1:
+                                wait_time = min(retry_after, 30)  # Cap wait time at 30s
+                                logger.info(
+                                    f"Waiting {wait_time}s for rate limit reset",
+                                    extra={
+                                        "client_id": self.client_id,
+                                        "operation": operation,
+                                    },
+                                )
+                                await asyncio.sleep(wait_time)
+                                continue
+                            else:
+                                raise BluefinServiceRateLimitError(
+                                    error_msg, retry_after=retry_after
+                                )
+
+                        else:
+                            error_text = await resp.text()
+                            self._record_failure()
+
+                            if attempt < self._max_retries - 1:
+                                delay = self._calculate_retry_delay(attempt)
+                                logger.warning(
+                                    f"Request failed, retrying in {delay:.2f}s",
+                                    extra={
+                                        "client_id": self.client_id,
+                                        "operation": operation,
+                                        "status_code": resp.status,
+                                        "error_response": error_text[:200],
+                                        "attempt": attempt + 1,
+                                        "max_retries": self._max_retries,
+                                        "delay": delay,
+                                    },
+                                )
+                                await asyncio.sleep(delay)
+                                continue
+                            else:
+                                error_msg = f"Request failed: HTTP {resp.status}"
+                                logger.error(
+                                    "All retry attempts failed",
+                                    extra={
+                                        "client_id": self.client_id,
+                                        "operation": operation,
+                                        "status_code": resp.status,
+                                        "error_response": error_text[:200],
+                                        "total_attempts": attempt + 1,
+                                    },
+                                )
+                                raise BluefinServiceConnectionError(
+                                    error_msg,
+                                    status_code=resp.status,
+                                    service_url=self.service_url,
+                                )
 
             except (
                 BluefinServiceAuthError,
@@ -1240,7 +1243,7 @@ class BluefinServiceClient:
             service_url=self.service_url,
         )
 
-    def _validate_candle_data(self, candles: list) -> bool:
+    def _validate_candle_data(self, candles: list[Any]) -> bool:
         """
         Validate candle data for consistency and correctness.
 

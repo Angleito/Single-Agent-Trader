@@ -85,6 +85,7 @@ import asyncio
 import logging
 import signal
 import time
+from asyncio import Task
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -166,6 +167,7 @@ class TradingEngine:
         self._running = False
         self._shutdown_requested = False
         self._memory_available = False  # Initialize early to prevent AttributeError
+        self._last_position_log_time: datetime | None = None
 
         print("DEBUG: About to load configuration")
         # Load configuration
@@ -584,7 +586,7 @@ class TradingEngine:
 
             # Publish alert to dashboard if available
             if hasattr(self, "websocket_publisher") and self.websocket_publisher:
-                asyncio.create_task(
+                task: Task[None] = asyncio.create_task(
                     self.websocket_publisher.publish_system_status(
                         status="performance_alert",
                         health=alert.level.value != "critical",
@@ -1057,7 +1059,9 @@ class TradingEngine:
             try:
                 await self.command_consumer.initialize()
                 # Start polling in background
-                asyncio.create_task(self.command_consumer.start_polling())
+                polling_task: Task[None] = asyncio.create_task(
+                    self.command_consumer.start_polling()
+                )
                 console.print("    [green]✓ Dashboard command consumer started[/green]")
             except Exception as e:
                 self.logger.warning(f"Failed to start command consumer: {e}")
@@ -1123,7 +1127,7 @@ class TradingEngine:
                     # Safety check - ensure data is not a coroutine or Task
                     if inspect.iscoroutine(data):
                         self.logger.warning("Detected coroutine data, awaiting...")
-                        data = await data
+                        data = await data  # type: ignore[misc]
                     elif isinstance(data, asyncio.Task):
                         self.logger.warning("Detected asyncio.Task data, awaiting...")
                         data = await data
@@ -1412,7 +1416,7 @@ class TradingEngine:
             initial_price = Decimal("0")
             try:
                 if self.market_data is not None:
-                    latest_data = await self.market_data.get_latest_ohlcv(limit=1)
+                    latest_data = self.market_data.get_latest_ohlcv(limit=1)
                     if latest_data:
                         initial_price = latest_data[-1].close
             except Exception as e:
@@ -1506,7 +1510,7 @@ class TradingEngine:
                             self.logger.warning(
                                 "Detected coroutine data in main loop, awaiting..."
                             )
-                            latest_data = await latest_data
+                            latest_data = await latest_data  # type: ignore[misc]
                         elif isinstance(latest_data, asyncio.Task):
                             self.logger.warning(
                                 "Detected asyncio.Task data in main loop, awaiting..."
@@ -1516,7 +1520,7 @@ class TradingEngine:
                             self.logger.warning(
                                 "Detected awaitable object in main loop, awaiting..."
                             )
-                            latest_data = await latest_data
+                            latest_data = await latest_data  # type: ignore[misc]
                     except Exception as e:
                         self.logger.warning(
                             f"Error getting market data in main loop: {e}"
@@ -2414,7 +2418,10 @@ class TradingEngine:
                     self.logger.warning(f"Failed to update trade progress: {e}")
 
             # Log position update for ongoing trades (periodic logging, not every tick)
-            if hasattr(self, "_last_position_log_time"):
+            if (
+                hasattr(self, "_last_position_log_time")
+                and self._last_position_log_time is not None
+            ):
                 time_since_last_log = (
                     datetime.now(UTC) - self._last_position_log_time
                 ).total_seconds()
@@ -2696,7 +2703,7 @@ class TradingEngine:
         self._running = False
 
         # Create a list of cleanup tasks to run concurrently with timeout
-        cleanup_tasks = []
+        cleanup_tasks: list[Task[Any]] = []
 
         try:
             # Cancel all open orders
@@ -2706,22 +2713,26 @@ class TradingEngine:
                 and self.exchange_client.is_connected()
             ):
                 console.print("  • Cancelling open orders...")
-                task = asyncio.create_task(
+                cancel_task: Task[bool] = asyncio.create_task(
                     self.exchange_client.cancel_all_orders(self.symbol)
                 )
-                cleanup_tasks.append(task)
+                cleanup_tasks.append(cancel_task)  # type: ignore[arg-type]
 
             # Close market data connection
             if hasattr(self, "market_data") and self.market_data is not None:
                 console.print("  • Disconnecting from market data...")
-                task = asyncio.create_task(self.market_data.disconnect())  # type: ignore[arg-type]
-                cleanup_tasks.append(task)
+                market_task: Task[None] = asyncio.create_task(
+                    self.market_data.disconnect()
+                )  # type: ignore[arg-type]
+                cleanup_tasks.append(market_task)
 
             # Close exchange connection
             if hasattr(self, "exchange_client") and self.exchange_client is not None:
                 console.print("  • Disconnecting from exchange...")
-                task = asyncio.create_task(self.exchange_client.disconnect())  # type: ignore[arg-type]
-                cleanup_tasks.append(task)
+                exchange_task: Task[None] = asyncio.create_task(
+                    self.exchange_client.disconnect()
+                )  # type: ignore[arg-type]
+                cleanup_tasks.append(exchange_task)
 
             # Close OmniSearch connection
             if (
@@ -2729,8 +2740,10 @@ class TradingEngine:
                 and self.omnisearch_client is not None
             ):
                 console.print("  • Disconnecting from OmniSearch...")
-                task = asyncio.create_task(self.omnisearch_client.disconnect())  # type: ignore[arg-type]
-                cleanup_tasks.append(task)
+                omnisearch_task: Task[None] = asyncio.create_task(
+                    self.omnisearch_client.disconnect()
+                )  # type: ignore[arg-type]
+                cleanup_tasks.append(omnisearch_task)
 
             # Close WebSocket publisher connection
             if (
@@ -2738,15 +2751,18 @@ class TradingEngine:
                 and self.websocket_publisher is not None
             ):
                 console.print("  • Disconnecting from dashboard WebSocket...")
-                cleanup_tasks.append(
-                    asyncio.create_task(self.websocket_publisher.close())
+                websocket_task: Task[None] = asyncio.create_task(
+                    self.websocket_publisher.close()
                 )
+                cleanup_tasks.append(websocket_task)
 
             # Stop command consumer
             if hasattr(self, "command_consumer") and self.command_consumer is not None:
                 console.print("  • Stopping dashboard command consumer...")
-                task1 = asyncio.create_task(self.command_consumer.stop_polling())
-                task2 = asyncio.create_task(self.command_consumer.close())
+                task1: Task[None] = asyncio.create_task(
+                    self.command_consumer.stop_polling()
+                )
+                task2: Task[None] = asyncio.create_task(self.command_consumer.close())
                 cleanup_tasks.append(task1)
                 cleanup_tasks.append(task2)
 
@@ -2756,8 +2772,10 @@ class TradingEngine:
                 and self.experience_manager is not None
             ):
                 console.print("  • Stopping experience tracking...")
-                task = asyncio.create_task(self.experience_manager.stop())  # type: ignore[arg-type]
-                cleanup_tasks.append(task)
+                experience_task: Task[None] = asyncio.create_task(
+                    self.experience_manager.stop()
+                )  # type: ignore[arg-type]
+                cleanup_tasks.append(experience_task)
 
             # Close dominance data connection - CRITICAL for async session cleanup
             if (
@@ -2765,8 +2783,10 @@ class TradingEngine:
                 and self.dominance_provider is not None
             ):
                 console.print("  • Disconnecting from dominance data...")
-                task = asyncio.create_task(self.dominance_provider.disconnect())  # type: ignore[arg-type]
-                cleanup_tasks.append(task)
+                dominance_task: Task[None] = asyncio.create_task(
+                    self.dominance_provider.disconnect()
+                )  # type: ignore[arg-type]
+                cleanup_tasks.append(dominance_task)
 
             # Stop performance monitoring
             if (
@@ -2774,8 +2794,10 @@ class TradingEngine:
                 and self.performance_monitor is not None
             ):
                 console.print("  • Stopping performance monitoring...")
-                task = asyncio.create_task(self.performance_monitor.stop_monitoring())
-                cleanup_tasks.append(task)
+                perf_task: Task[None] = asyncio.create_task(
+                    self.performance_monitor.stop_monitoring()
+                )
+                cleanup_tasks.append(perf_task)
 
             # Wait for all cleanup tasks with a timeout
             if cleanup_tasks:

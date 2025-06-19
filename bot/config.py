@@ -55,8 +55,8 @@ class TradingSettings(BaseModel):
         pattern=r"^[A-Z]+-[A-Z]+$",
     )
     interval: str = Field(
-        default="15s",
-        description="Candle interval for analysis (scalping mode: 1s-15s)",
+        default="1m",
+        description="Candle interval for analysis (Note: Bluefin only supports 1m minimum. Sub-minute intervals will be converted with granularity loss)",
     )
     leverage: int = Field(
         default=5, ge=1, le=100, description="Trading leverage multiplier"
@@ -176,7 +176,7 @@ class TradingSettings(BaseModel):
         default=15,  # 15 seconds minimum for high-frequency scalping
         ge=1,
         le=300,
-        description="Minimum interval between trades in seconds (15s for scalping)",
+        description="Minimum interval between trades in seconds (Note: Bluefin API constraints may affect actual execution timing)",
     )
     require_24h_data_before_trading: bool = Field(
         default=False,
@@ -192,16 +192,21 @@ class TradingSettings(BaseModel):
     @field_validator("interval")
     @classmethod
     def validate_interval(cls, v: str) -> str:
-        """Validate trading interval format."""
+        """Validate trading interval format.
+
+        Note: For Bluefin exchange, only intervals >= 1m are natively supported.
+        Sub-minute intervals will be converted to 1m with data granularity loss.
+        """
+        # All intervals (including unsupported ones for validation purposes)
         valid_intervals = [
-            "1s",
-            "5s",
-            "15s",
-            "30s",
-            "1m",
-            "3m",
-            "5m",
-            "15m",
+            "1s",  # Unsupported by Bluefin - will convert to 1m
+            "5s",  # Unsupported by Bluefin - will convert to 1m
+            "15s",  # Unsupported by Bluefin - will convert to 1m
+            "30s",  # Unsupported by Bluefin - will convert to 1m
+            "1m",  # Supported
+            "3m",  # Supported
+            "5m",  # Supported
+            "15m",  # Supported
             "30m",
             "1h",
             "4h",
@@ -612,6 +617,17 @@ class ExchangeSettings(BaseModel):
             raise ValueError("API credentials cannot be empty strings")
         return v
 
+    @field_validator("bluefin_network")
+    @classmethod
+    def validate_bluefin_network(cls, v: str) -> str:
+        """Validate Bluefin network configuration."""
+        valid_networks = {"mainnet", "testnet"}
+        if v.lower() not in valid_networks:
+            raise ValueError(
+                f"Invalid Bluefin network '{v}'. Must be one of: {valid_networks}"
+            )
+        return v.lower()
+
     @model_validator(mode="after")
     def validate_exchange_credentials(self) -> "ExchangeSettings":
         """Validate exchange-specific credentials based on exchange type."""
@@ -765,7 +781,7 @@ class DataSettings(BaseModel):
         default=1000,
         ge=200,
         le=5000,
-        description="Number of historical candles to fetch (1000 = ~4 hours for 15s intervals, optimal for fast indicators)",
+        description="Number of historical candles to fetch (1000 = ~16.7 hours for 1m intervals, optimal for indicators)",
     )
     real_time_updates: bool = Field(
         default=True, description="Enable real-time data updates"
@@ -1341,9 +1357,52 @@ class Settings(BaseSettings):
 
         return cls(**config_data)
 
+    def validate_network_consistency(self) -> list[str]:
+        """Validate network configuration consistency across components."""
+        warnings = []
+
+        if self.exchange.exchange_type == "bluefin":
+            # Check for network consistency
+            network = self.exchange.bluefin_network
+
+            # Warn about production networks
+            if network == "mainnet" and self.system.dry_run:
+                warnings.append(
+                    "Using Bluefin mainnet in paper trading mode - "
+                    "consider using testnet for development"
+                )
+            elif network == "testnet" and not self.system.dry_run:
+                warnings.append(
+                    "Using Bluefin testnet in live trading mode - "
+                    "ensure this is intentional"
+                )
+
+            # Environment-specific recommendations
+            if (
+                self.system.environment == Environment.PRODUCTION
+                and network == "testnet"
+            ):
+                warnings.append(
+                    "Production environment configured with Bluefin testnet - "
+                    "consider using mainnet for production"
+                )
+            elif (
+                self.system.environment == Environment.DEVELOPMENT
+                and network == "mainnet"
+            ):
+                warnings.append(
+                    "Development environment configured with Bluefin mainnet - "
+                    "consider using testnet for development"
+                )
+
+        return warnings
+
     def validate_trading_environment(self) -> list[str]:
         """Validate configuration for trading environment."""
         warnings = []
+
+        # Include network consistency warnings
+        warnings.extend(self.validate_network_consistency())
 
         if self.system.dry_run and self.system.environment == Environment.PRODUCTION:
             warnings.append("Running in dry-run mode in production environment")

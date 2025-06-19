@@ -6,8 +6,9 @@ exchange client based on the configuration settings.
 """
 
 import logging
+from typing import Any
 
-from ..config import settings
+from ..config import Settings, settings
 from .base import BaseExchange
 from .bluefin import BluefinClient
 from .coinbase import CoinbaseClient
@@ -20,15 +21,16 @@ class ExchangeFactory:
 
     @staticmethod
     def create_exchange(
-        settings_obj=None,
+        settings_obj: Settings | None = None,
         exchange_type: str | None = None,
         dry_run: bool | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> BaseExchange:
         """
         Create an exchange client based on configuration.
 
         Args:
+            settings_obj: Configuration settings object
             exchange_type: Exchange type ('coinbase', 'bluefin').
                           Defaults to config setting.
             dry_run: Override dry run setting. Defaults to config setting.
@@ -65,7 +67,7 @@ class ExchangeFactory:
             )
 
     @staticmethod
-    def _create_coinbase(dry_run: bool, **kwargs) -> CoinbaseClient:
+    def _create_coinbase(dry_run: bool, **kwargs: Any) -> CoinbaseClient:
         """Create a Coinbase exchange client."""
         # Extract Coinbase-specific parameters
         api_key = kwargs.get("api_key")
@@ -93,7 +95,7 @@ class ExchangeFactory:
         return client
 
     @staticmethod
-    def _create_bluefin(dry_run: bool, **kwargs) -> BluefinClient:
+    def _create_bluefin(dry_run: bool, **kwargs: Any) -> BluefinClient:
         """Create a Bluefin exchange client."""
         # Extract Bluefin-specific parameters
         private_key = kwargs.get("private_key")
