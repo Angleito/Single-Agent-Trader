@@ -1162,11 +1162,35 @@ class OmniSearchSettings(BaseModel):
         default=False,
         description="Enable OmniSearch MCP server for market intelligence",
     )
-    api_key: SecretStr | None = Field(
-        default=None, description="API key for OmniSearch service"
-    )
     server_url: str = Field(
         default="http://localhost:8766", description="OmniSearch MCP server URL"
+    )
+
+    # API Keys for Different Providers
+    # Search Provider API Keys
+    tavily_api_key: SecretStr | None = Field(
+        default=None, description="Tavily API key for premium search and news"
+    )
+    brave_api_key: SecretStr | None = Field(
+        default=None, description="Brave Search API key for privacy-focused search"
+    )
+    kagi_api_key: SecretStr | None = Field(
+        default=None, description="Kagi API key for premium search and AI services"
+    )
+
+    # AI Response Provider API Keys
+    perplexity_api_key: SecretStr | None = Field(
+        default=None,
+        description="Perplexity API key for AI-powered search and reasoning",
+    )
+
+    # Content Processing API Keys
+    jina_ai_api_key: SecretStr | None = Field(
+        default=None, description="Jina AI API key for text processing and grounding"
+    )
+    firecrawl_api_key: SecretStr | None = Field(
+        default=None,
+        description="Firecrawl API key for web scraping and content extraction",
     )
 
     # Search Configuration
@@ -1208,20 +1232,48 @@ class OmniSearchSettings(BaseModel):
         default=True, description="Enable cross-market correlation analysis"
     )
 
-    @field_validator("api_key")
+    # Legacy compatibility
+    api_key: SecretStr | None = Field(
+        default=None, description="Legacy API key field for backward compatibility"
+    )
+
+    @computed_field
+    @property
+    def has_any_api_key(self) -> bool:
+        """Check if any API key is configured."""
+        api_keys = [
+            self.tavily_api_key,
+            self.brave_api_key,
+            self.kagi_api_key,
+            self.perplexity_api_key,
+            self.jina_ai_api_key,
+            self.firecrawl_api_key,
+            self.api_key,  # Legacy
+        ]
+        return any(key and key.get_secret_value().strip() for key in api_keys if key)
+
+    @field_validator(
+        "tavily_api_key",
+        "brave_api_key",
+        "kagi_api_key",
+        "perplexity_api_key",
+        "jina_ai_api_key",
+        "firecrawl_api_key",
+        "api_key",
+    )
     @classmethod
     def validate_api_key_format(cls, v: SecretStr | None) -> SecretStr | None:
-        """Validate OmniSearch API key format."""
+        """Validate API key format."""
         if v is None:
             return v
 
         key = v.get_secret_value()
         if not key.strip():
-            raise ValueError("OmniSearch API key cannot be empty")
+            return None  # Allow empty keys
 
         # Basic format validation
         if len(key) < 10:
-            raise ValueError("OmniSearch API key seems too short")
+            raise ValueError("API key seems too short (minimum 10 characters)")
 
         return v
 
