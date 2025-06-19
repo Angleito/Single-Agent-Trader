@@ -35,8 +35,28 @@ class RSIMFIIndicator:
     that combines price action and momentum characteristics.
     """
 
-    def __init__(self) -> None:
-        """Initialize the RSI+MFI indicator calculator."""
+    def __init__(
+        self,
+        rsi_length: int = 14,
+        mfi_length: int = 14,
+        period: int = 60,
+        multiplier: float = 150.0,
+    ) -> None:
+        """
+        Initialize the RSI+MFI indicator calculator.
+        
+        Args:
+            rsi_length: RSI calculation period (used for minimum data requirements)
+            mfi_length: MFI calculation period (used for minimum data requirements)  
+            period: Default period for the SMA calculation
+            multiplier: Default sensitivity multiplier for the price ratio
+        """
+        # Store indicator parameters for compatibility with other components
+        self.rsi_length = rsi_length
+        self.mfi_length = mfi_length
+        self.period = period
+        self.multiplier = multiplier
+        
         # Initialize performance tracking
         self._calculation_count = 0
         self._total_calculation_time = 0.0
@@ -47,14 +67,20 @@ class RSIMFIIndicator:
             extra={
                 "indicator": "rsimfi",
                 "description": "Custom RSI+MFI hybrid oscillator from VuManChu Cipher",
+                "parameters": {
+                    "rsi_length": rsi_length,
+                    "mfi_length": mfi_length,
+                    "period": period,
+                    "multiplier": multiplier,
+                },
             },
         )
 
     def calculate_rsimfi(
         self,
         df: pd.DataFrame,
-        period: int = 60,
-        multiplier: float = 150.0,
+        period: int | None = None,
+        multiplier: float | None = None,
         pos_y: float = 0.0,
     ) -> pd.Series:
         """
@@ -66,8 +92,8 @@ class RSIMFIIndicator:
 
         Args:
             df: DataFrame with OHLC data (columns: open, high, low, close)
-            period: Period for the simple moving average (default: 60)
-            multiplier: Sensitivity multiplier for the price ratio (default: 150.0)
+            period: Period for the simple moving average (None = use default from __init__)
+            multiplier: Sensitivity multiplier for the price ratio (None = use default from __init__)
             pos_y: Y-position offset for display purposes (default: 0.0)
 
         Returns:
@@ -77,6 +103,10 @@ class RSIMFIIndicator:
             ValueError: If required OHLC columns are missing
             ValueError: If period is less than 1
         """
+        # Use default parameters if None provided
+        period = period if period is not None else self.period
+        multiplier = multiplier if multiplier is not None else self.multiplier
+        
         start_time = time.perf_counter()
         tracemalloc.start()
 
@@ -405,8 +435,8 @@ class RSIMFIIndicator:
     def calculate_with_analysis(
         self,
         df: pd.DataFrame,
-        period: int = 60,
-        multiplier: float = 150.0,
+        period: int | None = None,
+        multiplier: float | None = None,
         pos_y: float = 0.0,
         bear_level: float = 0.0,
         bull_level: float = 0.0,
@@ -416,8 +446,8 @@ class RSIMFIIndicator:
 
         Args:
             df: DataFrame with OHLC data
-            period: Period for SMA calculation
-            multiplier: Sensitivity multiplier
+            period: Period for SMA calculation (None = use default from __init__)
+            multiplier: Sensitivity multiplier (None = use default from __init__)
             pos_y: Y-position offset
             bear_level: Bearish area threshold
             bull_level: Bullish area threshold
@@ -425,6 +455,10 @@ class RSIMFIIndicator:
         Returns:
             DataFrame with RSI+MFI values and analysis columns
         """
+        # Use default parameters if None provided
+        period = period if period is not None else self.period
+        multiplier = multiplier if multiplier is not None else self.multiplier
+        
         start_time = time.perf_counter()
 
         logger.info(

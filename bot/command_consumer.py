@@ -75,6 +75,7 @@ class CommandConsumer:
         self.poll_interval = poll_interval
         self.running = False
         self.session: aiohttp.ClientSession | None = None
+        self._polling_task: asyncio.Task | None = None
 
         # Command execution state
         self.trading_paused = False
@@ -110,6 +111,16 @@ class CommandConsumer:
 
     async def close(self):
         """Close HTTP session and cleanup."""
+        # Stop polling task if running
+        if self._polling_task and not self._polling_task.done():
+            self._polling_task.cancel()
+            try:
+                await self._polling_task
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                logger.warning(f"Error while cancelling polling task: {e}")
+        
         if self.session:
             await self.session.close()
             self.session = None
@@ -150,6 +161,40 @@ class CommandConsumer:
         """Stop the command polling loop."""
         self.running = False
         logger.info("Command polling stopped")
+
+    async def start_polling_task(self) -> None:
+        """Start the command polling as a managed background task."""
+        if self._polling_task and not self._polling_task.done():
+            logger.warning("Command polling task already running")
+            return
+        
+        await self.initialize()
+        self._polling_task = asyncio.create_task(self.start_polling())
+        logger.info("Command polling task started")
+
+    async def stop_polling_task(self) -> None:
+        """Stop the command polling task and wait for completion."""
+        if not self._polling_task:
+            logger.debug("No polling task to stop")
+            return
+        
+        # First, signal the polling loop to stop
+        self.running = False
+        
+        # Cancel the task if it's still running
+        if not self._polling_task.done():
+            self._polling_task.cancel()
+            try:
+                await asyncio.wait_for(self._polling_task, timeout=5.0)
+            except asyncio.TimeoutError:
+                logger.warning("Polling task did not stop within timeout")
+            except asyncio.CancelledError:
+                logger.debug("Polling task cancelled successfully")
+            except Exception as e:
+                logger.warning(f"Error while stopping polling task: {e}")
+        
+        self._polling_task = None
+        logger.info("Command polling task stopped")
 
     async def _poll_for_commands(self):
         """Poll the dashboard for new commands."""
@@ -473,4 +518,5 @@ class CommandConsumer:
                 cmd_type: callback is not None
                 for cmd_type, callback in self.callbacks.items()
             },
+            "polling_task_running": self._polling_task is not None and not self._polling_task.done(),
         }

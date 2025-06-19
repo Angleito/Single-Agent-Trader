@@ -37,6 +37,8 @@ try:
         BluefinSymbolConverter,
         InvalidSymbolError,
         SymbolConversionError,
+        get_testnet_symbol_fallback,
+        is_bluefin_symbol_supported,
     )
 
     logger = create_secure_logger(__name__, level=logging.INFO)
@@ -87,6 +89,22 @@ except ImportError:
 
     class InvalidSymbolError(Exception):
         pass
+
+    # Fallback BluefinEndpointConfig class
+    class BluefinEndpointConfig:
+        @staticmethod
+        def get_endpoints(network: str = "mainnet"):
+            class Endpoints:
+                def __init__(self, network: str):
+                    if network.lower() == "testnet":
+                        self.rest_api = "https://dapi.api.sui-staging.bluefin.io"
+                        self.websocket_api = "wss://dapi.api.sui-staging.bluefin.io"
+                        self.websocket_notifications = "wss://dapi.api.sui-staging.bluefin.io"
+                    else:
+                        self.rest_api = "https://dapi.api.sui-prod.bluefin.io"  
+                        self.websocket_api = "wss://dapi.api.sui-prod.bluefin.io"
+                        self.websocket_notifications = "wss://dapi.api.sui-prod.bluefin.io"
+            return Endpoints(network)
 
 
 class BluefinServiceError(Exception):
@@ -169,8 +187,8 @@ class BluefinSDKService:
         # Add service identification for logging context
         self.service_id = f"bluefin-sdk-{int(time.time())}"
 
-        # Initialize symbol converter
-        self.symbol_converter = BluefinSymbolConverter(MARKET_SYMBOLS)
+        # Initialize symbol converter with network-aware configuration
+        self.symbol_converter = BluefinSymbolConverter(MARKET_SYMBOLS, network=self.network)
 
         logger.info(
             "Initializing Bluefin SDK Service",
@@ -205,6 +223,21 @@ class BluefinSDKService:
         )
 
         try:
+            # Check if symbol is supported on the current network first
+            if self.network == "testnet" and not is_bluefin_symbol_supported(symbol, "testnet"):
+                # Use testnet fallback for unsupported symbols
+                fallback_symbol = get_testnet_symbol_fallback(symbol)
+                logger.warning(
+                    f"Symbol {symbol} not available on testnet, using fallback: {fallback_symbol}",
+                    extra={
+                        "service_id": self.service_id,
+                        "original_symbol": symbol,
+                        "fallback_symbol": fallback_symbol,
+                        "network": self.network,
+                    },
+                )
+                symbol = fallback_symbol
+
             # Use the symbol converter for robust conversion
             market_symbol = self.symbol_converter.to_market_symbol(symbol)
 
@@ -881,8 +914,32 @@ class BluefinSDKService:
         logger.info("Cleaning up Bluefin SDK service resources...")
         try:
             if self.client:
-                # Note: BluefinClient doesn't have an explicit cleanup method
-                # but we can set it to None to release references
+                # Try to close any underlying HTTP sessions
+                try:
+                    # Check if the client has a session attribute to close
+                    if hasattr(self.client, 'session') and self.client.session:
+                        if hasattr(self.client.session, 'close'):
+                            await self.client.session.close()
+                            logger.debug("Closed Bluefin client HTTP session")
+                    
+                    # Check for other common session attributes
+                    if hasattr(self.client, '_session') and self.client._session:
+                        if hasattr(self.client._session, 'close'):
+                            await self.client._session.close()
+                            logger.debug("Closed Bluefin client private HTTP session")
+                    
+                    # Check if client has a cleanup/close method
+                    if hasattr(self.client, 'close'):
+                        await self.client.close()
+                        logger.debug("Called Bluefin client close method")
+                    elif hasattr(self.client, 'cleanup'):
+                        await self.client.cleanup()
+                        logger.debug("Called Bluefin client cleanup method")
+                    
+                except Exception as session_err:
+                    logger.warning(f"Error closing Bluefin client sessions: {session_err}")
+                
+                # Clear client reference
                 self.client = None
                 logger.debug("Bluefin client reference cleared")
 
@@ -1309,6 +1366,20 @@ class BluefinSDKService:
         if not symbol or not isinstance(symbol, str):
             raise BluefinDataError(f"Invalid symbol input: {symbol}")
 
+        # Check if symbol is supported on the current network and apply fallback if needed
+        if self.network == "testnet" and not is_bluefin_symbol_supported(symbol, "testnet"):
+            fallback_symbol = get_testnet_symbol_fallback(symbol)
+            logger.warning(
+                f"Symbol {symbol} not available on testnet, using fallback: {fallback_symbol}",
+                extra={
+                    "service_id": self.service_id,
+                    "original_symbol": symbol,
+                    "fallback_symbol": fallback_symbol,
+                    "network": self.network,
+                },
+            )
+            symbol = fallback_symbol
+
         # Validate using symbol utilities
         if not self._validate_symbol(symbol):
             # Try to normalize the symbol and validate again
@@ -1549,18 +1620,10 @@ class BluefinSDKService:
                     for candle in candles:
                         if isinstance(candle, list) and len(candle) >= 6:
                             # Bluefin format: [openTime, openPrice, highPrice, lowPrice, closePrice, volume, closeTime, ...]
-                            # Prices and volume are in 18-decimal format, need to convert
+                            # Prices and volume may be in 18-decimal format, use smart conversion
                             try:
-                                formatted_candle = [
-                                    candle[0],  # openTime (timestamp)
-                                    float(candle[1])
-                                    / 1e18,  # openPrice (convert from 18 decimals)
-                                    float(candle[2]) / 1e18,  # highPrice
-                                    float(candle[3]) / 1e18,  # lowPrice
-                                    float(candle[4]) / 1e18,  # closePrice
-                                    float(candle[5])
-                                    / 1e18,  # volume (convert from 18 decimals)
-                                ]
+                                from bot.utils.price_conversion import convert_candle_data
+                                formatted_candle = convert_candle_data(candle, symbol)
                                 formatted_candles.append(formatted_candle)
                             except (ValueError, IndexError, TypeError) as format_error:
                                 logger.warning(
@@ -1933,24 +1996,11 @@ class BluefinSDKService:
                                 continue
 
                             try:
-                                formatted_candle = [
-                                    int(candle[0]) if candle[0] else 0,  # openTime
-                                    (
-                                        float(candle[1]) / 1e18 if candle[1] else 0.0
-                                    ),  # openPrice
-                                    (
-                                        float(candle[2]) / 1e18 if candle[2] else 0.0
-                                    ),  # highPrice
-                                    (
-                                        float(candle[3]) / 1e18 if candle[3] else 0.0
-                                    ),  # lowPrice
-                                    (
-                                        float(candle[4]) / 1e18 if candle[4] else 0.0
-                                    ),  # closePrice
-                                    (
-                                        float(candle[5]) / 1e18 if candle[5] else 0.0
-                                    ),  # volume
-                                ]
+                                # Import price conversion utility
+                                from bot.utils.price_conversion import convert_candle_data
+                                
+                                # Use smart conversion that detects 18-decimal format
+                                formatted_candle = convert_candle_data(candle, symbol)
                                 formatted_candles.append(formatted_candle)
                             except (ValueError, TypeError) as e:
                                 logger.warning(
@@ -2406,13 +2456,15 @@ async def get_ticker(request):
                         if response.status == 200:
                             data = await response.json()
                             if data and "price" in data:
-                                # Convert from 18-decimal format if needed
-                                raw_price = float(data["price"])
-                                # Check if this looks like an 18-decimal value (very large number)
-                                if raw_price > 1e15:
-                                    price = raw_price / 1e18
-                                else:
-                                    price = raw_price
+                                # Import price conversion utility
+                                from bot.utils.price_conversion import convert_from_18_decimal, log_price_conversion_stats
+                                
+                                # Use smart conversion that detects 18-decimal format
+                                raw_price = data["price"]
+                                price = float(convert_from_18_decimal(raw_price, symbol, "price"))
+                                
+                                # Log conversion stats for debugging
+                                log_price_conversion_stats(raw_price, price, symbol, "ticker_price")
 
                                 return web.json_response(
                                     {

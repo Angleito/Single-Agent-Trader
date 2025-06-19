@@ -168,6 +168,7 @@ class TradingEngine:
         self._shutdown_requested = False
         self._memory_available = False  # Initialize early to prevent AttributeError
         self._last_position_log_time: datetime | None = None
+        self._background_tasks: list[asyncio.Task[Any]] = []  # Track background tasks for cleanup
 
         print("DEBUG: About to load configuration")
         # Load configuration
@@ -591,7 +592,7 @@ class TradingEngine:
 
             # Publish alert to dashboard if available
             if hasattr(self, "websocket_publisher") and self.websocket_publisher:
-                _alert_task = asyncio.create_task(
+                alert_task = asyncio.create_task(
                     self.websocket_publisher.publish_system_status(
                         status="performance_alert",
                         health=alert.level.value != "critical",
@@ -605,6 +606,8 @@ class TradingEngine:
                         },
                     )
                 )
+                if hasattr(self, "_background_tasks"):
+                    self._background_tasks.append(alert_task)
 
         except Exception as e:
             self.logger.error(f"Error handling performance alert: {e}")
@@ -1063,11 +1066,7 @@ class TradingEngine:
         if self.command_consumer:
             console.print("  • Starting dashboard command consumer...")
             try:
-                await self.command_consumer.initialize()
-                # Start polling in background
-                _polling_task = asyncio.create_task(
-                    self.command_consumer.start_polling()
-                )
+                await self.command_consumer.start_polling_task()
                 console.print("    [green]✓ Dashboard command consumer started[/green]")
             except Exception as e:
                 self.logger.warning(f"Failed to start command consumer: {e}")
@@ -2765,12 +2764,12 @@ class TradingEngine:
             # Stop command consumer
             if hasattr(self, "command_consumer") and self.command_consumer is not None:
                 console.print("  • Stopping dashboard command consumer...")
-                task1: Task[None] = asyncio.create_task(
-                    self.command_consumer.stop_polling()
+                command_task: Task[None] = asyncio.create_task(
+                    self.command_consumer.stop_polling_task()
                 )
-                task2: Task[None] = asyncio.create_task(self.command_consumer.close())
-                cleanup_tasks.append(task1)
-                cleanup_tasks.append(task2)
+                close_task: Task[None] = asyncio.create_task(self.command_consumer.close())
+                cleanup_tasks.append(command_task)
+                cleanup_tasks.append(close_task)
 
             # Stop experience manager if enabled
             if (
@@ -2804,6 +2803,20 @@ class TradingEngine:
                     self.performance_monitor.stop_monitoring()
                 )
                 cleanup_tasks.append(perf_task)
+
+            # Cancel all background tasks
+            if hasattr(self, "_background_tasks") and self._background_tasks:
+                console.print("  • Cancelling background tasks...")
+                for task in self._background_tasks:
+                    if not task.done():
+                        task.cancel()
+                        try:
+                            await task
+                        except asyncio.CancelledError:
+                            pass
+                        except Exception as e:
+                            self.logger.warning(f"Error cancelling background task: {e}")
+                self._background_tasks.clear()
 
             # Wait for all cleanup tasks with a timeout
             if cleanup_tasks:

@@ -372,11 +372,25 @@ class PaperTradingAccount:
             # Check if we already have an open position for this symbol
             existing_position = self._find_open_position(symbol)
             if existing_position:
-                logger.warning(
-                    f"Cannot open new {action.action} position - already have "
-                    f"{existing_position.side} position for {symbol}"
-                )
-                return self._create_failed_order(action, symbol, "POSITION_EXISTS")
+                # Handle different scenarios for existing positions
+                if existing_position.side == action.action:
+                    # Same direction - increase position size
+                    logger.info(
+                        f"Adding to existing {action.action} position for {symbol}"
+                    )
+                    return self._increase_position(existing_position, price, size, fees, current_time)
+                else:
+                    # Opposite direction - close existing position and open new one
+                    logger.info(
+                        f"Closing existing {existing_position.side} position and opening new {action.action} position for {symbol}"
+                    )
+                    # First close the existing position
+                    close_order = self._close_position(symbol, price, current_time, fees)
+                    if close_order.status != OrderStatus.FILLED:
+                        logger.error(f"Failed to close existing position: {close_order.status}")
+                        return self._create_failed_order(action, symbol, "CLOSE_FAILED")
+                    
+                    # Now continue to open the new position (fall through to position opening logic)
 
             # Open new position
             trade = PaperTrade(
@@ -497,6 +511,58 @@ class PaperTradingAccount:
                 return trade
         return None
 
+    def _increase_position(
+        self, 
+        existing_position: PaperTrade, 
+        price: Decimal, 
+        size: Decimal, 
+        fees: Decimal,
+        current_time: datetime
+    ) -> Order:
+        """Increase the size of an existing position."""
+        trade_id = f"paper_{self.trade_counter:06d}"
+        self.trade_counter += 1
+        
+        # Calculate average entry price (weighted by position sizes)
+        current_value = existing_position.size * existing_position.entry_price
+        new_value = size * price
+        total_size = existing_position.size + size
+        average_price = (current_value + new_value) / total_size
+        
+        # Update existing position
+        existing_position.size = total_size
+        existing_position.entry_price = average_price
+        existing_position.fees += fees
+        
+        # Update account balance and margin
+        trade_value = size * price
+        required_margin = trade_value / Decimal(str(settings.trading.leverage))
+        self.margin_used += required_margin
+        self.current_balance -= fees  # Deduct fees immediately
+        
+        # Create order object for the increase
+        order = Order(
+            id=trade_id,
+            symbol=existing_position.symbol,
+            side="BUY" if existing_position.side == "LONG" else "SELL",
+            type="MARKET",
+            quantity=size,
+            price=price,
+            filled_quantity=size,
+            status=OrderStatus.FILLED,
+            timestamp=current_time,
+        )
+        
+        logger.info(
+            f"📈 Paper Trading: Increased {existing_position.side} position | "
+            f"+{size} {existing_position.symbol} @ ${price} | "
+            f"Total size: {total_size} @ avg ${average_price:.4f} | Trade ID: {trade_id}"
+        )
+        
+        # Save state immediately after increasing position
+        self._save_state()
+        return order
+
     def _create_failed_order(
         self, action: TradeAction, symbol: str, reason: str
     ) -> Order:
@@ -516,8 +582,16 @@ class PaperTradingAccount:
     def _get_current_price(self, symbol: str) -> Decimal:
         """Get current price for a symbol (placeholder - would connect to market data)."""
         # This would typically connect to market data feed
-        # For now, return a default price
-        return Decimal("50000")  # Default BTC price
+        # For now, return realistic default prices based on symbol
+        if "SUI" in symbol:
+            return Decimal("3.50")  # Realistic SUI price
+        elif "ETH" in symbol:
+            return Decimal("2500")  # Realistic ETH price
+        elif "BTC" in symbol:
+            return Decimal("50000")  # Realistic BTC price
+        else:
+            # For unknown symbols, return a reasonable default
+            return Decimal("100")  # Generic reasonable price
 
     def update_daily_performance(self) -> None:
         """Update daily performance metrics."""

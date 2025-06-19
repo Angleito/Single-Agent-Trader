@@ -1,0 +1,205 @@
+"""
+Price conversion utilities for handling 18-decimal format prices from Bluefin DEX.
+
+This module provides safe conversion functions that can detect if a price value
+is in 18-decimal format and convert it appropriately, with validation and logging.
+"""
+
+import logging
+from decimal import Decimal
+from typing import Union, Optional, Dict, Any
+
+logger = logging.getLogger(__name__)
+
+# Price validation ranges for different symbols
+PRICE_RANGES = {
+    "SUI-PERP": {"min": 0.5, "max": 20.0},
+    "BTC-PERP": {"min": 10000.0, "max": 200000.0},
+    "ETH-PERP": {"min": 1000.0, "max": 20000.0},
+    "SOL-PERP": {"min": 10.0, "max": 1000.0},
+    # Default range for unknown symbols
+    "default": {"min": 0.0001, "max": 1000000.0},
+}
+
+
+def is_likely_18_decimal(value: Union[float, int, str, Decimal]) -> bool:
+    """
+    Determine if a numeric value is likely in 18-decimal format.
+    
+    18-decimal format values are typically very large numbers (>1e10).
+    Using 1e10 as threshold instead of 1e15 to catch more edge cases.
+    
+    Args:
+        value: The numeric value to check
+        
+    Returns:
+        bool: True if the value appears to be in 18-decimal format
+    """
+    try:
+        numeric_value = float(value)
+        # Values larger than 1e10 are likely in 18-decimal format
+        # This catches values like 3.45e12 which should be ~3.45 after conversion
+        return numeric_value > 1e10
+    except (ValueError, TypeError):
+        return False
+
+
+def convert_from_18_decimal(
+    value: Union[float, int, str, Decimal], 
+    symbol: Optional[str] = None,
+    field_name: Optional[str] = None
+) -> Decimal:
+    """
+    Safely convert a value from 18-decimal format to regular decimal.
+    
+    Args:
+        value: The value to convert
+        symbol: Trading symbol for validation (e.g., "SUI-PERP")
+        field_name: Name of the field being converted (for logging)
+        
+    Returns:
+        Decimal: The converted value
+        
+    Raises:
+        ValueError: If the input value is invalid
+    """
+    if value is None:
+        return Decimal("0")
+    
+    try:
+        # Convert to Decimal for precision
+        decimal_value = Decimal(str(value))
+        
+        # Check if conversion is needed
+        if is_likely_18_decimal(decimal_value):
+            converted_value = decimal_value / Decimal("1e18")
+            logger.debug(
+                f"Converted {field_name or 'value'} from 18-decimal: "
+                f"{decimal_value} -> {converted_value} (symbol: {symbol})"
+            )
+        else:
+            converted_value = decimal_value
+            logger.debug(
+                f"No conversion needed for {field_name or 'value'}: "
+                f"{decimal_value} (symbol: {symbol})"
+            )
+        
+        # Validate the result
+        if symbol and not is_price_valid(converted_value, symbol):
+            logger.warning(
+                f"Price {converted_value} for {symbol} is outside expected range. "
+                f"Original value: {value}, Field: {field_name}"
+            )
+        
+        return converted_value
+        
+    except (ValueError, TypeError, ArithmeticError) as e:
+        logger.error(f"Error converting value {value}: {e}")
+        raise ValueError(f"Invalid numeric value: {value}")
+
+
+def is_price_valid(price: Union[float, Decimal], symbol: str) -> bool:
+    """
+    Validate if a price is within expected range for a given symbol.
+    
+    Args:
+        price: The price to validate
+        symbol: Trading symbol (e.g., "SUI-PERP")
+        
+    Returns:
+        bool: True if price is within expected range
+    """
+    try:
+        price_float = float(price)
+        
+        # Get price range for symbol
+        price_range = PRICE_RANGES.get(symbol, PRICE_RANGES["default"])
+        
+        return price_range["min"] <= price_float <= price_range["max"]
+        
+    except (ValueError, TypeError):
+        return False
+
+
+def convert_candle_data(candle: list, symbol: Optional[str] = None) -> list:
+    """
+    Convert candle data from 18-decimal format to regular decimal.
+    
+    Args:
+        candle: List containing [timestamp, open, high, low, close, volume]
+        symbol: Trading symbol for validation
+        
+    Returns:
+        list: Converted candle data
+    """
+    if not isinstance(candle, list) or len(candle) < 6:
+        raise ValueError(f"Invalid candle format: {candle}")
+    
+    try:
+        converted_candle = [
+            int(candle[0]) if candle[0] else 0,  # timestamp
+            float(convert_from_18_decimal(candle[1], symbol, "open")),  # open
+            float(convert_from_18_decimal(candle[2], symbol, "high")),  # high
+            float(convert_from_18_decimal(candle[3], symbol, "low")),   # low
+            float(convert_from_18_decimal(candle[4], symbol, "close")), # close
+            float(convert_from_18_decimal(candle[5], symbol, "volume")), # volume
+        ]
+        
+        logger.debug(f"Converted candle for {symbol}: OHLCV = {converted_candle[1:6]}")
+        return converted_candle
+        
+    except (ValueError, TypeError, IndexError) as e:
+        logger.error(f"Error converting candle data: {e}")
+        raise ValueError(f"Failed to convert candle data: {candle}")
+
+
+def convert_ticker_price(
+    price_data: Dict[str, Any], 
+    symbol: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Convert ticker price data from 18-decimal format.
+    
+    Args:
+        price_data: Dictionary containing price information
+        symbol: Trading symbol for validation
+        
+    Returns:
+        Dict: Converted price data
+    """
+    converted_data = {}
+    
+    for key, value in price_data.items():
+        if key in ["price", "lastPrice", "bestBid", "bestAsk", "high", "low", "open", "close"]:
+            try:
+                converted_data[key] = str(convert_from_18_decimal(value, symbol, key))
+            except ValueError:
+                logger.warning(f"Failed to convert {key}: {value}")
+                converted_data[key] = str(value)
+        else:
+            converted_data[key] = value
+    
+    return converted_data
+
+
+def log_price_conversion_stats(
+    original_value: Union[float, Decimal], 
+    converted_value: Union[float, Decimal],
+    symbol: str,
+    field_name: str
+) -> None:
+    """
+    Log detailed price conversion statistics for debugging.
+    
+    Args:
+        original_value: Original value before conversion
+        converted_value: Value after conversion
+        symbol: Trading symbol
+        field_name: Name of the field being converted
+    """
+    logger.info(
+        f"Price conversion stats for {symbol}:{field_name} - "
+        f"Original: {original_value}, Converted: {converted_value}, "
+        f"Ratio: {float(original_value) / float(converted_value) if converted_value != 0 else 'N/A'}, "
+        f"Valid: {is_price_valid(converted_value, symbol)}"
+    )

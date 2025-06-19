@@ -651,13 +651,16 @@ class BluefinWebSocketClient:
 
             for ticker in tickers:
                 if ticker.get("symbol") == self.symbol:
-                    # Extract price data (values are in 18 decimal format)
+                    # Extract price data (values may be in 18 decimal format)
                     price_str = ticker.get("price", "0")
                     last_price_str = ticker.get("lastPrice", "0")
 
-                    # Convert from 18 decimal format to regular decimal
-                    price = Decimal(price_str) / Decimal(10**18)
-                    last_price = Decimal(last_price_str) / Decimal(10**18)
+                    # Import price conversion utility
+                    from bot.utils.price_conversion import convert_from_18_decimal
+                    
+                    # Use smart conversion that detects 18-decimal format
+                    price = convert_from_18_decimal(price_str, self.symbol, "ticker_price")
+                    last_price = convert_from_18_decimal(last_price_str, self.symbol, "ticker_last_price")
 
                     # Use the most recent price
                     current_price = price if price > 0 else last_price
@@ -734,9 +737,12 @@ class BluefinWebSocketClient:
                     price_str = trade.get("price", "0")
                     size_str = trade.get("quantity", trade.get("size", "0"))
 
-                    # Convert from 18 decimal format
-                    price = Decimal(price_str) / Decimal(10**18)
-                    size = Decimal(size_str) / Decimal(10**18)
+                    # Import price conversion utility
+                    from bot.utils.price_conversion import convert_from_18_decimal
+                    
+                    # Use smart conversion that detects 18-decimal format
+                    price = convert_from_18_decimal(price_str, self.symbol, "trade_price")
+                    size = convert_from_18_decimal(size_str, self.symbol, "trade_size")
 
                     if price > 0 and size > 0:
                         trade_data = {
@@ -801,33 +807,15 @@ class BluefinWebSocketClient:
                 close_price = kline_data.get("closePrice", "0")
                 volume = kline_data.get("volume", "0")
 
-                # Convert from 18-decimal format if needed
+                # Convert from 18-decimal format if needed using utility function
                 try:
-                    open_val = (
-                        Decimal(open_price) / Decimal(10**18)
-                        if int(open_price) > 1e10
-                        else Decimal(open_price)
-                    )
-                    high_val = (
-                        Decimal(high_price) / Decimal(10**18)
-                        if int(high_price) > 1e10
-                        else Decimal(high_price)
-                    )
-                    low_val = (
-                        Decimal(low_price) / Decimal(10**18)
-                        if int(low_price) > 1e10
-                        else Decimal(low_price)
-                    )
-                    close_val = (
-                        Decimal(close_price) / Decimal(10**18)
-                        if int(close_price) > 1e10
-                        else Decimal(close_price)
-                    )
-                    volume_val = (
-                        Decimal(volume) / Decimal(10**18)
-                        if int(volume) > 1e10
-                        else Decimal(volume)
-                    )
+                    from bot.utils.price_conversion import convert_from_18_decimal
+                    
+                    open_val = convert_from_18_decimal(open_price, self.symbol, "kline_open")
+                    high_val = convert_from_18_decimal(high_price, self.symbol, "kline_high")
+                    low_val = convert_from_18_decimal(low_price, self.symbol, "kline_low")
+                    close_val = convert_from_18_decimal(close_price, self.symbol, "kline_close")
+                    volume_val = convert_from_18_decimal(volume, self.symbol, "kline_volume")
                 except (ValueError, TypeError) as e:
                     exception_handler.log_exception_with_context(
                         e,
