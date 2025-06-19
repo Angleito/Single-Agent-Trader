@@ -1868,6 +1868,209 @@ class PaperTradingSettings(BaseModel):
     )
 
 
+class MonitoringSettings(BaseModel):
+    """Balance monitoring and alerting configuration."""
+
+    model_config = ConfigDict(frozen=True)
+
+    # Core Monitoring Configuration
+    enabled: bool = Field(
+        default=True,
+        description="Enable comprehensive balance monitoring and metrics collection"
+    )
+
+    # Metrics Collection Settings
+    metrics_retention_limit: int = Field(
+        default=10000,
+        ge=1000,
+        le=100000,
+        description="Maximum number of metrics to retain in memory"
+    )
+    timing_window_minutes: int = Field(
+        default=60,
+        ge=5,
+        le=1440,
+        description="Time window for timing statistics in minutes"
+    )
+    enable_prometheus_metrics: bool = Field(
+        default=True,
+        description="Enable Prometheus-compatible metrics exposition"
+    )
+
+    # Metrics Collection Performance
+    collection_overhead_limit_ms: float = Field(
+        default=5.0,
+        ge=1.0,
+        le=50.0,
+        description="Maximum allowed overhead per monitoring operation in milliseconds"
+    )
+
+    # Alerting Configuration
+    enable_alerting: bool = Field(
+        default=True,
+        description="Enable balance operation alerting system"
+    )
+    alert_history_limit: int = Field(
+        default=1000,
+        ge=100,
+        le=10000,
+        description="Maximum number of alerts to keep in history"
+    )
+    alert_config_file: str = Field(
+        default="data/alerts/config.json",
+        description="Path to alert configuration file"
+    )
+
+    # Default Alert Thresholds
+    error_rate_warning_threshold: float = Field(
+        default=10.0,
+        ge=1.0,
+        le=50.0,
+        description="Error rate percentage threshold for warnings"
+    )
+    error_rate_critical_threshold: float = Field(
+        default=25.0,
+        ge=10.0,
+        le=75.0,
+        description="Error rate percentage threshold for critical alerts"
+    )
+    response_time_warning_threshold_ms: float = Field(
+        default=5000.0,
+        ge=1000.0,
+        le=30000.0,
+        description="Response time threshold in milliseconds for warnings"
+    )
+    response_time_critical_threshold_ms: float = Field(
+        default=10000.0,
+        ge=5000.0,
+        le=60000.0,
+        description="Response time threshold in milliseconds for critical alerts"
+    )
+    consecutive_errors_warning_threshold: int = Field(
+        default=3,
+        ge=2,
+        le=10,
+        description="Number of consecutive errors before warning alert"
+    )
+    consecutive_errors_critical_threshold: int = Field(
+        default=5,
+        ge=3,
+        le=20,
+        description="Number of consecutive errors before critical alert"
+    )
+
+    # Balance Change Alert Thresholds
+    large_balance_change_threshold: float = Field(
+        default=1000.0,
+        ge=100.0,
+        le=100000.0,
+        description="Balance change amount in USD for large change alerts"
+    )
+    huge_balance_change_threshold: float = Field(
+        default=5000.0,
+        ge=1000.0,
+        le=500000.0,
+        description="Balance change amount in USD for huge change alerts"
+    )
+
+    # Notification Settings
+    enable_email_notifications: bool = Field(
+        default=False,
+        description="Enable email notifications for alerts"
+    )
+    email_smtp_server: str = Field(
+        default="",
+        description="SMTP server for email notifications"
+    )
+    email_smtp_port: int = Field(
+        default=587,
+        ge=1,
+        le=65535,
+        description="SMTP port for email notifications"
+    )
+    email_username: str = Field(
+        default="",
+        description="SMTP username for email notifications"
+    )
+    email_password: SecretStr = Field(
+        default=SecretStr(""),
+        description="SMTP password for email notifications"
+    )
+    email_from_address: str = Field(
+        default="",
+        description="From email address for notifications"
+    )
+    email_to_addresses: list[str] = Field(
+        default_factory=list,
+        description="List of email addresses to send notifications to"
+    )
+
+    # Webhook Notifications
+    enable_webhook_notifications: bool = Field(
+        default=False,
+        description="Enable webhook notifications for alerts"
+    )
+    webhook_url: str = Field(
+        default="",
+        description="Webhook URL for alert notifications"
+    )
+    webhook_timeout_seconds: int = Field(
+        default=10,
+        ge=1,
+        le=60,
+        description="Timeout for webhook requests in seconds"
+    )
+
+    # File Logging
+    enable_file_logging: bool = Field(
+        default=True,
+        description="Enable file logging for alerts"
+    )
+    alert_log_file: str = Field(
+        default="data/alerts/alerts.log",
+        description="Path to alert log file"
+    )
+
+    # Background Tasks
+    enable_background_monitoring: bool = Field(
+        default=True,
+        description="Enable background monitoring and cleanup tasks"
+    )
+    monitoring_interval_seconds: int = Field(
+        default=30,
+        ge=10,
+        le=300,
+        description="Interval for background monitoring evaluation in seconds"
+    )
+    cleanup_interval_minutes: int = Field(
+        default=30,
+        ge=5,
+        le=240,
+        description="Interval for cleanup tasks in minutes"
+    )
+
+    @field_validator("email_to_addresses")
+    @classmethod
+    def validate_email_addresses(cls, v: list[str]) -> list[str]:
+        """Validate email addresses format."""
+        import re
+        email_pattern = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+
+        for email in v:
+            if email and not email_pattern.match(email):
+                raise ValueError(f"Invalid email address format: {email}")
+
+        return v
+
+    @field_validator("webhook_url")
+    @classmethod
+    def validate_webhook_url(cls, v: str) -> str:
+        """Validate webhook URL format."""
+        if v and not v.startswith(("http://", "https://")):
+            raise ValueError("Webhook URL must start with http:// or https://")
+        return v
+
+
 class SystemSettings(BaseModel):
     """System and operational configuration."""
 
@@ -2054,6 +2257,7 @@ class Settings(BaseSettings):
     paper_trading: PaperTradingSettings = Field(default_factory=PaperTradingSettings)
     mcp: MCPSettings = Field(default_factory=MCPSettings)
     omnisearch: OmniSearchSettings = Field(default_factory=OmniSearchSettings)
+    monitoring: MonitoringSettings = Field(default_factory=MonitoringSettings)
 
     # Profile Configuration
     profile: TradingProfile = Field(

@@ -47,6 +47,19 @@ except ImportError:
         def __init__(self):
             pass
 
+# Import monitoring components
+try:
+    from ..monitoring.balance_alerts import get_balance_alert_manager
+    from ..monitoring.balance_metrics import (
+        get_balance_metrics_collector,
+        record_operation_complete,
+        record_operation_start,
+        record_timeout,
+    )
+    MONITORING_AVAILABLE = True
+except ImportError:
+    MONITORING_AVAILABLE = False
+
 
 BLUEFIN_AVAILABLE = True  # Always available via service
 
@@ -188,6 +201,17 @@ class BluefinClient(BaseExchange):
         self._account_address: str | None = None
         self._leverage_settings: dict[str, Any] = {}
         self._contract_info: dict[str, Any] = {}
+
+        # Initialize monitoring
+        self.monitoring_enabled = MONITORING_AVAILABLE
+        if self.monitoring_enabled:
+            try:
+                self.metrics_collector = get_balance_metrics_collector()
+                self.alert_manager = get_balance_alert_manager()
+                logger.info("✅ Bluefin exchange monitoring enabled")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Bluefin monitoring: {e}")
+                self.monitoring_enabled = False
 
         logger.info(
             f"Initialized BluefinClient (network={network}, "
@@ -950,6 +974,41 @@ class BluefinClient(BaseExchange):
             logger.error(f"Failed to get positions: {e}")
             return []
 
+    def _record_balance_operation(
+        self,
+        operation: str,
+        balance_before: Optional[float] = None,
+        balance_after: Optional[float] = None,
+        success: bool = True,
+        error_type: Optional[str] = None,
+        metadata: Optional[dict] = None
+    ) -> None:
+        """Record a balance operation in the monitoring system."""
+        try:
+            if self.monitoring_enabled:
+                correlation_id = f"bluefin_{operation}_{int(time.time() * 1000)}"
+
+                start_time = record_operation_start(
+                    operation=operation,
+                    component="bluefin_exchange",
+                    correlation_id=correlation_id,
+                    metadata=metadata or {}
+                )
+
+                record_operation_complete(
+                    operation=operation,
+                    component="bluefin_exchange",
+                    start_time=start_time,
+                    success=success,
+                    balance_before=balance_before,
+                    balance_after=balance_after,
+                    error_type=error_type,
+                    correlation_id=correlation_id,
+                    metadata=metadata
+                )
+        except Exception as e:
+            logger.debug(f"Failed to record balance operation {operation}: {e}")
+
     async def get_account_balance(
         self, account_type: AccountType | None = None
     ) -> Decimal:
@@ -970,7 +1029,39 @@ class BluefinClient(BaseExchange):
         """
         if self.dry_run:
             # Return mock balance for paper trading with proper normalization
-            return self._normalize_balance(Decimal("10000.00"))
+            mock_balance = self._normalize_balance(Decimal("10000.00"))
+
+            # Record mock balance retrieval in monitoring
+            self._record_balance_operation(
+                operation="get_balance_mock",
+                balance_before=None,
+                balance_after=float(mock_balance),
+                success=True,
+                metadata={
+                    "account_type": str(account_type) if account_type else None,
+                    "dry_run": True,
+                    "network": self.network_name
+                }
+            )
+
+            return mock_balance
+
+        # Record balance retrieval start
+        start_time = None
+        if self.monitoring_enabled:
+            try:
+                correlation_id = f"bluefin_balance_{int(time.time() * 1000)}"
+                start_time = record_operation_start(
+                    operation="get_balance",
+                    component="bluefin_exchange",
+                    correlation_id=correlation_id,
+                    metadata={
+                        "account_type": str(account_type) if account_type else None,
+                        "network": self.network_name
+                    }
+                )
+            except Exception as e:
+                logger.debug(f"Failed to record balance operation start: {e}")
 
         try:
             # Check if service client is available
@@ -1052,6 +1143,28 @@ class BluefinClient(BaseExchange):
                     f"Please ensure your Bluefin account has USDC balance. Current: ${total_balance}"
                 )
 
+            # Record successful balance retrieval
+            if self.monitoring_enabled and start_time is not None:
+                try:
+                    record_operation_complete(
+                        operation="get_balance",
+                        component="bluefin_exchange",
+                        start_time=start_time,
+                        success=True,
+                        balance_before=None,
+                        balance_after=float(total_balance),
+                        correlation_id=correlation_id,
+                        metadata={
+                            "account_type": str(account_type) if account_type else None,
+                            "network": self.network_name,
+                            "raw_balance": str(raw_balance),
+                            "normalized_balance": str(total_balance),
+                            "is_negative": total_balance < Decimal("0")
+                        }
+                    )
+                except Exception as e:
+                    logger.debug(f"Failed to record successful balance operation: {e}")
+
             return total_balance
 
         except (
@@ -1059,10 +1172,59 @@ class BluefinClient(BaseExchange):
             BalanceServiceUnavailableError,
             BalanceTimeoutError,
             BalanceValidationError,
-        ):
+        ) as balance_error:
+            # Record specific balance errors in monitoring
+            if self.monitoring_enabled and start_time is not None:
+                try:
+                    error_type = type(balance_error).__name__
+                    if hasattr(balance_error, "timeout_duration"):
+                        # Handle timeout specifically
+                        record_timeout(
+                            operation="get_balance",
+                            component="bluefin_exchange",
+                            timeout_duration_ms=getattr(balance_error, "timeout_duration", 30) * 1000,
+                            correlation_id=correlation_id
+                        )
+                    else:
+                        record_operation_complete(
+                            operation="get_balance",
+                            component="bluefin_exchange",
+                            start_time=start_time,
+                            success=False,
+                            error_type=error_type,
+                            correlation_id=correlation_id,
+                            metadata={
+                                "account_type": str(account_type) if account_type else None,
+                                "network": self.network_name,
+                                "error_message": str(balance_error)
+                            }
+                        )
+                except Exception as e:
+                    logger.debug(f"Failed to record balance error: {e}")
+
             # Re-raise specific balance exceptions
             raise
         except Exception as e:
+            # Record unexpected errors in monitoring
+            if self.monitoring_enabled and start_time is not None:
+                try:
+                    record_operation_complete(
+                        operation="get_balance",
+                        component="bluefin_exchange",
+                        start_time=start_time,
+                        success=False,
+                        error_type="unexpected_error",
+                        correlation_id=correlation_id,
+                        metadata={
+                            "account_type": str(account_type) if account_type else None,
+                            "network": self.network_name,
+                            "error_message": str(e),
+                            "error_type": type(e).__name__
+                        }
+                    )
+                except Exception as monitoring_error:
+                    logger.debug(f"Failed to record unexpected error: {monitoring_error}")
+
             # Wrap any other exceptions in BalanceRetrievalError
             logger.error(f"Unexpected error getting account balance: {e}")
             raise BalanceRetrievalError(

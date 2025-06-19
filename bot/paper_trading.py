@@ -25,6 +25,18 @@ from .fee_calculator import fee_calculator
 from .trading_types import Order, OrderStatus, TradeAction
 from .validation import BalanceValidator
 
+# Import monitoring components
+try:
+    from .monitoring.balance_alerts import get_balance_alert_manager
+    from .monitoring.balance_metrics import (
+        get_balance_metrics_collector,
+        record_operation_complete,
+        record_operation_start,
+    )
+    MONITORING_AVAILABLE = True
+except ImportError:
+    MONITORING_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 # Set global decimal precision for financial calculations
@@ -160,6 +172,17 @@ class PaperTradingAccount:
         # Balance validation system
         self.balance_validator = BalanceValidator()
 
+        # Monitoring system integration
+        self.monitoring_enabled = MONITORING_AVAILABLE
+        if self.monitoring_enabled:
+            try:
+                self.metrics_collector = get_balance_metrics_collector()
+                self.alert_manager = get_balance_alert_manager()
+                logger.info("✅ Paper trading monitoring enabled")
+            except Exception as e:
+                logger.warning(f"Failed to initialize monitoring: {e}")
+                self.monitoring_enabled = False
+
         # State files
         self.account_file = self.data_dir / "account.json"
         self.trades_file = self.data_dir / "trades.json"
@@ -168,9 +191,74 @@ class PaperTradingAccount:
         # Load persisted state
         self._load_state()
 
+        # Record initialization in monitoring system
+        if self.monitoring_enabled:
+            self._record_account_initialization()
+
         logger.info(
             f"Initialized paper trading account with ${self.current_balance:,.2f} and balance validation"
         )
+
+    def _record_account_initialization(self) -> None:
+        """Record account initialization in monitoring system."""
+        try:
+            if self.monitoring_enabled:
+                start_time = record_operation_start(
+                    operation="account_initialization",
+                    component="paper_trading",
+                    correlation_id=f"init_{int(time.time())}",
+                    metadata={
+                        "starting_balance": float(self.starting_balance),
+                        "data_dir": str(self.data_dir)
+                    }
+                )
+
+                record_operation_complete(
+                    operation="account_initialization",
+                    component="paper_trading",
+                    start_time=start_time,
+                    success=True,
+                    balance_before=None,
+                    balance_after=float(self.starting_balance),
+                    correlation_id=f"init_{int(time.time())}"
+                )
+        except Exception as e:
+            logger.warning(f"Failed to record account initialization: {e}")
+
+    def _record_balance_operation(
+        self,
+        operation: str,
+        balance_before: Optional[float] = None,
+        balance_after: Optional[float] = None,
+        success: bool = True,
+        error_type: Optional[str] = None,
+        metadata: Optional[dict] = None
+    ) -> None:
+        """Record a balance operation in the monitoring system."""
+        try:
+            if self.monitoring_enabled:
+                correlation_id = f"paper_{operation}_{int(time.time() * 1000)}"
+
+                start_time = record_operation_start(
+                    operation=operation,
+                    component="paper_trading",
+                    correlation_id=correlation_id,
+                    metadata=metadata or {}
+                )
+
+                record_operation_complete(
+                    operation=operation,
+                    component="paper_trading",
+                    start_time=start_time,
+                    success=success,
+                    balance_before=balance_before,
+                    balance_after=balance_after,
+                    error_type=error_type,
+                    correlation_id=correlation_id,
+                    metadata=metadata
+                )
+        except Exception as e:
+            logger.debug(f"Failed to record balance operation {operation}: {e}")
 
     def _normalize_balance(self, amount: Decimal) -> Decimal:
         """
@@ -257,7 +345,7 @@ class PaperTradingAccount:
         return amount.quantize(Decimal("0.00000001"), rounding=ROUND_HALF_EVEN)
 
     def _validate_balance_update(
-        self, new_balance: Decimal, operation: str = "unknown"
+        self, new_balance: Decimal, operation: str = "unknown", metadata: dict = None
     ) -> bool:
         """
         Validate a balance update before applying it.
@@ -375,12 +463,29 @@ class PaperTradingAccount:
         Returns:
             Order object representing the simulated trade
         """
+        # Record trade action start in monitoring
+        balance_before = float(self.current_balance)
+
         with self._lock:
             try:
                 if action.action == "HOLD":
                     logger.info(
                         f"🛑 PAPER TRADING DECISION: HOLD | Symbol: {symbol} | "
                         f"Current Price: ${current_price} | Reason: {action.rationale}"
+                    )
+
+                    # Record HOLD decision in monitoring
+                    self._record_balance_operation(
+                        operation="trade_decision_hold",
+                        balance_before=balance_before,
+                        balance_after=balance_before,
+                        success=True,
+                        metadata={
+                            "action": action.action,
+                            "symbol": symbol,
+                            "price": float(current_price),
+                            "rationale": action.rationale
+                        }
                     )
                     return None
 
@@ -529,10 +634,46 @@ class PaperTradingAccount:
                         f"Value: ${trade_value:.2f} | Balance: ${self.current_balance:.2f} → ${self.equity:.2f}"
                     )
 
+                    # Record successful trade execution in monitoring
+                    balance_after = float(self.current_balance)
+                    self._record_balance_operation(
+                        operation="trade_execution",
+                        balance_before=balance_before,
+                        balance_after=balance_after,
+                        success=True,
+                        metadata={
+                            "action": action.action,
+                            "symbol": symbol,
+                            "execution_price": float(execution_price),
+                            "trade_size": float(trade_size),
+                            "trade_value": float(trade_value),
+                            "fees": float(fees),
+                            "order_id": order.id if order else None,
+                            "equity": float(self.equity),
+                            "margin_used": float(self.margin_used)
+                        }
+                    )
+
                 return order
 
             except Exception as e:
                 logger.error(f"❌ Error simulating paper trade: {e}")
+
+                # Record failed trade execution in monitoring
+                self._record_balance_operation(
+                    operation="trade_execution",
+                    balance_before=balance_before,
+                    balance_after=balance_before,
+                    success=False,
+                    error_type="trade_execution_error",
+                    metadata={
+                        "action": action.action,
+                        "symbol": symbol,
+                        "price": float(current_price),
+                        "error": str(e)
+                    }
+                )
+
                 return self._create_failed_order(action, symbol, f"ERROR: {e!s}")
 
     def _calculate_trade_size(
@@ -1840,3 +1981,120 @@ class PaperTradingAccount:
 
             self._save_state()
             logger.info(f"Paper trading account reset to ${self.starting_balance:,.2f}")
+
+    def get_monitoring_summary(self) -> Dict[str, Any]:
+        """Get comprehensive monitoring summary for paper trading."""
+        summary = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "monitoring_enabled": self.monitoring_enabled,
+            "account_status": self.get_account_status(),
+            "performance_metrics": self.get_performance_metrics_for_monitor(),
+        }
+
+        if self.monitoring_enabled:
+            try:
+                # Get enhanced metrics
+                enhanced_metrics = self.metrics_collector.get_metrics_summary(
+                    component="paper_trading"
+                )
+                summary["enhanced_metrics"] = enhanced_metrics
+
+                # Get alert summary
+                alert_summary = self.alert_manager.get_alert_summary()
+                summary["alert_summary"] = alert_summary
+
+                # Get active alerts for paper trading
+                active_alerts = self.alert_manager.get_active_alerts()
+                paper_trading_alerts = [
+                    {
+                        "id": alert.id,
+                        "severity": alert.severity.value,
+                        "title": alert.title,
+                        "created_at": alert.created_at.isoformat(),
+                        "duration_minutes": alert.duration_minutes
+                    }
+                    for alert in active_alerts
+                    if alert.component == "paper_trading"
+                ]
+                summary["active_alerts"] = paper_trading_alerts
+
+            except Exception as e:
+                logger.warning(f"Failed to get enhanced monitoring summary: {e}")
+                summary["monitoring_error"] = str(e)
+
+        return summary
+
+    def enable_monitoring(self) -> bool:
+        """Enable monitoring for this paper trading account."""
+        if not MONITORING_AVAILABLE:
+            logger.warning("Monitoring components not available")
+            return False
+
+        try:
+            self.metrics_collector = get_balance_metrics_collector()
+            self.alert_manager = get_balance_alert_manager()
+            self.monitoring_enabled = True
+
+            # Record monitoring enablement
+            self._record_balance_operation(
+                operation="monitoring_enabled",
+                balance_before=float(self.current_balance),
+                balance_after=float(self.current_balance),
+                success=True,
+                metadata={"enabled_at": datetime.now(UTC).isoformat()}
+            )
+
+            logger.info("✅ Paper trading monitoring enabled")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to enable monitoring: {e}")
+            return False
+
+    def disable_monitoring(self) -> None:
+        """Disable monitoring for this paper trading account."""
+        if self.monitoring_enabled:
+            try:
+                # Record monitoring disablement before disabling
+                self._record_balance_operation(
+                    operation="monitoring_disabled",
+                    balance_before=float(self.current_balance),
+                    balance_after=float(self.current_balance),
+                    success=True,
+                    metadata={"disabled_at": datetime.now(UTC).isoformat()}
+                )
+            except Exception as e:
+                logger.warning(f"Failed to record monitoring disablement: {e}")
+
+        self.monitoring_enabled = False
+        logger.info("🔇 Paper trading monitoring disabled")
+
+    def get_prometheus_metrics(self) -> List[str]:
+        """Get Prometheus format metrics for paper trading."""
+        metrics = []
+
+        if self.monitoring_enabled:
+            try:
+                # Get enhanced prometheus metrics
+                enhanced_metrics = self.metrics_collector.get_prometheus_metrics()
+                metrics.extend(enhanced_metrics)
+            except Exception as e:
+                logger.warning(f"Failed to get enhanced Prometheus metrics: {e}")
+
+        # Add paper trading specific metrics
+        account_status = self.get_account_status()
+        timestamp = int(datetime.now(UTC).timestamp() * 1000)
+
+        base_metrics = [
+            f"paper_trading_balance_usd {account_status['current_balance']} {timestamp}",
+            f"paper_trading_equity_usd {account_status['equity']} {timestamp}",
+            f"paper_trading_pnl_usd {account_status['total_pnl']} {timestamp}",
+            f"paper_trading_roi_percent {account_status['roi_percent']} {timestamp}",
+            f"paper_trading_drawdown_percent {account_status['current_drawdown']} {timestamp}",
+            f"paper_trading_open_positions {account_status['open_positions']} {timestamp}",
+            f"paper_trading_total_trades {account_status['total_trades']} {timestamp}",
+            f"paper_trading_margin_used_usd {account_status['margin_used']} {timestamp}",
+        ]
+
+        metrics.extend(base_metrics)
+        return metrics
