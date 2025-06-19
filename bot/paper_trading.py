@@ -33,6 +33,7 @@ try:
         record_operation_complete,
         record_operation_start,
     )
+
     MONITORING_AVAILABLE = True
 except ImportError:
     MONITORING_AVAILABLE = False
@@ -209,8 +210,8 @@ class PaperTradingAccount:
                     correlation_id=f"init_{int(time.time())}",
                     metadata={
                         "starting_balance": float(self.starting_balance),
-                        "data_dir": str(self.data_dir)
-                    }
+                        "data_dir": str(self.data_dir),
+                    },
                 )
 
                 record_operation_complete(
@@ -220,7 +221,7 @@ class PaperTradingAccount:
                     success=True,
                     balance_before=None,
                     balance_after=float(self.starting_balance),
-                    correlation_id=f"init_{int(time.time())}"
+                    correlation_id=f"init_{int(time.time())}",
                 )
         except Exception as e:
             logger.warning(f"Failed to record account initialization: {e}")
@@ -232,7 +233,7 @@ class PaperTradingAccount:
         balance_after: Optional[float] = None,
         success: bool = True,
         error_type: Optional[str] = None,
-        metadata: Optional[dict] = None
+        metadata: Optional[dict] = None,
     ) -> None:
         """Record a balance operation in the monitoring system."""
         try:
@@ -243,7 +244,7 @@ class PaperTradingAccount:
                     operation=operation,
                     component="paper_trading",
                     correlation_id=correlation_id,
-                    metadata=metadata or {}
+                    metadata=metadata or {},
                 )
 
                 record_operation_complete(
@@ -255,7 +256,7 @@ class PaperTradingAccount:
                     balance_after=balance_after,
                     error_type=error_type,
                     correlation_id=correlation_id,
-                    metadata=metadata
+                    metadata=metadata,
                 )
         except Exception as e:
             logger.debug(f"Failed to record balance operation {operation}: {e}")
@@ -484,8 +485,8 @@ class PaperTradingAccount:
                             "action": action.action,
                             "symbol": symbol,
                             "price": float(current_price),
-                            "rationale": action.rationale
-                        }
+                            "rationale": action.rationale,
+                        },
                     )
                     return None
 
@@ -650,8 +651,8 @@ class PaperTradingAccount:
                             "fees": float(fees),
                             "order_id": order.id if order else None,
                             "equity": float(self.equity),
-                            "margin_used": float(self.margin_used)
-                        }
+                            "margin_used": float(self.margin_used),
+                        },
                     )
 
                 return order
@@ -670,8 +671,8 @@ class PaperTradingAccount:
                         "action": action.action,
                         "symbol": symbol,
                         "price": float(current_price),
-                        "error": str(e)
-                    }
+                        "error": str(e),
+                    },
                 )
 
                 return self._create_failed_order(action, symbol, f"ERROR: {e!s}")
@@ -2011,7 +2012,7 @@ class PaperTradingAccount:
                         "severity": alert.severity.value,
                         "title": alert.title,
                         "created_at": alert.created_at.isoformat(),
-                        "duration_minutes": alert.duration_minutes
+                        "duration_minutes": alert.duration_minutes,
                     }
                     for alert in active_alerts
                     if alert.component == "paper_trading"
@@ -2041,7 +2042,7 @@ class PaperTradingAccount:
                 balance_before=float(self.current_balance),
                 balance_after=float(self.current_balance),
                 success=True,
-                metadata={"enabled_at": datetime.now(UTC).isoformat()}
+                metadata={"enabled_at": datetime.now(UTC).isoformat()},
             )
 
             logger.info("✅ Paper trading monitoring enabled")
@@ -2061,7 +2062,7 @@ class PaperTradingAccount:
                     balance_before=float(self.current_balance),
                     balance_after=float(self.current_balance),
                     success=True,
-                    metadata={"disabled_at": datetime.now(UTC).isoformat()}
+                    metadata={"disabled_at": datetime.now(UTC).isoformat()},
                 )
             except Exception as e:
                 logger.warning(f"Failed to record monitoring disablement: {e}")

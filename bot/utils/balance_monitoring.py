@@ -25,6 +25,7 @@ try:
         record_operation_start,
         record_timeout,
     )
+
     ENHANCED_MONITORING_AVAILABLE = True
 except ImportError:
     ENHANCED_MONITORING_AVAILABLE = False
@@ -119,7 +120,7 @@ class BalanceOperationMonitor:
             component: Component name ('service' or 'client')
             operation: Operation name
             metadata: Additional operation metadata
-            
+
         Returns:
             Start time for enhanced metrics collection
         """
@@ -131,7 +132,7 @@ class BalanceOperationMonitor:
                     operation=operation,
                     component=component,
                     correlation_id=correlation_id,
-                    metadata=metadata
+                    metadata=metadata,
                 )
             except Exception as e:
                 self.logger.debug(f"Enhanced metrics recording failed: {e}")
@@ -194,7 +195,9 @@ class BalanceOperationMonitor:
                 balance_after = None
                 if balance_amount:
                     try:
-                        balance_after = float(balance_amount.replace("$", "").replace(",", ""))
+                        balance_after = float(
+                            balance_amount.replace("$", "").replace(",", "")
+                        )
                     except (ValueError, AttributeError):
                         pass
 
@@ -207,7 +210,7 @@ class BalanceOperationMonitor:
                     balance_after=balance_after,
                     error_type=error_category,
                     correlation_id=correlation_id,
-                    metadata=metadata
+                    metadata=metadata,
                 )
             except Exception as e:
                 self.logger.debug(f"Enhanced metrics completion recording failed: {e}")
@@ -232,7 +235,9 @@ class BalanceOperationMonitor:
                     balance_after = None
                     if balance_amount:
                         try:
-                            balance_after = float(balance_amount.replace("$", "").replace(",", ""))
+                            balance_after = float(
+                                balance_amount.replace("$", "").replace(",", "")
+                            )
                         except (ValueError, AttributeError):
                             pass
 
@@ -245,7 +250,7 @@ class BalanceOperationMonitor:
                         balance_after=balance_after,
                         error_type=error_category,
                         correlation_id=correlation_id,
-                        metadata=metadata
+                        metadata=metadata,
                     )
                 except Exception as e:
                     self.logger.debug(f"Enhanced metrics final recording failed: {e}")
@@ -557,7 +562,9 @@ async def record_balance_operation_start(
 ) -> float:
     """Convenience function to record balance operation start."""
     monitor = get_balance_monitor()
-    return await monitor.record_operation_start(correlation_id, component, operation, metadata)
+    return await monitor.record_operation_start(
+        correlation_id, component, operation, metadata
+    )
 
 
 async def record_balance_operation_complete(
@@ -572,7 +579,13 @@ async def record_balance_operation_complete(
     """Convenience function to record balance operation completion."""
     monitor = get_balance_monitor()
     await monitor.record_operation_complete(
-        correlation_id, status, balance_amount, error, error_category, metadata, start_time
+        correlation_id,
+        status,
+        balance_amount,
+        error,
+        error_category,
+        metadata,
+        start_time,
     )
 
 
@@ -625,7 +638,7 @@ def generate_monitoring_report() -> dict[str, Any]:
             base_report["monitoring_features"] = {
                 "enhanced_metrics_enabled": True,
                 "alerting_enabled": True,
-                "prometheus_metrics_available": True
+                "prometheus_metrics_available": True,
             }
         except Exception as e:
             logger.warning(f"Failed to include enhanced metrics in report: {e}")
@@ -633,14 +646,14 @@ def generate_monitoring_report() -> dict[str, Any]:
                 "enhanced_metrics_enabled": False,
                 "alerting_enabled": False,
                 "prometheus_metrics_available": False,
-                "error": str(e)
+                "error": str(e),
             }
     else:
         base_report["monitoring_features"] = {
             "enhanced_metrics_enabled": False,
             "alerting_enabled": False,
             "prometheus_metrics_available": False,
-            "reason": "Enhanced monitoring components not available"
+            "reason": "Enhanced monitoring components not available",
         }
 
     return base_report
@@ -652,6 +665,7 @@ def get_enhanced_metrics_summary() -> dict[str, Any]:
     if ENHANCED_MONITORING_AVAILABLE:
         try:
             from ..monitoring.balance_metrics import get_metrics_summary
+
             return get_metrics_summary()
         except Exception as e:
             logger.error(f"Failed to get enhanced metrics summary: {e}")
@@ -664,6 +678,7 @@ def get_prometheus_metrics() -> list[str]:
     if ENHANCED_MONITORING_AVAILABLE:
         try:
             from ..monitoring.balance_metrics import get_prometheus_metrics
+
             return get_prometheus_metrics()
         except Exception as e:
             logger.error(f"Failed to get Prometheus metrics: {e}")
@@ -676,6 +691,7 @@ async def trigger_alert_evaluation() -> list:
     if ENHANCED_MONITORING_AVAILABLE:
         try:
             from ..monitoring.balance_alerts import trigger_alert_evaluation
+
             return await trigger_alert_evaluation()
         except Exception as e:
             logger.error(f"Failed to trigger alert evaluation: {e}")
@@ -686,7 +702,7 @@ async def trigger_alert_evaluation() -> list:
 def enable_enhanced_monitoring() -> bool:
     """
     Enable enhanced monitoring and alerting if available.
-    
+
     Returns:
         True if enhanced monitoring was successfully enabled
     """

@@ -47,6 +47,7 @@ except ImportError:
         def __init__(self):
             pass
 
+
 # Import monitoring components
 try:
     from ..monitoring.balance_alerts import get_balance_alert_manager
@@ -56,6 +57,7 @@ try:
         record_operation_start,
         record_timeout,
     )
+
     MONITORING_AVAILABLE = True
 except ImportError:
     MONITORING_AVAILABLE = False
@@ -981,7 +983,7 @@ class BluefinClient(BaseExchange):
         balance_after: Optional[float] = None,
         success: bool = True,
         error_type: Optional[str] = None,
-        metadata: Optional[dict] = None
+        metadata: Optional[dict] = None,
     ) -> None:
         """Record a balance operation in the monitoring system."""
         try:
@@ -992,7 +994,7 @@ class BluefinClient(BaseExchange):
                     operation=operation,
                     component="bluefin_exchange",
                     correlation_id=correlation_id,
-                    metadata=metadata or {}
+                    metadata=metadata or {},
                 )
 
                 record_operation_complete(
@@ -1004,7 +1006,7 @@ class BluefinClient(BaseExchange):
                     balance_after=balance_after,
                     error_type=error_type,
                     correlation_id=correlation_id,
-                    metadata=metadata
+                    metadata=metadata,
                 )
         except Exception as e:
             logger.debug(f"Failed to record balance operation {operation}: {e}")
@@ -1040,8 +1042,8 @@ class BluefinClient(BaseExchange):
                 metadata={
                     "account_type": str(account_type) if account_type else None,
                     "dry_run": True,
-                    "network": self.network_name
-                }
+                    "network": self.network_name,
+                },
             )
 
             return mock_balance
@@ -1057,8 +1059,8 @@ class BluefinClient(BaseExchange):
                     correlation_id=correlation_id,
                     metadata={
                         "account_type": str(account_type) if account_type else None,
-                        "network": self.network_name
-                    }
+                        "network": self.network_name,
+                    },
                 )
             except Exception as e:
                 logger.debug(f"Failed to record balance operation start: {e}")
@@ -1159,8 +1161,8 @@ class BluefinClient(BaseExchange):
                             "network": self.network_name,
                             "raw_balance": str(raw_balance),
                             "normalized_balance": str(total_balance),
-                            "is_negative": total_balance < Decimal("0")
-                        }
+                            "is_negative": total_balance < Decimal("0"),
+                        },
                     )
                 except Exception as e:
                     logger.debug(f"Failed to record successful balance operation: {e}")
@@ -1182,8 +1184,11 @@ class BluefinClient(BaseExchange):
                         record_timeout(
                             operation="get_balance",
                             component="bluefin_exchange",
-                            timeout_duration_ms=getattr(balance_error, "timeout_duration", 30) * 1000,
-                            correlation_id=correlation_id
+                            timeout_duration_ms=getattr(
+                                balance_error, "timeout_duration", 30
+                            )
+                            * 1000,
+                            correlation_id=correlation_id,
                         )
                     else:
                         record_operation_complete(
@@ -1194,10 +1199,12 @@ class BluefinClient(BaseExchange):
                             error_type=error_type,
                             correlation_id=correlation_id,
                             metadata={
-                                "account_type": str(account_type) if account_type else None,
+                                "account_type": (
+                                    str(account_type) if account_type else None
+                                ),
                                 "network": self.network_name,
-                                "error_message": str(balance_error)
-                            }
+                                "error_message": str(balance_error),
+                            },
                         )
                 except Exception as e:
                     logger.debug(f"Failed to record balance error: {e}")
@@ -1219,11 +1226,13 @@ class BluefinClient(BaseExchange):
                             "account_type": str(account_type) if account_type else None,
                             "network": self.network_name,
                             "error_message": str(e),
-                            "error_type": type(e).__name__
-                        }
+                            "error_type": type(e).__name__,
+                        },
                     )
                 except Exception as monitoring_error:
-                    logger.debug(f"Failed to record unexpected error: {monitoring_error}")
+                    logger.debug(
+                        f"Failed to record unexpected error: {monitoring_error}"
+                    )
 
             # Wrap any other exceptions in BalanceRetrievalError
             logger.error(f"Unexpected error getting account balance: {e}")
