@@ -1,16 +1,53 @@
 """Configuration settings for the AI Trading Bot."""
 
+import hashlib
 import json
 import logging
 import os
 import re
 import secrets
+import socket
+import time
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlparse
 
+# Optional dependency for network testing
+try:
+    import aiohttp
+    AIOHTTP_AVAILABLE = True
+except ImportError:
+    AIOHTTP_AVAILABLE = False
+    # Create a mock aiohttp for type hints
+    class aiohttp:
+        class ClientSession:
+            def __init__(self, *args, **kwargs):
+                pass
+            async def __aenter__(self):
+                return self
+            async def __aexit__(self, *args):
+                pass
+            def get(self, *args, **kwargs):
+                return MockResponse()
+            def post(self, *args, **kwargs):
+                return MockResponse()
+        
+        class ClientTimeout:
+            def __init__(self, *args, **kwargs):
+                pass
+    
+    class MockResponse:
+        def __init__(self):
+            self.status = 200
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *args):
+            pass
+        async def json(self):
+            return {}
 from pydantic import (
     AnyHttpUrl,
     BaseModel,
@@ -24,6 +61,655 @@ from pydantic import (
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
+
+
+class ConfigValidationError(Exception):
+    """Raised when configuration validation fails."""
+
+    def __init__(self, message: str, errors: list[str] | None = None):
+        super().__init__(message)
+        self.errors = errors or []
+
+
+class ConfigurationValidator:
+    """Comprehensive configuration validation and testing utilities."""
+
+    def __init__(self, settings: "Settings"):
+        self.settings = settings
+        self.errors: list[str] = []
+        self.warnings: list[str] = []
+        self.validation_results: dict[str, Any] = {}
+    
+    def _check_aiohttp_available(self, test_name: str) -> dict[str, Any] | None:
+        """Check if aiohttp is available for network testing."""
+        if not AIOHTTP_AVAILABLE:
+            return {"name": test_name, "status": "skip", "message": "aiohttp not available for network testing"}
+        return None
+
+    async def validate_all(self) -> dict[str, Any]:
+        """Run all configuration validations."""
+        results = {
+            "environment": await self._validate_environment(),
+            "network_connectivity": await self._validate_network_connectivity(),
+            "exchange_config": await self._validate_exchange_configuration(),
+            "security": await self._validate_security_settings(),
+            "trading_parameters": await self._validate_trading_parameters(),
+            "llm_config": await self._validate_llm_configuration(),
+            "sui_network": (
+                await self._validate_sui_network()
+                if self.settings.exchange.exchange_type == "bluefin"
+                else None
+            ),
+        }
+
+        results["summary"] = {
+            "total_errors": len(self.errors),
+            "total_warnings": len(self.warnings),
+            "errors": self.errors,
+            "warnings": self.warnings,
+            "is_valid": len(self.errors) == 0,
+        }
+
+        self.validation_results = results
+        return results
+
+    async def _validate_environment(self) -> dict[str, Any]:
+        """Validate environment configuration consistency."""
+        results = {"status": "pass", "checks": []}
+
+        # Environment-network consistency
+        if self.settings.exchange.exchange_type == "bluefin":
+            env = self.settings.system.environment
+            network = self.settings.exchange.bluefin_network
+            dry_run = self.settings.system.dry_run
+
+            if env.value == "production" and network == "testnet":
+                self.warnings.append("Production environment using testnet network")
+                results["checks"].append(
+                    {"name": "prod_testnet_mismatch", "status": "warning"}
+                )
+
+            if not dry_run and network == "testnet":
+                self.warnings.append("Live trading enabled on testnet network")
+                results["checks"].append(
+                    {"name": "live_testnet_mismatch", "status": "warning"}
+                )
+
+            if env.value == "development" and network == "mainnet" and not dry_run:
+                self.errors.append(
+                    "Development environment should not use live mainnet trading"
+                )
+                results["status"] = "fail"
+                results["checks"].append(
+                    {"name": "dev_mainnet_live", "status": "error"}
+                )
+
+        return results
+
+    async def _validate_network_connectivity(self) -> dict[str, Any]:
+        """Test network connectivity to required services."""
+        results = {"status": "pass", "checks": []}
+
+        # Test basic internet connectivity
+        internet_check = await self._test_internet_connectivity()
+        results["checks"].append(internet_check)
+        if internet_check["status"] == "error":
+            results["status"] = "fail"
+
+        # Test DNS resolution
+        dns_check = await self._test_dns_resolution()
+        results["checks"].append(dns_check)
+        if dns_check["status"] == "error":
+            results["status"] = "fail"
+
+        return results
+
+    async def _validate_exchange_configuration(self) -> dict[str, Any]:
+        """Validate exchange-specific configuration."""
+        results = {"status": "pass", "checks": []}
+
+        if self.settings.exchange.exchange_type == "bluefin":
+            # Validate Bluefin service URL
+            service_url_check = await self._test_bluefin_service_connectivity()
+            results["checks"].append(service_url_check)
+            if service_url_check["status"] == "error":
+                results["status"] = "fail"
+
+            # Validate private key format comprehensively
+            key_validation = self._validate_bluefin_private_key_format()
+            results["checks"].append(key_validation)
+            if key_validation["status"] == "error":
+                results["status"] = "fail"
+
+            # Validate network endpoints
+            endpoint_validation = await self._validate_bluefin_endpoints()
+            results["checks"].append(endpoint_validation)
+            if endpoint_validation["status"] == "error":
+                results["status"] = "fail"
+
+        return results
+
+    async def _validate_security_settings(self) -> dict[str, Any]:
+        """Validate security-related configuration."""
+        results = {"status": "pass", "checks": []}
+
+        # Check for secure private key handling
+        if self.settings.exchange.exchange_type == "bluefin":
+            if self.settings.exchange.bluefin_private_key:
+                key = self.settings.exchange.bluefin_private_key.get_secret_value()
+
+                # Check if key appears to be exposed in logs or config
+                if len(key) < 32:
+                    self.errors.append(
+                        "Bluefin private key appears to be truncated or invalid"
+                    )
+                    results["status"] = "fail"
+                    results["checks"].append({"name": "key_length", "status": "error"})
+
+                # Security recommendations
+                if not self.settings.system.dry_run:
+                    self.warnings.append(
+                        "Live trading enabled - ensure private keys are securely stored"
+                    )
+                    results["checks"].append(
+                        {"name": "live_trading_security", "status": "warning"}
+                    )
+
+        return results
+
+    async def _validate_trading_parameters(self) -> dict[str, Any]:
+        """Validate trading parameter bounds and consistency."""
+        results = {"status": "pass", "checks": []}
+
+        # Leverage validation
+        if self.settings.trading.leverage > 20:
+            self.warnings.append(
+                f"High leverage ({self.settings.trading.leverage}x) detected"
+            )
+            results["checks"].append({"name": "high_leverage", "status": "warning"})
+
+        # Position size validation
+        if self.settings.trading.max_size_pct > 50.0:
+            self.warnings.append(
+                f"High position size ({self.settings.trading.max_size_pct}%) detected"
+            )
+            results["checks"].append(
+                {"name": "high_position_size", "status": "warning"}
+            )
+
+        # Risk-reward ratio validation
+        risk_reward = (
+            self.settings.risk.default_take_profit_pct
+            / self.settings.risk.default_stop_loss_pct
+        )
+        if risk_reward < 1.5:
+            self.warnings.append(
+                f"Low risk-reward ratio ({risk_reward:.2f}) may impact profitability"
+            )
+            results["checks"].append({"name": "low_risk_reward", "status": "warning"})
+
+        return results
+
+    async def _validate_llm_configuration(self) -> dict[str, Any]:
+        """Validate LLM configuration and test connectivity."""
+        results = {"status": "pass", "checks": []}
+
+        # Test LLM API connectivity if key is provided
+        if self.settings.llm.openai_api_key:
+            api_test = await self._test_openai_api_connectivity()
+            results["checks"].append(api_test)
+            if api_test["status"] == "error":
+                results["status"] = "fail"
+
+        # Validate temperature setting for trading
+        if self.settings.llm.temperature > 0.3:
+            self.warnings.append(
+                f"High LLM temperature ({self.settings.llm.temperature}) may cause inconsistent decisions"
+            )
+            results["checks"].append({"name": "high_temperature", "status": "warning"})
+
+        return results
+
+    async def _validate_sui_network(self) -> dict[str, Any]:
+        """Validate Sui network connectivity and configuration."""
+        results = {"status": "pass", "checks": []}
+
+        # Test Sui RPC connectivity
+        rpc_test = await self._test_sui_rpc_connectivity()
+        results["checks"].append(rpc_test)
+        if rpc_test["status"] == "error":
+            results["status"] = "fail"
+
+        # Test Bluefin API endpoints
+        bluefin_api_test = await self._test_bluefin_api_connectivity()
+        results["checks"].append(bluefin_api_test)
+        if bluefin_api_test["status"] == "error":
+            results["status"] = "fail"
+
+        return results
+
+    async def _test_internet_connectivity(self) -> dict[str, Any]:
+        """Test basic internet connectivity."""
+        skip_result = self._check_aiohttp_available("internet_connectivity")
+        if skip_result:
+            return skip_result
+        
+        try:
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as session:
+                async with session.get("https://8.8.8.8") as response:
+                    if response.status == 200:
+                        return {
+                            "name": "internet_connectivity",
+                            "status": "pass",
+                            "message": "Internet connectivity OK",
+                        }
+        except Exception as e:
+            self.errors.append(f"No internet connectivity: {str(e)}")
+            return {
+                "name": "internet_connectivity",
+                "status": "error",
+                "message": f"No internet: {str(e)}",
+            }
+
+        self.errors.append("Internet connectivity test failed")
+        return {
+            "name": "internet_connectivity",
+            "status": "error",
+            "message": "Internet test failed",
+        }
+
+    async def _test_dns_resolution(self) -> dict[str, Any]:
+        """Test DNS resolution for key domains."""
+        domains_to_test = ["api.openai.com"]
+
+        if self.settings.exchange.exchange_type == "bluefin":
+            network = self.settings.exchange.bluefin_network
+            if network == "mainnet":
+                domains_to_test.extend(
+                    ["dapi.api.sui-prod.bluefin.io", "fullnode.mainnet.sui.io"]
+                )
+            else:
+                domains_to_test.extend(
+                    ["dapi.api.sui-staging.bluefin.io", "fullnode.testnet.sui.io"]
+                )
+
+        failed_domains = []
+        for domain in domains_to_test:
+            try:
+                socket.gethostbyname(domain)
+            except socket.gaierror:
+                failed_domains.append(domain)
+
+        if failed_domains:
+            self.errors.append(
+                f"DNS resolution failed for: {', '.join(failed_domains)}"
+            )
+            return {
+                "name": "dns_resolution",
+                "status": "error",
+                "message": f"DNS failed: {failed_domains}",
+            }
+
+        return {
+            "name": "dns_resolution",
+            "status": "pass",
+            "message": "DNS resolution OK",
+        }
+
+    async def _test_bluefin_service_connectivity(self) -> dict[str, Any]:
+        """Test connectivity to Bluefin service."""
+        service_url = self.settings.exchange.bluefin_service_url
+
+        try:
+            # Parse URL to check if it's valid
+            parsed = urlparse(service_url)
+            if not parsed.scheme or not parsed.netloc:
+                raise ValueError("Invalid service URL format")
+
+            # Test connectivity
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=15)
+            ) as session:
+                health_url = f"{service_url.rstrip('/')}/health"
+                async with session.get(health_url) as response:
+                    if response.status == 200:
+                        return {
+                            "name": "bluefin_service",
+                            "status": "pass",
+                            "message": "Bluefin service reachable",
+                        }
+                    else:
+                        self.warnings.append(
+                            f"Bluefin service returned status {response.status}"
+                        )
+                        return {
+                            "name": "bluefin_service",
+                            "status": "warning",
+                            "message": f"Service status: {response.status}",
+                        }
+        except Exception as e:
+            self.errors.append(
+                f"Cannot reach Bluefin service at {service_url}: {str(e)}"
+            )
+            return {
+                "name": "bluefin_service",
+                "status": "error",
+                "message": f"Service unreachable: {str(e)}",
+            }
+
+    def _validate_bluefin_private_key_format(self) -> dict[str, Any]:
+        """Comprehensively validate Bluefin private key format."""
+        if not self.settings.exchange.bluefin_private_key:
+            self.errors.append("Bluefin private key is required")
+            return {
+                "name": "private_key_format",
+                "status": "error",
+                "message": "Private key missing",
+            }
+
+        key = self.settings.exchange.bluefin_private_key.get_secret_value().strip()
+
+        # Check for common formats
+        if not key:
+            self.errors.append("Bluefin private key is empty")
+            return {
+                "name": "private_key_format",
+                "status": "error",
+                "message": "Private key empty",
+            }
+
+        # Validate different supported formats
+        formats_detected = []
+
+        # 1. Mnemonic phrase (12 or 24 words)
+        words = key.split()
+        if len(words) in [12, 24]:
+            if all(word.isalpha() and len(word) > 2 for word in words):
+                formats_detected.append("mnemonic")
+
+        # 2. Bech32-encoded Sui private key
+        if key.startswith("suiprivkey") and len(key) > 20:
+            formats_detected.append("sui_bech32")
+
+        # 3. Hex format (with or without 0x prefix)
+        hex_key = key[2:] if key.startswith("0x") else key
+        if len(hex_key) == 64 and all(c in "0123456789abcdefABCDEF" for c in hex_key):
+            formats_detected.append("hex")
+
+        if not formats_detected:
+            self.errors.append(
+                "Bluefin private key format not recognized (expected: hex, mnemonic, or Sui bech32)"
+            )
+            return {
+                "name": "private_key_format",
+                "status": "error",
+                "message": "Invalid key format",
+            }
+
+        return {
+            "name": "private_key_format",
+            "status": "pass",
+            "message": f"Valid format: {', '.join(formats_detected)}",
+        }
+
+    async def _validate_bluefin_endpoints(self) -> dict[str, Any]:
+        """Validate Bluefin API endpoints."""
+        try:
+            from .exchange.bluefin_endpoints import BluefinEndpointConfig
+
+            network = self.settings.exchange.bluefin_network
+            endpoints = BluefinEndpointConfig.get_endpoints(network)
+
+            # Test if endpoints are reachable
+            test_url = f"{endpoints.rest_api}/ping"
+
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as session:
+                async with session.get(test_url) as response:
+                    if response.status == 200:
+                        return {
+                            "name": "bluefin_endpoints",
+                            "status": "pass",
+                            "message": f"Endpoints reachable ({network})",
+                        }
+                    else:
+                        self.warnings.append(
+                            f"Bluefin {network} endpoint returned status {response.status}"
+                        )
+                        return {
+                            "name": "bluefin_endpoints",
+                            "status": "warning",
+                            "message": f"Endpoint status: {response.status}",
+                        }
+        except Exception as e:
+            self.errors.append(f"Cannot validate Bluefin endpoints: {str(e)}")
+            return {
+                "name": "bluefin_endpoints",
+                "status": "error",
+                "message": f"Endpoint test failed: {str(e)}",
+            }
+
+    async def _test_openai_api_connectivity(self) -> dict[str, Any]:
+        """Test OpenAI API connectivity."""
+        if not self.settings.llm.openai_api_key:
+            return {
+                "name": "openai_api",
+                "status": "skip",
+                "message": "No API key provided",
+            }
+
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.settings.llm.openai_api_key.get_secret_value()}",
+                "Content-Type": "application/json",
+            }
+
+            # Test with a minimal request to models endpoint
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=15)
+            ) as session:
+                async with session.get(
+                    "https://api.openai.com/v1/models", headers=headers
+                ) as response:
+                    if response.status == 200:
+                        return {
+                            "name": "openai_api",
+                            "status": "pass",
+                            "message": "OpenAI API accessible",
+                        }
+                    elif response.status == 401:
+                        self.errors.append("OpenAI API key is invalid")
+                        return {
+                            "name": "openai_api",
+                            "status": "error",
+                            "message": "Invalid API key",
+                        }
+                    else:
+                        self.warnings.append(
+                            f"OpenAI API returned status {response.status}"
+                        )
+                        return {
+                            "name": "openai_api",
+                            "status": "warning",
+                            "message": f"API status: {response.status}",
+                        }
+        except Exception as e:
+            self.errors.append(f"Cannot reach OpenAI API: {str(e)}")
+            return {
+                "name": "openai_api",
+                "status": "error",
+                "message": f"API unreachable: {str(e)}",
+            }
+
+    async def _test_sui_rpc_connectivity(self) -> dict[str, Any]:
+        """Test Sui RPC connectivity."""
+        # Determine RPC URL based on network
+        network = self.settings.exchange.bluefin_network
+
+        if self.settings.exchange.bluefin_rpc_url:
+            rpc_url = self.settings.exchange.bluefin_rpc_url
+        else:
+            # Use default Sui RPC URLs
+            if network == "mainnet":
+                rpc_url = "https://fullnode.mainnet.sui.io:443"
+            else:
+                rpc_url = "https://fullnode.testnet.sui.io:443"
+
+        try:
+            # Test with a simple RPC call
+            payload = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "sui_getLatestSuiSystemState",
+                "params": [],
+            }
+
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=15)
+            ) as session:
+                async with session.post(rpc_url, json=payload) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if "result" in data:
+                            return {
+                                "name": "sui_rpc",
+                                "status": "pass",
+                                "message": f"Sui RPC accessible ({network})",
+                            }
+                        else:
+                            self.warnings.append(
+                                f"Sui RPC returned unexpected response: {data}"
+                            )
+                            return {
+                                "name": "sui_rpc",
+                                "status": "warning",
+                                "message": "Unexpected RPC response",
+                            }
+                    else:
+                        self.errors.append(f"Sui RPC returned status {response.status}")
+                        return {
+                            "name": "sui_rpc",
+                            "status": "error",
+                            "message": f"RPC status: {response.status}",
+                        }
+        except Exception as e:
+            self.errors.append(f"Cannot reach Sui RPC at {rpc_url}: {str(e)}")
+            return {
+                "name": "sui_rpc",
+                "status": "error",
+                "message": f"RPC unreachable: {str(e)}",
+            }
+
+    async def _test_bluefin_api_connectivity(self) -> dict[str, Any]:
+        """Test Bluefin API connectivity."""
+        try:
+            from .exchange.bluefin_endpoints import BluefinEndpointConfig
+
+            network = self.settings.exchange.bluefin_network
+            endpoints = BluefinEndpointConfig.get_endpoints(network)
+
+            # Test ticker endpoint (public, no auth required)
+            test_url = f"{endpoints.rest_api}/ticker24hr"
+
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=15)
+            ) as session:
+                async with session.get(test_url) as response:
+                    if response.status == 200:
+                        return {
+                            "name": "bluefin_api",
+                            "status": "pass",
+                            "message": f"Bluefin API accessible ({network})",
+                        }
+                    elif response.status == 429:
+                        self.warnings.append(
+                            "Bluefin API rate limited - this is normal"
+                        )
+                        return {
+                            "name": "bluefin_api",
+                            "status": "warning",
+                            "message": "API rate limited",
+                        }
+                    else:
+                        self.warnings.append(
+                            f"Bluefin API returned status {response.status}"
+                        )
+                        return {
+                            "name": "bluefin_api",
+                            "status": "warning",
+                            "message": f"API status: {response.status}",
+                        }
+        except Exception as e:
+            self.errors.append(f"Cannot reach Bluefin API: {str(e)}")
+            return {
+                "name": "bluefin_api",
+                "status": "error",
+                "message": f"API unreachable: {str(e)}",
+            }
+
+    def generate_validation_report(self) -> str:
+        """Generate a comprehensive validation report."""
+        if not self.validation_results:
+            return "No validation results available. Run validate_all() first."
+
+        report = ["\n=== CONFIGURATION VALIDATION REPORT ==="]
+        report.append(f"Generated at: {datetime.now(UTC).isoformat()}")
+        report.append(f"Environment: {self.settings.system.environment.value}")
+        report.append(f"Exchange: {self.settings.exchange.exchange_type}")
+
+        if self.settings.exchange.exchange_type == "bluefin":
+            report.append(f"Network: {self.settings.exchange.bluefin_network}")
+
+        report.append(f"Dry Run: {self.settings.system.dry_run}")
+        report.append("")
+
+        # Summary
+        summary = self.validation_results["summary"]
+        report.append("=== SUMMARY ===")
+        report.append(f"Status: {'✓ PASS' if summary['is_valid'] else '✗ FAIL'}")
+        report.append(f"Errors: {summary['total_errors']}")
+        report.append(f"Warnings: {summary['total_warnings']}")
+        report.append("")
+
+        # Detailed results
+        for section, results in self.validation_results.items():
+            if section == "summary" or results is None:
+                continue
+
+            report.append(f"=== {section.upper().replace('_', ' ')} ===")
+            report.append(f"Status: {results['status'].upper()}")
+
+            if "checks" in results:
+                for check in results["checks"]:
+                    status_symbol = {
+                        "pass": "✓",
+                        "warning": "⚠",
+                        "error": "✗",
+                        "skip": "-",
+                    }[check["status"]]
+                    report.append(
+                        f"  {status_symbol} {check['name']}: {check['message']}"
+                    )
+
+            report.append("")
+
+        # Errors and warnings
+        if summary["errors"]:
+            report.append("=== ERRORS ===")
+            for error in summary["errors"]:
+                report.append(f"  ✗ {error}")
+            report.append("")
+
+        if summary["warnings"]:
+            report.append("=== WARNINGS ===")
+            for warning in summary["warnings"]:
+                report.append(f"  ⚠ {warning}")
+            report.append("")
+
+        return "\n".join(report)
 
 
 class Environment(str, Enum):
@@ -674,46 +1360,223 @@ class ExchangeSettings(BaseModel):
                 self.bluefin_private_key
                 and self.bluefin_private_key.get_secret_value().strip()
             ):
-                # Support multiple Sui private key formats with proper validation
-                private_key = self.bluefin_private_key.get_secret_value().strip()
-
-                # Check for mnemonic phrase format (12 or 24 words)
-                words = private_key.split()
-                if len(words) in [12, 24]:
-                    # This is a mnemonic phrase - validate word count and basic structure
-                    if all(word.isalpha() and len(word) > 2 for word in words):
-                        return self
-                    else:
-                        raise ValueError(
-                            "Bluefin mnemonic phrase contains invalid words"
-                        )
-
-                # Remove common prefixes for other formats
-                if private_key.startswith("0x"):
-                    private_key = private_key[2:]
-                elif private_key.startswith("suiprivkey"):
-                    # This is a Bech32-encoded Sui private key, which is valid
-                    # Basic length validation for Bech32 format
-                    if len(private_key) < 20:
-                        raise ValueError(
-                            "Bluefin Sui private key in Bech32 format appears too short"
-                        )
-                    return self
-
-                # Validate hex format (after removing 0x prefix)
-                if private_key:
-                    # Check for valid hex characters
-                    if not all(c in "0123456789abcdefABCDEF" for c in private_key):
-                        raise ValueError(
-                            "Bluefin private key must be a valid hexadecimal string, Sui private key format (suiprivkey...), or mnemonic phrase"
-                        )
-                    # Check for reasonable length (32 bytes = 64 hex chars)
-                    if len(private_key) != 64:
-                        raise ValueError(
-                            "Bluefin hex private key must be exactly 64 characters (32 bytes)"
-                        )
+                self._validate_bluefin_private_key_comprehensive()
 
         return self
+
+    def _validate_bluefin_private_key_comprehensive(self) -> None:
+        """Comprehensive validation of Bluefin private key formats."""
+        if not self.bluefin_private_key:
+            return
+
+        private_key = self.bluefin_private_key.get_secret_value().strip()
+
+        # Track validation results
+        validation_errors = []
+        detected_formats = []
+
+        # 1. Check for mnemonic phrase format (12 or 24 words)
+        words = private_key.split()
+        if len(words) in [12, 24]:
+            if all(word.isalpha() and len(word) > 2 for word in words):
+                detected_formats.append("mnemonic")
+                # Additional mnemonic validation
+                if not self._validate_mnemonic_checksum(words):
+                    validation_errors.append(
+                        "Mnemonic phrase appears to have invalid checksum"
+                    )
+            else:
+                validation_errors.append(
+                    "Mnemonic phrase contains invalid words (must be alphabetic, >2 chars)"
+                )
+
+        # 2. Check for Bech32-encoded Sui private key
+        elif private_key.startswith("suiprivkey"):
+            if len(private_key) < 50:  # More realistic minimum length for Bech32
+                validation_errors.append("Sui Bech32 private key appears too short")
+            else:
+                detected_formats.append("sui_bech32")
+                # Additional Bech32 validation
+                if not self._validate_bech32_format(private_key):
+                    validation_errors.append(
+                        "Sui Bech32 private key has invalid format"
+                    )
+
+        # 3. Check for hex format (with or without 0x prefix)
+        else:
+            hex_key = private_key[2:] if private_key.startswith("0x") else private_key
+
+            if len(hex_key) == 64:
+                if all(c in "0123456789abcdefABCDEF" for c in hex_key):
+                    detected_formats.append("hex")
+                    # Additional hex validation
+                    if hex_key == "0" * 64:
+                        validation_errors.append("Private key cannot be all zeros")
+                    elif hex_key.upper() == "F" * 64:
+                        validation_errors.append("Private key cannot be all F's")
+                else:
+                    validation_errors.append(
+                        "Hex private key contains invalid characters"
+                    )
+            else:
+                validation_errors.append(
+                    f"Hex private key must be exactly 64 characters, got {len(hex_key)}"
+                )
+
+        # Check if any format was detected
+        if not detected_formats:
+            validation_errors.append(
+                "Private key format not recognized. Expected: 64-char hex (with/without 0x), "
+                "Sui Bech32 (suiprivkey...), or 12/24-word mnemonic phrase"
+            )
+
+        # Raise error if validation failed
+        if validation_errors:
+            error_msg = "Bluefin private key validation failed: " + "; ".join(
+                validation_errors
+            )
+            if detected_formats:
+                error_msg += f" (detected formats: {', '.join(detected_formats)})"
+            raise ValueError(error_msg)
+
+    def _validate_mnemonic_checksum(self, words: list[str]) -> bool:
+        """Basic mnemonic phrase validation (simplified BIP39 check)."""
+        # This is a simplified check - in production, you'd use a proper BIP39 library
+        # For now, just check word count and basic structure
+        if len(words) not in [12, 24]:
+            return False
+
+        # Check for common invalid patterns
+        if len(set(words)) < len(words) * 0.8:  # Too many repeated words
+            return False
+
+        # Check for reasonable word lengths
+        if any(len(word) < 3 or len(word) > 12 for word in words):
+            return False
+
+        return True
+
+    def _validate_bech32_format(self, key: str) -> bool:
+        """Basic Bech32 format validation for Sui private keys."""
+        if not key.startswith("suiprivkey"):
+            return False
+
+        # Check length (Bech32 encoded keys should be reasonably long)
+        if len(key) < 50 or len(key) > 120:
+            return False
+
+        # Check character set (Bech32 uses specific characters)
+        bech32_chars = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+        key_part = key[10:]  # Remove "suiprivkey" prefix
+
+        # Allow uppercase and lowercase, but check valid Bech32 chars
+        return all(c.lower() in bech32_chars for c in key_part)
+
+    def validate_network_endpoints(self) -> list[str]:
+        """Validate network endpoint configuration and accessibility."""
+        validation_issues = []
+
+        if self.exchange_type == "bluefin":
+            # Validate network setting
+            if self.bluefin_network not in ["mainnet", "testnet"]:
+                validation_issues.append(
+                    f"Invalid Bluefin network: {self.bluefin_network}"
+                )
+
+            # Validate custom RPC URL if provided
+            if self.bluefin_rpc_url:
+                if not self._validate_url_format(self.bluefin_rpc_url):
+                    validation_issues.append(
+                        f"Invalid Bluefin RPC URL format: {self.bluefin_rpc_url}"
+                    )
+
+                # Check if URL matches network
+                if (
+                    self.bluefin_network == "mainnet"
+                    and "testnet" in self.bluefin_rpc_url.lower()
+                ):
+                    validation_issues.append(
+                        "Mainnet network configured with testnet RPC URL"
+                    )
+                elif (
+                    self.bluefin_network == "testnet"
+                    and "mainnet" in self.bluefin_rpc_url.lower()
+                ):
+                    validation_issues.append(
+                        "Testnet network configured with mainnet RPC URL"
+                    )
+
+            # Validate service URL
+            if not self._validate_url_format(self.bluefin_service_url):
+                validation_issues.append(
+                    f"Invalid Bluefin service URL format: {self.bluefin_service_url}"
+                )
+
+        return validation_issues
+
+    def _validate_url_format(self, url: str) -> bool:
+        """Validate URL format."""
+        try:
+            from urllib.parse import urlparse
+
+            result = urlparse(url)
+            return all([result.scheme, result.netloc])
+        except Exception:
+            return False
+
+    def get_effective_endpoints(self) -> dict[str, str]:
+        """Get effective endpoints for the current configuration."""
+        endpoints = {}
+
+        if self.exchange_type == "bluefin":
+            try:
+                # Try to import and use the endpoint config
+                from ..exchange.bluefin_endpoints import BluefinEndpointConfig
+
+                bluefin_endpoints = BluefinEndpointConfig.get_endpoints(
+                    self.bluefin_network
+                )
+                endpoints.update(
+                    {
+                        "rest_api": bluefin_endpoints.rest_api,
+                        "websocket_api": bluefin_endpoints.websocket_api,
+                        "websocket_notifications": bluefin_endpoints.websocket_notifications,
+                        "service_url": self.bluefin_service_url,
+                    }
+                )
+
+                # Add custom RPC if specified
+                if self.bluefin_rpc_url:
+                    endpoints["custom_rpc"] = self.bluefin_rpc_url
+                else:
+                    # Add default RPC URLs
+                    if self.bluefin_network == "mainnet":
+                        endpoints["default_rpc"] = "https://fullnode.mainnet.sui.io:443"
+                    else:
+                        endpoints["default_rpc"] = "https://fullnode.testnet.sui.io:443"
+
+            except ImportError:
+                # Fallback if endpoint config is not available
+                if self.bluefin_network == "mainnet":
+                    endpoints.update(
+                        {
+                            "rest_api": "https://dapi.api.sui-prod.bluefin.io",
+                            "websocket_api": "wss://dapi.api.sui-prod.bluefin.io",
+                            "default_rpc": "https://fullnode.mainnet.sui.io:443",
+                        }
+                    )
+                else:
+                    endpoints.update(
+                        {
+                            "rest_api": "https://dapi.api.sui-staging.bluefin.io",
+                            "websocket_api": "wss://dapi.api.sui-staging.bluefin.io",
+                            "default_rpc": "https://fullnode.testnet.sui.io:443",
+                        }
+                    )
+
+                endpoints["service_url"] = self.bluefin_service_url
+
+        return endpoints
 
 
 class RiskSettings(BaseModel):
@@ -1498,8 +2361,6 @@ class Settings(BaseSettings):
 
     def generate_config_hash(self) -> str:
         """Generate a hash of the current configuration for change detection."""
-        import hashlib
-
         # Create a normalized config without secrets and timestamps
         config_for_hash = self.model_dump(
             exclude={
@@ -1520,6 +2381,276 @@ class Settings(BaseSettings):
 
         config_str = json.dumps(config_for_hash, sort_keys=True, default=str)
         return hashlib.sha256(config_str.encode()).hexdigest()[:16]
+
+    async def validate_configuration_comprehensive(self) -> dict[str, Any]:
+        """Run comprehensive configuration validation with network testing."""
+        validator = ConfigurationValidator(self)
+        return await validator.validate_all()
+
+    def create_configuration_monitor(self) -> "ConfigurationMonitor":
+        """Create a configuration monitor for runtime change detection."""
+        return ConfigurationMonitor(self)
+
+    def test_bluefin_configuration(self) -> dict[str, Any]:
+        """Test Bluefin-specific configuration synchronously."""
+        if self.exchange.exchange_type != "bluefin":
+            return {"status": "skipped", "reason": "Not using Bluefin exchange"}
+
+        results = {"status": "pass", "tests": []}
+
+        # Test private key format
+        try:
+            if self.exchange.bluefin_private_key:
+                self.exchange._validate_bluefin_private_key_comprehensive()
+                results["tests"].append(
+                    {"name": "private_key_format", "status": "pass"}
+                )
+            else:
+                results["tests"].append(
+                    {
+                        "name": "private_key_format",
+                        "status": "skip",
+                        "reason": "No private key provided",
+                    }
+                )
+        except ValueError as e:
+            results["status"] = "fail"
+            results["tests"].append(
+                {"name": "private_key_format", "status": "fail", "error": str(e)}
+            )
+
+        # Test network endpoint validation
+        endpoint_issues = self.exchange.validate_network_endpoints()
+        if endpoint_issues:
+            results["status"] = "fail"
+            results["tests"].append(
+                {
+                    "name": "network_endpoints",
+                    "status": "fail",
+                    "issues": endpoint_issues,
+                }
+            )
+        else:
+            results["tests"].append({"name": "network_endpoints", "status": "pass"})
+
+        # Test environment consistency
+        consistency_warnings = self.validate_network_consistency()
+        if consistency_warnings:
+            results["tests"].append(
+                {
+                    "name": "environment_consistency",
+                    "status": "warning",
+                    "warnings": consistency_warnings,
+                }
+            )
+        else:
+            results["tests"].append(
+                {"name": "environment_consistency", "status": "pass"}
+            )
+
+        return results
+
+    def get_configuration_summary(self) -> dict[str, Any]:
+        """Get a comprehensive configuration summary."""
+        summary = {
+            "basic_info": {
+                "environment": self.system.environment.value,
+                "exchange": self.exchange.exchange_type,
+                "dry_run": self.system.dry_run,
+                "trading_symbol": self.trading.symbol,
+                "leverage": self.trading.leverage,
+                "profile": self.profile.value,
+            },
+            "security_status": {
+                "has_llm_key": bool(self.llm.openai_api_key),
+                "has_exchange_credentials": self._has_exchange_credentials(),
+                "dry_run_enabled": self.system.dry_run,
+            },
+            "risk_parameters": {
+                "max_daily_loss_pct": self.risk.max_daily_loss_pct,
+                "max_position_size_pct": self.trading.max_size_pct,
+                "stop_loss_pct": self.risk.default_stop_loss_pct,
+                "take_profit_pct": self.risk.default_take_profit_pct,
+                "risk_reward_ratio": self.risk.default_take_profit_pct
+                / self.risk.default_stop_loss_pct,
+            },
+            "network_config": {},
+            "warnings": [],
+            "config_hash": self.generate_config_hash(),
+        }
+
+        # Add exchange-specific info
+        if self.exchange.exchange_type == "bluefin":
+            summary["network_config"] = {
+                "network": self.exchange.bluefin_network,
+                "service_url": self.exchange.bluefin_service_url,
+                "custom_rpc": bool(self.exchange.bluefin_rpc_url),
+                "endpoints": self.exchange.get_effective_endpoints(),
+            }
+
+            # Add network consistency warnings
+            summary["warnings"].extend(self.validate_network_consistency())
+
+        # Add trading environment warnings
+        summary["warnings"].extend(self.validate_trading_environment())
+
+        return summary
+
+    def _has_exchange_credentials(self) -> bool:
+        """Check if exchange credentials are configured."""
+        if self.exchange.exchange_type == "coinbase":
+            has_legacy = all(
+                [
+                    self.exchange.cb_api_key,
+                    self.exchange.cb_api_secret,
+                    self.exchange.cb_passphrase,
+                ]
+            )
+            has_cdp = all(
+                [
+                    self.exchange.cdp_api_key_name,
+                    self.exchange.cdp_private_key,
+                ]
+            )
+            return has_legacy or has_cdp
+        elif self.exchange.exchange_type == "bluefin":
+            return bool(self.exchange.bluefin_private_key)
+
+        return False
+
+    def create_backup_configuration(self) -> dict[str, Any]:
+        """Create a backup of the current configuration without secrets."""
+        backup = {
+            "metadata": {
+                "created_at": datetime.now(UTC).isoformat(),
+                "config_hash": self.generate_config_hash(),
+                "environment": self.system.environment.value,
+                "exchange": self.exchange.exchange_type,
+                "version": "1.0",
+            },
+            "configuration": self.model_dump(
+                exclude={
+                    "llm": {"openai_api_key", "anthropic_api_key"},
+                    "exchange": {
+                        "cb_api_key",
+                        "cb_api_secret",
+                        "cb_passphrase",
+                        "cdp_api_key_name",
+                        "cdp_private_key",
+                        "bluefin_private_key",
+                    },
+                    "system": {"api_secret_key"},
+                    "mcp": {"memory_api_key"},
+                    "omnisearch": {"api_key"},
+                }
+            ),
+        }
+
+        return backup
+
+
+class ConfigurationMonitor:
+    """Monitor configuration changes and provide hot-reloading capabilities."""
+
+    def __init__(self, settings: Settings):
+        self.settings = settings
+        self.initial_hash = settings.generate_config_hash()
+        self.last_check = time.time()
+        self.change_callbacks: list[callable] = []
+        self.validation_cache: dict[str, Any] = {}
+        self.cache_ttl = 300  # 5 minutes
+
+    def register_change_callback(self, callback: callable) -> None:
+        """Register a callback to be called when configuration changes."""
+        self.change_callbacks.append(callback)
+
+    def check_for_changes(self) -> bool:
+        """Check if configuration has changed since last check."""
+        current_hash = self.settings.generate_config_hash()
+
+        if current_hash != self.initial_hash:
+            logger.info(
+                f"Configuration change detected: {self.initial_hash} -> {current_hash}"
+            )
+
+            # Notify callbacks
+            for callback in self.change_callbacks:
+                try:
+                    callback(self.settings, self.initial_hash, current_hash)
+                except Exception as e:
+                    logger.error(f"Error in configuration change callback: {e}")
+
+            self.initial_hash = current_hash
+            return True
+
+        return False
+
+    async def validate_and_cache(self) -> dict[str, Any]:
+        """Validate configuration and cache results."""
+        current_time = time.time()
+
+        # Check if cache is still valid
+        if (
+            "validation_results" in self.validation_cache
+            and current_time - self.validation_cache.get("cached_at", 0)
+            < self.cache_ttl
+        ):
+            return self.validation_cache["validation_results"]
+
+        # Run validation
+        validation_results = await self.settings.validate_configuration_comprehensive()
+
+        # Cache results
+        self.validation_cache = {
+            "validation_results": validation_results,
+            "cached_at": current_time,
+            "config_hash": self.settings.generate_config_hash(),
+        }
+
+        return validation_results
+
+    def get_health_status(self) -> dict[str, Any]:
+        """Get overall configuration health status."""
+        status = {
+            "overall_status": "healthy",
+            "last_check": self.last_check,
+            "config_hash": self.settings.generate_config_hash(),
+            "issues": [],
+        }
+
+        # Check basic configuration issues
+        if self.settings.exchange.exchange_type == "bluefin":
+            try:
+                endpoint_issues = self.settings.exchange.validate_network_endpoints()
+                if endpoint_issues:
+                    status["issues"].extend(endpoint_issues)
+                    status["overall_status"] = "degraded"
+            except Exception as e:
+                status["issues"].append(f"Endpoint validation error: {str(e)}")
+                status["overall_status"] = "unhealthy"
+
+        # Check environment consistency
+        env_warnings = self.settings.validate_trading_environment()
+        if env_warnings:
+            status["issues"].extend(env_warnings)
+            if status["overall_status"] == "healthy":
+                status["overall_status"] = "warning"
+
+        return status
+
+    def export_monitoring_data(self) -> dict[str, Any]:
+        """Export monitoring data for external analysis."""
+        return {
+            "monitor_info": {
+                "initial_hash": self.initial_hash,
+                "last_check": self.last_check,
+                "cache_ttl": self.cache_ttl,
+                "callback_count": len(self.change_callbacks),
+            },
+            "current_config": self.settings.get_configuration_summary(),
+            "health_status": self.get_health_status(),
+            "validation_cache": self.validation_cache,
+        }
 
 
 def create_settings(

@@ -282,34 +282,32 @@ class EnvValidator:
             )
 
     def _validate_bluefin_vars(self, env_vars: dict[str, str]) -> None:
-        """Validate Bluefin-specific variables."""
-        # Bluefin Private Key
+        """Validate Bluefin-specific variables with comprehensive validation."""
+        # Bluefin Private Key - Enhanced validation
         private_key = env_vars.get("EXCHANGE__BLUEFIN_PRIVATE_KEY", "")
         if not private_key:
             self.errors.append(
                 ValidationResult(
                     status=ValidationStatus.FAIL,
                     message="EXCHANGE__BLUEFIN_PRIVATE_KEY is not set",
-                    fix="Add your Sui wallet private key (hex format) to .env",
-                )
-            )
-        elif not re.match(r"^(0x)?[0-9a-fA-F]{64}$", private_key):
-            self.errors.append(
-                ValidationResult(
-                    status=ValidationStatus.FAIL,
-                    message="Bluefin private key is not valid hex format",
-                    fix="Private key should be 64 hex characters (with or without 0x prefix)",
+                    fix="Add your Sui wallet private key (hex, mnemonic, or Sui Bech32 format) to .env",
                 )
             )
         else:
-            self.successes.append(
-                ValidationResult(
-                    status=ValidationStatus.PASS,
-                    message="Bluefin private key format is valid",
+            # Comprehensive private key validation
+            validation_result = self._validate_bluefin_private_key_comprehensive(private_key)
+            if validation_result:
+                self.successes.append(validation_result)
+            else:
+                self.errors.append(
+                    ValidationResult(
+                        status=ValidationStatus.FAIL,
+                        message="Bluefin private key format is invalid",
+                        fix="Use one of: 64-char hex (with/without 0x), 12/24-word mnemonic, or Sui Bech32 (suiprivkey...)",
+                    )
                 )
-            )
 
-        # Bluefin Network (optional)
+        # Bluefin Network
         network = env_vars.get("EXCHANGE__BLUEFIN_NETWORK", "mainnet").lower()
         if network not in ["mainnet", "testnet"]:
             self.warnings.append(
@@ -319,6 +317,145 @@ class EnvValidator:
                     fix="Set EXCHANGE__BLUEFIN_NETWORK to 'mainnet' or 'testnet'",
                 )
             )
+        else:
+            self.successes.append(
+                ValidationResult(
+                    status=ValidationStatus.PASS,
+                    message=f"Bluefin network is valid: {network}",
+                )
+            )
+        
+        # Bluefin Service URL
+        service_url = env_vars.get("EXCHANGE__BLUEFIN_SERVICE_URL", "")
+        if service_url:
+            if self._validate_url_format(service_url):
+                self.successes.append(
+                    ValidationResult(
+                        status=ValidationStatus.PASS,
+                        message="Bluefin service URL format is valid",
+                    )
+                )
+            else:
+                self.warnings.append(
+                    ValidationResult(
+                        status=ValidationStatus.WARN,
+                        message="Bluefin service URL format looks invalid",
+                        fix="Ensure URL includes protocol (http:// or https://)",
+                    )
+                )
+        
+        # Custom RPC URL (optional)
+        rpc_url = env_vars.get("EXCHANGE__BLUEFIN_RPC_URL", "")
+        if rpc_url:
+            if self._validate_url_format(rpc_url):
+                # Check network consistency
+                if network == "mainnet" and "testnet" in rpc_url.lower():
+                    self.warnings.append(
+                        ValidationResult(
+                            status=ValidationStatus.WARN,
+                            message="Mainnet network with testnet RPC URL",
+                            fix="Ensure RPC URL matches your network setting",
+                        )
+                    )
+                elif network == "testnet" and "mainnet" in rpc_url.lower():
+                    self.warnings.append(
+                        ValidationResult(
+                            status=ValidationStatus.WARN,
+                            message="Testnet network with mainnet RPC URL",
+                            fix="Ensure RPC URL matches your network setting",
+                        )
+                    )
+                else:
+                    self.successes.append(
+                        ValidationResult(
+                            status=ValidationStatus.PASS,
+                            message="Custom RPC URL format is valid",
+                        )
+                    )
+            else:
+                self.warnings.append(
+                    ValidationResult(
+                        status=ValidationStatus.WARN,
+                        message="Custom RPC URL format looks invalid",
+                        fix="Ensure URL includes protocol and valid hostname",
+                    )
+                )
+        
+        # Environment consistency checks
+        environment = env_vars.get("SYSTEM__ENVIRONMENT", "development").lower()
+        dry_run = env_vars.get("SYSTEM__DRY_RUN", "true").lower()
+        
+        if environment == "production" and network == "testnet":
+            self.warnings.append(
+                ValidationResult(
+                    status=ValidationStatus.WARN,
+                    message="Production environment using testnet network",
+                    fix="Consider using mainnet for production or development for testnet",
+                )
+            )
+        
+        if dry_run == "false" and network == "testnet":
+            self.warnings.append(
+                ValidationResult(
+                    status=ValidationStatus.WARN,
+                    message="Live trading enabled on testnet network",
+                    fix="Consider using paper trading (SYSTEM__DRY_RUN=true) for testnet",
+                )
+            )
+    
+    def _validate_bluefin_private_key_comprehensive(self, private_key: str) -> ValidationResult | None:
+        """Comprehensive validation of Bluefin private key formats."""
+        private_key = private_key.strip()
+        detected_formats = []
+        
+        # 1. Check for mnemonic phrase format (12 or 24 words)
+        words = private_key.split()
+        if len(words) in [12, 24]:
+            if all(word.isalpha() and len(word) > 2 for word in words):
+                detected_formats.append(f"mnemonic ({len(words)} words)")
+                
+                # Additional mnemonic validation
+                if len(set(words)) < len(words) * 0.8:  # Too many repeated words
+                    return None
+        
+        # 2. Check for Bech32-encoded Sui private key
+        elif private_key.startswith("suiprivkey"):
+            if len(private_key) >= 50:  # Reasonable minimum length
+                detected_formats.append("Sui Bech32")
+                
+                # Basic Bech32 character validation
+                bech32_chars = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+                key_part = private_key[10:]  # Remove "suiprivkey" prefix
+                if not all(c.lower() in bech32_chars for c in key_part):
+                    return None
+        
+        # 3. Check for hex format (with or without 0x prefix)
+        else:
+            hex_key = private_key[2:] if private_key.startswith("0x") else private_key
+            
+            if len(hex_key) == 64 and all(c in "0123456789abcdefABCDEF" for c in hex_key):
+                detected_formats.append("hex")
+                
+                # Check for obviously invalid keys
+                if hex_key == "0" * 64 or hex_key.upper() == "F" * 64:
+                    return None
+        
+        if detected_formats:
+            return ValidationResult(
+                status=ValidationStatus.PASS,
+                message=f"Valid Bluefin private key ({', '.join(detected_formats)})",
+            )
+        
+        return None
+    
+    def _validate_url_format(self, url: str) -> bool:
+        """Validate URL format."""
+        try:
+            from urllib.parse import urlparse
+            result = urlparse(url)
+            return all([result.scheme, result.netloc])
+        except Exception:
+            return False
 
     def _validate_common_vars(self, env_vars: dict[str, str]) -> None:
         """Validate common required variables."""
