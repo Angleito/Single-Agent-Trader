@@ -21,6 +21,7 @@ import sys
 import time
 import traceback
 from collections import defaultdict
+from datetime import UTC, datetime
 from typing import Any
 
 from aiohttp import ClientError, ClientTimeout, web
@@ -101,7 +102,7 @@ except ImportError:
                         self.websocket_api = "wss://dapi.api.sui-staging.bluefin.io"
                         self.websocket_notifications = "wss://dapi.api.sui-staging.bluefin.io"
                     else:
-                        self.rest_api = "https://dapi.api.sui-prod.bluefin.io"  
+                        self.rest_api = "https://dapi.api.sui-prod.bluefin.io"
                         self.websocket_api = "wss://dapi.api.sui-prod.bluefin.io"
                         self.websocket_notifications = "wss://dapi.api.sui-prod.bluefin.io"
             return Endpoints(network)
@@ -187,8 +188,22 @@ class BluefinSDKService:
         # Add service identification for logging context
         self.service_id = f"bluefin-sdk-{int(time.time())}"
 
-        # Initialize symbol converter with network-aware configuration
-        self.symbol_converter = BluefinSymbolConverter(MARKET_SYMBOLS, network=self.network)
+        # Service health monitoring
+        self.health_stats = {
+            "start_time": time.time(),
+            "total_requests": 0,
+            "successful_requests": 0,
+            "failed_requests": 0,
+            "last_request_time": 0.0,
+            "last_success_time": 0.0,
+            "last_failure_time": 0.0,
+            "average_response_time": 0.0,
+            "response_times": [],
+            "max_response_times": 100,  # Keep last 100 response times for averaging
+        }
+
+        # Initialize symbol converter with market symbols
+        self.symbol_converter = BluefinSymbolConverter(MARKET_SYMBOLS)
 
         logger.info(
             "Initializing Bluefin SDK Service",
@@ -643,6 +658,154 @@ class BluefinSDKService:
                 extra={"service_id": self.service_id},
             )
 
+    def reset_circuit_breaker(self, force: bool = False) -> bool:
+        """
+        Manual circuit breaker reset functionality for the SDK service.
+        
+        Args:
+            force: If True, force reset even if not ready naturally
+            
+        Returns:
+            True if reset was successful
+        """
+        current_time = time.time()
+        old_state = self.circuit_state
+        old_failures = self.failure_count
+
+        if force or (self.circuit_state == "OPEN" and current_time >= self.circuit_open_until):
+            self.circuit_state = "CLOSED"
+            self.circuit_open_until = 0
+            self.failure_count = 0
+            self.circuit_half_open_calls = 0
+            # Reset failure type counters
+            self.failure_types = {key: 0 for key in self.failure_types}
+
+            logger.info(
+                "SDK service circuit breaker manually reset",
+                extra={
+                    "service_id": self.service_id,
+                    "previous_state": old_state,
+                    "previous_failures": old_failures,
+                    "force_reset": force,
+                    "time_until_natural_reset": max(0, self.circuit_open_until - current_time) if old_state == "OPEN" else 0,
+                },
+            )
+            return True
+        else:
+            if self.circuit_state == "OPEN":
+                remaining_time = self.circuit_open_until - current_time
+                logger.warning(
+                    f"SDK circuit breaker reset not ready - {remaining_time:.1f}s remaining",
+                    extra={
+                        "service_id": self.service_id,
+                        "remaining_seconds": remaining_time,
+                        "current_state": self.circuit_state,
+                        "use_force_to_override": True,
+                    },
+                )
+            else:
+                logger.info(
+                    f"SDK circuit breaker already in {self.circuit_state} state",
+                    extra={"service_id": self.service_id, "current_state": self.circuit_state},
+                )
+            return False
+
+    def get_circuit_breaker_status(self) -> dict[str, Any]:
+        """
+        Get current circuit breaker status for monitoring.
+        
+        Returns:
+            Dictionary with circuit breaker state information
+        """
+        current_time = time.time()
+        return {
+            "state": self.circuit_state,
+            "failure_count": self.failure_count,
+            "failure_threshold": self.circuit_failure_threshold,
+            "recovery_timeout": self.circuit_recovery_timeout,
+            "open_until": self.circuit_open_until,
+            "seconds_until_reset": max(0, self.circuit_open_until - current_time) if self.circuit_state == "OPEN" else 0,
+            "half_open_calls": self.circuit_half_open_calls,
+            "half_open_max_calls": self.circuit_half_open_max_calls,
+            "failure_types": dict(self.failure_types),
+            "can_reset_manually": self.circuit_state != "OPEN" or current_time >= self.circuit_open_until,
+        }
+
+    def _record_request_start(self) -> float:
+        """Record the start of a request for health monitoring."""
+        request_start_time = time.time()
+        self.health_stats["total_requests"] += 1
+        self.health_stats["last_request_time"] = request_start_time
+        return request_start_time
+
+    def _record_request_end(self, start_time: float, success: bool):
+        """Record the end of a request for health monitoring."""
+        end_time = time.time()
+        response_time = end_time - start_time
+
+        # Update response time statistics
+        self.health_stats["response_times"].append(response_time)
+        if len(self.health_stats["response_times"]) > self.health_stats["max_response_times"]:
+            self.health_stats["response_times"].pop(0)  # Remove oldest
+
+        # Calculate average response time
+        if self.health_stats["response_times"]:
+            self.health_stats["average_response_time"] = sum(self.health_stats["response_times"]) / len(self.health_stats["response_times"])
+
+        # Update success/failure counters
+        if success:
+            self.health_stats["successful_requests"] += 1
+            self.health_stats["last_success_time"] = end_time
+        else:
+            self.health_stats["failed_requests"] += 1
+            self.health_stats["last_failure_time"] = end_time
+
+    def get_health_status(self) -> dict[str, Any]:
+        """
+        Get comprehensive health status for monitoring and diagnostics.
+        
+        Returns:
+            Dictionary with health statistics and status information
+        """
+        current_time = time.time()
+        uptime = current_time - self.health_stats["start_time"]
+
+        # Calculate success rate
+        total_requests = self.health_stats["total_requests"]
+        success_rate = (self.health_stats["successful_requests"] / total_requests * 100) if total_requests > 0 else 0
+
+        # Calculate request rate (requests per minute)
+        request_rate = (total_requests / uptime * 60) if uptime > 0 else 0
+
+        return {
+            "service_id": self.service_id,
+            "network": self.network,
+            "initialized": self.initialized,
+            "has_client": bool(self.client),
+            "uptime_seconds": uptime,
+            "circuit_breaker": self.get_circuit_breaker_status(),
+            "requests": {
+                "total": total_requests,
+                "successful": self.health_stats["successful_requests"],
+                "failed": self.health_stats["failed_requests"],
+                "success_rate_percent": round(success_rate, 2),
+                "rate_per_minute": round(request_rate, 2),
+            },
+            "response_times": {
+                "average_ms": round(self.health_stats["average_response_time"] * 1000, 2),
+                "sample_count": len(self.health_stats["response_times"]),
+                "latest_ms": round(self.health_stats["response_times"][-1] * 1000, 2) if self.health_stats["response_times"] else 0,
+            },
+            "last_activity": {
+                "request_time": self.health_stats["last_request_time"],
+                "success_time": self.health_stats["last_success_time"],
+                "failure_time": self.health_stats["last_failure_time"],
+                "seconds_since_last_request": round(current_time - self.health_stats["last_request_time"], 1) if self.health_stats["last_request_time"] > 0 else None,
+                "seconds_since_last_success": round(current_time - self.health_stats["last_success_time"], 1) if self.health_stats["last_success_time"] > 0 else None,
+            },
+            "status": "healthy" if self.initialized and success_rate > 50 and self.circuit_state == "CLOSED" else "degraded",
+        }
+
     async def _retry_request(self, func, *args, **kwargs):
         """Execute request with enhanced exponential backoff retry and circuit breaker."""
         if await self._is_circuit_open():
@@ -768,16 +931,55 @@ class BluefinSDKService:
                 )
                 raise BluefinConnectionError(error_msg)
 
-            # Validate private key format (basic check)
-            if len(self.private_key) < 32:
-                error_msg = "BLUEFIN_PRIVATE_KEY appears to be too short (expected 64+ hex characters)"
+            # Enhanced private key format validation
+            key_validation_errors = []
+
+            # Check minimum length (64 hex chars = 32 bytes)
+            if len(self.private_key) < 64:
+                key_validation_errors.append(f"Too short: got {len(self.private_key)} chars, expected 64+")
+
+            # Check if it's valid hexadecimal
+            try:
+                # Remove common prefixes if present
+                clean_key = self.private_key.strip()
+                if clean_key.startswith('0x') or clean_key.startswith('0X'):
+                    clean_key = clean_key[2:]
+
+                # Try to decode as hex
+                bytes.fromhex(clean_key)
+
+                # Update the private key to clean version if it had prefix
+                if clean_key != self.private_key:
+                    logger.debug(
+                        "Cleaned private key by removing hex prefix",
+                        extra={
+                            "service_id": self.service_id,
+                            "original_length": len(self.private_key),
+                            "cleaned_length": len(clean_key),
+                        },
+                    )
+                    self.private_key = clean_key
+
+            except ValueError as hex_err:
+                key_validation_errors.append(f"Invalid hexadecimal format: {str(hex_err)}")
+
+            # Check for common patterns that indicate invalid keys
+            if self.private_key.count('0') == len(self.private_key):
+                key_validation_errors.append("All zeros - invalid private key")
+            elif self.private_key.count('f') == len(self.private_key.replace('F', 'f')):
+                key_validation_errors.append("All 0xf values - likely invalid private key")
+
+            # If any validation errors, fail initialization
+            if key_validation_errors:
+                error_msg = f"BLUEFIN_PRIVATE_KEY validation failed: {'; '.join(key_validation_errors)}"
                 logger.error(
                     "Private key format validation failed",
                     extra={
                         "service_id": self.service_id,
                         "error_type": "invalid_private_key_format",
                         "key_length": len(self.private_key),
-                        "expected_min_length": 64,
+                        "validation_errors": key_validation_errors,
+                        "expected_format": "64+ hexadecimal characters (32+ bytes)",
                     },
                 )
                 raise BluefinConnectionError(error_msg)
@@ -811,72 +1013,121 @@ class BluefinSDKService:
                 )
                 raise BluefinConnectionError(error_msg) from e
 
-            # Initialize Bluefin client
-            logger.info(
-                "Creating Bluefin client instance",
-                extra={
-                    "service_id": self.service_id,
-                    "network": self.network,
-                    "onchain_enabled": True,
-                },
-            )
+            # Initialize Bluefin client with retry mechanism
+            max_init_retries = 3
+            init_retry_delay = 2.0
 
-            try:
-                self.client = BluefinClient(
-                    True,  # Use on-chain transactions
-                    network,
-                    self.private_key,
-                )
-                logger.debug(
-                    "Bluefin client instance created successfully",
-                    extra={
-                        "service_id": self.service_id,
-                        "client_type": type(self.client).__name__,
-                    },
-                )
-            except Exception as e:
-                error_msg = f"Failed to create Bluefin client instance: {str(e)}"
-                logger.error(
-                    "Bluefin client creation failed",
-                    extra={
-                        "service_id": self.service_id,
-                        "error_type": "client_creation_failed",
-                        "error_message": str(e),
-                        "traceback": traceback.format_exc(),
-                    },
-                )
-                raise BluefinAPIError(error_msg) from e
-
-            # Initialize the client
-            logger.info(
-                "Initializing Bluefin client connection",
-                extra={
-                    "service_id": self.service_id,
-                    "initialization_step": "client_init",
-                },
-            )
-
-            try:
-                await self.client.init(True)
+            for init_attempt in range(max_init_retries):
                 logger.info(
-                    "Bluefin client initialization completed",
+                    f"Creating Bluefin client instance (attempt {init_attempt + 1}/{max_init_retries})",
                     extra={
                         "service_id": self.service_id,
-                        "initialization_successful": True,
+                        "network": self.network,
+                        "onchain_enabled": True,
+                        "attempt": init_attempt + 1,
                     },
                 )
-            except Exception as e:
-                error_msg = f"Failed to initialize Bluefin client: {str(e)}"
-                logger.error(
-                    "Bluefin client initialization failed",
-                    extra={
-                        "service_id": self.service_id,
-                        "error_type": "client_init_failed",
-                        "error_message": str(e),
-                        "traceback": traceback.format_exc(),
-                    },
-                )
-                raise BluefinAPIError(error_msg) from e
+
+                try:
+                    # Create client instance
+                    self.client = BluefinClient(
+                        True,  # Use on-chain transactions
+                        network,
+                        self.private_key,
+                    )
+                    logger.debug(
+                        "Bluefin client instance created successfully",
+                        extra={
+                            "service_id": self.service_id,
+                            "client_type": type(self.client).__name__,
+                            "attempt": init_attempt + 1,
+                        },
+                    )
+
+                    # Initialize the client connection
+                    logger.info(
+                        "Initializing Bluefin client connection",
+                        extra={
+                            "service_id": self.service_id,
+                            "initialization_step": "client_init",
+                            "attempt": init_attempt + 1,
+                        },
+                    )
+
+                    await self.client.init(True)
+
+                    # If we reach here, initialization was successful
+                    logger.info(
+                        "Bluefin client initialization completed successfully",
+                        extra={
+                            "service_id": self.service_id,
+                            "initialization_successful": True,
+                            "successful_attempt": init_attempt + 1,
+                            "total_attempts": init_attempt + 1,
+                        },
+                    )
+                    break  # Success - exit retry loop
+
+                except Exception as e:
+                    if init_attempt < max_init_retries - 1:
+                        # Classify the error to determine if retry is worthwhile
+                        retry_error = False
+
+                        error_str = str(e).lower()
+                        if any(keyword in error_str for keyword in ["network", "connection", "timeout", "temporary", "503", "502", "500"]):
+                            retry_error = True
+                        elif "private key" in error_str or "authentication" in error_str:
+                            # Don't retry auth/key errors
+                            retry_error = False
+                        elif "invalid" in error_str and "key" in error_str:
+                            # Don't retry validation errors
+                            retry_error = False
+                        else:
+                            # Default to retry for unknown errors
+                            retry_error = True
+
+                        if retry_error:
+                            delay = init_retry_delay * (2 ** init_attempt)  # Exponential backoff
+                            logger.warning(
+                                f"Client initialization failed (attempt {init_attempt + 1}/{max_init_retries}), retrying in {delay:.1f}s: {e}",
+                                extra={
+                                    "service_id": self.service_id,
+                                    "error_type": type(e).__name__,
+                                    "error_message": str(e),
+                                    "attempt": init_attempt + 1,
+                                    "max_retries": max_init_retries,
+                                    "retry_delay": delay,
+                                },
+                            )
+                            await asyncio.sleep(delay)
+                            continue
+                        else:
+                            # Non-retryable error
+                            logger.error(
+                                f"Non-retryable initialization error: {e}",
+                                extra={
+                                    "service_id": self.service_id,
+                                    "error_type": type(e).__name__,
+                                    "error_message": str(e),
+                                    "attempt": init_attempt + 1,
+                                    "non_retryable": True,
+                                },
+                            )
+                            raise BluefinAPIError(f"Failed to initialize Bluefin client: {str(e)}") from e
+                    else:
+                        # Final attempt failed
+                        error_msg = f"Failed to initialize Bluefin client after {max_init_retries} attempts: {str(e)}"
+                        logger.error(
+                            "All initialization attempts failed",
+                            extra={
+                                "service_id": self.service_id,
+                                "error_type": type(e).__name__,
+                                "error_message": str(e),
+                                "total_attempts": max_init_retries,
+                                "traceback": traceback.format_exc(),
+                            },
+                        )
+                        raise BluefinAPIError(error_msg) from e
 
             self.initialized = True
             logger.info(
@@ -921,13 +1172,13 @@ class BluefinSDKService:
                         if hasattr(self.client.session, 'close'):
                             await self.client.session.close()
                             logger.debug("Closed Bluefin client HTTP session")
-                    
+
                     # Check for other common session attributes
                     if hasattr(self.client, '_session') and self.client._session:
                         if hasattr(self.client._session, 'close'):
                             await self.client._session.close()
                             logger.debug("Closed Bluefin client private HTTP session")
-                    
+
                     # Check if client has a cleanup/close method
                     if hasattr(self.client, 'close'):
                         await self.client.close()
@@ -935,10 +1186,10 @@ class BluefinSDKService:
                     elif hasattr(self.client, 'cleanup'):
                         await self.client.cleanup()
                         logger.debug("Called Bluefin client cleanup method")
-                    
+
                 except Exception as session_err:
                     logger.warning(f"Error closing Bluefin client sessions: {session_err}")
-                
+
                 # Clear client reference
                 self.client = None
                 logger.debug("Bluefin client reference cleared")
@@ -1493,21 +1744,16 @@ class BluefinSDKService:
         fallback_sources = [
             ("REST_API", self._get_candles_via_rest_api_with_retry),
             ("SDK", self._get_candles_via_sdk_with_retry),
-            ("MOCK", self._generate_mock_candles),
         ]
 
         for source_name, method in fallback_sources:
             try:
                 logger.info(f"🔄 Attempting data fetch via {source_name}")
 
-                if source_name == "MOCK":
-                    # Mock data doesn't need retry logic
-                    candles = method(symbol, interval, limit, start_time, end_time)
-                else:
-                    # Try the method with retry logic
-                    candles = await method(
-                        symbol, interval, limit, start_time, end_time
-                    )
+                # All remaining methods use async retry logic
+                candles = await method(
+                    symbol, interval, limit, start_time, end_time
+                )
 
                 if candles and len(candles) > 0:
                     logger.info(
@@ -1525,8 +1771,8 @@ class BluefinSDKService:
                 )
 
         # If we reach here, all methods failed
-        logger.error("🚨 ALL DATA SOURCES FAILED - returning empty list")
-        return []
+        logger.error("🚨 ALL DATA SOURCES FAILED - no real-time data available")
+        raise Exception("Unable to fetch real-time market data from any source")
 
     async def _get_candles_via_rest_api_with_retry(
         self, symbol: str, interval: str, limit: int, start_time: int, end_time: int
@@ -1588,12 +1834,12 @@ class BluefinSDKService:
             try:
                 logger.info(f"🔧 SDK attempt {attempt + 1}/{max_retries} for {symbol}")
 
-                # Convert symbol to market symbol enum value (for SDK compatibility)
-                market_symbol_value = self._get_market_symbol_value(symbol)
-                logger.debug(f"Using market symbol value: {market_symbol_value}")
+                # Convert symbol to market symbol enum object (for SDK compatibility)
+                market_symbol_enum = self._get_market_symbol(symbol)
+                logger.debug(f"Using market symbol enum: {market_symbol_enum}")
 
                 params = {
-                    "symbol": market_symbol_value,
+                    "symbol": market_symbol_enum,
                     "interval": interval,
                 }
 
@@ -1622,7 +1868,9 @@ class BluefinSDKService:
                             # Bluefin format: [openTime, openPrice, highPrice, lowPrice, closePrice, volume, closeTime, ...]
                             # Prices and volume may be in 18-decimal format, use smart conversion
                             try:
-                                from bot.utils.price_conversion import convert_candle_data
+                                from bot.utils.price_conversion import (
+                                    convert_candle_data,
+                                )
                                 formatted_candle = convert_candle_data(candle, symbol)
                                 formatted_candles.append(formatted_candle)
                             except (ValueError, IndexError, TypeError) as format_error:
@@ -1897,6 +2145,25 @@ class BluefinSDKService:
             logger.error(f"Invalid end_time: {end_time}")
             return []
 
+        # Convert symbol to the string format that the REST API expects
+        # Strip any MARKET_SYMBOLS prefix and ensure proper format
+        symbol_str = str(symbol).replace("MARKET_SYMBOLS.", "").strip()
+
+        # For real-time price data (small limits), try base symbol first, then PERP format
+        if limit <= 10:
+            # Try base symbol format first (SUI, BTC, ETH) as per API docs
+            if symbol_str.endswith("-PERP"):
+                base_symbol = symbol_str.replace("-PERP", "")
+                logger.debug(f"Using base symbol format for real-time data: {base_symbol}")
+                symbol_str = base_symbol
+            else:
+                logger.debug(f"Using existing symbol format for real-time data: {symbol_str}")
+        else:
+            # For historical data, use PERP format
+            if not symbol_str.endswith("-PERP"):
+                symbol_str = f"{symbol_str}-PERP"
+                logger.debug(f"Using PERP format for historical data: {symbol_str}")
+
         async def _make_request():
             # Use the correct Bluefin REST API endpoint from centralized config
             api_url = get_rest_api_url(self.network.lower())
@@ -1909,12 +2176,6 @@ class BluefinSDKService:
                     "api_url": api_url,
                 },
             )
-
-            # Convert symbol to the string format that the REST API expects
-            # Strip any MARKET_SYMBOLS prefix and ensure proper format
-            symbol_str = str(symbol).replace("MARKET_SYMBOLS.", "").strip()
-            if not symbol_str.endswith("-PERP"):
-                symbol_str = f"{symbol_str}-PERP"
 
             # Build request parameters according to Bluefin API docs
             params = {
@@ -1997,8 +2258,10 @@ class BluefinSDKService:
 
                             try:
                                 # Import price conversion utility
-                                from bot.utils.price_conversion import convert_candle_data
-                                
+                                from bot.utils.price_conversion import (
+                                    convert_candle_data,
+                                )
+
                                 # Use smart conversion that detects 18-decimal format
                                 formatted_candle = convert_candle_data(candle, symbol)
                                 formatted_candles.append(formatted_candle)
@@ -2032,10 +2295,111 @@ class BluefinSDKService:
                         return []
 
         try:
-            return await self._retry_request(_make_request)
+            # For real-time data, try multiple symbol formats if first fails
+            if limit <= 10:
+                # First attempt with the symbol format we determined above
+                result = await self._retry_request(_make_request)
+
+                if not result:
+                    # Try alternate symbol format if no data returned
+                    logger.info(f"No data with symbol format '{symbol_str}', trying alternate format")
+
+                    # Create alternate symbol format
+                    original_symbol_str = str(symbol).replace("MARKET_SYMBOLS.", "").strip()
+                    if original_symbol_str.endswith("-PERP"):
+                        # We tried base symbol, now try PERP format
+                        alternate_symbol = original_symbol_str
+                    else:
+                        # We tried PERP, now try base format
+                        alternate_symbol = original_symbol_str.replace("-PERP", "")
+
+                    if alternate_symbol != symbol_str:
+                        # Create new request function with alternate symbol
+                        async def _make_alternate_request():
+                            return await self._make_symbol_request(alternate_symbol, interval, limit, start_time, end_time)
+
+                        logger.info(f"Trying alternate symbol format: {alternate_symbol}")
+                        result = await self._retry_request(_make_alternate_request)
+
+                return result
+            else:
+                # For historical data, just use the original request
+                return await self._retry_request(_make_request)
         except Exception as e:
             logger.error(f"Error in REST API call after retries: {e}")
             return []
+
+    async def _make_symbol_request(self, symbol_str: str, interval: str, limit: int, start_time: int, end_time: int):
+        """Make REST API request with specific symbol format."""
+        # Use the correct Bluefin REST API endpoint from centralized config
+        api_url = get_rest_api_url(self.network.lower())
+
+        # Build request parameters
+        params = {
+            "symbol": symbol_str,
+            "interval": self._normalize_interval(interval),
+        }
+
+        # Add limit if specified
+        if limit > 0:
+            params["limit"] = min(limit, 1000)
+
+        # Add time parameters for historical data only
+        if limit > 10 and start_time > 0 and end_time > 0:
+            current_time_ms = int(time.time() * 1000)
+            if start_time < current_time_ms and end_time < current_time_ms:
+                params["startTime"] = start_time
+                params["endTime"] = end_time
+
+        url = f"{api_url}/candlestickData"
+        logger.info(f"Making REST API call to {url} with params: {params}")
+
+        headers = {
+            "Accept": "application/json",
+            "User-Agent": "AI-Trading-Bot-Bluefin/1.0",
+        }
+
+        import aiohttp
+        async with aiohttp.ClientSession(timeout=self.heavy_timeout) as session:
+            async with session.get(url, params=params, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+
+                    if not isinstance(data, list):
+                        logger.warning(f"Expected list response, got {type(data)}: {data}")
+                        return []
+
+                    if len(data) == 0:
+                        logger.info("API returned empty array - no data available for requested parameters")
+                        return []
+
+                    logger.info(f"Successfully got {len(data)} candles from Bluefin REST API")
+
+                    # Format candles
+                    formatted_candles = []
+                    for i, candle in enumerate(data):
+                        if not isinstance(candle, list) or len(candle) < 6:
+                            logger.warning(f"Invalid candle format at index {i}: {candle}")
+                            continue
+
+                        try:
+                            from bot.utils.price_conversion import convert_candle_data
+                            formatted_candle = convert_candle_data(candle, symbol_str)
+                            formatted_candles.append(formatted_candle)
+                        except (ValueError, TypeError) as e:
+                            logger.warning(f"Error formatting candle at index {i}: {e}")
+                            continue
+
+                    if formatted_candles:
+                        logger.info(f"Successfully formatted {len(formatted_candles)} candles from REST API")
+                        return formatted_candles
+                    else:
+                        logger.warning("No valid candles after formatting")
+                        return []
+
+                else:
+                    logger.error(f"API request failed with status {response.status}: {await response.text()}")
+                    return []
 
 
 # Global service instance
@@ -2308,6 +2672,525 @@ async def health_check(request):
         )
 
 
+async def detailed_health_check(request):
+    """Comprehensive health check with detailed component status."""
+    try:
+        health_data = {
+            "status": "healthy" if service.initialized else "unhealthy",
+            "timestamp": datetime.now(UTC).isoformat(),
+            "service_info": {
+                "service_id": service.service_id,
+                "version": "2.0.0",
+                "network": service.network,
+                "initialized": service.initialized,
+                "uptime_seconds": int(time.time() - getattr(service, "_start_time", time.time())),
+            },
+            "components": {},
+            "performance": {},
+            "dependencies": {}
+        }
+
+        # Check BlueFin client connection
+        if hasattr(service, 'client') and service.client:
+            try:
+                # Test basic client functionality
+                test_start = time.time()
+                # This is a lightweight test - we don't make actual API calls
+                health_data["components"]["bluefin_client"] = {
+                    "status": "healthy",
+                    "initialized": True,
+                    "response_time_ms": (time.time() - test_start) * 1000
+                }
+            except Exception as e:
+                health_data["components"]["bluefin_client"] = {
+                    "status": "unhealthy",
+                    "error": str(e),
+                    "initialized": False
+                }
+        else:
+            health_data["components"]["bluefin_client"] = {
+                "status": "unhealthy",
+                "error": "Client not initialized",
+                "initialized": False
+            }
+
+        # Check endpoint configuration
+        try:
+            endpoints = BluefinEndpointConfig.get_endpoints(service.network.lower())
+            health_data["components"]["endpoint_config"] = {
+                "status": "healthy",
+                "endpoints": {
+                    "rest_api": endpoints.rest_api,
+                    "websocket_api": endpoints.websocket_api,
+                    "websocket_notifications": endpoints.websocket_notifications,
+                },
+                "configuration_source": "centralized"
+            }
+        except ImportError:
+            health_data["components"]["endpoint_config"] = {
+                "status": "degraded",
+                "endpoints": {
+                    "rest_api": get_rest_api_url(service.network.lower()),
+                    "websocket_api": "N/A (fallback mode)",
+                    "websocket_notifications": "N/A (fallback mode)",
+                },
+                "configuration_source": "fallback"
+            }
+
+        # Performance metrics
+        if hasattr(service, '_request_count'):
+            health_data["performance"]["total_requests"] = service._request_count
+        if hasattr(service, '_success_count'):
+            health_data["performance"]["successful_requests"] = service._success_count
+        if hasattr(service, '_error_count'):
+            health_data["performance"]["error_count"] = service._error_count
+
+        # Memory and CPU info (if available)
+        try:
+            import os
+
+            import psutil
+            process = psutil.Process(os.getpid())
+            health_data["performance"]["memory_usage_mb"] = process.memory_info().rss / 1024 / 1024
+            health_data["performance"]["cpu_percent"] = process.cpu_percent()
+        except ImportError:
+            pass
+
+        # Rate limiting status
+        health_data["performance"]["rate_limiting"] = {
+            "enabled": True,
+            "limit_per_minute": RATE_LIMIT_REQUESTS,
+            "window_seconds": RATE_LIMIT_WINDOW
+        }
+
+        # Check dependencies
+        dependencies = ["aiohttp", "bluefin_v2_client"]
+        for dep in dependencies:
+            try:
+                __import__(dep)
+                health_data["dependencies"][dep] = {"status": "available"}
+            except ImportError as e:
+                health_data["dependencies"][dep] = {"status": "missing", "error": str(e)}
+
+        # Overall health assessment
+        component_statuses = [comp.get("status") for comp in health_data["components"].values()]
+        if all(status == "healthy" for status in component_statuses):
+            health_data["status"] = "healthy"
+        elif any(status == "unhealthy" for status in component_statuses):
+            health_data["status"] = "degraded"
+        else:
+            health_data["status"] = "unhealthy"
+
+        return web.json_response(health_data)
+
+    except Exception as e:
+        logger.error(f"Detailed health check failed: {e}")
+        return web.json_response(
+            {
+                "status": "unhealthy",
+                "error": str(e),
+                "timestamp": datetime.now(UTC).isoformat(),
+            },
+            status=500,
+        )
+
+
+async def connectivity_health_check(request):
+    """Check external connectivity to BlueFin services."""
+    start_time = time.time()
+
+    try:
+        connectivity_data = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "checks": {},
+            "overall_status": "unknown"
+        }
+
+        # Get endpoints to test
+        try:
+            endpoints = BluefinEndpointConfig.get_endpoints(service.network.lower())
+            test_endpoints = {
+                "rest_api": endpoints.rest_api,
+                "websocket_api": endpoints.websocket_api,
+            }
+        except ImportError:
+            test_endpoints = {
+                "rest_api": get_rest_api_url(service.network.lower()),
+            }
+
+        # Test each endpoint
+        import aiohttp
+        from aiohttp import ClientTimeout
+        timeout = ClientTimeout(total=10)
+
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            for endpoint_name, endpoint_url in test_endpoints.items():
+                check_start = time.time()
+                try:
+                    # For WebSocket URLs, just test HTTP connectivity to the host
+                    if endpoint_url.startswith("ws"):
+                        test_url = endpoint_url.replace("wss://", "https://").replace("ws://", "http://")
+                        # Remove /ws path for basic connectivity test
+                        if test_url.endswith("/ws"):
+                            test_url = test_url[:-3]
+                    else:
+                        test_url = endpoint_url
+
+                    async with session.get(f"{test_url}/", timeout=5) as response:
+                        response_time = (time.time() - check_start) * 1000
+
+                        connectivity_data["checks"][endpoint_name] = {
+                            "status": "reachable" if response.status < 500 else "degraded",
+                            "url": endpoint_url,
+                            "response_time_ms": response_time,
+                            "status_code": response.status
+                        }
+
+                except TimeoutError:
+                    connectivity_data["checks"][endpoint_name] = {
+                        "status": "timeout",
+                        "url": endpoint_url,
+                        "response_time_ms": (time.time() - check_start) * 1000,
+                        "error": "Request timeout"
+                    }
+                except Exception as e:
+                    connectivity_data["checks"][endpoint_name] = {
+                        "status": "unreachable",
+                        "url": endpoint_url,
+                        "response_time_ms": (time.time() - check_start) * 1000,
+                        "error": str(e)
+                    }
+
+        # Determine overall connectivity status
+        check_results = [check["status"] for check in connectivity_data["checks"].values()]
+        if all(status in ["reachable", "degraded"] for status in check_results):
+            connectivity_data["overall_status"] = "healthy"
+        elif any(status in ["reachable", "degraded"] for status in check_results):
+            connectivity_data["overall_status"] = "degraded"
+        else:
+            connectivity_data["overall_status"] = "unhealthy"
+
+        connectivity_data["total_check_time_ms"] = (time.time() - start_time) * 1000
+
+        return web.json_response(connectivity_data)
+
+    except Exception as e:
+        logger.error(f"Connectivity health check failed: {e}")
+        return web.json_response(
+            {
+                "overall_status": "error",
+                "error": str(e),
+                "timestamp": datetime.now(UTC).isoformat(),
+                "total_check_time_ms": (time.time() - start_time) * 1000
+            },
+            status=500,
+        )
+
+
+async def performance_metrics(request):
+    """Get performance metrics for monitoring."""
+    try:
+        metrics_data = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "service": {
+                "uptime_seconds": int(time.time() - getattr(service, "_start_time", time.time())),
+                "service_id": service.service_id,
+                "network": service.network,
+            },
+            "requests": {},
+            "performance": {},
+            "resources": {}
+        }
+
+        # Request metrics
+        if hasattr(service, '_request_count'):
+            metrics_data["requests"]["total"] = service._request_count
+        if hasattr(service, '_success_count'):
+            metrics_data["requests"]["successful"] = service._success_count
+        if hasattr(service, '_error_count'):
+            metrics_data["requests"]["errors"] = service._error_count
+
+        # Calculate derived metrics
+        total_requests = metrics_data["requests"].get("total", 0)
+        successful_requests = metrics_data["requests"].get("successful", 0)
+        error_requests = metrics_data["requests"].get("errors", 0)
+
+        if total_requests > 0:
+            metrics_data["requests"]["success_rate"] = (successful_requests / total_requests) * 100
+            metrics_data["requests"]["error_rate"] = (error_requests / total_requests) * 100
+        else:
+            metrics_data["requests"]["success_rate"] = 0
+            metrics_data["requests"]["error_rate"] = 0
+
+        # Performance metrics
+        if hasattr(service, '_avg_response_time'):
+            metrics_data["performance"]["avg_response_time_ms"] = service._avg_response_time
+
+        # Resource metrics (if available)
+        try:
+            import os
+
+            import psutil
+            process = psutil.Process(os.getpid())
+            memory_info = process.memory_info()
+
+            metrics_data["resources"] = {
+                "memory_usage_mb": memory_info.rss / 1024 / 1024,
+                "memory_percent": process.memory_percent(),
+                "cpu_percent": process.cpu_percent(),
+                "num_threads": process.num_threads(),
+                "connections": len(process.connections()),
+            }
+
+            # System metrics
+            metrics_data["system"] = {
+                "cpu_count": psutil.cpu_count(),
+                "total_memory_gb": psutil.virtual_memory().total / (1024**3),
+                "available_memory_gb": psutil.virtual_memory().available / (1024**3),
+            }
+        except ImportError:
+            metrics_data["resources"]["note"] = "psutil not available for detailed metrics"
+
+        # Rate limiting metrics
+        current_time = time.time()
+        active_limits = 0
+        for client_data in rate_limit_storage.values():
+            if current_time - client_data["window_start"] < RATE_LIMIT_WINDOW:
+                active_limits += 1
+
+        metrics_data["rate_limiting"] = {
+            "limit_per_minute": RATE_LIMIT_REQUESTS,
+            "window_seconds": RATE_LIMIT_WINDOW,
+            "active_clients": active_limits
+        }
+
+        return web.json_response(metrics_data)
+
+    except Exception as e:
+        logger.error(f"Performance metrics failed: {e}")
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def service_status(request):
+    """Get comprehensive service status."""
+    try:
+        status_data = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "service": {
+                "name": "Bluefin SDK Service",
+                "version": "2.0.0",
+                "service_id": service.service_id,
+                "status": "running" if service.initialized else "initializing",
+                "network": service.network,
+                "uptime_seconds": int(time.time() - getattr(service, "_start_time", time.time())),
+            },
+            "health": {
+                "overall": "healthy" if service.initialized else "initializing",
+                "components": {}
+            },
+            "configuration": {},
+            "statistics": {}
+        }
+
+        # Component health
+        components = ["bluefin_client", "endpoint_config", "rate_limiter"]
+        for component in components:
+            if component == "bluefin_client":
+                status_data["health"]["components"][component] = {
+                    "status": "healthy" if hasattr(service, 'client') and service.client else "unhealthy"
+                }
+            elif component == "endpoint_config":
+                try:
+                    BluefinEndpointConfig.get_endpoints(service.network.lower())
+                    status_data["health"]["components"][component] = {"status": "healthy"}
+                except ImportError:
+                    status_data["health"]["components"][component] = {"status": "degraded"}
+            elif component == "rate_limiter":
+                status_data["health"]["components"][component] = {"status": "healthy"}
+
+        # Configuration
+        status_data["configuration"] = {
+            "network": service.network,
+            "rate_limit_enabled": True,
+            "rate_limit_per_minute": RATE_LIMIT_REQUESTS,
+            "authentication_required": bool(os.getenv("BLUEFIN_SERVICE_API_KEY")),
+        }
+
+        # Statistics
+        status_data["statistics"] = {
+            "total_requests": getattr(service, '_request_count', 0),
+            "successful_requests": getattr(service, '_success_count', 0),
+            "error_requests": getattr(service, '_error_count', 0),
+            "active_rate_limits": len(rate_limit_storage),
+        }
+
+        return web.json_response(status_data)
+
+    except Exception as e:
+        logger.error(f"Service status failed: {e}")
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def service_diagnostics(request):
+    """Run diagnostic checks for troubleshooting."""
+    try:
+        diagnostics_data = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "diagnostics_id": f"diag_{int(time.time())}",
+            "checks": {},
+            "recommendations": [],
+            "overall_status": "unknown"
+        }
+
+        # Environment diagnostics
+        env_check = {
+            "status": "healthy",
+            "details": {}
+        }
+
+        required_vars = ["BLUEFIN_PRIVATE_KEY", "BLUEFIN_NETWORK"]
+        optional_vars = ["BLUEFIN_SERVICE_API_KEY", "HOST", "PORT"]
+
+        for var in required_vars:
+            if os.getenv(var):
+                env_check["details"][var] = "set"
+            else:
+                env_check["details"][var] = "missing"
+                env_check["status"] = "degraded"
+                diagnostics_data["recommendations"].append(f"Set {var} environment variable")
+
+        for var in optional_vars:
+            env_check["details"][var] = "set" if os.getenv(var) else "not_set"
+
+        diagnostics_data["checks"]["environment"] = env_check
+
+        # Service initialization check
+        init_check = {
+            "status": "healthy" if service.initialized else "unhealthy",
+            "details": {
+                "service_initialized": service.initialized,
+                "client_available": hasattr(service, 'client') and service.client is not None,
+                "network_configured": bool(service.network),
+            }
+        }
+
+        if not service.initialized:
+            diagnostics_data["recommendations"].append("Service not properly initialized - check logs for initialization errors")
+
+        diagnostics_data["checks"]["initialization"] = init_check
+
+        # Dependency check
+        dep_check = {
+            "status": "healthy",
+            "details": {}
+        }
+
+        dependencies = [
+            "aiohttp", "bluefin_v2_client", "asyncio", "logging", "os", "time"
+        ]
+
+        for dep in dependencies:
+            try:
+                __import__(dep)
+                dep_check["details"][dep] = "available"
+            except ImportError:
+                dep_check["details"][dep] = "missing"
+                dep_check["status"] = "unhealthy"
+                diagnostics_data["recommendations"].append(f"Install missing dependency: {dep}")
+
+        diagnostics_data["checks"]["dependencies"] = dep_check
+
+        # Network accessibility check
+        network_check = {
+            "status": "unknown",
+            "details": {}
+        }
+
+        try:
+            # Test basic network connectivity
+            import socket
+            hostname = "google.com"
+            port = 80
+
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            result = sock.connect_ex((hostname, port))
+            sock.close()
+
+            if result == 0:
+                network_check["status"] = "healthy"
+                network_check["details"]["internet_connectivity"] = "available"
+            else:
+                network_check["status"] = "degraded"
+                network_check["details"]["internet_connectivity"] = "limited"
+                diagnostics_data["recommendations"].append("Check internet connectivity")
+
+        except Exception as e:
+            network_check["status"] = "error"
+            network_check["details"]["error"] = str(e)
+            diagnostics_data["recommendations"].append("Network connectivity test failed")
+
+        diagnostics_data["checks"]["network"] = network_check
+
+        # Performance check
+        perf_check = {
+            "status": "healthy",
+            "details": {}
+        }
+
+        try:
+            import os
+
+            import psutil
+
+            process = psutil.Process(os.getpid())
+            memory_percent = process.memory_percent()
+            cpu_percent = process.cpu_percent()
+
+            perf_check["details"]["memory_usage_percent"] = memory_percent
+            perf_check["details"]["cpu_usage_percent"] = cpu_percent
+
+            if memory_percent > 80:
+                perf_check["status"] = "degraded"
+                diagnostics_data["recommendations"].append("High memory usage detected")
+
+            if cpu_percent > 80:
+                perf_check["status"] = "degraded"
+                diagnostics_data["recommendations"].append("High CPU usage detected")
+
+        except ImportError:
+            perf_check["details"]["note"] = "psutil not available for performance metrics"
+
+        diagnostics_data["checks"]["performance"] = perf_check
+
+        # Overall status assessment
+        check_statuses = [check["status"] for check in diagnostics_data["checks"].values()]
+
+        if all(status == "healthy" for status in check_statuses):
+            diagnostics_data["overall_status"] = "healthy"
+        elif any(status == "unhealthy" for status in check_statuses):
+            diagnostics_data["overall_status"] = "unhealthy"
+        else:
+            diagnostics_data["overall_status"] = "degraded"
+
+        # Default recommendations if everything is healthy
+        if not diagnostics_data["recommendations"]:
+            diagnostics_data["recommendations"] = ["All diagnostic checks passed - service is operating normally"]
+
+        return web.json_response(diagnostics_data)
+
+    except Exception as e:
+        logger.error(f"Service diagnostics failed: {e}")
+        return web.json_response(
+            {
+                "overall_status": "error",
+                "error": str(e),
+                "timestamp": datetime.now(UTC).isoformat(),
+            },
+            status=500,
+        )
+
+
 async def get_account(request):
     """Get account data."""
     try:
@@ -2457,12 +3340,15 @@ async def get_ticker(request):
                             data = await response.json()
                             if data and "price" in data:
                                 # Import price conversion utility
-                                from bot.utils.price_conversion import convert_from_18_decimal, log_price_conversion_stats
-                                
+                                from bot.utils.price_conversion import (
+                                    convert_from_18_decimal,
+                                    log_price_conversion_stats,
+                                )
+
                                 # Use smart conversion that detects 18-decimal format
                                 raw_price = data["price"]
                                 price = float(convert_from_18_decimal(raw_price, symbol, "price"))
-                                
+
                                 # Log conversion stats for debugging
                                 log_price_conversion_stats(raw_price, price, symbol, "ticker_price")
 
@@ -2698,7 +3584,15 @@ def create_app():
     app = web.Application(middlewares=[rate_limit_middleware, auth_middleware])
 
     # Add routes
+    # Health monitoring endpoints
     app.router.add_get("/health", health_check)
+    app.router.add_get("/health/detailed", detailed_health_check)
+    app.router.add_get("/health/connectivity", connectivity_health_check)
+    app.router.add_get("/metrics", performance_metrics)
+    app.router.add_get("/status", service_status)
+    app.router.add_get("/diagnostics", service_diagnostics)
+
+    # Business endpoints
     app.router.add_get("/account", get_account)
     app.router.add_get("/positions", get_positions)
     app.router.add_post("/orders", place_order)
@@ -2706,6 +3600,8 @@ def create_app():
     app.router.add_get("/market/ticker", get_ticker)
     app.router.add_get("/market/candles", get_market_candles)
     app.router.add_post("/leverage", set_leverage)
+
+    # Debug endpoints
     app.router.add_get("/debug/symbols", debug_symbols)
     app.router.add_get("/debug/validate-endpoints", validate_endpoints)
 

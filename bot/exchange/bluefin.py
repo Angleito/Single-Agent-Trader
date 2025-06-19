@@ -106,6 +106,7 @@ class BluefinClient(BaseExchange):
         self,
         private_key: str | None = None,
         network: str = "mainnet",
+        service_url: str | None = None,
         dry_run: bool = True,
     ):
         """
@@ -114,6 +115,7 @@ class BluefinClient(BaseExchange):
         Args:
             private_key: Sui wallet private key
             network: Network to connect to ('mainnet' or 'testnet')
+            service_url: URL of the Bluefin service container
             dry_run: Whether to run in paper trading mode
         """
         # Enhanced live trading mode detection with environment variable overrides
@@ -162,7 +164,11 @@ class BluefinClient(BaseExchange):
 
         # Use service client instead of direct SDK
         # Connect to the Bluefin SDK service container
-        service_url = os.getenv("BLUEFIN_SERVICE_URL", "http://bluefin-service:8080")
+        # Use provided service_url or fall back to environment variable
+        if service_url is None:
+            service_url = os.getenv(
+                "BLUEFIN_SERVICE_URL", "http://bluefin-service:8080"
+            )
         api_key = os.getenv("BLUEFIN_SERVICE_API_KEY")
         self._service_client = BluefinServiceClient(service_url, api_key)
 
@@ -179,7 +185,8 @@ class BluefinClient(BaseExchange):
         self._contract_info: dict[str, Any] = {}
 
         logger.info(
-            f"Initialized BluefinClient (network={network}, " f"dry_run={dry_run})"
+            f"Initialized BluefinClient (network={network}, "
+            f"service_url={service_url}, dry_run={dry_run})"
         )
 
     async def validate_symbol_exists(self, symbol: str) -> bool:
@@ -1115,13 +1122,10 @@ class BluefinClient(BaseExchange):
         Returns:
             List of OHLCV data dictionaries
         """
-        if self.dry_run:
-            logger.info(
-                f"PAPER TRADING: Simulating historical data fetch for {symbol} "
-                f"({limit} candles, {interval} interval)"
-            )
-            # Generate mock historical data for paper trading
-            return self._generate_mock_historical_data(symbol, interval, limit)
+        logger.info(
+            f"Fetching real historical data for {symbol} "
+            f"({limit} candles, {interval} interval) from Bluefin"
+        )
 
         try:
             # Convert standard symbol to Bluefin format
@@ -1164,73 +1168,7 @@ class BluefinClient(BaseExchange):
 
         except Exception as e:
             logger.error(f"Failed to fetch historical candles from Bluefin: {e}")
-            # Fallback to mock data in case of errors
-            return self._generate_mock_historical_data(symbol, interval, limit)
-
-    def _generate_mock_historical_data(
-        self, symbol: str, interval: str, limit: int
-    ) -> list:
-        """Generate mock historical data for paper trading."""
-        import random
-        from datetime import datetime, timedelta
-
-        # Base price for different symbols
-        base_prices = {
-            "ETH-USD": 2500.0,
-            "ETH-PERP": 2500.0,
-            "BTC-USD": 45000.0,
-            "BTC-PERP": 45000.0,
-            "SOL-USD": 150.0,
-            "SOL-PERP": 150.0,
-            "SUI-USD": 3.50,
-            "SUI-PERP": 3.50,
-        }
-
-        base_price = base_prices.get(symbol, 2500.0)
-
-        # Convert interval to minutes
-        interval_minutes = {
-            "1m": 1,
-            "5m": 5,
-            "15m": 15,
-            "30m": 30,
-            "1h": 60,
-            "4h": 240,
-            "1d": 1440,
-        }.get(interval, 5)
-
-        candles = []
-        current_time = datetime.utcnow()
-        current_price = base_price
-
-        for i in range(limit):
-            # Generate realistic OHLCV data
-            volatility = 0.02  # 2% volatility
-            change = random.uniform(-volatility, volatility)
-
-            open_price = current_price
-            close_price = open_price * (1 + change)
-            high_price = max(open_price, close_price) * (1 + random.uniform(0, 0.01))
-            low_price = min(open_price, close_price) * (1 - random.uniform(0, 0.01))
-            volume = random.uniform(100, 10000)
-
-            timestamp = current_time - timedelta(
-                minutes=interval_minutes * (limit - i - 1)
-            )
-
-            candle = {
-                "timestamp": int(timestamp.timestamp() * 1000),
-                "open": round(open_price, 2),
-                "high": round(high_price, 2),
-                "low": round(low_price, 2),
-                "close": round(close_price, 2),
-                "volume": round(volume, 2),
-            }
-            candles.append(candle)
-            current_price = close_price
-
-        logger.info(f"Generated {len(candles)} mock candles for paper trading")
-        return candles
+            return []
 
     @property
     def supports_futures(self) -> bool:

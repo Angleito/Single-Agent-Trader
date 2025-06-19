@@ -112,16 +112,24 @@ class ExchangeFactory:
         network_setting = getattr(settings.exchange, "bluefin_network", "mainnet")
         network = kwargs.get("network") or network_setting
 
+        # Extract service URL from settings
+        service_url_setting = getattr(
+            settings.exchange, "bluefin_service_url", "http://bluefin-service:8080"
+        )
+        service_url = kwargs.get("service_url") or service_url_setting
+
         # Create client
         client = BluefinClient(
             private_key=private_key,
             network=network,
+            service_url=service_url,
             dry_run=dry_run,
         )
 
         logger.info(
             "Created Bluefin client "
             f"(network={network}, "
+            f"service_url={service_url}, "
             f"has_key={bool(private_key)})"
         )
 

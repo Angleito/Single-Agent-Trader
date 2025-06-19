@@ -75,7 +75,7 @@ class ExperienceManager:
         # Background task for monitoring trades
         self._monitor_task: asyncio.Task | None = None
         self._running = False
-        
+
         # Track reflection tasks for proper cleanup
         self._reflection_tasks: list[asyncio.Task] = []
 
@@ -106,7 +106,7 @@ class ExperienceManager:
                 await self._monitor_task
             except asyncio.CancelledError:
                 pass
-        
+
         # Cancel reflection tasks
         for task in self._reflection_tasks:
             if not task.done():
@@ -115,7 +115,7 @@ class ExperienceManager:
                     await task
                 except asyncio.CancelledError:
                     pass
-        
+
         self._reflection_tasks.clear()
 
         # Update any remaining active trades
@@ -409,9 +409,11 @@ class ExperienceManager:
                 )
             )
             self._reflection_tasks.append(reflection_task)
-            
+
             # Clean up completed tasks periodically
-            self._reflection_tasks = [task for task in self._reflection_tasks if not task.done()]
+            self._reflection_tasks = [
+                task for task in self._reflection_tasks if not task.done()
+            ]
 
         return True
 

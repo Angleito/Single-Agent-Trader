@@ -50,6 +50,8 @@ types-python-dateutil = "^2.9.0"
 memory-profiler = "^0.61.0"
 safety = "^3.5.2"
 bandit = "^1.7.0"
+vulture = "^2.13.0"
+djlint = "^1.35.0"
 
 [tool.poetry.scripts]
 ai-trading-bot = "bot.main:cli"
@@ -82,22 +84,95 @@ line-length = 88
 
 [tool.ruff.lint]
 select = [
-    "E",  # pycodestyle errors
-    "W",  # pycodestyle warnings
-    "F",  # pyflakes
-    "I",  # isort
-    "B",  # flake8-bugbear
-    "C4", # flake8-comprehensions
-    "UP", # pyupgrade
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "N",   # pep8-naming
+    "S",   # flake8-bandit (security)
+    "A",   # flake8-builtins
+    "COM", # flake8-commas
+    "C90", # mccabe complexity
+    "DTZ", # flake8-datetimez
+    "EM",  # flake8-errmsg
+    "FA",  # flake8-future-annotations
+    "ICN", # flake8-import-conventions
+    "LOG", # flake8-logging
+    "G",   # flake8-logging-format
+    "PIE", # flake8-pie
+    "PT",  # flake8-pytest-style
+    "Q",   # flake8-quotes
+    "RSE", # flake8-raise
+    "RET", # flake8-return
+    "SIM", # flake8-simplify
+    "TID", # flake8-tidy-imports
+    "TCH", # flake8-type-checking
+    "ARG", # flake8-unused-arguments
+    "PTH", # flake8-use-pathlib
+    "ERA", # eradicate (commented-out code)
+    "PD",  # pandas-vet
+    "PGH", # pygrep-hooks
+    "PL",  # pylint
+    "TRY", # tryceratops
+    "FLY", # flynt
+    "NPY", # numpy-specific rules
+    "ASYNC", # flake8-async
+    "FURB", # refurb
+    "RUF", # ruff-specific rules
 ]
 ignore = [
-    "E501",  # line too long, handled by black
-    "B008",  # do not perform function calls in argument defaults
-    "C901",  # too complex
+    "E501",   # line too long, handled by formatter
+    "B008",   # do not perform function calls in argument defaults
+    "C901",   # too complex
+    "S101",   # use of assert
+    "S603",   # subprocess call: check for execution of untrusted input
+    "S607",   # starting a process with a partial executable path
+    "PLR0913", # too many arguments
+    "PLR0915", # too many statements
+    "PLR2004", # magic value used in comparison
+    "COM812", # trailing comma missing (handled by formatter)
+    "ISC001", # implicitly concatenated string literals (handled by formatter)
+    "TRY003", # avoid specifying long messages outside the exception class
+    "EM101",  # exception must not use a string literal
+    "EM102",  # exception must not use an f-string literal
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
+"tests/*" = ["S101", "PLR2004", "ARG001", "ARG002"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["bot"]
+force-single-line = false
+split-on-trailing-comma = true
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-args = 8
+max-branches = 15
+max-returns = 8
+max-statements = 60
+
+[tool.vulture]
+min_confidence = 80
+paths = ["bot"]
+ignore_decorators = ["@pytest.fixture", "@property", "@cached_property", "@click.command", "@click.option"]
+ignore_names = ["_*", "test_*", "setUp", "tearDown"]
+
+[tool.djlint]
+profile = "html"
+max_line_length = 88
+format_attribute_template_tags = true
+preserve_leading_space = true
+preserve_blank_lines = true
+indent = 2
+exclude = "node_modules,*.min.html"
+extension = "html"
 
 [tool.mypy]
 python_version = "3.12"

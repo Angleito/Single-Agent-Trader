@@ -216,34 +216,72 @@ class PaperTradingAccount:
         self, action: TradeAction, symbol: str, current_price: Decimal
     ) -> Order | None:
         """
-        Execute a trade action in paper trading mode.
+        Execute a trade action in paper trading mode using real market data.
+
+        This method simulates what would happen if the trade were placed on the real exchange,
+        using actual market prices and comprehensive logging to show the trading decisions.
 
         Args:
             action: Trade action to execute
             symbol: Trading symbol
-            current_price: Current market price
+            current_price: Current market price (from real market data)
 
         Returns:
-            Order object representing the executed trade
+            Order object representing the simulated trade
         """
         with self._lock:
             try:
                 if action.action == "HOLD":
+                    logger.info(
+                        f"🛑 PAPER TRADING DECISION: HOLD | Symbol: {symbol} | "
+                        f"Current Price: ${current_price} | Reason: {action.rationale}"
+                    )
                     return None
+
+                # Log the trading decision with full context
+                logger.info(
+                    f"🎯 PAPER TRADING DECISION: {action.action} | Symbol: {symbol} | "
+                    f"Current Price: ${current_price} | Size: {action.size_pct}% | "
+                    f"Reason: {action.rationale}"
+                )
 
                 # Calculate trade size based on action
                 trade_size = self._calculate_trade_size(action, current_price, symbol)
                 if trade_size <= 0:
-                    logger.warning(f"Invalid trade size calculated: {trade_size}")
+                    logger.warning(f"❌ Invalid trade size calculated: {trade_size}")
                     return None
 
-                # Apply slippage
+                # Log what would happen with real market execution
+                trade_value = trade_size * current_price
+                required_margin = trade_value / Decimal(str(settings.trading.leverage))
+
+                logger.info(
+                    f"📊 TRADE SIMULATION DETAILS:"
+                    f"\n  • Symbol: {symbol}"
+                    f"\n  • Action: {action.action}"
+                    f"\n  • Current Real Price: ${current_price}"
+                    f"\n  • Position Size: {trade_size} {symbol.split('-')[0]}"
+                    f"\n  • Position Value: ${trade_value:,.2f}"
+                    f"\n  • Leverage: {settings.trading.leverage}x"
+                    f"\n  • Required Margin: ${required_margin:,.2f}"
+                    f"\n  • Available Balance: ${self.equity - self.margin_used:,.2f}"
+                    f"\n  • Stop Loss: {action.stop_loss_pct}%"
+                    f"\n  • Take Profit: {action.take_profit_pct}%"
+                )
+
+                # Apply realistic slippage based on real market conditions
                 execution_price = self._apply_slippage(current_price, action.action)
+                slippage_amount = abs(execution_price - current_price)
+                slippage_pct = (slippage_amount / current_price) * 100
+
+                logger.info(
+                    f"📈 EXECUTION SIMULATION:"
+                    f"\n  • Market Price: ${current_price}"
+                    f"\n  • Execution Price: ${execution_price} (slippage: {slippage_pct:.3f}%)"
+                    f"\n  • Slippage Cost: ${slippage_amount * trade_size:.2f}"
+                )
 
                 # Calculate realistic trading fees using the fee calculator
-                trade_value = trade_size * execution_price
-
-                # Use the proper fee calculator
                 trade_fees = fee_calculator.calculate_trade_fees(
                     action, trade_value, execution_price, is_market_order=True
                 )
@@ -251,44 +289,104 @@ class PaperTradingAccount:
                 # For paper trading, we only charge entry fee for now
                 fees = trade_fees.entry_fee
 
+                logger.info(
+                    f"💰 FEE CALCULATION:"
+                    f"\n  • Fee Rate: {trade_fees.fee_rate:.4%}"
+                    f"\n  • Entry Fee: ${fees:.4f}"
+                    f"\n  • Trade Value: ${trade_value:.2f}"
+                )
+
                 # Check available balance
                 if action.action in ["LONG", "SHORT"]:
                     # Opening new position
-                    required_margin = trade_value / Decimal(
-                        str(settings.trading.leverage)
-                    )
                     if required_margin + fees > (self.equity - self.margin_used):
                         logger.warning(
-                            f"Insufficient funds for trade: required ${required_margin + fees:,.2f}, available ${self.equity - self.margin_used:,.2f}"
+                            f"❌ INSUFFICIENT FUNDS SIMULATION:"
+                            f"\n  • Required: ${required_margin + fees:,.2f}"
+                            f"\n  • Available: ${self.equity - self.margin_used:,.2f}"
+                            f"\n  • Shortfall: ${(required_margin + fees) - (self.equity - self.margin_used):,.2f}"
                         )
                         return self._create_failed_order(
                             action, symbol, "INSUFFICIENT_FUNDS"
                         )
 
-                # Execute the trade
+                # Execute the simulated trade
                 order = self._execute_paper_trade(
                     action, symbol, execution_price, trade_size, fees
                 )
 
                 if order and order.status == OrderStatus.FILLED:
-                    # Add contract information for futures trades
+                    # Calculate potential profit/loss scenarios
+                    stop_loss_price = (
+                        execution_price * (1 - Decimal(str(action.stop_loss_pct)) / 100)
+                        if action.action == "LONG"
+                        else execution_price
+                        * (1 + Decimal(str(action.stop_loss_pct)) / 100)
+                    )
+                    take_profit_price = (
+                        execution_price
+                        * (1 + Decimal(str(action.take_profit_pct)) / 100)
+                        if action.action == "LONG"
+                        else execution_price
+                        * (1 - Decimal(str(action.take_profit_pct)) / 100)
+                    )
+
+                    stop_loss_pnl = (
+                        (stop_loss_price - execution_price) * trade_size
+                        if action.action == "LONG"
+                        else (execution_price - stop_loss_price) * trade_size
+                    )
+                    take_profit_pnl = (
+                        (take_profit_price - execution_price) * trade_size
+                        if action.action == "LONG"
+                        else (execution_price - take_profit_price) * trade_size
+                    )
+
+                    # Add comprehensive execution logging
                     if settings.trading.enable_futures and symbol == "ETH-USD":
                         num_contracts = int(trade_size / Decimal("0.1"))
                         logger.info(
-                            f"💸 Paper Trading FUTURES: Executed {action.action} | "
-                            f"{num_contracts} contracts ({trade_size} ETH) @ ${execution_price} | "
-                            f"Fees: ${fees:.4f} @ {trade_fees.fee_rate:.4%} | Value: ${trade_size * execution_price:.2f}"
+                            f"✅ PAPER TRADING FUTURES EXECUTION COMPLETE:"
+                            f"\n  🎯 Action: {action.action}"
+                            f"\n  📊 Contracts: {num_contracts} contracts ({trade_size} ETH)"
+                            f"\n  💵 Price: ${execution_price}"
+                            f"\n  💸 Value: ${trade_size * execution_price:.2f}"
+                            f"\n  🏷️ Fees: ${fees:.4f} @ {trade_fees.fee_rate:.4%}"
+                            f"\n  🔴 Stop Loss: ${stop_loss_price:.2f} (${stop_loss_pnl:+.2f})"
+                            f"\n  🟢 Take Profit: ${take_profit_price:.2f} (${take_profit_pnl:+.2f})"
+                            f"\n  🏦 New Balance: ${self.current_balance:.2f}"
+                            f"\n  📈 New Equity: ${self.equity:.2f}"
+                            f"\n  🔒 Margin Used: ${self.margin_used:.2f}"
+                            f"\n  💳 Available: ${self.equity - self.margin_used:.2f}"
+                            f"\n  📋 Order ID: {order.id}"
                         )
                     else:
                         logger.info(
-                            f"💸 Paper Trading: Executed {action.action} | {trade_size} {symbol} @ ${execution_price} | "
-                            f"Fees: ${fees:.4f} @ {trade_fees.fee_rate:.4%} | Value: ${trade_size * execution_price:.2f}"
+                            f"✅ PAPER TRADING EXECUTION COMPLETE:"
+                            f"\n  🎯 Action: {action.action}"
+                            f"\n  📊 Size: {trade_size} {symbol}"
+                            f"\n  💵 Price: ${execution_price}"
+                            f"\n  💸 Value: ${trade_size * execution_price:.2f}"
+                            f"\n  🏷️ Fees: ${fees:.4f} @ {trade_fees.fee_rate:.4%}"
+                            f"\n  🔴 Stop Loss: ${stop_loss_price:.2f} (${stop_loss_pnl:+.2f})"
+                            f"\n  🟢 Take Profit: ${take_profit_price:.2f} (${take_profit_pnl:+.2f})"
+                            f"\n  🏦 New Balance: ${self.current_balance:.2f}"
+                            f"\n  📈 New Equity: ${self.equity:.2f}"
+                            f"\n  🔒 Margin Used: ${self.margin_used:.2f}"
+                            f"\n  💳 Available: ${self.equity - self.margin_used:.2f}"
+                            f"\n  📋 Order ID: {order.id}"
                         )
+
+                    # Also log a summary for easy scanning
+                    logger.info(
+                        f"🎬 TRADE SUMMARY: {action.action} {trade_size} {symbol} @ ${execution_price} | "
+                        f"Value: ${trade_value:.2f} | Balance: ${self.current_balance:.2f} → ${self.equity:.2f}"
+                    )
 
                 return order
 
             except Exception as e:
-                logger.error(f"Error executing paper trade: {e}")
+                logger.error(f"❌ Error simulating paper trade: {e}")
                 return self._create_failed_order(action, symbol, f"ERROR: {str(e)}")
 
     def _calculate_trade_size(
@@ -378,18 +476,24 @@ class PaperTradingAccount:
                     logger.info(
                         f"Adding to existing {action.action} position for {symbol}"
                     )
-                    return self._increase_position(existing_position, price, size, fees, current_time)
+                    return self._increase_position(
+                        existing_position, price, size, fees, current_time
+                    )
                 else:
                     # Opposite direction - close existing position and open new one
                     logger.info(
                         f"Closing existing {existing_position.side} position and opening new {action.action} position for {symbol}"
                     )
                     # First close the existing position
-                    close_order = self._close_position(symbol, price, current_time, fees)
+                    close_order = self._close_position(
+                        symbol, price, current_time, fees
+                    )
                     if close_order.status != OrderStatus.FILLED:
-                        logger.error(f"Failed to close existing position: {close_order.status}")
+                        logger.error(
+                            f"Failed to close existing position: {close_order.status}"
+                        )
                         return self._create_failed_order(action, symbol, "CLOSE_FAILED")
-                    
+
                     # Now continue to open the new position (fall through to position opening logic)
 
             # Open new position
@@ -512,34 +616,34 @@ class PaperTradingAccount:
         return None
 
     def _increase_position(
-        self, 
-        existing_position: PaperTrade, 
-        price: Decimal, 
-        size: Decimal, 
+        self,
+        existing_position: PaperTrade,
+        price: Decimal,
+        size: Decimal,
         fees: Decimal,
-        current_time: datetime
+        current_time: datetime,
     ) -> Order:
         """Increase the size of an existing position."""
         trade_id = f"paper_{self.trade_counter:06d}"
         self.trade_counter += 1
-        
+
         # Calculate average entry price (weighted by position sizes)
         current_value = existing_position.size * existing_position.entry_price
         new_value = size * price
         total_size = existing_position.size + size
         average_price = (current_value + new_value) / total_size
-        
+
         # Update existing position
         existing_position.size = total_size
         existing_position.entry_price = average_price
         existing_position.fees += fees
-        
+
         # Update account balance and margin
         trade_value = size * price
         required_margin = trade_value / Decimal(str(settings.trading.leverage))
         self.margin_used += required_margin
         self.current_balance -= fees  # Deduct fees immediately
-        
+
         # Create order object for the increase
         order = Order(
             id=trade_id,
@@ -552,13 +656,13 @@ class PaperTradingAccount:
             status=OrderStatus.FILLED,
             timestamp=current_time,
         )
-        
+
         logger.info(
             f"📈 Paper Trading: Increased {existing_position.side} position | "
             f"+{size} {existing_position.symbol} @ ${price} | "
             f"Total size: {total_size} @ avg ${average_price:.4f} | Trade ID: {trade_id}"
         )
-        
+
         # Save state immediately after increasing position
         self._save_state()
         return order
@@ -580,18 +684,30 @@ class PaperTradingAccount:
         )
 
     def _get_current_price(self, symbol: str) -> Decimal:
-        """Get current price for a symbol (placeholder - would connect to market data)."""
-        # This would typically connect to market data feed
-        # For now, return realistic default prices based on symbol
+        """Get current price for a symbol from real market data."""
+        try:
+            # Try to get real market data from the price conversion utility
+            from .utils.price_conversion import get_current_real_price
+
+            real_price = get_current_real_price(symbol)
+            if real_price:
+                logger.debug(f"📊 Using real market price for {symbol}: ${real_price}")
+                return Decimal(str(real_price))
+        except (ImportError, Exception) as e:
+            logger.debug(f"Could not fetch real price for {symbol}: {e}")
+
+        # Fallback to realistic prices based on corrected price data
         if "SUI" in symbol:
-            return Decimal("3.50")  # Realistic SUI price
+            price = Decimal("3.50")  # Realistic SUI price post-fix
         elif "ETH" in symbol:
-            return Decimal("2500")  # Realistic ETH price
+            price = Decimal("2500")  # Realistic ETH price
         elif "BTC" in symbol:
-            return Decimal("50000")  # Realistic BTC price
+            price = Decimal("50000")  # Realistic BTC price
         else:
-            # For unknown symbols, return a reasonable default
-            return Decimal("100")  # Generic reasonable price
+            price = Decimal("100")  # Generic reasonable price
+
+        logger.debug(f"📊 Using fallback price for {symbol}: ${price}")
+        return price
 
     def update_daily_performance(self) -> None:
         """Update daily performance metrics."""
@@ -1412,6 +1528,14 @@ class PaperTradingAccount:
                     performance_data = json.load(f)
 
                 for date, metrics_data in performance_data.items():
+                    # Skip metadata entries that don't contain daily performance data
+                    if (
+                        date == "save_metadata"
+                        or not isinstance(metrics_data, dict)
+                        or "date" not in metrics_data
+                    ):
+                        continue
+
                     metrics = DailyPerformance(
                         date=metrics_data["date"],
                         starting_balance=Decimal(metrics_data["starting_balance"]),

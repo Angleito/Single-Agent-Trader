@@ -191,11 +191,11 @@ class SommiPatterns:
 
             # Calculate minimum required data based on WaveTrend parameters
             min_required = max(
-                self.wavetrend.channel_length, 
-                self.wavetrend.average_length, 
-                self.wavetrend.ma_length
+                self.wavetrend.channel_length,
+                self.wavetrend.average_length,
+                self.wavetrend.ma_length,
             )
-            
+
             if len(htf_data) < min_required:
                 logger.warning(
                     f"Insufficient HTF data for WaveTrend calculation: {len(htf_data)} < {min_required}"
@@ -666,15 +666,17 @@ class SommiPatterns:
             # Calculate minimum required data based on all indicator parameters
             min_required = max(
                 self.wavetrend.channel_length,
-                self.wavetrend.average_length, 
+                self.wavetrend.average_length,
                 self.wavetrend.ma_length,
                 self.rsimfi.rsi_length,
                 self.rsimfi.mfi_length,
-                self.htf_multiplier * 2  # Allow for some HTF resampling
+                self.htf_multiplier * 2,  # Allow for some HTF resampling
             )
-            
+
             if len(price_data) < min_required:
-                logger.warning(f"Insufficient data for Sommi analysis: {len(price_data)} < {min_required}")
+                logger.warning(
+                    f"Insufficient data for Sommi analysis: {len(price_data)} < {min_required}"
+                )
                 return price_data.copy()
 
             result = price_data.copy()

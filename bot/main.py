@@ -168,7 +168,9 @@ class TradingEngine:
         self._shutdown_requested = False
         self._memory_available = False  # Initialize early to prevent AttributeError
         self._last_position_log_time: datetime | None = None
-        self._background_tasks: list[asyncio.Task[Any]] = []  # Track background tasks for cleanup
+        self._background_tasks: list[asyncio.Task[Any]] = (
+            []
+        )  # Track background tasks for cleanup
 
         print("DEBUG: About to load configuration")
         # Load configuration
@@ -2767,7 +2769,9 @@ class TradingEngine:
                 command_task: Task[None] = asyncio.create_task(
                     self.command_consumer.stop_polling_task()
                 )
-                close_task: Task[None] = asyncio.create_task(self.command_consumer.close())
+                close_task: Task[None] = asyncio.create_task(
+                    self.command_consumer.close()
+                )
                 cleanup_tasks.append(command_task)
                 cleanup_tasks.append(close_task)
 
@@ -2815,7 +2819,9 @@ class TradingEngine:
                         except asyncio.CancelledError:
                             pass
                         except Exception as e:
-                            self.logger.warning(f"Error cancelling background task: {e}")
+                            self.logger.warning(
+                                f"Error cancelling background task: {e}"
+                            )
                 self._background_tasks.clear()
 
             # Wait for all cleanup tasks with a timeout

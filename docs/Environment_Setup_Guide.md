@@ -1,477 +1,378 @@
-# Environment Setup and Integration Guide
+# Environment Setup Guide for Bluefin DEX Trading
 
-This guide covers the comprehensive environment setup, configuration validation, and monitoring integration for the AI Trading Bot.
+This guide provides comprehensive instructions for setting up your environment configuration for the AI Trading Bot with Bluefin DEX support.
 
-## 🚀 Quick Start
+## Quick Start Checklist
 
-### 1. Environment Configuration
+### 1. Prerequisites
+- [ ] **Sui Wallet Setup**: Install Sui Wallet browser extension and create a wallet
+- [ ] **OpenAI Account**: Get API key from [OpenAI Platform](https://platform.openai.com/api-keys)
+- [ ] **Funding**: Have USDC on Sui for trading capital and SUI for gas fees
+- [ ] **Docker**: Ensure Docker and Docker Compose are installed
 
-Copy the example environment file and configure your settings:
+### 2. Configuration Files
+- [ ] Copy environment template: `cp .env.example .env` (or `cp .env.bluefin.example .env` for Bluefin-specific setup)
+- [ ] Generate Bluefin service API key: `python services/generate_api_key.py`
+- [ ] Configure all required variables (see sections below)
+- [ ] Set file permissions: `chmod 600 .env`
 
+### 3. Validation and Testing
+- [ ] Validate configuration: `python services/scripts/validate_env.py`
+- [ ] Start in paper trading mode first: `SYSTEM__DRY_RUN=true`
+- [ ] Test the system: `python -m bot.main live`
+- [ ] Monitor dashboard: Open `http://localhost:8000`
+
+## Environment Variables Reference
+
+### Core Required Variables
+
+#### Exchange Configuration
 ```bash
-cp .env.example .env
+# REQUIRED: Choose your exchange
+EXCHANGE__EXCHANGE_TYPE=bluefin  # or "coinbase"
+
+# REQUIRED for Bluefin: Your Sui wallet private key
+EXCHANGE__BLUEFIN_PRIVATE_KEY=0xYOUR_PRIVATE_KEY_HERE
+
+# REQUIRED for Bluefin: Network selection
+EXCHANGE__BLUEFIN_NETWORK=mainnet  # or "testnet"
+
+# REQUIRED for Bluefin: Service configuration
+BLUEFIN_SERVICE_URL=http://bluefin-service:8080
+BLUEFIN_SERVICE_API_KEY=your-generated-api-key
 ```
 
-Edit `.env` with your actual values:
+#### Trading Configuration
+```bash
+# REQUIRED: Trading pair
+TRADING__SYMBOL=SUI-PERP  # Bluefin uses PERP suffix
+
+# REQUIRED: Leverage setting
+TRADING__LEVERAGE=5  # Conservative: 2-3x, Moderate: 5-10x
+
+# REQUIRED: Enable futures (Bluefin only supports futures)
+TRADING__ENABLE_FUTURES=true
+
+# REQUIRED: Safety setting
+SYSTEM__DRY_RUN=true  # ALWAYS start with true for testing
+```
+
+#### AI Configuration
+```bash
+# REQUIRED: OpenAI API key for AI trading decisions
+LLM__OPENAI_API_KEY=sk-YOUR_OPENAI_KEY_HERE
+
+# OPTIONAL: Model selection
+LLM__MODEL_NAME=o3  # Recommended for best performance
+LLM__TEMPERATURE=0.1  # Low for consistent decisions
+```
+
+#### Risk Management
+```bash
+# REQUIRED: Loss limits
+RISK__MAX_DAILY_LOSS_PCT=5.0
+RISK__DEFAULT_STOP_LOSS_PCT=0.5
+RISK__DEFAULT_TAKE_PROFIT_PCT=1.0
+RISK__MAX_CONCURRENT_TRADES=1
+```
+
+### Optional but Recommended Variables
+
+#### Paper Trading Configuration
+```bash
+PAPER_TRADING__STARTING_BALANCE=10000
+PAPER_TRADING__FEE_RATE=0.0005
+PAPER_TRADING__SLIPPAGE_RATE=0.0005
+PAPER_TRADING__ENABLE_DAILY_REPORTS=true
+```
+
+#### Dashboard and Monitoring
+```bash
+SYSTEM__ENABLE_WEBSOCKET_PUBLISHING=true
+SYSTEM__WEBSOCKET_DASHBOARD_URL=ws://localhost:8000/ws
+SYSTEM__ENABLE_PERFORMANCE_MONITORING=true
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080
+```
+
+#### Advanced Features
+```bash
+# Memory and learning system (optional)
+MCP_ENABLED=false
+MCP_SERVER_URL=http://localhost:8765
+
+# Market sentiment analysis (optional)
+OMNISEARCH_ENABLED=false
+OMNISEARCH_SERVER_URL=http://localhost:8766
+```
+
+## Private Key Formats
+
+The bot supports multiple Sui private key formats:
+
+### 1. Hex Format (Most Common)
+```bash
+# With 0x prefix
+EXCHANGE__BLUEFIN_PRIVATE_KEY=0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+
+# Without 0x prefix
+EXCHANGE__BLUEFIN_PRIVATE_KEY=1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+```
+
+### 2. Bech32 Format (Sui Native)
+```bash
+EXCHANGE__BLUEFIN_PRIVATE_KEY=suiprivkey1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq
+```
+
+### 3. Mnemonic Phrase (12 or 24 words)
+```bash
+EXCHANGE__BLUEFIN_PRIVATE_KEY=word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12
+```
+
+## Environment Validation
+
+### Automatic Validation Script
+
+Use the built-in validation script to check your configuration:
 
 ```bash
-# Required: Choose your LLM provider
-LLM__PROVIDER=openai  # or anthropic, ollama
-LLM__OPENAI_API_KEY=your_actual_openai_key
+python services/scripts/validate_env.py
+```
 
-# Required: Coinbase credentials (for live trading)
-EXCHANGE__CB_API_KEY=your_coinbase_key
-EXCHANGE__CB_API_SECRET=your_coinbase_secret
-EXCHANGE__CB_PASSPHRASE=your_coinbase_passphrase
+This script checks:
+- ✅ File existence and permissions
+- ✅ Required variables are set
+- ✅ API key formats
+- ✅ Private key formats
+- ✅ Network consistency
+- ✅ Trading parameters
+- ⚠️ Common configuration mistakes
 
-# Recommended: Start with safety settings
+### Manual Validation Checklist
+
+#### File Security
+```bash
+# Check file permissions (should be 600)
+ls -la .env
+
+# Fix if needed
+chmod 600 .env
+```
+
+#### API Keys Validation
+```bash
+# OpenAI key should start with 'sk-'
+echo $LLM__OPENAI_API_KEY | head -c 3  # Should output 'sk-'
+
+# Bluefin service key should be 32+ characters
+echo $BLUEFIN_SERVICE_API_KEY | wc -c  # Should be > 32
+```
+
+#### Network Consistency
+- **Development**: Use `testnet` with `SYSTEM__DRY_RUN=true`
+- **Production**: Use `mainnet` with careful consideration
+
+#### Trading Safety
+- **ALWAYS** start with `SYSTEM__DRY_RUN=true`
+- **NEVER** set `SYSTEM__DRY_RUN=false` until thoroughly tested
+- Use conservative leverage (2-5x) for beginners
+
+## Common Configuration Mistakes
+
+### 1. Wrong Network for Environment
+```bash
+# ❌ Wrong: Production settings with testnet
+SYSTEM__ENVIRONMENT=production
+EXCHANGE__BLUEFIN_NETWORK=testnet
+
+# ✅ Correct: Match network to environment
+SYSTEM__ENVIRONMENT=development
+EXCHANGE__BLUEFIN_NETWORK=testnet
+```
+
+### 2. Unsafe Live Trading Setup
+```bash
+# ❌ Dangerous: Live trading without testing
+SYSTEM__DRY_RUN=false
+TRADING__LEVERAGE=20
+
+# ✅ Safe: Always test first
 SYSTEM__DRY_RUN=true
-EXCHANGE__CB_SANDBOX=true
-TRADING__LEVERAGE=3
+TRADING__LEVERAGE=5
+```
+
+### 3. Incorrect Symbol Format
+```bash
+# ❌ Wrong: Coinbase format for Bluefin
+EXCHANGE__EXCHANGE_TYPE=bluefin
+TRADING__SYMBOL=BTC-USD
+
+# ✅ Correct: Bluefin PERP format
+EXCHANGE__EXCHANGE_TYPE=bluefin
+TRADING__SYMBOL=BTC-PERP
+```
+
+### 4. Missing Required Services
+```bash
+# ❌ Wrong: Missing Bluefin service configuration
+EXCHANGE__EXCHANGE_TYPE=bluefin
+# BLUEFIN_SERVICE_URL missing
+
+# ✅ Correct: Complete Bluefin setup
+EXCHANGE__EXCHANGE_TYPE=bluefin
+BLUEFIN_SERVICE_URL=http://bluefin-service:8080
+BLUEFIN_SERVICE_API_KEY=your-generated-key
+```
+
+## Security Best Practices
+
+### 1. API Key Management
+- **Generate unique keys** for each environment
+- **Rotate keys regularly** (monthly for production)
+- **Use different keys** for development/staging/production
+- **Never commit keys** to version control
+- **Monitor key usage** and set up alerts
+
+### 2. Private Key Security
+- **Never share** your Sui private key
+- **Use hardware wallets** for large amounts
+- **Consider test amounts** first on mainnet
+- **Backup your keys** securely offline
+- **Use separate wallets** for different purposes
+
+### 3. File Permissions
+```bash
+# Secure .env file permissions
+chmod 600 .env
+
+# Check current permissions
+ls -la .env
+# Should show: -rw-------
+```
+
+### 4. Environment Separation
+```bash
+# Development
+cp .env.example .env.dev
+# Configure with testnet and low amounts
+
+# Production
+cp .env.example .env.prod
+# Configure with mainnet and real amounts
+
+# Load appropriate environment
+source .env.dev  # or .env.prod
+```
+
+## Troubleshooting
+
+### Configuration Issues
+
+#### 1. Validation Errors
+```bash
+# Run validator for detailed error messages
+python services/scripts/validate_env.py
+
+# Common fixes:
+# - Check file permissions: chmod 600 .env
+# - Verify API key formats
+# - Ensure all required variables are set
+```
+
+#### 2. API Key Problems
+```bash
+# Test OpenAI key
+curl https://api.openai.com/v1/models \
+  -H "Authorization: Bearer $LLM__OPENAI_API_KEY"
+
+# Generate new Bluefin service key
+python services/generate_api_key.py
+```
+
+#### 3. Bluefin Service Connection
+```bash
+# Check if Bluefin service is running
+curl http://localhost:8081/health
+
+# Start Bluefin service if needed
+docker-compose -f docker-compose.bluefin.yml up bluefin-service -d
+```
+
+### Runtime Issues
+
+#### 1. Bot Won't Start
+- Check logs: `tail -f logs/bot.log`
+- Validate environment: `python services/scripts/validate_env.py`
+- Verify all services are running
+
+#### 2. No Trading Activity
+- Ensure `SYSTEM__DRY_RUN=true` for testing
+- Check symbol format (BTC-PERP for Bluefin)
+- Verify sufficient balance and gas
+
+#### 3. Dashboard Not Loading
+- Check WebSocket settings
+- Verify CORS configuration
+- Ensure dashboard service is running: `http://localhost:8000`
+
+## Environment Templates
+
+### Minimal Development Setup
+```bash
+# Essential variables for testing
+EXCHANGE__EXCHANGE_TYPE=bluefin
+EXCHANGE__BLUEFIN_PRIVATE_KEY=0xYOUR_KEY
+EXCHANGE__BLUEFIN_NETWORK=testnet
+BLUEFIN_SERVICE_URL=http://bluefin-service:8080
+BLUEFIN_SERVICE_API_KEY=generated-key
+TRADING__SYMBOL=SUI-PERP
+TRADING__LEVERAGE=2
+TRADING__ENABLE_FUTURES=true
+SYSTEM__DRY_RUN=true
+LLM__OPENAI_API_KEY=sk-YOUR_KEY
 RISK__MAX_DAILY_LOSS_PCT=2.0
 ```
 
-### 2. Validate Configuration
-
-Run the validation script to check your setup:
-
+### Production Setup
 ```bash
-python scripts/validate_config.py
+# Complete production configuration
+EXCHANGE__EXCHANGE_TYPE=bluefin
+EXCHANGE__BLUEFIN_PRIVATE_KEY=0xYOUR_PRODUCTION_KEY
+EXCHANGE__BLUEFIN_NETWORK=mainnet
+BLUEFIN_SERVICE_URL=http://bluefin-service:8080
+BLUEFIN_SERVICE_API_KEY=production-api-key
+TRADING__SYMBOL=BTC-PERP
+TRADING__LEVERAGE=5
+TRADING__ENABLE_FUTURES=true
+SYSTEM__DRY_RUN=false  # Only after thorough testing!
+SYSTEM__ENVIRONMENT=production
+LLM__OPENAI_API_KEY=sk-PRODUCTION_KEY
+RISK__MAX_DAILY_LOSS_PCT=5.0
+RISK__DEFAULT_STOP_LOSS_PCT=0.5
+RISK__DEFAULT_TAKE_PROFIT_PCT=1.0
+PAPER_TRADING__STARTING_BALANCE=10000
+SYSTEM__ENABLE_WEBSOCKET_PUBLISHING=true
+SYSTEM__ENABLE_PERFORMANCE_MONITORING=true
 ```
 
-This will:
-- ✅ Validate all environment variables
-- 🔍 Test API connectivity
-- 🏥 Check system health
-- 📊 Generate detailed reports
-- 💡 Provide recommendations
+## Getting Help
 
-### 3. Start the Bot
+If you encounter issues:
 
-If validation passes, start the bot:
+1. **Run the validator**: `python services/scripts/validate_env.py`
+2. **Check the logs**: `tail -f logs/bot.log`
+3. **Verify services**: `docker-compose ps`
+4. **Test connectivity**: `curl http://localhost:8081/health`
+5. **Review documentation**: Check `docs/bluefin_integration.md`
+6. **Start simple**: Use minimal configuration first, then add features
 
-```bash
-python -m bot.main
-```
+## Next Steps
 
-## 📋 Environment Variables Reference
+After successfully configuring your environment:
 
-### Trading Configuration
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `TRADING__SYMBOL` | BTC-USD | Trading pair symbol |
-| `TRADING__INTERVAL` | 1m | Chart timeframe |
-| `TRADING__LEVERAGE` | 5 | Trading leverage (1-20) |
-| `TRADING__MAX_SIZE_PCT` | 20.0 | Max position size (% of equity) |
+1. **Test with paper trading**: Verify everything works with `SYSTEM__DRY_RUN=true`
+2. **Monitor the dashboard**: Access `http://localhost:8000` for real-time data
+3. **Review logs**: Check for any warnings or errors
+4. **Optimize settings**: Adjust risk parameters based on your strategy
+5. **Consider live trading**: Only after extensive testing and validation
 
-### LLM Provider Configuration
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `LLM__PROVIDER` | openai | Provider: openai, anthropic, ollama |
-| `LLM__MODEL_NAME` | gpt-4o | Model name |
-| `LLM__TEMPERATURE` | 0.1 | Response randomness (0.0-2.0) |
-| `LLM__OPENAI_API_KEY` | - | OpenAI API key (required for OpenAI) |
-| `LLM__ANTHROPIC_API_KEY` | - | Anthropic API key (required for Anthropic) |
-
-### Exchange Configuration
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `EXCHANGE__CB_API_KEY` | - | Coinbase API key |
-| `EXCHANGE__CB_API_SECRET` | - | Coinbase API secret |
-| `EXCHANGE__CB_PASSPHRASE` | - | Coinbase passphrase |
-| `EXCHANGE__CB_SANDBOX` | true | Use sandbox for testing |
-
-### Risk Management
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RISK__MAX_DAILY_LOSS_PCT` | 5.0 | Daily loss limit (%) |
-| `RISK__MAX_CONCURRENT_TRADES` | 3 | Max open positions |
-| `RISK__DEFAULT_STOP_LOSS_PCT` | 2.0 | Default stop loss (%) |
-| `RISK__DEFAULT_TAKE_PROFIT_PCT` | 4.0 | Default take profit (%) |
-
-### System Configuration
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SYSTEM__DRY_RUN` | true | Safe testing mode |
-| `SYSTEM__ENVIRONMENT` | development | Environment type |
-| `SYSTEM__LOG_LEVEL` | INFO | Logging verbosity |
-| `SYSTEM__ENABLE_MONITORING` | true | Health monitoring |
-
-## 🔧 Configuration Management
-
-### Trading Profiles
-
-The bot supports predefined risk profiles:
-
-```python
-from bot.config_utils import ConfigManager, setup_configuration
-from bot.config import TradingProfile
-
-# Load with specific profile
-settings = setup_configuration(profile=TradingProfile.CONSERVATIVE)
-
-# Switch profiles with backup
-config_manager = ConfigManager()
-new_settings = config_manager.switch_profile(
-    settings,
-    TradingProfile.AGGRESSIVE,
-    save_current=True
-)
-```
-
-**Available Profiles:**
-- `conservative`: Low risk, low leverage (2x), 1% daily loss limit
-- `moderate`: Balanced risk, medium leverage (5x), 3% daily loss limit
-- `aggressive`: High risk, high leverage (10x), 5% daily loss limit
-- `custom`: User-defined parameters
-
-### Configuration Backup and Export
-
-```python
-# Create backup
-backup_path = config_manager.create_config_backup(settings)
-
-# List backups
-backups = config_manager.list_config_backups()
-
-# Export configuration
-json_export = config_manager.export_configuration(settings, "json")
-env_export = config_manager.export_configuration(settings, "env")
-
-# Import configuration
-imported_settings = config_manager.import_configuration(backup_path)
-```
-
-## 🏥 Health Monitoring
-
-### Health Check Endpoints
-
-The bot provides comprehensive health monitoring:
-
-```python
-from bot.health import create_health_endpoints
-
-endpoints = create_health_endpoints(settings)
-
-# Basic health check (fast)
-health = endpoints.get_health()
-
-# Detailed health check (comprehensive)
-detailed_health = endpoints.get_health_detailed()
-
-# Performance metrics
-metrics = endpoints.get_metrics()
-
-# Configuration status
-config_status = endpoints.get_configuration_status()
-
-# Readiness check
-readiness = endpoints.get_readiness()
-```
-
-### Monitoring Integration
-
-#### Prometheus Metrics Export
-
-```python
-from bot.health import create_monitoring_exporter
-
-exporter = create_monitoring_exporter(settings)
-prometheus_metrics = exporter.export_prometheus_metrics()
-
-# Metrics include:
-# - trading_bot_uptime_seconds
-# - trading_bot_health_status
-# - trading_bot_memory_usage_bytes
-# - trading_bot_cpu_usage_percent
-```
-
-#### JSON Summary Export
-
-```python
-json_summary = exporter.export_json_summary()
-snapshot_file = exporter.save_monitoring_snapshot()
-```
-
-### Health Check Components
-
-The health monitoring system checks:
-
-1. **System Resources**
-   - CPU usage (warning >80%)
-   - Memory usage (warning >85%)
-   - Disk space (critical >90%)
-
-2. **API Connectivity**
-   - LLM provider accessibility
-   - Exchange API connectivity
-   - Network latency and timeouts
-
-3. **File System**
-   - Directory permissions
-   - Disk space availability
-   - Log file writability
-
-4. **Configuration Integrity**
-   - Parameter validation
-   - Risk management settings
-   - Environment consistency
-
-## 🛡️ Security Best Practices
-
-### API Key Management
-
-1. **Never commit `.env` files** to version control
-2. **Use strong, unique API keys** for all services
-3. **Enable 2FA** on all exchange accounts
-4. **Regularly rotate API keys** (monthly recommended)
-5. **Use sandbox mode** for testing
-
-### Configuration Security
-
-```bash
-# Set proper file permissions
-chmod 600 .env
-chmod 600 config/*.json
-
-# Backup configurations securely
-tar -czf config_backup.tar.gz config/
-gpg -c config_backup.tar.gz  # Encrypt backup
-```
-
-### Runtime Security
-
-1. **Start with dry-run mode** (`SYSTEM__DRY_RUN=true`)
-2. **Use conservative settings** initially
-3. **Monitor continuously** in production
-4. **Set up alerts** for unusual activity
-5. **Keep logs secure** and monitor access
-
-## 📊 Startup Validation
-
-### Comprehensive Validation
-
-The startup validator performs:
-
-- ✅ **Environment Variables**: Checks all required variables
-- 🔌 **API Connectivity**: Tests LLM and exchange APIs
-- 🖥️ **System Dependencies**: Validates Python version and modules
-- 📁 **File Permissions**: Ensures writable directories
-- ⚙️ **Configuration Integrity**: Validates parameter consistency
-
-### Validation Levels
-
-**Critical Errors** (prevent startup):
-- Missing required API keys (for live trading)
-- Invalid Python version (<3.8)
-- Missing required modules
-- Unwritable directories
-- Extremely risky configurations
-
-**Warnings** (allow startup with caution):
-- High leverage settings
-- Aggressive risk parameters
-- Performance concerns
-- Non-optimal configurations
-
-### Example Validation Output
-
-```bash
-🤖 AI Trading Bot - Configuration Validation & Health Check
-============================================================
-
-📋 Loading configuration...
-✅ Configuration loaded successfully
-   Environment: development
-   Profile: moderate
-   Dry Run: true
-
-🔍 Running comprehensive validation...
-
-📊 Validation Results:
-   Status: ✅ Valid
-   Warnings: 2
-     ⚠️  Leverage above 5x may be risky for beginners
-     ⚠️  Consider enabling real-time data updates
-
-🏥 Health Check Results:
-   Overall Status: ✅ Healthy
-   System: ✅ Healthy
-   Apis: ✅ Healthy
-   Filesystem: ✅ Healthy
-   Configuration: ⚠️  Warning
-
-📈 Performance Metrics:
-   Uptime: 0s
-   Memory Usage: 45.2 MB
-   CPU Usage: 2.1%
-
-💡 Recommendations:
-   1. Currently in dry-run mode - switch to live trading when ready
-   2. Consider reducing leverage for safer trading
-   3. Enable real-time market data updates
-
-✅ System is ready for operation!
-   💡 Running in dry-run mode (safe for testing)
-```
-
-## 🚨 Troubleshooting
-
-### Common Issues
-
-**Configuration Validation Fails:**
-```bash
-# Check environment variables
-python -c "from bot.config import create_settings; settings = create_settings(); print('OK')"
-
-# Validate specific settings
-python scripts/validate_config.py
-```
-
-**API Connectivity Issues:**
-```bash
-# Test OpenAI API
-curl -H "Authorization: Bearer $LLM__OPENAI_API_KEY" \
-     https://api.openai.com/v1/models
-
-# Test Coinbase API (requires proper auth)
-# See Coinbase Advanced Trade API documentation
-```
-
-**System Resource Issues:**
-```bash
-# Check available memory
-free -h
-
-# Check disk space
-df -h
-
-# Check Python modules
-pip list | grep -E "(pandas|numpy|pydantic|requests)"
-```
-
-### Error Messages
-
-| Error | Cause | Solution |
-|-------|-------|----------|
-| "OpenAI API key is required" | Missing `LLM__OPENAI_API_KEY` | Set the environment variable |
-| "Cannot write to data directory" | Permission issue | Check directory permissions |
-| "Python 3.8+ required" | Old Python version | Upgrade Python |
-| "Leverage above 20x is extremely risky" | High leverage setting | Reduce `TRADING__LEVERAGE` |
-
-## 📈 Production Deployment
-
-### Production Checklist
-
-- [ ] API keys configured and tested
-- [ ] `SYSTEM__DRY_RUN=false` (only when ready!)
-- [ ] `EXCHANGE__CB_SANDBOX=false` (for live trading)
-- [ ] `SYSTEM__ENVIRONMENT=production`
-- [ ] Monitoring and alerts configured
-- [ ] Backup strategy implemented
-- [ ] Security review completed
-
-### Monitoring Setup
-
-1. **Set up health check monitoring**:
-   ```bash
-   # Monitor health endpoint
-   curl http://localhost:8080/health
-   ```
-
-2. **Configure log monitoring**:
-   ```bash
-   tail -f logs/bot.log | grep -E "(ERROR|CRITICAL)"
-   ```
-
-3. **Set up alerts**:
-   ```bash
-   # Configure webhook alerts
-   export SYSTEM__ALERT_WEBHOOK_URL="https://hooks.slack.com/..."
-   ```
-
-### Performance Tuning
-
-- **Memory**: Ensure >512MB available
-- **CPU**: Monitor usage <80% sustained
-- **Disk**: Keep >1GB free space
-- **Network**: Stable connection required
-- **Latency**: <100ms to exchange APIs
-
-## 🔗 Integration Examples
-
-### Docker Integration
-
-```dockerfile
-# Health check in Docker
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD python -c "from bot.health import create_health_endpoints; \
-                 from bot.config import create_settings; \
-                 endpoints = create_health_endpoints(create_settings()); \
-                 health = endpoints.get_health(); \
-                 exit(0 if health['status'] == 'healthy' else 1)"
-```
-
-### Kubernetes Integration
-
-```yaml
-# Kubernetes readiness/liveness probes
-apiVersion: v1
-kind: Pod
-spec:
-  containers:
-  - name: trading-bot
-    image: trading-bot:latest
-    readinessProbe:
-      exec:
-        command:
-        - python
-        - -c
-        - "from bot.health import create_health_endpoints; from bot.config import create_settings; endpoints = create_health_endpoints(create_settings()); readiness = endpoints.get_readiness(); exit(0 if readiness['ready'] else 1)"
-      initialDelaySeconds: 10
-      periodSeconds: 30
-    livenessProbe:
-      exec:
-        command:
-        - python
-        - -c
-        - "from bot.health import create_health_endpoints; from bot.config import create_settings; endpoints = create_health_endpoints(create_settings()); health = endpoints.get_liveness(); exit(0 if health['alive'] else 1)"
-      initialDelaySeconds: 30
-      periodSeconds: 60
-```
-
-## 📚 API Reference
-
-### Configuration Functions
-
-```python
-# Setup and validation
-from bot.config_utils import (
-    setup_configuration,
-    validate_configuration,
-    create_startup_report,
-    ConfigManager,
-    HealthMonitor
-)
-
-# Health monitoring
-from bot.health import (
-    create_health_endpoints,
-    create_monitoring_exporter,
-    HealthCheckEndpoints,
-    MonitoringExporter
-)
-```
-
-### Configuration Classes
-
-```python
-from bot.config import (
-    Settings,
-    TradingProfile,
-    Environment,
-    create_settings
-)
-```
-
-For detailed API documentation, see the docstrings in each module.
+Remember: **Always prioritize safety over profits**. Start conservatively and gradually increase your comfort level with the system.

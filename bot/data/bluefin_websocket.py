@@ -657,10 +657,14 @@ class BluefinWebSocketClient:
 
                     # Import price conversion utility
                     from bot.utils.price_conversion import convert_from_18_decimal
-                    
+
                     # Use smart conversion that detects 18-decimal format
-                    price = convert_from_18_decimal(price_str, self.symbol, "ticker_price")
-                    last_price = convert_from_18_decimal(last_price_str, self.symbol, "ticker_last_price")
+                    price = convert_from_18_decimal(
+                        price_str, self.symbol, "ticker_price"
+                    )
+                    last_price = convert_from_18_decimal(
+                        last_price_str, self.symbol, "ticker_last_price"
+                    )
 
                     # Use the most recent price
                     current_price = price if price > 0 else last_price
@@ -739,9 +743,11 @@ class BluefinWebSocketClient:
 
                     # Import price conversion utility
                     from bot.utils.price_conversion import convert_from_18_decimal
-                    
+
                     # Use smart conversion that detects 18-decimal format
-                    price = convert_from_18_decimal(price_str, self.symbol, "trade_price")
+                    price = convert_from_18_decimal(
+                        price_str, self.symbol, "trade_price"
+                    )
                     size = convert_from_18_decimal(size_str, self.symbol, "trade_size")
 
                     if price > 0 and size > 0:
@@ -810,12 +816,22 @@ class BluefinWebSocketClient:
                 # Convert from 18-decimal format if needed using utility function
                 try:
                     from bot.utils.price_conversion import convert_from_18_decimal
-                    
-                    open_val = convert_from_18_decimal(open_price, self.symbol, "kline_open")
-                    high_val = convert_from_18_decimal(high_price, self.symbol, "kline_high")
-                    low_val = convert_from_18_decimal(low_price, self.symbol, "kline_low")
-                    close_val = convert_from_18_decimal(close_price, self.symbol, "kline_close")
-                    volume_val = convert_from_18_decimal(volume, self.symbol, "kline_volume")
+
+                    open_val = convert_from_18_decimal(
+                        open_price, self.symbol, "kline_open"
+                    )
+                    high_val = convert_from_18_decimal(
+                        high_price, self.symbol, "kline_high"
+                    )
+                    low_val = convert_from_18_decimal(
+                        low_price, self.symbol, "kline_low"
+                    )
+                    close_val = convert_from_18_decimal(
+                        close_price, self.symbol, "kline_close"
+                    )
+                    volume_val = convert_from_18_decimal(
+                        volume, self.symbol, "kline_volume"
+                    )
                 except (ValueError, TypeError) as e:
                     exception_handler.log_exception_with_context(
                         e,

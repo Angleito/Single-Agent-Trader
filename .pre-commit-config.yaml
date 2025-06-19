@@ -37,3 +37,20 @@ repos:
           - pandas-stubs
         args: [--ignore-missing-imports, --no-strict-optional]
         files: ^bot/
+
+  # Vulture for dead code detection
+  - repo: https://github.com/jendrikseipp/vulture
+    rev: v2.13
+    hooks:
+      - id: vulture
+        args: [--min-confidence, "80"]
+        files: ^bot/
+
+  # djlint for HTML/template linting
+  - repo: https://github.com/Riverside-Healthcare/djLint
+    rev: v1.35.2
+    hooks:
+      - id: djlint-check
+        files: \.(html|jinja|j2)$
+      - id: djlint-reformat
+        files: \.(html|jinja|j2)$

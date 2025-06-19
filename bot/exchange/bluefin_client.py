@@ -111,6 +111,29 @@ class BluefinServiceClient:
         )
         self.consecutive_failures = 0
         self.max_consecutive_failures = 3
+        
+        # Comprehensive connectivity monitoring
+        self.connection_metrics = {
+            "total_requests": 0,
+            "successful_requests": 0,
+            "failed_requests": 0,
+            "connection_attempts": 0,
+            "successful_connections": 0,
+            "last_successful_request": None,
+            "last_failed_request": None,
+            "response_times": [],  # Rolling window of response times
+            "error_counts_by_type": {},
+            "health_check_history": [],  # Recent health check results
+        }
+        
+        # WebSocket monitoring (if applicable)
+        self.websocket_status = {
+            "connected": False,
+            "last_ping": None,
+            "reconnect_attempts": 0,
+            "messages_received": 0,
+            "messages_sent": 0,
+        }
 
         # Circuit breaker state
         self.circuit_open = False
@@ -129,27 +152,46 @@ class BluefinServiceClient:
         self._session_request_count = 0
         self._max_requests_per_session = 1000
 
-        # Get API key from parameter or environment
+        # Get API key from parameter or environment - MANDATORY
         self.api_key = api_key or os.getenv("BLUEFIN_SERVICE_API_KEY")
         if not self.api_key:
-            logger.warning(
-                "No BLUEFIN_SERVICE_API_KEY configured - authentication may fail",
+            error_msg = (
+                "BLUEFIN_SERVICE_API_KEY is required for Bluefin service authentication"
+            )
+            logger.error(
+                "Critical: API key missing - service will fail",
                 extra={
                     "client_id": self.client_id,
                     "service_url": self.service_url,
                     "auth_configured": False,
+                    "required_env_var": "BLUEFIN_SERVICE_API_KEY",
                 },
             )
-        else:
-            logger.debug(
-                "Bluefin service client initialized with authentication",
+            raise BluefinServiceAuthError(error_msg)
+
+        # Validate API key format
+        if len(self.api_key) < 16:
+            error_msg = f"BLUEFIN_SERVICE_API_KEY appears too short (got {len(self.api_key)} chars, expected 16+)"
+            logger.error(
+                "API key validation failed",
                 extra={
                     "client_id": self.client_id,
                     "service_url": self.service_url,
-                    "auth_configured": True,
                     "api_key_length": len(self.api_key),
+                    "minimum_length": 16,
                 },
             )
+            raise BluefinServiceAuthError(error_msg)
+
+        logger.info(
+            "Bluefin service client initialized with valid authentication",
+            extra={
+                "client_id": self.client_id,
+                "service_url": self.service_url,
+                "auth_configured": True,
+                "api_key_length": len(self.api_key),
+            },
+        )
 
         # Prepare headers with authentication
         self._headers = {
@@ -192,6 +234,73 @@ class BluefinServiceClient:
             self.consecutive_failures = 0
         return False
 
+    def reset_circuit_breaker(self, force: bool = False) -> bool:
+        """
+        Manual circuit breaker reset functionality.
+
+        Args:
+            force: If True, force reset even if not ready naturally
+
+        Returns:
+            True if reset was successful
+        """
+        current_time = time.time()
+        old_state = self.circuit_open
+        old_failures = self.consecutive_failures
+
+        if force or current_time >= self.circuit_open_until:
+            self.circuit_open = False
+            self.circuit_open_until = 0.0
+            self.consecutive_failures = 0
+
+            logger.info(
+                "Circuit breaker manually reset",
+                extra={
+                    "client_id": self.client_id,
+                    "was_open": old_state,
+                    "previous_failures": old_failures,
+                    "force_reset": force,
+                    "time_until_natural_reset": max(
+                        0, self.circuit_open_until - current_time
+                    ),
+                },
+            )
+            return True
+        else:
+            remaining_time = self.circuit_open_until - current_time
+            logger.warning(
+                f"Circuit breaker reset not ready - {remaining_time:.1f}s remaining",
+                extra={
+                    "client_id": self.client_id,
+                    "remaining_seconds": remaining_time,
+                    "use_force_to_override": True,
+                },
+            )
+            return False
+
+    def get_circuit_breaker_status(self) -> dict[str, Any]:
+        """
+        Get current circuit breaker status for monitoring.
+
+        Returns:
+            Dictionary with circuit breaker state information
+        """
+        current_time = time.time()
+        return {
+            "is_open": self.circuit_open,
+            "consecutive_failures": self.consecutive_failures,
+            "failure_threshold": self.circuit_failure_threshold,
+            "recovery_timeout": self.circuit_recovery_timeout,
+            "open_until": self.circuit_open_until,
+            "seconds_until_reset": (
+                max(0, self.circuit_open_until - current_time)
+                if self.circuit_open
+                else 0
+            ),
+            "can_reset_manually": not self.circuit_open
+            or current_time >= self.circuit_open_until,
+        }
+
     def _record_success(self):
         """Record successful operation - reset failure counters."""
         if self.consecutive_failures > 0:
@@ -214,15 +323,61 @@ class BluefinServiceClient:
                 extra={"client_id": self.client_id},
             )
 
-    def _calculate_retry_delay(self, attempt: int) -> float:
-        """Calculate retry delay with exponential backoff and jitter."""
-        # Exponential backoff: base * (2 ^ attempt)
-        delay = min(self._base_retry_delay * (2**attempt), self._max_retry_delay)
+    def _calculate_retry_delay(self, attempt: int, operation: str = "default") -> float:
+        """
+        Calculate retry delay with enhanced exponential backoff and intelligent jitter.
 
-        # Add jitter to prevent thundering herd
-        jitter = delay * self._jitter_factor * random.random()
+        Args:
+            attempt: Current attempt number (0-based)
+            operation: Type of operation for context-aware delays
 
-        return delay + jitter
+        Returns:
+            Calculated delay in seconds
+        """
+        # Base exponential backoff: base * (2 ^ attempt)
+        base_delay = self._base_retry_delay * (2**attempt)
+
+        # Apply operation-specific multipliers
+        operation_multipliers = {
+            "health_check": 0.5,  # Faster retries for health checks
+            "connect": 1.0,  # Standard delays for connection
+            "api_call": 1.2,  # Slightly longer for API calls
+            "heavy_operation": 1.5,  # Longer delays for heavy operations
+        }
+
+        multiplier = operation_multipliers.get(operation, 1.0)
+        adjusted_delay = base_delay * multiplier
+
+        # Cap at maximum delay
+        capped_delay = min(adjusted_delay, self._max_retry_delay)
+
+        # Add intelligent jitter
+        # - More jitter for early attempts to spread out retries
+        # - Less jitter for later attempts to be more predictable
+        jitter_factor = self._jitter_factor * (
+            1 - (attempt * 0.1)
+        )  # Decrease jitter over time
+        jitter_factor = max(jitter_factor, 0.05)  # Minimum jitter
+
+        jitter = capped_delay * jitter_factor * random.uniform(0.5, 1.5)
+
+        final_delay = capped_delay + jitter
+
+        logger.debug(
+            f"Calculated retry delay for {operation}",
+            extra={
+                "client_id": self.client_id,
+                "attempt": attempt,
+                "operation": operation,
+                "base_delay": base_delay,
+                "multiplier": multiplier,
+                "capped_delay": capped_delay,
+                "jitter": jitter,
+                "final_delay": final_delay,
+            },
+        )
+
+        return final_delay
 
     async def _retry_request(self, func, *args, **kwargs):
         """Execute request with enhanced exponential backoff retry and circuit breaker."""
@@ -249,7 +404,7 @@ class BluefinServiceClient:
                 self._record_failure()
 
                 if attempt < self._max_retries - 1:
-                    delay = self._calculate_retry_delay(attempt)
+                    delay = self._calculate_retry_delay(attempt, "api_call")
                     logger.warning(
                         f"Request failed (attempt {attempt + 1}/{self._max_retries}), "
                         f"retrying in {delay:.2f}s: {e}",
@@ -359,7 +514,7 @@ class BluefinServiceClient:
         return session
 
     async def _check_connection_health(self) -> bool:
-        """Enhanced connection health check with intelligent reconnection."""
+        """Enhanced connection health check with intelligent reconnection and resilient error handling."""
         current_time = time.time()
 
         # Skip health check if done recently and connection appears healthy
@@ -370,64 +525,132 @@ class BluefinServiceClient:
         ):
             return self._connected
 
-        try:
-            # Recreate session if needed
-            if self._should_recreate_session():
-                await self._ensure_session()
+        # Multiple retry attempts for health check resilience
+        max_health_retries = 3
+        health_retry_delay = 1.0
 
-            # Quick health check
-            if self._session is not None:
-                async with self._session.get(
-                    f"{self.service_url}/health", timeout=self.quick_timeout
-                ) as resp:
-                    self._connected = resp.status == 200
-                    self.last_health_check = current_time
+        for attempt in range(max_health_retries):
+            try:
+                # Recreate session if needed
+                if self._should_recreate_session():
+                    await self._ensure_session()
 
-                if self._connected:
-                    self.consecutive_failures = 0
+                # Quick health check with timeout
+                if self._session is not None:
+                    async with self._session.get(
+                        f"{self.service_url}/health", timeout=self.quick_timeout
+                    ) as resp:
+                        self._connected = resp.status == 200
+                        self.last_health_check = current_time
 
-                logger.debug(
-                    f"Health check completed: status={resp.status}, connected={self._connected}",
-                    extra={
-                        "client_id": self.client_id,
-                        "status_code": resp.status,
-                        "connected": self._connected,
-                    },
-                )
+                    if self._connected:
+                        self.consecutive_failures = 0
+                        logger.debug(
+                            f"Health check successful on attempt {attempt + 1}",
+                            extra={
+                                "client_id": self.client_id,
+                                "status_code": resp.status,
+                                "connected": self._connected,
+                                "attempt": attempt + 1,
+                            },
+                        )
+                        return True
+                    else:
+                        if attempt < max_health_retries - 1:
+                            logger.debug(
+                                f"Health check failed (status {resp.status}), retrying in {health_retry_delay}s",
+                                extra={
+                                    "client_id": self.client_id,
+                                    "status_code": resp.status,
+                                    "attempt": attempt + 1,
+                                    "max_retries": max_health_retries,
+                                },
+                            )
+                            await asyncio.sleep(health_retry_delay)
+                            continue
+                        else:
+                            logger.warning(
+                                f"Health check failed after {max_health_retries} attempts: status {resp.status}",
+                                extra={
+                                    "client_id": self.client_id,
+                                    "status_code": resp.status,
+                                    "total_attempts": max_health_retries,
+                                },
+                            )
+                else:
+                    logger.warning(
+                        f"Health check session unavailable on attempt {attempt + 1}",
+                        extra={
+                            "client_id": self.client_id,
+                            "attempt": attempt + 1,
+                        },
+                    )
+                    if attempt < max_health_retries - 1:
+                        await asyncio.sleep(health_retry_delay)
+                        continue
 
-                return self._connected
-            else:
+                # If we reach here, this attempt failed
                 self._connected = False
+
+            except (ClientError, TimeoutError, OSError) as e:
+                if attempt < max_health_retries - 1:
+                    logger.debug(
+                        f"Health check network error on attempt {attempt + 1}, retrying: {e}",
+                        extra={
+                            "client_id": self.client_id,
+                            "error_type": type(e).__name__,
+                            "attempt": attempt + 1,
+                            "max_retries": max_health_retries,
+                        },
+                    )
+                    await asyncio.sleep(health_retry_delay)
+                    continue
+                else:
+                    # Final attempt failed
+                    exception_handler.log_exception_with_context(
+                        e,
+                        {
+                            "client_id": self.client_id,
+                            "service_url": self.service_url,
+                            "consecutive_failures": self.consecutive_failures,
+                            "health_check_network_error": True,
+                            "total_attempts": max_health_retries,
+                        },
+                        component="BluefinServiceClient",
+                        operation="_check_connection_health",
+                    )
+                    self._connected = False
+                    self.consecutive_failures += 1
+                    return False
+
+            except Exception as e:
+                # For unexpected errors, don't retry - fail fast
+                exception_handler.log_exception_with_context(
+                    e,
+                    {
+                        "client_id": self.client_id,
+                        "unexpected_health_check_error": True,
+                        "attempt": attempt + 1,
+                    },
+                    component="BluefinServiceClient",
+                    operation="_check_connection_health",
+                )
+                self._connected = False
+                self.consecutive_failures += 1
                 return False
 
-        except (ClientError, TimeoutError, OSError) as e:
-            exception_handler.log_exception_with_context(
-                e,
-                {
-                    "client_id": self.client_id,
-                    "service_url": self.service_url,
-                    "consecutive_failures": self.consecutive_failures,
-                    "health_check_network_error": True,
-                },
-                component="BluefinServiceClient",
-                operation="_check_connection_health",
-            )
-            self._connected = False
-            self.consecutive_failures += 1
-            return False
-        except Exception as e:
-            exception_handler.log_exception_with_context(
-                e,
-                {
-                    "client_id": self.client_id,
-                    "unexpected_health_check_error": True,
-                },
-                component="BluefinServiceClient",
-                operation="_check_connection_health",
-            )
-            self._connected = False
-            self.consecutive_failures += 1
-            return False
+        # All attempts failed
+        self._connected = False
+        self.consecutive_failures += 1
+        logger.warning(
+            f"Health check failed after {max_health_retries} resilient attempts",
+            extra={
+                "client_id": self.client_id,
+                "total_attempts": max_health_retries,
+                "consecutive_failures": self.consecutive_failures,
+            },
+        )
+        return False
 
     async def _ensure_session(self) -> None:
         """Ensure we have a valid session, creating one if needed."""
@@ -564,23 +787,106 @@ class BluefinServiceClient:
             )
             return False
 
+    async def force_session_refresh(self) -> bool:
+        """
+        Force a session refresh, useful for recovering from connection issues.
+
+        Returns:
+            True if session was successfully refreshed
+        """
+        logger.info(
+            "Forcing session refresh",
+            extra={
+                "client_id": self.client_id,
+                "current_session_age": (
+                    time.time() - self._session_created_at if self._session else 0
+                ),
+                "current_request_count": self._session_request_count,
+            },
+        )
+
+        try:
+            # Close existing session
+            if self._session and not self._session.closed:
+                await self._session.close()
+                logger.debug("Closed existing session for refresh")
+
+            # Create new session
+            self._session = await self._create_session()
+            self._session_closed = False
+
+            logger.info(
+                "Session refresh completed successfully",
+                extra={"client_id": self.client_id},
+            )
+            return True
+
+        except Exception as e:
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "client_id": self.client_id,
+                    "session_refresh_error": True,
+                },
+                component="BluefinServiceClient",
+                operation="force_session_refresh",
+            )
+            return False
+
+    async def get_session_stats(self) -> dict[str, Any]:
+        """
+        Get current session statistics for monitoring.
+
+        Returns:
+            Dictionary with session statistics
+        """
+        current_time = time.time()
+        session_age = current_time - self._session_created_at if self._session else 0
+
+        return {
+            "has_session": self._session is not None,
+            "session_closed": self._session.closed if self._session else True,
+            "session_age_seconds": session_age,
+            "session_max_age_seconds": self._session_max_age,
+            "request_count": self._session_request_count,
+            "max_requests_per_session": self._max_requests_per_session,
+            "needs_recreation": self._should_recreate_session(),
+            "pool_size": self._connection_pool_size,
+            "keep_alive_timeout": self._keep_alive_timeout,
+            "last_health_check": self.last_health_check,
+            "consecutive_failures": self.consecutive_failures,
+        }
+
     async def disconnect(self) -> None:
-        """Disconnect from the Bluefin service with proper cleanup."""
+        """Disconnect from the Bluefin service with comprehensive cleanup."""
         logger.info(
             "Disconnecting from Bluefin service",
             extra={
                 "client_id": self.client_id,
                 "service_url": self.service_url,
                 "was_connected": self._connected,
+                "session_stats": await self.get_session_stats(),
             },
         )
 
         if self._session and not self._session.closed:
             try:
+                # Wait for any pending requests to complete (with timeout)
+                if hasattr(self._session, "_connector") and self._session._connector:
+                    logger.debug("Waiting for pending requests to complete")
+                    await asyncio.sleep(0.1)  # Brief wait for graceful closure
+
                 await self._session.close()
+
+                # Wait for session cleanup to complete
+                await asyncio.sleep(0.1)
+
                 logger.debug(
                     "HTTP session closed successfully",
-                    extra={"client_id": self.client_id},
+                    extra={
+                        "client_id": self.client_id,
+                        "final_request_count": self._session_request_count,
+                    },
                 )
             except Exception as e:
                 exception_handler.log_exception_with_context(
@@ -595,8 +901,13 @@ class BluefinServiceClient:
             finally:
                 self._session = None
                 self._session_closed = True
+                self._session_created_at = 0.0
+                self._session_request_count = 0
 
+        # Reset connection state
         self._connected = False
+        self.last_health_check = 0.0
+
         logger.info(
             "Successfully disconnected from Bluefin service",
             extra={"client_id": self.client_id},
@@ -1496,6 +1807,406 @@ class BluefinServiceClient:
             f"✅ Candle validation passed: {validation_rate:.1%} ({valid_count}/{total_candles} valid)"
         )
         return True
+
+    # Comprehensive Connectivity Monitoring Methods
+    
+    def _record_request_metrics(self, success: bool, response_time: float = 0.0, error_type: str = None) -> None:
+        """Record metrics for a request."""
+        import time
+        from datetime import datetime, UTC
+        
+        self.connection_metrics["total_requests"] += 1
+        
+        if success:
+            self.connection_metrics["successful_requests"] += 1
+            self.connection_metrics["last_successful_request"] = datetime.now(UTC)
+            
+            # Record response time (keep rolling window of 100)
+            self.connection_metrics["response_times"].append(response_time)
+            if len(self.connection_metrics["response_times"]) > 100:
+                self.connection_metrics["response_times"] = self.connection_metrics["response_times"][-100:]
+        else:
+            self.connection_metrics["failed_requests"] += 1
+            self.connection_metrics["last_failed_request"] = datetime.now(UTC)
+            
+            if error_type:
+                if error_type not in self.connection_metrics["error_counts_by_type"]:
+                    self.connection_metrics["error_counts_by_type"][error_type] = 0
+                self.connection_metrics["error_counts_by_type"][error_type] += 1
+
+    def _record_health_check_result(self, success: bool, response_time: float = 0.0, status_code: int = None) -> None:
+        """Record health check result for monitoring."""
+        from datetime import datetime, UTC
+        
+        result = {
+            "timestamp": datetime.now(UTC),
+            "success": success,
+            "response_time_ms": response_time * 1000,
+            "status_code": status_code
+        }
+        
+        self.connection_metrics["health_check_history"].append(result)
+        
+        # Keep only last 50 health checks
+        if len(self.connection_metrics["health_check_history"]) > 50:
+            self.connection_metrics["health_check_history"] = self.connection_metrics["health_check_history"][-50:]
+
+    async def get_connectivity_status(self) -> dict[str, Any]:
+        """Get comprehensive connectivity status and metrics."""
+        from datetime import datetime, UTC
+        
+        status = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "service_url": self.service_url,
+            "client_id": self.client_id,
+            "connection": {
+                "connected": self._connected,
+                "session_active": self._session is not None and not self._session.closed,
+                "consecutive_failures": self.consecutive_failures,
+                "last_health_check": datetime.fromtimestamp(self.last_health_check, UTC).isoformat() if self.last_health_check > 0 else None,
+                "circuit_breaker_open": self._is_circuit_open(),
+            },
+            "metrics": {},
+            "performance": {},
+            "websocket": self.websocket_status.copy(),
+            "health_checks": []
+        }
+        
+        # Connection metrics
+        total_requests = self.connection_metrics["total_requests"]
+        successful_requests = self.connection_metrics["successful_requests"]
+        failed_requests = self.connection_metrics["failed_requests"]
+        
+        status["metrics"] = {
+            "total_requests": total_requests,
+            "successful_requests": successful_requests,
+            "failed_requests": failed_requests,
+            "success_rate": (successful_requests / total_requests * 100) if total_requests > 0 else 0,
+            "error_rate": (failed_requests / total_requests * 100) if total_requests > 0 else 0,
+            "connection_attempts": self.connection_metrics["connection_attempts"],
+            "successful_connections": self.connection_metrics["successful_connections"],
+            "last_successful_request": self.connection_metrics["last_successful_request"].isoformat() if self.connection_metrics["last_successful_request"] else None,
+            "last_failed_request": self.connection_metrics["last_failed_request"].isoformat() if self.connection_metrics["last_failed_request"] else None,
+            "error_counts_by_type": self.connection_metrics["error_counts_by_type"].copy()
+        }
+        
+        # Performance metrics
+        response_times = self.connection_metrics["response_times"]
+        if response_times:
+            status["performance"] = {
+                "average_response_time_ms": sum(response_times) / len(response_times) * 1000,
+                "min_response_time_ms": min(response_times) * 1000,
+                "max_response_time_ms": max(response_times) * 1000,
+                "response_time_samples": len(response_times)
+            }
+            
+            # Calculate percentiles if we have enough samples
+            if len(response_times) >= 10:
+                sorted_times = sorted(response_times)
+                p95_index = int(len(sorted_times) * 0.95)
+                p99_index = int(len(sorted_times) * 0.99)
+                
+                status["performance"]["p95_response_time_ms"] = sorted_times[p95_index] * 1000
+                status["performance"]["p99_response_time_ms"] = sorted_times[p99_index] * 1000
+        else:
+            status["performance"] = {
+                "average_response_time_ms": 0,
+                "response_time_samples": 0
+            }
+        
+        # Recent health checks
+        status["health_checks"] = [
+            {
+                "timestamp": hc["timestamp"].isoformat(),
+                "success": hc["success"],
+                "response_time_ms": hc["response_time_ms"],
+                "status_code": hc["status_code"]
+            }
+            for hc in self.connection_metrics["health_check_history"][-10:]  # Last 10 checks
+        ]
+        
+        return status
+
+    async def run_comprehensive_connectivity_test(self) -> dict[str, Any]:
+        """Run a comprehensive connectivity test with detailed results."""
+        from datetime import datetime, UTC
+        import time
+        
+        test_start = time.time()
+        test_results = {
+            "test_id": f"conn_test_{int(test_start)}",
+            "timestamp": datetime.now(UTC).isoformat(),
+            "service_url": self.service_url,
+            "tests": {},
+            "overall_status": "unknown",
+            "recommendations": []
+        }
+        
+        # Test 1: Basic connectivity
+        basic_test_start = time.time()
+        try:
+            # Ensure we have a session for testing
+            await self._ensure_session()
+            
+            if self._session and not self._session.closed:
+                async with self._session.get(
+                    f"{self.service_url}/health", 
+                    timeout=self.quick_timeout
+                ) as resp:
+                    response_time = time.time() - basic_test_start
+                    
+                    test_results["tests"]["basic_connectivity"] = {
+                        "status": "pass" if resp.status == 200 else "fail",
+                        "response_time_ms": response_time * 1000,
+                        "status_code": resp.status,
+                        "details": "Basic HTTP connectivity test"
+                    }
+            else:
+                test_results["tests"]["basic_connectivity"] = {
+                    "status": "fail",
+                    "response_time_ms": (time.time() - basic_test_start) * 1000,
+                    "error": "No session available",
+                    "details": "Could not establish session"
+                }
+                
+        except Exception as e:
+            test_results["tests"]["basic_connectivity"] = {
+                "status": "fail",
+                "response_time_ms": (time.time() - basic_test_start) * 1000,
+                "error": str(e),
+                "details": "Exception during basic connectivity test"
+            }
+        
+        # Test 2: Detailed health check
+        detailed_test_start = time.time()
+        try:
+            if self._session and not self._session.closed:
+                async with self._session.get(
+                    f"{self.service_url}/health/detailed", 
+                    timeout=self.normal_timeout
+                ) as resp:
+                    response_time = time.time() - detailed_test_start
+                    
+                    if resp.status == 200:
+                        health_data = await resp.json()
+                        test_results["tests"]["detailed_health"] = {
+                            "status": "pass",
+                            "response_time_ms": response_time * 1000,
+                            "status_code": resp.status,
+                            "health_data": health_data,
+                            "details": "Detailed health endpoint test"
+                        }
+                    else:
+                        test_results["tests"]["detailed_health"] = {
+                            "status": "degraded",
+                            "response_time_ms": response_time * 1000,
+                            "status_code": resp.status,
+                            "details": "Detailed health endpoint returned non-200 status"
+                        }
+            else:
+                test_results["tests"]["detailed_health"] = {
+                    "status": "fail",
+                    "error": "No session available",
+                    "details": "Could not test detailed health endpoint"
+                }
+                
+        except Exception as e:
+            test_results["tests"]["detailed_health"] = {
+                "status": "fail",
+                "response_time_ms": (time.time() - detailed_test_start) * 1000,
+                "error": str(e),
+                "details": "Exception during detailed health test"
+            }
+        
+        # Test 3: Authentication test
+        auth_test_start = time.time()
+        try:
+            if self._session and not self._session.closed:
+                async with self._session.get(
+                    f"{self.service_url}/account", 
+                    timeout=self.normal_timeout
+                ) as resp:
+                    response_time = time.time() - auth_test_start
+                    
+                    if resp.status == 200:
+                        test_results["tests"]["authentication"] = {
+                            "status": "pass",
+                            "response_time_ms": response_time * 1000,
+                            "status_code": resp.status,
+                            "details": "Authentication working correctly"
+                        }
+                    elif resp.status == 401:
+                        test_results["tests"]["authentication"] = {
+                            "status": "fail",
+                            "response_time_ms": response_time * 1000,
+                            "status_code": resp.status,
+                            "details": "Authentication failed - check API key"
+                        }
+                        test_results["recommendations"].append("Check BLUEFIN_SERVICE_API_KEY environment variable")
+                    else:
+                        test_results["tests"]["authentication"] = {
+                            "status": "degraded",
+                            "response_time_ms": response_time * 1000,
+                            "status_code": resp.status,
+                            "details": f"Unexpected status code: {resp.status}"
+                        }
+            else:
+                test_results["tests"]["authentication"] = {
+                    "status": "fail",
+                    "error": "No session available",
+                    "details": "Could not test authentication"
+                }
+                
+        except Exception as e:
+            test_results["tests"]["authentication"] = {
+                "status": "fail",
+                "response_time_ms": (time.time() - auth_test_start) * 1000,
+                "error": str(e),
+                "details": "Exception during authentication test"
+            }
+        
+        # Test 4: Performance test (multiple quick requests)
+        perf_test_start = time.time()
+        try:
+            if self._session and not self._session.closed:
+                response_times = []
+                success_count = 0
+                
+                for i in range(5):  # 5 quick requests
+                    req_start = time.time()
+                    try:
+                        async with self._session.get(
+                            f"{self.service_url}/health", 
+                            timeout=self.quick_timeout
+                        ) as resp:
+                            req_time = time.time() - req_start
+                            response_times.append(req_time)
+                            if resp.status == 200:
+                                success_count += 1
+                    except Exception:
+                        response_times.append(time.time() - req_start)
+                
+                avg_response_time = sum(response_times) / len(response_times) if response_times else 0
+                success_rate = success_count / 5 * 100
+                
+                test_results["tests"]["performance"] = {
+                    "status": "pass" if success_rate >= 80 else "degraded" if success_rate >= 60 else "fail",
+                    "response_time_ms": avg_response_time * 1000,
+                    "success_rate": success_rate,
+                    "total_requests": 5,
+                    "successful_requests": success_count,
+                    "details": f"Performance test: {success_rate:.1f}% success rate"
+                }
+                
+                if avg_response_time > 2.0:
+                    test_results["recommendations"].append("High response times detected - check service performance")
+                if success_rate < 100:
+                    test_results["recommendations"].append("Some requests failed - check service stability")
+            else:
+                test_results["tests"]["performance"] = {
+                    "status": "fail",
+                    "error": "No session available",
+                    "details": "Could not run performance test"
+                }
+                
+        except Exception as e:
+            test_results["tests"]["performance"] = {
+                "status": "fail",
+                "response_time_ms": (time.time() - perf_test_start) * 1000,
+                "error": str(e),
+                "details": "Exception during performance test"
+            }
+        
+        # Determine overall status
+        test_statuses = [test.get("status", "fail") for test in test_results["tests"].values()]
+        
+        if all(status == "pass" for status in test_statuses):
+            test_results["overall_status"] = "healthy"
+        elif any(status == "pass" for status in test_statuses):
+            test_results["overall_status"] = "degraded"
+        else:
+            test_results["overall_status"] = "unhealthy"
+        
+        # Add general recommendations
+        if not test_results["recommendations"]:
+            if test_results["overall_status"] == "healthy":
+                test_results["recommendations"] = ["All connectivity tests passed - service is operating normally"]
+            else:
+                test_results["recommendations"].append("Review failed tests and check service configuration")
+        
+        test_results["total_test_time_ms"] = (time.time() - test_start) * 1000
+        
+        return test_results
+
+    def get_connection_health_summary(self) -> dict[str, Any]:
+        """Get a concise connection health summary."""
+        from datetime import datetime, UTC
+        
+        total_requests = self.connection_metrics["total_requests"]
+        successful_requests = self.connection_metrics["successful_requests"]
+        
+        # Recent health checks (last 10)
+        recent_health_checks = self.connection_metrics["health_check_history"][-10:]
+        recent_success_rate = 0
+        if recent_health_checks:
+            recent_successes = sum(1 for hc in recent_health_checks if hc["success"])
+            recent_success_rate = recent_successes / len(recent_health_checks) * 100
+        
+        # Average response time from recent samples
+        response_times = self.connection_metrics["response_times"][-20:]  # Last 20 samples
+        avg_response_time = sum(response_times) / len(response_times) * 1000 if response_times else 0
+        
+        health_status = "healthy"
+        if not self._connected or self.consecutive_failures >= 3:
+            health_status = "unhealthy"
+        elif recent_success_rate < 80 or avg_response_time > 5000:
+            health_status = "degraded"
+        
+        return {
+            "overall_health": health_status,
+            "connected": self._connected,
+            "consecutive_failures": self.consecutive_failures,
+            "circuit_breaker_open": self._is_circuit_open(),
+            "success_rate": (successful_requests / total_requests * 100) if total_requests > 0 else 0,
+            "recent_health_check_success_rate": recent_success_rate,
+            "average_response_time_ms": avg_response_time,
+            "last_health_check": datetime.fromtimestamp(self.last_health_check, UTC).isoformat() if self.last_health_check > 0 else None,
+            "total_requests": total_requests,
+            "websocket_connected": self.websocket_status["connected"]
+        }
+
+    async def reset_connectivity_metrics(self) -> None:
+        """Reset all connectivity metrics."""
+        from datetime import datetime, UTC
+        
+        logger.info(
+            "Resetting connectivity metrics",
+            extra={"client_id": self.client_id}
+        )
+        
+        self.connection_metrics = {
+            "total_requests": 0,
+            "successful_requests": 0,
+            "failed_requests": 0,
+            "connection_attempts": 0,
+            "successful_connections": 0,
+            "last_successful_request": None,
+            "last_failed_request": None,
+            "response_times": [],
+            "error_counts_by_type": {},
+            "health_check_history": [],
+        }
+        
+        self.websocket_status = {
+            "connected": False,
+            "last_ping": None,
+            "reconnect_attempts": 0,
+            "messages_received": 0,
+            "messages_sent": 0,
+        }
+        
+        # Reset circuit breaker
+        self.reset_circuit_breaker(force=True)
 
     async def __aenter__(self):
         """Async context manager entry."""

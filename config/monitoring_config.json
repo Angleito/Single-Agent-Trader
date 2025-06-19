@@ -1,0 +1,130 @@
+{
+  "bluefin_monitoring": {
+    "services": {
+      "bluefin_sdk_service": {
+        "url": "http://bluefin-service:8080",
+        "health_endpoint": "/health",
+        "detailed_health_endpoint": "/health/detailed",
+        "metrics_endpoint": "/metrics",
+        "diagnostics_endpoint": "/diagnostics",
+        "timeout_seconds": 30
+      },
+      "alternative_endpoints": [
+        "http://localhost:8080",
+        "http://bluefin-sdk:8080"
+      ]
+    },
+    "health_monitor": {
+      "check_interval_seconds": 30,
+      "timeout_seconds": 10,
+      "max_consecutive_failures": 3,
+      "enable_auto_recovery": true
+    },
+    "service_discovery": {
+      "discovery_interval_seconds": 300,
+      "health_check_timeout_seconds": 10,
+      "enable_dns_discovery": true,
+      "enable_container_discovery": true,
+      "static_services": [
+        {
+          "name": "bluefin_mainnet_rest",
+          "url": "https://dapi.api.sui-prod.bluefin.io",
+          "type": "bluefin_rest"
+        },
+        {
+          "name": "bluefin_testnet_rest", 
+          "url": "https://dapi.api.sui-staging.bluefin.io",
+          "type": "bluefin_rest"
+        }
+      ]
+    },
+    "performance_metrics": {
+      "collection_interval_seconds": 10,
+      "retention_hours": 24,
+      "max_metrics_per_series": 10000,
+      "alert_rules": [
+        {
+          "name": "high_response_time",
+          "metric": "response_time_avg",
+          "condition": "greater_than",
+          "threshold": 2000,
+          "severity": "warning"
+        },
+        {
+          "name": "high_error_rate",
+          "metric": "error_rate",
+          "condition": "greater_than", 
+          "threshold": 5.0,
+          "severity": "warning"
+        },
+        {
+          "name": "service_unhealthy",
+          "metric": "health_check_status",
+          "condition": "less_than",
+          "threshold": 1.0,
+          "severity": "critical"
+        }
+      ]
+    },
+    "diagnostics": {
+      "enable_performance_tests": true,
+      "enable_stress_tests": false,
+      "timeout_seconds": 30,
+      "max_concurrent_tests": 5
+    },
+    "auto_recovery": {
+      "enabled": true,
+      "check_interval_seconds": 60,
+      "max_recovery_attempts": 3,
+      "cooldown_minutes": 15,
+      "recovery_rules": [
+        {
+          "name": "connection_timeout_refresh",
+          "trigger": "connection_timeout",
+          "action": "refresh_connection",
+          "cooldown_minutes": 5,
+          "max_attempts": 5
+        },
+        {
+          "name": "service_unavailable_restart",
+          "trigger": "service_unavailable", 
+          "action": "restart_service",
+          "cooldown_minutes": 10,
+          "max_attempts": 3
+        },
+        {
+          "name": "high_error_rate_session_reset",
+          "trigger": "high_error_rate",
+          "action": "recreate_session",
+          "threshold": 20.0,
+          "cooldown_minutes": 10,
+          "max_attempts": 3
+        }
+      ]
+    },
+    "dashboard": {
+      "enabled": true,
+      "host": "0.0.0.0",
+      "port": 9090,
+      "auto_refresh_seconds": 30,
+      "cache_ttl_seconds": 30
+    },
+    "logging": {
+      "level": "INFO",
+      "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+      "log_to_file": true,
+      "log_file": "logs/monitoring.log",
+      "max_log_size_mb": 100,
+      "backup_count": 5
+    },
+    "notifications": {
+      "enabled": false,
+      "webhook_url": "",
+      "channels": {
+        "critical": ["webhook", "email"],
+        "warning": ["webhook"], 
+        "info": []
+      }
+    }
+  }
+}

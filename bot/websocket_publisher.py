@@ -146,12 +146,16 @@ class WebSocketPublisher:
             if self._connected:
                 logger.info("WebSocket publisher initialized successfully")
                 # Start automatic reconnection monitoring
-                self._auto_reconnect_task = asyncio.create_task(self._auto_reconnect_manager())
+                self._auto_reconnect_task = asyncio.create_task(
+                    self._auto_reconnect_manager()
+                )
                 return True
         except Exception as e:
             logger.error(f"Failed to initialize WebSocket publisher: {e}")
             # Start auto-reconnect even if initial connection fails
-            self._auto_reconnect_task = asyncio.create_task(self._auto_reconnect_manager())
+            self._auto_reconnect_task = asyncio.create_task(
+                self._auto_reconnect_manager()
+            )
         return False
 
     async def _auto_reconnect_manager(self) -> None:

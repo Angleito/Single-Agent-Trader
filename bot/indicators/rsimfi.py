@@ -44,10 +44,10 @@ class RSIMFIIndicator:
     ) -> None:
         """
         Initialize the RSI+MFI indicator calculator.
-        
+
         Args:
             rsi_length: RSI calculation period (used for minimum data requirements)
-            mfi_length: MFI calculation period (used for minimum data requirements)  
+            mfi_length: MFI calculation period (used for minimum data requirements)
             period: Default period for the SMA calculation
             multiplier: Default sensitivity multiplier for the price ratio
         """
@@ -56,7 +56,7 @@ class RSIMFIIndicator:
         self.mfi_length = mfi_length
         self.period = period
         self.multiplier = multiplier
-        
+
         # Initialize performance tracking
         self._calculation_count = 0
         self._total_calculation_time = 0.0
@@ -106,7 +106,7 @@ class RSIMFIIndicator:
         # Use default parameters if None provided
         period = period if period is not None else self.period
         multiplier = multiplier if multiplier is not None else self.multiplier
-        
+
         start_time = time.perf_counter()
         tracemalloc.start()
 
@@ -458,7 +458,7 @@ class RSIMFIIndicator:
         # Use default parameters if None provided
         period = period if period is not None else self.period
         multiplier = multiplier if multiplier is not None else self.multiplier
-        
+
         start_time = time.perf_counter()
 
         logger.info(
