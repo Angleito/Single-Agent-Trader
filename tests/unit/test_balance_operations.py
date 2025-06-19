@@ -559,7 +559,7 @@ class TestBalanceOperations:
         """Test futures account balance handling."""
         # Test futures account info structure
         futures_info = FuturesAccountInfo(
-            account_type=AccountType.FUTURES,
+            account_type=AccountType.CFM,
             account_id="test_futures_123",
             currency="USD",
             cash_balance=Decimal("10000"),

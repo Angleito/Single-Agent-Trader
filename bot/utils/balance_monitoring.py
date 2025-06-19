@@ -40,11 +40,11 @@ class BalanceOperationEvent:
     operation: str
     status: str  # 'started', 'success', 'failed', 'timeout'
     timestamp: datetime
-    duration_ms: float | None = None
-    balance_amount: str | None = None
-    error: str | None = None
-    error_category: str | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
+    duration_ms: Optional[float] = None
+    balance_amount: Optional[str] = None
+    error: Optional[str] = None
+    error_category: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -60,8 +60,8 @@ class PerformanceMetrics:
     p95_response_time: float = 0.0
     p99_response_time: float = 0.0
     response_times: deque = field(default_factory=lambda: deque(maxlen=1000))
-    error_counts_by_category: dict[str, int] = field(default_factory=dict)
-    last_updated: datetime = field(default_factory=lambda: datetime.now(UTC))
+    error_counts_by_category: Dict[str, int] = field(default_factory=dict)
+    last_updated: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class BalanceOperationMonitor:
