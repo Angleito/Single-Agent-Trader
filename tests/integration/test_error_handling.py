@@ -29,7 +29,7 @@ from bot.trading_types import (
 class TestErrorHandlingIntegration:
     """Test error handling and failure recovery across the system."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_market_data(self):
         """Create mock market data for testing."""
         return [
@@ -45,7 +45,7 @@ class TestErrorHandlingIntegration:
             for i in range(50, 0, -1)
         ]
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_api_connection_failures(self, mock_market_data):
         """Test handling of API connection failures."""
         # Test market data API failure
@@ -90,7 +90,7 @@ class TestErrorHandlingIntegration:
             with pytest.raises(ConnectionError):
                 await engine._initialize_components()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_llm_service_outages(self, mock_market_data):
         """Test handling of LLM service outages."""
         # Test complete LLM service unavailability
@@ -156,7 +156,7 @@ class TestErrorHandlingIntegration:
                 # Expected to fail, system should handle this gracefully
                 pass
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invalid_data_handling(self):
         """Test handling of invalid or corrupted market data."""
         # Test with corrupted/invalid OHLCV data
@@ -224,7 +224,7 @@ class TestErrorHandlingIntegration:
                     for keyword in ["invalid", "data", "empty", "nan", "calculation"]
                 ), f"Scenario {i}: Unexpected exception: {e}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_order_execution_failures(self, mock_market_data):
         """Test handling of order execution failures."""
         # Test various order failure scenarios
@@ -309,7 +309,7 @@ class TestErrorHandlingIntegration:
                     assert engine.current_position.side == initial_position.side
                     assert engine.current_position.size == initial_position.size
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_network_timeout_recovery(self, mock_market_data):
         """Test recovery from network timeouts and intermittent connectivity."""
         # Simulate intermittent network failures
@@ -352,7 +352,7 @@ class TestErrorHandlingIntegration:
                 # If it still fails, should be after max retries
                 assert call_count >= 2
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_data_corruption_recovery(self, mock_market_data):
         """Test recovery from data corruption scenarios."""
         # Test indicator calculation with corrupted data
@@ -404,7 +404,7 @@ class TestErrorHandlingIntegration:
                     for keyword in ["data", "invalid", "missing", "column", "type"]
                 ), f"Scenario {i}: Unexpected error: {e}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_memory_pressure_handling(self):
         """Test handling of memory pressure scenarios."""
         # Simulate large data processing
@@ -440,7 +440,7 @@ class TestErrorHandlingIntegration:
             # Should not crash with other exceptions
             assert "memory" in str(e).lower() or "size" in str(e).lower()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_concurrent_operation_errors(self, mock_market_data):
         """Test handling of concurrent operation errors."""
         # Test multiple simultaneous operations
@@ -504,7 +504,7 @@ class TestErrorHandlingIntegration:
                     # Should be expected timeout errors
                     assert isinstance(result, asyncio.TimeoutError)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_graceful_degradation_scenarios(self, mock_market_data):
         """Test graceful degradation when components fail."""
         # Test system behavior when LLM is unavailable but other components work
@@ -587,7 +587,7 @@ class TestErrorHandlingIntegration:
         df.set_index("timestamp", inplace=True)
         return df
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_shutdown_during_active_operations(self, mock_market_data):
         """Test graceful shutdown during active trading operations."""
         # Test shutdown while operations are in progress

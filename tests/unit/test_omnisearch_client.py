@@ -110,7 +110,7 @@ class TestRateLimiter:
         assert limiter.window_seconds == 60
         assert len(limiter.requests) == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_rate_limiter_allow_requests(self):
         """Test rate limiter allows requests within limit."""
         limiter = RateLimiter(max_requests=5, window_seconds=10)
@@ -120,7 +120,7 @@ class TestRateLimiter:
             result = await limiter.acquire()
             assert result is True
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_rate_limiter_block_excess_requests(self):
         """Test rate limiter blocks requests exceeding limit."""
         limiter = RateLimiter(max_requests=2, window_seconds=10)
@@ -139,7 +139,7 @@ class TestRateLimiter:
         # Note: In real test, we'd mock time.time() to avoid actual delays
         # For now, we'll test the logic without waiting
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_rate_limiter_window_cleanup(self):
         """Test rate limiter cleans up old requests."""
         limiter = RateLimiter(max_requests=3, window_seconds=1)
@@ -399,7 +399,7 @@ class TestOmniSearchClient:
         assert client.rate_limiter.max_requests == 50
         assert client.rate_limiter.window_seconds == 1800
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_connect_success(self):
         """Test successful connection to OmniSearch service."""
         client = OmniSearchClient()
@@ -414,7 +414,7 @@ class TestOmniSearchClient:
             assert result is True
             assert client._connected is True
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_connect_failure(self):
         """Test failed connection to OmniSearch service."""
         client = OmniSearchClient()
@@ -429,7 +429,7 @@ class TestOmniSearchClient:
             assert result is False
             assert client._connected is False
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_connect_exception(self):
         """Test connection exception handling."""
         client = OmniSearchClient()
@@ -442,7 +442,7 @@ class TestOmniSearchClient:
             assert result is False
             assert client._connected is False
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_disconnect(self):
         """Test disconnecting from OmniSearch service."""
         client = OmniSearchClient()
@@ -456,7 +456,7 @@ class TestOmniSearchClient:
         assert client._session is None
         client._session.close.assert_called_once()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_search_financial_news_cache_hit(self):
         """Test financial news search with cache hit."""
         client = OmniSearchClient()
@@ -483,7 +483,7 @@ class TestOmniSearchClient:
         assert results[0].base_result.title == "Test News"
         assert results[0].sentiment == "positive"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_search_financial_news_api_call(self):
         """Test financial news search with API call."""
         client = OmniSearchClient()
@@ -521,7 +521,7 @@ class TestOmniSearchClient:
         assert results[0].sentiment == "positive"
         assert "BTC" in results[0].mentioned_symbols
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_search_financial_news_api_error(self):
         """Test financial news search with API error."""
         client = OmniSearchClient()
@@ -541,7 +541,7 @@ class TestOmniSearchClient:
         # Should return fallback results (empty list in this case)
         assert isinstance(results, list)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_search_crypto_sentiment_success(self):
         """Test crypto sentiment search success."""
         client = OmniSearchClient()
@@ -577,7 +577,7 @@ class TestOmniSearchClient:
         assert sentiment.confidence == 0.8
         assert len(sentiment.key_drivers) == 2
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_search_nasdaq_sentiment_success(self):
         """Test NASDAQ sentiment search success."""
         client = OmniSearchClient()
@@ -608,7 +608,7 @@ class TestOmniSearchClient:
         assert sentiment.overall_sentiment == "bearish"
         assert sentiment.sentiment_score == -0.3
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_search_market_correlation_success(self):
         """Test market correlation search success."""
         client = OmniSearchClient()
@@ -635,7 +635,7 @@ class TestOmniSearchClient:
         assert correlation.direction == "positive"
         assert correlation.beta == 1.2
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_search_market_correlation_invalid_coefficient(self):
         """Test market correlation search with invalid correlation coefficient."""
         client = OmniSearchClient()
@@ -663,7 +663,7 @@ class TestOmniSearchClient:
         assert correlation.strength == "weak"  # 0.0 should be classified as weak
         assert correlation.direction == "neutral"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_search_market_correlation_percentage_value(self):
         """Test market correlation search with percentage value."""
         client = OmniSearchClient()
@@ -691,7 +691,7 @@ class TestOmniSearchClient:
         assert correlation.strength == "moderate"  # 0.45 should be moderate
         assert correlation.direction == "positive"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_search_market_correlation_string_coefficient(self):
         """Test market correlation search with string correlation coefficient."""
         client = OmniSearchClient()
@@ -718,7 +718,7 @@ class TestOmniSearchClient:
         assert correlation.strength == "weak"
         assert correlation.direction == "neutral"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_health_check(self):
         """Test health check functionality."""
         client = OmniSearchClient()
@@ -781,7 +781,7 @@ class TestOmniSearchClient:
         result = client._parse_date(None)
         assert result is None
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_fallback_sentiment(self):
         """Test fallback sentiment generation."""
         client = OmniSearchClient()
@@ -794,7 +794,7 @@ class TestOmniSearchClient:
         assert sentiment.confidence == 0.1
         assert "API unavailable" in sentiment.key_drivers[0]
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_fallback_correlation(self):
         """Test fallback correlation generation."""
         client = OmniSearchClient()
@@ -808,7 +808,7 @@ class TestOmniSearchClient:
         assert correlation.strength == "weak"
         assert correlation.direction == "neutral"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_fallback_news_empty(self):
         """Test fallback news with no local cache."""
         client = OmniSearchClient()
@@ -819,7 +819,7 @@ class TestOmniSearchClient:
         assert isinstance(results, list)
         assert len(results) == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_rate_limiting_integration(self):
         """Test rate limiting integration with search methods."""
         client = OmniSearchClient(rate_limit_requests=1, rate_limit_window=10)
@@ -844,7 +844,7 @@ class TestOmniSearchClient:
 
 
 # Fixtures for integration tests
-@pytest.fixture
+@pytest.fixture()
 def mock_aiohttp_session():
     """Mock aiohttp session for testing."""
     with patch("aiohttp.ClientSession") as mock:
@@ -853,7 +853,7 @@ def mock_aiohttp_session():
         yield session
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_financial_news_response():
     """Sample financial news API response."""
     return {
@@ -886,7 +886,7 @@ def sample_financial_news_response():
     }
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_sentiment_response():
     """Sample sentiment analysis API response."""
     return {
@@ -911,7 +911,7 @@ def sample_sentiment_response():
     }
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_correlation_response():
     """Sample correlation analysis API response."""
     return {"correlation": {"coefficient": 0.73, "beta": 1.85, "r_squared": 0.53}}
@@ -920,7 +920,7 @@ def sample_correlation_response():
 class TestOmniSearchClientIntegration:
     """Integration tests for OmniSearchClient with mocked external services."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_full_search_workflow(
         self, mock_aiohttp_session, sample_financial_news_response
     ):
@@ -952,7 +952,7 @@ class TestOmniSearchClientIntegration:
 
         await client.disconnect()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_sentiment_analysis_workflow(
         self, mock_aiohttp_session, sample_sentiment_response
     ):
@@ -978,7 +978,7 @@ class TestOmniSearchClientIntegration:
         assert len(sentiment.key_drivers) == 3
         assert len(sentiment.risk_factors) == 2
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_correlation_analysis_workflow(
         self, mock_aiohttp_session, sample_correlation_response
     ):
@@ -1005,7 +1005,7 @@ class TestOmniSearchClientIntegration:
         assert correlation.direction == "positive"
         assert correlation.beta == 1.85
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_caching_across_requests(self):
         """Test caching behavior across multiple requests."""
         client = OmniSearchClient(cache_ttl=300)  # 5 minute cache
@@ -1021,7 +1021,7 @@ class TestOmniSearchClientIntegration:
             await client.search_financial_news("test query")
             assert mock_search.call_count == 1  # Not called again
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_error_handling_and_fallbacks(self):
         """Test error handling and fallback mechanisms."""
         client = OmniSearchClient()

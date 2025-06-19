@@ -116,7 +116,7 @@ class BluefinServiceClient:
         except aiohttp.ClientError as e:
             logger.error(f"Failed to get Bluefin account info: {e}")
             raise HTTPException(
-                status_code=503, detail=f"Bluefin service unavailable: {str(e)}"
+                status_code=503, detail=f"Bluefin service unavailable: {e!s}"
             ) from e
 
     async def get_positions(self) -> dict:
@@ -134,7 +134,7 @@ class BluefinServiceClient:
         except aiohttp.ClientError as e:
             logger.error(f"Failed to get Bluefin positions: {e}")
             raise HTTPException(
-                status_code=503, detail=f"Bluefin service unavailable: {str(e)}"
+                status_code=503, detail=f"Bluefin service unavailable: {e!s}"
             ) from e
 
     async def get_orders(self) -> dict:
@@ -152,7 +152,7 @@ class BluefinServiceClient:
         except aiohttp.ClientError as e:
             logger.error(f"Failed to get Bluefin orders: {e}")
             raise HTTPException(
-                status_code=503, detail=f"Bluefin service unavailable: {str(e)}"
+                status_code=503, detail=f"Bluefin service unavailable: {e!s}"
             ) from e
 
     async def get_market_ticker(self, symbol: str) -> dict:
@@ -172,7 +172,7 @@ class BluefinServiceClient:
         except aiohttp.ClientError as e:
             logger.error(f"Failed to get Bluefin market ticker: {e}")
             raise HTTPException(
-                status_code=503, detail=f"Bluefin service unavailable: {str(e)}"
+                status_code=503, detail=f"Bluefin service unavailable: {e!s}"
             ) from e
 
     async def place_order(self, order_data: dict) -> dict:
@@ -192,7 +192,7 @@ class BluefinServiceClient:
         except aiohttp.ClientError as e:
             logger.error(f"Failed to place Bluefin order: {e}")
             raise HTTPException(
-                status_code=503, detail=f"Bluefin service unavailable: {str(e)}"
+                status_code=503, detail=f"Bluefin service unavailable: {e!s}"
             ) from e
 
 
@@ -571,7 +571,11 @@ class LogStreamer:
         try:
             # Check if docker command is available
             result = subprocess.run(
-                ["docker", "--version"], capture_output=True, text=True, timeout=5
+                ["docker", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
             )
             if result.returncode != 0:
                 raise Exception("Docker command not available")
@@ -699,7 +703,7 @@ class LogStreamer:
     async def stop(self):
         """Stop log streaming and cleanup tasks"""
         self.running = False
-        
+
         # Cancel stream logs task
         if self._stream_logs_task and not self._stream_logs_task.done():
             self._stream_logs_task.cancel()
@@ -707,7 +711,7 @@ class LogStreamer:
                 await self._stream_logs_task
             except asyncio.CancelledError:
                 pass
-        
+
         # Cancel file watcher tasks
         for task in self._file_watcher_tasks:
             if not task.done():
@@ -716,9 +720,9 @@ class LogStreamer:
                     await task
                 except asyncio.CancelledError:
                     pass
-        
+
         self._file_watcher_tasks.clear()
-        
+
         if self.process:
             self.process.terminate()
         self.file_watchers.clear()
@@ -736,7 +740,7 @@ _delayed_startup_task: asyncio.Task | None = None
 async def lifespan(app: FastAPI):
     """Manage application startup and shutdown"""
     global _delayed_startup_task
-    
+
     # Startup
     logger.info("Starting FastAPI dashboard server...")
 
@@ -844,7 +848,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down FastAPI dashboard server...")
-    
+
     # Cancel delayed startup task
     if _delayed_startup_task and not _delayed_startup_task.done():
         _delayed_startup_task.cancel()
@@ -852,7 +856,7 @@ async def lifespan(app: FastAPI):
             await _delayed_startup_task
         except asyncio.CancelledError:
             pass
-    
+
     await log_streamer.stop()
 
     # Close Bluefin service client
@@ -1013,32 +1017,30 @@ async def add_json_headers(request, call_next):
         allow_origin = None
         if origin:
             # Check if origin is in allowed list
-            if origin in allowed_origins:
-                allow_origin = origin
-            # Check for localhost variations (more permissive for development)
-            elif any(
-                origin.startswith(prefix)
-                for prefix in [
-                    "http://localhost:",
-                    "http://127.0.0.1:",
-                    "ws://localhost:",
-                    "ws://127.0.0.1:",
-                ]
-            ):
-                allow_origin = origin
-            # Check for docker internal network origins
-            elif any(
-                origin.startswith(prefix)
-                for prefix in [
-                    "http://dashboard-frontend",
-                    "https://dashboard-frontend",
-                    "http://dashboard-backend",
-                    "https://dashboard-backend",
-                    "http://cursorprod-dashboard-frontend",
-                    "https://cursorprod-dashboard-frontend",
-                    "http://cursorprod_dashboard_frontend",
-                    "https://cursorprod_dashboard_frontend",
-                ]
+            if (
+                origin in allowed_origins
+                or any(
+                    origin.startswith(prefix)
+                    for prefix in [
+                        "http://localhost:",
+                        "http://127.0.0.1:",
+                        "ws://localhost:",
+                        "ws://127.0.0.1:",
+                    ]
+                )
+                or any(
+                    origin.startswith(prefix)
+                    for prefix in [
+                        "http://dashboard-frontend",
+                        "https://dashboard-frontend",
+                        "http://dashboard-backend",
+                        "https://dashboard-backend",
+                        "http://cursorprod-dashboard-frontend",
+                        "https://cursorprod-dashboard-frontend",
+                        "http://cursorprod_dashboard_frontend",
+                        "https://cursorprod_dashboard_frontend",
+                    ]
+                )
             ):
                 allow_origin = origin
 
@@ -1048,16 +1050,14 @@ async def add_json_headers(request, call_next):
             response.headers["Access-Control-Allow-Credentials"] = str(
                 allow_credentials
             ).lower()
+        elif os.getenv("ENVIRONMENT", "development") == "development":
+            response.headers["Access-Control-Allow-Origin"] = "*"
         else:
-            # Fallback for development - be more permissive
-            if os.getenv("ENVIRONMENT", "development") == "development":
-                response.headers["Access-Control-Allow-Origin"] = "*"
-            else:
-                # Dynamic fallback based on request origin or environment
-                fallback_origin = origin or os.getenv(
-                    "FRONTEND_URL", "http://localhost:3000"
-                )
-                response.headers["Access-Control-Allow-Origin"] = fallback_origin
+            # Dynamic fallback based on request origin or environment
+            fallback_origin = origin or os.getenv(
+                "FRONTEND_URL", "http://localhost:3000"
+            )
+            response.headers["Access-Control-Allow-Origin"] = fallback_origin
 
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, UPGRADE"
         response.headers["Access-Control-Allow-Headers"] = (
@@ -1351,6 +1351,7 @@ async def get_status():
                 capture_output=True,
                 text=True,
                 timeout=5,
+                check=False,
             )
 
             if result.returncode == 0 and result.stdout.strip():
@@ -1369,7 +1370,7 @@ async def get_status():
         system_uptime = "unknown"
         try:
             uptime_result = subprocess.run(
-                ["uptime"], capture_output=True, text=True, timeout=3
+                ["uptime"], capture_output=True, text=True, timeout=3, check=False
             )
             if uptime_result.returncode == 0:
                 system_uptime = uptime_result.stdout.strip()
@@ -1430,6 +1431,7 @@ async def get_trading_data():
                 capture_output=True,
                 text=True,
                 timeout=5,
+                check=False,
             )
 
             if stats_result.returncode == 0:
@@ -1778,7 +1780,7 @@ async def get_trading_mode():
     except Exception as e:
         logger.error(f"Error getting trading mode: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Error getting trading mode: {str(e)}"
+            status_code=500, detail=f"Error getting trading mode: {e!s}"
         ) from e
 
 
@@ -1799,9 +1801,7 @@ async def get_logs(limit: int = 100):
         }
     except Exception as e:
         logger.error(f"Error getting logs: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error getting logs: {str(e)}"
-        ) from e
+        raise HTTPException(status_code=500, detail=f"Error getting logs: {e!s}") from e
 
 
 # LLM Monitoring Endpoints
@@ -2087,7 +2087,7 @@ async def get_llm_decisions(
     except Exception as e:
         logger.error(f"Error getting LLM decisions: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Error getting LLM decisions: {str(e)}"
+            status_code=500, detail=f"Error getting LLM decisions: {e!s}"
         ) from e
 
 
@@ -2120,7 +2120,7 @@ async def get_llm_alerts(
     except Exception as e:
         logger.error(f"Error getting LLM alerts: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Error getting LLM alerts: {str(e)}"
+            status_code=500, detail=f"Error getting LLM alerts: {e!s}"
         ) from e
 
 
@@ -2189,7 +2189,7 @@ async def get_llm_sessions():
     except Exception as e:
         logger.error(f"Error getting LLM sessions: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Error getting LLM sessions: {str(e)}"
+            status_code=500, detail=f"Error getting LLM sessions: {e!s}"
         ) from e
 
 
@@ -2249,7 +2249,7 @@ async def get_llm_cost_analysis():
     except Exception as e:
         logger.error(f"Error getting LLM cost analysis: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Error getting LLM cost analysis: {str(e)}"
+            status_code=500, detail=f"Error getting LLM cost analysis: {e!s}"
         ) from e
 
 
@@ -2275,7 +2275,7 @@ async def export_llm_data(
     except Exception as e:
         logger.error(f"Error exporting LLM data: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Error exporting LLM data: {str(e)}"
+            status_code=500, detail=f"Error exporting LLM data: {e!s}"
         ) from e
 
 
@@ -2315,7 +2315,7 @@ async def configure_llm_alerts(thresholds: dict[str, Any]):
     except Exception as e:
         logger.error(f"Error configuring LLM alerts: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Error configuring alerts: {str(e)}"
+            status_code=500, detail=f"Error configuring alerts: {e!s}"
         ) from e
 
 
@@ -2328,6 +2328,7 @@ async def restart_bot():
             capture_output=True,
             text=True,
             timeout=30,
+            check=False,
         )
 
         if result.returncode == 0:
@@ -2352,7 +2353,7 @@ async def restart_bot():
     except Exception as e:
         logger.error(f"Error restarting bot: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Error restarting bot: {str(e)}"
+            status_code=500, detail=f"Error restarting bot: {e!s}"
         ) from e
 
 
@@ -3281,7 +3282,7 @@ async def update_trading_data(symbol: str, data: dict[str, Any]):
     except Exception as e:
         logger.error(f"Error updating trading data: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Error updating data: {str(e)}"
+            status_code=500, detail=f"Error updating data: {e!s}"
         ) from e
 
 
@@ -3322,7 +3323,7 @@ async def add_llm_decision_to_chart(decision_data: dict[str, Any]):
     except Exception as e:
         logger.error(f"Error adding LLM decision to chart: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Error adding decision: {str(e)}"
+            status_code=500, detail=f"Error adding decision: {e!s}"
         ) from e
 
 

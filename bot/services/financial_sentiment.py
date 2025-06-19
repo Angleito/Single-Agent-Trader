@@ -266,7 +266,7 @@ class FinancialSentimentService:
             return SentimentResult(
                 sentiment_score=0.0,
                 confidence=0.0,
-                key_themes=[f"Analysis error: {str(e)}"],
+                key_themes=[f"Analysis error: {e!s}"],
             )
 
     async def _analyze_single_item(self, item: dict) -> dict[str, Any]:

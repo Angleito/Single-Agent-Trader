@@ -1187,24 +1187,22 @@ class TradingEngine:
                         self.trading_enabled = (
                             True  # Enable for scalping with limited data
                         )
-                else:
-                    # Just require minimum candles
-                    if len(data) >= min_candles_required:
-                        self.logger.info(
-                            f"✅ Loaded {len(data)} historical candles (minimum {min_candles_required}) for analysis"
-                        )
-                        historical_data_loaded = True
-                        self.trading_enabled = True
-                    elif len(data) >= 50:
-                        # Fallback with warning
-                        self.logger.warning(
-                            f"⚠️ Limited historical data available: {len(data)} candles. "
-                            f"Indicators may be unreliable until more data is accumulated."
-                        )
-                        historical_data_loaded = True
-                        self.trading_enabled = (
-                            False  # Don't enable trading with limited data
-                        )
+                elif len(data) >= min_candles_required:
+                    self.logger.info(
+                        f"✅ Loaded {len(data)} historical candles (minimum {min_candles_required}) for analysis"
+                    )
+                    historical_data_loaded = True
+                    self.trading_enabled = True
+                elif len(data) >= 50:
+                    # Fallback with warning
+                    self.logger.warning(
+                        f"⚠️ Limited historical data available: {len(data)} candles. "
+                        f"Indicators may be unreliable until more data is accumulated."
+                    )
+                    historical_data_loaded = True
+                    self.trading_enabled = (
+                        False  # Don't enable trading with limited data
+                    )
 
             # Check for WebSocket data
             if (
@@ -2438,23 +2436,21 @@ class TradingEngine:
             else:
                 self._log_position_update(current_price, pnl)
                 self._last_position_log_time = datetime.now(UTC)
-        else:
-            # Publish flat position to dashboard
-            if self.websocket_publisher:
-                # Create flat position object for the update
-                from .trading_types import Position
+        elif self.websocket_publisher:
+            # Create flat position object for the update
+            from .trading_types import Position
 
-                flat_position = Position(
-                    symbol=self.actual_trading_symbol,
-                    side="FLAT",
-                    size=Decimal("0"),
-                    entry_price=None,
-                    unrealized_pnl=Decimal("0"),
-                    timestamp=datetime.now(UTC),
-                )
-                await self.websocket_publisher.publish_position_update(
-                    position=flat_position
-                )
+            flat_position = Position(
+                symbol=self.actual_trading_symbol,
+                side="FLAT",
+                size=Decimal("0"),
+                entry_price=None,
+                unrealized_pnl=Decimal("0"),
+                timestamp=datetime.now(UTC),
+            )
+            await self.websocket_publisher.publish_position_update(
+                position=flat_position
+            )
 
             # This code was moved to the main trading loop
 
@@ -3247,7 +3243,6 @@ def cli() -> None:
     """AI Trading Bot - LangChain-powered crypto futures trading."""
     # Set up comprehensive warning suppression for third-party libraries
     setup_warnings_suppression()
-    pass
 
 
 @cli.command()

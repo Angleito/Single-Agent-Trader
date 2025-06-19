@@ -718,7 +718,7 @@ class CipherA:
             logger.debug("Cipher A calculation completed successfully")
 
         except Exception as e:
-            logger.error(f"Error in Cipher A calculation: {str(e)}")
+            logger.error(f"Error in Cipher A calculation: {e!s}")
             # Add error indicators
             result["cipher_a_error"] = True
             result["cipher_a_signal"] = 0
@@ -841,7 +841,7 @@ class CipherA:
             )
 
         except Exception as e:
-            logger.error(f"Error generating enhanced signals: {str(e)}")
+            logger.error(f"Error generating enhanced signals: {e!s}")
             signals = pd.Series(0, index=df.index, dtype="int64")
 
         return signals
@@ -869,7 +869,7 @@ class CipherA:
                 df["rsi_oversold"] = df["rsi"] < 30.0  # Standard RSI oversold
 
         except Exception as e:
-            logger.warning(f"Error adding compatibility indicators: {str(e)}")
+            logger.warning(f"Error adding compatibility indicators: {e!s}")
 
     def get_latest_values(self, df: pd.DataFrame) -> dict[str, Any]:
         """
@@ -1129,7 +1129,7 @@ class CipherA:
             return interpretation
 
         except Exception as e:
-            logger.error(f"Error interpreting signals: {str(e)}")
+            logger.error(f"Error interpreting signals: {e!s}")
             return "Error interpreting signals."
 
 
@@ -1485,7 +1485,7 @@ class CipherB:
             logger.debug("Cipher B calculation completed successfully")
 
         except Exception as e:
-            logger.error(f"Error in Cipher B calculation: {str(e)}")
+            logger.error(f"Error in Cipher B calculation: {e!s}")
             # Add error indicators
             result["cipher_b_error"] = True
             result["cipher_b_signal"] = 0
@@ -1572,7 +1572,7 @@ class CipherB:
                     result[col] = pd.Series(default, index=result.index)
 
         except Exception as e:
-            logger.warning(f"Error integrating Cipher B signals: {str(e)}")
+            logger.warning(f"Error integrating Cipher B signals: {e!s}")
             # Ensure minimum required columns exist
             default_columns = {
                 "buy_circle": False,
@@ -1713,7 +1713,7 @@ class CipherB:
             )
 
         except Exception as e:
-            logger.error(f"Error generating enhanced Cipher B signals: {str(e)}")
+            logger.error(f"Error generating enhanced Cipher B signals: {e!s}")
             signals = pd.Series(0, index=df.index, dtype="int64")
 
         return signals
@@ -1768,7 +1768,7 @@ class CipherB:
             )
 
         except Exception as e:
-            logger.warning(f"Error adding legacy indicators: {str(e)}")
+            logger.warning(f"Error adding legacy indicators: {e!s}")
             # Ensure these columns exist even if calculation fails
             if "vwap" not in df.columns:
                 df["vwap"] = (
@@ -1806,7 +1806,7 @@ class CipherB:
 
             return wave.astype("float64")
         except Exception as e:
-            logger.error(f"Error calculating wave indicator: {str(e)}")
+            logger.error(f"Error calculating wave indicator: {e!s}")
             return pd.Series(dtype="float64", index=df.index)
 
     def get_latest_values(self, df: pd.DataFrame) -> dict[str, Any]:
@@ -2052,7 +2052,7 @@ class CipherB:
             return interpretation
 
         except Exception as e:
-            logger.error(f"Error interpreting Cipher B signals: {str(e)}")
+            logger.error(f"Error interpreting Cipher B signals: {e!s}")
             return "Error interpreting signals."
 
 
@@ -2165,7 +2165,7 @@ class VuManChuIndicators:
             logger.debug("VuManChu Cipher calculation completed successfully")
 
         except Exception as e:
-            logger.error(f"Error in comprehensive indicator calculation: {str(e)}")
+            logger.error(f"Error in comprehensive indicator calculation: {e!s}")
             # Add error indicators
             result["calculation_error"] = True
 
@@ -2233,7 +2233,7 @@ class VuManChuIndicators:
                     )
 
         except Exception as e:
-            logger.warning(f"Error adding utility indicators: {str(e)}")
+            logger.warning(f"Error adding utility indicators: {e!s}")
 
         return result
 
@@ -2315,7 +2315,7 @@ class VuManChuIndicators:
             )
 
         except Exception as e:
-            logger.warning(f"Error adding combined analysis: {str(e)}")
+            logger.warning(f"Error adding combined analysis: {e!s}")
 
         return result
 
@@ -2484,7 +2484,7 @@ class VuManChuIndicators:
                 )
 
         except Exception as e:
-            logger.error(f"Error in dominance analysis: {str(e)}")
+            logger.error(f"Error in dominance analysis: {e!s}")
             # Ensure basic dominance columns exist even on error
             default_dominance_cols = {
                 "dominance_cipher_a_signal": 0,
@@ -2870,7 +2870,7 @@ class VuManChuIndicators:
             return interpretation
 
         except Exception as e:
-            logger.error(f"Error generating combined interpretation: {str(e)}")
+            logger.error(f"Error generating combined interpretation: {e!s}")
             return "Error generating signal interpretation."
 
     def _add_cipher_a_fallbacks(self, df: pd.DataFrame) -> pd.DataFrame:

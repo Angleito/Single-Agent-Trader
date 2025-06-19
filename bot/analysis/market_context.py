@@ -480,7 +480,7 @@ class MarketContextAnalyzer:
             return MarketRegime(
                 regime_type=MarketRegimeType.UNKNOWN,
                 confidence=0.0,
-                key_drivers=[f"Analysis error: {str(e)}"],
+                key_drivers=[f"Analysis error: {e!s}"],
                 regime_change_probability=0.1,
             )
 
@@ -625,7 +625,7 @@ class MarketContextAnalyzer:
                 strength_alignment=0.0,
                 crypto_momentum_score=0.0,
                 nasdaq_momentum_score=0.0,
-                momentum_divergences=[f"Analysis error: {str(e)}"],
+                momentum_divergences=[f"Analysis error: {e!s}"],
                 trend_strength_crypto=0.0,
                 trend_strength_nasdaq=0.0,
                 momentum_sustainability=0.0,

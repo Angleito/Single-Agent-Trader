@@ -18,36 +18,47 @@ from urllib.parse import urlparse
 # Optional dependency for network testing
 try:
     import aiohttp
+
     AIOHTTP_AVAILABLE = True
 except ImportError:
     AIOHTTP_AVAILABLE = False
+
     # Create a mock aiohttp for type hints
     class aiohttp:
         class ClientSession:
             def __init__(self, *args, **kwargs):
                 pass
+
             async def __aenter__(self):
                 return self
+
             async def __aexit__(self, *args):
                 pass
+
             def get(self, *args, **kwargs):
                 return MockResponse()
+
             def post(self, *args, **kwargs):
                 return MockResponse()
-        
+
         class ClientTimeout:
             def __init__(self, *args, **kwargs):
                 pass
-    
+
     class MockResponse:
         def __init__(self):
             self.status = 200
+
         async def __aenter__(self):
             return self
+
         async def __aexit__(self, *args):
             pass
+
         async def json(self):
             return {}
+
+
 from pydantic import (
     AnyHttpUrl,
     BaseModel,
@@ -79,11 +90,15 @@ class ConfigurationValidator:
         self.errors: list[str] = []
         self.warnings: list[str] = []
         self.validation_results: dict[str, Any] = {}
-    
+
     def _check_aiohttp_available(self, test_name: str) -> dict[str, Any] | None:
         """Check if aiohttp is available for network testing."""
         if not AIOHTTP_AVAILABLE:
-            return {"name": test_name, "status": "skip", "message": "aiohttp not available for network testing"}
+            return {
+                "name": test_name,
+                "status": "skip",
+                "message": "aiohttp not available for network testing",
+            }
         return None
 
     async def validate_all(self) -> dict[str, Any]:
@@ -293,7 +308,7 @@ class ConfigurationValidator:
         skip_result = self._check_aiohttp_available("internet_connectivity")
         if skip_result:
             return skip_result
-        
+
         try:
             async with aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=10)
@@ -306,11 +321,11 @@ class ConfigurationValidator:
                             "message": "Internet connectivity OK",
                         }
         except Exception as e:
-            self.errors.append(f"No internet connectivity: {str(e)}")
+            self.errors.append(f"No internet connectivity: {e!s}")
             return {
                 "name": "internet_connectivity",
                 "status": "error",
-                "message": f"No internet: {str(e)}",
+                "message": f"No internet: {e!s}",
             }
 
         self.errors.append("Internet connectivity test failed")
@@ -390,13 +405,11 @@ class ConfigurationValidator:
                             "message": f"Service status: {response.status}",
                         }
         except Exception as e:
-            self.errors.append(
-                f"Cannot reach Bluefin service at {service_url}: {str(e)}"
-            )
+            self.errors.append(f"Cannot reach Bluefin service at {service_url}: {e!s}")
             return {
                 "name": "bluefin_service",
                 "status": "error",
-                "message": f"Service unreachable: {str(e)}",
+                "message": f"Service unreachable: {e!s}",
             }
 
     def _validate_bluefin_private_key_format(self) -> dict[str, Any]:
@@ -485,11 +498,11 @@ class ConfigurationValidator:
                             "message": f"Endpoint status: {response.status}",
                         }
         except Exception as e:
-            self.errors.append(f"Cannot validate Bluefin endpoints: {str(e)}")
+            self.errors.append(f"Cannot validate Bluefin endpoints: {e!s}")
             return {
                 "name": "bluefin_endpoints",
                 "status": "error",
-                "message": f"Endpoint test failed: {str(e)}",
+                "message": f"Endpoint test failed: {e!s}",
             }
 
     async def _test_openai_api_connectivity(self) -> dict[str, Any]:
@@ -537,11 +550,11 @@ class ConfigurationValidator:
                             "message": f"API status: {response.status}",
                         }
         except Exception as e:
-            self.errors.append(f"Cannot reach OpenAI API: {str(e)}")
+            self.errors.append(f"Cannot reach OpenAI API: {e!s}")
             return {
                 "name": "openai_api",
                 "status": "error",
-                "message": f"API unreachable: {str(e)}",
+                "message": f"API unreachable: {e!s}",
             }
 
     async def _test_sui_rpc_connectivity(self) -> dict[str, Any]:
@@ -551,12 +564,10 @@ class ConfigurationValidator:
 
         if self.settings.exchange.bluefin_rpc_url:
             rpc_url = self.settings.exchange.bluefin_rpc_url
+        elif network == "mainnet":
+            rpc_url = "https://fullnode.mainnet.sui.io:443"
         else:
-            # Use default Sui RPC URLs
-            if network == "mainnet":
-                rpc_url = "https://fullnode.mainnet.sui.io:443"
-            else:
-                rpc_url = "https://fullnode.testnet.sui.io:443"
+            rpc_url = "https://fullnode.testnet.sui.io:443"
 
         try:
             # Test with a simple RPC call
@@ -596,11 +607,11 @@ class ConfigurationValidator:
                             "message": f"RPC status: {response.status}",
                         }
         except Exception as e:
-            self.errors.append(f"Cannot reach Sui RPC at {rpc_url}: {str(e)}")
+            self.errors.append(f"Cannot reach Sui RPC at {rpc_url}: {e!s}")
             return {
                 "name": "sui_rpc",
                 "status": "error",
-                "message": f"RPC unreachable: {str(e)}",
+                "message": f"RPC unreachable: {e!s}",
             }
 
     async def _test_bluefin_api_connectivity(self) -> dict[str, Any]:
@@ -643,11 +654,11 @@ class ConfigurationValidator:
                             "message": f"API status: {response.status}",
                         }
         except Exception as e:
-            self.errors.append(f"Cannot reach Bluefin API: {str(e)}")
+            self.errors.append(f"Cannot reach Bluefin API: {e!s}")
             return {
                 "name": "bluefin_api",
                 "status": "error",
-                "message": f"API unreachable: {str(e)}",
+                "message": f"API unreachable: {e!s}",
             }
 
     def generate_validation_report(self) -> str:
@@ -1548,12 +1559,10 @@ class ExchangeSettings(BaseModel):
                 # Add custom RPC if specified
                 if self.bluefin_rpc_url:
                     endpoints["custom_rpc"] = self.bluefin_rpc_url
+                elif self.bluefin_network == "mainnet":
+                    endpoints["default_rpc"] = "https://fullnode.mainnet.sui.io:443"
                 else:
-                    # Add default RPC URLs
-                    if self.bluefin_network == "mainnet":
-                        endpoints["default_rpc"] = "https://fullnode.mainnet.sui.io:443"
-                    else:
-                        endpoints["default_rpc"] = "https://fullnode.testnet.sui.io:443"
+                    endpoints["default_rpc"] = "https://fullnode.testnet.sui.io:443"
 
             except ImportError:
                 # Fallback if endpoint config is not available
@@ -2626,7 +2635,7 @@ class ConfigurationMonitor:
                     status["issues"].extend(endpoint_issues)
                     status["overall_status"] = "degraded"
             except Exception as e:
-                status["issues"].append(f"Endpoint validation error: {str(e)}")
+                status["issues"].append(f"Endpoint validation error: {e!s}")
                 status["overall_status"] = "unhealthy"
 
         # Check environment consistency

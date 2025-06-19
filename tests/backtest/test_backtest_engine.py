@@ -13,7 +13,7 @@ from bot.backtest.engine import BacktestEngine, BacktestResults, BacktestTrade
 class TestBacktestEngine:
     """Test cases for the backtest engine."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def sample_data(self):
         """Create sample OHLCV data for backtesting."""
         # Create 1000 candles of sample data
@@ -52,7 +52,7 @@ class TestBacktestEngine:
         assert len(engine.trades) == 0
         assert engine.current_position is None
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_run_backtest_basic(self, sample_data):
         """Test basic backtest execution."""
         engine = BacktestEngine(initial_balance=Decimal("10000"))
@@ -75,7 +75,7 @@ class TestBacktestEngine:
         assert results.total_trades >= 0
         assert isinstance(results.trades, list)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_backtest_with_llm_strategy(self, sample_data):
         """Test backtest with LLM strategy (fallback mode)."""
         engine = BacktestEngine()
@@ -133,7 +133,7 @@ class TestBacktestEngine:
         assert len(engine.trades) == 0
         assert engine.current_position is None
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_trade_execution_flow(self):
         """Test trade execution in backtest."""
         engine = BacktestEngine()
@@ -161,7 +161,7 @@ class TestBacktestEngine:
         assert engine.current_position.side == "LONG"
         assert engine.current_position.entry_price == Decimal("50050")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_position_closing(self):
         """Test position closing in backtest."""
         engine = BacktestEngine()
@@ -195,7 +195,7 @@ class TestBacktestEngine:
         assert trade.pnl > 0
         assert trade.exit_reason == "Take Profit"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_stop_loss_execution(self):
         """Test stop loss execution."""
         engine = BacktestEngine()
@@ -227,7 +227,7 @@ class TestBacktestEngine:
         assert len(engine.trades) == 1
         assert engine.trades[0].exit_reason == "Stop Loss"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_take_profit_execution(self):
         """Test take profit execution."""
         engine = BacktestEngine()

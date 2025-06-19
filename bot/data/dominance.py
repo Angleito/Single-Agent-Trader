@@ -1557,7 +1557,7 @@ class DominanceCandleBuilder:
             logger.error(f"Error during candle validation: {e}")
             return {
                 "is_valid": False,
-                "errors": [f"Validation failed with exception: {str(e)}"],
+                "errors": [f"Validation failed with exception: {e!s}"],
                 "warnings": [],
                 "statistics": {},
                 "quality_score": 0,
@@ -1740,7 +1740,7 @@ class DominanceCandleBuilder:
             logger.error(f"Error during data integrity check: {e}")
             return {
                 "integrity_score": 0,
-                "issues": [f"Integrity check failed with exception: {str(e)}"],
+                "issues": [f"Integrity check failed with exception: {e!s}"],
                 "gaps": [],
                 "duplicates": [],
                 "statistics": {},
@@ -1944,7 +1944,7 @@ class DominanceCandleBuilder:
 
         except Exception as e:
             logger.error(f"Error calculating candle statistics: {e}")
-            return {"error": f"Failed to calculate statistics: {str(e)}"}
+            return {"error": f"Failed to calculate statistics: {e!s}"}
 
     def _validate_ohlc_relationship(
         self, candle: DominanceCandleData, index: int, errors: list, warnings: list
@@ -1976,7 +1976,7 @@ class DominanceCandleBuilder:
             return valid
 
         except Exception as e:
-            errors.append(f"Candle {index}: Error validating OHLC - {str(e)}")
+            errors.append(f"Candle {index}: Error validating OHLC - {e!s}")
             return False
 
     def _validate_timestamp(
@@ -2005,7 +2005,7 @@ class DominanceCandleBuilder:
             return True
 
         except Exception as e:
-            errors.append(f"Candle {index}: Error validating timestamp - {str(e)}")
+            errors.append(f"Candle {index}: Error validating timestamp - {e!s}")
             return False
 
     def _validate_dominance_ranges(
@@ -2038,9 +2038,7 @@ class DominanceCandleBuilder:
             return valid
 
         except Exception as e:
-            errors.append(
-                f"Candle {index}: Error validating dominance ranges - {str(e)}"
-            )
+            errors.append(f"Candle {index}: Error validating dominance ranges - {e!s}")
             return False
 
     def _validate_technical_indicators(
@@ -2076,7 +2074,7 @@ class DominanceCandleBuilder:
 
         except Exception as e:
             errors.append(
-                f"Candle {index}: Error validating technical indicators - {str(e)}"
+                f"Candle {index}: Error validating technical indicators - {e!s}"
             )
             return False
 
@@ -2118,9 +2116,7 @@ class DominanceCandleBuilder:
             return nan_count, inf_count
 
         except Exception as e:
-            errors.append(
-                f"Candle {index}: Error checking NaN/infinite values - {str(e)}"
-            )
+            errors.append(f"Candle {index}: Error checking NaN/infinite values - {e!s}")
             return 1, 0  # Count as error
 
     def _validate_volume_consistency(
@@ -2136,7 +2132,7 @@ class DominanceCandleBuilder:
                 )
 
         except Exception as e:
-            warnings.append(f"Candle {index}: Error validating volume - {str(e)}")
+            warnings.append(f"Candle {index}: Error validating volume - {e!s}")
 
     def _count_ema_crossovers(
         self, candles: list[DominanceCandleData]

@@ -34,31 +34,21 @@ logger = logging.getLogger(__name__)
 class ExchangeError(Exception):
     """Base exception for exchange errors."""
 
-    pass
-
 
 class ExchangeConnectionError(ExchangeError):
     """Connection-related errors."""
-
-    pass
 
 
 class ExchangeAuthError(ExchangeError):
     """Authentication-related errors."""
 
-    pass
-
 
 class ExchangeOrderError(ExchangeError):
     """Order execution errors."""
 
-    pass
-
 
 class ExchangeInsufficientFundsError(ExchangeError):
     """Insufficient funds errors."""
-
-    pass
 
 
 class BaseExchange(ABC):
@@ -212,12 +202,10 @@ class BaseExchange(ABC):
         Returns:
             True if connection successful
         """
-        pass
 
     @abstractmethod
     async def disconnect(self) -> None:
         """Disconnect from the exchange."""
-        pass
 
     @abstractmethod
     async def execute_trade_action(
@@ -234,7 +222,6 @@ class BaseExchange(ABC):
         Returns:
             Order object if successful, None otherwise
         """
-        pass
 
     @abstractmethod
     async def place_market_order(
@@ -251,7 +238,6 @@ class BaseExchange(ABC):
         Returns:
             Order object if successful
         """
-        pass
 
     @abstractmethod
     async def place_limit_order(
@@ -273,7 +259,6 @@ class BaseExchange(ABC):
         Returns:
             Order object if successful
         """
-        pass
 
     @abstractmethod
     async def get_positions(self, symbol: str | None = None) -> list[Position]:
@@ -286,7 +271,6 @@ class BaseExchange(ABC):
         Returns:
             List of Position objects
         """
-        pass
 
     @abstractmethod
     async def get_account_balance(
@@ -301,7 +285,6 @@ class BaseExchange(ABC):
         Returns:
             Account balance in USD
         """
-        pass
 
     @abstractmethod
     async def cancel_order(self, order_id: str) -> bool:
@@ -314,7 +297,6 @@ class BaseExchange(ABC):
         Returns:
             True if successful
         """
-        pass
 
     @abstractmethod
     async def cancel_all_orders(
@@ -330,7 +312,6 @@ class BaseExchange(ABC):
         Returns:
             True if successful
         """
-        pass
 
     @abstractmethod
     def is_connected(self) -> bool:
@@ -340,7 +321,6 @@ class BaseExchange(ABC):
         Returns:
             True if connected
         """
-        pass
 
     @abstractmethod
     def get_connection_status(self) -> dict[str, Any]:
@@ -350,7 +330,6 @@ class BaseExchange(ABC):
         Returns:
             Dictionary with connection details
         """
-        pass
 
     # Optional methods for futures trading
     async def get_futures_positions(self, symbol: str | None = None) -> list[Position]:
@@ -530,7 +509,6 @@ class BaseExchange(ABC):
         This should be implemented as a property that returns True if the exchange
         instance is configured for futures trading, False for spot trading.
         """
-        pass
 
     @abstractmethod
     async def get_trading_symbol(self, symbol: str) -> str:
@@ -547,4 +525,3 @@ class BaseExchange(ABC):
         Returns:
             The actual trading symbol used by the exchange
         """
-        pass

@@ -237,12 +237,11 @@ class CoreStrategy:
             else:  # Already SHORT
                 return "HOLD"
 
-        else:  # neutral
-            if pos_side != "FLAT":
-                # Consider closing position in neutral market
-                return "CLOSE"
-            else:
-                return "HOLD"
+        elif pos_side != "FLAT":
+            # Consider closing position in neutral market
+            return "CLOSE"
+        else:
+            return "HOLD"
 
     def _calculate_position_size(
         self, market_bias: str, indicators: IndicatorData

@@ -12,13 +12,9 @@ from typing import Literal
 class SymbolConversionError(Exception):
     """Exception raised when symbol conversion fails."""
 
-    pass
-
 
 class InvalidSymbolError(Exception):
     """Exception raised when symbol is invalid."""
-
-    pass
 
 
 def validate_symbol(symbol: str) -> bool:

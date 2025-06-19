@@ -93,7 +93,7 @@ OVERRIDE AUTHORITY: You can trade with mixed Cipher B if momentum is very strong
             formatted_prompt = self.core_prompt.format(**safe_input)
 
             # Add minimal memory context if available
-            if "memory_context" in llm_input and llm_input["memory_context"]:
+            if llm_input.get("memory_context"):
                 memory_section = f"\n\nMEMORY: {self._compress_memory_context(llm_input['memory_context'])}"
                 formatted_prompt += memory_section
 

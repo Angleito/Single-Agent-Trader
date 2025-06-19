@@ -969,7 +969,7 @@ class EMAribbon:
                 )
 
         except Exception as e:
-            return False, f"Data validation error: {str(e)}"
+            return False, f"Data validation error: {e!s}"
 
         return True, ""
 

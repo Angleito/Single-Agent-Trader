@@ -227,7 +227,7 @@ class LoadTestSuite:
                 # Create a failure result
                 failure_result = LoadTestResult(
                     test_name=test.__name__,
-                    description=f"Test failed with error: {str(e)}",
+                    description=f"Test failed with error: {e!s}",
                     duration_seconds=0,
                     total_operations=0,
                     successful_operations=0,

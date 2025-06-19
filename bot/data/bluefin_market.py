@@ -24,8 +24,6 @@ logger = logging.getLogger(__name__)
 class BluefinDataError(Exception):
     """Exception raised when Bluefin data operations fail."""
 
-    pass
-
 
 class BluefinMarketDataProvider:
     """
@@ -219,7 +217,7 @@ class BluefinMarketDataProvider:
                         extra={"provider_id": self.provider_id},
                     )
                 except Exception as e:
-                    error_msg = f"Failed to initialize HTTP session: {str(e)}"
+                    error_msg = f"Failed to initialize HTTP session: {e!s}"
                     logger.error(
                         "HTTP session initialization failed",
                         extra={
@@ -1782,11 +1780,10 @@ class BluefinMarketDataProvider:
                                     self._ohlcv_cache = self._ohlcv_cache[
                                         -self._extended_history_limit :
                                     ]
-                            else:
-                                if len(self._ohlcv_cache) > self.candle_limit:
-                                    self._ohlcv_cache = self._ohlcv_cache[
-                                        -self.candle_limit :
-                                    ]
+                            elif len(self._ohlcv_cache) > self.candle_limit:
+                                self._ohlcv_cache = self._ohlcv_cache[
+                                    -self.candle_limit :
+                                ]
 
                             # Notify subscribers
                             await self._notify_subscribers(candle)

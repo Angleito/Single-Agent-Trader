@@ -35,7 +35,7 @@ from bot.validator import TradeValidator
 class TestComponentIntegration:
     """Test integration between major bot components."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def sample_ohlcv_data(self):
         """Create sample OHLCV data for testing."""
         dates = pd.date_range("2024-01-01", periods=200, freq="1min")
@@ -69,7 +69,7 @@ class TestComponentIntegration:
 
         return pd.DataFrame(data).set_index("timestamp")
 
-    @pytest.fixture
+    @pytest.fixture()
     def market_data_list(self, sample_ohlcv_data):
         """Convert DataFrame to MarketData list."""
         market_data = []
@@ -361,19 +361,17 @@ class TestComponentIntegration:
                 assert (
                     approved
                 ), f"Scenario '{scenario['name']}' should be approved: {reason}"
+            elif approved:
+                # If approved, should be significantly modified
+                assert (
+                    final_action.size_pct < scenario["action"].size_pct
+                ), f"Scenario '{scenario['name']}' should be modified"
             else:
-                # Either rejected or significantly modified
-                if approved:
-                    # If approved, should be significantly modified
-                    assert (
-                        final_action.size_pct < scenario["action"].size_pct
-                    ), f"Scenario '{scenario['name']}' should be modified"
-                else:
-                    assert (
-                        not approved
-                    ), f"Scenario '{scenario['name']}' should be rejected: {reason}"
+                assert (
+                    not approved
+                ), f"Scenario '{scenario['name']}' should be rejected: {reason}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_exchange_client_order_flow_integration(self):
         """Test CoinbaseClient integration with order flow."""
         # Mock the exchange client

@@ -28,38 +28,26 @@ if TYPE_CHECKING:
     from langchain_core.callbacks import BaseCallbackHandler
     from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
     from langchain_core.outputs import LLMResult
+elif LANGCHAIN_AVAILABLE:
+    from langchain_core.callbacks import BaseCallbackHandler
+    from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+    from langchain_core.outputs import LLMResult
 else:
-    # Runtime imports with fallback
-    if LANGCHAIN_AVAILABLE:
-        from langchain_core.callbacks import BaseCallbackHandler
-        from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
-        from langchain_core.outputs import LLMResult
-    else:
-        # Graceful degradation when LangChain is not available
-        class BaseCallbackHandler:
-            """Dummy BaseCallbackHandler for when LangChain is unavailable."""
+    # Graceful degradation when LangChain is not available
+    class BaseCallbackHandler:
+        """Dummy BaseCallbackHandler for when LangChain is unavailable."""
 
-            pass
+    class AIMessage:
+        """Dummy AIMessage for when LangChain is unavailable."""
 
-        class AIMessage:
-            """Dummy AIMessage for when LangChain is unavailable."""
+    class BaseMessage:
+        """Dummy BaseMessage for when LangChain is unavailable."""
 
-            pass
+    class HumanMessage:
+        """Dummy HumanMessage for when LangChain is unavailable."""
 
-        class BaseMessage:
-            """Dummy BaseMessage for when LangChain is unavailable."""
-
-            pass
-
-        class HumanMessage:
-            """Dummy HumanMessage for when LangChain is unavailable."""
-
-            pass
-
-        class LLMResult:
-            """Dummy LLMResult for when LangChain is unavailable."""
-
-            pass
+    class LLMResult:
+        """Dummy LLMResult for when LangChain is unavailable."""
 
 
 from bot.config import settings

@@ -10,13 +10,13 @@ import pytest
 from bot.data.dominance import DominanceData, DominanceDataProvider
 
 
-@pytest.fixture
+@pytest.fixture()
 def dominance_provider():
     """Create a dominance data provider instance."""
     return DominanceDataProvider(data_source="coingecko", update_interval=300)
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_coingecko_response():
     """Mock CoinGecko API response."""
     return {
@@ -43,7 +43,7 @@ def mock_coingecko_response():
     }
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_dominance_data():
     """Create sample dominance data."""
     return DominanceData(
@@ -67,7 +67,7 @@ def sample_dominance_data():
 class TestDominanceDataProvider:
     """Test cases for DominanceDataProvider."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_init(self, dominance_provider):
         """Test provider initialization."""
         assert dominance_provider.data_source == "coingecko"
@@ -75,7 +75,7 @@ class TestDominanceDataProvider:
         assert dominance_provider._dominance_cache == []
         assert dominance_provider._session is None
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_connect_disconnect(self, dominance_provider):
         """Test connection lifecycle."""
         with patch("aiohttp.ClientSession"):
@@ -87,7 +87,7 @@ class TestDominanceDataProvider:
             assert dominance_provider._session is None
             assert dominance_provider._running is False
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_fetch_coingecko_dominance(
         self, dominance_provider, mock_coingecko_response
     ):
@@ -116,7 +116,7 @@ class TestDominanceDataProvider:
         assert result.stablecoin_dominance == 7.0  # 140B / 2T * 100
         assert result.stablecoin_velocity == 0.5  # 70B / 140B
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_market_sentiment(
         self, dominance_provider, sample_dominance_data
     ):
@@ -249,7 +249,7 @@ class TestDominanceDataProvider:
         assert "velocity" in df.columns
         assert "rsi" in df.columns
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_update_loop(self, dominance_provider):
         """Test the periodic update loop."""
         # Mock fetch method
@@ -307,7 +307,7 @@ class TestDominanceDataProvider:
         assert latest.dominance_rsi is not None
         assert 0 <= latest.dominance_rsi <= 100
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_coinmarketcap_integration(self, dominance_provider):
         """Test CoinMarketCap data source (mocked)."""
         dominance_provider.data_source = "coinmarketcap"
@@ -350,7 +350,7 @@ class TestDominanceDataProvider:
         headers = call_args[1]["headers"]
         assert headers["X-CMC_PRO_API_KEY"] == "test-api-key"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_error_handling(self, dominance_provider):
         """Test error handling in data fetching."""
         # Mock failed response
@@ -365,7 +365,7 @@ class TestDominanceDataProvider:
         result = await dominance_provider.fetch_current_dominance()
         assert result is None
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_context_manager(self, dominance_provider):
         """Test async context manager usage."""
         async with dominance_provider as provider:

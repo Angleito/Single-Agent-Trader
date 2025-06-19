@@ -406,7 +406,9 @@ class DockerLogParser:
         try:
             # Run docker logs command to get historical logs
             cmd = ["docker", "logs", "--tail", str(tail_lines), self.container_name]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=30, check=False
+            )
 
             if result.returncode != 0:
                 logger.error(f"Docker logs command failed: {result.stderr}")
@@ -505,7 +507,9 @@ class DockerLogParser:
                 "--format",
                 "{{.Names}}",
             ]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=10, check=False
+            )
 
             return self.container_name in result.stdout
 

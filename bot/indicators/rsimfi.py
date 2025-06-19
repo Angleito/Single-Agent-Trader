@@ -650,7 +650,7 @@ class RSIMFIIndicator:
                 return False, f"Found {invalid_rows} rows where high < low"
 
         except Exception as e:
-            return False, f"Data validation error: {str(e)}"
+            return False, f"Data validation error: {e!s}"
 
         return True, ""
 

@@ -15,20 +15,19 @@ from pathlib import Path
 # Add the parent directory to the Python path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from bot.exchange.bluefin_client import BluefinServiceClient
 from bot.monitoring import (
-    BluefinHealthMonitor,
-    ServiceDiscovery,
     BluefinDiagnosticTools,
-    PerformanceMetricsCollector,
+    BluefinHealthMonitor,
     MonitoringDashboard,
+    PerformanceMetricsCollector,
+    ServiceDiscovery,
 )
 from bot.monitoring.auto_recovery import AutoRecoveryEngine
-from bot.exchange.bluefin_client import BluefinServiceClient
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -36,68 +35,66 @@ logger = logging.getLogger(__name__)
 class ComprehensiveMonitoringSystem:
     """
     Complete monitoring system for Bluefin services.
-    
+
     This class demonstrates how to integrate all monitoring components
     to create a comprehensive health monitoring and automatic recovery system.
     """
 
     def __init__(self, bluefin_service_url: str = "http://bluefin-service:8080"):
         self.bluefin_service_url = bluefin_service_url
-        
+
         # Initialize monitoring components
         self.health_monitor = BluefinHealthMonitor(bluefin_service_url)
         self.service_discovery = ServiceDiscovery()
         self.performance_collector = PerformanceMetricsCollector(bluefin_service_url)
         self.diagnostic_tools = BluefinDiagnosticTools(bluefin_service_url)
         self.monitoring_dashboard = MonitoringDashboard(
-            port=9090, 
-            bluefin_service_url=bluefin_service_url
+            port=9090, bluefin_service_url=bluefin_service_url
         )
-        
+
         # Initialize auto recovery (depends on other components)
         self.auto_recovery = AutoRecoveryEngine(
-            self.health_monitor,
-            self.service_discovery
+            self.health_monitor, self.service_discovery
         )
-        
+
         # Initialize Bluefin client for testing
         self.bluefin_client = BluefinServiceClient(bluefin_service_url)
-        
+
         # State tracking
         self.is_running = False
 
     async def start(self) -> None:
         """Start all monitoring components."""
         logger.info("🚀 Starting comprehensive Bluefin monitoring system")
-        
+
         try:
             # Start core monitoring components
             logger.info("Starting health monitor...")
             await self.health_monitor.start_monitoring()
-            
+
             logger.info("Starting service discovery...")
             await self.service_discovery.start_discovery()
-            
+
             logger.info("Starting performance metrics collection...")
             await self.performance_collector.start_collection()
-            
+
             logger.info("Starting auto recovery engine...")
             await self.auto_recovery.start()
-            
+
             logger.info("Starting monitoring dashboard...")
             await self.monitoring_dashboard.start()
-            
+
             self.is_running = True
-            
+
             logger.info("✅ All monitoring components started successfully!")
-            logger.info(f"📊 Dashboard available at: http://localhost:9090")
-            
+            logger.info("📊 Dashboard available at: http://localhost:9090")
+
             # Run initial diagnostics
             await self._run_initial_diagnostics()
-            
+
             # Demonstrate monitoring capabilities
             await self._demonstrate_monitoring()
-            
+
         except Exception as e:
             logger.error(f"❌ Failed to start monitoring system: {e}")
             await self.stop()
@@ -106,9 +103,9 @@ class ComprehensiveMonitoringSystem:
     async def stop(self) -> None:
         """Stop all monitoring components gracefully."""
         logger.info("🛑 Stopping comprehensive monitoring system")
-        
+
         self.is_running = False
-        
+
         # Stop components in reverse order
         try:
             await self.monitoring_dashboard.stop()
@@ -116,7 +113,7 @@ class ComprehensiveMonitoringSystem:
             await self.performance_collector.stop_collection()
             await self.service_discovery.stop_discovery()
             await self.health_monitor.stop_monitoring()
-            
+
             logger.info("✅ All monitoring components stopped successfully")
         except Exception as e:
             logger.error(f"❌ Error stopping monitoring system: {e}")
@@ -124,65 +121,71 @@ class ComprehensiveMonitoringSystem:
     async def _run_initial_diagnostics(self) -> None:
         """Run initial diagnostic checks."""
         logger.info("🔧 Running initial diagnostic checks...")
-        
+
         try:
             # Run quick diagnostics
             report = await self.diagnostic_tools.run_quick_diagnostic()
-            
+
             logger.info(f"📋 Diagnostic Report ID: {report.report_id}")
             logger.info(f"🎯 Overall Status: {report.overall_status}")
-            
+
             # Log key findings
             if report.results:
                 passed_checks = sum(1 for r in report.results if r.status == "pass")
                 total_checks = len(report.results)
                 logger.info(f"✅ Checks Passed: {passed_checks}/{total_checks}")
-                
+
                 # Log any failures
                 failed_checks = [r for r in report.results if r.status == "fail"]
                 if failed_checks:
                     logger.warning("⚠️ Failed Checks:")
                     for check in failed_checks:
                         logger.warning(f"  - {check.check_name}: {check.message}")
-        
+
         except Exception as e:
             logger.error(f"❌ Initial diagnostics failed: {e}")
 
     async def _demonstrate_monitoring(self) -> None:
         """Demonstrate monitoring capabilities."""
         logger.info("🎯 Demonstrating monitoring capabilities...")
-        
+
         try:
             # Test connectivity monitoring
             logger.info("Testing connectivity monitoring...")
             connectivity_status = await self.bluefin_client.get_connectivity_status()
-            logger.info(f"📡 Connection Status: {connectivity_status['connection']['connected']}")
-            logger.info(f"📊 Success Rate: {connectivity_status['metrics']['success_rate']:.1f}%")
-            
+            logger.info(
+                f"📡 Connection Status: {connectivity_status['connection']['connected']}"
+            )
+            logger.info(
+                f"📊 Success Rate: {connectivity_status['metrics']['success_rate']:.1f}%"
+            )
+
             # Test comprehensive connectivity test
             logger.info("Running comprehensive connectivity test...")
-            connectivity_test = await self.bluefin_client.run_comprehensive_connectivity_test()
+            connectivity_test = (
+                await self.bluefin_client.run_comprehensive_connectivity_test()
+            )
             logger.info(f"🧪 Connectivity Test: {connectivity_test['overall_status']}")
-            
+
             # Show service discovery results
             logger.info("Checking service discovery...")
             discovery_status = self.service_discovery.get_discovery_status()
             logger.info(f"🔍 Services Discovered: {discovery_status['total_services']}")
             logger.info(f"💚 Healthy Services: {discovery_status['healthy_services']}")
-            
+
             # Show performance metrics
             logger.info("Checking performance metrics...")
             metrics_summary = self.performance_collector.get_metrics_summary()
-            if metrics_summary['collection_status']['is_collecting']:
+            if metrics_summary["collection_status"]["is_collecting"]:
                 logger.info("📈 Performance metrics are being collected")
                 logger.info(f"📊 Total Metrics: {metrics_summary['metrics_count']}")
-            
+
             # Show auto recovery status
             logger.info("Checking auto recovery...")
             recovery_status = self.auto_recovery.get_recovery_status()
             logger.info(f"🔄 Recovery Rules: {recovery_status['total_rules']}")
             logger.info(f"✅ Enabled Rules: {recovery_status['enabled_rules']}")
-            
+
         except Exception as e:
             logger.error(f"❌ Error demonstrating monitoring: {e}")
 
@@ -194,34 +197,33 @@ class ComprehensiveMonitoringSystem:
             discovery_status = self.service_discovery.get_discovery_status()
             metrics_summary = self.performance_collector.get_metrics_summary()
             recovery_status = self.auto_recovery.get_recovery_status()
-            
+
             return {
                 "monitoring_active": self.is_running,
                 "bluefin_service_url": self.bluefin_service_url,
                 "health_monitor": {
                     "status": health_status.get("overall_health", "unknown"),
                     "monitoring_active": health_status.get("monitoring_active", False),
-                    "uptime_seconds": health_status.get("uptime_seconds", 0)
+                    "uptime_seconds": health_status.get("uptime_seconds", 0),
                 },
                 "service_discovery": {
                     "active": discovery_status.get("discovery_active", False),
                     "total_services": discovery_status.get("total_services", 0),
-                    "healthy_services": discovery_status.get("healthy_services", 0)
+                    "healthy_services": discovery_status.get("healthy_services", 0),
                 },
                 "performance_metrics": {
-                    "collecting": metrics_summary.get("collection_status", {}).get("is_collecting", False),
+                    "collecting": metrics_summary.get("collection_status", {}).get(
+                        "is_collecting", False
+                    ),
                     "metrics_count": metrics_summary.get("metrics_count", 0),
-                    "active_alerts": metrics_summary.get("active_alerts", 0)
+                    "active_alerts": metrics_summary.get("active_alerts", 0),
                 },
                 "auto_recovery": {
                     "active": recovery_status.get("recovery_active", False),
                     "total_rules": recovery_status.get("total_rules", 0),
-                    "recent_recoveries": recovery_status.get("recent_recoveries", 0)
+                    "recent_recoveries": recovery_status.get("recent_recoveries", 0),
                 },
-                "dashboard": {
-                    "url": "http://localhost:9090",
-                    "active": True
-                }
+                "dashboard": {"url": "http://localhost:9090", "active": True},
             }
         except Exception as e:
             logger.error(f"Error getting system status: {e}")
@@ -230,30 +232,32 @@ class ComprehensiveMonitoringSystem:
     async def run_diagnostic_suite(self) -> dict:
         """Run comprehensive diagnostic suite."""
         logger.info("🔧 Running comprehensive diagnostic suite...")
-        
+
         try:
             # Run comprehensive diagnostics
             report = await self.diagnostic_tools.run_comprehensive_diagnostics(
                 include_performance_tests=True,
-                include_stress_tests=False  # Skip stress tests for this example
+                include_stress_tests=False,  # Skip stress tests for this example
             )
-            
+
             logger.info(f"📋 Comprehensive Diagnostic Report: {report.overall_status}")
-            
+
             # Log summary
-            if hasattr(report, 'summary'):
+            if hasattr(report, "summary"):
                 summary = report.summary
                 logger.info(f"✅ Success Rate: {summary.get('success_rate', 0):.1f}%")
-                logger.info(f"⏱️  Total Duration: {summary.get('total_duration_ms', 0):.1f}ms")
-                
+                logger.info(
+                    f"⏱️  Total Duration: {summary.get('total_duration_ms', 0):.1f}ms"
+                )
+
                 # Log recommendations
-                if summary.get('recommendations'):
+                if summary.get("recommendations"):
                     logger.info("💡 Recommendations:")
-                    for rec in summary['recommendations'][:3]:  # Show top 3
+                    for rec in summary["recommendations"][:3]:  # Show top 3
                         logger.info(f"  - {rec}")
-            
+
             return report.__dict__
-            
+
         except Exception as e:
             logger.error(f"❌ Diagnostic suite failed: {e}")
             return {"error": str(e)}
@@ -263,63 +267,71 @@ async def main():
     """Main function demonstrating the monitoring system."""
     # Configuration
     BLUEFIN_SERVICE_URL = "http://localhost:8080"  # Adjust as needed
-    
+
     # Create monitoring system
     monitoring_system = ComprehensiveMonitoringSystem(BLUEFIN_SERVICE_URL)
-    
+
     # Setup signal handlers for graceful shutdown
     def signal_handler(signum, frame):
         logger.info(f"Received signal {signum}, initiating shutdown...")
-        raise KeyboardInterrupt()
-    
+        raise KeyboardInterrupt
+
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
+
     try:
         # Start the monitoring system
         await monitoring_system.start()
-        
+
         # Run for a demonstration period
         logger.info("🔄 Monitoring system is running...")
         logger.info("📊 Open http://localhost:9090 to view the dashboard")
         logger.info("🛑 Press Ctrl+C to stop the monitoring system")
-        
+
         # Monitor and report status periodically
         status_report_interval = 60  # seconds
         diagnostic_interval = 300  # seconds (5 minutes)
-        
+
         last_status_report = 0
         last_diagnostic = 0
-        
+
         while monitoring_system.is_running:
             current_time = asyncio.get_event_loop().time()
-            
+
             # Status report
             if current_time - last_status_report >= status_report_interval:
                 system_status = await monitoring_system.get_system_status()
                 logger.info("📊 System Status Update:")
                 logger.info(f"  🏥 Health: {system_status['health_monitor']['status']}")
-                logger.info(f"  🔍 Services: {system_status['service_discovery']['healthy_services']}/{system_status['service_discovery']['total_services']}")
-                logger.info(f"  📈 Metrics: {system_status['performance_metrics']['metrics_count']} collected")
-                logger.info(f"  🔄 Recoveries: {system_status['auto_recovery']['recent_recoveries']} recent")
-                
+                logger.info(
+                    f"  🔍 Services: {system_status['service_discovery']['healthy_services']}/{system_status['service_discovery']['total_services']}"
+                )
+                logger.info(
+                    f"  📈 Metrics: {system_status['performance_metrics']['metrics_count']} collected"
+                )
+                logger.info(
+                    f"  🔄 Recoveries: {system_status['auto_recovery']['recent_recoveries']} recent"
+                )
+
                 last_status_report = current_time
-            
+
             # Periodic diagnostics
             if current_time - last_diagnostic >= diagnostic_interval:
                 logger.info("🔧 Running periodic diagnostics...")
                 diagnostic_result = await monitoring_system.run_diagnostic_suite()
-                
+
                 if "error" not in diagnostic_result:
                     logger.info("✅ Periodic diagnostics completed successfully")
                 else:
-                    logger.warning(f"⚠️ Periodic diagnostics had issues: {diagnostic_result['error']}")
-                
+                    logger.warning(
+                        f"⚠️ Periodic diagnostics had issues: {diagnostic_result['error']}"
+                    )
+
                 last_diagnostic = current_time
-            
+
             # Short sleep to prevent busy waiting
             await asyncio.sleep(1)
-    
+
     except KeyboardInterrupt:
         logger.info("🛑 Shutdown requested by user")
     except Exception as e:
@@ -345,7 +357,7 @@ if __name__ == "__main__":
     print()
     print("🚀 Starting monitoring system...")
     print()
-    
+
     # Run the monitoring system
     try:
         asyncio.run(main())

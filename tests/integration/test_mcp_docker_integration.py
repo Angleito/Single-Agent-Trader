@@ -43,6 +43,7 @@ def ensure_mcp_running():
         ],
         capture_output=True,
         text=True,
+        check=False,
     )
 
     if CONTAINER_NAME not in result.stdout:
@@ -50,13 +51,11 @@ def ensure_mcp_running():
         subprocess.run(["docker-compose", "up", "-d", "mcp-memory"], check=True)
         time.sleep(5)  # Wait for startup
 
-    yield
-
     # Optionally stop container after tests (comment out to keep running)
     # subprocess.run(["docker-compose", "stop", "mcp-memory"])
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_mcp_health_check(ensure_mcp_running):
     """Test MCP server health check endpoint."""
     async with httpx.AsyncClient() as client:
@@ -69,7 +68,7 @@ async def test_mcp_health_check(ensure_mcp_running):
         assert "memory_count" in data
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_mcp_connection(ensure_mcp_running):
     """Test connecting to MCP memory server."""
     server = MCPMemoryServer(server_url=MCP_SERVER_URL)
@@ -80,7 +79,7 @@ async def test_mcp_connection(ensure_mcp_running):
     await server.disconnect()
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_store_and_retrieve_experience(ensure_mcp_running):
     """Test storing and retrieving trading experiences."""
     server = MCPMemoryServer(server_url=MCP_SERVER_URL)
@@ -167,7 +166,7 @@ async def test_store_and_retrieve_experience(ensure_mcp_running):
     await server.disconnect()
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_memory_persistence_across_connections(ensure_mcp_running):
     """Test that memories persist across different connections."""
     # First connection - store data
@@ -231,7 +230,7 @@ async def test_memory_persistence_across_connections(ensure_mcp_running):
     await server2.disconnect()
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_pattern_indexing(ensure_mcp_running):
     """Test pattern-based retrieval."""
     server = MCPMemoryServer(server_url=MCP_SERVER_URL)
@@ -290,7 +289,7 @@ async def test_pattern_indexing(ensure_mcp_running):
     await server.disconnect()
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_container_resource_usage(ensure_mcp_running):
     """Test container resource usage is within limits."""
     # Get container stats
@@ -305,6 +304,7 @@ async def test_container_resource_usage(ensure_mcp_running):
         ],
         capture_output=True,
         text=True,
+        check=False,
     )
 
     if result.returncode == 0:

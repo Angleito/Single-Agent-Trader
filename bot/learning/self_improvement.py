@@ -232,9 +232,8 @@ class SelfImprovementEngine:
                 if "dominance" in condition_name:
                     if condition_func(exp.dominance_data):
                         active_conditions.append(condition_name)
-                else:
-                    if condition_func(exp.indicators):
-                        active_conditions.append(condition_name)
+                elif condition_func(exp.indicators):
+                    active_conditions.append(condition_name)
 
             # Update stats for each active condition
             for condition in active_conditions:
@@ -731,9 +730,8 @@ class SelfImprovementEngine:
             if "dominance" in condition_name:
                 if current_dominance and condition_func(current_dominance):
                     active_conditions.append(condition_name)
-            else:
-                if condition_func(current_indicators):
-                    active_conditions.append(condition_name)
+            elif condition_func(current_indicators):
+                active_conditions.append(condition_name)
 
         # Look up historical performance for these conditions
         relevant_patterns = []

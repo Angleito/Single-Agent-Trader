@@ -19,7 +19,7 @@ def run_command(cmd: list[str], description: str) -> bool:
     print(f"Running: {' '.join(cmd)}")
 
     start_time = time.time()
-    result = subprocess.run(cmd, capture_output=False)
+    result = subprocess.run(cmd, capture_output=False, check=False)
     elapsed = time.time() - start_time
 
     if result.returncode == 0:

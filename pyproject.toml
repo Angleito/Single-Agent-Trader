@@ -159,7 +159,7 @@ max-returns = 8
 max-statements = 60
 
 [tool.vulture]
-min_confidence = 80
+min_confidence = 95
 paths = ["bot"]
 ignore_decorators = ["@pytest.fixture", "@property", "@cached_property", "@click.command", "@click.option"]
 ignore_names = ["_*", "test_*", "setUp", "tearDown"]

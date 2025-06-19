@@ -948,14 +948,12 @@ class SchaffTrendCycle:
 
                 if self.gap_threshold_multiplier is not None:
                     threshold_multiplier = self.gap_threshold_multiplier
-                else:
-                    # Auto-detect appropriate threshold based on median interval
-                    if median_seconds <= 60:  # High frequency (≤60s)
-                        threshold_multiplier = 10
-                    elif median_seconds <= 300:  # Medium frequency (≤300s)
-                        threshold_multiplier = 5
-                    else:  # Low frequency (>300s)
-                        threshold_multiplier = 3
+                elif median_seconds <= 60:  # High frequency (≤60s)
+                    threshold_multiplier = 10
+                elif median_seconds <= 300:  # Medium frequency (≤300s)
+                    threshold_multiplier = 5
+                else:  # Low frequency (>300s)
+                    threshold_multiplier = 3
 
                 large_gaps = (time_diffs > median_diff * threshold_multiplier).sum()
                 if large_gaps > 0:

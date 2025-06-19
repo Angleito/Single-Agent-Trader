@@ -45,13 +45,9 @@ logger = logging.getLogger(__name__)
 class BluefinWebSocketError(Exception):
     """Base exception for Bluefin WebSocket errors."""
 
-    pass
-
 
 class BluefinWebSocketConnectionError(BluefinWebSocketError):
     """Exception raised when WebSocket connection fails."""
-
-    pass
 
 
 class BluefinWebSocketClient:
@@ -505,10 +501,8 @@ class BluefinWebSocketClient:
                 await self._handle_ticker_update(data)
             elif channel == "orderbook" or "orderbook" in str(channel):
                 await self._handle_orderbook_update(data)
-            else:
-                # Log unhandled message types periodically
-                if self._message_count % 100 == 0:
-                    logger.debug(f"Unhandled event/channel: {event_name or channel}")
+            elif self._message_count % 100 == 0:
+                logger.debug(f"Unhandled event/channel: {event_name or channel}")
 
     async def _handle_trade_update(self, data: dict[str, Any]) -> None:
         """

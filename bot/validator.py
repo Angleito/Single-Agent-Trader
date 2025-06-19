@@ -62,7 +62,7 @@ class TradeValidator:
 
         except Exception as e:
             logger.error(f"Validation failed: {e}")
-            return self._get_default_hold_action(f"Validation error: {str(e)}")
+            return self._get_default_hold_action(f"Validation error: {e!s}")
 
     def _parse_llm_output(
         self, llm_output: str | dict[str, Any] | TradeAction

@@ -212,9 +212,7 @@ class DivergenceDetector:
                     if (
                         fractal.fractal_type == FractalType.TOP
                         and fractal.value > last_fractal.value
-                    ):
-                        filtered[-1] = fractal
-                    elif (
+                    ) or (
                         fractal.fractal_type == FractalType.BOTTOM
                         and fractal.value < last_fractal.value
                     ):
@@ -669,7 +667,7 @@ class DivergenceDetector:
             Dictionary mapping timeframe to divergence signals
         """
         if timeframe_weights is None:
-            timeframe_weights = {tf: 1.0 for tf in data_dict.keys()}
+            timeframe_weights = {tf: 1.0 for tf in data_dict}
 
         results = {}
 

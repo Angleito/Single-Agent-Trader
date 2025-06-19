@@ -590,7 +590,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
 
         except Exception as e:
             logger.error(f"Error generating sentiment-enhanced context: {e}")
-            return f"Error generating sentiment context: {str(e)}"
+            return f"Error generating sentiment context: {e!s}"
 
     async def _get_financial_sentiment_context(self, market_state: MarketState) -> str:
         """

@@ -220,7 +220,7 @@ class WebSearchFormatter:
 
         except Exception as e:
             logger.error(f"Error formatting news results: {e}", exc_info=True)
-            return f"📰 **NEWS ANALYSIS**\n\n❌ Error processing news data: {str(e)}\n"
+            return f"📰 **NEWS ANALYSIS**\n\n❌ Error processing news data: {e!s}\n"
 
     async def format_sentiment_data(self, sentiment: SentimentResult) -> str:
         """
@@ -298,7 +298,7 @@ class WebSearchFormatter:
 
         except Exception as e:
             logger.error(f"Error formatting sentiment data: {e}", exc_info=True)
-            return f"📊 **MARKET SENTIMENT ANALYSIS**\n\n❌ Error processing sentiment data: {str(e)}\n"
+            return f"📊 **MARKET SENTIMENT ANALYSIS**\n\n❌ Error processing sentiment data: {e!s}\n"
 
     async def format_correlation_analysis(
         self, correlation: CorrelationAnalysis
@@ -368,7 +368,7 @@ class WebSearchFormatter:
 
         except Exception as e:
             logger.error(f"Error formatting correlation analysis: {e}", exc_info=True)
-            return f"🔗 **CRYPTO-NASDAQ CORRELATION ANALYSIS**\n\n❌ Error processing correlation data: {str(e)}\n"
+            return f"🔗 **CRYPTO-NASDAQ CORRELATION ANALYSIS**\n\n❌ Error processing correlation data: {e!s}\n"
 
     async def format_market_context(self, context: dict[str, Any]) -> str:
         """
@@ -436,7 +436,7 @@ class WebSearchFormatter:
 
         except Exception as e:
             logger.error(f"Error formatting market context: {e}", exc_info=True)
-            return f"🌐 **MARKET CONTEXT ANALYSIS**\n\n❌ Error processing market context: {str(e)}\n"
+            return f"🌐 **MARKET CONTEXT ANALYSIS**\n\n❌ Error processing market context: {e!s}\n"
 
     def truncate_content(self, text: str, max_length: int) -> str:
         """
@@ -521,7 +521,7 @@ class WebSearchFormatter:
 
         except Exception as e:
             logger.error(f"Error extracting key insights: {e}", exc_info=True)
-            return [f"Error extracting insights: {str(e)}"]
+            return [f"Error extracting insights: {e!s}"]
 
     # Private helper methods
 
@@ -599,7 +599,7 @@ class WebSearchFormatter:
             logger.error(f"Error processing single news item: {e}", exc_info=True)
             # Return minimal formatted content for failed items
             return FormattedContent(
-                summary=f"Error processing item: {str(e)}",
+                summary=f"Error processing item: {e!s}",
                 key_insights=[],
                 trading_signals=[],
                 market_sentiment="NEUTRAL",

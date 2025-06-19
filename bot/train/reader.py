@@ -312,9 +312,7 @@ class RAGReader:
         trend_direction = self._analyze_trend(market_conditions)
 
         # Get relevant strategy advice
-        if trend_direction == "uptrend":
-            strategies = self.search_knowledge("trend_following")
-        elif trend_direction == "downtrend":
+        if trend_direction == "uptrend" or trend_direction == "downtrend":
             strategies = self.search_knowledge("trend_following")
         else:
             strategies = self.search_knowledge("mean_reversion")

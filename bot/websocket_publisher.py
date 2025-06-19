@@ -26,11 +26,7 @@ class TradingJSONEncoder(json.JSONEncoder):
         """Convert non-serializable objects to JSON-compatible formats."""
         if isinstance(obj, Decimal):
             return float(obj)
-        elif isinstance(obj, pd.Timestamp):
-            return obj.isoformat()
-        elif isinstance(obj, datetime):
-            return obj.isoformat()
-        elif hasattr(obj, "isoformat"):  # datetime-like objects
+        elif isinstance(obj, datetime | pd.Timestamp) or hasattr(obj, "isoformat"):
             return obj.isoformat()
         elif hasattr(obj, "__dict__"):  # pydantic models and other objects
             return obj.__dict__

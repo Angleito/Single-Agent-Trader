@@ -387,7 +387,7 @@ class PaperTradingAccount:
 
             except Exception as e:
                 logger.error(f"❌ Error simulating paper trade: {e}")
-                return self._create_failed_order(action, symbol, f"ERROR: {str(e)}")
+                return self._create_failed_order(action, symbol, f"ERROR: {e!s}")
 
     def _calculate_trade_size(
         self, action: TradeAction, current_price: Decimal, symbol: str

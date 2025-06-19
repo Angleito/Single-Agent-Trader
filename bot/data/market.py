@@ -23,8 +23,6 @@ try:
     class CoinbaseAdvancedTrader(_BaseClient):
         """Adapter class exposing legacy method names used in this codebase."""
 
-        pass
-
     COINBASE_AVAILABLE = True
 
 except ImportError:

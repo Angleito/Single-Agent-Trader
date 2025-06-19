@@ -536,9 +536,7 @@ class CoinbaseResponseValidator:
             order_data = None
             if hasattr(response, "success_response"):
                 order_data = response.success_response
-            elif hasattr(response, "order_id"):
-                order_data = response
-            elif isinstance(response, dict):
+            elif hasattr(response, "order_id") or isinstance(response, dict):
                 order_data = response
 
             if not order_data:
@@ -1724,30 +1722,28 @@ class CoinbaseClient(BaseExchange):
 
                     logger.info(f"Market order placed successfully: {order_id}")
                     return order
+                elif isinstance(result, dict) and result.get("success"):
+                    order_info = result.get("order", {})
+                    order_id = order_info.get("order_id")
+
+                    order = Order(
+                        id=order_id
+                        or f"cb_{int(datetime.utcnow().timestamp() * 1000)}",
+                        symbol=symbol,
+                        side=cast(Literal["BUY", "SELL"], side),
+                        type="MARKET",
+                        quantity=quantity,
+                        status=OrderStatus.PENDING,
+                        timestamp=datetime.utcnow(),
+                        filled_quantity=Decimal("0"),
+                    )
+
+                    logger.info(f"Market order placed successfully: {order_id}")
+                    return order
                 else:
-                    # Try dictionary access for backward compatibility
-                    if isinstance(result, dict) and result.get("success"):
-                        order_info = result.get("order", {})
-                        order_id = order_info.get("order_id")
-
-                        order = Order(
-                            id=order_id
-                            or f"cb_{int(datetime.utcnow().timestamp() * 1000)}",
-                            symbol=symbol,
-                            side=cast(Literal["BUY", "SELL"], side),
-                            type="MARKET",
-                            quantity=quantity,
-                            status=OrderStatus.PENDING,
-                            timestamp=datetime.utcnow(),
-                            filled_quantity=Decimal("0"),
-                        )
-
-                        logger.info(f"Market order placed successfully: {order_id}")
-                        return order
-                    else:
-                        error_msg = str(result) if result else "Unknown error"
-                        logger.error(f"Order placement failed: {error_msg}")
-                        raise ExchangeOrderError(f"Order placement failed: {error_msg}")
+                    error_msg = str(result) if result else "Unknown error"
+                    logger.error(f"Order placement failed: {error_msg}")
+                    raise ExchangeOrderError(f"Order placement failed: {error_msg}")
             except AttributeError as e:
                 logger.error(f"Error parsing order response: {e}")
                 logger.error(f"Response type: {type(result)}, Response: {result}")
@@ -2196,34 +2192,30 @@ class CoinbaseClient(BaseExchange):
 
                     logger.info(f"Futures market order placed successfully: {order_id}")
                     return order
+                elif isinstance(result, dict) and result.get("success"):
+                    order_info = result.get("order", {})
+                    order_id = order_info.get("order_id")
+
+                    order = Order(
+                        id=order_id
+                        or f"cb_futures_{int(datetime.utcnow().timestamp() * 1000)}",
+                        symbol=symbol,
+                        side=cast(Literal["BUY", "SELL"], side),
+                        type="MARKET",
+                        quantity=quantity,
+                        status=OrderStatus.PENDING,
+                        timestamp=datetime.utcnow(),
+                        filled_quantity=Decimal("0"),
+                    )
+
+                    logger.info(f"Futures market order placed successfully: {order_id}")
+                    return order
                 else:
-                    # Try dictionary access for backward compatibility
-                    if isinstance(result, dict) and result.get("success"):
-                        order_info = result.get("order", {})
-                        order_id = order_info.get("order_id")
-
-                        order = Order(
-                            id=order_id
-                            or f"cb_futures_{int(datetime.utcnow().timestamp() * 1000)}",
-                            symbol=symbol,
-                            side=cast(Literal["BUY", "SELL"], side),
-                            type="MARKET",
-                            quantity=quantity,
-                            status=OrderStatus.PENDING,
-                            timestamp=datetime.utcnow(),
-                            filled_quantity=Decimal("0"),
-                        )
-
-                        logger.info(
-                            f"Futures market order placed successfully: {order_id}"
-                        )
-                        return order
-                    else:
-                        error_msg = str(result) if result else "Unknown error"
-                        logger.error(f"Futures order placement failed: {error_msg}")
-                        raise ExchangeOrderError(
-                            f"Futures order placement failed: {error_msg}"
-                        )
+                    error_msg = str(result) if result else "Unknown error"
+                    logger.error(f"Futures order placement failed: {error_msg}")
+                    raise ExchangeOrderError(
+                        f"Futures order placement failed: {error_msg}"
+                    )
             except AttributeError as e:
                 logger.error(f"Error parsing order response: {e}")
                 logger.error(f"Response type: {type(result)}, Response: {result}")
