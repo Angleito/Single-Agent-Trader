@@ -251,7 +251,9 @@ class WebSocketPublisher:
                     logger.error(
                         "All WebSocket URLs failed, no more fallbacks available"
                     )
-                    raise Exception("All WebSocket connection attempts failed") from None
+                    raise Exception(
+                        "All WebSocket connection attempts failed"
+                    ) from None
 
     async def _connect_to_url(self, url: str) -> None:
         """Connect to a specific WebSocket URL."""
@@ -531,7 +533,7 @@ class WebSocketPublisher:
         priority_queue_size = self._priority_queue.qsize()
 
         logger.info(
-            f"📊 WebSocket Queue Health: "
+            "📊 WebSocket Queue Health: "
             f"Regular={regular_queue_size}/{self.queue_size}, "
             f"Priority={priority_queue_size}/{self._priority_queue.maxsize}, "
             f"Sent={self._queue_stats['messages_sent']}, "
