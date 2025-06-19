@@ -75,6 +75,9 @@ class ExperienceManager:
         # Background task for monitoring trades
         self._monitor_task: asyncio.Task | None = None
         self._running = False
+        
+        # Track reflection tasks for proper cleanup
+        self._reflection_tasks: list[asyncio.Task] = []
 
         # Initialize trade logger
         self.trade_logger = TradeLogger()
@@ -103,6 +106,17 @@ class ExperienceManager:
                 await self._monitor_task
             except asyncio.CancelledError:
                 pass
+        
+        # Cancel reflection tasks
+        for task in self._reflection_tasks:
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        
+        self._reflection_tasks.clear()
 
         # Update any remaining active trades
         for trade in self.active_trades.values():
@@ -389,11 +403,15 @@ class ExperienceManager:
 
         # Schedule reflection analysis after delay
         if settings.mcp.track_trade_lifecycle:
-            asyncio.create_task(
+            reflection_task = asyncio.create_task(
                 self._schedule_trade_reflection(
                     active_trade, delay_minutes=settings.mcp.reflection_delay_minutes
                 )
             )
+            self._reflection_tasks.append(reflection_task)
+            
+            # Clean up completed tasks periodically
+            self._reflection_tasks = [task for task in self._reflection_tasks if not task.done()]
 
         return True
 

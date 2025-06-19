@@ -547,6 +547,9 @@ class LogStreamer:
         self.use_file_based = (
             os.getenv("USE_FILE_BASED_LOGS", "false").lower() == "true"
         )
+        # Task tracking for proper cleanup
+        self._stream_logs_task: asyncio.Task | None = None
+        self._file_watcher_tasks: list[asyncio.Task] = []
 
     async def start(self):
         """Start log streaming in background"""
@@ -583,7 +586,7 @@ class LogStreamer:
             )
 
             # Stream logs in background
-            asyncio.create_task(self._stream_logs())
+            self._stream_logs_task = asyncio.create_task(self._stream_logs())
             logger.info(f"Started Docker-based log streaming for {self.container_name}")
 
         except Exception as e:
@@ -603,7 +606,8 @@ class LogStreamer:
 
             for log_path in log_paths:
                 if os.path.exists(log_path):
-                    asyncio.create_task(self._watch_log_file(log_path))
+                    task = asyncio.create_task(self._watch_log_file(log_path))
+                    self._file_watcher_tasks.append(task)
                     self.file_watchers.append(log_path)
                     logger.info(f"Started watching log file: {log_path}")
 
@@ -692,9 +696,29 @@ class LogStreamer:
             if self.process:
                 self.process.terminate()
 
-    def stop(self):
-        """Stop log streaming"""
+    async def stop(self):
+        """Stop log streaming and cleanup tasks"""
         self.running = False
+        
+        # Cancel stream logs task
+        if self._stream_logs_task and not self._stream_logs_task.done():
+            self._stream_logs_task.cancel()
+            try:
+                await self._stream_logs_task
+            except asyncio.CancelledError:
+                pass
+        
+        # Cancel file watcher tasks
+        for task in self._file_watcher_tasks:
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        
+        self._file_watcher_tasks.clear()
+        
         if self.process:
             self.process.terminate()
         self.file_watchers.clear()
@@ -703,12 +727,16 @@ class LogStreamer:
 
 # Global log streamer
 log_streamer = LogStreamer()
+# Track delayed startup task for proper cleanup
+_delayed_startup_task: asyncio.Task | None = None
 
 
 # Application lifecycle management
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application startup and shutdown"""
+    global _delayed_startup_task
+    
     # Startup
     logger.info("Starting FastAPI dashboard server...")
 
@@ -726,7 +754,7 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.warning(f"Failed to start file-based log streaming: {e}")
 
-        asyncio.create_task(start_log_streaming_delayed())
+        _delayed_startup_task = asyncio.create_task(start_log_streaming_delayed())
         logger.info("Log streamer initialization scheduled (file-based)")
     except Exception as e:
         logger.warning(
@@ -816,7 +844,16 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down FastAPI dashboard server...")
-    log_streamer.stop()
+    
+    # Cancel delayed startup task
+    if _delayed_startup_task and not _delayed_startup_task.done():
+        _delayed_startup_task.cancel()
+        try:
+            await _delayed_startup_task
+        except asyncio.CancelledError:
+            pass
+    
+    await log_streamer.stop()
 
     # Close Bluefin service client
     try:

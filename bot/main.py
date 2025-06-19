@@ -1065,7 +1065,9 @@ class TradingEngine:
             try:
                 await self.command_consumer.initialize()
                 # Start polling in background
-                _polling_task = asyncio.create_task(self.command_consumer.start_polling())
+                _polling_task = asyncio.create_task(
+                    self.command_consumer.start_polling()
+                )
                 console.print("    [green]✓ Dashboard command consumer started[/green]")
             except Exception as e:
                 self.logger.warning(f"Failed to start command consumer: {e}")

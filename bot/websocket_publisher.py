@@ -91,6 +91,7 @@ class WebSocketPublisher:
         self._last_pong_time: float | None = None
         self._ping_task: asyncio.Task | None = None
         self._connection_monitor_task: asyncio.Task | None = None
+        self._auto_reconnect_task: asyncio.Task | None = None
         self._message_queue: asyncio.Queue = asyncio.Queue(maxsize=self.queue_size)
         self._priority_queue: asyncio.Queue = asyncio.Queue(
             maxsize=min(self.queue_size // 4, 500)
@@ -145,12 +146,12 @@ class WebSocketPublisher:
             if self._connected:
                 logger.info("WebSocket publisher initialized successfully")
                 # Start automatic reconnection monitoring
-                asyncio.create_task(self._auto_reconnect_manager())
+                self._auto_reconnect_task = asyncio.create_task(self._auto_reconnect_manager())
                 return True
         except Exception as e:
             logger.error(f"Failed to initialize WebSocket publisher: {e}")
             # Start auto-reconnect even if initial connection fails
-            asyncio.create_task(self._auto_reconnect_manager())
+            self._auto_reconnect_task = asyncio.create_task(self._auto_reconnect_manager())
         return False
 
     async def _auto_reconnect_manager(self) -> None:
@@ -827,6 +828,14 @@ class WebSocketPublisher:
             self._queue_worker_task.cancel()
             try:
                 await self._queue_worker_task
+            except asyncio.CancelledError:
+                pass
+
+        # Cancel auto-reconnect task
+        if self._auto_reconnect_task and not self._auto_reconnect_task.done():
+            self._auto_reconnect_task.cancel()
+            try:
+                await self._auto_reconnect_task
             except asyncio.CancelledError:
                 pass
 
