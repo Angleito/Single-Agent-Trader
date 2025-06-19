@@ -1,16 +1,21 @@
 # Production-optimized Dockerfile for AI Trading Bot Dashboard
 
-# Build stage
-FROM --platform=$BUILDPLATFORM node:18-alpine AS builder
+# Build stage - Force x64 platform for consistent builds
+FROM node:18-alpine AS builder
+ARG TARGETPLATFORM
+ARG TARGETARCH
+ARG TARGETOS
 
 WORKDIR /app
 
 # Install minimal build dependencies
 RUN apk add --no-cache python3 make g++ gcc libc-dev
 
-# Copy package files and install dependencies
-COPY package*.json ./
-RUN npm ci --no-audit --no-fund && \
+# Copy package files and npm configuration
+COPY package*.json .npmrc ./
+
+# Install dependencies with platform specification
+RUN TARGETPLATFORM=linux/amd64 TARGETARCH=amd64 npm ci --no-audit --no-fund && \
     npm rebuild esbuild --update-binary
 
 # Copy source code and configuration
@@ -24,7 +29,7 @@ RUN npm run build
 # Remove development dependencies and source files to reduce size
 RUN rm -rf node_modules src tsconfig.json vite.config.ts
 
-# Production stage
+# Production stage - Force x64 platform for consistent deployment
 FROM nginx:alpine AS production
 
 # Create non-root user for security

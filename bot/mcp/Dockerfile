@@ -1,5 +1,5 @@
 # Dockerfile for MCP Memory Server
-FROM python:3.12-slim
+FROM --platform=linux/amd64 python:3.12-slim
 
 # Set working directory
 WORKDIR /app

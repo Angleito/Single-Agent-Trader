@@ -1,4 +1,14 @@
 # Docker Compose for AI Trading Bot with Dashboard
+# 
+# PLATFORM COMPATIBILITY:
+# - All services explicitly target linux/amd64 for X64 Linux deployment
+# - Build contexts specify platforms to ensure consistent builds
+# - Runtime platform specifications prevent architecture conflicts
+# 
+# DEPLOYMENT NOTES:
+# - Use: DOCKER_DEFAULT_PLATFORM=linux/amd64 docker-compose up
+# - For building: docker-compose build --platform linux/amd64
+# - All Dockerfiles include --platform=linux/amd64 specifications
 
 services:
   # Bluefin SDK Service - Isolated container for Bluefin DEX operations
@@ -6,7 +16,10 @@ services:
     build:
       context: ./services
       dockerfile: Dockerfile.bluefin
+      platforms:
+        - linux/amd64
     image: bluefin-sdk-service:latest
+    platform: linux/amd64
     container_name: bluefin-service
     restart: unless-stopped
 
@@ -76,12 +89,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
       args:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
         VCS_REF: ${VCS_REF:-$(git rev-parse --short HEAD)}
         VERSION: ${VERSION:-0.1.0}
         EXCHANGE_TYPE: coinbase
     image: ai-trading-bot:coinbase-${VERSION:-latest}
+    platform: linux/amd64
     container_name: ai-trading-bot
     restart: unless-stopped
 
@@ -210,7 +226,10 @@ services:
     build:
       context: ./bot/mcp/omnisearch-server
       dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
     image: mcp-omnisearch-server:latest
+    platform: linux/amd64
     container_name: mcp-omnisearch-server
     restart: unless-stopped
 
@@ -281,7 +300,10 @@ services:
     build:
       context: ./bot/mcp
       dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
     image: mcp-memory-server:latest
+    platform: linux/amd64
     container_name: mcp-memory-server
     restart: unless-stopped
 
@@ -343,7 +365,10 @@ services:
     build:
       context: ./dashboard/backend
       dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
     container_name: dashboard-backend
+    platform: linux/amd64
     ports:
       - "8000:8000"  # Allow external access for frontend connectivity
 
@@ -424,7 +449,10 @@ services:
       context: ./dashboard/frontend
       dockerfile: Dockerfile
       target: production
+      platforms:
+        - linux/amd64
     container_name: dashboard-frontend
+    platform: linux/amd64
     ports:
       - "3000:8080"  # Allow external access for frontend
 
@@ -472,7 +500,10 @@ services:
       context: ./dashboard/frontend
       dockerfile: Dockerfile
       target: production
+      platforms:
+        - linux/amd64
     container_name: dashboard-frontend-prod
+    platform: linux/amd64
     ports:
       - "3001:8080"  # Allow external access for frontend
 
@@ -521,6 +552,7 @@ services:
   dashboard-nginx:
     image: nginx:alpine
     container_name: dashboard-nginx
+    platform: linux/amd64
     ports:
       - "8080:80"  # Allow external access for nginx proxy
 
