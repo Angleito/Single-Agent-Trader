@@ -1,0 +1,376 @@
+# Docker Compose for AI Trading Bot - Bluefin DEX Configuration
+# This configuration launches the bot specifically for Bluefin DEX trading with real market data
+
+services:
+  # Bluefin SDK Service - Required for Bluefin DEX operations
+  bluefin-service:
+    build:
+      context: ./services
+      dockerfile: Dockerfile.bluefin
+    image: bluefin-sdk-service:latest
+    container_name: bluefin-service
+    restart: unless-stopped
+
+    # SECURITY HARDENING
+    user: "1000:1000"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    tmpfs:
+      - /tmp:noexec,nosuid,size=50m
+
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - BLUEFIN_PRIVATE_KEY=${EXCHANGE__BLUEFIN_PRIVATE_KEY:-}
+      - BLUEFIN_NETWORK=${EXCHANGE__BLUEFIN_NETWORK:-mainnet}
+      - EXCHANGE__BLUEFIN_NETWORK=${EXCHANGE__BLUEFIN_NETWORK:-mainnet}
+      - BLUEFIN_SERVICE_API_KEY=${BLUEFIN_SERVICE_API_KEY:-trading-bot-secret}
+      - BLUEFIN_SERVICE_RATE_LIMIT=${BLUEFIN_SERVICE_RATE_LIMIT:-100}
+      - HOST=0.0.0.0
+      - PORT=8080
+      - LOG_LEVEL=info
+
+    ports:
+      - "127.0.0.1:8081:8080"
+
+    volumes:
+      - ./logs/bluefin:/app/logs
+
+    networks:
+      trading-network:
+        aliases:
+          - bluefin-service
+          - bluefin
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.3'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # AI Trading Bot - Configured for Bluefin DEX with Real Data
+  ai-trading-bot-bluefin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
+        VCS_REF: ${VCS_REF:-$(git rev-parse --short HEAD)}
+        VERSION: ${VERSION:-0.1.0}
+        EXCHANGE_TYPE: bluefin
+    image: ai-trading-bot:bluefin-${VERSION:-latest}
+    container_name: ai-trading-bot-bluefin
+    restart: unless-stopped
+
+    # SECURITY HARDENING
+    user: "1000:1000"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+
+    # Bluefin-specific command with real data
+    command: ["python", "-m", "bot.main", "live", "--symbol", "SUI-PERP", "--interval", "1m", "--force"]
+
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONWARNINGS=ignore::UserWarning,ignore::DeprecationWarning
+      
+      # TRADING CONFIGURATION
+      - SYSTEM__DRY_RUN=${SYSTEM__DRY_RUN:-true}  # Paper trading mode (safe)
+      - SYSTEM__ENVIRONMENT=production
+      - TRADING__SYMBOL=SUI-PERP
+      - TRADING__INTERVAL=1m
+      - TRADING__LEVERAGE=${TRADING__LEVERAGE:-5}
+      
+      # BLUEFIN CONFIGURATION
+      - EXCHANGE__EXCHANGE_TYPE=bluefin
+      - EXCHANGE__BLUEFIN_NETWORK=${EXCHANGE__BLUEFIN_NETWORK:-mainnet}
+      - EXCHANGE__BLUEFIN_PRIVATE_KEY=${EXCHANGE__BLUEFIN_PRIVATE_KEY:-}
+      - BLUEFIN_SERVICE_URL=http://bluefin-service:8080
+      - BLUEFIN_SERVICE_API_KEY=${BLUEFIN_SERVICE_API_KEY:-trading-bot-secret}
+      
+      # REAL DATA CONFIGURATION
+      - DATA__USE_REAL_DATA=true
+      - DATA__CANDLE_LIMIT=500
+      - DATA__DATA_CACHE_TTL_SECONDS=30
+      
+      # LLM CONFIGURATION
+      - LLM__OPENAI_API_KEY=${LLM__OPENAI_API_KEY:-}
+      - LLM__MODEL_NAME=${LLM__MODEL_NAME:-gpt-4o}
+      - LLM__PROVIDER=${LLM__PROVIDER:-openai}
+      - LLM__ENABLE_COMPLETION_LOGGING=true
+      - LLM__LOG_MARKET_CONTEXT=true
+      
+      # LOGGING CONFIGURATION
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - SYSTEM__ENABLE_WEBSOCKET_PUBLISHING=true
+      
+      # PAPER TRADING CONFIGURATION
+      - PAPER_TRADING__STARTING_BALANCE=${PAPER_TRADING__STARTING_BALANCE:-10000}
+      - PAPER_TRADING__FEE_RATE=${PAPER_TRADING__FEE_RATE:-0.0015}
+      
+      # MCP MEMORY (Optional)
+      - MCP_ENABLED=${MCP_ENABLED:-false}
+      - MCP_SERVER_URL=http://mcp-memory:8765
+      
+      # PERFORMANCE MONITORING
+      - SYSTEM__ENABLE_PERFORMANCE_MONITORING=true
+
+    # Environment file
+    env_file:
+      - path: .env
+        required: true
+
+    volumes:
+      - ./logs:/app/logs:rw
+      - ./data:/app/data:rw
+      - ./config:/app/config:ro
+
+    healthcheck:
+      test: ["CMD-SHELL", "/app/healthcheck.sh"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
+
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    networks:
+      trading-network:
+        aliases:
+          - ai-trading-bot-bluefin
+          - trading-bot-bluefin
+
+    depends_on:
+      bluefin-service:
+        condition: service_healthy
+
+  # MCP Memory Server (Optional - for AI learning)
+  mcp-memory:
+    build:
+      context: ./bot/mcp
+      dockerfile: Dockerfile
+    image: mcp-memory-server:latest
+    container_name: mcp-memory-server
+    restart: unless-stopped
+    profiles:
+      - memory
+
+    user: "1000:1000"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:noexec,nosuid,size=50m
+
+    environment:
+      - MCP_SERVER_PORT=8765
+      - MEM0_API_KEY=${MEM0_API_KEY:-}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MEMORY_RETENTION_DAYS=${MCP_MEMORY_RETENTION_DAYS:-90}
+
+    volumes:
+      - ./data/mcp_memory:/app/data
+      - ./logs/mcp:/app/logs
+
+    ports:
+      - "127.0.0.1:8765:8765"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8765/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    networks:
+      trading-network:
+        aliases:
+          - mcp-memory
+          - memory-server
+
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.3'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Dashboard Backend (Optional)
+  dashboard-backend:
+    build:
+      context: ./dashboard/backend
+      dockerfile: Dockerfile
+    container_name: dashboard-backend-bluefin
+    restart: unless-stopped
+    profiles:
+      - dashboard
+
+    user: "1000:1000"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    tmpfs:
+      - /tmp:noexec,nosuid,size=50m
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      - ./dashboard/backend/logs:/app/logs
+      - ./dashboard/backend/data:/app/data
+      - ./logs:/app/trading-logs:ro
+      - ./data:/app/trading-data:ro
+
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ENVIRONMENT=production
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - TRADING_BOT_CONTAINER=ai-trading-bot-bluefin
+      - DOCKER_ENV=true
+      - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+      - EXCHANGE__EXCHANGE_TYPE=bluefin
+      - BLUEFIN_SERVICE_URL=http://bluefin-service:8080
+      - BLUEFIN_SERVICE_API_KEY=${BLUEFIN_SERVICE_API_KEY:-trading-bot-secret}
+
+    networks:
+      trading-network:
+        aliases:
+          - dashboard-backend-bluefin
+          - dashboard-backend
+          - api
+
+    depends_on:
+      - ai-trading-bot-bluefin
+      - bluefin-service
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.3'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Dashboard Frontend (Optional)
+  dashboard-frontend:
+    build:
+      context: ./dashboard/frontend
+      dockerfile: Dockerfile
+      target: production
+    container_name: dashboard-frontend-bluefin
+    restart: unless-stopped
+    profiles:
+      - dashboard
+
+    ports:
+      - "3000:8080"
+
+    environment:
+      - NODE_ENV=production
+      - VITE_API_BASE_URL=/api
+      - VITE_WS_URL=/api/ws
+      - VITE_DOCKER_ENV=true
+
+    networks:
+      trading-network:
+        aliases:
+          - dashboard-frontend-bluefin
+          - dashboard-frontend
+          - frontend
+
+    depends_on:
+      - dashboard-backend
+
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.3'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  trading-network:
+    name: trading-network
+    driver: bridge
+    enable_ipv6: false
+    external: true

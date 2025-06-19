@@ -120,7 +120,7 @@ class CommandConsumer:
                 pass
             except Exception as e:
                 logger.warning(f"Error while cancelling polling task: {e}")
-        
+
         if self.session:
             await self.session.close()
             self.session = None
@@ -167,7 +167,7 @@ class CommandConsumer:
         if self._polling_task and not self._polling_task.done():
             logger.warning("Command polling task already running")
             return
-        
+
         await self.initialize()
         self._polling_task = asyncio.create_task(self.start_polling())
         logger.info("Command polling task started")
@@ -177,22 +177,22 @@ class CommandConsumer:
         if not self._polling_task:
             logger.debug("No polling task to stop")
             return
-        
+
         # First, signal the polling loop to stop
         self.running = False
-        
+
         # Cancel the task if it's still running
         if not self._polling_task.done():
             self._polling_task.cancel()
             try:
                 await asyncio.wait_for(self._polling_task, timeout=5.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning("Polling task did not stop within timeout")
             except asyncio.CancelledError:
                 logger.debug("Polling task cancelled successfully")
             except Exception as e:
                 logger.warning(f"Error while stopping polling task: {e}")
-        
+
         self._polling_task = None
         logger.info("Command polling task stopped")
 
@@ -518,5 +518,6 @@ class CommandConsumer:
                 cmd_type: callback is not None
                 for cmd_type, callback in self.callbacks.items()
             },
-            "polling_task_running": self._polling_task is not None and not self._polling_task.done(),
+            "polling_task_running": self._polling_task is not None
+            and not self._polling_task.done(),
         }
