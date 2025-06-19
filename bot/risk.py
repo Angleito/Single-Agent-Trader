@@ -17,6 +17,7 @@ from .config import settings
 from .fee_calculator import fee_calculator
 from .position_manager import PositionManager
 from .trading_types import Position, RiskMetrics, TradeAction
+from .validation import BalanceValidationError, BalanceValidator
 
 logger = logging.getLogger(__name__)
 
@@ -433,6 +434,9 @@ class RiskManager:
         self._daily_pnl: dict[date, DailyPnL] = {}
         self._account_balance = Decimal("10000")  # Default starting balance
 
+        # Balance validation system
+        self.balance_validator = BalanceValidator()
+
         # Advanced risk management components
         self.circuit_breaker = TradingCircuitBreaker(
             failure_threshold=5, timeout_seconds=300
@@ -452,7 +456,8 @@ class RiskManager:
             f"  • Max daily loss: {self.max_daily_loss_pct}%\n"
             f"  • Circuit breaker: {self.circuit_breaker.failure_threshold} failures\n"
             f"  • API protection: {self.api_protection.max_retries} retries\n"
-            f"  • Emergency stop: enabled"
+            f"  • Emergency stop: enabled\n"
+            f"  • Balance validation: enabled"
         )
 
     def evaluate_risk(
@@ -574,6 +579,27 @@ class RiskManager:
                     "Fee calculation error",
                 )
 
+            # 🏦 BALANCE VALIDATION - Comprehensive balance checks
+            balance_valid, balance_reason = self.validate_balance_for_trade(
+                modified_action,
+                current_price,
+                trade_fees.total_fee if trade_fees else Decimal("0"),
+            )
+
+            if not balance_valid:
+                self.circuit_breaker.record_failure(
+                    "balance_validation",
+                    f"Balance validation failed: {balance_reason}",
+                    "medium",
+                )
+                return (
+                    False,
+                    self._get_hold_action(
+                        f"Balance validation failed: {balance_reason}"
+                    ),
+                    "Balance validation",
+                )
+
             if modified_action.size_pct == 0 and trade_action.action in [
                 "LONG",
                 "SHORT",
@@ -644,6 +670,114 @@ class RiskManager:
             logger.error(f"Risk evaluation error: {e}")
             self.circuit_breaker.record_failure("risk_evaluation_error", str(e), "high")
             return False, self._get_hold_action("Risk evaluation error"), "Error"
+
+    def validate_balance_for_trade(
+        self,
+        trade_action: TradeAction,
+        current_price: Decimal,
+        estimated_fees: Decimal = Decimal("0"),
+    ) -> tuple[bool, str]:
+        """
+        Validate account balance can support the proposed trade.
+
+        Args:
+            trade_action: Proposed trade action
+            current_price: Current market price
+            estimated_fees: Estimated trading fees
+
+        Returns:
+            Tuple of (is_valid, reason)
+        """
+        try:
+            if trade_action.action in ["HOLD", "CLOSE"]:
+                return True, "No balance validation required for HOLD/CLOSE"
+
+            # Calculate required balance for the trade
+            position_value = self._account_balance * (
+                Decimal(str(trade_action.size_pct)) / 100
+            )
+            leveraged_value = position_value * Decimal(str(self.leverage))
+            required_margin = leveraged_value / Decimal(str(self.leverage))
+            total_required = required_margin + estimated_fees
+
+            # Validate current balance can support this trade
+            validation_result = self.balance_validator.validate_balance_range(
+                self._account_balance, f"trade_preparation_{trade_action.action}"
+            )
+
+            if not validation_result["valid"]:
+                return (
+                    False,
+                    f"Current balance validation failed: {validation_result.get('message', 'Unknown error')}",
+                )
+
+            # Check if balance after trade would be valid
+            post_trade_balance = self._account_balance - estimated_fees
+            if post_trade_balance < Decimal("0"):
+                return (
+                    False,
+                    f"Trade would result in negative balance: ${post_trade_balance}",
+                )
+
+            try:
+                post_trade_validation = self.balance_validator.validate_balance_range(
+                    post_trade_balance, f"post_trade_{trade_action.action}"
+                )
+
+                if not post_trade_validation["valid"]:
+                    return (
+                        False,
+                        f"Post-trade balance would be invalid: {post_trade_validation.get('message', 'Unknown error')}",
+                    )
+
+            except BalanceValidationError as e:
+                return False, f"Post-trade balance validation failed: {e}"
+
+            # Validate margin requirements
+            try:
+                current_margin_used = self._calculate_current_margin_usage()
+                new_margin_used = current_margin_used + required_margin
+
+                margin_validation = self.balance_validator.validate_margin_calculation(
+                    balance=self._account_balance,
+                    used_margin=new_margin_used,
+                    position_value=leveraged_value,
+                    leverage=self.leverage,
+                )
+
+                if not margin_validation["valid"]:
+                    return (
+                        False,
+                        f"Margin validation failed: {margin_validation.get('message', 'Unknown error')}",
+                    )
+
+            except BalanceValidationError as e:
+                return False, f"Margin validation error: {e}"
+
+            logger.debug(
+                f"✅ Balance validation passed for {trade_action.action} trade"
+            )
+            return True, "Balance validation successful"
+
+        except Exception as e:
+            logger.error(f"Error in balance validation for trade: {e}")
+            return False, f"Balance validation error: {e}"
+
+    def _calculate_current_margin_usage(self) -> Decimal:
+        """Calculate current margin usage across all positions."""
+        if not self.position_manager:
+            return Decimal("0")
+
+        total_margin = Decimal("0")
+        positions = self.position_manager.get_all_positions()
+
+        for position in positions:
+            if position.side != "FLAT" and position.entry_price:
+                position_value = position.size * position.entry_price
+                margin_required = position_value / Decimal(str(self.leverage))
+                total_margin += margin_required
+
+        return total_margin
 
     def _is_daily_loss_limit_reached(self) -> bool:
         """
@@ -1099,6 +1233,7 @@ class RiskManager:
             "circuit_breaker": self.circuit_breaker.get_status(),
             "api_protection": self.api_protection.get_health_status(),
             "emergency_stop": self.emergency_stop.get_status(),
+            "balance_validation": self.balance_validator.get_validation_statistics(),
             "current_metrics": current_metrics,
             "risk_assessment": self._assess_overall_risk_level(current_metrics),
         }
@@ -1258,15 +1393,51 @@ class RiskManager:
 
     def update_account_balance(self, new_balance: Decimal) -> None:
         """
-        Update account balance.
+        Update account balance with validation.
 
         Args:
             new_balance: New account balance
         """
         old_balance = self._account_balance
-        self._account_balance = new_balance
 
-        logger.info(f"Account balance updated: {old_balance} -> {new_balance}")
+        # Validate the balance update
+        try:
+            validation_result = self.balance_validator.comprehensive_balance_validation(
+                balance=new_balance,
+                previous_balance=old_balance,
+                operation_type="account_balance_update",
+            )
+
+            if validation_result["valid"]:
+                self._account_balance = validation_result["balance"]
+                logger.info(
+                    f"Account balance updated and validated: {old_balance} -> {self._account_balance}"
+                )
+            else:
+                logger.error(
+                    f"❌ Balance update validation failed: "
+                    f"{validation_result.get('error', {}).get('message', 'Unknown error')}"
+                )
+                # Still update the balance but log the issue
+                self._account_balance = new_balance
+                logger.warning(
+                    f"⚠️ Balance updated despite validation failure: {old_balance} -> {new_balance}"
+                )
+
+        except BalanceValidationError as e:
+            logger.error(f"❌ Balance validation error during update: {e}")
+            # Still update the balance but log the issue
+            self._account_balance = new_balance
+            logger.warning(
+                f"⚠️ Balance updated despite validation error: {old_balance} -> {new_balance}"
+            )
+        except Exception as e:
+            logger.error(f"❌ Unexpected error during balance validation: {e}")
+            # Still update the balance but log the issue
+            self._account_balance = new_balance
+            logger.warning(
+                f"⚠️ Balance updated despite unexpected error: {old_balance} -> {new_balance}"
+            )
 
     def get_risk_metrics(self) -> RiskMetrics:
         """

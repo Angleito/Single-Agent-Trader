@@ -992,7 +992,9 @@ class EMAribbon:
             "ribbon_direction": (
                 "bullish"
                 if latest.get("ribbon_direction", 0) > 0
-                else "bearish" if latest.get("ribbon_direction", 0) < 0 else "neutral"
+                else "bearish"
+                if latest.get("ribbon_direction", 0) < 0
+                else "neutral"
             ),
             "ribbon_strength": latest.get("ribbon_strength", 0),
             "signals": {

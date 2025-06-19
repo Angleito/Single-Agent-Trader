@@ -6,6 +6,7 @@ futures exchange built on the Sui blockchain.
 """
 
 import asyncio
+import decimal
 import logging
 from datetime import datetime
 from decimal import Decimal
@@ -26,6 +27,10 @@ from ..utils.symbol_utils import (
     validate_symbol,
 )
 from .base import (
+    BalanceRetrievalError,
+    BalanceServiceUnavailableError,
+    BalanceTimeoutError,
+    BalanceValidationError,
     BaseExchange,
     ExchangeAuthError,
     ExchangeConnectionError,
@@ -188,6 +193,82 @@ class BluefinClient(BaseExchange):
             f"Initialized BluefinClient (network={network}, "
             f"service_url={service_url}, dry_run={dry_run})"
         )
+
+    def _normalize_balance(self, amount: Decimal) -> Decimal:
+        """
+        Normalize balance to 2 decimal places for USD currency.
+        This prevents floating-point precision errors and excessive decimal places.
+
+        Args:
+            amount: USD amount to normalize
+
+        Returns:
+            Normalized amount with 2 decimal places
+
+        Raises:
+            ValueError: If amount is invalid (NaN, infinite)
+        """
+        if amount is None:
+            return Decimal("0.00")
+
+        # Validate that the amount is a proper decimal
+        if not isinstance(amount, Decimal):
+            try:
+                amount = Decimal(str(amount))
+            except (ValueError, TypeError):
+                logger.error(f"Invalid balance amount: {amount} (type: {type(amount)})")
+                raise ValueError(f"Cannot convert to Decimal: {amount}")
+
+        # Check for invalid values
+        if amount.is_nan():
+            logger.error("Balance amount is NaN")
+            raise ValueError("Balance amount cannot be NaN")
+
+        if amount.is_infinite():
+            logger.error("Balance amount is infinite")
+            raise ValueError("Balance amount cannot be infinite")
+
+        # Quantize to 2 decimal places using banker's rounding
+        from decimal import ROUND_HALF_EVEN
+
+        return amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
+
+    def _normalize_crypto_amount(self, amount: Decimal) -> Decimal:
+        """
+        Normalize crypto amounts to 8 decimal places for precision.
+
+        Args:
+            amount: Crypto amount to normalize
+
+        Returns:
+            Normalized amount with 8 decimal places
+
+        Raises:
+            ValueError: If amount is invalid (NaN, infinite)
+        """
+        if amount is None:
+            return Decimal("0.00000000")
+
+        # Validate that the amount is a proper decimal
+        if not isinstance(amount, Decimal):
+            try:
+                amount = Decimal(str(amount))
+            except (ValueError, TypeError):
+                logger.error(f"Invalid crypto amount: {amount} (type: {type(amount)})")
+                raise ValueError(f"Cannot convert to Decimal: {amount}")
+
+        # Check for invalid values
+        if amount.is_nan():
+            logger.error("Crypto amount is NaN")
+            raise ValueError("Crypto amount cannot be NaN")
+
+        if amount.is_infinite():
+            logger.error("Crypto amount is infinite")
+            raise ValueError("Crypto amount cannot be infinite")
+
+        from decimal import ROUND_HALF_EVEN
+
+        return amount.quantize(Decimal("0.00000001"), rounding=ROUND_HALF_EVEN)
 
     async def validate_symbol_exists(self, symbol: str) -> bool:
         """
@@ -880,31 +961,120 @@ class BluefinClient(BaseExchange):
 
         Returns:
             Account balance in USD
+
+        Raises:
+            BalanceServiceUnavailableError: When service is unavailable
+            BalanceTimeoutError: When request times out
+            BalanceValidationError: When balance data is invalid
+            BalanceRetrievalError: For other balance retrieval issues
         """
         if self.dry_run:
-            # Return mock balance for paper trading
-            return Decimal("10000.00")
+            # Return mock balance for paper trading with proper normalization
+            return self._normalize_balance(Decimal("10000.00"))
 
         try:
-            # Get account data from service
-            account_data = await self._service_client.get_account_data()
+            # Check if service client is available
+            if not self._service_client:
+                raise BalanceServiceUnavailableError(
+                    "Bluefin service client not initialized",
+                    service_name="bluefin_service",
+                    account_type=str(account_type) if account_type else None,
+                )
+
+            # Get account data from service with timeout handling
+            try:
+                account_data = await asyncio.wait_for(
+                    self._service_client.get_account_data(),
+                    timeout=30.0,  # 30 second timeout
+                )
+            except TimeoutError as timeout_err:
+                raise BalanceTimeoutError(
+                    "Balance request timed out after 30 seconds",
+                    timeout_duration=30.0,
+                    endpoint="get_account_data",
+                    account_type=str(account_type) if account_type else None,
+                ) from timeout_err
+            except Exception as service_err:
+                # Check if it's a service availability issue
+                if (
+                    "connection" in str(service_err).lower()
+                    or "unavailable" in str(service_err).lower()
+                ):
+                    raise BalanceServiceUnavailableError(
+                        f"Bluefin service connection failed: {service_err}",
+                        service_name="bluefin_service",
+                        account_type=str(account_type) if account_type else None,
+                    ) from service_err
+                raise  # Re-raise other service exceptions
+
+            # Validate response structure
+            if not isinstance(account_data, dict):
+                raise BalanceValidationError(
+                    f"Invalid account data format: expected dict, got {type(account_data)}",
+                    invalid_value=type(account_data).__name__,
+                    validation_rule="account_data_dict_format",
+                    account_type=str(account_type) if account_type else None,
+                )
 
             # Extract USDC balance (Bluefin uses USDC as margin)
-            total_balance = Decimal(str(account_data.get("balance", "0")))
+            balance_value = account_data.get("balance", "0")
+
+            # Validate balance value
+            try:
+                raw_balance = Decimal(str(balance_value))
+            except (ValueError, TypeError, decimal.InvalidOperation) as decimal_err:
+                raise BalanceValidationError(
+                    f"Invalid balance value format: {balance_value}",
+                    invalid_value=balance_value,
+                    validation_rule="decimal_conversion",
+                    account_type=str(account_type) if account_type else None,
+                ) from decimal_err
+
+            # Normalize balance to ensure consistent precision
+            total_balance = self._normalize_balance(raw_balance)
+
+            # Validate balance is not negative (unless explicitly allowed)
+            if total_balance < Decimal("0"):
+                logger.warning(f"Retrieved negative balance: ${total_balance}")
+                # For Bluefin, negative balance might be valid due to unrealized PnL
+                # But log it for monitoring
 
             logger.info(f"Retrieved Bluefin balance from service: ${total_balance}")
             logger.debug(f"Full account data: {account_data}")
+            logger.debug(f"Balance normalization: {raw_balance} -> {total_balance}")
 
-            # For live trading, ensure minimum balance for testing
+            # For live trading, check minimum balance requirements
             if total_balance <= Decimal("0") and not self.dry_run:
-                logger.warning("Zero balance in live mode - this will prevent trading")
-                logger.warning("Please ensure your Bluefin account has USDC balance")
+                logger.warning(
+                    "Zero or negative balance in live mode - this will prevent trading"
+                )
+                logger.warning(
+                    f"Please ensure your Bluefin account has USDC balance. Current: ${total_balance}"
+                )
 
             return total_balance
 
+        except (
+            BalanceRetrievalError,
+            BalanceServiceUnavailableError,
+            BalanceTimeoutError,
+            BalanceValidationError,
+        ):
+            # Re-raise specific balance exceptions
+            raise
         except Exception as e:
-            logger.error(f"Failed to get account balance: {e}")
-            return Decimal("0")
+            # Wrap any other exceptions in BalanceRetrievalError
+            logger.error(f"Unexpected error getting account balance: {e}")
+            raise BalanceRetrievalError(
+                f"Failed to retrieve account balance: {e}",
+                account_type=str(account_type) if account_type else None,
+                balance_context={
+                    "exchange": "bluefin",
+                    "network": self.network_name,
+                    "dry_run": self.dry_run,
+                    "error_type": type(e).__name__,
+                },
+            ) from e
 
     async def cancel_order(self, order_id: str) -> bool:
         """

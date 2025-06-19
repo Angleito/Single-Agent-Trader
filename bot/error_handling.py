@@ -22,6 +22,32 @@ import aiohttp
 # Configure logger
 logger = logging.getLogger(__name__)
 
+# Import balance-specific exceptions for handling
+try:
+    from .exchange.base import (
+        BalanceRetrievalError,
+        BalanceServiceUnavailableError,
+        BalanceTimeoutError,
+        BalanceValidationError,
+        InsufficientBalanceError,
+    )
+except ImportError:
+    # Fallback if imports fail
+    class BalanceRetrievalError(Exception):
+        pass
+
+    class BalanceServiceUnavailableError(BalanceRetrievalError):
+        pass
+
+    class BalanceTimeoutError(BalanceRetrievalError):
+        pass
+
+    class BalanceValidationError(BalanceRetrievalError):
+        pass
+
+    class InsufficientBalanceError(BalanceRetrievalError):
+        pass
+
 
 class FallbackCallable(Protocol):
     """Protocol for fallback callable functions."""
@@ -454,11 +480,23 @@ class EnhancedExceptionHandler:
             ConnectionError: 3,
             TimeoutError: 5,
             aiohttp.ClientError: 3,
+            # Balance-specific retry strategies
+            BalanceServiceUnavailableError: 4,  # Service issues may resolve quickly
+            BalanceTimeoutError: 5,  # Network timeouts benefit from retries
+            BalanceValidationError: 1,  # Data issues unlikely to resolve with retry
+            BalanceRetrievalError: 2,  # Generic balance errors get limited retries
+            InsufficientBalanceError: 0,  # Insufficient funds won't resolve with retry
         }
         self.retry_delays: dict[type, float] = {
             ConnectionError: 2.0,
             TimeoutError: 1.0,
             aiohttp.ClientError: 1.5,
+            # Balance-specific retry delays
+            BalanceServiceUnavailableError: 3.0,  # Longer delay for service recovery
+            BalanceTimeoutError: 1.5,  # Standard delay for timeouts
+            BalanceValidationError: 0.5,  # Quick retry for validation issues
+            BalanceRetrievalError: 2.0,  # Standard delay for balance errors
+            InsufficientBalanceError: 0.0,  # No retry for insufficient funds
         }
 
     def log_exception_with_context(
@@ -539,6 +577,19 @@ class EnhancedExceptionHandler:
             ValueError,
             TypeError,
             AttributeError,
+            BalanceValidationError,  # Data corruption issues are high severity
+        ]
+
+        medium_severity_exceptions = [
+            ConnectionError,
+            TimeoutError,
+            BalanceServiceUnavailableError,  # Service issues are concerning but recoverable
+            BalanceTimeoutError,  # Timeout issues indicate performance problems
+            BalanceRetrievalError,  # General balance issues need attention
+        ]
+
+        low_severity_exceptions = [
+            InsufficientBalanceError,  # Expected business logic condition
         ]
 
         if any(isinstance(exception, exc_type) for exc_type in critical_exceptions):
@@ -547,8 +598,14 @@ class EnhancedExceptionHandler:
             isinstance(exception, exc_type) for exc_type in high_severity_exceptions
         ):
             return ErrorSeverity.HIGH
-        elif isinstance(exception, ConnectionError | TimeoutError):
+        elif any(
+            isinstance(exception, exc_type) for exc_type in medium_severity_exceptions
+        ):
             return ErrorSeverity.MEDIUM
+        elif any(
+            isinstance(exception, exc_type) for exc_type in low_severity_exceptions
+        ):
+            return ErrorSeverity.LOW
         else:
             return ErrorSeverity.LOW
 
@@ -582,6 +639,165 @@ class EnhancedExceptionHandler:
                 for ctx in self.exception_history[-10:]  # Last 10 exceptions
             ],
         }
+
+
+class BalanceErrorHandler:
+    """
+    Specialized error handler for balance-related operations.
+
+    Provides specific handling strategies for different types of balance errors,
+    including intelligent retry logic and fallback behaviors.
+    """
+
+    def __init__(self, exception_handler: EnhancedExceptionHandler):
+        self.exception_handler = exception_handler
+        self.balance_error_counts: dict[str, int] = {}
+        self.consecutive_insufficient_balance_errors = 0
+
+    def handle_balance_error(
+        self,
+        error: Exception,
+        operation_context: dict[str, Any],
+        component: str = "balance_operations",
+    ) -> dict[str, Any]:
+        """
+        Handle balance-specific errors with appropriate logging and recovery strategies.
+
+        Args:
+            error: The balance exception that occurred
+            operation_context: Context about the operation that failed
+            component: Component where the error occurred
+
+        Returns:
+            Dictionary with error handling recommendations
+        """
+        error_type = type(error).__name__
+        self.balance_error_counts[error_type] = (
+            self.balance_error_counts.get(error_type, 0) + 1
+        )
+
+        # Enhanced context for balance errors
+        enhanced_context = {
+            **operation_context,
+            "balance_error_count": self.balance_error_counts[error_type],
+            "total_balance_errors": sum(self.balance_error_counts.values()),
+        }
+
+        # Add balance-specific context if available
+        if hasattr(error, "get_error_context"):
+            enhanced_context.update(error.get_error_context())
+
+        # Log the error with enhanced context
+        error_context = self.exception_handler.log_exception_with_context(
+            error, enhanced_context, component, "balance_operation"
+        )
+
+        # Generate handling recommendations
+        recommendations = self._generate_handling_recommendations(error, error_context)
+
+        # Special handling for consecutive insufficient balance errors
+        if isinstance(error, InsufficientBalanceError):
+            self.consecutive_insufficient_balance_errors += 1
+            recommendations["consecutive_insufficient_balance"] = (
+                self.consecutive_insufficient_balance_errors
+            )
+
+            if self.consecutive_insufficient_balance_errors >= 3:
+                recommendations["action"] = "halt_trading"
+                recommendations["reason"] = (
+                    "Multiple consecutive insufficient balance errors detected"
+                )
+                logger.critical(
+                    f"Critical: {self.consecutive_insufficient_balance_errors} consecutive "
+                    f"insufficient balance errors. Trading should be halted."
+                )
+        else:
+            self.consecutive_insufficient_balance_errors = 0
+
+        return recommendations
+
+    def _generate_handling_recommendations(
+        self, error: Exception, error_context: ErrorContext
+    ) -> dict[str, Any]:
+        """Generate specific handling recommendations based on error type."""
+        recommendations = {
+            "error_type": type(error).__name__,
+            "severity": error_context.severity.value,
+            "should_retry": error_context.should_retry,
+            "action": "continue",
+        }
+
+        if isinstance(error, InsufficientBalanceError):
+            recommendations.update(
+                {
+                    "action": "check_balance",
+                    "retry_strategy": "none",
+                    "user_action_required": True,
+                    "message": "Insufficient balance detected. Please check account funding.",
+                }
+            )
+
+        elif isinstance(error, BalanceServiceUnavailableError):
+            recommendations.update(
+                {
+                    "action": "retry_with_backoff",
+                    "retry_strategy": "exponential_backoff",
+                    "max_retries": 4,
+                    "initial_delay": 3.0,
+                    "message": "Balance service temporarily unavailable. Will retry with backoff.",
+                }
+            )
+
+        elif isinstance(error, BalanceTimeoutError):
+            recommendations.update(
+                {
+                    "action": "retry_with_reduced_timeout",
+                    "retry_strategy": "linear_backoff",
+                    "max_retries": 5,
+                    "initial_delay": 1.5,
+                    "message": "Balance request timed out. Will retry with adjusted timeout.",
+                }
+            )
+
+        elif isinstance(error, BalanceValidationError):
+            recommendations.update(
+                {
+                    "action": "log_and_fallback",
+                    "retry_strategy": "single_retry",
+                    "max_retries": 1,
+                    "initial_delay": 0.5,
+                    "message": "Balance data validation failed. May indicate API changes.",
+                    "escalation_required": True,
+                }
+            )
+
+        elif isinstance(error, BalanceRetrievalError):
+            recommendations.update(
+                {
+                    "action": "retry_with_fallback",
+                    "retry_strategy": "exponential_backoff",
+                    "max_retries": 2,
+                    "initial_delay": 2.0,
+                    "message": "General balance retrieval error. Will retry with fallback.",
+                }
+            )
+
+        return recommendations
+
+    def get_balance_error_summary(self) -> dict[str, Any]:
+        """Get summary of balance errors encountered."""
+        return {
+            "error_counts_by_type": self.balance_error_counts.copy(),
+            "total_balance_errors": sum(self.balance_error_counts.values()),
+            "consecutive_insufficient_balance": self.consecutive_insufficient_balance_errors,
+            "critical_threshold_reached": self.consecutive_insufficient_balance_errors
+            >= 3,
+        }
+
+    def reset_error_counts(self):
+        """Reset error counters (useful for new trading sessions)."""
+        self.balance_error_counts.clear()
+        self.consecutive_insufficient_balance_errors = 0
 
 
 # Retry decorator with exponential backoff
@@ -675,3 +891,4 @@ def retry_with_backoff(
 # Global instances for use throughout the application
 exception_handler = EnhancedExceptionHandler()
 graceful_degradation = GracefulDegradation()
+balance_error_handler = BalanceErrorHandler(exception_handler)

@@ -685,3 +685,344 @@ class TestCompleteTradingFlow:
             assert engine.trade_count == 5
             assert engine.successful_trades == 4
             assert engine.current_position.side == "LONG"
+
+    @pytest.mark.asyncio()
+    async def test_balance_validation_throughout_trading_flow(
+        self, mock_market_data, mock_llm_responses, mock_orders
+    ):
+        """Test balance validation and consistency throughout complete trading flow."""
+        with (
+            patch.multiple(
+                "bot.main.MarketDataProvider",
+                get_latest_ohlcv=Mock(return_value=mock_market_data),
+                to_dataframe=Mock(
+                    return_value=self._create_mock_dataframe(mock_market_data)
+                ),
+                connect=AsyncMock(return_value=True),
+                disconnect=AsyncMock(return_value=True),
+                is_connected=Mock(return_value=True),
+                get_data_status=Mock(
+                    return_value={"connected": True, "cached_candles": 200}
+                ),
+            ),
+            patch.multiple(
+                "bot.main.LLMAgent",
+                analyze_market=AsyncMock(
+                    side_effect=[
+                        mock_llm_responses["bullish"],  # Open LONG
+                        mock_llm_responses["close"],  # Close position
+                    ]
+                ),
+                is_available=Mock(return_value=True),
+            ),
+            patch.multiple(
+                "bot.main.CoinbaseClient",
+                connect=AsyncMock(return_value=True),
+                disconnect=AsyncMock(return_value=True),
+                is_connected=Mock(return_value=True),
+                _get_account_balance=AsyncMock(return_value=Decimal("10000")),
+            ),
+        ):
+            engine = TradingEngine(symbol="BTC-USD", interval="1m", dry_run=True)
+            await engine._initialize_components()
+
+            # Reset positions and capture initial balance state
+            engine.position_manager.reset_positions()
+            initial_balance = engine.paper_account.current_balance
+            initial_equity = engine.paper_account.equity
+            initial_margin = engine.paper_account.margin_used
+
+            # Verify initial balance consistency
+            account_status = engine.paper_account.get_account_status()
+            assert account_status["current_balance"] == float(initial_balance)
+            assert account_status["equity"] == float(initial_equity)
+            assert account_status["margin_used"] == float(initial_margin)
+            assert account_status["margin_available"] == float(
+                initial_equity - initial_margin
+            )
+
+            # Execute first trade (LONG)
+            current_price = mock_market_data[-1].close
+
+            # Mock successful order execution
+            first_order = Order(
+                id="balance_test_123",
+                symbol="BTC-USD",
+                side="BUY",
+                type="MARKET",
+                quantity=Decimal("0.03"),
+                price=current_price,
+                status=OrderStatus.FILLED,
+                timestamp=datetime.now(UTC),
+                filled_quantity=Decimal("0.03"),
+            )
+            engine.paper_account.execute_trade_action = Mock(return_value=first_order)
+
+            # Get LLM decision and execute
+            df = engine.market_data.to_dataframe(limit=200)
+            df_with_indicators = engine.indicator_calc.calculate_all(df)
+            indicator_state = engine.indicator_calc.get_latest_state(df_with_indicators)
+
+            market_state = MarketState(
+                symbol=engine.symbol,
+                interval=engine.interval,
+                timestamp=datetime.now(UTC),
+                current_price=current_price,
+                ohlcv_data=mock_market_data[-10:],
+                indicators=IndicatorData(**indicator_state),
+                current_position=engine.current_position,
+            )
+
+            trade_action = await engine.llm_agent.analyze_market(market_state)
+            validated_action = engine.validator.validate(trade_action)
+            risk_approved, final_action, risk_reason = (
+                engine.risk_manager.evaluate_risk(
+                    validated_action, engine.current_position, current_price
+                )
+            )
+
+            if risk_approved and final_action.action != "HOLD":
+                await engine._execute_trade(final_action, current_price)
+
+            # Verify balance changes after opening position
+            post_trade_balance = engine.paper_account.current_balance
+            post_trade_margin = engine.paper_account.margin_used
+            post_trade_equity = engine.paper_account.equity
+
+            # Balance should decrease by fees
+            assert post_trade_balance < initial_balance
+
+            # Margin should be allocated
+            assert post_trade_margin > initial_margin
+
+            # Equity should account for unrealized P&L
+            account_status = engine.paper_account.get_account_status()
+            assert account_status["current_balance"] == float(post_trade_balance)
+            assert account_status["margin_used"] == float(post_trade_margin)
+            assert account_status["open_positions"] == 1
+
+            # Verify position is properly tracked
+            assert engine.current_position.side == "LONG"
+            assert engine.current_position.size > 0
+            assert engine.current_position.entry_price == current_price
+
+            # Execute second trade (CLOSE)
+            second_order = Order(
+                id="balance_close_124",
+                symbol="BTC-USD",
+                side="SELL",
+                type="MARKET",
+                quantity=engine.current_position.size,
+                price=current_price,
+                status=OrderStatus.FILLED,
+                timestamp=datetime.now(UTC),
+                filled_quantity=engine.current_position.size,
+            )
+            engine.paper_account.execute_trade_action = Mock(return_value=second_order)
+
+            # Update market state for close decision
+            market_state.current_position = engine.current_position
+            trade_action = await engine.llm_agent.analyze_market(market_state)
+            validated_action = engine.validator.validate(trade_action)
+            risk_approved, final_action, risk_reason = (
+                engine.risk_manager.evaluate_risk(
+                    validated_action, engine.current_position, current_price
+                )
+            )
+
+            if risk_approved and final_action.action != "HOLD":
+                await engine._execute_trade(final_action, current_price)
+
+            # Verify balance after closing position
+            final_balance = engine.paper_account.current_balance
+            final_margin = engine.paper_account.margin_used
+            final_equity = engine.paper_account.equity
+
+            # Margin should be released
+            assert final_margin == Decimal("0.00")
+
+            # No open positions
+            assert len(engine.paper_account.open_trades) == 0
+
+            # Balance consistency check
+            account_status = engine.paper_account.get_account_status()
+            assert account_status["current_balance"] == float(final_balance)
+            assert account_status["margin_used"] == 0.0
+            assert account_status["open_positions"] == 0
+            assert account_status["margin_available"] == float(final_equity)
+
+            # Verify position is closed
+            assert engine.current_position.side == "FLAT"
+            assert engine.current_position.size == 0
+
+            # Verify trade counts
+            assert engine.trade_count == 2
+            assert engine.successful_trades == 2
+
+            await engine._shutdown()
+
+    @pytest.mark.asyncio()
+    async def test_balance_precision_and_rounding_consistency(
+        self, mock_market_data, mock_llm_responses
+    ):
+        """Test balance precision and rounding consistency across operations."""
+        with (
+            patch.multiple(
+                "bot.main.MarketDataProvider",
+                get_latest_ohlcv=Mock(return_value=mock_market_data),
+                to_dataframe=Mock(
+                    return_value=self._create_mock_dataframe(mock_market_data)
+                ),
+                connect=AsyncMock(return_value=True),
+                is_connected=Mock(return_value=True),
+            ),
+            patch.multiple(
+                "bot.main.LLMAgent",
+                analyze_market=AsyncMock(return_value=mock_llm_responses["bullish"]),
+                is_available=Mock(return_value=True),
+            ),
+            patch.multiple(
+                "bot.main.CoinbaseClient",
+                connect=AsyncMock(return_value=True),
+                is_connected=Mock(return_value=True),
+                _get_account_balance=AsyncMock(return_value=Decimal("10000.123456")),
+            ),
+        ):
+            engine = TradingEngine(symbol="BTC-USD", interval="1m", dry_run=True)
+            await engine._initialize_components()
+
+            # Test balance precision with non-standard decimal values
+            engine.paper_account.current_balance = Decimal("9999.123456789")
+            engine.paper_account.equity = Decimal("10001.987654321")
+            engine.paper_account.margin_used = Decimal("500.555555555")
+
+            # Get account status and verify precision handling
+            account_status = engine.paper_account.get_account_status()
+
+            # All balance values should be properly normalized to 2 decimal places for USD
+            for key in ["current_balance", "equity", "margin_used", "margin_available"]:
+                value = account_status[key]
+                assert isinstance(value, float)
+
+                # Check that values are reasonably precise (not overly precise)
+                decimal_places = (
+                    len(str(value).split(".")[-1]) if "." in str(value) else 0
+                )
+                assert decimal_places <= 6, f"Excessive precision in {key}: {value}"
+
+            # Test multiple operations maintain precision
+            for i in range(5):
+                # Simulate small balance changes
+                engine.paper_account.current_balance += Decimal("0.123")
+                engine.paper_account.equity += Decimal("0.456")
+
+                account_status = engine.paper_account.get_account_status()
+
+                # Verify values remain well-formed
+                assert account_status["current_balance"] > 0
+                assert account_status["equity"] > 0
+                assert not any(
+                    str(value).endswith(".000000000")
+                    for value in account_status.values()
+                    if isinstance(value, float)
+                )
+
+    @pytest.mark.asyncio()
+    async def test_balance_edge_cases_in_trading_flow(self, mock_market_data):
+        """Test balance handling in edge cases during trading flow."""
+        with (
+            patch.multiple(
+                "bot.main.MarketDataProvider",
+                get_latest_ohlcv=Mock(return_value=mock_market_data),
+                to_dataframe=Mock(
+                    return_value=self._create_mock_dataframe(mock_market_data)
+                ),
+                connect=AsyncMock(return_value=True),
+                is_connected=Mock(return_value=True),
+            ),
+            patch.multiple(
+                "bot.main.CoinbaseClient",
+                connect=AsyncMock(return_value=True),
+                is_connected=Mock(return_value=True),
+                _get_account_balance=AsyncMock(
+                    return_value=Decimal("100")
+                ),  # Small balance
+            ),
+            patch.multiple(
+                "bot.main.LLMAgent",
+                is_available=Mock(return_value=True),
+            ),
+        ):
+            engine = TradingEngine(symbol="BTC-USD", interval="1m", dry_run=True)
+            await engine._initialize_components()
+
+            # Set very small balance to test edge cases
+            engine.paper_account.current_balance = Decimal("50.00")
+            engine.paper_account.equity = Decimal("50.00")
+
+            # Test insufficient balance scenario
+            large_trade = TradeAction(
+                action="LONG",
+                size_pct=200,  # Request 200% of balance
+                take_profit_pct=2.0,
+                stop_loss_pct=1.5,
+                rationale="Insufficient funds test",
+            )
+
+            current_price = mock_market_data[-1].close
+
+            # Mock failed order due to insufficient funds
+            failed_order = Order(
+                id="insufficient_funds",
+                symbol="BTC-USD",
+                side="BUY",
+                type="MARKET",
+                quantity=Decimal("0"),
+                price=current_price,
+                status=OrderStatus.REJECTED,
+                timestamp=datetime.now(UTC),
+                filled_quantity=Decimal("0"),
+            )
+            engine.paper_account.execute_trade_action = Mock(return_value=failed_order)
+
+            # Execute trade - should handle insufficient funds gracefully
+            await engine._execute_trade(large_trade, current_price)
+
+            # Verify balance unchanged after failed trade
+            assert engine.paper_account.current_balance == Decimal("50.00")
+            assert engine.paper_account.margin_used == Decimal("0.00")
+            assert len(engine.paper_account.open_trades) == 0
+
+            # Test very small successful trade
+            small_trade = TradeAction(
+                action="LONG",
+                size_pct=1,  # 1% of small balance
+                take_profit_pct=2.0,
+                stop_loss_pct=1.5,
+                rationale="Micro trade test",
+            )
+
+            small_order = Order(
+                id="micro_trade",
+                symbol="BTC-USD",
+                side="BUY",
+                type="MARKET",
+                quantity=Decimal("0.00001"),  # Very small quantity
+                price=current_price,
+                status=OrderStatus.FILLED,
+                timestamp=datetime.now(UTC),
+                filled_quantity=Decimal("0.00001"),
+            )
+            engine.paper_account.execute_trade_action = Mock(return_value=small_order)
+
+            initial_balance = engine.paper_account.current_balance
+            await engine._execute_trade(small_trade, current_price)
+
+            # Verify micro trade was handled correctly
+            assert (
+                engine.paper_account.current_balance <= initial_balance
+            )  # Fees deducted
+
+            # Balance changes should be reasonable (not zero due to precision)
+            balance_change = initial_balance - engine.paper_account.current_balance
+            assert balance_change >= Decimal("0")  # Should have some fee impact

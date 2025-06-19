@@ -579,6 +579,44 @@ services:
           - trading-bot-dev
     command: ["python", "-m", "bot.main", "live", "--symbol", "BTC-USD"]
 
+  # VPS deployment service (optional) - use with: docker-compose --profile vps up
+  # This service demonstrates VPS configuration within the main compose file
+  ai-trading-bot-vps:
+    extends: ai-trading-bot
+    container_name: ai-trading-bot-vps-demo
+    profiles:
+      - vps
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - VPS_DEPLOYMENT=true
+      - GEOGRAPHIC_REGION=${GEOGRAPHIC_REGION:-US}
+      - SYSTEM__DRY_RUN=${SYSTEM__DRY_RUN:-true}
+      - CONFIG_FILE=/app/config/vps_production.json
+      - MONITORING__ENABLED=true
+      - BACKUP_ENABLED=true
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./config:/app/config:ro
+      - ./scripts/vps-healthcheck.sh:/app/vps-healthcheck.sh:ro
+    networks:
+      trading-network:
+        aliases:
+          - ai-trading-bot-vps-demo
+          - trading-bot-vps-demo
+    command: ["python", "-m", "bot.main", "live", "--symbol", "SUI-PERP", "--interval", "30s", "--force"]
+    healthcheck:
+      test: ["CMD-SHELL", "/app/vps-healthcheck.sh ai-trading-bot"]
+      interval: 45s
+      timeout: 20s
+      retries: 5
+      start_period: 60s
+    labels:
+      - "com.vps.service=ai-trading-bot"
+      - "com.vps.monitoring=enabled"
+      - "com.vps.demo=true"
+
 volumes:
   # Dashboard data persistence (trading bot uses bind mounts)
   dashboard-logs:

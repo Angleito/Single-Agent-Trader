@@ -10,6 +10,8 @@ import logging
 import os
 import random
 import time
+import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 import aiohttp
@@ -129,11 +131,16 @@ class BluefinServiceClient:
             "messages_sent": 0,
         }
 
-        # Circuit breaker state
+        # Enhanced circuit breaker state
         self.circuit_open = False
         self.circuit_open_until = 0.0
-        self.circuit_failure_threshold = 5
+        self.circuit_failure_threshold = 3  # Reduced threshold for faster failover
         self.circuit_recovery_timeout = 60  # seconds
+
+        # Balance operation health tracking
+        self.balance_operation_failures = 0
+        self.last_successful_balance_fetch = 0
+        self.balance_staleness_threshold = 300  # 5 minutes
 
         # Connection pooling settings
         self._connection_pool_size = 10
@@ -187,6 +194,22 @@ class BluefinServiceClient:
             },
         )
 
+        # Balance operation audit trail
+        self.balance_operation_audit = []
+        self.max_balance_audit_entries = 500
+
+        # Performance tracking for balance operations
+        self.balance_performance_metrics = {
+            "total_balance_requests": 0,
+            "successful_balance_requests": 0,
+            "failed_balance_requests": 0,
+            "average_balance_response_time": 0.0,
+            "balance_response_times": [],
+            "last_balance_request": None,
+            "last_successful_balance": None,
+            "balance_error_counts": {},
+        }
+
         # Prepare headers with authentication
         self._headers = {
             "Content-Type": "application/json",
@@ -213,6 +236,258 @@ class BluefinServiceClient:
                     logger.error(f"Invalid timestamp parameter {key}: {value}")
                     return False
         return True
+
+    def _record_balance_operation_audit(
+        self,
+        correlation_id: str,
+        operation: str,
+        status: str,
+        balance_amount: str = None,
+        error: str = None,
+        duration_ms: float = None,
+        response_size: int = None,
+        metadata: dict = None,
+    ) -> None:
+        """
+        Record balance operation in client audit trail.
+
+        Args:
+            correlation_id: Unique identifier for the operation
+            operation: Type of balance operation
+            status: success/failed/timeout/retried
+            balance_amount: Balance amount (if applicable)
+            error: Error message (if failed)
+            duration_ms: Operation duration in milliseconds
+            response_size: Size of response in bytes
+            metadata: Additional context data
+        """
+        audit_entry = {
+            "correlation_id": correlation_id,
+            "operation": operation,
+            "status": status,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "client_id": self.client_id,
+            "service_url": self.service_url,
+            "balance_amount": balance_amount,
+            "error": error,
+            "duration_ms": duration_ms,
+            "response_size_bytes": response_size,
+            "metadata": metadata or {},
+        }
+
+        # Add to audit trail
+        self.balance_operation_audit.append(audit_entry)
+
+        # Keep only recent entries
+        if len(self.balance_operation_audit) > self.max_balance_audit_entries:
+            self.balance_operation_audit = self.balance_operation_audit[
+                -self.max_balance_audit_entries :
+            ]
+
+        # Update performance metrics
+        self._update_balance_performance_metrics(status, duration_ms, error)
+
+        # Log audit entry
+        logger.debug(
+            f"Balance client audit: {operation} - {status}",
+            extra={
+                "audit_entry": audit_entry,
+                "operation_type": "balance_client_audit",
+            },
+        )
+
+    def _update_balance_performance_metrics(
+        self, status: str, duration_ms: float = None, error: str = None
+    ) -> None:
+        """Update balance operation performance metrics."""
+        self.balance_performance_metrics["total_balance_requests"] += 1
+        self.balance_performance_metrics["last_balance_request"] = datetime.now(UTC)
+
+        if status == "success":
+            self.balance_performance_metrics["successful_balance_requests"] += 1
+            self.balance_performance_metrics["last_successful_balance"] = datetime.now(
+                UTC
+            )
+
+            if duration_ms is not None:
+                self.balance_performance_metrics["balance_response_times"].append(
+                    duration_ms
+                )
+                # Keep only recent response times
+                if (
+                    len(self.balance_performance_metrics["balance_response_times"])
+                    > 100
+                ):
+                    self.balance_performance_metrics["balance_response_times"] = (
+                        self.balance_performance_metrics[
+                            "balance_response_times"
+                        ][-100:]
+                    )
+
+                # Update average
+                times = self.balance_performance_metrics["balance_response_times"]
+                self.balance_performance_metrics["average_balance_response_time"] = sum(
+                    times
+                ) / len(times)
+        else:
+            self.balance_performance_metrics["failed_balance_requests"] += 1
+
+            if error:
+                error_type = (
+                    type(error).__name__ if isinstance(error, Exception) else str(error)
+                )
+                if (
+                    error_type
+                    not in self.balance_performance_metrics["balance_error_counts"]
+                ):
+                    self.balance_performance_metrics["balance_error_counts"][
+                        error_type
+                    ] = 0
+                self.balance_performance_metrics["balance_error_counts"][
+                    error_type
+                ] += 1
+
+    def _get_balance_error_context(
+        self,
+        correlation_id: str,
+        operation: str,
+        error: Exception,
+        duration_ms: float = None,
+        endpoint: str = None,
+        additional_context: dict = None,
+    ) -> dict:
+        """
+        Generate comprehensive error context for balance operations.
+
+        Args:
+            correlation_id: Unique operation identifier
+            operation: Operation name
+            error: The exception that occurred
+            duration_ms: Operation duration in milliseconds
+            endpoint: API endpoint called
+            additional_context: Additional context data
+
+        Returns:
+            Dictionary with comprehensive error context
+        """
+        context = {
+            "correlation_id": correlation_id,
+            "operation": operation,
+            "error_type": type(error).__name__,
+            "error_message": str(error),
+            "timestamp": datetime.now(UTC).isoformat(),
+            "client_id": self.client_id,
+            "service_url": self.service_url,
+            "endpoint": endpoint,
+            "duration_ms": duration_ms,
+            "success": False,
+            "error_category": self._categorize_balance_error(error),
+            "actionable_message": self._get_actionable_balance_error_message(error),
+            "retry_recommended": self._should_retry_balance_error(error),
+            "circuit_breaker_open": self._is_circuit_open(),
+            "consecutive_failures": self.consecutive_failures,
+        }
+
+        if additional_context:
+            context.update(additional_context)
+
+        return context
+
+    def _categorize_balance_error(self, error: Exception) -> str:
+        """Categorize balance-specific errors."""
+        error_str = str(error).lower()
+        error_type = type(error).__name__.lower()
+
+        if "balance" in error_str:
+            return "balance_specific"
+        elif "account" in error_str:
+            return "account_related"
+        elif "timeout" in error_str or "timeout" in error_type:
+            return "network_timeout"
+        elif "connection" in error_str or "connection" in error_type:
+            return "network_connection"
+        elif "authentication" in error_str or "auth" in error_str:
+            return "authentication"
+        elif "rate" in error_str and "limit" in error_str:
+            return "rate_limiting"
+        elif "502" in error_str or "503" in error_str or "504" in error_str:
+            return "service_unavailable"
+        else:
+            return "unknown"
+
+    def _get_actionable_balance_error_message(self, error: Exception) -> str:
+        """Generate actionable error message for balance operations."""
+        error_str = str(error).lower()
+        error_type = type(error).__name__.lower()
+
+        if "balance" in error_str:
+            return (
+                "Balance retrieval failed. Account may not be initialized on Bluefin."
+            )
+        elif "account" in error_str:
+            return "Account access failed. Verify account exists and is properly configured."
+        elif "timeout" in error_str:
+            return "Request timed out. Check network connection and retry."
+        elif "connection" in error_str:
+            return (
+                "Connection failed. Verify Bluefin service is running and accessible."
+            )
+        elif "authentication" in error_str or "auth" in error_str:
+            return "Authentication failed. Check API key configuration."
+        elif "rate" in error_str and "limit" in error_str:
+            return "Rate limit exceeded. Wait before making another request."
+        else:
+            return "Balance operation failed. Check logs for details."
+
+    def _should_retry_balance_error(self, error: Exception) -> bool:
+        """Determine if balance error should be retried."""
+        error_str = str(error).lower()
+        error_type = type(error).__name__.lower()
+
+        # Don't retry authentication or validation errors
+        if "authentication" in error_str or "auth" in error_str:
+            return False
+        if "invalid" in error_str and ("key" in error_str or "token" in error_str):
+            return False
+
+        # Retry network and service errors
+        if any(
+            keyword in error_str
+            for keyword in ["timeout", "connection", "502", "503", "504"]
+        ):
+            return True
+
+        # Retry rate limit errors (with delay)
+        if "rate" in error_str and "limit" in error_str:
+            return True
+
+        # Default to retry for unknown errors
+        return True
+
+    def get_balance_audit_trail(self, limit: int = 50) -> list[dict]:
+        """Get recent balance operation audit trail."""
+        return self.balance_operation_audit[-limit:]
+
+    def get_balance_performance_summary(self) -> dict:
+        """Get balance operation performance summary."""
+        metrics = self.balance_performance_metrics.copy()
+
+        # Calculate success rate
+        total = metrics["total_balance_requests"]
+        successful = metrics["successful_balance_requests"]
+        metrics["success_rate_percent"] = (successful / total * 100) if total > 0 else 0
+
+        # Format timestamps
+        if metrics["last_balance_request"]:
+            metrics["last_balance_request"] = metrics[
+                "last_balance_request"
+            ].isoformat()
+        if metrics["last_successful_balance"]:
+            metrics["last_successful_balance"] = metrics[
+                "last_successful_balance"
+            ].isoformat()
+
+        return metrics
 
     def _is_circuit_open(self) -> bool:
         """Check if circuit breaker is currently open."""
@@ -913,35 +1188,153 @@ class BluefinServiceClient:
         Returns:
             Account data dictionary
         """
+        # Generate correlation ID for this balance operation
+        correlation_id = str(uuid.uuid4())
+        operation_start = time.time()
+
         if self._session is None or self._session.closed:
             error_msg = "Session not initialized or closed - call connect() first"
+
+            # Record audit for session error
+            self._record_balance_operation_audit(
+                correlation_id,
+                "get_account_data",
+                "failed",
+                error=error_msg,
+                duration_ms=0,
+                metadata={"error_stage": "session_check"},
+            )
+
             logger.error(
                 "Account data request failed - no session",
                 extra={
                     "client_id": self.client_id,
+                    "correlation_id": correlation_id,
                     "operation": "get_account_data",
                     "session_initialized": self._session is not None,
                     "session_closed": self._session.closed if self._session else True,
+                    "error_category": "session_unavailable",
+                    "timestamp": datetime.now(UTC).isoformat(),
                 },
             )
             return {"error": error_msg}
 
         # Check connection health
+        health_start = time.time()
         if not await self._check_connection_health():
-            return {"error": "Connection health check failed"}
+            health_duration = time.time() - health_start
+            error_msg = "Connection health check failed"
+
+            # Record audit for health check failure
+            self._record_balance_operation_audit(
+                correlation_id,
+                "get_account_data",
+                "failed",
+                error=error_msg,
+                duration_ms=round(health_duration * 1000, 2),
+                metadata={"error_stage": "health_check"},
+            )
+
+            logger.error(
+                "Account data request failed - health check",
+                extra={
+                    "client_id": self.client_id,
+                    "correlation_id": correlation_id,
+                    "operation": "get_account_data",
+                    "error_category": "health_check_failed",
+                    "health_check_duration_ms": round(health_duration * 1000, 2),
+                    "timestamp": datetime.now(UTC).isoformat(),
+                },
+            )
+            return {"error": error_msg}
 
         logger.debug(
             "Requesting account data from Bluefin service",
             extra={
                 "client_id": self.client_id,
+                "correlation_id": correlation_id,
                 "operation": "get_account_data",
                 "endpoint": "/account",
+                "timestamp": datetime.now(UTC).isoformat(),
             },
         )
 
-        return await self._make_request_with_retry(
-            method="GET", endpoint="/account", operation="get_account_data"
-        )
+        try:
+            result = await self._make_request_with_retry(
+                method="GET", endpoint="/account", operation="get_account_data"
+            )
+
+            # Record successful operation
+            total_duration = time.time() - operation_start
+            balance_amount = (
+                result.get("balance", "0") if isinstance(result, dict) else "0"
+            )
+
+            self._record_balance_operation_audit(
+                correlation_id,
+                "get_account_data",
+                "success",
+                balance_amount=balance_amount,
+                duration_ms=round(total_duration * 1000, 2),
+                response_size=len(str(result)),
+                metadata={
+                    "has_balance": bool(balance_amount and balance_amount != "0"),
+                    "has_address": (
+                        bool(result.get("address"))
+                        if isinstance(result, dict)
+                        else False
+                    ),
+                    "response_type": type(result).__name__,
+                },
+            )
+
+            logger.info(
+                "Successfully retrieved account data",
+                extra={
+                    "client_id": self.client_id,
+                    "correlation_id": correlation_id,
+                    "operation": "get_account_data",
+                    "duration_ms": round(total_duration * 1000, 2),
+                    "has_balance": bool(balance_amount and balance_amount != "0"),
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "success": True,
+                },
+            )
+
+            return result
+
+        except Exception as e:
+            total_duration = time.time() - operation_start
+
+            # Generate comprehensive error context
+            error_context = self._get_balance_error_context(
+                correlation_id,
+                "get_account_data",
+                e,
+                round(total_duration * 1000, 2),
+                "/account",
+                additional_context={"error_stage": "api_request"},
+            )
+
+            # Record audit for failed operation
+            self._record_balance_operation_audit(
+                correlation_id,
+                "get_account_data",
+                "failed",
+                error=str(e),
+                duration_ms=round(total_duration * 1000, 2),
+                metadata={
+                    "error_stage": "api_request",
+                    "exception_type": type(e).__name__,
+                },
+            )
+
+            logger.error(
+                "Account data request failed with exception",
+                extra=error_context,
+            )
+
+            return {"error": f"Account data request failed: {e!s}"}
 
     async def get_user_positions(self) -> list[dict[str, Any]]:
         """
@@ -2122,7 +2515,9 @@ class BluefinServiceClient:
                     "status": (
                         "pass"
                         if success_rate >= 80
-                        else "degraded" if success_rate >= 60 else "fail"
+                        else "degraded"
+                        if success_rate >= 60
+                        else "fail"
                     ),
                     "response_time_ms": avg_response_time * 1000,
                     "success_rate": success_rate,
@@ -2260,6 +2655,53 @@ class BluefinServiceClient:
 
         # Reset circuit breaker
         self.reset_circuit_breaker(force=True)
+
+    async def get_balance_operation_health(self) -> dict[str, Any]:
+        """
+        Get specific health metrics for balance operations.
+
+        Returns:
+            Dictionary with balance operation health information
+        """
+        current_time = time.time()
+
+        # Check if service supports health endpoint
+        service_health = None
+        try:
+            # Try to get circuit breaker status from service if it has the method
+            if hasattr(self, "_service_client") and self._service_client:
+                if hasattr(self._service_client, "get_circuit_breaker_status"):
+                    service_health = self._service_client.get_circuit_breaker_status()
+        except Exception as e:
+            logger.debug(
+                f"Could not get service health status: {e}",
+                extra={"client_id": self.client_id},
+            )
+
+        return {
+            "balance_operation_failures": getattr(
+                self, "balance_operation_failures", 0
+            ),
+            "last_successful_balance_fetch": getattr(
+                self, "last_successful_balance_fetch", 0
+            ),
+            "time_since_last_success": (
+                current_time - getattr(self, "last_successful_balance_fetch", 0)
+                if getattr(self, "last_successful_balance_fetch", 0) > 0
+                else None
+            ),
+            "balance_staleness_threshold": getattr(
+                self, "balance_staleness_threshold", 300
+            ),
+            "is_balance_stale": (
+                current_time - getattr(self, "last_successful_balance_fetch", 0)
+                > getattr(self, "balance_staleness_threshold", 300)
+                if getattr(self, "last_successful_balance_fetch", 0) > 0
+                else True
+            ),
+            "service_circuit_breaker": service_health,
+            "client_circuit_breaker_open": self._is_circuit_open(),
+        }
 
     async def __aenter__(self):
         """Async context manager entry."""

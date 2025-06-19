@@ -160,7 +160,6 @@ class TradingEngine:
             config_file: Optional configuration file path
             dry_run: Whether to run in dry-run mode
         """
-        print("DEBUG: TradingEngine.__init__ started")
         self.symbol = symbol
         self.interval = interval
         self.dry_run = dry_run
@@ -168,47 +167,31 @@ class TradingEngine:
         self._shutdown_requested = False
         self._memory_available = False  # Initialize early to prevent AttributeError
         self._last_position_log_time: datetime | None = None
-        self._background_tasks: list[asyncio.Task[Any]] = (
-            []
-        )  # Track background tasks for cleanup
+        self._background_tasks: list[
+            asyncio.Task[Any]
+        ] = []  # Track background tasks for cleanup
 
-        print("DEBUG: About to load configuration")
         # Load configuration
         self.settings = self._load_configuration(config_file, dry_run)
-        print("DEBUG: Configuration loaded")
 
         # Setup logging
-        print("DEBUG: About to setup logging")
         self._setup_logging()
         self.logger = logging.getLogger(__name__)
-        print("DEBUG: Logging setup complete")
 
         # Initialize paper trading if in dry run mode
-        print("DEBUG: About to initialize paper trading")
         self.paper_account = None
         if self.dry_run:
-            print("DEBUG: Accessing paper_trading settings...")
             balance = self.settings.paper_trading.starting_balance
-            print(f"DEBUG: Starting balance: {balance}")
-            print("DEBUG: Creating PaperTradingAccount...")
             self.paper_account = PaperTradingAccount(starting_balance=balance)
-            print("DEBUG: PaperTradingAccount created successfully")
 
         # Initialize components (market data will be initialized after exchange connection)
         self.market_data: MarketDataProviderType = None
         self.logger.debug("About to initialize VuManChu indicators...")
-        print("DEBUG: About to create VuManChuIndicators()")
         self.indicator_calc = VuManChuIndicators()
-        print("DEBUG: VuManChuIndicators created successfully")
-        print("DEBUG: About to log VuManChu success...")
         self.logger.debug("VuManChu indicators initialized successfully")
-        print("DEBUG: Logged VuManChu success")
-        print("DEBUG: About to set actual_trading_symbol")
         self.actual_trading_symbol = symbol  # Will be updated if futures are enabled
-        print("DEBUG: Set actual_trading_symbol")
 
         # Initialize MCP memory components if enabled
-        print("DEBUG: About to initialize MCP memory components")
         self.logger.debug("About to initialize MCP memory components...")
         self.memory_server = None
         self.experience_manager = None
@@ -368,12 +351,15 @@ class TradingEngine:
         performance_thresholds = PerformanceThresholds()
 
         # Customize thresholds for trading environment
-        if interval in [
-            "1s",
-            "5s",
-            "10s",
-            "15s",
-        ]:  # High-frequency trading (Note: sub-minute intervals converted to 1m on Bluefin)
+        if (
+            interval
+            in [
+                "1s",
+                "5s",
+                "10s",
+                "15s",
+            ]
+        ):  # High-frequency trading (Note: sub-minute intervals converted to 1m on Bluefin)
             performance_thresholds.indicator_calculation_ms = 50
             performance_thresholds.market_data_processing_ms = 25
             performance_thresholds.trade_execution_ms = 500

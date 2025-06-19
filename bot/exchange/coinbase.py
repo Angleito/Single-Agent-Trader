@@ -6,6 +6,7 @@ for executing trades, managing orders, and retrieving account information.
 """
 
 import asyncio
+import decimal
 import logging
 import time
 import traceback
@@ -113,6 +114,10 @@ from ..trading_types import (
     TradeAction,
 )
 from .base import (
+    BalanceRetrievalError,
+    BalanceServiceUnavailableError,
+    BalanceTimeoutError,
+    BalanceValidationError,
     BaseExchange,
     ExchangeAuthError,
     ExchangeConnectionError,
@@ -1213,6 +1218,82 @@ class CoinbaseClient(BaseExchange):
             await self._load_portfolios()
         return list(self._portfolios.values())
 
+    def _normalize_balance(self, amount: Decimal) -> Decimal:
+        """
+        Normalize balance to 2 decimal places for USD currency.
+        This prevents floating-point precision errors and excessive decimal places.
+
+        Args:
+            amount: USD amount to normalize
+
+        Returns:
+            Normalized amount with 2 decimal places
+
+        Raises:
+            ValueError: If amount is invalid (NaN, infinite)
+        """
+        if amount is None:
+            return Decimal("0.00")
+
+        # Validate that the amount is a proper decimal
+        if not isinstance(amount, Decimal):
+            try:
+                amount = Decimal(str(amount))
+            except (ValueError, TypeError):
+                logger.error(f"Invalid balance amount: {amount} (type: {type(amount)})")
+                raise ValueError(f"Cannot convert to Decimal: {amount}")
+
+        # Check for invalid values
+        if amount.is_nan():
+            logger.error("Balance amount is NaN")
+            raise ValueError("Balance amount cannot be NaN")
+
+        if amount.is_infinite():
+            logger.error("Balance amount is infinite")
+            raise ValueError("Balance amount cannot be infinite")
+
+        # Quantize to 2 decimal places using banker's rounding
+        from decimal import ROUND_HALF_EVEN
+
+        return amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
+
+    def _normalize_crypto_amount(self, amount: Decimal) -> Decimal:
+        """
+        Normalize crypto amounts to 8 decimal places for precision.
+
+        Args:
+            amount: Crypto amount to normalize
+
+        Returns:
+            Normalized amount with 8 decimal places
+
+        Raises:
+            ValueError: If amount is invalid (NaN, infinite)
+        """
+        if amount is None:
+            return Decimal("0.00000000")
+
+        # Validate that the amount is a proper decimal
+        if not isinstance(amount, Decimal):
+            try:
+                amount = Decimal(str(amount))
+            except (ValueError, TypeError):
+                logger.error(f"Invalid crypto amount: {amount} (type: {type(amount)})")
+                raise ValueError(f"Cannot convert to Decimal: {amount}")
+
+        # Check for invalid values
+        if amount.is_nan():
+            logger.error("Crypto amount is NaN")
+            raise ValueError("Crypto amount cannot be NaN")
+
+        if amount.is_infinite():
+            logger.error("Crypto amount is infinite")
+            raise ValueError("Crypto amount cannot be infinite")
+
+        from decimal import ROUND_HALF_EVEN
+
+        return amount.quantize(Decimal("0.00000001"), rounding=ROUND_HALF_EVEN)
+
     def get_futures_portfolio_id(self) -> str | None:
         """
         Get the futures portfolio ID if available.
@@ -2251,29 +2332,56 @@ class CoinbaseClient(BaseExchange):
 
         Returns:
             Account balance in USD
+
+        Raises:
+            BalanceServiceUnavailableError: When Coinbase API is unavailable
+            BalanceTimeoutError: When request times out
+            BalanceValidationError: When balance data is invalid
+            BalanceRetrievalError: For other balance retrieval issues
         """
         if self.dry_run:
-            # Return mock balance for paper trading
-            mock_balance = Decimal("10000.00")
+            # Return mock balance for paper trading with proper normalization
+            mock_balance = self._normalize_balance(Decimal("10000.00"))
             logger.debug(f"PAPER TRADING: Returning mock balance ${mock_balance}")
             return mock_balance
 
         try:
             if self.enable_futures and account_type == AccountType.CFM:
-                return await self.get_futures_balance()
+                futures_balance = await self.get_futures_balance()
+                return self._normalize_balance(futures_balance)
             elif account_type == AccountType.CBI:
-                return await self.get_spot_balance()
+                spot_balance = await self.get_spot_balance()
+                return self._normalize_balance(spot_balance)
             else:
                 # Get total balance across all accounts
                 spot_balance = await self.get_spot_balance()
                 if self.enable_futures:
                     futures_balance = await self.get_futures_balance()
-                    return spot_balance + futures_balance
-                return spot_balance
+                    total_balance = spot_balance + futures_balance
+                    return self._normalize_balance(total_balance)
+                return self._normalize_balance(spot_balance)
 
+        except (
+            BalanceRetrievalError,
+            BalanceServiceUnavailableError,
+            BalanceTimeoutError,
+            BalanceValidationError,
+        ):
+            # Re-raise specific balance exceptions
+            raise
         except Exception as e:
             logger.error(f"Failed to get account balance: {e}")
-            raise ExchangeConnectionError(f"Failed to get account balance: {e}") from e
+            # Wrap generic exceptions in BalanceRetrievalError
+            raise BalanceRetrievalError(
+                f"Failed to retrieve account balance: {e}",
+                account_type=str(account_type) if account_type else None,
+                balance_context={
+                    "exchange": "coinbase",
+                    "enable_futures": self.enable_futures,
+                    "dry_run": self.dry_run,
+                    "error_type": type(e).__name__,
+                },
+            ) from e
 
     async def get_spot_balance(self) -> Decimal:
         """
@@ -2281,13 +2389,31 @@ class CoinbaseClient(BaseExchange):
 
         Returns:
             Spot account balance in USD
+
+        Raises:
+            BalanceServiceUnavailableError: When client not initialized or service unavailable
+            BalanceValidationError: When balance data is invalid
+            BalanceRetrievalError: For other balance retrieval issues
         """
         try:
             if self._client is None:
-                logger.error("Client not initialized")
-                return Decimal("0")
+                raise BalanceServiceUnavailableError(
+                    "Coinbase client not initialized",
+                    service_name="coinbase_client",
+                    account_type="CBI",
+                )
 
+            # Use retry request which handles API-level errors
             accounts_data = await self._retry_request(self._client.get_accounts)
+
+            # Validate response structure
+            if not isinstance(accounts_data, dict) or "accounts" not in accounts_data:
+                raise BalanceValidationError(
+                    "Invalid accounts data structure from Coinbase API",
+                    invalid_value=type(accounts_data).__name__,
+                    validation_rule="accounts_data_structure",
+                    account_type="CBI",
+                )
 
             # Find USD balance in spot accounts
             total_balance = Decimal("0")
@@ -2296,17 +2422,60 @@ class CoinbaseClient(BaseExchange):
                     account.get("currency") == "USD"
                     and account.get("type") != "futures"
                 ):
-                    available_balance = account.get("available_balance", {}).get(
-                        "value", "0"
-                    )
-                    total_balance += Decimal(str(available_balance))
+                    balance_data = account.get("available_balance", {})
+                    balance_value = balance_data.get("value", "0")
+
+                    # Validate balance value format
+                    try:
+                        account_balance = Decimal(str(balance_value))
+                        total_balance += account_balance
+                    except (
+                        ValueError,
+                        TypeError,
+                        decimal.InvalidOperation,
+                    ) as decimal_err:
+                        raise BalanceValidationError(
+                            f"Invalid balance value format in spot account: {balance_value}",
+                            invalid_value=balance_value,
+                            validation_rule="decimal_conversion",
+                            account_type="CBI",
+                        ) from decimal_err
+
+            # Validate final balance
+            if total_balance < Decimal("0"):
+                logger.warning(f"Retrieved negative spot balance: ${total_balance}")
 
             logger.debug(f"Retrieved spot USD balance: {total_balance}")
             return total_balance
 
+        except (
+            BalanceRetrievalError,
+            BalanceServiceUnavailableError,
+            BalanceValidationError,
+        ):
+            # Re-raise specific balance exceptions
+            raise
         except Exception as e:
             logger.error(f"Failed to get spot balance: {e}")
-            raise ExchangeConnectionError(f"Failed to get spot balance: {e}") from e
+            # Check for specific API error types
+            if hasattr(e, "status_code"):
+                if e.status_code == 503:
+                    raise BalanceServiceUnavailableError(
+                        f"Coinbase API service unavailable: {e}",
+                        service_name="coinbase_api",
+                        status_code=e.status_code,
+                        account_type="CBI",
+                    ) from e
+
+            raise BalanceRetrievalError(
+                f"Failed to retrieve spot balance: {e}",
+                account_type="CBI",
+                balance_context={
+                    "exchange": "coinbase",
+                    "account_type": "spot",
+                    "error_type": type(e).__name__,
+                },
+            ) from e
 
     async def get_futures_balance(self) -> Decimal:
         """
@@ -2314,37 +2483,116 @@ class CoinbaseClient(BaseExchange):
 
         Returns:
             Futures account balance in USD
+
+        Raises:
+            BalanceServiceUnavailableError: When client not initialized or service unavailable
+            BalanceValidationError: When balance data is invalid
+            BalanceRetrievalError: For other balance retrieval issues
         """
         try:
             if self._client is None:
-                logger.error("Client not initialized")
-                return Decimal("0")
+                raise BalanceServiceUnavailableError(
+                    "Coinbase client not initialized",
+                    service_name="coinbase_client",
+                    account_type="CFM",
+                )
 
-            # Get FCM balance summary
+            # Get FCM balance summary with retry mechanism
             balance_response = await self._retry_request(
                 self._client.get_fcm_balance_summary
             )
 
+            # Validate response structure and extract balance
+            futures_balance = None
+
             # Handle response object format
             if hasattr(balance_response, "balance_summary"):
                 balance_data = balance_response.balance_summary
-                # Get CFM USD balance from the response - use direct attribute access
-                cfm_balance = balance_data.cfm_usd_balance.get("value", "0")
-                futures_balance = Decimal(str(cfm_balance))
-            else:
+                if hasattr(balance_data, "cfm_usd_balance"):
+                    balance_value = balance_data.cfm_usd_balance.get("value", "0")
+                    try:
+                        futures_balance = Decimal(str(balance_value))
+                    except (
+                        ValueError,
+                        TypeError,
+                        decimal.InvalidOperation,
+                    ) as decimal_err:
+                        raise BalanceValidationError(
+                            f"Invalid CFM balance value format: {balance_value}",
+                            invalid_value=balance_value,
+                            validation_rule="decimal_conversion",
+                            account_type="CFM",
+                        ) from decimal_err
+                else:
+                    raise BalanceValidationError(
+                        "Missing cfm_usd_balance field in balance summary",
+                        invalid_value="missing_field",
+                        validation_rule="response_structure",
+                        account_type="CFM",
+                    )
+            elif isinstance(balance_response, dict):
                 # Fallback for dict format
-                cash_balance = balance_response.get("cash_balance", {}).get(
-                    "value", "0"
+                cash_balance_data = balance_response.get("cash_balance", {})
+                balance_value = cash_balance_data.get("value", "0")
+                try:
+                    futures_balance = Decimal(str(balance_value))
+                except (ValueError, TypeError, decimal.InvalidOperation) as decimal_err:
+                    raise BalanceValidationError(
+                        f"Invalid cash balance value format: {balance_value}",
+                        invalid_value=balance_value,
+                        validation_rule="decimal_conversion",
+                        account_type="CFM",
+                    ) from decimal_err
+            else:
+                raise BalanceValidationError(
+                    f"Invalid balance response format: {type(balance_response)}",
+                    invalid_value=type(balance_response).__name__,
+                    validation_rule="response_format",
+                    account_type="CFM",
                 )
-                futures_balance = Decimal(str(cash_balance))
+
+            if futures_balance is None:
+                raise BalanceValidationError(
+                    "Unable to extract balance from response",
+                    invalid_value="null_balance",
+                    validation_rule="balance_extraction",
+                    account_type="CFM",
+                )
+
+            # Validate balance value
+            if futures_balance < Decimal("0"):
+                logger.warning(
+                    f"Retrieved negative futures balance: ${futures_balance}"
+                )
 
             logger.debug(f"Retrieved futures USD balance: {futures_balance}")
             return futures_balance
 
+        except (
+            BalanceRetrievalError,
+            BalanceServiceUnavailableError,
+            BalanceValidationError,
+        ):
+            # Re-raise specific balance exceptions
+            raise
         except Exception as e:
             logger.error(f"Failed to get futures balance: {e}")
-            # Fallback to regular accounts API
-            return await self._get_futures_balance_fallback()
+            # Try fallback method before raising final exception
+            try:
+                return await self._get_futures_balance_fallback()
+            except Exception as fallback_error:
+                logger.error(f"Fallback futures balance also failed: {fallback_error}")
+                raise BalanceRetrievalError(
+                    f"Failed to retrieve futures balance (primary and fallback): {e}",
+                    account_type="CFM",
+                    balance_context={
+                        "exchange": "coinbase",
+                        "account_type": "futures",
+                        "primary_error": str(e),
+                        "fallback_error": str(fallback_error),
+                        "error_type": type(e).__name__,
+                    },
+                ) from e
 
     async def _get_futures_balance_fallback(self) -> Decimal:
         """
@@ -2352,13 +2600,30 @@ class CoinbaseClient(BaseExchange):
 
         Returns:
             Futures account balance in USD
+
+        Raises:
+            BalanceServiceUnavailableError: When client not initialized
+            BalanceValidationError: When balance data is invalid
+            BalanceRetrievalError: For other balance retrieval issues
         """
         try:
             if self._client is None:
-                logger.error("Client not initialized")
-                return Decimal("0")
+                raise BalanceServiceUnavailableError(
+                    "Coinbase client not initialized for fallback balance retrieval",
+                    service_name="coinbase_client",
+                    account_type="CFM",
+                )
 
             accounts_data = await self._retry_request(self._client.get_accounts)
+
+            # Validate response structure
+            if not isinstance(accounts_data, dict) or "accounts" not in accounts_data:
+                raise BalanceValidationError(
+                    "Invalid accounts data structure from Coinbase fallback API",
+                    invalid_value=type(accounts_data).__name__,
+                    validation_rule="accounts_data_structure",
+                    account_type="CFM",
+                )
 
             total_balance = Decimal("0")
             for account in accounts_data.get("accounts", []):
@@ -2366,16 +2631,41 @@ class CoinbaseClient(BaseExchange):
                     account.get("currency") == "USD"
                     and account.get("type") == "futures"
                 ):
-                    available_balance = account.get("available_balance", {}).get(
-                        "value", "0"
-                    )
-                    total_balance += Decimal(str(available_balance))
+                    balance_data = account.get("available_balance", {})
+                    balance_value = balance_data.get("value", "0")
+
+                    # Validate balance value format
+                    try:
+                        account_balance = Decimal(str(balance_value))
+                        total_balance += account_balance
+                    except (
+                        ValueError,
+                        TypeError,
+                        decimal.InvalidOperation,
+                    ) as decimal_err:
+                        raise BalanceValidationError(
+                            f"Invalid balance value format in futures account (fallback): {balance_value}",
+                            invalid_value=balance_value,
+                            validation_rule="decimal_conversion",
+                            account_type="CFM",
+                        ) from decimal_err
 
             return total_balance
 
+        except (BalanceServiceUnavailableError, BalanceValidationError):
+            # Re-raise specific balance exceptions
+            raise
         except Exception as e:
             logger.error(f"Fallback futures balance failed: {e}")
-            return Decimal("0")
+            raise BalanceRetrievalError(
+                f"Fallback futures balance retrieval failed: {e}",
+                account_type="CFM",
+                balance_context={
+                    "exchange": "coinbase",
+                    "account_type": "futures_fallback",
+                    "error_type": type(e).__name__,
+                },
+            ) from e
 
     async def get_futures_account_info(
         self, refresh: bool = False

@@ -16,15 +16,20 @@ import threading
 import time
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_EVEN, Decimal, getcontext
 from pathlib import Path
 from typing import Any
 
 from .config import settings
 from .fee_calculator import fee_calculator
 from .trading_types import Order, OrderStatus, TradeAction
+from .validation import BalanceValidator
 
 logger = logging.getLogger(__name__)
+
+# Set global decimal precision for financial calculations
+getcontext().prec = 28
+getcontext().rounding = ROUND_HALF_EVEN
 
 
 @dataclass
@@ -119,10 +124,13 @@ class PaperTradingAccount:
         self.data_dir = data_dir or Path("data/paper_trading")
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
-        # Account state
-        self.starting_balance = starting_balance or Decimal(
-            str(getattr(settings.paper_trading, "starting_balance", 10000))
-        )
+        # Account state with normalized precision
+        if starting_balance is not None:
+            self.starting_balance = self._normalize_balance(starting_balance)
+        else:
+            self.starting_balance = self._normalize_balance(
+                Decimal(str(getattr(settings.paper_trading, "starting_balance", 10000)))
+            )
         self.current_balance = self.starting_balance
         self.equity = self.starting_balance
         self.margin_used = Decimal("0")
@@ -149,6 +157,9 @@ class PaperTradingAccount:
         # Thread safety
         self._lock = threading.RLock()
 
+        # Balance validation system
+        self.balance_validator = BalanceValidator()
+
         # State files
         self.account_file = self.data_dir / "account.json"
         self.trades_file = self.data_dir / "trades.json"
@@ -158,8 +169,138 @@ class PaperTradingAccount:
         self._load_state()
 
         logger.info(
-            f"Initialized paper trading account with ${self.current_balance:,.2f}"
+            f"Initialized paper trading account with ${self.current_balance:,.2f} and balance validation"
         )
+
+    def _normalize_balance(self, amount: Decimal) -> Decimal:
+        """
+        Normalize balance to 2 decimal places for USD currency.
+        This prevents floating-point precision errors and excessive decimal places.
+
+        Args:
+            amount: USD amount to normalize
+
+        Returns:
+            Normalized amount with 2 decimal places
+
+        Raises:
+            ValueError: If amount is invalid (NaN, infinite, or extremely large)
+        """
+        if amount is None:
+            return Decimal("0.00")
+
+        # Validate that the amount is a proper decimal
+        if not isinstance(amount, Decimal):
+            try:
+                amount = Decimal(str(amount))
+            except (ValueError, TypeError):
+                logger.error(f"Invalid balance amount: {amount} (type: {type(amount)})")
+                raise ValueError(f"Cannot convert to Decimal: {amount}")
+
+        # Check for invalid values
+        if amount.is_nan():
+            logger.error("Balance amount is NaN")
+            raise ValueError("Balance amount cannot be NaN")
+
+        if amount.is_infinite():
+            logger.error("Balance amount is infinite")
+            raise ValueError("Balance amount cannot be infinite")
+
+        # Check for extremely large values (> $1 billion)
+        if abs(amount) > Decimal("1000000000"):
+            logger.warning(f"Extremely large balance amount: {amount}")
+
+        # Quantize to 2 decimal places using banker's rounding
+        return amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
+
+    def _normalize_crypto_amount(self, amount: Decimal) -> Decimal:
+        """
+        Normalize crypto amounts to 8 decimal places for precision.
+
+        Args:
+            amount: Crypto amount to normalize
+
+        Returns:
+            Normalized amount with 8 decimal places
+
+        Raises:
+            ValueError: If amount is invalid (NaN, infinite, or negative)
+        """
+        if amount is None:
+            return Decimal("0.00000000")
+
+        # Validate that the amount is a proper decimal
+        if not isinstance(amount, Decimal):
+            try:
+                amount = Decimal(str(amount))
+            except (ValueError, TypeError):
+                logger.error(f"Invalid crypto amount: {amount} (type: {type(amount)})")
+                raise ValueError(f"Cannot convert to Decimal: {amount}")
+
+        # Check for invalid values
+        if amount.is_nan():
+            logger.error("Crypto amount is NaN")
+            raise ValueError("Crypto amount cannot be NaN")
+
+        if amount.is_infinite():
+            logger.error("Crypto amount is infinite")
+            raise ValueError("Crypto amount cannot be infinite")
+
+        # Check for negative values (most crypto amounts should be positive)
+        if amount < Decimal("0"):
+            logger.warning(f"Negative crypto amount: {amount}")
+
+        # Check for extremely small values (dust)
+        if Decimal("0") < amount < Decimal("0.00000001"):
+            logger.warning(f"Dust amount (< 1 satoshi): {amount}")
+
+        return amount.quantize(Decimal("0.00000001"), rounding=ROUND_HALF_EVEN)
+
+    def _validate_balance_update(
+        self, new_balance: Decimal, operation: str = "unknown"
+    ) -> bool:
+        """
+        Validate a balance update before applying it.
+
+        Args:
+            new_balance: The proposed new balance
+            operation: Description of the operation for logging
+
+        Returns:
+            True if the balance update is valid
+
+        Raises:
+            ValueError: If the balance update would result in invalid state
+        """
+        try:
+            # Normalize to check for validation issues
+            normalized_balance = self._normalize_balance(new_balance)
+
+            # Check for critical issues
+            if normalized_balance < Decimal("-1000"):
+                logger.error(
+                    f"Critical: Balance would become severely negative: ${normalized_balance} from {operation}"
+                )
+                raise ValueError(
+                    f"Balance update rejected: would result in ${normalized_balance}"
+                )
+
+            # Check for suspicious large changes
+            if self.current_balance > Decimal("0"):
+                change_ratio = (
+                    abs(normalized_balance - self.current_balance)
+                    / self.current_balance
+                )
+                if change_ratio > Decimal("10"):  # 1000% change
+                    logger.warning(
+                        f"Large balance change detected: ${self.current_balance} -> ${normalized_balance} from {operation}"
+                    )
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Balance validation failed for {operation}: {e}")
+            raise ValueError(f"Invalid balance update: {e}") from e
 
     def get_account_status(
         self, current_prices: dict[str, Decimal] = None
@@ -175,7 +316,8 @@ class PaperTradingAccount:
                     price = self._get_current_price(trade.symbol)
                 unrealized_pnl += trade.calculate_unrealized_pnl(price)
 
-            self.equity = self.current_balance + unrealized_pnl
+            # Normalize equity calculation
+            self.equity = self._normalize_balance(self.current_balance + unrealized_pnl)
 
             # Calculate performance metrics
             total_pnl = self.equity - self.starting_balance
@@ -197,17 +339,21 @@ class PaperTradingAccount:
                 self.max_drawdown = current_drawdown
 
             return {
-                "starting_balance": float(self.starting_balance),
-                "current_balance": float(self.current_balance),
-                "equity": float(self.equity),
-                "unrealized_pnl": float(unrealized_pnl),
-                "total_pnl": float(total_pnl),
+                "starting_balance": float(
+                    self._normalize_balance(self.starting_balance)
+                ),
+                "current_balance": float(self._normalize_balance(self.current_balance)),
+                "equity": float(self._normalize_balance(self.equity)),
+                "unrealized_pnl": float(self._normalize_balance(unrealized_pnl)),
+                "total_pnl": float(self._normalize_balance(total_pnl)),
                 "roi_percent": float(roi),
-                "margin_used": float(self.margin_used),
-                "margin_available": float(self.equity - self.margin_used),
+                "margin_used": float(self._normalize_balance(self.margin_used)),
+                "margin_available": float(
+                    self._normalize_balance(self.equity - self.margin_used)
+                ),
                 "open_positions": len(self.open_trades),
                 "total_trades": len(self.closed_trades),
-                "peak_equity": float(self.peak_equity),
+                "peak_equity": float(self._normalize_balance(self.peak_equity)),
                 "current_drawdown": float(current_drawdown),
                 "max_drawdown": float(self.max_drawdown),
             }
@@ -434,8 +580,8 @@ class PaperTradingAccount:
         else:
             # For spot trading or non-ETH futures, use the original calculation
             trade_size = leveraged_value / current_price
-            # Round to reasonable precision
-            trade_size = trade_size.quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP)
+            # Normalize to 8 decimal places for crypto precision
+            trade_size = self._normalize_crypto_amount(trade_size)
 
         return trade_size
 
@@ -502,19 +648,51 @@ class PaperTradingAccount:
                 symbol=symbol,
                 side=action.action,
                 entry_time=current_time,
-                entry_price=price,
-                size=size,
-                fees=fees,
-                slippage=abs(price - (price / (1 + self.slippage_rate))),
+                entry_price=self._normalize_balance(price),
+                size=self._normalize_crypto_amount(size),
+                fees=self._normalize_balance(fees),
+                slippage=self._normalize_balance(
+                    abs(price - (price / (1 + self.slippage_rate)))
+                ),
             )
 
             self.open_trades[trade_id] = trade
 
-            # Update account balance and margin
-            trade_value = size * price
-            required_margin = trade_value / Decimal(str(settings.trading.leverage))
-            self.margin_used += required_margin
-            self.current_balance -= fees  # Deduct fees immediately
+            # Calculate slippage cost based on the difference between execution price and market price
+            # Since price is the execution price (with slippage), calculate the market price
+            slippage_amount = (
+                price * self.slippage_rate
+            )  # This matches the slippage calculation
+            slippage_cost = self._normalize_balance(slippage_amount * size)
+
+            # Update account balance and margin with proper normalization
+            trade_value = self._normalize_balance(size * price)
+            required_margin = self._normalize_balance(
+                trade_value / Decimal(str(settings.trading.leverage))
+            )
+            new_margin_used = self._normalize_balance(
+                self.margin_used + required_margin
+            )
+
+            # Deduct both fees and slippage cost from balance
+            total_costs = self._normalize_balance(fees + slippage_cost)
+            new_balance = self._normalize_balance(self.current_balance - total_costs)
+
+            # Validate balance update before applying
+            try:
+                self._validate_balance_update(
+                    new_balance, f"trade_execution_{action.action}"
+                )
+                self.margin_used = new_margin_used
+                self.current_balance = new_balance
+                logger.debug(f"✅ Balance update validated: ${self.current_balance}")
+            except ValueError as e:
+                logger.error(
+                    f"❌ Balance validation failed during trade execution - trade rejected: {e}"
+                )
+                return self._create_failed_order(
+                    action, symbol, f"BALANCE_VALIDATION_FAILED: {e}"
+                )
 
             # Create order object
             order = Order(
@@ -572,14 +750,45 @@ class PaperTradingAccount:
                 "NO_POSITION",
             )
 
+        # Calculate slippage cost for closing
+        slippage_amount = price * self.slippage_rate
+        slippage_cost = self._normalize_balance(slippage_amount * trade_to_close.size)
+
         # Calculate realized P&L
         realized_pnl = trade_to_close.close_trade(price, close_time, fees)
 
-        # Update account
-        self.current_balance += realized_pnl - fees  # Add P&L, subtract fees
-        trade_value = trade_to_close.size * trade_to_close.entry_price
-        released_margin = trade_value / Decimal(str(settings.trading.leverage))
-        self.margin_used -= released_margin
+        # Update account with proper normalization - deduct additional slippage cost
+        balance_change = self._normalize_balance(realized_pnl - fees - slippage_cost)
+        new_balance = self._normalize_balance(self.current_balance + balance_change)
+        trade_value = self._normalize_balance(
+            trade_to_close.size * trade_to_close.entry_price
+        )
+        released_margin = self._normalize_balance(
+            trade_value / Decimal(str(settings.trading.leverage))
+        )
+        new_margin_used = self._normalize_balance(self.margin_used - released_margin)
+
+        # Validate balance update
+        if self._validate_balance_update(
+            new_balance,
+            "position_close",
+            {
+                "trade_id": trade_to_close.id,
+                "symbol": symbol,
+                "realized_pnl": float(realized_pnl),
+                "fees": float(fees),
+                "slippage_cost": float(slippage_cost),
+            },
+        ):
+            self.current_balance = new_balance
+            self.margin_used = new_margin_used
+        else:
+            logger.warning(
+                "⚠️ Balance validation failed during position close - continuing with original values"
+            )
+            # For closing positions, we proceed anyway but log the issue
+            self.current_balance = new_balance
+            self.margin_used = new_margin_used
 
         # Move to closed trades
         self.closed_trades.append(trade_to_close)
@@ -630,19 +839,60 @@ class PaperTradingAccount:
         # Calculate average entry price (weighted by position sizes)
         current_value = existing_position.size * existing_position.entry_price
         new_value = size * price
-        total_size = existing_position.size + size
-        average_price = (current_value + new_value) / total_size
+        total_size = self._normalize_crypto_amount(existing_position.size + size)
+        average_price = self._normalize_balance(
+            (current_value + new_value) / total_size
+        )
 
         # Update existing position
         existing_position.size = total_size
         existing_position.entry_price = average_price
         existing_position.fees += fees
 
-        # Update account balance and margin
-        trade_value = size * price
-        required_margin = trade_value / Decimal(str(settings.trading.leverage))
-        self.margin_used += required_margin
-        self.current_balance -= fees  # Deduct fees immediately
+        # Calculate slippage cost for the increase
+        slippage_amount = price * self.slippage_rate
+        slippage_cost = self._normalize_balance(slippage_amount * size)
+
+        # Update account balance and margin with proper normalization
+        trade_value = self._normalize_balance(size * price)
+        required_margin = self._normalize_balance(
+            trade_value / Decimal(str(settings.trading.leverage))
+        )
+        new_margin_used = self._normalize_balance(self.margin_used + required_margin)
+
+        # Deduct both fees and slippage cost from balance
+        total_costs = self._normalize_balance(fees + slippage_cost)
+        new_balance = self._normalize_balance(self.current_balance - total_costs)
+
+        # Validate balance update
+        if self._validate_balance_update(
+            new_balance,
+            "position_increase",
+            {
+                "trade_id": trade_id,
+                "symbol": existing_position.symbol,
+                "size_increase": float(size),
+                "fees": float(fees),
+                "slippage_cost": float(slippage_cost),
+            },
+        ):
+            self.margin_used = new_margin_used
+            self.current_balance = new_balance
+        else:
+            logger.error(
+                "❌ Balance validation failed during position increase - operation rejected"
+            )
+            return self._create_failed_order(
+                TradeAction(
+                    action="LONG" if existing_position.side == "LONG" else "SHORT",
+                    size_pct=0,
+                    take_profit_pct=2.0,
+                    stop_loss_pct=1.5,
+                    rationale="Balance validation failed",
+                ),
+                existing_position.symbol,
+                "BALANCE_VALIDATION_FAILED",
+            )
 
         # Create order object for the increase
         order = Order(
@@ -1158,13 +1408,17 @@ class PaperTradingAccount:
                 # Save account state with detailed error context
                 try:
                     account_data = {
-                        "starting_balance": str(self.starting_balance),
-                        "current_balance": str(self.current_balance),
-                        "equity": str(self.equity),
-                        "margin_used": str(self.margin_used),
+                        "starting_balance": str(
+                            self._normalize_balance(self.starting_balance)
+                        ),
+                        "current_balance": str(
+                            self._normalize_balance(self.current_balance)
+                        ),
+                        "equity": str(self._normalize_balance(self.equity)),
+                        "margin_used": str(self._normalize_balance(self.margin_used)),
                         "trade_counter": self.trade_counter,
                         "session_start_time": self.session_start_time.isoformat(),
-                        "peak_equity": str(self.peak_equity),
+                        "peak_equity": str(self._normalize_balance(self.peak_equity)),
                         "max_drawdown": str(self.max_drawdown),
                         "last_save_time": datetime.now(UTC).isoformat(),
                     }
@@ -1175,7 +1429,7 @@ class PaperTradingAccount:
                         json.dump(account_data, f, indent=2)
                     temp_account_file.rename(self.account_file)
                     logger.info(
-                        f"✅ Account state saved: balance=${self.current_balance}, trades={self.trade_counter}"
+                        f"✅ Account state saved: balance=${self._normalize_balance(self.current_balance)}, trades={self.trade_counter}"
                     )
 
                 except Exception as e:
@@ -1430,17 +1684,25 @@ class PaperTradingAccount:
                 with open(self.account_file) as f:
                     account_data = json.load(f)
 
-                self.starting_balance = Decimal(
-                    account_data.get("starting_balance", str(self.starting_balance))
+                self.starting_balance = self._normalize_balance(
+                    Decimal(
+                        account_data.get("starting_balance", str(self.starting_balance))
+                    )
                 )
-                self.current_balance = Decimal(
-                    account_data.get("current_balance", str(self.current_balance))
+                self.current_balance = self._normalize_balance(
+                    Decimal(
+                        account_data.get("current_balance", str(self.current_balance))
+                    )
                 )
-                self.equity = Decimal(account_data.get("equity", str(self.equity)))
-                self.margin_used = Decimal(account_data.get("margin_used", "0"))
+                self.equity = self._normalize_balance(
+                    Decimal(account_data.get("equity", str(self.equity)))
+                )
+                self.margin_used = self._normalize_balance(
+                    Decimal(account_data.get("margin_used", "0"))
+                )
                 self.trade_counter = account_data.get("trade_counter", 0)
-                self.peak_equity = Decimal(
-                    account_data.get("peak_equity", str(self.peak_equity))
+                self.peak_equity = self._normalize_balance(
+                    Decimal(account_data.get("peak_equity", str(self.peak_equity)))
                 )
                 self.max_drawdown = Decimal(account_data.get("max_drawdown", "0"))
 

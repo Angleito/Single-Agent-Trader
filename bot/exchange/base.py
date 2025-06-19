@@ -6,8 +6,10 @@ must inherit from, ensuring consistent interface across different exchanges.
 Includes enterprise-grade error handling with error boundaries and recovery mechanisms.
 """
 
+import decimal
 import logging
 from abc import ABC, abstractmethod
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, Literal
 
@@ -26,6 +28,8 @@ from ..trading_types import (
     Position,
     TradeAction,
 )
+
+# Validation functionality is implemented inline in this module
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -51,6 +55,178 @@ class ExchangeInsufficientFundsError(ExchangeError):
     """Insufficient funds errors."""
 
 
+# Balance-specific exception hierarchy
+class BalanceRetrievalError(ExchangeError):
+    """
+    Base exception for balance retrieval operations.
+
+    This is the parent class for all balance-related errors,
+    providing common attributes and methods for error handling.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        account_type: str | None = None,
+        symbol: str | None = None,
+        balance_context: dict | None = None,
+    ):
+        super().__init__(message)
+        self.account_type = account_type
+        self.symbol = symbol
+        self.balance_context = balance_context or {}
+        self.timestamp = datetime.now(UTC)
+
+    def get_error_context(self) -> dict:
+        """Get structured error context for logging and debugging."""
+        return {
+            "error_type": self.__class__.__name__,
+            "message": str(self),
+            "account_type": self.account_type,
+            "symbol": self.symbol,
+            "balance_context": self.balance_context,
+            "timestamp": self.timestamp.isoformat(),
+        }
+
+
+class InsufficientBalanceError(BalanceRetrievalError):
+    """
+    Raised when account balance is insufficient for the requested operation.
+
+    This exception includes information about required vs available balance
+    for detailed error reporting and recovery strategies.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        required_balance: float | None = None,
+        available_balance: float | None = None,
+        account_type: str | None = None,
+        symbol: str | None = None,
+        operation_context: dict | None = None,
+    ):
+        super().__init__(message, account_type, symbol, operation_context)
+        self.required_balance = required_balance
+        self.available_balance = available_balance
+        self.shortfall = None
+        if required_balance is not None and available_balance is not None:
+            self.shortfall = required_balance - available_balance
+
+    def get_error_context(self) -> dict:
+        """Get enhanced error context including balance details."""
+        context = super().get_error_context()
+        context.update(
+            {
+                "required_balance": self.required_balance,
+                "available_balance": self.available_balance,
+                "shortfall": self.shortfall,
+            }
+        )
+        return context
+
+
+class BalanceValidationError(BalanceRetrievalError):
+    """
+    Raised when balance data fails validation checks.
+
+    This includes negative balances, invalid decimal values,
+    or other data integrity issues.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        invalid_value: Any = None,
+        validation_rule: str | None = None,
+        account_type: str | None = None,
+    ):
+        super().__init__(message, account_type)
+        self.invalid_value = invalid_value
+        self.validation_rule = validation_rule
+
+    def get_error_context(self) -> dict:
+        """Get validation-specific error context."""
+        context = super().get_error_context()
+        context.update(
+            {
+                "invalid_value": (
+                    str(self.invalid_value) if self.invalid_value is not None else None
+                ),
+                "validation_rule": self.validation_rule,
+            }
+        )
+        return context
+
+
+class BalanceServiceUnavailableError(BalanceRetrievalError):
+    """
+    Raised when balance service or API is temporarily unavailable.
+
+    This indicates a service-level issue that may be retryable
+    after a backoff period.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        service_name: str | None = None,
+        status_code: int | None = None,
+        retry_after: float | None = None,
+    ):
+        super().__init__(message)
+        self.service_name = service_name
+        self.status_code = status_code
+        self.retry_after = retry_after
+        self.is_retryable = True
+
+    def get_error_context(self) -> dict:
+        """Get service availability error context."""
+        context = super().get_error_context()
+        context.update(
+            {
+                "service_name": self.service_name,
+                "status_code": self.status_code,
+                "retry_after": self.retry_after,
+                "is_retryable": self.is_retryable,
+            }
+        )
+        return context
+
+
+class BalanceTimeoutError(BalanceRetrievalError):
+    """
+    Raised when balance API requests timeout.
+
+    This indicates network or API performance issues that may
+    require retry with exponential backoff.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        timeout_duration: float | None = None,
+        endpoint: str | None = None,
+        account_type: str | None = None,
+    ):
+        super().__init__(message, account_type)
+        self.timeout_duration = timeout_duration
+        self.endpoint = endpoint
+        self.is_retryable = True
+
+    def get_error_context(self) -> dict:
+        """Get timeout-specific error context."""
+        context = super().get_error_context()
+        context.update(
+            {
+                "timeout_duration": self.timeout_duration,
+                "endpoint": self.endpoint,
+                "is_retryable": self.is_retryable,
+            }
+        )
+        return context
+
+
 class BaseExchange(ABC):
     """
     Abstract base class for exchange implementations with enterprise-grade error handling.
@@ -70,6 +246,9 @@ class BaseExchange(ABC):
         self.dry_run = dry_run
         self._connected = False
         self._last_health_check: Any | None = None
+        self._last_validated_balance: Decimal | None = None
+
+        # Balance validation - using inline validation with proper exceptions
 
         # Error handling components
         self.exchange_name = self.__class__.__name__.replace("Client", "").replace(
@@ -95,7 +274,246 @@ class BaseExchange(ABC):
             degradation_threshold=2,
         )
 
-        logger.info(f"Initialized {self.exchange_name} exchange with error handling")
+        logger.info(
+            f"Initialized {self.exchange_name} exchange with error handling and balance validation"
+        )
+
+    async def validate_balance_update(
+        self,
+        new_balance: Decimal,
+        operation_type: str = "balance_update",
+        metadata: dict[str, Any] = None,
+    ) -> dict[str, Any]:
+        """
+        Validate balance update with comprehensive checks.
+
+        Args:
+            new_balance: New balance to validate
+            operation_type: Type of operation causing the update
+            metadata: Additional context information
+
+        Returns:
+            Validation result dictionary
+
+        Raises:
+            BalanceValidationError: If validation fails
+        """
+        try:
+            # Inline balance validation using our new exception architecture
+            if new_balance is None:
+                raise BalanceValidationError(
+                    "Balance value cannot be None",
+                    invalid_value=None,
+                    validation_rule="null_check",
+                )
+
+            if not isinstance(new_balance, Decimal):
+                try:
+                    new_balance = Decimal(str(new_balance))
+                except (ValueError, TypeError, decimal.InvalidOperation) as e:
+                    raise BalanceValidationError(
+                        f"Invalid balance format: {new_balance}",
+                        invalid_value=new_balance,
+                        validation_rule="decimal_conversion",
+                    ) from e
+
+            # Check for negative balance in most cases (some DEXs allow negative due to unrealized PnL)
+            if new_balance < Decimal("0") and not metadata.get("allow_negative", False):
+                logger.warning(
+                    f"Negative balance detected: ${new_balance} for operation {operation_type}"
+                )
+
+            # Check for unrealistic balance values
+            max_reasonable_balance = Decimal("1000000000")  # $1B threshold
+            if new_balance > max_reasonable_balance:
+                raise BalanceValidationError(
+                    f"Balance value too large: ${new_balance}",
+                    invalid_value=float(new_balance),
+                    validation_rule="max_balance_check",
+                )
+
+            # Update last validated balance
+            self._last_validated_balance = new_balance
+            logger.debug(
+                f"✅ Balance validation passed: ${new_balance} ({operation_type})"
+            )
+
+            return {
+                "valid": True,
+                "balance": new_balance,
+                "operation_type": operation_type,
+                "validation_timestamp": datetime.now(UTC).isoformat(),
+            }
+
+        except BalanceValidationError:
+            # Re-raise balance validation errors
+            raise
+        except Exception as e:
+            logger.error(f"Balance validation error in {self.exchange_name}: {e}")
+            raise BalanceValidationError(
+                f"Balance validation failed for {operation_type}: {e}",
+                invalid_value=str(new_balance) if new_balance is not None else None,
+                validation_rule="comprehensive_validation",
+            ) from e
+
+    async def validate_margin_requirements(
+        self,
+        balance: Decimal,
+        used_margin: Decimal,
+        position_value: Decimal = None,
+        leverage: int = None,
+    ) -> dict[str, Any]:
+        """
+        Validate margin requirements and calculations.
+
+        Args:
+            balance: Account balance
+            used_margin: Currently used margin
+            position_value: Total position value (optional)
+            leverage: Leverage ratio (optional)
+
+        Returns:
+            Margin validation result
+
+        Raises:
+            BalanceValidationError: If margin validation fails
+        """
+        try:
+            # Inline margin validation
+            if balance < Decimal("0"):
+                raise BalanceValidationError(
+                    "Account balance cannot be negative for margin calculation",
+                    invalid_value=float(balance),
+                    validation_rule="negative_balance_check",
+                )
+
+            if used_margin < Decimal("0"):
+                raise BalanceValidationError(
+                    "Used margin cannot be negative",
+                    invalid_value=float(used_margin),
+                    validation_rule="negative_used_margin_check",
+                )
+
+            if used_margin > balance:
+                logger.warning(
+                    f"Used margin (${used_margin}) exceeds balance (${balance})"
+                )
+
+            available_margin = balance - used_margin
+            margin_ratio = (
+                (used_margin / balance * 100) if balance > 0 else Decimal("100")
+            )
+
+            return {
+                "valid": True,
+                "balance": balance,
+                "used_margin": used_margin,
+                "available_margin": available_margin,
+                "margin_ratio_pct": float(margin_ratio),
+                "validation_timestamp": datetime.now(UTC).isoformat(),
+            }
+
+        except BalanceValidationError:
+            # Re-raise balance validation errors
+            raise
+        except Exception as e:
+            logger.error(f"Margin validation error in {self.exchange_name}: {e}")
+            raise BalanceValidationError(
+                f"Margin validation failed: {e}",
+                invalid_value=f"balance:{balance}, used_margin:{used_margin}",
+                validation_rule="margin_calculation",
+            ) from e
+
+    async def validate_balance_reconciliation(
+        self,
+        calculated_balance: Decimal,
+        exchange_reported_balance: Decimal,
+        tolerance_pct: float = 0.1,
+    ) -> dict[str, Any]:
+        """
+        Validate balance reconciliation between internal calculations and exchange.
+
+        Args:
+            calculated_balance: Balance calculated from our records
+            exchange_reported_balance: Balance reported by exchange
+            tolerance_pct: Acceptable difference percentage
+
+        Returns:
+            Reconciliation validation result
+
+        Raises:
+            BalanceValidationError: If reconciliation fails
+        """
+        try:
+            # Inline balance reconciliation validation
+            if calculated_balance is None or exchange_reported_balance is None:
+                raise BalanceValidationError(
+                    "Balance values cannot be None for reconciliation",
+                    invalid_value="null_balance",
+                    validation_rule="null_balance_check",
+                )
+
+            # Calculate difference
+            difference = abs(calculated_balance - exchange_reported_balance)
+            relative_difference = 0.0
+
+            if exchange_reported_balance != Decimal("0"):
+                relative_difference = float(
+                    difference / abs(exchange_reported_balance) * 100
+                )
+            elif calculated_balance != Decimal("0"):
+                # If reported balance is 0 but calculated isn't, this is a significant discrepancy
+                relative_difference = 100.0
+
+            is_within_tolerance = relative_difference <= tolerance_pct
+
+            result = {
+                "valid": is_within_tolerance,
+                "calculated_balance": calculated_balance,
+                "exchange_reported_balance": exchange_reported_balance,
+                "difference": difference,
+                "relative_difference_pct": relative_difference,
+                "tolerance_pct": tolerance_pct,
+                "validation_timestamp": datetime.now(UTC).isoformat(),
+            }
+
+            if not is_within_tolerance:
+                logger.warning(
+                    f"Balance reconciliation outside tolerance: "
+                    f"calculated=${calculated_balance}, reported=${exchange_reported_balance}, "
+                    f"difference={relative_difference:.2f}% (tolerance: {tolerance_pct}%)"
+                )
+
+            return result
+
+        except BalanceValidationError:
+            # Re-raise balance validation errors
+            raise
+        except Exception as e:
+            logger.error(f"Balance reconciliation error in {self.exchange_name}: {e}")
+            raise BalanceValidationError(
+                f"Balance reconciliation failed: {e}",
+                invalid_value=f"calculated:{calculated_balance}, reported:{exchange_reported_balance}",
+                validation_rule="reconciliation",
+            ) from e
+
+    def get_balance_validation_status(self) -> dict[str, Any]:
+        """
+        Get current balance validation status and statistics.
+
+        Returns:
+            Dictionary with validation status and statistics
+        """
+        return {
+            "exchange_name": self.exchange_name,
+            "last_validated_balance": (
+                float(self._last_validated_balance)
+                if self._last_validated_balance
+                else None
+            ),
+            "validation_enabled": True,
+            "validation_method": "inline_validation_with_balance_exceptions",
+        }
 
     async def _exchange_error_fallback(self, error: Exception, context: dict) -> None:
         """Fallback behavior for exchange errors."""
@@ -283,7 +701,11 @@ class BaseExchange(ABC):
             account_type: Specific account type or None for total
 
         Returns:
-            Account balance in USD
+            Account balance in USD (normalized to 2 decimal places)
+
+        Note:
+            Implementations should normalize USD balances to 2 decimal places
+            and crypto amounts to 8 decimal places for consistency.
         """
 
     @abstractmethod
@@ -426,10 +848,37 @@ class BaseExchange(ABC):
     async def get_account_balance_with_error_handling(
         self, account_type: AccountType | None = None
     ) -> Decimal:
-        """Get account balance with error boundary protection."""
+        """Get account balance with error boundary protection and validation."""
         async with self._error_boundary:
             try:
-                return await self.get_account_balance(account_type)
+                # Get balance from exchange
+                balance = await self.get_account_balance(account_type)
+
+                # Validate balance
+                try:
+                    validation_result = await self.validate_balance_update(
+                        new_balance=balance,
+                        operation_type="balance_fetch",
+                        metadata={
+                            "account_type": str(account_type) if account_type else "all"
+                        },
+                    )
+
+                    if not validation_result["valid"]:
+                        logger.warning(
+                            f"⚠️ Balance validation failed for {self.exchange_name}: "
+                            f"{validation_result.get('error', {}).get('message', 'Unknown error')}"
+                        )
+                        # Return the balance anyway but log the issue
+                        # In production, you might want to trigger alerts here
+
+                    return validation_result.get("balance", balance)
+
+                except BalanceValidationError as ve:
+                    logger.error(f"Balance validation error: {ve}")
+                    # Return original balance if validation fails but log the issue
+                    return balance
+
             except Exception as e:
                 # Log error with context
                 exception_handler.log_exception_with_context(

@@ -20,9 +20,20 @@ import secrets
 import sys
 import time
 import traceback
+import uuid
 from collections import defaultdict
 from datetime import UTC, datetime
+from enum import Enum
 from typing import Any
+
+
+class ErrorType(Enum):
+    """Classification of different error types for retry logic."""
+
+    TEMPORARY = "temporary"  # Retryable errors (network, timeout, rate limit)
+    PERMANENT = "permanent"  # Non-retryable errors (auth, invalid params)
+    UNKNOWN = "unknown"  # Unclassified errors
+
 
 from aiohttp import ClientError, ClientTimeout, web
 from bluefin_v2_client import MARKET_SYMBOLS, BluefinClient, Networks
@@ -204,6 +215,31 @@ class BluefinSDKService:
         # Initialize symbol converter with market symbols
         self.symbol_converter = BluefinSymbolConverter(MARKET_SYMBOLS)
 
+        # Enhanced retry configuration for balance operations
+        self.balance_retry_config = {
+            "max_retries": 4,
+            "base_delay": 1.0,  # Start with 1 second
+            "max_delay": 8.0,  # Cap at 8 seconds
+            "backoff_factor": 2.0,  # Exponential backoff
+            "jitter_factor": 0.1,  # Add randomness
+        }
+
+        # Balance staleness tracking
+        self.last_successful_balance_fetch = 0
+        self.balance_staleness_threshold = 300  # 5 minutes
+        self.cached_balance_data = None
+        self.balance_cache_timestamp = 0
+
+        # Health check configuration
+        self.health_check_interval = 30  # seconds
+        self.last_health_check = 0
+        self.consecutive_health_failures = 0
+        self.max_health_failures = 3
+
+        # Balance operation audit trail
+        self.balance_audit_trail = []
+        self.max_audit_entries = 1000
+
         logger.info(
             "Initializing Bluefin SDK Service",
             extra={
@@ -213,6 +249,454 @@ class BluefinSDKService:
                 "private_key_length": len(self.private_key) if self.private_key else 0,
             },
         )
+
+    def _record_balance_audit(
+        self,
+        correlation_id: str,
+        operation: str,
+        status: str,
+        balance_amount: str = None,
+        error: str = None,
+        duration_ms: float = None,
+        metadata: dict = None,
+    ) -> None:
+        """
+        Record balance operation in audit trail.
+
+        Args:
+            correlation_id: Unique identifier for the operation
+            operation: Type of balance operation
+            status: success/failed/timeout
+            balance_amount: Balance amount (if applicable)
+            error: Error message (if failed)
+            duration_ms: Operation duration in milliseconds
+            metadata: Additional context data
+        """
+        audit_entry = {
+            "correlation_id": correlation_id,
+            "operation": operation,
+            "status": status,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "service_id": self.service_id,
+            "network": self.network,
+            "balance_amount": balance_amount,
+            "error": error,
+            "duration_ms": duration_ms,
+            "metadata": metadata or {},
+        }
+
+        # Add to audit trail
+        self.balance_audit_trail.append(audit_entry)
+
+        # Keep only recent entries
+        if len(self.balance_audit_trail) > self.max_audit_entries:
+            self.balance_audit_trail = self.balance_audit_trail[
+                -self.max_audit_entries :
+            ]
+
+        # Log audit entry
+        logger.info(
+            f"Balance audit: {operation} - {status}",
+            extra={
+                "audit_entry": audit_entry,
+                "operation_type": "balance_audit",
+            },
+        )
+
+    def get_balance_audit_trail(self, limit: int = 100) -> list[dict]:
+        """
+        Get recent balance operation audit trail.
+
+        Args:
+            limit: Maximum number of entries to return
+
+        Returns:
+            List of recent audit entries
+        """
+        return self.balance_audit_trail[-limit:]
+
+    def _get_error_context(
+        self,
+        correlation_id: str,
+        operation: str,
+        error: Exception,
+        duration_ms: float = None,
+        additional_context: dict = None,
+    ) -> dict:
+        """
+        Generate comprehensive error context for logging.
+
+        Args:
+            correlation_id: Unique operation identifier
+            operation: Operation name
+            error: The exception that occurred
+            duration_ms: Operation duration in milliseconds
+            additional_context: Additional context data
+
+        Returns:
+            Dictionary with comprehensive error context
+        """
+        context = {
+            "correlation_id": correlation_id,
+            "operation": operation,
+            "error_type": type(error).__name__,
+            "error_message": str(error),
+            "timestamp": datetime.now(UTC).isoformat(),
+            "service_id": self.service_id,
+            "network": self.network,
+            "sdk_version": getattr(self.client, "version", "unknown"),
+            "client_initialized": self.initialized,
+            "duration_ms": duration_ms,
+            "success": False,
+            "error_category": self._categorize_error(error),
+            "actionable_message": self._get_actionable_error_message(error),
+        }
+
+        if additional_context:
+            context.update(additional_context)
+
+        return context
+
+    def _categorize_error(self, error: Exception) -> str:
+        """
+        Categorize error for better troubleshooting.
+
+        Args:
+            error: The exception to categorize
+
+        Returns:
+            Error category string
+        """
+        error_str = str(error).lower()
+        error_type = type(error).__name__.lower()
+
+        if "'data'" in error_str or "keyerror" in error_type:
+            return "api_response_structure"
+        elif "timeout" in error_str or "timeout" in error_type:
+            return "network_timeout"
+        elif "connection" in error_str or "connection" in error_type:
+            return "network_connection"
+        elif "authentication" in error_str or "auth" in error_str:
+            return "authentication"
+        elif "rate" in error_str and "limit" in error_str:
+            return "rate_limiting"
+        elif "balance" in error_str:
+            return "balance_specific"
+        elif "sdk" in error_str:
+            return "sdk_internal"
+        else:
+            return "unknown"
+
+    def _get_actionable_error_message(self, error: Exception) -> str:
+        """
+        Generate actionable error message for users.
+
+        Args:
+            error: The exception to analyze
+
+        Returns:
+            Actionable error message
+        """
+        error_str = str(error).lower()
+        error_type = type(error).__name__.lower()
+
+        if "'data'" in error_str or "keyerror" in error_type:
+            return (
+                "Account may not be initialized on Bluefin. Try depositing funds first."
+            )
+        elif "timeout" in error_str:
+            return "Network request timed out. Check internet connection and try again."
+        elif "connection" in error_str:
+            return "Unable to connect to Bluefin network. Check network connectivity."
+        elif "authentication" in error_str or "auth" in error_str:
+            return "Authentication failed. Verify private key configuration."
+        elif "rate" in error_str and "limit" in error_str:
+            return "Rate limit exceeded. Please wait before making another request."
+        else:
+            return "An unexpected error occurred. Check logs for details."
+
+    def _classify_error(self, error: Exception) -> ErrorType:
+        """
+        Classify an error as temporary, permanent, or unknown for retry logic.
+
+        Args:
+            error: The exception to classify
+
+        Returns:
+            ErrorType indicating whether the error is retryable
+        """
+        error_str = str(error).lower()
+        error_type = type(error).__name__.lower()
+
+        # Temporary errors (retryable)
+        if any(
+            keyword in error_str
+            for keyword in [
+                "timeout",
+                "connection",
+                "network",
+                "temporary",
+                "rate limit",
+                "503",
+                "502",
+                "504",
+                "429",
+                "too many requests",
+                "unavailable",
+            ]
+        ):
+            return ErrorType.TEMPORARY
+
+        if any(
+            keyword in error_type
+            for keyword in ["timeout", "connection", "network", "client"]
+        ):
+            return ErrorType.TEMPORARY
+
+        # Permanent errors (not retryable)
+        if any(
+            keyword in error_str
+            for keyword in [
+                "unauthorized",
+                "forbidden",
+                "invalid",
+                "authentication",
+                "401",
+                "403",
+                "404",
+                "400",
+                "bad request",
+            ]
+        ):
+            return ErrorType.PERMANENT
+
+        # Special handling for Bluefin SDK errors
+        if "'data'" in error_str or "keyerror" in error_type:
+            # These are typically account not initialized - temporary
+            return ErrorType.TEMPORARY
+
+        # Default to unknown
+        return ErrorType.UNKNOWN
+
+    def _calculate_retry_delay(self, attempt: int, operation: str = "balance") -> float:
+        """
+        Calculate exponential backoff delay with jitter.
+
+        Args:
+            attempt: Current attempt number (0-based)
+            operation: Type of operation for context-aware delays
+
+        Returns:
+            Delay in seconds
+        """
+        config = self.balance_retry_config
+
+        # Base exponential backoff
+        delay = config["base_delay"] * (config["backoff_factor"] ** attempt)
+
+        # Cap at maximum delay
+        delay = min(delay, config["max_delay"])
+
+        # Add jitter to prevent thundering herd
+        jitter = delay * config["jitter_factor"] * random.uniform(-1, 1)
+        final_delay = max(0.1, delay + jitter)  # Minimum 100ms delay
+
+        logger.debug(
+            f"Calculated retry delay for {operation}",
+            extra={
+                "service_id": self.service_id,
+                "attempt": attempt,
+                "operation": operation,
+                "base_delay": delay,
+                "jitter": jitter,
+                "final_delay": final_delay,
+            },
+        )
+
+        return final_delay
+
+    async def _check_service_health(self) -> bool:
+        """
+        Check service health before making balance requests.
+
+        Returns:
+            True if service is healthy, False otherwise
+        """
+        current_time = time.time()
+
+        # Skip if checked recently
+        if current_time - self.last_health_check < self.health_check_interval:
+            return self.consecutive_health_failures < self.max_health_failures
+
+        self.last_health_check = current_time
+
+        try:
+            # Simple health check - try to get public address
+            if self.client:
+                address = self.client.get_public_address()
+                if address:
+                    self.consecutive_health_failures = 0
+                    logger.debug(
+                        "Service health check passed",
+                        extra={
+                            "service_id": self.service_id,
+                            "address_length": len(address),
+                        },
+                    )
+                    return True
+
+            self.consecutive_health_failures += 1
+            logger.warning(
+                "Service health check failed",
+                extra={
+                    "service_id": self.service_id,
+                    "consecutive_failures": self.consecutive_health_failures,
+                    "max_failures": self.max_health_failures,
+                },
+            )
+            return False
+
+        except Exception as e:
+            self.consecutive_health_failures += 1
+            logger.warning(
+                "Service health check error",
+                extra={
+                    "service_id": self.service_id,
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "consecutive_failures": self.consecutive_health_failures,
+                },
+            )
+            return False
+
+    def _is_balance_stale(self) -> bool:
+        """
+        Check if cached balance data is stale.
+
+        Returns:
+            True if balance data is stale or missing
+        """
+        current_time = time.time()
+
+        # No cached data
+        if not self.cached_balance_data or self.balance_cache_timestamp == 0:
+            return True
+
+        # Check staleness
+        age = current_time - self.balance_cache_timestamp
+        is_stale = age > self.balance_staleness_threshold
+
+        if is_stale:
+            logger.warning(
+                "Balance data is stale",
+                extra={
+                    "service_id": self.service_id,
+                    "age_seconds": age,
+                    "threshold_seconds": self.balance_staleness_threshold,
+                },
+            )
+
+        return is_stale
+
+    async def _retry_balance_operation(self, operation_func, operation_name: str):
+        """
+        Execute a balance operation with exponential backoff retry logic.
+
+        Args:
+            operation_func: The function to execute
+            operation_name: Name of the operation for logging
+
+        Returns:
+            The result of the operation
+
+        Raises:
+            Exception: If all retries are exhausted
+        """
+        config = self.balance_retry_config
+        last_exception = None
+
+        for attempt in range(config["max_retries"]):
+            try:
+                # Check circuit breaker
+                if await self._is_circuit_open():
+                    raise BluefinConnectionError("Circuit breaker is open")
+
+                # Check service health before each attempt
+                if not await self._check_service_health():
+                    raise BluefinConnectionError("Service health check failed")
+
+                # Execute the operation
+                result = await operation_func()
+
+                # Success - record metrics
+                self.last_successful_balance_fetch = time.time()
+                self._record_success()
+
+                logger.debug(
+                    f"Balance operation {operation_name} succeeded",
+                    extra={
+                        "service_id": self.service_id,
+                        "operation": operation_name,
+                        "attempt": attempt + 1,
+                    },
+                )
+
+                return result
+
+            except Exception as e:
+                last_exception = e
+                error_type = self._classify_error(e)
+
+                logger.warning(
+                    f"Balance operation {operation_name} failed",
+                    extra={
+                        "service_id": self.service_id,
+                        "operation": operation_name,
+                        "attempt": attempt + 1,
+                        "error_type": error_type.value,
+                        "error_class": type(e).__name__,
+                        "error_message": str(e),
+                    },
+                )
+
+                # Don't retry permanent errors
+                if error_type == ErrorType.PERMANENT:
+                    logger.error(
+                        f"Permanent error in {operation_name}, not retrying",
+                        extra={
+                            "service_id": self.service_id,
+                            "operation": operation_name,
+                            "error_type": error_type.value,
+                        },
+                    )
+                    break
+
+                # If this is the last attempt, don't wait
+                if attempt == config["max_retries"] - 1:
+                    break
+
+                # Calculate delay and wait
+                delay = self._calculate_retry_delay(attempt, operation_name)
+                logger.info(
+                    f"Retrying {operation_name} in {delay:.2f}s",
+                    extra={
+                        "service_id": self.service_id,
+                        "operation": operation_name,
+                        "attempt": attempt + 1,
+                        "max_retries": config["max_retries"],
+                        "delay": delay,
+                    },
+                )
+
+                await asyncio.sleep(delay)
+
+        # All retries exhausted
+        self._record_failure("balance_operation")
+
+        if last_exception:
+            raise last_exception
+        else:
+            raise BluefinConnectionError(f"All retries exhausted for {operation_name}")
 
     def _get_market_symbol(self, symbol: str):
         """
@@ -1304,10 +1788,17 @@ class BluefinSDKService:
                 "error": None,
             }
 
+            # Generate correlation ID for this balance operation
+            correlation_id = str(uuid.uuid4())
+            operation_start = time.time()
+
             logger.debug(
                 "Initialized default account data structure",
                 extra={
                     "service_id": self.service_id,
+                    "correlation_id": correlation_id,
+                    "operation": "get_account_data_init",
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "default_balance": account_data["balance"],
                     "default_margin": account_data["margin"],
                 },
@@ -1315,100 +1806,176 @@ class BluefinSDKService:
 
             # Get public address (this should always work)
             try:
+                address_start = time.time()
                 account_data["address"] = self.client.get_public_address()
+                address_duration = time.time() - address_start
+
                 logger.info(
                     "Successfully retrieved account address",
                     extra={
                         "service_id": self.service_id,
-                        "address": account_data["address"],
+                        "correlation_id": correlation_id,
+                        "operation": "get_public_address",
+                        "duration_ms": round(address_duration * 1000, 2),
+                        "timestamp": datetime.now(UTC).isoformat(),
+                        "address_truncated": (
+                            account_data["address"][:8]
+                            + "..."
+                            + account_data["address"][-4:]
+                            if account_data["address"]
+                            and len(account_data["address"]) > 12
+                            else account_data["address"]
+                        ),
                         "address_length": (
                             len(account_data["address"])
                             if account_data["address"]
                             else 0
                         ),
+                        "success": True,
                     },
                 )
+
+                # Record successful address retrieval
+                self._record_balance_audit(
+                    correlation_id,
+                    "get_public_address",
+                    "success",
+                    duration_ms=round(address_duration * 1000, 2),
+                    metadata={
+                        "address_length": (
+                            len(account_data["address"])
+                            if account_data["address"]
+                            else 0
+                        )
+                    },
+                )
+
             except Exception as e:
+                address_duration = time.time() - address_start
+                error_context = self._get_error_context(
+                    correlation_id,
+                    "get_public_address",
+                    e,
+                    round(address_duration * 1000, 2),
+                )
+
                 logger.warning(
-                    "Failed to retrieve public address",
-                    extra={
-                        "service_id": self.service_id,
-                        "error_type": type(e).__name__,
-                        "error_message": str(e),
-                        "operation": "get_public_address",
-                    },
+                    "Failed to retrieve public address - SDK client error",
+                    extra=error_context,
                 )
 
-            # Try to get account balances
+                # Record audit trail for address retrieval failure
+                self._record_balance_audit(
+                    correlation_id,
+                    "get_public_address",
+                    "failed",
+                    error=str(e),
+                    duration_ms=round(address_duration * 1000, 2),
+                )
+
+            # Try to get account balances with enhanced retry logic
             try:
-                logger.debug(
-                    "Starting USDC balance retrieval",
-                    extra={
-                        "service_id": self.service_id,
-                        "operation": "get_usdc_balance",
-                        "client_available": bool(self.client),
-                    },
-                )
+                balance_start = time.time()
 
-                # Wrap the SDK call with additional protection
-                try:
-                    balance_response = await self.client.get_usdc_balance()
-                    logger.debug(
-                        "Received balance response from SDK",
+                # Check if we should use cached data
+                if not self._is_balance_stale() and self.cached_balance_data:
+                    logger.info(
+                        "Using cached balance data",
                         extra={
                             "service_id": self.service_id,
-                            "response_type": type(balance_response).__name__,
-                            "response_value": str(balance_response)[
-                                :100
-                            ],  # Truncate for logging
+                            "correlation_id": correlation_id,
+                            "cache_age_seconds": time.time()
+                            - self.balance_cache_timestamp,
                             "operation": "get_usdc_balance",
                         },
                     )
-                except Exception as sdk_error:
-                    # Handle known Bluefin SDK issues
-                    error_str = str(sdk_error)
-                    error_type = type(sdk_error).__name__
-
+                    account_data["balance"] = str(
+                        self.cached_balance_data.get("balance", "0.0")
+                    )
+                else:
                     logger.debug(
-                        "SDK balance call failed",
+                        "Starting USDC balance retrieval with retry logic",
                         extra={
                             "service_id": self.service_id,
-                            "sdk_error_type": error_type,
-                            "sdk_error_message": error_str,
+                            "correlation_id": correlation_id,
                             "operation": "get_usdc_balance",
+                            "client_available": bool(self.client),
+                            "retry_config": self.balance_retry_config,
+                            "timestamp": datetime.now(UTC).isoformat(),
                         },
                     )
 
-                    if (
-                        "'data'" in error_str
-                        or "KeyError" in error_type
-                        or "Exception: 'data'" in error_str
-                    ):
-                        logger.warning(
-                            "Detected known Bluefin SDK data access error",
-                            extra={
-                                "service_id": self.service_id,
-                                "error_type": "sdk_data_access_error",
-                                "error_message": error_str,
-                                "probable_cause": "account_not_initialized_or_no_balance",
-                                "operation": "get_usdc_balance",
-                            },
-                        )
-                        # Return a default balance of 0
-                        balance_response = {"balance": 0, "amount": 0}
-                    else:
-                        # Re-raise other SDK errors
-                        logger.error(
-                            "Unhandled SDK error in balance call",
-                            extra={
-                                "service_id": self.service_id,
-                                "error_type": error_type,
-                                "error_message": error_str,
-                                "operation": "get_usdc_balance",
-                                "traceback": traceback.format_exc(),
-                            },
-                        )
-                        raise sdk_error
+                    # Define the balance fetching operation for retry logic
+                    async def _fetch_usdc_balance():
+                        """Inner function for balance fetching with SDK error handling."""
+                        sdk_call_start = time.time()
+                        try:
+                            balance_response = await self.client.get_usdc_balance()
+                            sdk_call_duration = time.time() - sdk_call_start
+
+                            logger.debug(
+                                "Received balance response from SDK",
+                                extra={
+                                    "service_id": self.service_id,
+                                    "correlation_id": correlation_id,
+                                    "response_type": type(balance_response).__name__,
+                                    "response_value": str(balance_response)[:100],
+                                    "operation": "get_usdc_balance",
+                                    "sdk_call_duration_ms": round(
+                                        sdk_call_duration * 1000, 2
+                                    ),
+                                    "timestamp": datetime.now(UTC).isoformat(),
+                                },
+                            )
+                            return balance_response
+                        except Exception as sdk_error:
+                            sdk_call_duration = time.time() - sdk_call_start
+                            error_str = str(sdk_error)
+                            error_type = type(sdk_error).__name__
+
+                            # Handle known Bluefin SDK issues
+                            if (
+                                "'data'" in error_str
+                                or "KeyError" in error_type
+                                or "Exception: 'data'" in error_str
+                            ):
+                                logger.warning(
+                                    "Detected known Bluefin SDK data access error",
+                                    extra={
+                                        "service_id": self.service_id,
+                                        "correlation_id": correlation_id,
+                                        "error_type": "sdk_data_access_error",
+                                        "error_message": error_str,
+                                        "probable_cause": "account_not_initialized_or_no_balance",
+                                        "operation": "get_usdc_balance",
+                                        "sdk_call_duration_ms": round(
+                                            sdk_call_duration * 1000, 2
+                                        ),
+                                    },
+                                )
+                                # Return a default balance structure for account not initialized
+                                return {"balance": 0, "amount": 0}
+                            else:
+                                # Log the error but re-raise for retry logic to handle
+                                logger.debug(
+                                    "SDK balance call failed, will be retried",
+                                    extra={
+                                        "service_id": self.service_id,
+                                        "correlation_id": correlation_id,
+                                        "sdk_error_type": error_type,
+                                        "sdk_error_message": error_str,
+                                        "operation": "get_usdc_balance",
+                                        "sdk_call_duration_ms": round(
+                                            sdk_call_duration * 1000, 2
+                                        ),
+                                    },
+                                )
+                                raise sdk_error
+
+                    # Execute with retry logic
+                    balance_response = await self._retry_balance_operation(
+                        _fetch_usdc_balance, "get_usdc_balance"
+                    )
 
                 # Handle different response formats
                 if isinstance(balance_response, dict):
@@ -1421,9 +1988,12 @@ class BluefinSDKService:
                         "Extracted balance from dictionary response",
                         extra={
                             "service_id": self.service_id,
+                            "correlation_id": correlation_id,
                             "extracted_balance": balance,
                             "response_keys": list(balance_response.keys()),
                             "operation": "get_usdc_balance",
+                            "response_format": "dictionary",
+                            "timestamp": datetime.now(UTC).isoformat(),
                         },
                     )
                 elif isinstance(balance_response, int | float | str):
@@ -1433,9 +2003,12 @@ class BluefinSDKService:
                         "Using direct balance value",
                         extra={
                             "service_id": self.service_id,
+                            "correlation_id": correlation_id,
                             "balance_value": balance,
                             "balance_type": type(balance).__name__,
                             "operation": "get_usdc_balance",
+                            "response_format": "direct_value",
+                            "timestamp": datetime.now(UTC).isoformat(),
                         },
                     )
                 else:
@@ -1450,77 +2023,169 @@ class BluefinSDKService:
                     )
                     balance = 0
 
+                balance_duration = time.time() - balance_start
                 account_data["balance"] = str(balance)
+
                 logger.info(
                     "Successfully retrieved account balance",
                     extra={
                         "service_id": self.service_id,
+                        "correlation_id": correlation_id,
                         "balance": account_data["balance"],
                         "currency": "USDC",
                         "operation": "get_usdc_balance",
+                        "duration_ms": round(balance_duration * 1000, 2),
+                        "timestamp": datetime.now(UTC).isoformat(),
+                        "success": True,
                     },
                 )
 
-            except KeyError as ke:
-                balance_response_str = str(locals().get("balance_response", "unknown"))[
-                    :200
-                ]
-                logger.error(
-                    "KeyError accessing balance data",
-                    extra={
-                        "service_id": self.service_id,
-                        "error_type": "balance_key_error",
-                        "missing_key": str(ke),
-                        "response_preview": balance_response_str,
-                        "operation": "get_usdc_balance",
+                # Record successful balance retrieval
+                self._record_balance_audit(
+                    correlation_id,
+                    "get_usdc_balance",
+                    "success",
+                    balance_amount=account_data["balance"],
+                    duration_ms=round(balance_duration * 1000, 2),
+                    metadata={
+                        "currency": "USDC",
+                        "response_format": (
+                            "dictionary"
+                            if isinstance(balance_response, dict)
+                            else "direct_value"
+                        ),
+                        "balance_numeric": float(balance) if balance else 0.0,
                     },
                 )
-                account_data["error"] = f"Balance fetch failed - missing key: {ke!s}"
+
+                # Cache the successful balance data
+                self.cached_balance_data = {"balance": balance}
+                self.balance_cache_timestamp = time.time()
+
             except Exception as e:
-                logger.error(
-                    "Unexpected error getting balance",
-                    extra={
-                        "service_id": self.service_id,
-                        "error_type": type(e).__name__,
-                        "error_message": str(e),
-                        "operation": "get_usdc_balance",
+                balance_duration = time.time() - balance_start
+                error_type = self._classify_error(e)
+
+                error_context = self._get_error_context(
+                    correlation_id,
+                    "get_usdc_balance_general",
+                    e,
+                    round(balance_duration * 1000, 2),
+                    additional_context={
                         "traceback": traceback.format_exc(),
+                        "error_stage": "general_processing",
+                        "error_classification": error_type.value,
+                        "has_cached_data": bool(self.cached_balance_data),
                     },
                 )
-                account_data["error"] = f"Balance fetch failed: {e!s}"
 
-            # Try to get margin info
+                logger.error(
+                    "Balance retrieval failed after all retries",
+                    extra=error_context,
+                )
+
+                # Record audit for general error
+                self._record_balance_audit(
+                    correlation_id,
+                    "get_usdc_balance_general",
+                    "failed",
+                    error=str(e),
+                    duration_ms=round(balance_duration * 1000, 2),
+                    metadata={
+                        "error_stage": "general_processing",
+                        "error_classification": error_type.value,
+                        "has_cached_data": bool(self.cached_balance_data),
+                        "requires_investigation": True,
+                    },
+                )
+
+                # Use cached data if available as fallback
+                if self.cached_balance_data:
+                    logger.warning(
+                        "Using stale cached balance data as fallback",
+                        extra={
+                            "service_id": self.service_id,
+                            "correlation_id": correlation_id,
+                            "cache_age_seconds": time.time()
+                            - self.balance_cache_timestamp,
+                            "operation": "get_usdc_balance",
+                        },
+                    )
+                    account_data["balance"] = str(
+                        self.cached_balance_data.get("balance", "0.0")
+                    )
+                    account_data["error"] = f"Using cached data due to error: {e!s}"
+                else:
+                    account_data["error"] = f"Balance fetch failed: {e!s}"
+
+            # Try to get margin info with retry logic
             try:
                 logger.debug(
-                    "Attempting to get margin bank balance from Bluefin SDK..."
+                    "Starting margin bank balance retrieval with retry logic",
+                    extra={
+                        "service_id": self.service_id,
+                        "correlation_id": correlation_id,
+                        "operation": "get_margin_bank_balance",
+                        "client_available": bool(self.client),
+                    },
                 )
 
-                # Wrap the SDK call with additional protection
-                try:
-                    margin_response = await self.client.get_margin_bank_balance()
-                    logger.debug(f"Margin response: {margin_response}")
-                except Exception as sdk_error:
-                    # Handle known Bluefin SDK issues
-                    logger.debug(
-                        f"SDK error type: {type(sdk_error)}, message: {sdk_error!s}"
-                    )
-                    if (
-                        "'data'" in str(sdk_error)
-                        or "KeyError" in str(type(sdk_error))
-                        or "Exception: 'data'" in str(sdk_error)
-                    ):
-                        logger.warning(
-                            f"Bluefin SDK 'data' access error in margin call: {sdk_error}"
+                async def _fetch_margin_balance():
+                    """Inner function for margin balance fetching with SDK error handling."""
+                    try:
+                        margin_response = await self.client.get_margin_bank_balance()
+                        logger.debug(
+                            "Received margin response from SDK",
+                            extra={
+                                "service_id": self.service_id,
+                                "correlation_id": correlation_id,
+                                "response_type": type(margin_response).__name__,
+                                "response_value": str(margin_response)[:100],
+                                "operation": "get_margin_bank_balance",
+                            },
                         )
-                        logger.info(
-                            "This usually indicates the account is not initialized or has no margin balance"
-                        )
-                        # Return a default margin structure
-                        margin_response = {"available": 0, "used": 0, "total": 0}
-                    else:
-                        # Re-raise other SDK errors
-                        logger.error(f"Unhandled SDK error in margin call: {sdk_error}")
-                        raise sdk_error
+                        return margin_response
+                    except Exception as sdk_error:
+                        error_str = str(sdk_error)
+                        error_type = type(sdk_error).__name__
+
+                        # Handle known Bluefin SDK issues
+                        if (
+                            "'data'" in error_str
+                            or "KeyError" in error_type
+                            or "Exception: 'data'" in error_str
+                        ):
+                            logger.warning(
+                                "Detected known Bluefin SDK data access error in margin call",
+                                extra={
+                                    "service_id": self.service_id,
+                                    "correlation_id": correlation_id,
+                                    "error_type": "sdk_data_access_error",
+                                    "error_message": error_str,
+                                    "probable_cause": "account_not_initialized_or_no_margin",
+                                    "operation": "get_margin_bank_balance",
+                                },
+                            )
+                            # Return a default margin structure for account not initialized
+                            return {"available": 0, "used": 0, "total": 0}
+                        else:
+                            # Log the error but re-raise for retry logic to handle
+                            logger.debug(
+                                "SDK margin call failed, will be retried",
+                                extra={
+                                    "service_id": self.service_id,
+                                    "correlation_id": correlation_id,
+                                    "sdk_error_type": error_type,
+                                    "sdk_error_message": error_str,
+                                    "operation": "get_margin_bank_balance",
+                                },
+                            )
+                            raise sdk_error
+
+                # Execute with retry logic
+                margin_response = await self._retry_balance_operation(
+                    _fetch_margin_balance, "get_margin_bank_balance"
+                )
 
                 # Handle different margin response formats
                 if isinstance(margin_response, dict):
@@ -1544,6 +2209,41 @@ class BluefinSDKService:
                     account_data["error"] += f", Margin fetch failed: {e!s}"
                 else:
                     account_data["error"] = f"Margin fetch failed: {e!s}"
+
+            # Record final operation metrics
+            total_duration = time.time() - operation_start
+            logger.info(
+                "Account data operation completed",
+                extra={
+                    "service_id": self.service_id,
+                    "correlation_id": correlation_id,
+                    "operation": "get_account_data_complete",
+                    "total_duration_ms": round(total_duration * 1000, 2),
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "has_balance": bool(account_data.get("balance", "0") != "0"),
+                    "has_address": bool(account_data.get("address")),
+                    "has_error": bool(account_data.get("error")),
+                    "success": not bool(account_data.get("error")),
+                },
+            )
+
+            # Record final audit entry
+            final_status = (
+                "success" if not account_data.get("error") else "partial_failure"
+            )
+            self._record_balance_audit(
+                correlation_id,
+                "get_account_data_complete",
+                final_status,
+                balance_amount=account_data.get("balance"),
+                error=account_data.get("error"),
+                duration_ms=round(total_duration * 1000, 2),
+                metadata={
+                    "has_address": bool(account_data.get("address")),
+                    "has_margin": bool(account_data.get("margin")),
+                    "operation_type": "complete_account_data_fetch",
+                },
+            )
 
             return account_data
 
