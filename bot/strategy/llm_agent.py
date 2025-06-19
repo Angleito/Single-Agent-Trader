@@ -1102,30 +1102,30 @@ FINANCIAL INTELLIGENCE INTEGRATION:
                 if self._chain is None:
                     raise RuntimeError("LLM chain not properly initialized")
 
-                # Use optimized chain if available
+                # Use optimized prompt if available
                 if self._use_optimized_prompts and self._optimized_prompt_template:
-                    # Create a temporary optimized prompt for non-o3 models
+                    # Get formatted prompt directly from optimized template
                     optimized_prompt_text = (
                         self._optimized_prompt_template.format_prompt(llm_input)
                     )
 
-                    # Create temporary chain with optimized prompt
-                    if (
-                        PromptTemplate is not None
-                        and JsonOutputParser is not None
-                        and self._model is not None
-                    ):
-                        temp_prompt = PromptTemplate.from_template(
-                            optimized_prompt_text
-                        )
-                        parser = JsonOutputParser(pydantic_object=TradeAction)
-                        temp_chain = temp_prompt | self._model | parser
-                        result = await temp_chain.ainvoke({}, **chain_kwargs)
-                        logger.debug(
-                            f"Used optimized prompt chain (size: {len(optimized_prompt_text)} chars)"
-                        )
-                    else:
-                        result = await self._chain.ainvoke(llm_input, **chain_kwargs)
+                    # For optimized prompts, use the same approach as o3 models
+                    # since the prompt is already formatted
+                    from langchain_core.messages import HumanMessage
+
+                    message = HumanMessage(content=optimized_prompt_text)
+
+                    # Get raw response from model
+                    if self._model is None:
+                        raise RuntimeError("Model not initialized")
+                    raw_response = await self._model.ainvoke([message])
+                    response_content = raw_response.content
+
+                    # Extract JSON from the response
+                    result = self._extract_json_from_response(response_content)
+                    logger.debug(
+                        f"Used optimized prompt (size: {len(optimized_prompt_text)} chars)"
+                    )
                 else:
                     result = await self._chain.ainvoke(llm_input, **chain_kwargs)
 
