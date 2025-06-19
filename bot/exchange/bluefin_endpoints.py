@@ -6,7 +6,7 @@ supporting both mainnet and testnet environments with proper URL validation.
 """
 
 import os
-from typing import Literal, NamedTuple
+from typing import Literal, NamedTuple, cast
 
 
 class BluefinEndpoints(NamedTuple):
@@ -71,7 +71,7 @@ class BluefinEndpointConfig:
             )
 
     @classmethod
-    def get_network_from_env(cls) -> str:
+    def get_network_from_env(cls) -> Literal["mainnet", "testnet"]:
         """
         Get network configuration from environment variables.
 
@@ -83,9 +83,10 @@ class BluefinEndpointConfig:
         # Validate network value
         if network not in ["mainnet", "testnet"]:
             # Default to mainnet for invalid values
-            network = "mainnet"
+            return "mainnet"
 
-        return network
+        # At this point we know network is either "mainnet" or "testnet"
+        return cast(Literal["mainnet", "testnet"], network)
 
     @classmethod
     def get_current_endpoints(cls) -> BluefinEndpoints:
@@ -155,21 +156,21 @@ class BluefinEndpointConfig:
 
 
 # Convenience functions for easy access
-def get_rest_api_url(network: str = None) -> str:
+def get_rest_api_url(network: Literal["mainnet", "testnet"] | None = None) -> str:
     """Get REST API URL for specified network or current environment."""
     if network:
         return BluefinEndpointConfig.get_endpoints(network).rest_api
     return BluefinEndpointConfig.get_current_endpoints().rest_api
 
 
-def get_websocket_url(network: str = None) -> str:
+def get_websocket_url(network: Literal["mainnet", "testnet"] | None = None) -> str:
     """Get WebSocket API URL for specified network or current environment."""
     if network:
         return BluefinEndpointConfig.get_endpoints(network).websocket_api
     return BluefinEndpointConfig.get_current_endpoints().websocket_api
 
 
-def get_notifications_url(network: str = None) -> str:
+def get_notifications_url(network: Literal["mainnet", "testnet"] | None = None) -> str:
     """Get notifications WebSocket URL for specified network or current environment."""
     if network:
         return BluefinEndpointConfig.get_endpoints(network).websocket_notifications

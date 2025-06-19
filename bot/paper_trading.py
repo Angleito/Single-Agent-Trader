@@ -550,12 +550,16 @@ class PaperTradingAccount:
             today_realized = sum(
                 t.realized_pnl
                 for t in self.closed_trades
-                if t.exit_time and t.exit_time.date().isoformat() == today
+                if t.exit_time
+                and t.exit_time.date().isoformat() == today
+                and t.realized_pnl is not None
             ) or Decimal("0")
             today_fees = sum(
                 t.fees
                 for t in self.closed_trades
-                if t.exit_time and t.exit_time.date().isoformat() == today
+                if t.exit_time
+                and t.exit_time.date().isoformat() == today
+                and t.fees is not None
             ) or Decimal("0")
 
             # Win rate calculation
@@ -564,7 +568,13 @@ class PaperTradingAccount:
                 for t in self.closed_trades
                 if t.exit_time and t.exit_time.date().isoformat() == today
             ]
-            winning_trades = len([t for t in today_closed_trades if t.realized_pnl > 0])
+            winning_trades = len(
+                [
+                    t
+                    for t in today_closed_trades
+                    if t.realized_pnl is not None and t.realized_pnl > 0
+                ]
+            )
             win_rate = (
                 (winning_trades / len(today_closed_trades) * 100)
                 if today_closed_trades
@@ -573,8 +583,17 @@ class PaperTradingAccount:
 
             # Largest win/loss
             if today_closed_trades:
-                largest_win = max(t.realized_pnl for t in today_closed_trades)
-                largest_loss = min(t.realized_pnl for t in today_closed_trades)
+                pnl_values = [
+                    t.realized_pnl
+                    for t in today_closed_trades
+                    if t.realized_pnl is not None
+                ]
+                if pnl_values:
+                    largest_win = max(pnl_values)
+                    largest_loss = min(pnl_values)
+                else:
+                    largest_win = Decimal("0")
+                    largest_loss = Decimal("0")
             else:
                 largest_win = Decimal("0")
                 largest_loss = Decimal("0")
@@ -593,14 +612,14 @@ class PaperTradingAccount:
                 ending_balance=Decimal(str(account_status["equity"])),
                 trades_opened=today_trades_opened,
                 trades_closed=today_trades_closed,
-                realized_pnl=today_realized,
+                realized_pnl=Decimal(str(today_realized)),
                 unrealized_pnl=Decimal(str(account_status["unrealized_pnl"])),
                 total_pnl=today_realized
                 + Decimal(str(account_status["unrealized_pnl"])),
                 fees_paid=today_fees,
                 win_rate=win_rate,
-                largest_win=largest_win,
-                largest_loss=largest_loss,
+                largest_win=Decimal(str(largest_win)),
+                largest_loss=Decimal(str(largest_loss)),
                 drawdown=Decimal(str(account_status["current_drawdown"])),
             )
 
@@ -691,7 +710,11 @@ class PaperTradingAccount:
                 if t.exit_time and t.exit_time.date().isoformat() >= cutoff_date
             ]
             winning_trades = len(
-                [t for t in closed_trades_period if t.realized_pnl > 0]
+                [
+                    t
+                    for t in closed_trades_period
+                    if t.realized_pnl is not None and t.realized_pnl > 0
+                ]
             )
             overall_win_rate = (
                 (winning_trades / len(closed_trades_period) * 100)
@@ -841,7 +864,7 @@ class PaperTradingAccount:
                     [
                         t
                         for t in self.closed_trades
-                        if t.realized_pnl and t.realized_pnl > 0
+                        if t.realized_pnl is not None and t.realized_pnl > 0
                     ]
                 )
                 win_rate = (winning_trades / len(self.closed_trades)) * 100

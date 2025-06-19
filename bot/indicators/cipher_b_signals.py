@@ -425,12 +425,12 @@ class CipherBSignals:
         """
         os_threshold = os_level3 if os_level3 is not None else self.os_level3
 
-        wt2 = wt_data.get("wt2", pd.Series(dtype=float))
+        wt2 = wt_data.get("wt2", pd.Series(dtype="float64"))
         wt_fractal_bot = fractal_data.get(
             "wt_fractal_bot", pd.Series(False, index=wt2.index)
         )
         wt_low_prev = fractal_data.get(
-            "wt_low_prev", pd.Series(dtype=float, index=wt2.index)
+            "wt_low_prev", pd.Series(dtype="float64", index=wt2.index)
         )
 
         if wt2.empty or rsi_data.empty:
@@ -484,8 +484,8 @@ class CipherBSignals:
         Returns:
             Dictionary with small circle signal conditions
         """
-        wt1 = wt_cross_data.get("wt1", pd.Series(dtype=float))
-        wt2 = wt_cross_data.get("wt2", pd.Series(dtype=float))
+        wt1 = wt_cross_data.get("wt1", pd.Series(dtype="float64"))
+        wt2 = wt_cross_data.get("wt2", pd.Series(dtype="float64"))
         wt_cross = wt_cross_data.get("wt_cross", pd.Series(False, index=wt1.index))
         wt_cross_up = wt_cross_data.get(
             "wt_cross_up", pd.Series(False, index=wt1.index)

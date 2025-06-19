@@ -1141,7 +1141,6 @@ class Settings(BaseSettings):
         """Check if running in production environment."""
         return self.system.environment == Environment.PRODUCTION
 
-    @computed_field
     def requires_api_keys(self) -> bool:
         """Check if API keys are required for current configuration."""
         return (
@@ -1151,7 +1150,7 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_api_keys(self) -> "Settings":
         """Validate required API keys based on configuration."""
-        if self.requires_api_keys:
+        if self.requires_api_keys():
             # Validate LLM API keys
             if self.llm.provider == "openai" and not self.llm.openai_api_key:
                 raise ValueError("OpenAI API key required for live trading")

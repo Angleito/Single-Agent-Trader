@@ -1224,19 +1224,19 @@ class CoinbaseClient(BaseExchange):
         """
         return self._futures_portfolio_id
 
-    async def get_trading_symbol(self, base_symbol: str) -> str:
+    async def get_trading_symbol(self, symbol: str) -> str:
         """
         Get the appropriate trading symbol based on whether futures are enabled.
 
         Args:
-            base_symbol: Base symbol like "ETH-USD"
+            symbol: Base symbol like "ETH-USD"
 
         Returns:
             Actual trading symbol (spot or futures contract)
         """
         if not self.enable_futures:
             # Use spot symbol as-is
-            return base_symbol
+            return symbol
 
         # Map spot symbols to actual futures contracts
         # Coinbase uses abbreviated symbols with date suffixes
@@ -1245,13 +1245,13 @@ class CoinbaseClient(BaseExchange):
             "BTC-USD": "BT-27JUN25-CDE",  # Assuming similar pattern
         }
 
-        if base_symbol in futures_mappings:
-            futures_symbol = futures_mappings[base_symbol]
-            logger.info(f"Mapped {base_symbol} to futures contract {futures_symbol}")
+        if symbol in futures_mappings:
+            futures_symbol = futures_mappings[symbol]
+            logger.info(f"Mapped {symbol} to futures contract {futures_symbol}")
             return futures_symbol
 
         # For other symbols, try to find dated contracts
-        base_currency = base_symbol.split("-")[0]
+        base_currency = symbol.split("-")[0]
 
         # Try to get cached contract first
         if self._futures_contract_manager:
@@ -1269,8 +1269,8 @@ class CoinbaseClient(BaseExchange):
                 return active_contract
 
         # Fallback to original symbol
-        logger.info(f"Using {base_symbol} for futures trading")
-        return base_symbol
+        logger.info(f"Using {symbol} for futures trading")
+        return symbol
 
     async def execute_trade_action(
         self, trade_action: TradeAction, symbol: str, current_price: Decimal

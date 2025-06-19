@@ -19,6 +19,26 @@ from ..error_handling import (
 )
 from ..trading_types import MarketData
 
+# Import centralized endpoint configuration with fallback
+try:
+    from ..exchange.bluefin_endpoints import get_notifications_url, get_websocket_url
+except ImportError:
+    # Fallback endpoint resolver if centralized config is not available
+    def get_websocket_url(network: str = "mainnet") -> str:
+        """Fallback WebSocket URL resolver."""
+        if network.lower() == "testnet":
+            return "wss://dapi.api.sui-staging.bluefin.io"
+        else:
+            return "wss://dapi.api.sui-prod.bluefin.io"
+
+    def get_notifications_url(network: str = "mainnet") -> str:
+        """Fallback notifications URL resolver."""
+        if network.lower() == "testnet":
+            return "wss://notifications.api.sui-staging.bluefin.io"
+        else:
+            return "wss://notifications.api.sui-prod.bluefin.io"
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -70,13 +90,17 @@ class BluefinWebSocketClient:
         self.candle_limit = candle_limit
         self.on_candle_update = on_candle_update
 
-        # Determine network and set appropriate URLs
-        self.network = network or os.getenv("EXCHANGE__BLUEFIN_NETWORK", "mainnet")
+        # Determine network and set appropriate URLs using centralized configuration
+        self.network = (
+            network or os.getenv("EXCHANGE__BLUEFIN_NETWORK", "mainnet")
+        ).lower()
 
-        if self.network.lower() == "testnet":
+        # Set WebSocket URLs based on network
+        if self.network == "testnet":
             self.NOTIFICATION_WS_URL = "wss://notifications.api.sui-staging.bluefin.io"
             self.DAPI_WS_URL = "wss://dapi.api.sui-staging.bluefin.io"
         else:
+            # Default to mainnet for any other value
             self.NOTIFICATION_WS_URL = "wss://notifications.api.sui-prod.bluefin.io"
             self.DAPI_WS_URL = "wss://dapi.api.sui-prod.bluefin.io"
 

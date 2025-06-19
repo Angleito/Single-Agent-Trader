@@ -13,7 +13,7 @@ import time
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 import aiohttp
@@ -913,7 +913,7 @@ class MCPMemoryServer:
 async def main() -> None:
     """Main entry point for running the MCP memory server."""
     import uvicorn
-    from fastapi import FastAPI, HTTPException
+    from fastapi import Body, FastAPI, HTTPException
 
     # Create FastAPI app
     app = FastAPI(
@@ -938,12 +938,15 @@ async def main() -> None:
 
     @app.post("/experience")
     async def store_experience(
-        market_state: dict[str, Any],
-        trade_action: dict[str, Any],
-        additional_context: dict[str, Any] | None = None,
+        request_data: dict[str, Any] = Body(...),
     ) -> dict[str, str]:
         """Store a new trading experience."""
         try:
+            # Extract data from request
+            market_state = request_data.get("market_state", {})
+            trade_action = request_data.get("trade_action", {})
+            additional_context = request_data.get("additional_context")
+
             # Convert dicts to proper objects
             from datetime import UTC, datetime
             from decimal import Decimal
@@ -987,7 +990,7 @@ async def main() -> None:
                     **{
                         k: v
                         for k, v in market_state.get("indicators", {}).items()
-                        if k != "timestamp"
+                        if k != "timestamp" and v is not None
                     },
                 ),
                 current_position=Position(
@@ -1020,12 +1023,19 @@ async def main() -> None:
             )
 
             # Convert trade_action dict to TradeAction object
+            action_value = trade_action.get("action", "HOLD")
+            # Ensure action is a valid literal type
+            if action_value not in ["LONG", "SHORT", "CLOSE", "HOLD"]:
+                action_value = "HOLD"
+
+            from typing import Literal
+
             trade_action_obj = TradeAction(
-                action=trade_action.get("action", "HOLD"),
+                action=cast(Literal["LONG", "SHORT", "CLOSE", "HOLD"], action_value),
                 size_pct=float(trade_action.get("size_pct", 0)),
                 take_profit_pct=float(trade_action.get("take_profit_pct", 0)),
                 stop_loss_pct=float(trade_action.get("stop_loss_pct", 0)),
-                rationale=trade_action.get("rationale", "No rationale provided"),
+                rationale=str(trade_action.get("rationale", "No rationale provided")),
                 leverage=int(trade_action.get("leverage", 1)),
                 reduce_only=bool(trade_action.get("reduce_only", False)),
             )
@@ -1049,10 +1059,14 @@ async def main() -> None:
 
     @app.post("/query")
     async def query_experiences(
-        market_state: dict[str, Any], query_params: dict[str, Any] | None = None
+        request_data: dict[str, Any] = Body(...),
     ) -> dict[str, Any]:
         """Query similar experiences."""
         try:
+            # Extract data from request
+            market_state = request_data.get("market_state", {})
+            query_params = request_data.get("query_params")
+
             # Convert market_state dict to MarketState object
             from datetime import UTC, datetime
             from decimal import Decimal
@@ -1089,7 +1103,7 @@ async def main() -> None:
                     **{
                         k: v
                         for k, v in market_state.get("indicators", {}).items()
-                        if k != "timestamp"
+                        if k != "timestamp" and v is not None
                     },
                 ),
                 current_position=Position(
@@ -1122,16 +1136,19 @@ async def main() -> None:
             )
 
             # Convert query_params dict to MemoryQuery object if provided
-            query_params_obj = None
+            query_params_obj: MemoryQuery | None = None
             if query_params:
                 from decimal import Decimal
 
+                current_price_raw = query_params.get("current_price")
+                current_price = (
+                    Decimal(str(current_price_raw))
+                    if current_price_raw is not None
+                    else None
+                )
+
                 query_params_obj = MemoryQuery(
-                    current_price=(
-                        Decimal(str(query_params.get("current_price")))
-                        if query_params.get("current_price")
-                        else None
-                    ),
+                    current_price=current_price,
                     indicators=query_params.get("indicators"),
                     dominance_data=query_params.get("dominance_data"),
                     market_sentiment=query_params.get("market_sentiment"),

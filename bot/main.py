@@ -147,7 +147,7 @@ class TradingEngine:
     def __init__(
         self,
         symbol: str = "BTC-USD",
-        interval: str = "15s",
+        interval: str = "1m",  # Note: 15s was changed to 1m due to Bluefin API limitations
         config_file: str | None = None,
         dry_run: bool = True,
     ):
@@ -365,7 +365,12 @@ class TradingEngine:
         performance_thresholds = PerformanceThresholds()
 
         # Customize thresholds for trading environment
-        if interval in ["1s", "5s", "10s", "15s"]:  # High-frequency trading
+        if interval in [
+            "1s",
+            "5s",
+            "10s",
+            "15s",
+        ]:  # High-frequency trading (Note: sub-minute intervals converted to 1m on Bluefin)
             performance_thresholds.indicator_calculation_ms = 50
             performance_thresholds.market_data_processing_ms = 25
             performance_thresholds.trade_execution_ms = 500
@@ -586,7 +591,7 @@ class TradingEngine:
 
             # Publish alert to dashboard if available
             if hasattr(self, "websocket_publisher") and self.websocket_publisher:
-                task: Task[None] = asyncio.create_task(
+                _alert_task = asyncio.create_task(
                     self.websocket_publisher.publish_system_status(
                         status="performance_alert",
                         health=alert.level.value != "critical",
@@ -638,7 +643,8 @@ class TradingEngine:
     def _can_trade_now(self) -> bool:
         """
         Check if trading is currently allowed based on data availability and timing.
-        For high-frequency scalping, we trade on every new candle completion (1s-15s).
+        For high-frequency scalping, we trade on every new candle completion.
+        Note: Bluefin DEX only supports intervals >= 1m. Sub-minute intervals are converted with granularity loss.
 
         Returns:
             True if trading is allowed, False otherwise
@@ -1059,9 +1065,7 @@ class TradingEngine:
             try:
                 await self.command_consumer.initialize()
                 # Start polling in background
-                polling_task: Task[None] = asyncio.create_task(
-                    self.command_consumer.start_polling()
-                )
+                _polling_task = asyncio.create_task(self.command_consumer.start_polling())
                 console.print("    [green]✓ Dashboard command consumer started[/green]")
             except Exception as e:
                 self.logger.warning(f"Failed to start command consumer: {e}")
@@ -2338,7 +2342,7 @@ class TradingEngine:
         interval_map = {
             "1s": 1,
             "5s": 5,
-            "15s": 15,
+            "15s": 15,  # Will be converted to 1m by Bluefin service
             "30s": 30,
             "1m": 60,
             "3m": 180,
@@ -3231,7 +3235,9 @@ def cli() -> None:
 )
 @click.option("--symbol", default="BTC-USD", help="Trading symbol")
 @click.option(
-    "--interval", default="15s", help="Candle interval (scalping: 1s/5s/15s/30s)"
+    "--interval",
+    default="1m",
+    help="Candle interval (Note: Bluefin converts sub-minute intervals to 1m)",
 )
 @click.option("--config", default=None, help="Configuration file path")
 @click.option("--force", is_flag=True, help="Skip confirmation prompt for live trading")

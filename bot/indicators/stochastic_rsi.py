@@ -118,8 +118,8 @@ class StochasticRSI:
             logger.warning(
                 f"Insufficient data for Stochastic RSI: need {min_required}, got {len(src)}"
             )
-            return pd.Series(dtype=float, index=src.index), pd.Series(
-                dtype=float, index=src.index
+            return pd.Series(dtype="float64", index=src.index), pd.Series(
+                dtype="float64", index=src.index
             )
 
         # Step 1: Apply log transformation if requested
@@ -133,8 +133,8 @@ class StochasticRSI:
         rsi_values = ta.rsi(src_transformed, length=rsi_len)
         if rsi_values is None:
             logger.warning("RSI calculation failed")
-            return pd.Series(dtype=float, index=src.index), pd.Series(
-                dtype=float, index=src.index
+            return pd.Series(dtype="float64", index=src.index), pd.Series(
+                dtype="float64", index=src.index
             )
 
         # Step 3: Calculate Stochastic of RSI
@@ -147,16 +147,16 @@ class StochasticRSI:
         kk = ta.sma(stoch_rsi, length=smooth_k)
         if kk is None:
             logger.warning("K line smoothing failed")
-            return pd.Series(dtype=float, index=src.index), pd.Series(
-                dtype=float, index=src.index
+            return pd.Series(dtype="float64", index=src.index), pd.Series(
+                dtype="float64", index=src.index
             )
 
         # Step 5: Calculate D line (d1 = sma(kk, _smoothd))
         d1 = ta.sma(kk, length=smooth_d)
         if d1 is None:
             logger.warning("D line calculation failed")
-            return pd.Series(dtype=float, index=src.index), pd.Series(
-                dtype=float, index=src.index
+            return pd.Series(dtype="float64", index=src.index), pd.Series(
+                dtype="float64", index=src.index
             )
 
         # Step 6: Calculate final K line
@@ -166,7 +166,7 @@ class StochasticRSI:
         else:
             k = kk
 
-        return k.astype(float), d1.astype(float)
+        return k.astype("float64"), d1.astype("float64")
 
     def _calculate_stochastic(
         self, high: pd.Series, low: pd.Series, close: pd.Series, length: int
@@ -406,9 +406,9 @@ class StochasticRSI:
                     "d_length": len(d),
                 },
             )
-            return pd.Series(0, index=k.index, dtype=int)
+            return pd.Series(0, index=k.index, dtype="int64")
 
-        signals = pd.Series(0, index=k.index, dtype=int)
+        signals = pd.Series(0, index=k.index, dtype="int64")
 
         if len(k) < 2:
             logger.warning(

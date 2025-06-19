@@ -7,7 +7,7 @@ and comprehensive recovery mechanisms.
 """
 
 import logging
-from typing import Any
+from typing import Any, Literal, cast
 
 from ..config import settings
 from ..error_handling import (
@@ -142,7 +142,7 @@ class CoreStrategy:
             rationale = self._create_rationale(market_bias, action)
 
             trade_action = TradeAction(
-                action=action,
+                action=cast("Literal['LONG', 'SHORT', 'CLOSE', 'HOLD']", action),
                 size_pct=size_pct,
                 take_profit_pct=tp_pct,
                 stop_loss_pct=sl_pct,
@@ -166,29 +166,29 @@ class CoreStrategy:
         Returns:
             Market bias: 'bullish', 'bearish', 'neutral'
         """
-        bullish_signals = 0
-        bearish_signals = 0
+        bullish_signals = 0.0
+        bearish_signals = 0.0
 
         # Cipher A analysis
         if indicators.cipher_a_dot is not None:
             if indicators.cipher_a_dot > 0:
-                bullish_signals += 1
+                bullish_signals += 1.0
             elif indicators.cipher_a_dot < 0:
-                bearish_signals += 1
+                bearish_signals += 1.0
 
         # Cipher B analysis
         if indicators.cipher_b_wave is not None:
             if indicators.cipher_b_wave > 0:
-                bullish_signals += 1
+                bullish_signals += 1.0
             elif indicators.cipher_b_wave < 0:
-                bearish_signals += 1
+                bearish_signals += 1.0
 
         # Money flow analysis
         if indicators.cipher_b_money_flow is not None:
             if indicators.cipher_b_money_flow > 60:
-                bullish_signals += 1
+                bullish_signals += 1.0
             elif indicators.cipher_b_money_flow < 40:
-                bearish_signals += 1
+                bearish_signals += 1.0
 
         # RSI analysis
         if indicators.rsi is not None:

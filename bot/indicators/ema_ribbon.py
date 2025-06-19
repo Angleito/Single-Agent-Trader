@@ -188,7 +188,7 @@ class EMAribbon:
                 ema_values = ta.ema(result["close"], length=length)
 
                 if ema_values is not None:
-                    result[f"ema{i}"] = ema_values.astype(float)
+                    result[f"ema{i}"] = ema_values.astype("float64")
                     successful_emas += 1
 
                     # Validate EMA values with improved thresholds
@@ -243,7 +243,7 @@ class EMAribbon:
                             },
                         )
                 else:
-                    result[f"ema{i}"] = pd.Series(dtype=float, index=df.index)
+                    result[f"ema{i}"] = pd.Series(dtype="float64", index=df.index)
                     logger.error(
                         f"Failed to calculate EMA{i}",
                         extra={
@@ -354,7 +354,7 @@ class EMAribbon:
             # Ribbon direction signal: 1 = bullish, -1 = bearish, 0 = neutral
             result["ribbon_direction"] = np.where(
                 result["ribbon_bullish"], 1, np.where(result["ribbon_bearish"], -1, 0)
-            ).astype(int)
+            ).astype("int64")
 
             # Calculate ribbon trend strength (distance between fastest and slowest EMA)
             if "ema1" in df.columns and "ema8" in df.columns:
@@ -502,7 +502,7 @@ class EMAribbon:
                 result["long_ema_signal"],
                 1,
                 np.where(result["short_ema_signal"], -1, 0),
-            ).astype(int)
+            ).astype("int64")
 
             # Log signal generation events
             if long_signal_count > 0:
@@ -588,7 +588,7 @@ class EMAribbon:
         # Combined cross signal: 1 = green cross (bullish), -1 = red cross (bearish), 0 = no signal
         result["cross_pattern_signal"] = np.where(
             result["green_cross"], 1, np.where(result["red_cross"], -1, 0)
-        ).astype(int)
+        ).astype("int64")
 
         return result
 
@@ -624,7 +624,7 @@ class EMAribbon:
         # Combined triangle signal: 1 = up (bullish), -1 = down (bearish), 0 = no signal
         result["triangle_signal"] = np.where(
             result["blue_triangle_up"], 1, np.where(result["blue_triangle_down"], -1, 0)
-        ).astype(int)
+        ).astype("int64")
 
         return result
 
@@ -767,7 +767,7 @@ class EMAribbon:
         # Convert to discrete signal: 1 = bullish, -1 = bearish, 0 = neutral
         result["ribbon_overall_signal"] = np.where(
             weighted_signal > 0.3, 1, np.where(weighted_signal < -0.3, -1, 0)
-        ).astype(int)
+        ).astype("int64")
 
         return result
 

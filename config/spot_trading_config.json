@@ -3,7 +3,7 @@
   "description": "Optimized configuration for Coinbase spot trading",
   "trading": {
     "symbol": "ETH-USD",
-    "interval": "15s",
+    "interval": "1m",
     "enable_futures": false,
     "max_size_pct": 50.0,
     "leverage": 1,

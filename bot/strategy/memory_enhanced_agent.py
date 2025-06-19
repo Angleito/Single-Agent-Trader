@@ -164,12 +164,24 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                 market_state
             )
 
+        # Ensure pattern_insights and sentiment_enhanced_context are strings
+        pattern_insights_str = (
+            pattern_insights
+            if isinstance(pattern_insights, str)
+            else "No pattern insights available"
+        )
+        sentiment_enhanced_context_str = (
+            sentiment_enhanced_context
+            if isinstance(sentiment_enhanced_context, str)
+            else ""
+        )
+
         # Enhance the prompt with memory and sentiment context
         enhanced_market_state = self._enhance_with_memory(
             market_state,
             memory_context,
-            pattern_insights,
-            sentiment_enhanced_context,
+            pattern_insights_str,
+            sentiment_enhanced_context_str,
         )
 
         # Get decision using enhanced context (bypass cache for this call)
@@ -185,7 +197,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             f"🤖 Memory+Sentiment-Enhanced Decision: {result.action} | "
             f"Similar experiences: {len(similar_experiences)} | "
             f"Memory context: {'✅ Applied' if memory_context != 'No similar past experiences found.' else '❌ None'} | "
-            f"Sentiment context: {'✅ Applied' if 'sentiment' in sentiment_enhanced_context.lower() else '❌ None'}"
+            f"Sentiment context: {'✅ Applied' if 'sentiment' in sentiment_enhanced_context_str.lower() else '❌ None'}"
         )
 
         # Log detailed memory context used
@@ -218,8 +230,8 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                 }
                 for exp in similar_experiences
             ],
-            "pattern_insights": pattern_insights,
-            "sentiment_context": sentiment_enhanced_context,
+            "pattern_insights": pattern_insights_str,
+            "sentiment_context": sentiment_enhanced_context_str,
             "memory_context_formatted": memory_context,
         }
 

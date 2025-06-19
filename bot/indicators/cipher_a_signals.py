@@ -1096,37 +1096,45 @@ class CipherASignals:
         # Calculate bullish strength
         if "yellow_cross_up" in df.columns:
             bullish_strength += (
-                df["yellow_cross_up"].astype(float) * weights["yellow_cross_up"]
+                df["yellow_cross_up"].astype("float64") * weights["yellow_cross_up"]
             )
         if "moon_diamond" in df.columns:
             bullish_strength += (
-                df["moon_diamond"].astype(float) * weights["moon_diamond"]
+                df["moon_diamond"].astype("float64") * weights["moon_diamond"]
             )
         if "green_diamond" in df.columns:
             bullish_strength += (
-                df["green_diamond"].astype(float) * weights["green_diamond"]
+                df["green_diamond"].astype("float64") * weights["green_diamond"]
             )
         if "bull_candle" in df.columns:
-            bullish_strength += df["bull_candle"].astype(float) * weights["bull_candle"]
+            bullish_strength += (
+                df["bull_candle"].astype("float64") * weights["bull_candle"]
+            )
         if "wt_cross_up" in df.columns:
-            bullish_strength += df["wt_cross_up"].astype(float) * weights["wt_cross_up"]
+            bullish_strength += (
+                df["wt_cross_up"].astype("float64") * weights["wt_cross_up"]
+            )
 
         # Calculate bearish strength
         if "yellow_cross_down" in df.columns:
             bearish_strength += (
-                df["yellow_cross_down"].astype(float) * weights["yellow_cross_down"]
+                df["yellow_cross_down"].astype("float64") * weights["yellow_cross_down"]
             )
         if "dump_diamond" in df.columns:
             bearish_strength += (
-                df["dump_diamond"].astype(float) * weights["dump_diamond"]
+                df["dump_diamond"].astype("float64") * weights["dump_diamond"]
             )
         if "red_diamond" in df.columns:
-            bearish_strength += df["red_diamond"].astype(float) * weights["red_diamond"]
+            bearish_strength += (
+                df["red_diamond"].astype("float64") * weights["red_diamond"]
+            )
         if "bear_candle" in df.columns:
-            bearish_strength += df["bear_candle"].astype(float) * weights["bear_candle"]
+            bearish_strength += (
+                df["bear_candle"].astype("float64") * weights["bear_candle"]
+            )
         if "wt_cross_down" in df.columns:
             bearish_strength += (
-                df["wt_cross_down"].astype(float) * weights["wt_cross_down"]
+                df["wt_cross_down"].astype("float64") * weights["wt_cross_down"]
             )
 
         # Calculate confidence based on multiple signal confluence
@@ -1142,7 +1150,7 @@ class CipherASignals:
             "bear_candle",
         ]:
             if signal_col in df.columns:
-                signal_count += df[signal_col].astype(int)
+                signal_count += df[signal_col].astype("int64")
 
         # Confidence increases with multiple signals
         confidence_score = np.minimum(signal_count / 3.0 * 100, 100.0)
@@ -1172,7 +1180,7 @@ class CipherASignals:
         Returns:
             Series with signal summary: 1=bullish, -1=bearish, 0=neutral
         """
-        signal_summary = pd.Series(0, index=df.index, dtype=int)
+        signal_summary = pd.Series(0, index=df.index, dtype="int64")
 
         bullish_strength = df.get(
             "cipher_a_bullish_strength", pd.Series(0.0, index=df.index)

@@ -430,6 +430,13 @@ class BluefinClient(BaseExchange):
             return None
 
         try:
+            # Validate symbol before proceeding
+            if not await self.validate_symbol_exists(symbol):
+                logger.error(
+                    f"Symbol validation failed for {symbol}, cannot execute trade"
+                )
+                return None
+
             # Convert symbol to Bluefin format (e.g., ETH-USD -> ETH-PERP)
             bluefin_symbol = self._convert_symbol(symbol)
 
@@ -449,6 +456,9 @@ class BluefinClient(BaseExchange):
                 logger.error(f"Unknown action: {trade_action.action}")
                 return None
 
+        except ValueError as e:
+            logger.error(f"Symbol validation error: {e}")
+            return None
         except Exception as e:
             logger.error(f"Failed to execute trade action: {e}")
             return None

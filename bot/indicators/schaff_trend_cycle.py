@@ -155,7 +155,7 @@ class SchaffTrendCycle:
                     "shortage": min_required - len(src),
                 },
             )
-            return pd.Series(dtype=float, index=src.index)
+            return pd.Series(dtype="float64", index=src.index)
 
         # Data quality validation
         self._validate_input_data_quality(src)
@@ -184,7 +184,7 @@ class SchaffTrendCycle:
                         "ema2_failed": ema2 is None,
                     },
                 )
-                return pd.Series(dtype=float, index=src.index)
+                return pd.Series(dtype="float64", index=src.index)
 
             # Step 2: Calculate MACD
             logger.debug(
@@ -346,7 +346,7 @@ class SchaffTrendCycle:
                 },
             )
 
-            return stc_return.astype(float)
+            return stc_return.astype("float64")
 
         except Exception as e:
             logger.error(
@@ -364,7 +364,7 @@ class SchaffTrendCycle:
                     },
                 },
             )
-            return pd.Series(dtype=float, index=src.index)
+            return pd.Series(dtype="float64", index=src.index)
 
     def _apply_recursive_smoothing(self, series: pd.Series, factor: float) -> pd.Series:
         """
@@ -382,7 +382,7 @@ class SchaffTrendCycle:
         if series.empty:
             return series.copy()
 
-        result = pd.Series(dtype=float, index=series.index)
+        result = pd.Series(dtype="float64", index=series.index)
 
         # Handle flat market conditions by checking for minimal variance
         series_variance = series.var()
@@ -432,7 +432,7 @@ class SchaffTrendCycle:
         overbought = threshold_levels.get("overbought", self.overbought)
         oversold = threshold_levels.get("oversold", self.oversold)
 
-        signals = pd.Series(0, index=stc_values.index, dtype=int)
+        signals = pd.Series(0, index=stc_values.index, dtype="int64")
 
         # Bullish signal: STC crosses above oversold level
         bullish_cross = (stc_values.shift(1) <= oversold) & (stc_values > oversold)
@@ -466,7 +466,7 @@ class SchaffTrendCycle:
         analysis["momentum"] = momentum
 
         # Determine cycle phase
-        phase = pd.Series(0, index=stc_values.index, dtype=int)
+        phase = pd.Series(0, index=stc_values.index, dtype="int64")
 
         # Phase 0: Bottom (STC < 25 and rising)
         bottom_phase = (stc_values < 25) & (momentum > 0)

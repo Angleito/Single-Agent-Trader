@@ -1369,7 +1369,7 @@ FINANCIAL INTELLIGENCE INTEGRATION:
             size_pct=size_pct,
             take_profit_pct=2.0,
             stop_loss_pct=1.5,
-            leverage=leverage,
+            leverage=leverage if leverage is not None else 1,
             reduce_only=reduce_only,
             rationale=f"Fallback logic - simple trend following{omnisearch_status}",
         )

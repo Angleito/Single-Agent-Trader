@@ -739,7 +739,7 @@ class CipherA:
         Returns:
             Series with signals: 1 = buy, -1 = sell, 0 = hold
         """
-        signals = pd.Series(0, index=df.index, dtype=int)
+        signals = pd.Series(0, index=df.index, dtype="int64")
 
         try:
             # Get pre-calculated signal from cipher_a_signals if available
@@ -842,7 +842,7 @@ class CipherA:
 
         except Exception as e:
             logger.error(f"Error generating enhanced signals: {str(e)}")
-            signals = pd.Series(0, index=df.index, dtype=int)
+            signals = pd.Series(0, index=df.index, dtype="int64")
 
         return signals
 
@@ -861,7 +861,7 @@ class CipherA:
                 df["ema_diff"] = df["ema_fast"] - df["ema_slow"]
                 df["trend_dot"] = np.where(
                     df["ema_diff"] > 0, 1, np.where(df["ema_diff"] < 0, -1, 0)
-                ).astype(int)
+                ).astype("int64")
 
             # Legacy RSI indicators
             if "rsi" in df.columns:
@@ -1603,7 +1603,7 @@ class CipherB:
         Returns:
             Series with signals: 1 = buy, -1 = sell, 0 = hold
         """
-        signals = pd.Series(0, index=df.index, dtype=int)
+        signals = pd.Series(0, index=df.index, dtype="int64")
 
         try:
             # Get pre-calculated signals from cipher_b_signals if available
@@ -1714,7 +1714,7 @@ class CipherB:
 
         except Exception as e:
             logger.error(f"Error generating enhanced Cipher B signals: {str(e)}")
-            signals = pd.Series(0, index=df.index, dtype=int)
+            signals = pd.Series(0, index=df.index, dtype="int64")
 
         return signals
 
@@ -1797,17 +1797,17 @@ class CipherB:
             ema2 = ta.ema(df["close"], length=self.wave_length * 2)
 
             if ema1 is None or ema2 is None:
-                return pd.Series(dtype=float, index=df.index)
+                return pd.Series(dtype="float64", index=df.index)
 
-            ema1 = ema1.astype(float)
-            ema2 = ema2.astype(float)
+            ema1 = ema1.astype("float64")
+            ema2 = ema2.astype("float64")
 
             wave = (ema1 - ema2) * self.wave_mult
 
-            return wave.astype(float)
+            return wave.astype("float64")
         except Exception as e:
             logger.error(f"Error calculating wave indicator: {str(e)}")
-            return pd.Series(dtype=float, index=df.index)
+            return pd.Series(dtype="float64", index=df.index)
 
     def get_latest_values(self, df: pd.DataFrame) -> dict[str, Any]:
         """
@@ -2194,9 +2194,9 @@ class VuManChuIndicators:
             # Long-term trend indicator (EMA 200)
             ema_200 = ta.ema(result["close"], length=200)
             result["ema_200"] = (
-                ema_200.astype(float)
+                ema_200.astype("float64")
                 if ema_200 is not None
-                else pd.Series(dtype=float, index=df.index)
+                else pd.Series(dtype="float64", index=df.index)
             )
 
             # Bollinger Bands for volatility context
@@ -2209,9 +2209,9 @@ class VuManChuIndicators:
                 result["high"], result["low"], result["close"], length=14
             )
             result["atr"] = (
-                atr_values.astype(float)
+                atr_values.astype("float64")
                 if atr_values is not None
-                else pd.Series(dtype=float, index=df.index)
+                else pd.Series(dtype="float64", index=df.index)
             )
 
             # Volume indicators (if volume data available)
@@ -2219,9 +2219,9 @@ class VuManChuIndicators:
                 # Volume Moving Average
                 volume_ma = ta.sma(result["volume"], length=20)
                 result["volume_ma"] = (
-                    volume_ma.astype(float)
+                    volume_ma.astype("float64")
                     if volume_ma is not None
-                    else pd.Series(dtype=float, index=df.index)
+                    else pd.Series(dtype="float64", index=df.index)
                 )
 
                 # Volume ratio (current vs average)
@@ -2281,7 +2281,7 @@ class VuManChuIndicators:
             # Round to discrete signal values
             result["combined_signal"] = np.where(
                 combined_signal > 0.5, 1, np.where(combined_signal < -0.5, -1, 0)
-            ).astype(int)
+            ).astype("int64")
 
             # Calculate overall confidence (average of both)
             result["combined_confidence"] = (

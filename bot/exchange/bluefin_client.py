@@ -105,7 +105,7 @@ class BluefinServiceClient:
         self.heavy_timeout = ClientTimeout(total=30.0)  # For large responses
 
         # Enhanced connection health tracking
-        self.last_health_check = 0
+        self.last_health_check = 0.0
         self.health_check_interval = (
             30  # Check health every 30 seconds (reduced from 60)
         )
@@ -114,7 +114,7 @@ class BluefinServiceClient:
 
         # Circuit breaker state
         self.circuit_open = False
-        self.circuit_open_until = 0
+        self.circuit_open_until = 0.0
         self.circuit_failure_threshold = 5
         self.circuit_recovery_timeout = 60  # seconds
 
@@ -124,7 +124,7 @@ class BluefinServiceClient:
         self._keep_alive_timeout = 30
 
         # Session reuse tracking
-        self._session_created_at = 0
+        self._session_created_at = 0.0
         self._session_max_age = 1800  # 30 minutes
         self._session_request_count = 0
         self._max_requests_per_session = 1000
@@ -396,6 +396,9 @@ class BluefinServiceClient:
                 )
 
                 return self._connected
+            else:
+                self._connected = False
+                return False
 
         except (ClientError, TimeoutError, OSError) as e:
             exception_handler.log_exception_with_context(
@@ -522,6 +525,17 @@ class BluefinServiceClient:
                             },
                         )
                         return False
+            else:
+                self._record_failure()
+                logger.error(
+                    "Session is None - cannot perform health check",
+                    extra={
+                        "client_id": self.client_id,
+                        "service_url": self.service_url,
+                        "operation": "health_check",
+                    },
+                )
+                return False
 
         except (ClientError, TimeoutError, OSError) as e:
             self._record_failure()

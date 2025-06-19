@@ -99,6 +99,9 @@ class BluefinMarketDataProvider:
         self._reconnect_delay = 5  # seconds
         self._running = False
 
+        # Add type annotation for WebSocket client
+        self._ws_client: Any = None
+
         # Non-blocking message processing
         self._message_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
         self._processing_task: asyncio.Task | None = None
@@ -108,16 +111,33 @@ class BluefinMarketDataProvider:
         self._candle_builder_task: asyncio.Task | None = None
         self._last_candle_timestamp: datetime | None = None
 
-        # Bluefin API configuration - use environment-specific endpoints
-        self.network = os.getenv("EXCHANGE__BLUEFIN_NETWORK", "mainnet").lower()
-        if self.network == "testnet":
-            self._api_base_url = "https://dapi.api.sui-staging.bluefin.io"
-            self._ws_url = "wss://dapi.api.sui-staging.bluefin.io"
-            self._notification_ws_url = "wss://notifications.api.sui-staging.bluefin.io"
-        else:
-            self._api_base_url = "https://dapi.api.sui-prod.bluefin.io"
-            self._ws_url = "wss://dapi.api.sui-prod.bluefin.io"
-            self._notification_ws_url = "wss://notifications.api.sui-prod.bluefin.io"
+        # Use centralized endpoint configuration for consistency
+        try:
+            from ..exchange.bluefin_endpoints import (
+                get_notifications_url,
+                get_rest_api_url,
+                get_websocket_url,
+            )
+
+            self.network = os.getenv("EXCHANGE__BLUEFIN_NETWORK", "mainnet").lower()
+            self._api_base_url = get_rest_api_url(self.network)
+            self._ws_url = get_websocket_url(self.network)
+            self._notification_ws_url = get_notifications_url(self.network)
+        except ImportError:
+            # Fallback to hardcoded URLs if centralized config is not available
+            self.network = os.getenv("EXCHANGE__BLUEFIN_NETWORK", "mainnet").lower()
+            if self.network == "testnet":
+                self._api_base_url = "https://dapi.api.sui-staging.bluefin.io"
+                self._ws_url = "wss://dapi.api.sui-staging.bluefin.io"
+                self._notification_ws_url = (
+                    "wss://notifications.api.sui-staging.bluefin.io"
+                )
+            else:
+                self._api_base_url = "https://dapi.api.sui-prod.bluefin.io"
+                self._ws_url = "wss://dapi.api.sui-prod.bluefin.io"
+                self._notification_ws_url = (
+                    "wss://notifications.api.sui-prod.bluefin.io"
+                )
 
         logger.info(
             "Initialized BluefinMarketDataProvider",
@@ -326,7 +346,7 @@ class BluefinMarketDataProvider:
 
         # Close WebSocket connection
         if hasattr(self, "_ws_client") and self._ws_client:
-            await self._ws_client.disconnect()
+            await self._ws_client.disconnect()  # type: ignore[attr-defined]
             self._ws_client = None
         elif self._ws:
             await self._ws.close()
@@ -504,7 +524,8 @@ class BluefinMarketDataProvider:
                 return orderbook
             else:
                 # In production, fetch from Bluefin service
-                pass
+                # TODO: Implement real orderbook fetching from Bluefin service
+                return None
 
         except Exception as e:
             logger.error(f"Error fetching orderbook: {e}")
@@ -716,7 +737,7 @@ class BluefinMarketDataProvider:
 
         # Add WebSocket client status if available
         if hasattr(self, "_ws_client") and self._ws_client:
-            ws_status = self._ws_client.get_status()
+            ws_status = self._ws_client.get_status()  # type: ignore[attr-defined]
             status["ws_client"] = {
                 "connected": ws_status.get("connected", False),
                 "candles": ws_status.get("candles_buffered", 0),
@@ -750,7 +771,7 @@ class BluefinMarketDataProvider:
             True if WebSocket data is available
         """
         if hasattr(self, "_ws_client") and self._ws_client:
-            return len(self._ws_client.get_candles()) > 0
+            return len(self._ws_client.get_candles()) > 0  # type: ignore[attr-defined]
         return self._ws_connected and not self._use_mock_data
 
     def get_connection_status(self) -> str:
@@ -1099,7 +1120,9 @@ class BluefinMarketDataProvider:
                     "4h": "4h",
                     "1d": "1d",
                     "1w": "1w",
-                    "15s": "15s",  # For high-frequency trading
+                    # Note: 15s is not supported by Bluefin API - this will be handled by the service
+                    # The service will convert 15s to 1m with granularity loss warnings
+                    "15s": "15s",  # Will be converted to 1m by BluefinSDKService
                 }
 
                 bluefin_interval = interval_map.get(interval, "5m")
@@ -1225,10 +1248,13 @@ class BluefinMarketDataProvider:
                         candles.append(market_data)
                     elif isinstance(candle, dict):
                         # Alternative format with keys
+                        timestamp_val = (
+                            candle.get("timestamp") or candle.get("time") or 0
+                        )
                         market_data = MarketData(
                             symbol=symbol,
                             timestamp=datetime.fromtimestamp(
-                                candle.get("timestamp", candle.get("time", 0)) / 1000,
+                                timestamp_val / 1000,
                                 UTC,
                             ),
                             open=Decimal(str(candle.get("open", 0))),
@@ -1307,9 +1333,9 @@ class BluefinMarketDataProvider:
         """Establish WebSocket connection to Bluefin."""
         try:
             # Import and use BluefinWebSocketClient for proper ticker handling
+            # Create WebSocket client with candle update callback
             from .bluefin_websocket import BluefinWebSocketClient
 
-            # Create WebSocket client with candle update callback
             self._ws_client = BluefinWebSocketClient(
                 symbol=self.symbol,
                 interval=self.interval,
@@ -1319,7 +1345,7 @@ class BluefinMarketDataProvider:
             )
 
             # Connect to WebSocket
-            await self._ws_client.connect()
+            await self._ws_client.connect()  # type: ignore[attr-defined]
             self._ws_connected = True
             self._reconnect_attempts = 0
 
@@ -1366,7 +1392,7 @@ class BluefinMarketDataProvider:
                             pass
 
                 except json.JSONDecodeError:
-                    logger.error(f"Invalid JSON in WebSocket message: {message}")
+                    logger.error(f"Invalid JSON in WebSocket message: {message!r}")
                 except Exception as e:
                     logger.error(f"Error handling WebSocket message: {e}")
 

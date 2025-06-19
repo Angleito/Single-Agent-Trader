@@ -111,7 +111,7 @@ class SelfImprovementEngine:
         recent_experiences = [
             exp
             for exp in self.memory_server.memory_cache.values()
-            if exp.timestamp >= cutoff_time and exp.outcome
+            if exp.timestamp >= cutoff_time and exp.outcome is not None
         ]
 
         if not recent_experiences:
@@ -132,9 +132,13 @@ class SelfImprovementEngine:
         # Calculate overall metrics
         total_trades = len(recent_experiences)
         successful_trades = sum(
-            1 for exp in recent_experiences if exp.outcome["success"]
+            1
+            for exp in recent_experiences
+            if exp.outcome and exp.outcome.get("success", False)
         )
-        total_pnl = sum(exp.outcome["pnl"] for exp in recent_experiences)
+        total_pnl = sum(
+            exp.outcome.get("pnl", 0.0) for exp in recent_experiences if exp.outcome
+        )
 
         analysis = {
             "period_hours": hours,
@@ -160,39 +164,48 @@ class SelfImprovementEngine:
         self, experiences: list[TradingExperience]
     ) -> dict[str, dict[str, Any]]:
         """Analyze pattern performance."""
-        pattern_stats = defaultdict(
+        pattern_stats: dict[str, dict[str, Any]] = defaultdict(
             lambda: {"count": 0, "successes": 0, "total_pnl": 0.0, "durations": []}
         )
 
         for exp in experiences:
+            if exp.outcome is None:
+                continue
             for pattern in exp.pattern_tags:
                 stats = pattern_stats[pattern]
                 stats["count"] += 1
 
-                if exp.outcome["success"]:
+                if exp.outcome.get("success", False):
                     stats["successes"] += 1
 
-                stats["total_pnl"] += exp.outcome["pnl"]
+                stats["total_pnl"] += exp.outcome.get("pnl", 0.0)
 
-                if exp.trade_duration_minutes:
+                if exp.trade_duration_minutes and isinstance(stats["durations"], list):
                     stats["durations"].append(exp.trade_duration_minutes)
 
         # Calculate aggregated metrics
         pattern_performance = {}
         for pattern, stats in pattern_stats.items():
-            if stats["count"] >= settings.mcp.min_samples_for_pattern:
+            count = stats["count"]
+            successes = stats["successes"]
+            total_pnl = stats["total_pnl"]
+            durations = stats["durations"]
+
+            if count >= settings.mcp.min_samples_for_pattern:
                 perf = PatternPerformance(
                     pattern_name=pattern,
-                    occurrence_count=stats["count"],
-                    success_count=stats["successes"],
-                    total_pnl=stats["total_pnl"],
-                    avg_pnl=stats["total_pnl"] / stats["count"],
-                    win_rate=stats["successes"] / stats["count"],
+                    occurrence_count=count,
+                    success_count=successes,
+                    total_pnl=total_pnl,
+                    avg_pnl=total_pnl / count,
+                    win_rate=successes / count,
                     avg_duration_minutes=(
-                        np.mean(stats["durations"]) if stats["durations"] else 0
+                        float(np.mean(durations))
+                        if isinstance(durations, list) and durations
+                        else 0.0
                     ),
                     confidence_score=self._calculate_pattern_confidence(
-                        stats["count"], stats["successes"] / stats["count"]
+                        count, successes / count
                     ),
                 )
 
@@ -207,7 +220,7 @@ class SelfImprovementEngine:
         self, experiences: list[TradingExperience]
     ) -> dict[str, dict[str, Any]]:
         """Analyze performance under different market conditions."""
-        condition_stats = defaultdict(
+        condition_stats: dict[str, dict[str, Any]] = defaultdict(
             lambda: {"count": 0, "successes": 0, "total_pnl": 0.0}
         )
 
@@ -225,23 +238,29 @@ class SelfImprovementEngine:
 
             # Update stats for each active condition
             for condition in active_conditions:
+                if exp.outcome is None:
+                    continue
                 stats = condition_stats[condition]
                 stats["count"] += 1
 
-                if exp.outcome["success"]:
+                if exp.outcome.get("success", False):
                     stats["successes"] += 1
 
-                stats["total_pnl"] += exp.outcome["pnl"]
+                stats["total_pnl"] += exp.outcome.get("pnl", 0.0)
 
         # Calculate performance metrics
         condition_performance = {}
         for condition, stats in condition_stats.items():
-            if stats["count"] > 0:
+            count = stats["count"]
+            successes = stats["successes"]
+            total_pnl = stats["total_pnl"]
+
+            if count > 0:
                 condition_performance[condition] = {
-                    "count": stats["count"],
-                    "win_rate": stats["successes"] / stats["count"],
-                    "avg_pnl": stats["total_pnl"] / stats["count"],
-                    "total_pnl": stats["total_pnl"],
+                    "count": count,
+                    "win_rate": successes / count,
+                    "avg_pnl": total_pnl / count,
+                    "total_pnl": total_pnl,
                 }
 
         return condition_performance
@@ -281,27 +300,33 @@ class SelfImprovementEngine:
         # Group by position size ranges
         size_buckets = {"small": (0, 10), "medium": (10, 20), "large": (20, 100)}
 
-        bucket_performance = defaultdict(lambda: {"count": 0, "successes": 0, "pnl": 0})
+        bucket_performance: dict[str, dict[str, Any]] = defaultdict(
+            lambda: {"count": 0, "successes": 0, "pnl": 0.0}
+        )
 
         for exp in experiences:
+            if exp.outcome is None:
+                continue
             size_pct = exp.decision.get("size_pct", 0)
 
             for bucket_name, (min_size, max_size) in size_buckets.items():
                 if min_size <= size_pct < max_size:
                     stats = bucket_performance[bucket_name]
                     stats["count"] += 1
-                    if exp.outcome["success"]:
+                    if exp.outcome.get("success", False):
                         stats["successes"] += 1
-                    stats["pnl"] += exp.outcome["pnl"]
+                    stats["pnl"] += exp.outcome.get("pnl", 0.0)
                     break
 
         # Find best performing bucket
         best_bucket = None
-        best_win_rate = 0
+        best_win_rate = 0.0
 
         for bucket_name, stats in bucket_performance.items():
-            if stats["count"] >= 3:  # Minimum sample size
-                win_rate = stats["successes"] / stats["count"]
+            count = stats["count"]
+            successes = stats["successes"]
+            if count >= 3:  # Minimum sample size
+                win_rate = successes / count
                 if win_rate > best_win_rate:
                     best_win_rate = win_rate
                     best_bucket = bucket_name
@@ -335,24 +360,31 @@ class SelfImprovementEngine:
         self, experiences: list[TradingExperience]
     ) -> StrategyAdjustment | None:
         """Analyze leverage usage and performance."""
-        leverage_stats = defaultdict(lambda: {"count": 0, "successes": 0, "pnl": 0})
+        leverage_stats: dict[int | float, dict[str, Any]] = defaultdict(
+            lambda: {"count": 0, "successes": 0, "pnl": 0.0}
+        )
 
         for exp in experiences:
+            if exp.outcome is None:
+                continue
             leverage = exp.decision.get("leverage", 1)
             stats = leverage_stats[leverage]
             stats["count"] += 1
-            if exp.outcome["success"]:
+            if exp.outcome.get("success", False):
                 stats["successes"] += 1
-            stats["pnl"] += exp.outcome["pnl"]
+            stats["pnl"] += exp.outcome.get("pnl", 0.0)
 
         # Find optimal leverage
         best_leverage = None
         best_score = 0.0  # Combination of win rate and avg PnL
 
         for leverage, stats in leverage_stats.items():
-            if stats["count"] >= 3:
-                win_rate = stats["successes"] / stats["count"]
-                avg_pnl = stats["pnl"] / stats["count"]
+            count = stats["count"]
+            successes = stats["successes"]
+            pnl = stats["pnl"]
+            if count >= 3:
+                win_rate = successes / count
+                avg_pnl = pnl / count
 
                 # Score combines win rate and profitability
                 score = win_rate * 0.6 + min(avg_pnl / 100, 0.4)
@@ -385,12 +417,17 @@ class SelfImprovementEngine:
         large_losses = 0
 
         for exp in experiences:
-            if not exp.outcome["success"] and exp.outcome["pnl"] < 0:
+            if exp.outcome is None:
+                continue
+            if (
+                not exp.outcome.get("success", False)
+                and exp.outcome.get("pnl", 0.0) < 0
+            ):
                 total_losses += 1
 
                 # Check if loss exceeded stop loss threshold
                 stop_loss_pct = exp.decision.get("stop_loss_pct", 2.0)
-                actual_loss_pct = abs(exp.outcome["price_change_pct"])
+                actual_loss_pct = abs(exp.outcome.get("price_change_pct", 0.0))
 
                 if actual_loss_pct >= stop_loss_pct * 0.9:  # Near or beyond stop
                     stop_loss_hits += 1
@@ -426,7 +463,9 @@ class SelfImprovementEngine:
             "position": (1440, float("inf")),  # > 24 hours
         }
 
-        bucket_stats = defaultdict(lambda: {"count": 0, "successes": 0})
+        bucket_stats: dict[str, dict[str, int]] = defaultdict(
+            lambda: {"count": 0, "successes": 0}
+        )
 
         for exp in experiences:
             if exp.trade_duration_minutes:
@@ -434,15 +473,17 @@ class SelfImprovementEngine:
 
                 for bucket_name, (min_dur, max_dur) in duration_buckets.items():
                     if min_dur <= duration < max_dur:
+                        if exp.outcome is None:
+                            continue
                         stats = bucket_stats[bucket_name]
                         stats["count"] += 1
-                        if exp.outcome["success"]:
+                        if exp.outcome.get("success", False):
                             stats["successes"] += 1
                         break
 
         # Find optimal holding period
         best_duration = None
-        best_win_rate = 0
+        best_win_rate = 0.0
 
         for bucket_name, stats in bucket_stats.items():
             if stats["count"] >= 3:
@@ -499,7 +540,9 @@ class SelfImprovementEngine:
         insights = []
 
         # Look for pattern combinations that work well together
-        pattern_combos = defaultdict(lambda: {"count": 0, "successes": 0})
+        pattern_combos: dict[str, dict[str, int]] = defaultdict(
+            lambda: {"count": 0, "successes": 0}
+        )
 
         for exp in experiences:
             if len(exp.pattern_tags) >= 2:
@@ -508,18 +551,22 @@ class SelfImprovementEngine:
 
                 # Trend + momentum alignment
                 if "uptrend" in patterns and "falling_dominance" in patterns:
+                    if exp.outcome is None:
+                        continue
                     combo = "uptrend_falling_dominance"
                     stats = pattern_combos[combo]
                     stats["count"] += 1
-                    if exp.outcome["success"]:
+                    if exp.outcome.get("success", False):
                         stats["successes"] += 1
 
                 # Oversold + dominance
                 if "oversold" in patterns and "high_stablecoin_dominance" in patterns:
+                    if exp.outcome is None:
+                        continue
                     combo = "oversold_high_dominance"
                     stats = pattern_combos[combo]
                     stats["count"] += 1
-                    if exp.outcome["success"]:
+                    if exp.outcome.get("success", False):
                         stats["successes"] += 1
 
         # Generate insights for strong correlations
@@ -548,13 +595,17 @@ class SelfImprovementEngine:
         insights = []
 
         # Group experiences by time periods
-        hourly_performance = defaultdict(lambda: {"count": 0, "successes": 0})
+        hourly_performance: dict[int, dict[str, int]] = defaultdict(
+            lambda: {"count": 0, "successes": 0}
+        )
 
         for exp in experiences:
+            if exp.outcome is None:
+                continue
             hour = exp.timestamp.hour
             stats = hourly_performance[hour]
             stats["count"] += 1
-            if exp.outcome["success"]:
+            if exp.outcome.get("success", False):
                 stats["successes"] += 1
 
         # Find best performing hours
@@ -589,11 +640,15 @@ class SelfImprovementEngine:
         insights = []
 
         # Analyze losing trades for common factors
-        losing_trades = [exp for exp in experiences if not exp.outcome["success"]]
+        losing_trades = [
+            exp
+            for exp in experiences
+            if exp.outcome and not exp.outcome.get("success", False)
+        ]
 
         if len(losing_trades) >= 3:
             # Check for common patterns in losses
-            loss_patterns = defaultdict(int)
+            loss_patterns: dict[str, int] = defaultdict(int)
 
             for exp in losing_trades:
                 # High leverage losses
@@ -689,9 +744,11 @@ class SelfImprovementEngine:
                     relevant_patterns.append(pattern_perf)
 
         if not relevant_patterns:
-            recommendations["reasoning"].append(
-                "No strong historical patterns match current conditions"
-            )
+            reasoning_list = recommendations.get("reasoning", [])
+            if isinstance(reasoning_list, list):
+                reasoning_list.append(
+                    "No strong historical patterns match current conditions"
+                )
             return recommendations
 
         # Find best performing relevant pattern
@@ -707,10 +764,12 @@ class SelfImprovementEngine:
                 recommendations["suggested_action"] = "SHORT"
 
             recommendations["confidence"] = best_pattern.confidence_score
-            recommendations["reasoning"].append(
-                f"Pattern '{best_pattern.pattern_name}' shows {best_pattern.win_rate:.1%} "
-                f"success rate over {best_pattern.occurrence_count} trades"
-            )
+            reasoning_list = recommendations.get("reasoning", [])
+            if isinstance(reasoning_list, list):
+                reasoning_list.append(
+                    f"Pattern '{best_pattern.pattern_name}' shows {best_pattern.win_rate:.1%} "
+                    f"success rate over {best_pattern.occurrence_count} trades"
+                )
 
             # Adjust size based on confidence
             if best_pattern.confidence_score > 0.7:
@@ -719,15 +778,17 @@ class SelfImprovementEngine:
                 recommendations["suggested_size_pct"] = 20
 
         # Add warnings for risk factors
-        if "high_stablecoin_dominance" in active_conditions:
-            recommendations["warnings"].append(
-                "High stablecoin dominance indicates risk-off sentiment"
-            )
+        warnings_list = recommendations.get("warnings", [])
+        if isinstance(warnings_list, list):
+            if "high_stablecoin_dominance" in active_conditions:
+                warnings_list.append(
+                    "High stablecoin dominance indicates risk-off sentiment"
+                )
 
-        if current_indicators.get("rsi", 50) > 80:
-            recommendations["warnings"].append(
-                "Extreme overbought conditions - consider reduced position size"
-            )
+            if current_indicators.get("rsi", 50) > 80:
+                warnings_list.append(
+                    "Extreme overbought conditions - consider reduced position size"
+                )
 
         return recommendations
 
@@ -750,15 +811,17 @@ class SelfImprovementEngine:
         )
 
         for pattern in sorted_patterns[:5]:
-            report["top_performing_patterns"].append(
-                {
-                    "pattern": pattern.pattern_name,
-                    "win_rate": pattern.win_rate,
-                    "avg_pnl": pattern.avg_pnl,
-                    "confidence": pattern.confidence_score,
-                    "samples": pattern.occurrence_count,
-                }
-            )
+            top_patterns_list = report.get("top_performing_patterns", [])
+            if isinstance(top_patterns_list, list):
+                top_patterns_list.append(
+                    {
+                        "pattern": pattern.pattern_name,
+                        "win_rate": pattern.win_rate,
+                        "avg_pnl": pattern.avg_pnl,
+                        "confidence": pattern.confidence_score,
+                        "samples": pattern.occurrence_count,
+                    }
+                )
 
         # Recent insights
         recent_insights = sorted(
@@ -766,27 +829,31 @@ class SelfImprovementEngine:
         )[:10]
 
         for insight in recent_insights:
-            report["recent_insights"].append(
-                {
-                    "type": insight.insight_type,
-                    "description": insight.description,
-                    "confidence": insight.confidence,
-                    "actionable": insight.actionable,
-                }
-            )
+            recent_insights_list = report.get("recent_insights", [])
+            if isinstance(recent_insights_list, list):
+                recent_insights_list.append(
+                    {
+                        "type": insight.insight_type,
+                        "description": insight.description,
+                        "confidence": insight.confidence,
+                        "actionable": insight.actionable,
+                    }
+                )
 
         # Recommended focus areas based on learning
-        if len(self.pattern_performance) < 10:
-            report["recommended_focus_areas"].append(
-                "Gather more trading data across different market conditions"
-            )
+        focus_areas_list = report.get("recommended_focus_areas", [])
+        if isinstance(focus_areas_list, list):
+            if len(self.pattern_performance) < 10:
+                focus_areas_list.append(
+                    "Gather more trading data across different market conditions"
+                )
 
-        low_confidence_patterns = [
-            p for p in self.pattern_performance.values() if p.confidence_score < 0.5
-        ]
-        if len(low_confidence_patterns) > 5:
-            report["recommended_focus_areas"].append(
-                "Review and refine pattern identification logic"
-            )
+            low_confidence_patterns = [
+                p for p in self.pattern_performance.values() if p.confidence_score < 0.5
+            ]
+            if len(low_confidence_patterns) > 5:
+                focus_areas_list.append(
+                    "Review and refine pattern identification logic"
+                )
 
         return report

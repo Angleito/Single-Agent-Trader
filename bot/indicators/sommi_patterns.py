@@ -236,7 +236,7 @@ class SommiPatterns:
         self, index: pd.Index
     ) -> tuple[pd.Series, pd.Series, pd.Series]:
         """Return empty series tuple for error cases."""
-        empty = pd.Series(dtype=float, index=index)
+        empty = pd.Series(dtype="float64", index=index)
         return empty, empty, empty
 
     def _determine_resample_rule(self, index: pd.DatetimeIndex, multiplier: int) -> str:
@@ -410,12 +410,12 @@ class SommiPatterns:
 
         try:
             # Extract required data
-            wt2 = wt_data.get("wt2", pd.Series(dtype=float))
+            wt2 = wt_data.get("wt2", pd.Series(dtype="float64"))
             wt_cross_up = wt_data.get("cross_up", pd.Series(dtype=bool))
             wt_cross_down = wt_data.get("cross_down", pd.Series(dtype=bool))
             wt_cross = wt_cross_up | wt_cross_down
 
-            htf_vwap = htf_wt_data.get("vwap", pd.Series(dtype=float))
+            htf_vwap = htf_wt_data.get("vwap", pd.Series(dtype="float64"))
 
             if any(s.empty for s in [wt2, rsimfi_data, htf_vwap]):
                 logger.warning("Empty data provided for Sommi Flag calculation")
@@ -478,7 +478,7 @@ class SommiPatterns:
 
         confidence = pd.Series(0.0, index=cond1.index)
         for condition, weight in zip(conditions, weights, strict=False):
-            confidence += condition.astype(float) * weight
+            confidence += condition.astype("float64") * weight
 
         return confidence
 
@@ -523,7 +523,7 @@ class SommiPatterns:
 
         try:
             # Extract WaveTrend data
-            wt2 = wt_data.get("wt2", pd.Series(dtype=float))
+            wt2 = wt_data.get("wt2", pd.Series(dtype="float64"))
             wt_cross_up = wt_data.get("cross_up", pd.Series(dtype=bool))
             wt_cross_down = wt_data.get("cross_down", pd.Series(dtype=bool))
             wt_cross = wt_cross_up | wt_cross_down
@@ -611,7 +611,7 @@ class SommiPatterns:
 
         confidence = pd.Series(0.0, index=wt_cond.index)
         for condition, weight in zip(conditions, base_weights, strict=False):
-            confidence += condition.astype(float) * weight
+            confidence += condition.astype("float64") * weight
 
         # Enhance confidence with candle quality
         if "body_ratio" in ha_tf1.columns and "body_ratio" in ha_tf2.columns:

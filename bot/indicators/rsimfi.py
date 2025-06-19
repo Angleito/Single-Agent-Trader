@@ -322,7 +322,7 @@ class RSIMFIIndicator:
             # Color signal: 1 = bullish (green), -1 = bearish (red), 0 = neutral
             conditions["color_signal"] = np.where(
                 rsimfi_values > 0, 1, np.where(rsimfi_values < 0, -1, 0)
-            ).astype(int)
+            ).astype("int64")
 
             # Count conditions for logging
             positive_count = conditions["is_positive"].sum()
@@ -398,7 +398,7 @@ class RSIMFIIndicator:
         # Area signal: 1 = bull area, -1 = bear area, 0 = neutral area
         conditions["area_signal"] = np.where(
             rsimfi_values > bull_level, 1, np.where(rsimfi_values < bear_level, -1, 0)
-        ).astype(int)
+        ).astype("int64")
 
         return conditions
 

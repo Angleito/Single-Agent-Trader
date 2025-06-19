@@ -438,12 +438,12 @@ class FeeCalculator:
             stop_loss_decimal = Decimal(str(trade_action.stop_loss_pct / 100))
 
             # Check if take profit is sufficient
-            if (
-                take_profit_decimal < min_move * 1.2
+            if take_profit_decimal < min_move * Decimal(
+                "1.2"
             ):  # 1.2x safety margin (more aggressive for active trading)
                 return (
                     False,
-                    f"Take profit {trade_action.take_profit_pct:.2f}% too low to cover fees (min: {float(min_move * 1.2):.4%})",
+                    f"Take profit {trade_action.take_profit_pct:.2f}% too low to cover fees (min: {float(min_move * Decimal('1.2')):.4%})",
                 )
 
             # Check if stop loss gives reasonable risk/reward

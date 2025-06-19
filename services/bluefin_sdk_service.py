@@ -2002,9 +2002,25 @@ rate_limit_storage = defaultdict(lambda: {"count": 0, "window_start": time.time(
 # Authentication middleware
 @web.middleware
 async def auth_middleware(request, handler):
-    """Validate API key authentication."""
-    # Skip auth for health check endpoint
-    if request.path == "/health":
+    """Validate API key authentication for private endpoints only."""
+    try:
+        from bot.exchange.bluefin_endpoints import is_public_endpoint
+    except ImportError:
+        # Fallback public endpoint checker if centralized config is not available
+        def is_public_endpoint(path: str) -> bool:
+            public_paths = {
+                "/health",
+                "/market/ticker",
+                "/market/candles",
+                "/debug/symbols",
+                "/ping",
+                "/time",
+            }
+            return any(path.startswith(pub_path) for pub_path in public_paths)
+
+    # Skip auth for public endpoints
+    if is_public_endpoint(request.path):
+        logger.debug(f"Skipping auth for public endpoint: {request.path}")
         return await handler(request)
 
     # Get API key from environment
@@ -2079,16 +2095,167 @@ async def rate_limit_middleware(request, handler):
     return response
 
 
+# Endpoint validation utilities
+async def validate_endpoint_connectivity(
+    endpoint_url: str, timeout: int = 10
+) -> tuple[bool, str]:
+    """
+    Validate connectivity to a Bluefin API endpoint.
+
+    Args:
+        endpoint_url: Base URL of the endpoint to test
+        timeout: Timeout in seconds for the connection test
+
+    Returns:
+        Tuple of (is_accessible, error_message)
+    """
+    try:
+        import aiohttp
+
+        logger.debug(f"Testing connectivity to endpoint: {endpoint_url}")
+
+        # Test with a simple ping endpoint
+        test_timeout = aiohttp.ClientTimeout(total=timeout)
+        async with aiohttp.ClientSession(timeout=test_timeout) as session:
+            # Try health check or ping endpoint
+            test_endpoints = ["/ping", "/time", "/exchangeInfo"]
+
+            for test_path in test_endpoints:
+                try:
+                    async with session.get(f"{endpoint_url}{test_path}") as response:
+                        if response.status == 200:
+                            logger.debug(
+                                f"Endpoint {endpoint_url} is accessible via {test_path}"
+                            )
+                            return True, ""
+                        elif response.status == 404:
+                            # Endpoint might not support this path, try next
+                            continue
+                        else:
+                            logger.warning(
+                                f"Endpoint {endpoint_url}{test_path} returned status {response.status}"
+                            )
+                            continue
+                except Exception as e:
+                    logger.debug(f"Test path {test_path} failed: {e}")
+                    continue
+
+            # If no test endpoint succeeded, consider it inaccessible
+            return (
+                False,
+                f"No test endpoints responded successfully from {endpoint_url}",
+            )
+
+    except Exception as e:
+        error_msg = f"Failed to test endpoint connectivity: {str(e)}"
+        logger.error(error_msg)
+        return False, error_msg
+
+
+async def validate_network_endpoints(network: str) -> dict[str, tuple[bool, str]]:
+    """
+    Validate all endpoints for a specific network.
+
+    Args:
+        network: Network name ("mainnet" or "testnet")
+
+    Returns:
+        Dictionary with endpoint validation results
+    """
+    try:
+        endpoints = BluefinEndpointConfig.get_endpoints(network)
+        results = {}
+
+        logger.info(f"Validating endpoints for {network} network")
+
+        # Test REST API endpoint
+        rest_valid, rest_error = await validate_endpoint_connectivity(
+            endpoints.rest_api
+        )
+        results["rest_api"] = (rest_valid, rest_error)
+
+        # Note: We don't test WebSocket endpoints here as they require different validation
+        # WebSocket validation would need a different approach with WebSocket client
+        results["websocket_api"] = (True, "WebSocket validation not implemented")
+        results["websocket_notifications"] = (
+            True,
+            "WebSocket validation not implemented",
+        )
+
+        return results
+
+    except ImportError:
+        logger.warning(
+            "Centralized endpoint config not available, using fallback validation"
+        )
+        # Fallback validation using hardcoded URLs
+        fallback_url = get_rest_api_url(network)
+        rest_valid, rest_error = await validate_endpoint_connectivity(fallback_url)
+        return {
+            "rest_api": (rest_valid, rest_error),
+            "websocket_api": (True, "Fallback - no validation"),
+            "websocket_notifications": (True, "Fallback - no validation"),
+        }
+    except Exception as e:
+        error_msg = f"Endpoint validation failed: {str(e)}"
+        logger.error(error_msg)
+        return {
+            "rest_api": (False, error_msg),
+            "websocket_api": (False, error_msg),
+            "websocket_notifications": (False, error_msg),
+        }
+
+
 # REST API Routes
 async def health_check(request):
     """Health check endpoint."""
-    return web.json_response(
-        {
+    try:
+        # Basic health status
+        health_data = {
             "status": "healthy" if service.initialized else "unhealthy",
             "initialized": service.initialized,
             "network": service.network,
         }
-    )
+
+        # Add endpoint configuration if available
+        try:
+            endpoints = BluefinEndpointConfig.get_endpoints(service.network.lower())
+            health_data["endpoints"] = {
+                "rest_api": endpoints.rest_api,
+                "websocket_api": endpoints.websocket_api,
+                "websocket_notifications": endpoints.websocket_notifications,
+                "configuration_source": "centralized",
+            }
+        except ImportError:
+            health_data["endpoints"] = {
+                "rest_api": get_rest_api_url(service.network.lower()),
+                "websocket_api": "N/A (fallback mode)",
+                "websocket_notifications": "N/A (fallback mode)",
+                "configuration_source": "fallback",
+            }
+
+        # Add service metadata
+        health_data["service_info"] = {
+            "service_id": service.service_id,
+            "version": "2.0.0",  # Update as needed
+            "uptime_seconds": int(
+                time.time() - getattr(service, "_start_time", time.time())
+            ),
+        }
+
+        return web.json_response(health_data)
+
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return web.json_response(
+            {
+                "status": "unhealthy",
+                "error": str(e),
+                "initialized": getattr(service, "initialized", False),
+                "network": getattr(service, "network", "unknown"),
+            },
+            status=500,
+        )
 
 
 async def get_account(request):
@@ -2374,6 +2541,91 @@ async def debug_symbols(request):
         return web.json_response({"error": str(e)}, status=500)
 
 
+async def validate_endpoints(request):
+    """Validate endpoint connectivity and configuration."""
+    try:
+        logger.info("Validating endpoint configuration and connectivity")
+
+        # Get network from query parameter or use service default
+        network = request.query.get("network", service.network.lower())
+
+        if network not in ["mainnet", "testnet"]:
+            return web.json_response(
+                {
+                    "error": f"Invalid network: {network}. Must be 'mainnet' or 'testnet'"
+                },
+                status=400,
+            )
+
+        # Validate all endpoints for the specified network
+        validation_results = await validate_network_endpoints(network)
+
+        # Determine overall status (checking if any endpoints are valid)
+        # all_valid = all(
+        #     result[0]
+        #     for result in validation_results.values()
+        #     if result[0] is not True
+        #     or result[1] != "WebSocket validation not implemented"
+        # )
+        rest_api_valid = validation_results.get("rest_api", (False, "Not tested"))[0]
+
+        # Prepare response
+        response_data = {
+            "network": network,
+            "overall_status": "healthy" if rest_api_valid else "unhealthy",
+            "endpoints": {},
+        }
+
+        # Add detailed endpoint results
+        for endpoint_type, (is_valid, error_msg) in validation_results.items():
+            response_data["endpoints"][endpoint_type] = {
+                "status": "healthy" if is_valid else "unhealthy",
+                "error": error_msg if error_msg else None,
+                "validated": True if endpoint_type == "rest_api" else False,
+            }
+
+        # Add current endpoint URLs for reference
+        try:
+            endpoints = BluefinEndpointConfig.get_endpoints(network)
+            response_data["endpoint_urls"] = {
+                "rest_api": endpoints.rest_api,
+                "websocket_api": endpoints.websocket_api,
+                "websocket_notifications": endpoints.websocket_notifications,
+            }
+        except ImportError:
+            response_data["endpoint_urls"] = {
+                "rest_api": get_rest_api_url(network),
+                "websocket_api": "Not available (fallback mode)",
+                "websocket_notifications": "Not available (fallback mode)",
+            }
+
+        # Set appropriate HTTP status
+        status_code = 200 if rest_api_valid else 503
+
+        logger.info(
+            f"Endpoint validation completed for {network}",
+            extra={
+                "network": network,
+                "overall_status": response_data["overall_status"],
+                "rest_api_valid": rest_api_valid,
+                "validation_results": validation_results,
+            },
+        )
+
+        return web.json_response(response_data, status=status_code)
+
+    except Exception as e:
+        logger.error(f"Error validating endpoints: {e}")
+        return web.json_response(
+            {
+                "error": "Endpoint validation failed",
+                "details": str(e),
+                "overall_status": "unhealthy",
+            },
+            status=500,
+        )
+
+
 async def startup(app):
     """Initialize service on startup."""
     logger.info("Starting Bluefin SDK service...")
@@ -2403,6 +2655,7 @@ def create_app():
     app.router.add_get("/market/candles", get_market_candles)
     app.router.add_post("/leverage", set_leverage)
     app.router.add_get("/debug/symbols", debug_symbols)
+    app.router.add_get("/debug/validate-endpoints", validate_endpoints)
 
     # Add startup and cleanup handlers
     app.on_startup.append(startup)

@@ -805,6 +805,11 @@ class DominanceCandleBuilder:
                     volume=volume,
                     avg_dominance=float(row["avg_dominance"]),
                     volatility=volatility,
+                    rsi=None,
+                    ema_fast=None,
+                    ema_slow=None,
+                    momentum=None,
+                    trend_signal=None,
                 )
                 candles.append(candle)
 
@@ -962,7 +967,9 @@ class DominanceCandleBuilder:
             logger.error(f"Error calculating technical indicators: {e}")
             raise ValueError(f"Failed to calculate technical indicators: {e}") from e
 
-    def _calculate_rsi(self, values: list[float], period: int = 14) -> list[float]:
+    def _calculate_rsi(
+        self, values: list[float], period: int = 14
+    ) -> list[float | None]:
         """
         Calculate Relative Strength Index (RSI) for dominance values.
 
@@ -1012,7 +1019,7 @@ class DominanceCandleBuilder:
             df["rsi"] = 100 - (100 / (1 + rs))
 
             # Convert to list, handling NaN values
-            rsi_list = []
+            rsi_list: list[float | None] = []
             for value in df["rsi"]:
                 if pd.isna(value):
                     rsi_list.append(None)
@@ -1025,7 +1032,7 @@ class DominanceCandleBuilder:
             logger.error(f"Error calculating RSI: {e}")
             return [None] * len(values)
 
-    def _calculate_ema(self, values: list[float], period: int) -> list[float]:
+    def _calculate_ema(self, values: list[float], period: int) -> list[float | None]:
         """
         Calculate Exponential Moving Average (EMA) for dominance values.
 
@@ -1051,7 +1058,7 @@ class DominanceCandleBuilder:
             df["ema"] = df["close"].ewm(span=period, adjust=False).mean()
 
             # Convert to list, handling NaN values
-            ema_list = []
+            ema_list: list[float | None] = []
             for i, value in enumerate(df["ema"]):
                 if pd.isna(value) or i < period - 1:
                     ema_list.append(None)
@@ -1064,7 +1071,9 @@ class DominanceCandleBuilder:
             logger.error(f"Error calculating EMA: {e}")
             return [None] * len(values)
 
-    def _calculate_momentum(self, values: list[float], period: int) -> list[float]:
+    def _calculate_momentum(
+        self, values: list[float], period: int
+    ) -> list[float | None]:
         """
         Calculate momentum indicator for dominance values.
 
@@ -1082,7 +1091,7 @@ class DominanceCandleBuilder:
             return [None] * len(values)
 
         try:
-            momentum_list = [None] * period
+            momentum_list: list[float | None] = [None] * period
 
             for i in range(period, len(values)):
                 current_value = values[i]
@@ -1130,22 +1139,25 @@ class DominanceCandleBuilder:
             bearish_signals = 0
 
             # RSI analysis
-            if rsi < 30:  # Oversold, potential bullish reversal
-                bullish_signals += 1
-            elif rsi > 70:  # Overbought, potential bearish reversal
-                bearish_signals += 1
+            if rsi is not None:
+                if rsi < 30:  # Oversold, potential bullish reversal
+                    bullish_signals += 1
+                elif rsi > 70:  # Overbought, potential bearish reversal
+                    bearish_signals += 1
 
             # EMA crossover analysis
-            if ema_fast > ema_slow:
-                bullish_signals += 1
-            elif ema_fast < ema_slow:
-                bearish_signals += 1
+            if ema_fast is not None and ema_slow is not None:
+                if ema_fast > ema_slow:
+                    bullish_signals += 1
+                elif ema_fast < ema_slow:
+                    bearish_signals += 1
 
             # Momentum analysis
-            if momentum > 1:  # Strong positive momentum
-                bullish_signals += 1
-            elif momentum < -1:  # Strong negative momentum
-                bearish_signals += 1
+            if momentum is not None:
+                if momentum > 1:  # Strong positive momentum
+                    bullish_signals += 1
+                elif momentum < -1:  # Strong negative momentum
+                    bearish_signals += 1
 
             # Determine overall signal
             if bullish_signals > bearish_signals:
@@ -1227,7 +1239,11 @@ class DominanceCandleBuilder:
             # Previous period: fast was below slow
             # Current period: fast is above slow -> Bullish crossover
             if (
-                prev_candle.ema_fast <= prev_candle.ema_slow
+                prev_candle.ema_fast is not None
+                and prev_candle.ema_slow is not None
+                and curr_candle.ema_fast is not None
+                and curr_candle.ema_slow is not None
+                and prev_candle.ema_fast <= prev_candle.ema_slow
                 and curr_candle.ema_fast > curr_candle.ema_slow
             ):
                 return "BULLISH_CROSSOVER"
@@ -1235,7 +1251,11 @@ class DominanceCandleBuilder:
             # Previous period: fast was above slow
             # Current period: fast is below slow -> Bearish crossover
             elif (
-                prev_candle.ema_fast >= prev_candle.ema_slow
+                prev_candle.ema_fast is not None
+                and prev_candle.ema_slow is not None
+                and curr_candle.ema_fast is not None
+                and curr_candle.ema_slow is not None
+                and prev_candle.ema_fast >= prev_candle.ema_slow
                 and curr_candle.ema_fast < curr_candle.ema_slow
             ):
                 return "BEARISH_CROSSOVER"
@@ -1303,14 +1323,25 @@ class DominanceCandleBuilder:
                 if len(valid_candles) < 5:  # Need minimum data points
                     continue
 
-                # Extract RSI and corresponding prices
-                rsi_values = [c.rsi for _, c in valid_candles]
-                corresponding_prices = [recent_prices[j] for j, _ in valid_candles]
+                # Extract RSI and corresponding prices (filter out None values)
+                rsi_values_raw = [c.rsi for _, c in valid_candles]
+                rsi_values = [v for v in rsi_values_raw if v is not None]
+                # Only include corresponding prices where RSI is not None
+                corresponding_prices = [
+                    recent_prices[j]
+                    for j, (_, c) in enumerate(valid_candles)
+                    if c.rsi is not None
+                ]
 
-                # Detect divergences using correlation analysis
-                divergence = self._analyze_divergence_pattern(
-                    rsi_values[-10:], corresponding_prices[-10:], i
-                )
+                # Only analyze divergence if we have enough non-None RSI values
+                if len(rsi_values) >= 5 and len(rsi_values) == len(
+                    corresponding_prices
+                ):
+                    divergence = self._analyze_divergence_pattern(
+                        rsi_values[-10:], corresponding_prices[-10:], i
+                    )
+                else:
+                    divergence = None
 
                 if divergence:
                     if divergence["type"] == "BULLISH":
@@ -1437,8 +1468,8 @@ class DominanceCandleBuilder:
             }
 
         try:
-            errors = []
-            warnings = []
+            errors: list[str] = []
+            warnings: list[str] = []
             statistics = {
                 "total_candles": len(candles),
                 "valid_ohlc": 0,
@@ -1570,8 +1601,8 @@ class DominanceCandleBuilder:
             duplicates = []
             statistics = {
                 "total_snapshots": len(snapshots),
-                "time_span_hours": 0,
-                "avg_interval_seconds": 0,
+                "time_span_hours": 0.0,
+                "avg_interval_seconds": 0.0,
                 "missing_values": 0,
                 "out_of_range_dominance": 0,
                 "negative_market_caps": 0,
@@ -1644,7 +1675,7 @@ class DominanceCandleBuilder:
             # Validate individual snapshots
             for i, snapshot in enumerate(sorted_snapshots):
                 # Check for missing values
-                missing_fields = []
+                missing_fields: list[str] = []
                 if snapshot.stablecoin_dominance is None:
                     missing_fields.append("stablecoin_dominance")
                 if snapshot.total_stablecoin_cap is None:
@@ -2120,23 +2151,37 @@ class DominanceCandleBuilder:
 
                 if all(
                     [
-                        prev_candle.ema_fast,
-                        prev_candle.ema_slow,
-                        curr_candle.ema_fast,
-                        curr_candle.ema_slow,
+                        prev_candle.ema_fast is not None,
+                        prev_candle.ema_slow is not None,
+                        curr_candle.ema_fast is not None,
+                        curr_candle.ema_slow is not None,
                     ]
                 ):
+                    # Type guard: we know these are not None after the all() check
+                    prev_fast = prev_candle.ema_fast
+                    prev_slow = prev_candle.ema_slow
+                    curr_fast = curr_candle.ema_fast
+                    curr_slow = curr_candle.ema_slow
+
                     # Bullish crossover: fast EMA crosses above slow EMA
                     if (
-                        prev_candle.ema_fast <= prev_candle.ema_slow
-                        and curr_candle.ema_fast > curr_candle.ema_slow
+                        prev_fast is not None
+                        and prev_slow is not None
+                        and curr_fast is not None
+                        and curr_slow is not None
+                        and prev_fast <= prev_slow
+                        and curr_fast > curr_slow
                     ):
                         crossovers["bullish"] += 1
 
                     # Bearish crossover: fast EMA crosses below slow EMA
                     elif (
-                        prev_candle.ema_fast >= prev_candle.ema_slow
-                        and curr_candle.ema_fast < curr_candle.ema_slow
+                        prev_fast is not None
+                        and prev_slow is not None
+                        and curr_fast is not None
+                        and curr_slow is not None
+                        and prev_fast >= prev_slow
+                        and curr_fast < curr_slow
                     ):
                         crossovers["bearish"] += 1
 
@@ -2190,6 +2235,10 @@ def create_dominance_provider(
     update_interval = update_interval or getattr(
         settings.dominance, "update_interval", 30
     )
+
+    # Ensure types are correct
+    data_source = str(data_source) if data_source is not None else "coingecko"
+    update_interval = int(update_interval) if update_interval is not None else 30
 
     return DominanceDataProvider(
         data_source=data_source, api_key=api_key, update_interval=update_interval
