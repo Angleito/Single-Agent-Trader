@@ -83,7 +83,7 @@ class WebSocketLoadTester:
 
                 await asyncio.sleep(interval)
             except Exception as e:
-                logger.exception(f"Resource monitoring error: {e}")
+                logger.exception("Resource monitoring error: %s", e)
                 break
 
     async def send_burst_messages(
@@ -119,7 +119,7 @@ class WebSocketLoadTester:
                     await asyncio.sleep(delay)
 
             except Exception as e:
-                logger.debug(f"Failed to send message {i}: {e}")
+                logger.debug("Failed to send message %s: %s", i, e)
                 failed += 1
 
         return sent, failed
@@ -128,9 +128,7 @@ class WebSocketLoadTester:
         self, duration: int = 60, messages_per_second: int = 100
     ):
         """Test sustained message load."""
-        logger.info(
-            f"\nTesting sustained load: {messages_per_second} msg/s for {duration}s"
-        )
+        logger.info("\nTesting sustained load: %s msg/s for %ss", messages_per_second, duration)
 
         # Start resource monitoring
         monitor_task = asyncio.create_task(self.monitor_resources())
@@ -156,7 +154,7 @@ class WebSocketLoadTester:
                 self.metrics.messages_failed = failed
 
         except Exception as e:
-            logger.exception(f"Connection error during sustained load: {e}")
+            logger.exception("Connection error during sustained load: %s", e)
             self.metrics.connection_failures += 1
 
         # Stop monitoring
@@ -173,9 +171,7 @@ class WebSocketLoadTester:
         self, burst_size: int = 1000, burst_count: int = 10, burst_interval: float = 5.0
     ):
         """Test burst message patterns."""
-        logger.info(
-            f"\nTesting burst load: {burst_count} bursts of {burst_size} messages"
-        )
+        logger.info("\nTesting burst load: %s bursts of %s messages", burst_count, burst_size)
 
         # Start resource monitoring
         monitor_task = asyncio.create_task(self.monitor_resources())
@@ -188,7 +184,7 @@ class WebSocketLoadTester:
                 logger.info("Connected to dashboard")
 
                 for burst_num in range(burst_count):
-                    logger.info(f"Sending burst {burst_num + 1}/{burst_count}")
+                    logger.info("Sending burst %s/%s", burst_num + 1, burst_count)
 
                     # Send burst with no delay between messages
                     sent, failed = await self.send_burst_messages(
@@ -203,7 +199,7 @@ class WebSocketLoadTester:
                         await asyncio.sleep(burst_interval)
 
         except Exception as e:
-            logger.exception(f"Connection error during burst load: {e}")
+            logger.exception("Connection error during burst load: %s", e)
             self.metrics.connection_failures += 1
 
         # Stop monitoring
@@ -220,7 +216,7 @@ class WebSocketLoadTester:
         self, connection_count: int = 10, messages_per_connection: int = 100
     ):
         """Test multiple concurrent connections."""
-        logger.info(f"\nTesting {connection_count} concurrent connections")
+        logger.info("\nTesting %s concurrent connections", connection_count)
 
         # Start resource monitoring
         monitor_task = asyncio.create_task(self.monitor_resources())
@@ -237,7 +233,7 @@ class WebSocketLoadTester:
                     )
                     return sent, failed
             except Exception as e:
-                logger.exception(f"Connection {conn_id} failed: {e}")
+                logger.exception("Connection %s failed: %s", conn_id, e)
                 return 0, messages_per_connection
 
         # Run concurrent connections
@@ -267,7 +263,7 @@ class WebSocketLoadTester:
         queue_size = int(os.getenv("SYSTEM__WEBSOCKET_QUEUE_SIZE", "100"))
         messages_to_send = queue_size * overflow_factor
 
-        logger.info(f"Queue size: {queue_size}, sending: {messages_to_send} messages")
+        logger.info("Queue size: %s, sending: %s messages", queue_size, messages_to_send)
 
         # Start resource monitoring
         monitor_task = asyncio.create_task(self.monitor_resources())
@@ -290,7 +286,7 @@ class WebSocketLoadTester:
                 self.metrics.messages_queued = min(queue_size, sent)
 
         except Exception as e:
-            logger.exception(f"Connection error during overflow test: {e}")
+            logger.exception("Connection error during overflow test: %s", e)
             self.metrics.connection_failures += 1
 
         # Stop monitoring
@@ -331,38 +327,34 @@ class WebSocketLoadTester:
 
     def print_metrics(self, test_name: str):
         """Print test metrics."""
-        logger.info(f"\n{'=' * 60}")
-        logger.info(f"{test_name} - Results")
-        logger.info(f"{'=' * 60}")
+        logger.info("\n%s", '=' * 60)
+        logger.info("%s - Results", test_name)
+        logger.info("%s", '=' * 60)
 
         logger.info("\nMessage Statistics:")
-        logger.info(f"  Messages Sent: {self.metrics.messages_sent:,}")
-        logger.info(f"  Messages Failed: {self.metrics.messages_failed:,}")
-        logger.info(
-            f"  Success Rate: {(self.metrics.messages_sent / (self.metrics.messages_sent + self.metrics.messages_failed) * 100):.1f}%"
-        )
-        logger.info(f"  Throughput: {self.metrics.messages_per_second:.1f} msg/s")
+        logger.info("  Messages Sent: %s", self.metrics.messages_sent:,)
+        logger.info("  Messages Failed: %s", self.metrics.messages_failed:,)
+        logger.info("  Success Rate: %s%", (self.metrics.messages_sent / (self.metrics.messages_sent + self.metrics.messages_failed) * 100):.1f)
+        logger.info("  Throughput: %s msg/s", self.metrics.messages_per_second:.1f)
 
         logger.info("\nLatency Statistics (ms):")
-        logger.info(f"  Min: {self.metrics.min_latency * 1000:.2f}")
-        logger.info(f"  Max: {self.metrics.max_latency * 1000:.2f}")
-        logger.info(f"  Avg: {self.metrics.avg_latency * 1000:.2f}")
-        logger.info(f"  P95: {self.metrics.p95_latency * 1000:.2f}")
-        logger.info(f"  P99: {self.metrics.p99_latency * 1000:.2f}")
+        logger.info("  Min: %s", self.metrics.min_latency * 1000:.2f)
+        logger.info("  Max: %s", self.metrics.max_latency * 1000:.2f)
+        logger.info("  Avg: %s", self.metrics.avg_latency * 1000:.2f)
+        logger.info("  P95: %s", self.metrics.p95_latency * 1000:.2f)
+        logger.info("  P99: %s", self.metrics.p99_latency * 1000:.2f)
 
         logger.info("\nResource Usage:")
-        logger.info(f"  Memory Start: {self.metrics.memory_start:.1f} MB")
-        logger.info(f"  Memory Peak: {self.metrics.memory_peak:.1f} MB")
-        logger.info(f"  Memory End: {self.metrics.memory_end:.1f} MB")
-        logger.info(
-            f"  Memory Growth: {self.metrics.memory_end - self.metrics.memory_start:.1f} MB"
-        )
-        logger.info(f"  CPU Average: {self.metrics.cpu_avg:.1f}%")
-        logger.info(f"  CPU Peak: {self.metrics.cpu_peak:.1f}%")
+        logger.info("  Memory Start: %s MB", self.metrics.memory_start:.1f)
+        logger.info("  Memory Peak: %s MB", self.metrics.memory_peak:.1f)
+        logger.info("  Memory End: %s MB", self.metrics.memory_end:.1f)
+        logger.info("  Memory Growth: %s MB", self.metrics.memory_end - self.metrics.memory_start:.1f)
+        logger.info("  CPU Average: %s%", self.metrics.cpu_avg:.1f)
+        logger.info("  CPU Peak: %s%", self.metrics.cpu_peak:.1f)
 
         logger.info("\nConnection Stats:")
-        logger.info(f"  Connection Failures: {self.metrics.connection_failures}")
-        logger.info(f"  Test Duration: {self.metrics.test_duration:.1f}s")
+        logger.info("  Connection Failures: %s", self.metrics.connection_failures)
+        logger.info("  Test Duration: %ss", self.metrics.test_duration:.1f)
 
     async def run_all_load_tests(self):
         """Run all load tests."""
@@ -473,7 +465,7 @@ class WebSocketLoadTester:
                 indent=2,
             )
 
-        logger.info(f"\nResults saved to: {results_file}")
+        logger.info("\nResults saved to: %s", results_file)
 
     def print_summary(self, results: dict[str, Any]):
         """Print test summary."""
@@ -485,11 +477,11 @@ class WebSocketLoadTester:
         issues = []
 
         for test_name, metrics in results.items():
-            logger.info(f"\n{test_name}:")
-            logger.info(f"  Success Rate: {metrics['success_rate']:.1f}%")
-            logger.info(f"  Throughput: {metrics['throughput']:.1f} msg/s")
-            logger.info(f"  Avg Latency: {metrics['latency']['avg_ms']:.2f} ms")
-            logger.info(f"  Memory Growth: {metrics['memory']['growth_mb']:.1f} MB")
+            logger.info("\n%s:", test_name)
+            logger.info("  Success Rate: %s%", metrics['success_rate']:.1f)
+            logger.info("  Throughput: %s msg/s", metrics['throughput']:.1f)
+            logger.info("  Avg Latency: %s ms", metrics['latency']['avg_ms']:.2f)
+            logger.info("  Memory Growth: %s MB", metrics['memory']['growth_mb']:.1f)
 
             # Check for issues
             if metrics["success_rate"] < 99:
@@ -510,7 +502,7 @@ class WebSocketLoadTester:
         if issues:
             logger.warning("\nPerformance Issues Detected:")
             for issue in issues:
-                logger.warning(f"  - {issue}")
+                logger.warning("  - %s", issue)
         else:
             logger.info("\n✅ All load tests passed with good performance!")
 

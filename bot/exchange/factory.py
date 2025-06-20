@@ -55,7 +55,7 @@ class ExchangeFactory:
 
         exchange_type = exchange_type.lower()
 
-        logger.info(f"Creating {exchange_type} exchange client " f"(dry_run={dry_run})")
+        logger.info("Creating %s exchange client (dry_run=%s)", exchange_type, dry_run)
 
         if exchange_type == "coinbase":
             return ExchangeFactory._create_coinbase(dry_run, **kwargs)
@@ -88,9 +88,8 @@ class ExchangeFactory:
         )
 
         logger.info(
-            "Created Coinbase client "
-            f"(auth_method={client.auth_method}, "
-            f"sandbox={client.sandbox})"
+            "Created Coinbase client (auth_method=%s, sandbox=%s)",
+            client.auth_method, client.sandbox
         )
 
         return client
@@ -128,10 +127,8 @@ class ExchangeFactory:
         )
 
         logger.info(
-            "Created Bluefin client "
-            f"(network={network}, "
-            f"service_url={service_url}, "
-            f"has_key={bool(private_key)})"
+            "Created Bluefin client (network=%s, service_url=%s, has_key=%s)",
+            network, service_url, bool(private_key)
         )
 
         return client

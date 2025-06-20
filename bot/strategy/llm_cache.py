@@ -118,11 +118,11 @@ class MarketStateHasher:
             key_string = "|".join(key_components)
             cache_key = hashlib.md5(key_string.encode()).hexdigest()
 
-            logger.debug(f"Generated cache key: {cache_key} from {key_string}")
+            logger.debug("Generated cache key: %s from %s", cache_key, key_string)
             return cache_key
 
         except Exception as e:
-            logger.exception(f"Error generating cache key: {e}")
+            logger.exception("Error generating cache key: %s", e)
             # Return timestamp-based key as fallback
             return hashlib.md5(f"fallback_{time.time()}".encode()).hexdigest()
 
@@ -191,9 +191,7 @@ class LLMResponseCache:
         self._cleanup_task = None
         self._cleanup_started = False
 
-        logger.info(
-            f"🚀 LLM Cache initialized: TTL={ttl_seconds}s, Max={max_entries} entries"
-        )
+        logger.info("🚀 LLM Cache initialized: TTL=%ss, Max=%s entries", ttl_seconds, max_entries)
 
     def _start_cleanup_task(self):
         """Start the background cleanup task (only if running in async context)."""
@@ -220,7 +218,7 @@ class LLMResponseCache:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.exception(f"Error in cache cleanup: {e}")
+                logger.exception("Error in cache cleanup: %s", e)
 
     def _cleanup_expired_entries(self):
         """Remove expired entries from cache."""
@@ -237,7 +235,7 @@ class LLMResponseCache:
 
         if expired_keys:
             self.stats["cleanups"] += 1
-            logger.debug(f"Cache cleanup: removed {len(expired_keys)} expired entries")
+            logger.debug("Cache cleanup: removed %s expired entries", len(expired_keys))
 
         # Enforce max entries limit
         if len(self.cache) > self.max_entries:
@@ -249,7 +247,7 @@ class LLMResponseCache:
                 del self.cache[key]
                 self.stats["evictions"] += 1
 
-            logger.debug(f"Cache size limit: removed {excess_count} oldest entries")
+            logger.debug("Cache size limit: removed %s oldest entries", excess_count)
 
     async def get_or_compute(
         self, market_state: MarketState, compute_func, *args, **kwargs
@@ -281,10 +279,7 @@ class LLMResponseCache:
             self.stats["hits"] += 1
 
             # Log cache hit for performance monitoring
-            logger.info(
-                f"🎯 LLM Cache HIT: {cached_entry.response.action} "
-                f"(age: {time.time() - cached_entry.timestamp:.1f}s, "
-                f"hits: {cached_entry.hit_count})"
+            logger.info("🎯 LLM Cache HIT: %s " "(age: %ss, " "hits: %s)", cached_entry.response.action, time.time() - cached_entry.timestamp:.1f, cached_entry.hit_count)
             )
 
             return cached_entry.response
@@ -299,9 +294,7 @@ class LLMResponseCache:
         # Cache the response
         self._store_response(cache_key, response, market_state)
 
-        logger.info(
-            f"🔄 LLM Cache MISS: {response.action} "
-            f"(compute_time: {compute_time:.2f}s)"
+        logger.info("🔄 LLM Cache MISS: %s " "(compute_time: %ss)", response.action, compute_time:.2f)
         )
 
         return response
@@ -352,9 +345,7 @@ class LLMResponseCache:
 
         self.cache[cache_key] = entry
 
-        logger.debug(
-            f"Cached LLM response: {response.action} "
-            f"(confidence: {confidence_score:.2f})"
+        logger.debug("Cached LLM response: %s " "(confidence: %s)", response.action, confidence_score:.2f)
         )
 
     def _calculate_confidence_score(
@@ -433,7 +424,7 @@ class LLMResponseCache:
             "cleanups": 0,
         }
 
-        logger.info(f"Cache cleared: removed {cleared_count} entries")
+        logger.info("Cache cleared: removed %s entries", cleared_count)
 
     def __del__(self):
         """Cleanup on deletion."""

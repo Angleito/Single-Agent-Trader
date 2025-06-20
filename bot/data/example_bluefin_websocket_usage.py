@@ -17,11 +17,7 @@ logger = logging.getLogger(__name__)
 
 async def on_new_candle(candle: MarketData):
     """Callback function called when a new candle is completed."""
-    logger.info(
-        f"New {candle.symbol} candle: "
-        f"O:{candle.open} H:{candle.high} L:{candle.low} C:{candle.close} "
-        f"V:{candle.volume} @ {candle.timestamp}"
-    )
+    logger.info("New %s candle: " "O:%s H:%s L:%s C:%s " "V:%s @ %s" ), candle.symbol, candle.open, candle.high, candle.low, candle.close, candle.volume, candle.timestamp)
 
 
 async def main():
@@ -47,20 +43,20 @@ async def main():
 
         # Get current status
         status = ws_client.get_status()
-        logger.info(f"WebSocket Status: {status}")
+        logger.info("WebSocket Status: %s", status)
 
         # Get latest price
         latest_price = ws_client.get_latest_price()
         if latest_price:
-            logger.info(f"Latest price: {latest_price}")
+            logger.info("Latest price: %s", latest_price)
 
         # Get historical candles
         candles = ws_client.get_candles(limit=10)
-        logger.info(f"Retrieved {len(candles)} candles")
+        logger.info("Retrieved %s candles", len(candles))
 
         # Get recent ticks
         ticks = ws_client.get_ticks(limit=20)
-        logger.info(f"Retrieved {len(ticks)} ticks")
+        logger.info("Retrieved %s ticks", len(ticks))
 
         # Keep running for a while
         logger.info("Streaming market data... (Press Ctrl+C to stop)")
@@ -106,7 +102,7 @@ async def integrate_with_existing_provider():
             try:
                 await self.fetch_historical_data()
             except Exception as e:
-                logger.warning(f"Failed to fetch historical data: {e}")
+                logger.warning("Failed to fetch historical data: %s", e)
 
         self._is_connected = True
         logger.info("Connected with enhanced WebSocket support")

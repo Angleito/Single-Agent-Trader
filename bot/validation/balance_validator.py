@@ -92,14 +92,7 @@ class BalanceValidator:
         self.validation_count = 0
         self.error_count = 0
 
-        logger.info(
-            f"BalanceValidator initialized with thresholds:\n"
-            f"  • Balance range: ${self.thresholds.min_balance} - ${self.thresholds.max_balance}\n"
-            f"  • Max change: {self.thresholds.max_balance_change_pct}% or ${self.thresholds.max_absolute_change}\n"
-            f"  • Precision: {self.thresholds.decimal_places} decimal places\n"
-            f"  • Anomaly threshold: {self.thresholds.anomaly_threshold_pct}%\n"
-            f"  • Max margin ratio: {self.thresholds.max_margin_ratio:.1%}"
-        )
+        logger.info("BalanceValidator initialized with thresholds:\n" "  • Balance range: $%s - $%s\n" "  • Max change: %s% or $%s\n" "  • Precision: %s decimal places\n" "  • Anomaly threshold: %s%\n" "  • Max margin ratio: %s" ), self.thresholds.min_balance, self.thresholds.max_balance, self.thresholds.max_balance_change_pct, self.thresholds.max_absolute_change, self.thresholds.decimal_places, self.thresholds.anomaly_threshold_pct, self.thresholds.max_margin_ratio:.1%)
 
     def validate_balance_range(
         self, balance: Decimal, context: str = "balance_check"
@@ -147,9 +140,7 @@ class BalanceValidator:
                     error_msg, error_code="NEGATIVE_BALANCE", validation_type="range"
                 )
 
-            logger.debug(
-                f"✅ Balance range validation passed: ${normalized_balance} ({context})"
-            )
+            logger.debug("✅ Balance range validation passed: $%s (%s)", normalized_balance, context)
 
             return {
                 "valid": True,
@@ -260,9 +251,7 @@ class BalanceValidator:
             self.balance_history.append(change_record)
             self._cleanup_old_history()
 
-            logger.debug(
-                f"✅ Balance change validation passed: ${old_normalized} -> ${new_normalized} "
-                f"({change_pct:.2f}%, {operation_type})"
+            logger.debug("✅ Balance change validation passed: $%s -> $%s " "(%s%, %s)", old_normalized, new_normalized, change_pct:.2f, operation_type)
             )
 
             return {
@@ -334,9 +323,7 @@ class BalanceValidator:
             # Normalize to correct precision
             normalized_balance = self._normalize_balance(balance, is_crypto)
 
-            logger.debug(
-                f"✅ Balance precision validation passed: {normalized_balance}"
-            )
+            logger.debug("✅ Balance precision validation passed: %s", normalized_balance)
 
             return {
                 "valid": True,
@@ -401,7 +388,7 @@ class BalanceValidator:
                     error_msg, error_code="BALANCE_ANOMALY", validation_type="anomaly"
                 )
 
-            logger.debug(f"✅ No balance anomalies detected for: ${normalized_balance}")
+            logger.debug("✅ No balance anomalies detected for: $%s", normalized_balance)
 
             return {
                 "valid": True,
@@ -514,10 +501,7 @@ class BalanceValidator:
                         validation_type="margin",
                     )
 
-            logger.debug(
-                f"✅ Margin validation passed: balance=${normalized_balance}, "
-                f"used=${normalized_used_margin}, ratio={margin_ratio:.1%}"
-            )
+            logger.debug("✅ Margin validation passed: balance=$%s, " "used=$%s, ratio=%s" ), normalized_balance, normalized_used_margin, margin_ratio:.1%)
 
             return {
                 "valid": True,
@@ -591,10 +575,7 @@ class BalanceValidator:
                     validation_type="reconciliation",
                 )
 
-            logger.debug(
-                f"✅ Balance reconciliation passed: calculated=${calc_normalized}, "
-                f"reported=${reported_normalized}, difference={diff_pct:.4f}%"
-            )
+            logger.debug("✅ Balance reconciliation passed: calculated=$%s, " "reported=$%s, difference=%s%" ), calc_normalized, reported_normalized, diff_pct:.4f)
 
             return {
                 "valid": True,
@@ -662,7 +643,7 @@ class BalanceValidator:
             # Anomaly detection
             validation_results["anomaly"] = self.detect_balance_anomalies(balance)
 
-            logger.info(f"✅ Comprehensive balance validation passed for ${balance}")
+            logger.info("✅ Comprehensive balance validation passed for $%s", balance)
 
             return {
                 "valid": True,
@@ -673,7 +654,7 @@ class BalanceValidator:
             }
 
         except BalanceValidationError as e:
-            logger.exception(f"❌ Comprehensive balance validation failed: {e}")
+            logger.exception("❌ Comprehensive balance validation failed: %s", e)
             validation_results["error"] = {
                 "error_code": e.error_code,
                 "validation_type": e.validation_type,
@@ -841,7 +822,5 @@ class BalanceValidator:
 
     def _log_validation_error(self, message: str, context: str, error_type: str):
         """Log validation error with context."""
-        logger.error(
-            f"❌ Balance Validation Error [{error_type}] in {context}: {message}"
-        )
+        logger.error("❌ Balance Validation Error [%s] in %s: %s", error_type, context, message)
         self.last_validation_time = datetime.now(UTC)

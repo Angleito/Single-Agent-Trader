@@ -90,11 +90,7 @@ class LLMPerformanceMonitor:
         self.slow_response_threshold_ms = target_response_time_ms * 1.5  # 3 seconds
         self.critical_response_threshold_ms = target_response_time_ms * 2.5  # 5 seconds
 
-        logger.info(
-            f"🚀 LLM Performance Monitor initialized: "
-            f"Target={target_response_time_ms}ms, "
-            f"Baseline={baseline_response_time_ms}ms"
-        )
+        logger.info("🚀 LLM Performance Monitor initialized: " "Target=%sms, " "Baseline=%sms" ), target_response_time_ms, baseline_response_time_ms)
 
     def record_request(
         self,
@@ -137,9 +133,7 @@ class LLMPerformanceMonitor:
 
         # Log achievement of target
         if response_time_ms <= self.target_response_time_ms and not cache_hit:
-            logger.info(
-                f"🎯 TARGET ACHIEVED: {response_time_ms:.1f}ms "
-                f"(target: {self.target_response_time_ms}ms) "
+            logger.info("🎯 TARGET ACHIEVED: %sms " "(target: %sms) ", response_time_ms:.1f, self.target_response_time_ms)
                 f"Action: {decision_action}"
             )
 
@@ -151,28 +145,20 @@ class LLMPerformanceMonitor:
             metric: Performance metric to check
         """
         if metric.error_occurred:
-            logger.error(
-                f"🚨 LLM Error: Request failed after {metric.response_time_ms:.1f}ms"
-            )
+            logger.error("🚨 LLM Error: Request failed after %sms", metric.response_time_ms:.1f)
             return
 
         if metric.response_time_ms >= self.critical_response_threshold_ms:
-            logger.error(
-                f"🚨 CRITICAL SLOW: {metric.response_time_ms:.1f}ms "
-                f"(threshold: {self.critical_response_threshold_ms}ms) "
+            logger.error("🚨 CRITICAL SLOW: %sms " "(threshold: %sms) ", metric.response_time_ms:.1f, self.critical_response_threshold_ms)
                 f"Cache: {'HIT' if metric.cache_hit else 'MISS'}"
             )
         elif metric.response_time_ms >= self.slow_response_threshold_ms:
-            logger.warning(
-                f"⚠️ SLOW RESPONSE: {metric.response_time_ms:.1f}ms "
-                f"(threshold: {self.slow_response_threshold_ms}ms) "
+            logger.warning("⚠️ SLOW RESPONSE: %sms " "(threshold: %sms) ", metric.response_time_ms:.1f, self.slow_response_threshold_ms)
                 f"Cache: {'HIT' if metric.cache_hit else 'MISS'}"
             )
         elif metric.response_time_ms <= self.target_response_time_ms:
             if not metric.cache_hit:
-                logger.info(
-                    f"⚡ FAST: {metric.response_time_ms:.1f}ms "
-                    f"(target: {self.target_response_time_ms}ms) FRESH"
+                logger.info("⚡ FAST: %sms " "(target: %sms) FRESH", metric.response_time_ms:.1f, self.target_response_time_ms)
                 )
 
     def get_current_stats(self) -> PerformanceStats:
@@ -346,9 +332,7 @@ class LLMPerformanceMonitor:
         Args:
             report_interval_minutes: Interval between performance reports
         """
-        logger.info(
-            f"🚀 Starting continuous performance monitoring (reports every {report_interval_minutes}min)"
-        )
+        logger.info("🚀 Starting continuous performance monitoring (reports every %smin)", report_interval_minutes)
 
         while True:
             try:
@@ -357,12 +341,7 @@ class LLMPerformanceMonitor:
                 stats = self.get_current_stats()
 
                 # Log performance summary
-                logger.info(
-                    f"📊 Performance Summary: "
-                    f"Avg={stats.avg_response_time_ms:.1f}ms, "
-                    f"Cache={stats.cache_hit_rate:.1f}%, "
-                    f"Target={'✅' if stats.target_achieved else '❌'}"
-                )
+                logger.info("📊 Performance Summary: " "Avg=%sms, " "Cache=%s%, " "Target=%s" ), stats.avg_response_time_ms:.1f, stats.cache_hit_rate:.1f, '✅' if stats.target_achieved else '❌')
 
                 # Generate full report if requested or if performance is poor
                 if not stats.target_achieved or stats.error_rate > 10:
@@ -372,7 +351,7 @@ class LLMPerformanceMonitor:
                 logger.info("Performance monitoring stopped")
                 break
             except Exception as e:
-                logger.exception(f"Error in performance monitoring: {e}")
+                logger.exception("Error in performance monitoring: %s", e)
 
     def get_cache_effectiveness_analysis(self) -> dict[str, Any]:
         """

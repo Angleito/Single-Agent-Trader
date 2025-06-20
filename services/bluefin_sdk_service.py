@@ -295,13 +295,7 @@ class BluefinSDKService:
             ]
 
         # Log audit entry
-        logger.info(
-            f"Balance audit: {operation} - {status}",
-            extra={
-                "audit_entry": audit_entry,
-                "operation_type": "balance_audit",
-            },
-        )
+        logger.info("Balance audit: %s - %s", extra=%s, ), operation, status,  "audit_entry": audit_entry, "operation_type": "balance_audit", )
 
     def get_balance_audit_trail(self, limit: int = 100) -> list[dict]:
         """
@@ -501,17 +495,7 @@ class BluefinSDKService:
         jitter = delay * config["jitter_factor"] * random.uniform(-1, 1)
         final_delay = max(0.1, delay + jitter)  # Minimum 100ms delay
 
-        logger.debug(
-            f"Calculated retry delay for {operation}",
-            extra={
-                "service_id": self.service_id,
-                "attempt": attempt,
-                "operation": operation,
-                "base_delay": delay,
-                "jitter": jitter,
-                "final_delay": final_delay,
-            },
-        )
+        logger.debug("Calculated retry delay for %s", extra=%s, ), operation,  "service_id": self.service_id, "attempt": attempt, "operation": operation, "base_delay": delay, "jitter": jitter, "final_delay": final_delay, )
 
         return final_delay
 
@@ -632,14 +616,7 @@ class BluefinSDKService:
                 self.last_successful_balance_fetch = time.time()
                 self._record_success()
 
-                logger.debug(
-                    f"Balance operation {operation_name} succeeded",
-                    extra={
-                        "service_id": self.service_id,
-                        "operation": operation_name,
-                        "attempt": attempt + 1,
-                    },
-                )
+                logger.debug("Balance operation %s succeeded", extra=%s, ), operation_name,  "service_id": self.service_id, "operation": operation_name, "attempt": attempt + 1, )
 
                 return result
 
@@ -647,28 +624,14 @@ class BluefinSDKService:
                 last_exception = e
                 error_type = self._classify_error(e)
 
-                logger.warning(
-                    f"Balance operation {operation_name} failed",
-                    extra={
-                        "service_id": self.service_id,
-                        "operation": operation_name,
-                        "attempt": attempt + 1,
-                        "error_type": error_type.value,
-                        "error_class": type(e).__name__,
+                logger.warning("Balance operation %s failed", extra={ "service_id": self.service_id, "operation": operation_name, "attempt": attempt + 1, "error_type": error_type.value, "error_class": type(e).__name__,, operation_name)
                         "error_message": str(e),
                     },
                 )
 
                 # Don't retry permanent errors
                 if error_type == ErrorType.PERMANENT:
-                    logger.exception(
-                        f"Permanent error in {operation_name}, not retrying",
-                        extra={
-                            "service_id": self.service_id,
-                            "operation": operation_name,
-                            "error_type": error_type.value,
-                        },
-                    )
+                    logger.exception("Permanent error in %s, not retrying", extra=%s, ), operation_name,  "service_id": self.service_id, "operation": operation_name, "error_type": error_type.value, )
                     break
 
                 # If this is the last attempt, don't wait
@@ -677,16 +640,7 @@ class BluefinSDKService:
 
                 # Calculate delay and wait
                 delay = self._calculate_retry_delay(attempt, operation_name)
-                logger.info(
-                    f"Retrying {operation_name} in {delay:.2f}s",
-                    extra={
-                        "service_id": self.service_id,
-                        "operation": operation_name,
-                        "attempt": attempt + 1,
-                        "max_retries": config["max_retries"],
-                        "delay": delay,
-                    },
-                )
+                logger.info("Retrying %s in %ss", extra=%s, ), operation_name, delay:.2f,  "service_id": self.service_id, "operation": operation_name, "attempt": attempt + 1, "max_retries": config["max_retries"], "delay": delay, )
 
                 await asyncio.sleep(delay)
 
@@ -727,15 +681,7 @@ class BluefinSDKService:
             ):
                 # Use testnet fallback for unsupported symbols
                 fallback_symbol = get_testnet_symbol_fallback(symbol)
-                logger.warning(
-                    f"Symbol {symbol} not available on testnet, using fallback: {fallback_symbol}",
-                    extra={
-                        "service_id": self.service_id,
-                        "original_symbol": symbol,
-                        "fallback_symbol": fallback_symbol,
-                        "network": self.network,
-                    },
-                )
+                logger.warning("Symbol %s not available on testnet, using fallback: %s", extra=%s, ), symbol, fallback_symbol,  "service_id": self.service_id, "original_symbol": symbol, "fallback_symbol": fallback_symbol, "network": self.network, )
                 symbol = fallback_symbol
 
             # Use the symbol converter for robust conversion
@@ -793,7 +739,7 @@ class BluefinSDKService:
         try:
             return self.symbol_converter.from_market_symbol(market_symbol)
         except Exception as e:
-            logger.exception(f"Failed to convert market symbol to string: {e}")
+            logger.exception("Failed to convert market symbol to string: %s", e)
             return str(market_symbol)
 
     def _validate_symbol(self, symbol: str) -> bool:
@@ -1103,16 +1049,7 @@ class BluefinSDKService:
             # Too many failures - open circuit
             self.circuit_state = "OPEN"
             self.circuit_open_until = current_time + self.circuit_recovery_timeout
-            logger.warning(
-                f"Circuit breaker opened due to {self.failure_count} failures",
-                extra={
-                    "service_id": self.service_id,
-                    "failure_threshold": self.circuit_failure_threshold,
-                    "recovery_timeout": self.circuit_recovery_timeout,
-                    "failure_types": self.failure_types,
-                    "primary_failure_type": max(
-                        self.failure_types, key=self.failure_types.get
-                    ),
+            logger.warning("Circuit breaker opened due to %s failures", extra={ "service_id": self.service_id, "failure_threshold": self.circuit_failure_threshold, "recovery_timeout": self.circuit_recovery_timeout, "failure_types": self.failure_types, "primary_failure_type": max( self.failure_types, key=self.failure_types.get ),, self.failure_count)
                 },
             )
 
@@ -1138,10 +1075,7 @@ class BluefinSDKService:
             # Gradual recovery in closed state
             old_count = self.failure_count
             self.failure_count = max(0, self.failure_count - 1)
-            logger.debug(
-                f"API call succeeded, reducing failure count from {old_count} to {self.failure_count}",
-                extra={"service_id": self.service_id},
-            )
+            logger.debug("API call succeeded, reducing failure count from %s to %s", extra=%s, ), old_count, self.failure_count, "service_id": self.service_id)
 
     def reset_circuit_breaker(self, force: bool = False) -> bool:
         """
@@ -1185,23 +1119,9 @@ class BluefinSDKService:
         else:
             if self.circuit_state == "OPEN":
                 remaining_time = self.circuit_open_until - current_time
-                logger.warning(
-                    f"SDK circuit breaker reset not ready - {remaining_time:.1f}s remaining",
-                    extra={
-                        "service_id": self.service_id,
-                        "remaining_seconds": remaining_time,
-                        "current_state": self.circuit_state,
-                        "use_force_to_override": True,
-                    },
-                )
+                logger.warning("SDK circuit breaker reset not ready - %ss remaining", extra=%s, ), remaining_time:.1f,  "service_id": self.service_id, "remaining_seconds": remaining_time, "current_state": self.circuit_state, "use_force_to_override": True, )
             else:
-                logger.info(
-                    f"SDK circuit breaker already in {self.circuit_state} state",
-                    extra={
-                        "service_id": self.service_id,
-                        "current_state": self.circuit_state,
-                    },
-                )
+                logger.info("SDK circuit breaker already in %s state", extra=%s, ), self.circuit_state,  "service_id": self.service_id, "current_state": self.circuit_state, )
             return False
 
     def get_circuit_breaker_status(self) -> dict[str, Any]:
@@ -1337,8 +1257,7 @@ class BluefinSDKService:
     async def _retry_request(self, func, *args, **kwargs):
         """Execute request with enhanced exponential backoff retry and circuit breaker."""
         if await self._is_circuit_open():
-            logger.warning(
-                f"Circuit breaker is {self._get_circuit_state()}, skipping request",
+            logger.warning("Circuit breaker is %s, skipping request",, self._get_circuit_state())
                 extra={"service_id": self.service_id},
             )
             return None
@@ -1362,16 +1281,12 @@ class BluefinSDKService:
                     delay = (
                         self.base_retry_delay * (2**attempt) * random.uniform(0.8, 1.2)
                     )
-                    logger.warning(
-                        f"Timeout error (attempt {attempt + 1}/{self.max_retries}), retrying in {delay:.2f}s: {e}",
+                    logger.warning("Timeout error (attempt %s/%s), retrying in %ss: %s",, attempt + 1, self.max_retries, delay:.2f, e)
                         extra={"service_id": self.service_id},
                     )
                     await asyncio.sleep(delay)
                 else:
-                    logger.exception(
-                        f"Timeout error after {self.max_retries} attempts: {e}",
-                        extra={"service_id": self.service_id},
-                    )
+                    logger.exception("Timeout error after %s attempts: %s", extra=%s, ), self.max_retries, e, "service_id": self.service_id)
             except ClientError as e:
                 last_exception = e
 
@@ -1393,8 +1308,7 @@ class BluefinSDKService:
                     delay = (
                         self.base_retry_delay * (2**attempt) * random.uniform(0.8, 1.2)
                     )
-                    logger.warning(
-                        f"Client error (attempt {attempt + 1}/{self.max_retries}), retrying in {delay:.2f}s: {e}",
+                    logger.warning("Client error (attempt %s/%s), retrying in %ss: %s",, attempt + 1, self.max_retries, delay:.2f, e)
                         extra={
                             "service_id": self.service_id,
                             "failure_type": failure_type,
@@ -1402,19 +1316,9 @@ class BluefinSDKService:
                     )
                     await asyncio.sleep(delay)
                 else:
-                    logger.exception(
-                        f"Client error after {self.max_retries} attempts: {e}",
-                        extra={
-                            "service_id": self.service_id,
-                            "failure_type": failure_type,
-                        },
-                    )
+                    logger.exception("Client error after %s attempts: %s", extra=%s, ), self.max_retries, e,  "service_id": self.service_id, "failure_type": failure_type, )
             except Exception as e:
-                logger.exception(
-                    f"Non-retryable error: {e}",
-                    extra={
-                        "service_id": self.service_id,
-                        "error_type": type(e).__name__,
+                logger.exception("Non-retryable error: %s", extra={ "service_id": self.service_id, "error_type": type(e).__name__,, e)
                     },
                 )
                 self._record_api_failure("unknown")
@@ -1466,8 +1370,7 @@ class BluefinSDKService:
             # Check if the key is a mnemonic phrase (12 or 24 words)
             words = original_key.split()
             if len(words) in [12, 24]:
-                logger.info(
-                    f"Detected {len(words)}-word mnemonic phrase, keeping original format for BluefinClient",
+                logger.info("Detected %s-word mnemonic phrase, keeping original format for BluefinClient",, len(words))
                     extra={
                         "service_id": self.service_id,
                         "mnemonic_word_count": len(words),
@@ -1589,8 +1492,7 @@ class BluefinSDKService:
             init_retry_delay = 2.0
 
             for init_attempt in range(max_init_retries):
-                logger.info(
-                    f"Creating Bluefin client instance (attempt {init_attempt + 1}/{max_init_retries})",
+                logger.info("Creating Bluefin client instance (attempt %s/%s)",, init_attempt + 1, max_init_retries)
                     extra={
                         "service_id": self.service_id,
                         "network": self.network,
@@ -1674,8 +1576,7 @@ class BluefinSDKService:
                             delay = init_retry_delay * (
                                 2**init_attempt
                             )  # Exponential backoff
-                            logger.warning(
-                                f"Client initialization failed (attempt {init_attempt + 1}/{max_init_retries}), retrying in {delay:.1f}s: {e}",
+                            logger.warning("Client initialization failed (attempt %s/%s), retrying in %ss: %s",, init_attempt + 1, max_init_retries, delay:.1f, e)
                                 extra={
                                     "service_id": self.service_id,
                                     "error_type": type(e).__name__,
@@ -1689,11 +1590,7 @@ class BluefinSDKService:
                             continue
                         else:
                             # Non-retryable error
-                            logger.exception(
-                                f"Non-retryable initialization error: {e}",
-                                extra={
-                                    "service_id": self.service_id,
-                                    "error_type": type(e).__name__,
+                            logger.exception("Non-retryable initialization error: %s", extra={ "service_id": self.service_id, "error_type": type(e).__name__,, e)
                                     "error_message": str(e),
                                     "attempt": init_attempt + 1,
                                     "non_retryable": True,
@@ -1776,9 +1673,7 @@ class BluefinSDKService:
                         logger.debug("Called Bluefin client cleanup method")
 
                 except Exception as session_err:
-                    logger.warning(
-                        f"Error closing Bluefin client sessions: {session_err}"
-                    )
+                    logger.warning("Error closing Bluefin client sessions: %s", session_err)
 
                 # Clear client reference
                 self.client = None
@@ -1788,7 +1683,7 @@ class BluefinSDKService:
             self._cleanup_complete = True
             logger.info("Bluefin SDK service cleanup completed")
         except Exception as e:
-            logger.exception(f"Error during Bluefin SDK service cleanup: {e}")
+            logger.exception("Error during Bluefin SDK service cleanup: %s", e)
 
     async def get_account_data(self) -> dict[str, Any]:
         """
@@ -2240,10 +2135,10 @@ class BluefinSDKService:
                         "total": str(margin_response) if margin_response else "0.0",
                     }
 
-                logger.info(f"Account margin info: {account_data['margin']}")
+                logger.info("Account margin info: %s", account_data['margin'])
 
             except Exception as e:
-                logger.exception(f"Failed to get margin info: {e}")
+                logger.exception("Failed to get margin info: %s", e)
                 if account_data["error"]:
                     account_data["error"] += f", Margin fetch failed: {e!s}"
                 else:
@@ -2287,8 +2182,8 @@ class BluefinSDKService:
             return account_data
 
         except Exception as e:
-            logger.exception(f"Error getting account data: {e}")
-            logger.exception(f"Exception type: {type(e)}")
+            logger.exception("Error getting account data: %s", e)
+            logger.exception("Exception type: %s", type(e))
 
             # Handle known Bluefin SDK data access issues
             error_msg = str(e)
@@ -2329,9 +2224,7 @@ class BluefinSDKService:
                 for pos in position:
                     if pos:  # Skip None/empty entries
                         # Log position symbol only for debugging
-                        logger.debug(
-                            f"Processing position for symbol: {pos.get('symbol', 'Unknown')}"
-                        )
+                        logger.debug("Processing position for symbol: %s", pos.get('symbol', 'Unknown'))
 
                         # Check if there's a direct side field
                         if "side" in pos:
@@ -2366,9 +2259,7 @@ class BluefinSDKService:
             # If it's a single position dict
             elif isinstance(position, dict):
                 # Log position symbol only for debugging
-                logger.debug(
-                    f"Processing position for symbol: {position.get('symbol', 'Unknown')}"
-                )
+                logger.debug("Processing position for symbol: %s", position.get('symbol', 'Unknown'))
 
                 # Check if there's a direct side field
                 if "side" in position:
@@ -2400,11 +2291,11 @@ class BluefinSDKService:
                     }
                 ]
             else:
-                logger.warning(f"Unexpected position type: {type(position)}")
+                logger.warning("Unexpected position type: %s", type(position))
                 return []
 
         except Exception as e:
-            logger.exception(f"Error getting positions: {e}")
+            logger.exception("Error getting positions: %s", e)
             return []
 
     def _validate_and_normalize_symbol(self, symbol: str) -> str:
@@ -2428,15 +2319,7 @@ class BluefinSDKService:
             symbol, "testnet"
         ):
             fallback_symbol = get_testnet_symbol_fallback(symbol)
-            logger.warning(
-                f"Symbol {symbol} not available on testnet, using fallback: {fallback_symbol}",
-                extra={
-                    "service_id": self.service_id,
-                    "original_symbol": symbol,
-                    "fallback_symbol": fallback_symbol,
-                    "network": self.network,
-                },
-            )
+            logger.warning("Symbol %s not available on testnet, using fallback: %s", extra=%s, ), symbol, fallback_symbol,  "service_id": self.service_id, "original_symbol": symbol, "fallback_symbol": fallback_symbol, "network": self.network, )
             symbol = fallback_symbol
 
         # Validate using symbol utilities
@@ -2448,7 +2331,7 @@ class BluefinSDKService:
                 normalized = normalize_symbol(symbol, "PERP")
 
                 if self._validate_symbol(normalized):
-                    logger.info(f"Normalized invalid symbol {symbol} to {normalized}")
+                    logger.info("Normalized invalid symbol %s to %s", symbol, normalized)
                     return normalized
                 else:
                     raise BluefinDataError(
@@ -2497,7 +2380,7 @@ class BluefinSDKService:
             return {"status": "success", "order": response}
 
         except Exception as e:
-            logger.exception(f"Error placing order: {e}")
+            logger.exception("Error placing order: %s", e)
             return {"status": "error", "message": str(e)}
 
     async def cancel_order(self, order_id: str) -> bool:
@@ -2509,7 +2392,7 @@ class BluefinSDKService:
             await self.client.cancel_order(order_id)
             return True
         except Exception as e:
-            logger.exception(f"Error canceling order: {e}")
+            logger.exception("Error canceling order: %s", e)
             return False
 
     async def set_leverage(self, symbol: str, leverage: int) -> bool:
@@ -2527,27 +2410,23 @@ class BluefinSDKService:
             )
             return True
         except Exception as e:
-            logger.exception(f"Error setting leverage for {symbol}: {e}")
+            logger.exception("Error setting leverage for %s: %s", symbol, e)
             return False
 
     async def get_candlestick_data(
         self, symbol: str, interval: str, limit: int, start_time: int, end_time: int
     ) -> list[list]:
         """Get historical candlestick data with robust fallback chain."""
-        logger.info(
-            f"🔍 Fetching candlestick data for {symbol}, interval: {interval}, limit: {limit}"
-        )
+        logger.info("🔍 Fetching candlestick data for %s, interval: %s, limit: %s", symbol, interval, limit)
 
         # Validate and normalize symbol first
         try:
             validated_symbol = self._validate_and_normalize_symbol(symbol)
             if validated_symbol != symbol:
-                logger.info(f"Symbol normalized from {symbol} to {validated_symbol}")
+                logger.info("Symbol normalized from %s to %s", symbol, validated_symbol)
                 symbol = validated_symbol
         except Exception as e:
-            logger.warning(
-                f"Symbol validation failed for {symbol}: {e}, proceeding with original"
-            )
+            logger.warning("Symbol validation failed for %s: %s, proceeding with original", symbol, e)
 
         fallback_sources = [
             ("REST_API", self._get_candles_via_rest_api_with_retry),
@@ -2556,25 +2435,19 @@ class BluefinSDKService:
 
         for source_name, method in fallback_sources:
             try:
-                logger.info(f"🔄 Attempting data fetch via {source_name}")
+                logger.info("🔄 Attempting data fetch via %s", source_name)
 
                 # All remaining methods use async retry logic
                 candles = await method(symbol, interval, limit, start_time, end_time)
 
                 if candles and len(candles) > 0:
-                    logger.info(
-                        f"✅ Successfully retrieved {len(candles)} candles from {source_name}"
-                    )
+                    logger.info("✅ Successfully retrieved %s candles from %s", len(candles), source_name)
                     return candles
                 else:
-                    logger.warning(
-                        f"❌ {source_name} returned no data, trying next fallback"
-                    )
+                    logger.warning("❌ %s returned no data, trying next fallback", source_name)
 
             except Exception as e:
-                logger.exception(
-                    f"❌ {source_name} failed with error: {e}, trying next fallback"
-                )
+                logger.exception("❌ %s failed with error: %s, trying next fallback", source_name, e)
 
         # If we reach here, all methods failed
         logger.error("🚨 ALL DATA SOURCES FAILED - no real-time data available")
@@ -2589,22 +2462,16 @@ class BluefinSDKService:
 
         for attempt in range(max_retries):
             try:
-                logger.info(
-                    f"🌐 REST API attempt {attempt + 1}/{max_retries} for {symbol}"
-                )
+                logger.info("🌐 REST API attempt %s/%s for %s", attempt + 1, max_retries, symbol)
                 candles = await self._get_candles_via_rest_api(
                     symbol, interval, limit, start_time, end_time
                 )
 
                 if candles and len(candles) > 0:
-                    logger.info(
-                        f"✅ REST API attempt {attempt + 1} succeeded with {len(candles)} candles"
-                    )
+                    logger.info("✅ REST API attempt %s succeeded with %s candles", attempt + 1, len(candles))
                     return candles
                 else:
-                    logger.warning(
-                        f"⚠️ REST API attempt {attempt + 1} returned empty data"
-                    )
+                    logger.warning("⚠️ REST API attempt %s returned empty data", attempt + 1)
 
             except Exception as e:
                 wait_time = base_delay * (2**attempt) + random.uniform(
@@ -2612,14 +2479,10 @@ class BluefinSDKService:
                 )  # Exponential backoff with jitter
 
                 if attempt < max_retries - 1:
-                    logger.warning(
-                        f"⚠️ REST API attempt {attempt + 1} failed: {e}. Retrying in {wait_time:.1f}s"
-                    )
+                    logger.warning("⚠️ REST API attempt %s failed: %s. Retrying in %ss", attempt + 1, e, wait_time:.1f)
                     await asyncio.sleep(wait_time)
                 else:
-                    logger.exception(
-                        f"❌ REST API attempt {attempt + 1} failed (final): {e}"
-                    )
+                    logger.exception("❌ REST API attempt %s failed (final): %s", attempt + 1, e)
                     raise
 
         # Should not reach here, but just in case
@@ -2638,11 +2501,11 @@ class BluefinSDKService:
 
         for attempt in range(max_retries):
             try:
-                logger.info(f"🔧 SDK attempt {attempt + 1}/{max_retries} for {symbol}")
+                logger.info("🔧 SDK attempt %s/%s for %s", attempt + 1, max_retries, symbol)
 
                 # Convert symbol to market symbol enum object (for SDK compatibility)
                 market_symbol_enum = self._get_market_symbol(symbol)
-                logger.debug(f"Using market symbol enum: {market_symbol_enum}")
+                logger.debug("Using market symbol enum: %s", market_symbol_enum)
 
                 params = {
                     "symbol": market_symbol_enum,
@@ -2659,13 +2522,11 @@ class BluefinSDKService:
                 if end_time > 0:
                     params["endTime"] = end_time
 
-                logger.debug(f"SDK call params: {params}")
+                logger.debug("SDK call params: %s", params)
                 candles = await self.client.get_market_candle_stick_data(params)
 
                 if candles and len(candles) > 0:
-                    logger.info(
-                        f"✅ SDK attempt {attempt + 1} got {len(candles)} raw candles"
-                    )
+                    logger.info("✅ SDK attempt %s got %s raw candles", attempt + 1, len(candles))
 
                     # Convert to expected format: [timestamp, open, high, low, close, volume]
                     formatted_candles = []
@@ -2681,33 +2542,25 @@ class BluefinSDKService:
                                 formatted_candle = convert_candle_data(candle, symbol)
                                 formatted_candles.append(formatted_candle)
                             except (ValueError, IndexError, TypeError) as format_error:
-                                logger.warning(
-                                    f"⚠️ Skipping malformed candle data: {format_error}"
-                                )
+                                logger.warning("⚠️ Skipping malformed candle data: %s", format_error)
                                 continue
 
                     if formatted_candles:
-                        logger.info(
-                            f"✅ SDK attempt {attempt + 1} succeeded with {len(formatted_candles)} formatted candles"
-                        )
+                        logger.info("✅ SDK attempt %s succeeded with %s formatted candles", attempt + 1, len(formatted_candles))
                         return formatted_candles
                     else:
-                        logger.warning(
-                            f"⚠️ SDK attempt {attempt + 1} - no valid candles after formatting"
-                        )
+                        logger.warning("⚠️ SDK attempt %s - no valid candles after formatting", attempt + 1)
                 else:
-                    logger.warning(f"⚠️ SDK attempt {attempt + 1} returned empty data")
+                    logger.warning("⚠️ SDK attempt %s returned empty data", attempt + 1)
 
             except Exception as e:
                 wait_time = base_delay * (2**attempt)
 
                 if attempt < max_retries - 1:
-                    logger.warning(
-                        f"⚠️ SDK attempt {attempt + 1} failed: {e}. Retrying in {wait_time:.1f}s"
-                    )
+                    logger.warning("⚠️ SDK attempt %s failed: %s. Retrying in %ss", attempt + 1, e, wait_time:.1f)
                     await asyncio.sleep(wait_time)
                 else:
-                    logger.exception(f"❌ SDK attempt {attempt + 1} failed (final): {e}")
+                    logger.exception("❌ SDK attempt %s failed (final): %s", attempt + 1, e)
                     raise
 
         # Should not reach here
@@ -2721,9 +2574,7 @@ class BluefinSDKService:
         import random
         import time
 
-        logger.info(
-            f"🎭 Generating realistic mock candles for {symbol} from {start_time} to {end_time}"
-        )
+        logger.info("🎭 Generating realistic mock candles for %s from %s to %s", symbol, start_time, end_time)
 
         # Updated base prices and volatility characteristics for different symbols
         market_data = {
@@ -2756,9 +2607,7 @@ class BluefinSDKService:
             start_time = current_time - (num_candles * interval_seconds * 1000)
 
         if num_candles <= 0:
-            logger.warning(
-                f"⚠️ Invalid number of candles calculated: {num_candles}, using default 100"
-            )
+            logger.warning("⚠️ Invalid number of candles calculated: %s, using default 100", num_candles)
             num_candles = 100
 
         candles = []
@@ -2844,11 +2693,9 @@ class BluefinSDKService:
             ):
                 valid_candles.append(candle)
             else:
-                logger.debug(f"⚠️ Skipping invalid candle: {candle}")
+                logger.debug("⚠️ Skipping invalid candle: %s", candle)
 
-        logger.info(
-            f"✅ Generated {len(valid_candles)} realistic mock candles for {symbol} (trend: {['bearish', 'sideways', 'bullish'][trend_direction + 1]})"
-        )
+        logger.info("✅ Generated %s realistic mock candles for %s (trend: %s)", len(valid_candles), symbol, ['bearish', 'sideways', 'bullish'][trend_direction + 1])
         return valid_candles
 
     def _interval_to_seconds(self, interval: str) -> int:
@@ -2905,23 +2752,11 @@ class BluefinSDKService:
         # Handle unsupported sub-minute intervals with explicit warnings
         sub_minute_intervals = {"15s", "30s", "45s"}
         if interval in sub_minute_intervals:
-            logger.warning(
-                f"⚠️ GRANULARITY LOSS: Bluefin does not support {interval} intervals. "
-                f"Converting to 1m - this will result in lower data granularity!",
-                extra={
-                    "service_id": self.service_id,
-                    "requested_interval": interval,
-                    "converted_interval": "1m",
-                    "granularity_loss": True,
-                    "impact": "Data points will be aggregated from higher frequency to 1-minute candles",
-                },
-            )
+            logger.warning("⚠️ GRANULARITY LOSS: Bluefin does not support %s intervals. " "Converting to 1m - this will result in lower data granularity!", extra=%s, ), interval,  "service_id": self.service_id, "requested_interval": interval, "converted_interval": "1m", "granularity_loss": True, "impact": "Data points will be aggregated from higher frequency to 1-minute candles", )
             return "1m"
 
         # Handle other unsupported intervals
-        logger.warning(
-            f"Unsupported interval '{interval}' - using default 1m. "
-            f"Supported intervals: {list(supported_intervals.keys())}",
+        logger.warning("Unsupported interval '%s' - using default 1m. " "Supported intervals: %s",, interval, list(supported_intervals.keys()))
             extra={
                 "service_id": self.service_id,
                 "requested_interval": interval,
@@ -2937,19 +2772,19 @@ class BluefinSDKService:
         """Get candlestick data via direct REST API call to Bluefin."""
         # Validate parameters
         if not self._validate_symbol(symbol):
-            logger.error(f"Invalid symbol: {symbol}")
+            logger.error("Invalid symbol: %s", symbol)
             return []
 
         if not self._validate_limit(limit):
-            logger.error(f"Invalid limit: {limit}")
+            logger.error("Invalid limit: %s", limit)
             return []
 
         if start_time > 0 and not self._validate_timestamp(start_time):
-            logger.error(f"Invalid start_time: {start_time}")
+            logger.error("Invalid start_time: %s", start_time)
             return []
 
         if end_time > 0 and not self._validate_timestamp(end_time):
-            logger.error(f"Invalid end_time: {end_time}")
+            logger.error("Invalid end_time: %s", end_time)
             return []
 
         # Convert symbol to the string format that the REST API expects
@@ -2961,30 +2796,19 @@ class BluefinSDKService:
             # Try base symbol format first (SUI, BTC, ETH) as per API docs
             if symbol_str.endswith("-PERP"):
                 base_symbol = symbol_str.replace("-PERP", "")
-                logger.debug(
-                    f"Using base symbol format for real-time data: {base_symbol}"
-                )
+                logger.debug("Using base symbol format for real-time data: %s", base_symbol)
                 symbol_str = base_symbol
             else:
-                logger.debug(
-                    f"Using existing symbol format for real-time data: {symbol_str}"
-                )
+                logger.debug("Using existing symbol format for real-time data: %s", symbol_str)
         elif not symbol_str.endswith("-PERP"):
             symbol_str = f"{symbol_str}-PERP"
-            logger.debug(f"Using PERP format for historical data: {symbol_str}")
+            logger.debug("Using PERP format for historical data: %s", symbol_str)
 
         async def _make_request():
             # Use the correct Bluefin REST API endpoint from centralized config
             api_url = get_rest_api_url(self.network.lower())
 
-            logger.debug(
-                f"Using Bluefin REST API endpoint for {self.network} network: {api_url}",
-                extra={
-                    "service_id": self.service_id,
-                    "network": self.network,
-                    "api_url": api_url,
-                },
-            )
+            logger.debug("Using Bluefin REST API endpoint for %s network: %s", extra=%s, ), self.network, api_url,  "service_id": self.service_id, "network": self.network, "api_url": api_url, )
 
             # Build request parameters according to Bluefin API docs
             params = {
@@ -3007,16 +2831,12 @@ class BluefinSDKService:
                     params["startTime"] = start_time
                     params["endTime"] = end_time
                 else:
-                    logger.warning(
-                        f"Skipping future time params: start={start_time}, end={end_time}, current={current_time_ms}"
-                    )
+                    logger.warning("Skipping future time params: start=%s, end=%s, current=%s", start_time, end_time, current_time_ms)
             else:
-                logger.info(
-                    f"Requesting latest {limit} candles without time constraints"
-                )
+                logger.info("Requesting latest %s candles without time constraints", limit)
 
             url = f"{api_url}/candlestickData"
-            logger.info(f"Making REST API call to {url} with params: {params}")
+            logger.info("Making REST API call to %s with params: %s", url, params)
 
             # Add headers for better API compatibility
             headers = {
@@ -3040,9 +2860,7 @@ class BluefinSDKService:
 
                         # Validate response structure
                         if not isinstance(data, list):
-                            logger.warning(
-                                f"Expected list response, got {type(data)}: {data}"
-                            )
+                            logger.warning("Expected list response, got %s: %s", type(data), data)
                             return []
 
                         if len(data) == 0:
@@ -3051,18 +2869,14 @@ class BluefinSDKService:
                             )
                             return []
 
-                        logger.info(
-                            f"Successfully got {len(data)} candles from Bluefin REST API"
-                        )
+                        logger.info("Successfully got %s candles from Bluefin REST API", len(data))
 
                         # Format candles: [timestamp, open, high, low, close, volume]
                         # Convert from Bluefin's 18-decimal format
                         formatted_candles = []
                         for i, candle in enumerate(data):
                             if not isinstance(candle, list) or len(candle) < 6:
-                                logger.warning(
-                                    f"Invalid candle format at index {i}: {candle}"
-                                )
+                                logger.warning("Invalid candle format at index %s: %s", i, candle)
                                 continue
 
                             try:
@@ -3075,15 +2889,11 @@ class BluefinSDKService:
                                 formatted_candle = convert_candle_data(candle, symbol)
                                 formatted_candles.append(formatted_candle)
                             except (ValueError, TypeError) as e:
-                                logger.warning(
-                                    f"Error formatting candle at index {i}: {e}"
-                                )
+                                logger.warning("Error formatting candle at index %s: %s", i, e)
                                 continue
 
                         if formatted_candles:
-                            logger.info(
-                                f"Successfully formatted {len(formatted_candles)} candles from REST API"
-                            )
+                            logger.info("Successfully formatted %s candles from REST API", len(formatted_candles))
                             return formatted_candles
                         else:
                             logger.warning("No valid candles after formatting")
@@ -3098,9 +2908,7 @@ class BluefinSDKService:
                         )
                     else:
                         error_text = await response.text()
-                        logger.error(
-                            f"REST API call failed with status {response.status}: {error_text}"
-                        )
+                        logger.error("REST API call failed with status %s: %s", response.status, error_text)
                         return []
 
         try:
@@ -3111,9 +2919,7 @@ class BluefinSDKService:
 
                 if not result:
                     # Try alternate symbol format if no data returned
-                    logger.info(
-                        f"No data with symbol format '{symbol_str}', trying alternate format"
-                    )
+                    logger.info("No data with symbol format '%s', trying alternate format", symbol_str)
 
                     # Create alternate symbol format
                     original_symbol_str = (
@@ -3133,9 +2939,7 @@ class BluefinSDKService:
                                 alternate_symbol, interval, limit, start_time, end_time
                             )
 
-                        logger.info(
-                            f"Trying alternate symbol format: {alternate_symbol}"
-                        )
+                        logger.info("Trying alternate symbol format: %s", alternate_symbol)
                         result = await self._retry_request(_make_alternate_request)
 
                 return result
@@ -3143,7 +2947,7 @@ class BluefinSDKService:
                 # For historical data, just use the original request
                 return await self._retry_request(_make_request)
         except Exception as e:
-            logger.exception(f"Error in REST API call after retries: {e}")
+            logger.exception("Error in REST API call after retries: %s", e)
             return []
 
     async def _make_symbol_request(
@@ -3171,7 +2975,7 @@ class BluefinSDKService:
                 params["endTime"] = end_time
 
         url = f"{api_url}/candlestickData"
-        logger.info(f"Making REST API call to {url} with params: {params}")
+        logger.info("Making REST API call to %s with params: %s", url, params)
 
         headers = {
             "Accept": "application/json",
@@ -3186,9 +2990,7 @@ class BluefinSDKService:
                     data = await response.json()
 
                     if not isinstance(data, list):
-                        logger.warning(
-                            f"Expected list response, got {type(data)}: {data}"
-                        )
+                        logger.warning("Expected list response, got %s: %s", type(data), data)
                         return []
 
                     if len(data) == 0:
@@ -3197,17 +2999,13 @@ class BluefinSDKService:
                         )
                         return []
 
-                    logger.info(
-                        f"Successfully got {len(data)} candles from Bluefin REST API"
-                    )
+                    logger.info("Successfully got %s candles from Bluefin REST API", len(data))
 
                     # Format candles
                     formatted_candles = []
                     for i, candle in enumerate(data):
                         if not isinstance(candle, list) or len(candle) < 6:
-                            logger.warning(
-                                f"Invalid candle format at index {i}: {candle}"
-                            )
+                            logger.warning("Invalid candle format at index %s: %s", i, candle)
                             continue
 
                         try:
@@ -3216,22 +3014,18 @@ class BluefinSDKService:
                             formatted_candle = convert_candle_data(candle, symbol_str)
                             formatted_candles.append(formatted_candle)
                         except (ValueError, TypeError) as e:
-                            logger.warning(f"Error formatting candle at index {i}: {e}")
+                            logger.warning("Error formatting candle at index %s: %s", i, e)
                             continue
 
                     if formatted_candles:
-                        logger.info(
-                            f"Successfully formatted {len(formatted_candles)} candles from REST API"
-                        )
+                        logger.info("Successfully formatted %s candles from REST API", len(formatted_candles))
                         return formatted_candles
                     else:
                         logger.warning("No valid candles after formatting")
                         return []
 
                 else:
-                    logger.error(
-                        f"API request failed with status {response.status}: {await response.text()}"
-                    )
+                    logger.error("API request failed with status %s: %s", response.status, await response.text())
                     return []
 
 
@@ -3267,7 +3061,7 @@ async def auth_middleware(request, handler):
 
     # Skip auth for public endpoints
     if is_public_endpoint(request.path):
-        logger.debug(f"Skipping auth for public endpoint: {request.path}")
+        logger.debug("Skipping auth for public endpoint: %s", request.path)
         return await handler(request)
 
     # Get API key from environment
@@ -3279,13 +3073,13 @@ async def auth_middleware(request, handler):
     # Check Authorization header
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
-        logger.warning(f"Missing or invalid auth header from {request.remote}")
+        logger.warning("Missing or invalid auth header from %s", request.remote)
         return web.json_response({"error": "Unauthorized"}, status=401)
 
     # Extract and validate token
     provided_api_key = auth_header[7:]  # Remove "Bearer " prefix
     if not secrets.compare_digest(provided_api_key, expected_api_key):
-        logger.warning(f"Invalid API key attempt from {request.remote}")
+        logger.warning("Invalid API key attempt from %s", request.remote)
         return web.json_response({"error": "Unauthorized"}, status=401)
 
     # API key is valid, proceed to handler
@@ -3319,7 +3113,7 @@ async def rate_limit_middleware(request, handler):
         remaining_time = int(
             RATE_LIMIT_WINDOW - (current_time - client_data["window_start"])
         )
-        logger.warning(f"Rate limit exceeded for {client_ip}")
+        logger.warning("Rate limit exceeded for %s", client_ip)
         return web.json_response(
             {"error": "Rate limit exceeded", "retry_after": remaining_time},
             status=429,
@@ -3359,7 +3153,7 @@ async def validate_endpoint_connectivity(
     try:
         import aiohttp
 
-        logger.debug(f"Testing connectivity to endpoint: {endpoint_url}")
+        logger.debug("Testing connectivity to endpoint: %s", endpoint_url)
 
         # Test with a simple ping endpoint
         test_timeout = aiohttp.ClientTimeout(total=timeout)
@@ -3371,20 +3165,16 @@ async def validate_endpoint_connectivity(
                 try:
                     async with session.get(f"{endpoint_url}{test_path}") as response:
                         if response.status == 200:
-                            logger.debug(
-                                f"Endpoint {endpoint_url} is accessible via {test_path}"
-                            )
+                            logger.debug("Endpoint %s is accessible via %s", endpoint_url, test_path)
                             return True, ""
                         elif response.status == 404:
                             # Endpoint might not support this path, try next
                             continue
                         else:
-                            logger.warning(
-                                f"Endpoint {endpoint_url}{test_path} returned status {response.status}"
-                            )
+                            logger.warning("Endpoint %s%s returned status %s", endpoint_url, test_path, response.status)
                             continue
                 except Exception as e:
-                    logger.debug(f"Test path {test_path} failed: {e}")
+                    logger.debug("Test path %s failed: %s", test_path, e)
                     continue
 
             # If no test endpoint succeeded, consider it inaccessible
@@ -3413,7 +3203,7 @@ async def validate_network_endpoints(network: str) -> dict[str, tuple[bool, str]
         endpoints = BluefinEndpointConfig.get_endpoints(network)
         results = {}
 
-        logger.info(f"Validating endpoints for {network} network")
+        logger.info("Validating endpoints for %s network", network)
 
         # Test REST API endpoint
         rest_valid, rest_error = await validate_endpoint_connectivity(
@@ -3493,7 +3283,7 @@ async def health_check(request):
         return web.json_response(health_data)
 
     except Exception as e:
-        logger.exception(f"Health check failed: {e}")
+        logger.exception("Health check failed: %s", e)
         return web.json_response(
             {
                 "status": "unhealthy",
@@ -3627,7 +3417,7 @@ async def detailed_health_check(request):
         return web.json_response(health_data)
 
     except Exception as e:
-        logger.exception(f"Detailed health check failed: {e}")
+        logger.exception("Detailed health check failed: %s", e)
         return web.json_response(
             {
                 "status": "unhealthy",
@@ -3725,7 +3515,7 @@ async def connectivity_health_check(request):
         return web.json_response(connectivity_data)
 
     except Exception as e:
-        logger.exception(f"Connectivity health check failed: {e}")
+        logger.exception("Connectivity health check failed: %s", e)
         return web.json_response(
             {
                 "overall_status": "error",
@@ -3828,7 +3618,7 @@ async def performance_metrics(request):
         return web.json_response(metrics_data)
 
     except Exception as e:
-        logger.exception(f"Performance metrics failed: {e}")
+        logger.exception("Performance metrics failed: %s", e)
         return web.json_response({"error": str(e)}, status=500)
 
 
@@ -3898,7 +3688,7 @@ async def service_status(request):
         return web.json_response(status_data)
 
     except Exception as e:
-        logger.exception(f"Service status failed: {e}")
+        logger.exception("Service status failed: %s", e)
         return web.json_response({"error": str(e)}, status=500)
 
 
@@ -4062,7 +3852,7 @@ async def service_diagnostics(request):
         return web.json_response(diagnostics_data)
 
     except Exception as e:
-        logger.exception(f"Service diagnostics failed: {e}")
+        logger.exception("Service diagnostics failed: %s", e)
         return web.json_response(
             {
                 "overall_status": "error",
@@ -4079,7 +3869,7 @@ async def get_account(request):
         data = await service.get_account_data()
         return web.json_response(data)
     except Exception as e:
-        logger.exception(f"Error in get_account: {e}")
+        logger.exception("Error in get_account: %s", e)
         return web.json_response({"error": str(e)}, status=500)
 
 
@@ -4089,7 +3879,7 @@ async def get_positions(request):
         positions = await service.get_positions()
         return web.json_response({"positions": positions})
     except Exception as e:
-        logger.exception(f"Error in get_positions: {e}")
+        logger.exception("Error in get_positions: %s", e)
         return web.json_response({"error": str(e)}, status=500)
 
 
@@ -4100,7 +3890,7 @@ async def place_order(request):
         result = await service.place_order(order_data)
         return web.json_response(result)
     except Exception as e:
-        logger.exception(f"Error in place_order: {e}")
+        logger.exception("Error in place_order: %s", e)
         return web.json_response({"error": str(e)}, status=500)
 
 
@@ -4111,7 +3901,7 @@ async def cancel_order(request):
         success = await service.cancel_order(order_id)
         return web.json_response({"success": success})
     except Exception as e:
-        logger.exception(f"Error in cancel_order: {e}")
+        logger.exception("Error in cancel_order: %s", e)
         return web.json_response({"error": str(e)}, status=500)
 
 
@@ -4124,16 +3914,14 @@ async def get_ticker(request):
         try:
             symbol = service._validate_and_normalize_symbol(raw_symbol)
             if symbol != raw_symbol:
-                logger.info(f"Symbol normalized from {raw_symbol} to {symbol}")
+                logger.info("Symbol normalized from %s to %s", raw_symbol, symbol)
         except Exception as e:
-            logger.warning(
-                f"Symbol validation failed for {raw_symbol}: {e}, proceeding with original"
-            )
+            logger.warning("Symbol validation failed for %s: %s, proceeding with original", raw_symbol, e)
             symbol = raw_symbol
 
         # Convert symbol to market symbol enum value
         market_symbol_value = service._get_market_symbol_value(symbol)
-        logger.info(f"Converted {symbol} to {market_symbol_value}")
+        logger.info("Converted %s to %s", symbol, market_symbol_value)
 
         # Try to get market data from SDK first
         try:
@@ -4151,7 +3939,7 @@ async def get_ticker(request):
                     current_price = float(
                         latest_candle[4]
                     )  # close price (already converted from 18 decimals)
-                    logger.info(f"Got current price from candles: {current_price}")
+                    logger.info("Got current price from candles: %s", current_price)
 
                     return web.json_response(
                         {
@@ -4162,7 +3950,7 @@ async def get_ticker(request):
                         }
                     )
         except Exception as candle_error:
-            logger.warning(f"Could not get price from candles: {candle_error}")
+            logger.warning("Could not get price from candles: %s", candle_error)
 
         # Fallback: Try orderbook approach
         try:
@@ -4170,7 +3958,7 @@ async def get_ticker(request):
                 symbol=market_symbol_value, limit=10
             )
             orderbook = await service.client.get_orderbook(orderbook_request)
-            logger.info(f"Got orderbook: {type(orderbook)}")
+            logger.info("Got orderbook: %s", type(orderbook))
 
             best_bid = orderbook["bids"][0]["price"] if orderbook.get("bids") else 0
             best_ask = orderbook["asks"][0]["price"] if orderbook.get("asks") else 0
@@ -4188,22 +3976,14 @@ async def get_ticker(request):
                 }
             )
         except Exception as orderbook_error:
-            logger.exception(f"Orderbook error: {orderbook_error}")
+            logger.exception("Orderbook error: %s", orderbook_error)
 
         # Final fallback: REST API for ticker
         try:
             # Use centralized endpoint configuration
             api_url = get_rest_api_url(service.network.lower())
 
-            logger.debug(
-                f"Using ticker API endpoint for {service.network} network: {api_url}",
-                extra={
-                    "service_id": service.service_id,
-                    "network": service.network,
-                    "api_url": api_url,
-                    "symbol": symbol,
-                },
-            )
+            logger.debug("Using ticker API endpoint for %s network: %s", extra=%s, ), service.network, api_url,  "service_id": service.service_id, "network": service.network, "api_url": api_url, "symbol": symbol, )
 
             # Get ticker via REST API
             symbol_str = str(symbol).replace("MARKET_SYMBOLS.", "")
@@ -4249,7 +4029,7 @@ async def get_ticker(request):
                 finally:
                     logger.debug("HTTP session closed for ticker call")
         except Exception as api_error:
-            logger.exception(f"REST API ticker error: {api_error}")
+            logger.exception("REST API ticker error: %s", api_error)
 
         # Return default values if all methods fail
         logger.warning("All ticker methods failed, returning default")
@@ -4264,7 +4044,7 @@ async def get_ticker(request):
         )
 
     except Exception as e:
-        logger.exception(f"Error in get_ticker: {e}")
+        logger.exception("Error in get_ticker: %s", e)
         return web.json_response({"error": str(e)}, status=500)
 
 
@@ -4275,7 +4055,7 @@ async def set_leverage(request):
         success = await service.set_leverage(data["symbol"], data["leverage"])
         return web.json_response({"success": success})
     except Exception as e:
-        logger.exception(f"Error in set_leverage: {e}")
+        logger.exception("Error in set_leverage: %s", e)
         return web.json_response({"error": str(e)}, status=500)
 
 
@@ -4289,9 +4069,7 @@ async def get_market_candles(request):
         start_time = int(request.query.get("startTime", "0"))
         end_time = int(request.query.get("endTime", "0"))
 
-        logger.info(
-            f"Market candles request: symbol={symbol}, interval={interval}, limit={limit}, startTime={start_time}, endTime={end_time}"
-        )
+        logger.info("Market candles request: symbol=%s, interval=%s, limit=%s, startTime=%s, endTime=%s", symbol, interval, limit, start_time, end_time)
 
         # If start_time or end_time are 0, calculate them
         import time
@@ -4313,10 +4091,10 @@ async def get_market_candles(request):
         return web.json_response({"candles": candles})
 
     except ValueError as e:
-        logger.exception(f"Invalid parameter in get_market_candles: {e}")
+        logger.exception("Invalid parameter in get_market_candles: %s", e)
         return web.json_response({"error": f"Invalid parameter: {e}"}, status=400)
     except Exception as e:
-        logger.exception(f"Error in get_market_candles: {e}")
+        logger.exception("Error in get_market_candles: %s", e)
         return web.json_response({"error": str(e)}, status=500)
 
 
@@ -4361,7 +4139,7 @@ async def debug_symbols(request):
             }
         )
     except Exception as e:
-        logger.exception(f"Error in debug_symbols: {e}")
+        logger.exception("Error in debug_symbols: %s", e)
         return web.json_response({"error": str(e)}, status=500)
 
 
@@ -4426,20 +4204,12 @@ async def validate_endpoints(request):
         # Set appropriate HTTP status
         status_code = 200 if rest_api_valid else 503
 
-        logger.info(
-            f"Endpoint validation completed for {network}",
-            extra={
-                "network": network,
-                "overall_status": response_data["overall_status"],
-                "rest_api_valid": rest_api_valid,
-                "validation_results": validation_results,
-            },
-        )
+        logger.info("Endpoint validation completed for %s", extra=%s, ), network,  "network": network, "overall_status": response_data["overall_status"], "rest_api_valid": rest_api_valid, "validation_results": validation_results, )
 
         return web.json_response(response_data, status=status_code)
 
     except Exception as e:
-        logger.exception(f"Error validating endpoints: {e}")
+        logger.exception("Error validating endpoints: %s", e)
         return web.json_response(
             {
                 "error": "Endpoint validation failed",
@@ -4508,15 +4278,13 @@ if __name__ == "__main__":
         logger.warning("BLUEFIN_SERVICE_API_KEY not set - generating a random key")
         api_key = secrets.token_urlsafe(32)
         os.environ["BLUEFIN_SERVICE_API_KEY"] = api_key
-        logger.info(f"Generated API key: {api_key}")
+        logger.info("Generated API key: %s", api_key)
         logger.info(
             "Please set BLUEFIN_SERVICE_API_KEY in your environment for production use"
         )
 
     # Create and run app
     app = create_app()
-    logger.info(f"Starting Bluefin SDK service on {host}:{port}")
-    logger.info(
-        f"Rate limit: {RATE_LIMIT_REQUESTS} requests per {RATE_LIMIT_WINDOW} seconds"
-    )
+    logger.info("Starting Bluefin SDK service on %s:%s", host, port)
+    logger.info("Rate limit: %s requests per %s seconds", RATE_LIMIT_REQUESTS, RATE_LIMIT_WINDOW)
     web.run_app(app, host=host, port=port)

@@ -176,14 +176,7 @@ class EMAribbon:
             for i, length in enumerate(self.lengths, 1):
                 ema_start = time.perf_counter()
 
-                logger.debug(
-                    f"Calculating EMA{i}",
-                    extra={
-                        "indicator": "ema_ribbon",
-                        "step": f"ema{i}_calculation",
-                        "ema_length": length,
-                    },
-                )
+                logger.debug("Calculating EMA%s", extra=%s_calculation", "ema_length": length, }, ), i,  "indicator": "ema_ribbon", "step": "ema{i)
 
                 ema_values = ta.ema(result["close"], length=length)
 
@@ -215,14 +208,7 @@ class EMAribbon:
                     if valid_percentage < max(
                         50.0, expected_valid_percentage * 0.8
                     ):  # At least 50% or 80% of expected
-                        logger.warning(
-                            f"Low valid data percentage in EMA{i}",
-                            extra={
-                                "indicator": "ema_ribbon",
-                                "issue": "low_valid_ema_data",
-                                "ema_number": i,
-                                "ema_length": length,
-                                "valid_count": int(valid_count),
+                        logger.warning("Low valid data percentage in EMA%s", extra={ "indicator": "ema_ribbon", "issue": "low_valid_ema_data", "ema_number": i, "ema_length": length, "valid_count": int(valid_count),, i)
                                 "total_count": total_count,
                                 "valid_percentage": round(valid_percentage, 2),
                                 "expected_valid_percentage": round(
@@ -232,27 +218,13 @@ class EMAribbon:
                             },
                         )
                     else:
-                        logger.debug(
-                            f"EMA{i} validation passed",
-                            extra={
-                                "indicator": "ema_ribbon",
-                                "ema_number": i,
-                                "ema_length": length,
-                                "valid_percentage": round(valid_percentage, 2),
+                        logger.debug("EMA%s validation passed", extra={ "indicator": "ema_ribbon", "ema_number": i, "ema_length": length, "valid_percentage": round(valid_percentage, 2),, i)
                                 "convergence_point": convergence_point,
                             },
                         )
                 else:
                     result[f"ema{i}"] = pd.Series(dtype="float64", index=df.index)
-                    logger.error(
-                        f"Failed to calculate EMA{i}",
-                        extra={
-                            "indicator": "ema_ribbon",
-                            "error_type": "ema_calculation_failed",
-                            "ema_number": i,
-                            "ema_length": length,
-                        },
-                    )
+                    logger.error("Failed to calculate EMA%s", extra=%s, ), i,  "indicator": "ema_ribbon", "error_type": "ema_calculation_failed", "ema_number": i, "ema_length": length, )
 
                 ema_duration = (time.perf_counter() - ema_start) * 1000
                 ema_calculation_times.append(ema_duration)
@@ -935,8 +907,7 @@ class EMAribbon:
                 f"Insufficient data. Need at least {max_length} rows, got {len(df)}",
             )
         elif len(df) < min_recommended:
-            logger.info(
-                f"Limited data for optimal EMA convergence. Have {len(df)} rows, recommend {min_recommended} for best results",
+            logger.info("Limited data for optimal EMA convergence. Have %s rows, recommend %s for best results",, len(df), min_recommended)
                 extra={
                     "indicator": "ema_ribbon",
                     "data_points": len(df),

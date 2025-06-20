@@ -144,7 +144,7 @@ class RateLimiter:
             # Calculate wait time until oldest request expires
             wait_time = self.window_seconds - (current_time - self.requests[0])
             if wait_time > 0:
-                logger.warning(f"Rate limit reached, waiting {wait_time:.1f}s")
+                logger.warning("Rate limit reached, waiting %ss", wait_time:.1f)
                 await asyncio.sleep(wait_time)
                 return await self.acquire()  # Retry after waiting
 
@@ -192,7 +192,7 @@ class OmniSearchClient:
         self.local_storage_path = Path("data/omnisearch_cache")
         self.local_storage_path.mkdir(parents=True, exist_ok=True)
 
-        logger.info(f"🔍 OmniSearch Client: Initialized for {self.server_url}")
+        logger.info("🔍 OmniSearch Client: Initialized for %s", self.server_url)
 
     async def connect(self) -> bool:
         """Connect to the OmniSearch service."""
@@ -212,13 +212,11 @@ class OmniSearchClient:
                     logger.info("✅ OmniSearch: Successfully connected")
                     return True
                 else:
-                    logger.warning(
-                        f"OmniSearch server returned status {response.status}"
-                    )
+                    logger.warning("OmniSearch server returned status %s", response.status)
                     return False
 
         except Exception as e:
-            logger.exception(f"Failed to connect to OmniSearch service: {e}")
+            logger.exception("Failed to connect to OmniSearch service: %s", e)
             # Fall back to cached/local results only
             return False
 
@@ -233,7 +231,7 @@ class OmniSearchClient:
         if self.cache:
             expired_count = self.cache.clear_expired()
             if expired_count > 0:
-                logger.info(f"Cleaned up {expired_count} expired cache entries")
+                logger.info("Cleaned up %s expired cache entries", expired_count)
 
         logger.info("Disconnected from OmniSearch service")
 
@@ -262,7 +260,7 @@ class OmniSearchClient:
         if self.cache:
             cached_result = self.cache.get(cache_key)
             if cached_result:
-                logger.debug(f"OmniSearch: Cache hit for financial news query: {query}")
+                logger.debug("OmniSearch: Cache hit for financial news query: %s", query)
                 return [FinancialNewsResult(**item) for item in cached_result]
 
         # Rate limiting
@@ -305,14 +303,12 @@ class OmniSearchClient:
                 cache_data = [result.dict() for result in financial_results]
                 self.cache.set(cache_key, cache_data)
 
-            logger.info(
-                f"🔍 OmniSearch: Found {len(financial_results)} financial news results for '{query}'"
-            )
+            logger.info("🔍 OmniSearch: Found %s financial news results for '%s'", len(financial_results), query)
 
             return financial_results
 
         except Exception as e:
-            logger.exception(f"Financial news search failed for '{query}': {e}")
+            logger.exception("Financial news search failed for '%s': %s", query, e)
             return await self._get_fallback_news(query, limit)
 
     async def search_crypto_sentiment(self, symbol: str) -> SentimentAnalysis:
@@ -333,9 +329,7 @@ class OmniSearchClient:
         if self.cache:
             cached_result = self.cache.get(cache_key)
             if cached_result:
-                logger.debug(
-                    f"OmniSearch: Cache hit for crypto sentiment: {base_symbol}"
-                )
+                logger.debug("OmniSearch: Cache hit for crypto sentiment: %s", base_symbol)
                 return SentimentAnalysis(**cached_result)
 
         # Rate limiting
@@ -371,15 +365,13 @@ class OmniSearchClient:
             if self.cache:
                 self.cache.set(cache_key, sentiment.dict())
 
-            logger.info(
-                f"🔍 OmniSearch: {base_symbol} sentiment - {sentiment.overall_sentiment} "
-                f"(score: {sentiment.sentiment_score:.2f}, confidence: {sentiment.confidence:.2f})"
+            logger.info("🔍 OmniSearch: %s sentiment - %s " "(score: %s, confidence: %s)", base_symbol, sentiment.overall_sentiment, sentiment.sentiment_score:.2f, sentiment.confidence:.2f)
             )
 
             return sentiment
 
         except Exception as e:
-            logger.exception(f"Crypto sentiment search failed for {base_symbol}: {e}")
+            logger.exception("Crypto sentiment search failed for %s: %s", base_symbol, e)
             return await self._get_fallback_sentiment(base_symbol)
 
     async def search_nasdaq_sentiment(self) -> SentimentAnalysis:
@@ -430,15 +422,13 @@ class OmniSearchClient:
             if self.cache:
                 self.cache.set(cache_key, sentiment.dict(), ttl=300)  # 5 minutes
 
-            logger.info(
-                f"🔍 OmniSearch: NASDAQ sentiment - {sentiment.overall_sentiment} "
-                f"(score: {sentiment.sentiment_score:.2f})"
+            logger.info("🔍 OmniSearch: NASDAQ sentiment - %s " "(score: %s)", sentiment.overall_sentiment, sentiment.sentiment_score:.2f)
             )
 
             return sentiment
 
         except Exception as e:
-            logger.exception(f"NASDAQ sentiment search failed: {e}")
+            logger.exception("NASDAQ sentiment search failed: %s", e)
             return await self._get_fallback_sentiment("NASDAQ")
 
     async def search_market_correlation(
@@ -465,9 +455,7 @@ class OmniSearchClient:
         if self.cache:
             cached_result = self.cache.get(cache_key)
             if cached_result:
-                logger.debug(
-                    f"OmniSearch: Cache hit for correlation {crypto_base}-{nasdaq_base}"
-                )
+                logger.debug("OmniSearch: Cache hit for correlation %s-%s", crypto_base, nasdaq_base)
                 return MarketCorrelation(**cached_result)
 
         # Rate limiting
@@ -488,9 +476,7 @@ class OmniSearchClient:
             raw_correlation_coeff = correlation_data.get("coefficient", 0.0)
 
             # Debug logging for API response
-            logger.debug(
-                f"API correlation response for {crypto_base}-{nasdaq_base}: {correlation_data}"
-            )
+            logger.debug("API correlation response for %s-%s: %s", crypto_base, nasdaq_base, correlation_data)
 
             # Validate and clamp correlation coefficient to valid range
             try:
@@ -498,10 +484,7 @@ class OmniSearchClient:
 
                 # Check for extremely large values that might be percentages, timeframe values, or other units
                 if abs(correlation_coeff) > 10.0:
-                    logger.warning(
-                        f"Extremely large correlation value {correlation_coeff} from API for {crypto_base}-{nasdaq_base}. "
-                        f"Timeframe: {timeframe}. Likely incorrect unit or data mixup. Raw API response: {correlation_data}"
-                    )
+                    logger.warning("Extremely large correlation value %s from API for %s-%s. " "Timeframe: %s. Likely incorrect unit or data mixup. Raw API response: %s" ), correlation_coeff, crypto_base, nasdaq_base, timeframe, correlation_data)
 
                     # Check if this might be a timeframe value (e.g., 30 from "30d")
                     timeframe_numeric = None
@@ -513,34 +496,24 @@ class OmniSearchClient:
                         timeframe_numeric
                         and abs(correlation_coeff) == timeframe_numeric
                     ):
-                        logger.error(
-                            f"Correlation coefficient {correlation_coeff} matches timeframe {timeframe}! "
-                            f"API likely returned timeframe value instead of correlation. Defaulting to 0.0."
-                        )
+                        logger.error("Correlation coefficient %s matches timeframe %s! " "API likely returned timeframe value instead of correlation. Defaulting to 0.0." ), correlation_coeff, timeframe)
                         correlation_coeff = 0.0
                     elif abs(correlation_coeff) <= 100.0:
                         # If it looks like a percentage (e.g., 30 meaning 30%), normalize it
                         correlation_coeff = correlation_coeff / 100.0
-                        logger.warning(
-                            f"Normalized correlation from {raw_correlation_coeff} to {correlation_coeff} (divided by 100)"
-                        )
+                        logger.warning("Normalized correlation from %s to %s (divided by 100)", raw_correlation_coeff, correlation_coeff)
                     else:
                         # For even larger values, default to neutral correlation
-                        logger.warning(
-                            f"Value {correlation_coeff} too large even for percentage, defaulting to 0.0"
-                        )
+                        logger.warning("Value %s too large even for percentage, defaulting to 0.0", correlation_coeff)
                         correlation_coeff = 0.0
 
                 # Final clamp to valid correlation range [-1, 1]
                 if abs(correlation_coeff) > 1.0:
-                    logger.warning(
-                        f"Clamping correlation coefficient {correlation_coeff} to valid range [-1, 1]"
-                    )
+                    logger.warning("Clamping correlation coefficient %s to valid range [-1, 1]", correlation_coeff)
                     correlation_coeff = max(-1.0, min(1.0, correlation_coeff))
 
             except (ValueError, TypeError) as e:
-                logger.exception(
-                    f"Invalid correlation coefficient type {type(raw_correlation_coeff)}: {raw_correlation_coeff} "
+                logger.exception("Invalid correlation coefficient type %s: %s ", type(raw_correlation_coeff), raw_correlation_coeff)
                     f"from API for {crypto_base}-{nasdaq_base}. Using fallback value 0.0. Error: {e}"
                 )
                 correlation_coeff = 0.0
@@ -568,9 +541,7 @@ class OmniSearchClient:
                 try:
                     beta = float(raw_beta)
                 except (ValueError, TypeError):
-                    logger.warning(
-                        f"Invalid beta value {raw_beta} from API. Setting to None."
-                    )
+                    logger.warning("Invalid beta value %s from API. Setting to None.", raw_beta)
                     beta = None
 
             # Validate r_squared value (should be between 0 and 1)
@@ -580,14 +551,10 @@ class OmniSearchClient:
                 try:
                     r_squared = float(raw_r_squared)
                     if r_squared < 0.0 or r_squared > 1.0:
-                        logger.warning(
-                            f"Invalid r_squared value {r_squared} from API. Should be between 0 and 1. Setting to None."
-                        )
+                        logger.warning("Invalid r_squared value %s from API. Should be between 0 and 1. Setting to None.", r_squared)
                         r_squared = None
                 except (ValueError, TypeError):
-                    logger.warning(
-                        f"Invalid r_squared value {raw_r_squared} from API. Setting to None."
-                    )
+                    logger.warning("Invalid r_squared value %s from API. Setting to None.", raw_r_squared)
                     r_squared = None
 
             correlation = MarketCorrelation(
@@ -605,17 +572,13 @@ class OmniSearchClient:
             if self.cache:
                 self.cache.set(cache_key, correlation.dict(), ttl=1800)  # 30 minutes
 
-            logger.info(
-                f"🔍 OmniSearch: {crypto_base}-{nasdaq_base} correlation - "
-                f"{direction} {strength} ({correlation_coeff:.3f})"
+            logger.info("🔍 OmniSearch: %s-%s correlation - " "%s %s (%s)", crypto_base, nasdaq_base, direction, strength, correlation_coeff:.3f)
             )
 
             return correlation
 
         except Exception as e:
-            logger.exception(
-                f"Market correlation search failed for {crypto_base}-{nasdaq_base}: {e}"
-            )
+            logger.exception("Market correlation search failed for %s-%s: %s", crypto_base, nasdaq_base, e)
             return await self._get_fallback_correlation(
                 crypto_base, nasdaq_base, timeframe
             )
@@ -661,21 +624,21 @@ class OmniSearchClient:
                     logger.warning("OmniSearch API rate limit hit")
                     raise Exception("Rate limit exceeded")
                 else:
-                    logger.warning(f"OmniSearch API returned status {response.status}")
+                    logger.warning("OmniSearch API returned status %s", response.status)
                     raise Exception(f"API error: {response.status}")
 
         except TimeoutError as e:
-            logger.warning(f"OmniSearch request timed out for {endpoint}")
+            logger.warning("OmniSearch request timed out for %s", endpoint)
             raise Exception("Request timeout") from e
         except aiohttp.ClientError as e:
-            logger.warning(f"OmniSearch network error: {e}")
+            logger.warning("OmniSearch network error: %s", e)
             raise Exception(f"Network error: {e}") from e
 
     async def _get_fallback_news(
         self, query: str, limit: int
     ) -> list[FinancialNewsResult]:
         """Provide fallback news results when API is unavailable."""
-        logger.info(f"Using fallback news results for: {query}")
+        logger.info("Using fallback news results for: %s", query)
 
         # Simple fallback with basic results
         fallback_results = []
@@ -689,17 +652,17 @@ class OmniSearchClient:
                     for item in cached_data[:limit]:
                         fallback_results.append(FinancialNewsResult(**item))
             except Exception as e:
-                logger.debug(f"Failed to load local cache: {e}")
+                logger.debug("Failed to load local cache: %s", e)
 
         # If no cached results, return empty with warning
         if not fallback_results:
-            logger.warning(f"No fallback news available for: {query}")
+            logger.warning("No fallback news available for: %s", query)
 
         return fallback_results
 
     async def _get_fallback_sentiment(self, symbol: str) -> SentimentAnalysis:
         """Provide fallback sentiment when API is unavailable."""
-        logger.info(f"Using fallback sentiment for: {symbol}")
+        logger.info("Using fallback sentiment for: %s", symbol)
 
         return SentimentAnalysis(
             symbol=symbol,
@@ -715,7 +678,7 @@ class OmniSearchClient:
         self, crypto_symbol: str, nasdaq_symbol: str, timeframe: str
     ) -> MarketCorrelation:
         """Provide fallback correlation when API is unavailable."""
-        logger.info(f"Using fallback correlation for: {crypto_symbol}-{nasdaq_symbol}")
+        logger.info("Using fallback correlation for: %s-%s", crypto_symbol, nasdaq_symbol)
 
         return MarketCorrelation(
             primary_symbol=crypto_symbol,
@@ -744,11 +707,11 @@ class OmniSearchClient:
                 except ValueError:
                     continue
 
-            logger.debug(f"Could not parse date: {date_str}")
+            logger.debug("Could not parse date: %s", date_str)
             return None
 
         except Exception as e:
-            logger.debug(f"Date parsing error: {e}")
+            logger.debug("Date parsing error: %s", e)
             return None
 
     async def health_check(self) -> dict[str, Any]:

@@ -66,10 +66,7 @@ class TradingCircuitBreaker:
         self.state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
         self.failure_history: list[FailureRecord] = []
 
-        logger.info(
-            f"Circuit breaker initialized: threshold={failure_threshold}, "
-            f"timeout={timeout_seconds}s"
-        )
+        logger.info("Circuit breaker initialized: threshold=%s, " "timeout=%ss" ), failure_threshold, timeout_seconds)
 
     def can_execute_trade(self) -> bool:
         """
@@ -129,13 +126,9 @@ class TradingCircuitBreaker:
 
         if self.failure_count >= self.failure_threshold:
             self.state = "OPEN"
-            logger.critical(
-                f"🚨 CIRCUIT BREAKER TRIGGERED - Trading halted for {self.timeout}s\n"
-                f"Failure count: {self.failure_count}, Last error: {error_message}"
-            )
+            logger.critical("🚨 CIRCUIT BREAKER TRIGGERED - Trading halted for %ss\n" "Failure count: %s, Last error: %s" ), self.timeout, self.failure_count, error_message)
         else:
-            logger.warning(
-                f"⚠️  Trading failure recorded ({self.failure_count}/{self.failure_threshold}): "
+            logger.warning("⚠️  Trading failure recorded (%s/%s): ", self.failure_count, self.failure_threshold)
                 f"{failure_type} - {error_message}"
             )
 
@@ -233,15 +226,12 @@ class APIFailureProtection:
                 if attempt < self.max_retries - 1:
                     # Calculate exponential backoff delay
                     delay = self.base_delay * (2**attempt)
-                    logger.warning(
-                        f"API call failed (attempt {attempt + 1}/{self.max_retries}): {e}\n"
+                    logger.warning("API call failed (attempt %s/%s): %s\n", attempt + 1, self.max_retries, e)
                         f"Retrying in {delay:.1f}s..."
                     )
                     await asyncio.sleep(delay)
                 else:
-                    logger.exception(
-                        f"API call failed after {self.max_retries} attempts: {e}"
-                    )
+                    logger.exception("API call failed after %s attempts: %s", self.max_retries, e)
 
         # All attempts failed
         raise last_exception or Exception("All retry attempts exhausted")
@@ -360,11 +350,7 @@ class EmergencyStopManager:
         }
         self.trigger_history.append(trigger_record)
 
-        logger.critical(
-            f"🚨 EMERGENCY STOP TRIGGERED: {reason}\n"
-            f"Trigger value: {trigger_value}\n"
-            f"All trading operations halted immediately!"
-        )
+        logger.critical("🚨 EMERGENCY STOP TRIGGERED: %s\n" "Trigger value: %s\n" "All trading operations halted immediately!" ), reason, trigger_value)
 
         # Keep only recent trigger history
         cutoff_time = datetime.now() - timedelta(hours=24)
@@ -449,16 +435,7 @@ class RiskManager:
         self._consecutive_losses = 0
         self._risk_metrics_history: list[dict[str, Any]] = []
 
-        logger.info(
-            f"Initialized Advanced RiskManager:\n"
-            f"  • Max size: {self.max_size_pct}%\n"
-            f"  • Leverage: {self.leverage}x\n"
-            f"  • Max daily loss: {self.max_daily_loss_pct}%\n"
-            f"  • Circuit breaker: {self.circuit_breaker.failure_threshold} failures\n"
-            f"  • API protection: {self.api_protection.max_retries} retries\n"
-            f"  • Emergency stop: enabled\n"
-            f"  • Balance validation: enabled"
-        )
+        logger.info("Initialized Advanced RiskManager:\n" "  • Max size: %s%\n" "  • Leverage: %sx\n" "  • Max daily loss: %s%\n" "  • Circuit breaker: %s failures\n" "  • API protection: %s retries\n" "  • Emergency stop: enabled\n" "  • Balance validation: enabled" ), self.max_size_pct, self.leverage, self.max_daily_loss_pct, self.circuit_breaker.failure_threshold, self.api_protection.max_retries)
 
     def evaluate_risk(
         self,
@@ -656,18 +633,12 @@ class RiskManager:
 
             # 📝 Log comprehensive information
             if trade_fees.total_fee > 0:
-                logger.info(
-                    f"✅ Risk approved - Position: {trade_action.size_pct}% -> {modified_action.size_pct}%\n"
-                    f"   • Fees: ${trade_fees.total_fee:.2f}\n"
-                    f"   • Max Loss: ${risk_metrics['max_loss_usd']:.2f}\n"
-                    f"   • R/R Ratio: {risk_metrics['risk_reward_ratio']:.2f}\n"
-                    f"   • Circuit Breaker: {self.circuit_breaker.state}"
-                )
+                logger.info("✅ Risk approved - Position: %s% -> %s%\n" "   • Fees: $%s\n" "   • Max Loss: $%s\n" "   • R/R Ratio: %s\n" "   • Circuit Breaker: %s" ), trade_action.size_pct, modified_action.size_pct, trade_fees.total_fee:.2f, risk_metrics['max_loss_usd']:.2f, risk_metrics['risk_reward_ratio']:.2f, self.circuit_breaker.state)
 
             return True, modified_action, "Advanced risk checks passed"
 
         except Exception as e:
-            logger.exception(f"Risk evaluation error: {e}")
+            logger.exception("Risk evaluation error: %s", e)
             self.circuit_breaker.record_failure("risk_evaluation_error", str(e), "high")
             return False, self._get_hold_action("Risk evaluation error"), "Error"
 
@@ -754,13 +725,11 @@ class RiskManager:
             except BalanceValidationError as e:
                 return False, f"Margin validation error: {e}"
 
-            logger.debug(
-                f"✅ Balance validation passed for {trade_action.action} trade"
-            )
+            logger.debug("✅ Balance validation passed for %s trade", trade_action.action)
             return True, "Balance validation successful"
 
         except Exception as e:
-            logger.exception(f"Error in balance validation for trade: {e}")
+            logger.exception("Error in balance validation for trade: %s", e)
             return False, f"Balance validation error: {e}"
 
     def _calculate_current_margin_usage(self) -> Decimal:
@@ -799,7 +768,7 @@ class RiskManager:
         )
 
         if total_pnl <= -max_loss_usd:
-            logger.warning(f"Daily loss limit reached: {total_pnl} <= -{max_loss_usd}")
+            logger.warning("Daily loss limit reached: %s <= -%s", total_pnl, max_loss_usd)
             return True
 
         return False
@@ -826,10 +795,7 @@ class RiskManager:
         # Check if we already have an active position
         if current_position.side != "FLAT":
             # We have a position - cannot open a new one
-            logger.warning(
-                f"Cannot open new {trade_action.action} position - "
-                f"existing {current_position.side} position for {current_position.symbol}"
-            )
+            logger.warning("Cannot open new %s position - " "existing %s position for %s" ), trade_action.action, current_position.side, current_position.symbol)
             return False
 
         # Get current position count from position manager if available
@@ -844,9 +810,7 @@ class RiskManager:
 
             # Double-check: ensure no other positions exist
             if active_positions > 0:
-                logger.warning(
-                    f"Cannot open new position - {active_positions} position(s) already exist"
-                )
+                logger.warning("Cannot open new position - %s position(s) already exist", active_positions)
                 return False
         else:
             # Fallback to internal tracking
@@ -872,7 +836,7 @@ class RiskManager:
         # Ensure size doesn't exceed maximum
         if modified.size_pct > self.max_size_pct:
             modified.size_pct = self.max_size_pct
-            logger.warning(f"Position size capped at {self.max_size_pct}%")
+            logger.warning("Position size capped at %s%", self.max_size_pct)
 
         # Account for available margin
         available_margin = self._get_available_margin()
@@ -880,9 +844,7 @@ class RiskManager:
 
         if modified.size_pct > max_allowed_size:
             modified.size_pct = int(max_allowed_size)
-            logger.warning(
-                f"Position size reduced to {max_allowed_size}% due to margin constraints"
-            )
+            logger.warning("Position size reduced to %s% due to margin constraints", max_allowed_size)
 
         return modified
 
@@ -979,9 +941,7 @@ class RiskManager:
                 new_size_pct = 0
 
             modified.size_pct = new_size_pct
-            logger.info(
-                f"Position size reduced from {trade_action.size_pct}% to {new_size_pct}%"
-            )
+            logger.info("Position size reduced from %s% to %s%", trade_action.size_pct, new_size_pct)
 
         return modified
 
@@ -1067,7 +1027,7 @@ class RiskManager:
             }
 
         except Exception as e:
-            logger.exception(f"Position validation error: {e}")
+            logger.exception("Position validation error: %s", e)
             return {
                 "valid": False,
                 "reason": f"Validation error: {e}",
@@ -1119,9 +1079,7 @@ class RiskManager:
                     concerning_metrics[k] = v
 
             if concerning_metrics:
-                logger.warning(
-                    f"⚠️  Concerning risk metrics detected: {concerning_metrics}"
-                )
+                logger.warning("⚠️  Concerning risk metrics detected: %s", concerning_metrics)
 
             # Store metrics history
             metrics["timestamp"] = datetime.now()
@@ -1139,7 +1097,7 @@ class RiskManager:
             return metrics
 
         except Exception as e:
-            logger.exception(f"Risk metrics monitoring error: {e}")
+            logger.exception("Risk metrics monitoring error: %s", e)
             return {}
 
     def _count_consecutive_losses(self) -> int:
@@ -1202,14 +1160,10 @@ class RiskManager:
         """
         if profit_loss < 0:
             self._consecutive_losses += 1
-            logger.info(
-                f"Trade loss recorded - consecutive losses: {self._consecutive_losses}"
-            )
+            logger.info("Trade loss recorded - consecutive losses: %s", self._consecutive_losses)
         else:
             if self._consecutive_losses > 0:
-                logger.info(
-                    f"Consecutive loss streak broken at {self._consecutive_losses}"
-                )
+                logger.info("Consecutive loss streak broken at %s", self._consecutive_losses)
             self._consecutive_losses = 0
 
     def get_advanced_risk_status(self) -> dict[str, Any]:
@@ -1323,23 +1277,16 @@ class RiskManager:
         # For LONG/SHORT actions, stop loss MUST be > 0
         if trade_action.action in ["LONG", "SHORT"]:
             if trade_action.stop_loss_pct <= 0:
-                logger.error(
-                    f"❌ MANDATORY STOP LOSS MISSING: {trade_action.action} action "
-                    f"requires stop_loss_pct > 0, got {trade_action.stop_loss_pct}"
-                )
+                logger.error("❌ MANDATORY STOP LOSS MISSING: %s action " "requires stop_loss_pct > 0, got %s" ), trade_action.action, trade_action.stop_loss_pct)
                 return False
 
             # Ensure stop loss is reasonable (between 0.1% and 10%)
             if trade_action.stop_loss_pct < 0.1 or trade_action.stop_loss_pct > 10.0:
-                logger.error(
-                    f"❌ INVALID STOP LOSS: {trade_action.stop_loss_pct}% is outside "
-                    f"acceptable range (0.1% - 10.0%)"
+                logger.error("❌ INVALID STOP LOSS: %s% is outside " "acceptable range (0.1% - 10.0%)", trade_action.stop_loss_pct)
                 )
                 return False
 
-            logger.info(
-                f"✅ Stop loss validation passed: {trade_action.stop_loss_pct}%"
-            )
+            logger.info("✅ Stop loss validation passed: %s%", trade_action.stop_loss_pct)
             return True
 
         return True
@@ -1408,34 +1355,24 @@ class RiskManager:
 
             if validation_result["valid"]:
                 self._account_balance = validation_result["balance"]
-                logger.info(
-                    f"Account balance updated and validated: {old_balance} -> {self._account_balance}"
-                )
+                logger.info("Account balance updated and validated: %s -> %s", old_balance, self._account_balance)
             else:
-                logger.error(
-                    f"❌ Balance update validation failed: "
-                    f"{validation_result.get('error', {}).get('message', 'Unknown error')}"
+                logger.error("❌ Balance update validation failed: " "%s).get('message', 'Unknown error')}", validation_result.get('error', {)
                 )
                 # Still update the balance but log the issue
                 self._account_balance = new_balance
-                logger.warning(
-                    f"⚠️ Balance updated despite validation failure: {old_balance} -> {new_balance}"
-                )
+                logger.warning("⚠️ Balance updated despite validation failure: %s -> %s", old_balance, new_balance)
 
         except BalanceValidationError as e:
-            logger.exception(f"❌ Balance validation error during update: {e}")
+            logger.exception("❌ Balance validation error during update: %s", e)
             # Still update the balance but log the issue
             self._account_balance = new_balance
-            logger.warning(
-                f"⚠️ Balance updated despite validation error: {old_balance} -> {new_balance}"
-            )
+            logger.warning("⚠️ Balance updated despite validation error: %s -> %s", old_balance, new_balance)
         except Exception as e:
-            logger.exception(f"❌ Unexpected error during balance validation: {e}")
+            logger.exception("❌ Unexpected error during balance validation: %s", e)
             # Still update the balance but log the issue
             self._account_balance = new_balance
-            logger.warning(
-                f"⚠️ Balance updated despite unexpected error: {old_balance} -> {new_balance}"
-            )
+            logger.warning("⚠️ Balance updated despite unexpected error: %s -> %s", old_balance, new_balance)
 
     def get_risk_metrics(self) -> RiskMetrics:
         """

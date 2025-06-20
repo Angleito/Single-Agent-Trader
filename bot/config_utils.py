@@ -225,13 +225,13 @@ class StartupValidator:
         if results["valid"]:
             logger.info("Startup validation completed successfully")
             if warning_issues:
-                logger.warning(f"Found {len(warning_issues)} warnings")
+                logger.warning("Found %s warnings", len(warning_issues))
                 for warning in warning_issues:
-                    logger.warning(f"  - {warning}")
+                    logger.warning("  - %s", warning)
         else:
             logger.error("Startup validation failed with critical errors")
             for error in critical_issues:
-                logger.error(f"  - {error}")
+                logger.error("  - %s", error)
 
         return results
 
@@ -390,7 +390,7 @@ class ConfigValidator:
                 # Test local Ollama connection
                 results["llm_provider"] = True
         except Exception as e:
-            logger.warning(f"LLM provider validation failed: {e}")
+            logger.warning("LLM provider validation failed: %s", e)
 
         # Test exchange connectivity
         try:
@@ -398,7 +398,7 @@ class ConfigValidator:
                 # In a real implementation, you would test the exchange connection
                 results["exchange"] = True
         except Exception as e:
-            logger.warning(f"Exchange validation failed: {e}")
+            logger.warning("Exchange validation failed: %s", e)
 
         return results
 
@@ -475,7 +475,7 @@ class ConfigManager:
         file_path = self.config_dir / filename
 
         settings.save_to_file(file_path)
-        logger.info(f"Saved {profile.value} configuration to {file_path}")
+        logger.info("Saved %s configuration to %s", profile.value, file_path)
 
         return file_path
 
@@ -485,15 +485,15 @@ class ConfigManager:
         file_path = self.config_dir / filename
 
         if not file_path.exists():
-            logger.warning(f"Configuration file not found: {file_path}")
+            logger.warning("Configuration file not found: %s", file_path)
             return None
 
         try:
             settings = Settings.load_from_file(file_path)
-            logger.info(f"Loaded {profile.value} configuration from {file_path}")
+            logger.info("Loaded %s configuration from %s", profile.value, file_path)
             return settings
         except Exception as e:
-            logger.exception(f"Failed to load configuration from {file_path}: {e}")
+            logger.exception("Failed to load configuration from %s: %s", file_path, e)
             return None
 
     def create_environment_configs(self) -> dict[Environment, Path]:
@@ -569,22 +569,22 @@ class ConfigManager:
 
         backup_path = self.backup_dir / backup_name
         settings.save_to_file(backup_path)
-        logger.info(f"Configuration backup created: {backup_path}")
+        logger.info("Configuration backup created: %s", backup_path)
         return backup_path
 
     def restore_config_backup(self, backup_name: str) -> Settings | None:
         """Restore configuration from a backup."""
         backup_path = self.backup_dir / backup_name
         if not backup_path.exists():
-            logger.error(f"Backup file not found: {backup_path}")
+            logger.error("Backup file not found: %s", backup_path)
             return None
 
         try:
             settings = Settings.load_from_file(backup_path)
-            logger.info(f"Configuration restored from backup: {backup_path}")
+            logger.info("Configuration restored from backup: %s", backup_path)
             return settings
         except Exception as e:
-            logger.exception(f"Failed to restore backup {backup_path}: {e}")
+            logger.exception("Failed to restore backup %s: %s", backup_path, e)
             return None
 
     def list_config_backups(self) -> list[dict[str, Any]]:
@@ -602,7 +602,7 @@ class ConfigManager:
                     }
                 )
             except Exception as e:
-                logger.warning(f"Error reading backup file {backup_file}: {e}")
+                logger.warning("Error reading backup file %s: %s", backup_file, e)
 
         return sorted(backups, key=lambda x: x["created"], reverse=True)
 
@@ -625,7 +625,7 @@ class ConfigManager:
         else:
             raise ValueError(f"Unsupported export format: {export_format}")
 
-        logger.info(f"Configuration exported to: {export_path}")
+        logger.info("Configuration exported to: %s", export_path)
         return export_path
 
     def import_configuration(
@@ -633,7 +633,7 @@ class ConfigManager:
     ) -> Settings | None:
         """Import configuration from various formats."""
         if not import_path.exists():
-            logger.error(f"Import file not found: {import_path}")
+            logger.error("Import file not found: %s", import_path)
             return None
 
         try:
@@ -642,11 +642,11 @@ class ConfigManager:
             else:
                 raise ValueError(f"Unsupported import format: {import_format}")
 
-            logger.info(f"Configuration imported from: {import_path}")
+            logger.info("Configuration imported from: %s", import_path)
             return settings
 
         except Exception as e:
-            logger.exception(f"Failed to import configuration from {import_path}: {e}")
+            logger.exception("Failed to import configuration from %s: %s", import_path, e)
             return None
 
     def switch_profile(
@@ -659,9 +659,7 @@ class ConfigManager:
             self.create_config_backup(settings, backup_name)
 
         new_settings = settings.apply_profile(new_profile)
-        logger.info(
-            f"Switched from {settings.profile.value} to " f"{new_profile.value} profile"
-        )
+        logger.info("Switched from %s to " "%s profile" ), settings.profile.value, new_profile.value)
         return new_settings
 
     def _settings_to_env_format(self, settings: Settings) -> str:
@@ -687,10 +685,7 @@ class ConfigManager:
         # This method is kept for backward compatibility
         # The actual template is now in .env.example
         template_path = Path(".env.template")
-        logger.info(
-            f"Use .env.example as the template file. "
-            f"Legacy template: {template_path}"
-        )
+        logger.info("Use .env.example as the template file. " "Legacy template: %s" ), template_path)
         return template_path
 
 
@@ -816,10 +811,7 @@ class HealthMonitor:
             name: comp["status"] for name, comp in health_status["components"].items()
         }
 
-        logger.info(
-            f"Health check completed. Overall status: "
-            f"{health_status['overall_status']}"
-        )
+        logger.info("Health check completed. Overall status: " "%s" ), health_status['overall_status'])
         return health_status
 
     def get_status_summary(self) -> dict[str, Any]:
@@ -1078,9 +1070,7 @@ def setup_configuration(
         try:
             environment = Environment(env_var)
         except ValueError:
-            logger.warning(
-                f"Unknown environment '{env_var}', defaulting to development"
-            )
+            logger.warning("Unknown environment '%s', defaulting to development", env_var)
             environment = Environment.DEVELOPMENT
 
     # Detect profile from environment variable
@@ -1089,14 +1079,12 @@ def setup_configuration(
         try:
             profile = TradingProfile(profile_var)
         except ValueError:
-            logger.warning(
-                f"Unknown trading profile '{profile_var}', defaulting to moderate"
-            )
+            logger.warning("Unknown trading profile '%s', defaulting to moderate", profile_var)
             profile = TradingProfile.MODERATE
 
     # Load from config file if provided
     if config_file and Path(config_file).exists():
-        logger.info(f"Loading configuration from {config_file}")
+        logger.info("Loading configuration from %s", config_file)
         settings = Settings.load_from_file(config_file)
         # Apply profile if different
         if settings.profile != profile:
@@ -1112,17 +1100,17 @@ def setup_configuration(
 
     if not validation_results["valid"]:
         for error in validation_results["critical_errors"]:
-            logger.error(f"Configuration error: {error}")
+            logger.error("Configuration error: %s", error)
         raise ValueError("Configuration validation failed with critical errors")
 
     for warning in validation_results["warnings"]:
-        logger.warning(f"Configuration warning: {warning}")
+        logger.warning("Configuration warning: %s", warning)
 
     logger.info("Configuration loaded successfully:")
-    logger.info(f"  Environment: {settings.system.environment.value}")
-    logger.info(f"  Profile: {settings.profile.value}")
-    logger.info(f"  Dry Run: {settings.system.dry_run}")
-    logger.info(f"  Symbol: {settings.trading.symbol}")
-    logger.info(f"  Leverage: {settings.trading.leverage}x")
+    logger.info("  Environment: %s", settings.system.environment.value)
+    logger.info("  Profile: %s", settings.profile.value)
+    logger.info("  Dry Run: %s", settings.system.dry_run)
+    logger.info("  Symbol: %s", settings.trading.symbol)
+    logger.info("  Leverage: %sx", settings.trading.leverage)
 
     return settings

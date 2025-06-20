@@ -172,7 +172,7 @@ class SommiPatterns:
             # Determine resampling rule based on original frequency
             resample_rule = self._determine_resample_rule(price_data.index, multiplier)
 
-            logger.debug(f"Resampling to higher timeframe: {resample_rule}")
+            logger.debug("Resampling to higher timeframe: %s", resample_rule)
 
             # Resample OHLCV data to higher timeframe
             htf_data = (
@@ -197,9 +197,7 @@ class SommiPatterns:
             )
 
             if len(htf_data) < min_required:
-                logger.warning(
-                    f"Insufficient HTF data for WaveTrend calculation: {len(htf_data)} < {min_required}"
-                )
+                logger.warning("Insufficient HTF data for WaveTrend calculation: %s < %s", len(htf_data), min_required)
                 return self._empty_htf_series(price_data.index)
 
             # Calculate WaveTrend on higher timeframe
@@ -216,7 +214,7 @@ class SommiPatterns:
             return htf_wt1_aligned, htf_wt2_aligned, htf_vwap_aligned
 
         except Exception as e:
-            logger.exception(f"Error calculating higher timeframe WaveTrend: {e}")
+            logger.exception("Error calculating higher timeframe WaveTrend: %s", e)
             return self._empty_htf_series(price_data.index)
 
     def _calculate_vwap(self, ohlcv_data: pd.DataFrame) -> pd.Series:
@@ -238,7 +236,7 @@ class SommiPatterns:
             ].cumsum()
             return vwap.fillna(0)
         except Exception as e:
-            logger.exception(f"Error calculating VWAP: {e}")
+            logger.exception("Error calculating VWAP: %s", e)
             return pd.Series(0, index=ohlcv_data.index)
 
     def _empty_htf_series(
@@ -300,9 +298,7 @@ class SommiPatterns:
                 # Fallback for single data point
                 resample_rule = f"{multiplier}T"
 
-            logger.debug(
-                f"Inferred frequency from time difference, using {resample_rule}"
-            )
+            logger.debug("Inferred frequency from time difference, using %s", resample_rule)
         else:
             # Extract numeric part and unit
             match = re.match(r"(\d*)([A-Z]+)", freq)
@@ -314,9 +310,7 @@ class SommiPatterns:
             else:
                 resample_rule = f"{multiplier}T"
 
-            logger.debug(
-                f"Using detected frequency {freq}, resampling with {resample_rule}"
-            )
+            logger.debug("Using detected frequency %s, resampling with %s", freq, resample_rule)
 
         return resample_rule
 
@@ -387,7 +381,7 @@ class SommiPatterns:
             return ha_data
 
         except Exception as e:
-            logger.exception(f"Error calculating Heikin Ashi candles: {e}")
+            logger.exception("Error calculating Heikin Ashi candles: %s", e)
             return pd.DataFrame(index=ohlc_data.index)
 
     def calculate_sommi_flags(
@@ -474,7 +468,7 @@ class SommiPatterns:
             }
 
         except Exception as e:
-            logger.exception(f"Error calculating Sommi flags: {e}")
+            logger.exception("Error calculating Sommi flags: %s", e)
             return self._empty_flag_result(pd.Index([]))
 
     def _calculate_flag_confidence(
@@ -603,7 +597,7 @@ class SommiPatterns:
             }
 
         except Exception as e:
-            logger.exception(f"Error calculating Sommi diamonds: {e}")
+            logger.exception("Error calculating Sommi diamonds: %s", e)
             return self._empty_diamond_result(pd.Index([]))
 
     def _calculate_diamond_confidence(
@@ -674,9 +668,7 @@ class SommiPatterns:
             )
 
             if len(price_data) < min_required:
-                logger.warning(
-                    f"Insufficient data for Sommi analysis: {len(price_data)} < {min_required}"
-                )
+                logger.warning("Insufficient data for Sommi analysis: %s < %s", len(price_data), min_required)
                 return price_data.copy()
 
             result = price_data.copy()
@@ -767,7 +759,7 @@ class SommiPatterns:
             return result
 
         except Exception as e:
-            logger.exception(f"Error in combined Sommi analysis: {e}")
+            logger.exception("Error in combined Sommi analysis: %s", e)
             return price_data.copy()
 
     def _resample_for_htf(self, price_data: pd.DataFrame) -> pd.DataFrame:
@@ -798,7 +790,7 @@ class SommiPatterns:
 
 
         except Exception as e:
-            logger.exception(f"Error resampling for HTF: {e}")
+            logger.exception("Error resampling for HTF: %s", e)
             return pd.DataFrame()
 
     def get_latest_signals(self, analysis_df: pd.DataFrame) -> list[PatternSignal]:
@@ -914,7 +906,7 @@ class SommiPatterns:
             return False
 
         except Exception as e:
-            logger.exception(f"Error validating pattern conditions: {e}")
+            logger.exception("Error validating pattern conditions: %s", e)
             return False
 
     def _validate_flag_conditions(self, data: dict, pattern_type: PatternType) -> bool:
@@ -990,7 +982,7 @@ class SommiPatterns:
             return result
 
         except Exception as e:
-            logger.exception(f"Error in Sommi patterns calculate method: {e}")
+            logger.exception("Error in Sommi patterns calculate method: %s", e)
             # Return DataFrame with empty pattern columns
             result = df.copy()
             empty_bool = pd.Series(False, index=result.index)

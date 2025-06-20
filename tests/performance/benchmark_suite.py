@@ -217,10 +217,10 @@ class PerformanceBenchmarks:
             suite.add_result(self.benchmark_data_serialization())
             suite.add_result(self.benchmark_data_deserialization())
 
-            logger.info(f"Completed {len(suite.results)} benchmarks successfully")
+            logger.info("Completed %s benchmarks successfully", len(suite.results))
 
         except Exception as e:
-            logger.exception(f"Benchmark suite failed: {e}")
+            logger.exception("Benchmark suite failed: %s", e)
             raise
         finally:
             suite.end_time = datetime.utcnow()
@@ -493,7 +493,7 @@ class PerformanceBenchmarks:
         Returns:
             BenchmarkResult with metrics
         """
-        logger.info(f"Running benchmark: {name}")
+        logger.info("Running benchmark: %s", name)
 
         # Warm up
         try:
@@ -517,7 +517,7 @@ class PerformanceBenchmarks:
             try:
                 result = func()
             except Exception as e:
-                logger.warning(f"Benchmark iteration {i+1} failed: {e}")
+                logger.warning("Benchmark iteration %s failed: %s", i+1, e)
                 continue
             end_time = time.perf_counter()
 

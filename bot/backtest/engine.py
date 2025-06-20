@@ -76,7 +76,7 @@ class BacktestEngine:
     realistic execution modeling and comprehensive performance metrics.
     """
 
-    def __init__(self, initial_balance: Decimal = Decimal("10000")):
+    def __init__(self, initial_balance: Decimal = Decimal("10000")) -> None:
         """
         Initialize the backtest engine.
 
@@ -98,9 +98,7 @@ class BacktestEngine:
         self.current_position: BacktestTrade | None = None
         self.equity_curve: list[tuple[datetime, Decimal]] = []
 
-        logger.info(
-            f"Initialized BacktestEngine with ${initial_balance} starting balance"
-        )
+        logger.info("Initialized BacktestEngine with $%s starting balance", initial_balance)
 
     async def run_backtest(
         self,
@@ -121,7 +119,7 @@ class BacktestEngine:
         Returns:
             BacktestResults with comprehensive metrics
         """
-        logger.info(f"Starting backtest with {strategy_type} strategy")
+        logger.info("Starting backtest with %s strategy", strategy_type)
 
         # Prepare data
         data = self._prepare_data(historical_data, start_date, end_date)
@@ -184,7 +182,7 @@ class BacktestEngine:
         # Sort by timestamp
         filtered_data = filtered_data.sort_index()
 
-        logger.info(f"Prepared {len(filtered_data)} candles for backtesting")
+        logger.info("Prepared %s candles for backtesting", len(filtered_data))
         return filtered_data
 
     def _reset_state(self) -> None:
@@ -363,7 +361,7 @@ class BacktestEngine:
             size=position_size,
         )
 
-        logger.debug(f"Opened {action.action} position: {position_size} @ {price}")
+        logger.debug("Opened %s position: %s @ %s", action.action, position_size, price)
 
     async def _close_backtest_position(
         self, timestamp: datetime, price: Decimal, reason: str

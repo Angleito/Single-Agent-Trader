@@ -73,28 +73,21 @@ def convert_from_18_decimal(
         # Check if conversion is needed
         if is_likely_18_decimal(decimal_value):
             converted_value = decimal_value / Decimal("1e18")
-            logger.debug(
-                f"Converted {field_name or 'value'} from 18-decimal: "
-                f"{decimal_value} -> {converted_value} (symbol: {symbol})"
+            logger.debug("Converted %s from 18-decimal: " "%s -> %s (symbol: %s)", field_name or 'value', decimal_value, converted_value, symbol)
             )
         else:
             converted_value = decimal_value
-            logger.debug(
-                f"No conversion needed for {field_name or 'value'}: "
-                f"{decimal_value} (symbol: {symbol})"
+            logger.debug("No conversion needed for %s: " "%s (symbol: %s)", field_name or 'value', decimal_value, symbol)
             )
 
         # Validate the result
         if symbol and not is_price_valid(converted_value, symbol):
-            logger.warning(
-                f"Price {converted_value} for {symbol} is outside expected range. "
-                f"Original value: {value}, Field: {field_name}"
-            )
+            logger.warning("Price %s for %s is outside expected range. " "Original value: %s, Field: %s" ), converted_value, symbol, value, field_name)
 
         return converted_value
 
     except (ValueError, TypeError, ArithmeticError) as e:
-        logger.exception(f"Error converting value {value}: {e}")
+        logger.exception("Error converting value %s: %s", value, e)
         raise ValueError(f"Invalid numeric value: {value}") from e
 
 
@@ -145,11 +138,11 @@ def convert_candle_data(candle: list, symbol: str | None = None) -> list:
             float(convert_from_18_decimal(candle[5], symbol, "volume")),  # volume
         ]
 
-        logger.debug(f"Converted candle for {symbol}: OHLCV = {converted_candle[1:6]}")
+        logger.debug("Converted candle for %s: OHLCV = %s", symbol, converted_candle[1:6])
         return converted_candle
 
     except (ValueError, TypeError, IndexError) as e:
-        logger.exception(f"Error converting candle data: {e}")
+        logger.exception("Error converting candle data: %s", e)
         raise ValueError(f"Failed to convert candle data: {candle}") from e
 
 
@@ -182,7 +175,7 @@ def convert_ticker_price(
             try:
                 converted_data[key] = str(convert_from_18_decimal(value, symbol, key))
             except ValueError:
-                logger.warning(f"Failed to convert {key}: {value}")
+                logger.warning("Failed to convert %s: %s", key, value)
                 converted_data[key] = str(value)
         else:
             converted_data[key] = value
@@ -205,10 +198,7 @@ def log_price_conversion_stats(
         symbol: Trading symbol
         field_name: Name of the field being converted
     """
-    logger.info(
-        f"Price conversion stats for {symbol}:{field_name} - "
-        f"Original: {original_value}, Converted: {converted_value}, "
-        f"Ratio: {float(original_value) / float(converted_value) if converted_value != 0 else 'N/A'}, "
+    logger.info("Price conversion stats for %s:%s - " "Original: %s, Converted: %s, " "Ratio: %s, ", symbol, field_name, original_value, converted_value, float(original_value) / float(converted_value) if converted_value != 0 else 'N/A')
         f"Valid: {is_price_valid(converted_value, symbol)}"
     )
 
@@ -238,11 +228,11 @@ def get_current_real_price(symbol: str) -> float | None:
         latest_data = market_provider.get_latest_ohlcv(limit=1)
         if latest_data and len(latest_data) > 0:
             current_price = float(latest_data[-1].close)
-            logger.debug(f"Retrieved real market price for {symbol}: ${current_price}")
+            logger.debug("Retrieved real market price for %s: $%s", symbol, current_price)
             return current_price
 
     except Exception as e:
-        logger.debug(f"Could not fetch real market price for {symbol}: {e}")
+        logger.debug("Could not fetch real market price for %s: %s", symbol, e)
 
     try:
         # Try Bluefin market data provider if available
@@ -252,12 +242,12 @@ def get_current_real_price(symbol: str) -> float | None:
         latest_data = bluefin_provider.get_latest_ohlcv(limit=1)
         if latest_data and len(latest_data) > 0:
             current_price = float(latest_data[-1].close)
-            logger.debug(f"Retrieved real Bluefin price for {symbol}: ${current_price}")
+            logger.debug("Retrieved real Bluefin price for %s: $%s", symbol, current_price)
             return current_price
 
     except Exception as e:
-        logger.debug(f"Could not fetch real Bluefin price for {symbol}: {e}")
+        logger.debug("Could not fetch real Bluefin price for %s: %s", symbol, e)
 
     # Return None if no real price could be fetched
-    logger.debug(f"No real market price available for {symbol}, using fallback")
+    logger.debug("No real market price available for %s, using fallback", symbol)
     return None

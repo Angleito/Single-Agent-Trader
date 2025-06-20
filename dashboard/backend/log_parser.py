@@ -220,7 +220,7 @@ class DockerLogParser:
             # First, match the basic log structure
             match = self.LOG_PATTERN.match(line.strip())
             if not match:
-                logger.debug(f"Failed to match log pattern for line: {line}")
+                logger.debug("Failed to match log pattern for line: %s", line)
                 return None
 
             # Extract basic components
@@ -234,14 +234,14 @@ class DockerLogParser:
             try:
                 timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S,%f")
             except ValueError:
-                logger.warning(f"Failed to parse timestamp: {timestamp_str}")
+                logger.warning("Failed to parse timestamp: %s", timestamp_str)
                 timestamp = datetime.now()
 
             # Parse log level
             try:
                 log_level = LogLevel(level_str)
             except ValueError:
-                logger.warning(f"Unknown log level: {level_str}")
+                logger.warning("Unknown log level: %s", level_str)
                 log_level = LogLevel.INFO
 
             # Parse specific log types based on content
@@ -251,7 +251,7 @@ class DockerLogParser:
 
 
         except Exception as e:
-            logger.exception(f"Error parsing log line '{line}': {e}")
+            logger.exception("Error parsing log line '%s': %s", line, e)
             return None
 
     def _parse_specific_log_type(
@@ -410,7 +410,7 @@ class DockerLogParser:
             )
 
             if result.returncode != 0:
-                logger.error(f"Docker logs command failed: {result.stderr}")
+                logger.error("Docker logs command failed: %s", result.stderr)
                 return []
 
             # Parse each line
@@ -434,7 +434,7 @@ class DockerLogParser:
             )
             return []
         except Exception as e:
-            logger.exception(f"Error getting historical logs: {e}")
+            logger.exception("Error getting historical logs: %s", e)
             return []
 
     def stream_logs(self, callback: Callable[[ParsedLogEntry], None]) -> None:
@@ -453,7 +453,7 @@ class DockerLogParser:
                     universal_newlines=True,
                 )
 
-                logger.info(f"Started streaming logs from {self.container_name}")
+                logger.info("Started streaming logs from %s", self.container_name)
 
                 while not self._stop_event.is_set():
                     try:
@@ -470,7 +470,7 @@ class DockerLogParser:
                             callback(parsed_entry)
 
                     except Exception as e:
-                        logger.exception(f"Error processing log line: {e}")
+                        logger.exception("Error processing log line: %s", e)
                         continue
 
                 # Clean up process
@@ -483,7 +483,7 @@ class DockerLogParser:
                     "Docker command not found. Make sure Docker is installed and in PATH"
                 )
             except Exception as e:
-                logger.exception(f"Error in log streaming worker: {e}")
+                logger.exception("Error in log streaming worker: %s", e)
 
         # Start streaming in background thread
         self._parsing_thread = threading.Thread(target=_stream_worker, daemon=True)
@@ -513,7 +513,7 @@ class DockerLogParser:
             return self.container_name in result.stdout
 
         except Exception as e:
-            logger.exception(f"Error checking container status: {e}")
+            logger.exception("Error checking container status: %s", e)
             return False
 
 

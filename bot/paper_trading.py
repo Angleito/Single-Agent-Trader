@@ -388,7 +388,7 @@ class PaperTradingAccount:
             return True
 
         except Exception as e:
-            logger.exception(f"Balance validation failed for {operation}: {e}")
+            logger.exception("Balance validation failed for %s: %s", operation, e)
             raise ValueError(f"Invalid balance update: {e}") from e
 
     def get_account_status(
@@ -558,10 +558,13 @@ class PaperTradingAccount:
                     # Opening new position
                     if required_margin + fees > (self.equity - self.margin_used):
                         logger.warning(
-                            f"❌ INSUFFICIENT FUNDS SIMULATION:"
-                            f"\n  • Required: ${required_margin + fees:,.2f}"
-                            f"\n  • Available: ${self.equity - self.margin_used:,.2f}"
-                            f"\n  • Shortfall: ${(required_margin + fees) - (self.equity - self.margin_used):,.2f}"
+                            "❌ INSUFFICIENT FUNDS SIMULATION:"
+                            "\n  • Required: $%.2f"
+                            "\n  • Available: $%.2f"
+                            "\n  • Shortfall: $%.2f",
+                            required_margin + fees,
+                            self.equity - self.margin_used,
+                            (required_margin + fees) - (self.equity - self.margin_used),
                         )
                         return self._create_failed_order(
                             action, symbol, "INSUFFICIENT_FUNDS"
@@ -602,10 +605,7 @@ class PaperTradingAccount:
                     # Add comprehensive execution logging
                     if settings.trading.enable_futures and symbol == "ETH-USD":
                         num_contracts = int(trade_size / Decimal("0.1"))
-                        logger.info(
-                            f"✅ PAPER TRADING FUTURES EXECUTION COMPLETE:"
-                            f"\n  🎯 Action: {action.action}"
-                            f"\n  📊 Contracts: {num_contracts} contracts ({trade_size} ETH)"
+                        logger.info("✅ PAPER TRADING FUTURES EXECUTION COMPLETE:" "\n  🎯 Action: %s" "\n  📊 Contracts: %s contracts (%s ETH)", action.action, num_contracts, trade_size)
                             f"\n  💵 Price: ${execution_price}"
                             f"\n  💸 Value: ${trade_size * execution_price:.2f}"
                             f"\n  🏷️ Fees: ${fees:.4f} @ {trade_fees.fee_rate:.4%}"
@@ -618,14 +618,7 @@ class PaperTradingAccount:
                             f"\n  📋 Order ID: {order.id}"
                         )
                     else:
-                        logger.info(
-                            f"✅ PAPER TRADING EXECUTION COMPLETE:"
-                            f"\n  🎯 Action: {action.action}"
-                            f"\n  📊 Size: {trade_size} {symbol}"
-                            f"\n  💵 Price: ${execution_price}"
-                            f"\n  💸 Value: ${trade_size * execution_price:.2f}"
-                            f"\n  🏷️ Fees: ${fees:.4f} @ {trade_fees.fee_rate:.4%}"
-                            f"\n  🔴 Stop Loss: ${stop_loss_price:.2f} (${stop_loss_pnl:+.2f})"
+                        logger.info("✅ PAPER TRADING EXECUTION COMPLETE:" "\n  🎯 Action: %s" "\n  📊 Size: %s %s" "\n  💵 Price: $%s" "\n  💸 Value: $%s" "\n  🏷️ Fees: $%s @ %s" "\n  🔴 Stop Loss: $%s ($%s)", action.action, trade_size, symbol, execution_price, trade_size * execution_price:.2f, fees:.4f, trade_fees.fee_rate:.4%, stop_loss_price:.2f, stop_loss_pnl:+.2f)
                             f"\n  🟢 Take Profit: ${take_profit_price:.2f} (${take_profit_pnl:+.2f})"
                             f"\n  🏦 New Balance: ${self.current_balance:.2f}"
                             f"\n  📈 New Equity: ${self.equity:.2f}"
@@ -635,10 +628,7 @@ class PaperTradingAccount:
                         )
 
                     # Also log a summary for easy scanning
-                    logger.info(
-                        f"🎬 TRADE SUMMARY: {action.action} {trade_size} {symbol} @ ${execution_price} | "
-                        f"Value: ${trade_value:.2f} | Balance: ${self.current_balance:.2f} → ${self.equity:.2f}"
-                    )
+                    logger.info("🎬 TRADE SUMMARY: %s %s %s @ $%s | " "Value: $%s | Balance: $%s → $%s" ), action.action, trade_size, symbol, execution_price, trade_value:.2f, self.current_balance:.2f, self.equity:.2f)
 
                     # Record successful trade execution in monitoring
                     balance_after = float(self.current_balance)
@@ -663,7 +653,7 @@ class PaperTradingAccount:
                 return order
 
             except Exception as e:
-                logger.exception(f"❌ Error simulating paper trade: {e}")
+                logger.exception("❌ Error simulating paper trade: %s", e)
 
                 # Record failed trade execution in monitoring
                 self._record_balance_operation(
@@ -706,9 +696,7 @@ class PaperTradingAccount:
                 # Use fixed number of contracts
                 num_contracts = settings.trading.fixed_contract_size
                 trade_size = CONTRACT_SIZE * num_contracts
-                logger.debug(
-                    f"Using fixed contract size: {num_contracts} contracts = {trade_size} ETH"
-                )
+                logger.debug("Using fixed contract size: %s contracts = %s ETH", num_contracts, trade_size)
             else:
                 # Calculate quantity in ETH based on position value
                 quantity_in_eth = leveraged_value / current_price
@@ -720,10 +708,7 @@ class PaperTradingAccount:
                 # Return the actual quantity in ETH (multiples of 0.1)
                 trade_size = CONTRACT_SIZE * num_contracts
 
-                logger.debug(
-                    f"Futures contract calculation: {quantity_in_eth:.6f} ETH -> "
-                    f"{num_contracts} contracts = {trade_size} ETH"
-                )
+                logger.debug("Futures contract calculation: %s ETH -> " "%s contracts = %s ETH" ), quantity_in_eth:.6f, num_contracts, trade_size)
         else:
             # For spot trading or non-ETH futures, use the original calculation
             trade_size = leveraged_value / current_price
@@ -766,25 +751,19 @@ class PaperTradingAccount:
                 # Handle different scenarios for existing positions
                 if existing_position.side == action.action:
                     # Same direction - increase position size
-                    logger.info(
-                        f"Adding to existing {action.action} position for {symbol}"
-                    )
+                    logger.info("Adding to existing %s position for %s", action.action, symbol)
                     return self._increase_position(
                         existing_position, price, size, fees, current_time
                     )
                 else:
                     # Opposite direction - close existing position and open new one
-                    logger.info(
-                        f"Closing existing {existing_position.side} position and opening new {action.action} position for {symbol}"
-                    )
+                    logger.info("Closing existing %s position and opening new %s position for %s", existing_position.side, action.action, symbol)
                     # First close the existing position
                     close_order = self._close_position(
                         symbol, price, current_time, fees
                     )
                     if close_order.status != OrderStatus.FILLED:
-                        logger.error(
-                            f"Failed to close existing position: {close_order.status}"
-                        )
+                        logger.error("Failed to close existing position: %s", close_order.status)
                         return self._create_failed_order(action, symbol, "CLOSE_FAILED")
 
                     # Now continue to open the new position (fall through to position opening logic)
@@ -832,11 +811,9 @@ class PaperTradingAccount:
                 )
                 self.margin_used = new_margin_used
                 self.current_balance = new_balance
-                logger.debug(f"✅ Balance update validated: ${self.current_balance}")
+                logger.debug("✅ Balance update validated: $%s", self.current_balance)
             except ValueError as e:
-                logger.exception(
-                    f"❌ Balance validation failed during trade execution - trade rejected: {e}"
-                )
+                logger.exception("❌ Balance validation failed during trade execution - trade rejected: %s", e)
                 return self._create_failed_order(
                     action, symbol, f"BALANCE_VALIDATION_FAILED: {e}"
                 )
@@ -857,14 +834,10 @@ class PaperTradingAccount:
             # Log with contract information for futures
             if settings.trading.enable_futures and symbol == "ETH-USD":
                 num_contracts = int(size / Decimal("0.1"))
-                logger.info(
-                    f"📈 Paper Trading FUTURES: Opened {action.action} position | "
-                    f"{num_contracts} contracts ({size} ETH) @ ${price} | Trade ID: {trade_id}"
+                logger.info("📈 Paper Trading FUTURES: Opened %s position | " "%s contracts (%s ETH) @ $%s | Trade ID: %s", action.action, num_contracts, size, price, trade_id)
                 )
             else:
-                logger.info(
-                    f"📈 Paper Trading: Opened {action.action} position | {size} {symbol} @ ${price} | Trade ID: {trade_id}"
-                )
+                logger.info("📈 Paper Trading: Opened %s position | %s %s @ $%s | Trade ID: %s", action.action, size, symbol, price, trade_id)
 
             # Save state immediately after opening position
             self._save_state()
@@ -884,7 +857,7 @@ class PaperTradingAccount:
                 break
 
         if not trade_to_close:
-            logger.warning(f"No open position found for {symbol}")
+            logger.warning("No open position found for %s", symbol)
             return self._create_failed_order(
                 TradeAction(
                     action="CLOSE",
@@ -954,9 +927,7 @@ class PaperTradingAccount:
             timestamp=close_time,
         )
 
-        logger.info(
-            f"📊 Paper Trading: Closed {trade_to_close.side} position | {trade_to_close.size} {symbol} @ ${price} | "
-            f"P&L: ${realized_pnl:.2f} ({'+' if realized_pnl > 0 else ''}{realized_pnl/trade_to_close.entry_price*100:.2f}%) | "
+        logger.info("📊 Paper Trading: Closed %s position | %s %s @ $%s | " "P&L: $%s (%s%s%) | ", trade_to_close.side, trade_to_close.size, symbol, price, realized_pnl:.2f, '+' if realized_pnl > 0 else '', realized_pnl/trade_to_close.entry_price*100:.2f)
             f"{'✅ WIN' if realized_pnl > 0 else '❌ LOSS'}"
         )
 
@@ -1054,11 +1025,7 @@ class PaperTradingAccount:
             timestamp=current_time,
         )
 
-        logger.info(
-            f"📈 Paper Trading: Increased {existing_position.side} position | "
-            f"+{size} {existing_position.symbol} @ ${price} | "
-            f"Total size: {total_size} @ avg ${average_price:.4f} | Trade ID: {trade_id}"
-        )
+        logger.info("📈 Paper Trading: Increased %s position | " "+%s %s @ $%s | " "Total size: %s @ avg $%s | Trade ID: %s" ), existing_position.side, size, existing_position.symbol, price, total_size, average_price:.4f, trade_id)
 
         # Save state immediately after increasing position
         self._save_state()
@@ -1088,10 +1055,10 @@ class PaperTradingAccount:
 
             real_price = get_current_real_price(symbol)
             if real_price:
-                logger.debug(f"📊 Using real market price for {symbol}: ${real_price}")
+                logger.debug("📊 Using real market price for %s: $%s", symbol, real_price)
                 return Decimal(str(real_price))
         except (ImportError, Exception) as e:
-            logger.debug(f"Could not fetch real price for {symbol}: {e}")
+            logger.debug("Could not fetch real price for %s: %s", symbol, e)
 
         # Fallback to realistic prices based on corrected price data
         if "SUI" in symbol:
@@ -1103,7 +1070,7 @@ class PaperTradingAccount:
         else:
             price = Decimal("100")  # Generic reasonable price
 
-        logger.debug(f"📊 Using fallback price for {symbol}: ${price}")
+        logger.debug("📊 Using fallback price for %s: $%s", symbol, price)
         return price
 
     def update_daily_performance(self) -> None:
@@ -1574,14 +1541,10 @@ class PaperTradingAccount:
                     with open(temp_account_file, "w") as f:
                         json.dump(account_data, f, indent=2)
                     temp_account_file.rename(self.account_file)
-                    logger.info(
-                        f"✅ Account state saved: balance=${self._normalize_balance(self.current_balance)}, trades={self.trade_counter}"
-                    )
+                    logger.info("✅ Account state saved: balance=$%s, trades=%s", self._normalize_balance(self.current_balance), self.trade_counter)
 
                 except Exception as e:
-                    logger.exception(
-                        f"❌ Failed to save account state to {self.account_file}: {type(e).__name__}: {e}"
-                    )
+                    logger.exception("❌ Failed to save account state to %s: %s: %s", self.account_file, type(e).__name__, e)
                     raise OSError(f"Account save failed: {e}") from e
 
                 # Save trades with enhanced serialization error handling
@@ -1615,9 +1578,7 @@ class PaperTradingAccount:
                                 json.dumps(obj)
                                 return obj
                         except (TypeError, ValueError) as e:
-                            logger.warning(
-                                f"⚠️ Serialization issue with {type(obj).__name__} '{obj}': {e}"
-                            )
+                            logger.warning("⚠️ Serialization issue with %s '%s': %s", type(obj).__name__, obj, e)
                             return str(obj)  # Fallback to string representation
 
                     def serialize_dict(d):
@@ -1635,14 +1596,10 @@ class PaperTradingAccount:
                     with open(temp_trades_file, "w") as f:
                         json.dump(trades_data, f, indent=2)
                     temp_trades_file.rename(self.trades_file)
-                    logger.info(
-                        f"✅ Trades saved: {len(self.open_trades)} open, {len(self.closed_trades)} closed"
-                    )
+                    logger.info("✅ Trades saved: %s open, %s closed", len(self.open_trades), len(self.closed_trades))
 
                 except Exception as e:
-                    logger.exception(
-                        f"❌ Failed to save trades to {self.trades_file}: {type(e).__name__}: {e}"
-                    )
+                    logger.exception("❌ Failed to save trades to %s: %s: %s", self.trades_file, type(e).__name__, e)
                     raise OSError(f"Trades save failed: {e}") from e
 
                 # Save performance data with error handling
@@ -1662,30 +1619,22 @@ class PaperTradingAccount:
                     with open(temp_perf_file, "w") as f:
                         json.dump(performance_data, f, indent=2)
                     temp_perf_file.rename(self.performance_file)
-                    logger.info(
-                        f"✅ Performance data saved: {len(self.daily_metrics)} daily metrics"
-                    )
+                    logger.info("✅ Performance data saved: %s daily metrics", len(self.daily_metrics))
 
                 except Exception as e:
-                    logger.exception(
-                        f"❌ Failed to save performance data to {self.performance_file}: {type(e).__name__}: {e}"
-                    )
+                    logger.exception("❌ Failed to save performance data to %s: %s: %s", self.performance_file, type(e).__name__, e)
                     raise OSError(f"Performance save failed: {e}") from e
 
                 # Save session trades for dashboard access
                 try:
                     self.save_session_trades()
                 except Exception as e:
-                    logger.warning(
-                        f"⚠️ Failed to save session trades (non-critical): {e}"
-                    )
+                    logger.warning("⚠️ Failed to save session trades (non-critical): %s", e)
                     # Don't fail the entire save operation for this
 
                 # Calculate and log save performance
                 save_duration = (time.perf_counter() - save_start_time) * 1000
-                logger.info(
-                    f"💾 Paper trading state saved successfully in {save_duration:.1f}ms"
-                )
+                logger.info("💾 Paper trading state saved successfully in %sms", save_duration:.1f)
 
                 # Clean up any temporary files that might have been left behind
                 for temp_file in self.data_dir.glob("*.tmp"):
@@ -1696,31 +1645,21 @@ class PaperTradingAccount:
 
             except OSError as e:
                 # IO-specific errors (permissions, disk space, etc.)
-                logger.exception(
-                    f"🚨 CRITICAL: Paper trading state save failed due to IO error: {e}"
-                )
-                logger.exception(f"🚨 Data directory: {self.data_dir}")
-                logger.exception(
-                    f"🚨 Files: account={self.account_file.exists()}, trades={self.trades_file.exists()}, perf={self.performance_file.exists()}"
-                )
+                logger.exception("🚨 CRITICAL: Paper trading state save failed due to IO error: %s", e)
+                logger.exception("🚨 Data directory: %s", self.data_dir)
+                logger.exception("🚨 Files: account=%s, trades=%s, perf=%s", self.account_file.exists(), self.trades_file.exists(), self.performance_file.exists())
                 raise  # Re-raise IO errors as they're critical
 
             except Exception as e:
                 # Catch-all for unexpected errors
-                logger.exception(
-                    f"🚨 CRITICAL: Unexpected error during paper trading state save: {type(e).__name__}: {e}"
-                )
-                logger.exception(
-                    f"🚨 Account state: balance={self.current_balance}, trades={self.trade_counter}"
-                )
-                logger.exception(
-                    f"🚨 Data state: open_trades={len(self.open_trades)}, closed_trades={len(self.closed_trades)}"
-                )
+                logger.exception("🚨 CRITICAL: Unexpected error during paper trading state save: %s: %s", type(e).__name__, e)
+                logger.exception("🚨 Account state: balance=%s, trades=%s", self.current_balance, self.trade_counter)
+                logger.exception("🚨 Data state: open_trades=%s, closed_trades=%s", len(self.open_trades), len(self.closed_trades))
 
                 # Log stack trace for debugging
                 import traceback
 
-                logger.exception(f"🚨 Stack trace:\n{traceback.format_exc()}")
+                logger.exception("🚨 Stack trace:\n%s", traceback.format_exc())
 
                 raise  # Re-raise unexpected errors
 
@@ -1755,7 +1694,7 @@ class PaperTradingAccount:
                         }
                     )
                 except Exception as e:
-                    logger.warning(f"⚠️ Error serializing open trade {trade.id}: {e}")
+                    logger.warning("⚠️ Error serializing open trade %s: %s", trade.id, e)
                     continue
 
             # Add closed trades with error handling
@@ -1793,7 +1732,7 @@ class PaperTradingAccount:
                         }
                     )
                 except Exception as e:
-                    logger.warning(f"⚠️ Error serializing closed trade {trade.id}: {e}")
+                    logger.warning("⚠️ Error serializing closed trade %s: %s", trade.id, e)
                     continue
 
             # Add metadata for debugging
@@ -1813,14 +1752,10 @@ class PaperTradingAccount:
                 json.dump(session_data, f, indent=2)
             temp_session_file.rename(session_trades_file)
 
-            logger.info(
-                f"📊 Session trades saved: {len(session_trades)} trades to {session_trades_file}"
-            )
+            logger.info("📊 Session trades saved: %s trades to %s", len(session_trades), session_trades_file)
 
         except Exception as e:
-            logger.exception(
-                f"❌ Failed to save session trades to {session_trades_file}: {type(e).__name__}: {e}"
-            )
+            logger.exception("❌ Failed to save session trades to %s: %s: %s", session_trades_file, type(e).__name__, e)
 
     def _load_state(self) -> None:
         """Load state from files."""
@@ -1857,9 +1792,7 @@ class PaperTradingAccount:
                         account_data["session_start_time"]
                     )
 
-                logger.info(
-                    f"Loaded paper trading account: ${self.current_balance:,.2f} balance"
-                )
+                logger.info("Loaded paper trading account: $%s balance", self.current_balance:,.2f)
 
             # Load trades
             if self.trades_file.exists():
@@ -1926,9 +1859,7 @@ class PaperTradingAccount:
                     )
                     self.closed_trades.append(trade)
 
-                logger.info(
-                    f"Loaded {len(self.open_trades)} open and {len(self.closed_trades)} closed trades"
-                )
+                logger.info("Loaded %s open and %s closed trades", len(self.open_trades), len(self.closed_trades))
 
             # Load performance data
             if self.performance_file.exists():
@@ -1961,12 +1892,10 @@ class PaperTradingAccount:
                     )
                     self.daily_metrics[date] = metrics
 
-                logger.info(
-                    f"Loaded performance data for {len(self.daily_metrics)} days"
-                )
+                logger.info("Loaded performance data for %s days", len(self.daily_metrics))
 
         except Exception as e:
-            logger.exception(f"Failed to load paper trading state: {e}")
+            logger.exception("Failed to load paper trading state: %s", e)
             # Continue with default state
 
     def reset_account(self, new_balance: Decimal | None = None) -> None:
@@ -1985,7 +1914,7 @@ class PaperTradingAccount:
             self.max_drawdown = Decimal("0")
 
             self._save_state()
-            logger.info(f"Paper trading account reset to ${self.starting_balance:,.2f}")
+            logger.info("Paper trading account reset to $%s", self.starting_balance:,.2f)
 
     def get_monitoring_summary(self) -> dict[str, Any]:
         """Get comprehensive monitoring summary for paper trading."""
@@ -2024,7 +1953,7 @@ class PaperTradingAccount:
                 summary["active_alerts"] = paper_trading_alerts
 
             except Exception as e:
-                logger.warning(f"Failed to get enhanced monitoring summary: {e}")
+                logger.warning("Failed to get enhanced monitoring summary: %s", e)
                 summary["monitoring_error"] = str(e)
 
         return summary
@@ -2053,7 +1982,7 @@ class PaperTradingAccount:
             return True
 
         except Exception as e:
-            logger.exception(f"Failed to enable monitoring: {e}")
+            logger.exception("Failed to enable monitoring: %s", e)
             return False
 
     def disable_monitoring(self) -> None:
@@ -2069,7 +1998,7 @@ class PaperTradingAccount:
                     metadata={"disabled_at": datetime.now(UTC).isoformat()},
                 )
             except Exception as e:
-                logger.warning(f"Failed to record monitoring disablement: {e}")
+                logger.warning("Failed to record monitoring disablement: %s", e)
 
         self.monitoring_enabled = False
         logger.info("🔇 Paper trading monitoring disabled")
@@ -2084,7 +2013,7 @@ class PaperTradingAccount:
                 enhanced_metrics = self.metrics_collector.get_prometheus_metrics()
                 metrics.extend(enhanced_metrics)
             except Exception as e:
-                logger.warning(f"Failed to get enhanced Prometheus metrics: {e}")
+                logger.warning("Failed to get enhanced Prometheus metrics: %s", e)
 
         # Add paper trading specific metrics
         account_status = self.get_account_status()

@@ -35,7 +35,7 @@ class RAGReader:
         # Create knowledge directory if it doesn't exist
         self.knowledge_dir.mkdir(exist_ok=True)
 
-        logger.info(f"Initialized RAGReader with knowledge dir: {self.knowledge_dir}")
+        logger.info("Initialized RAGReader with knowledge dir: %s", self.knowledge_dir)
 
     async def load_knowledge_base(self) -> bool:
         """
@@ -53,11 +53,11 @@ class RAGReader:
             await self._load_risk_guidelines()
             await self._load_indicator_docs()
 
-            logger.info(f"Loaded {len(self.documents)} knowledge documents")
+            logger.info("Loaded %s knowledge documents", len(self.documents))
             return True
 
         except Exception as e:
-            logger.exception(f"Failed to load knowledge base: {e}")
+            logger.exception("Failed to load knowledge base: %s", e)
             return False
 
     async def _load_trading_strategies(self) -> None:
@@ -124,7 +124,7 @@ class RAGReader:
                 )
 
         except Exception as e:
-            logger.warning(f"Failed to load trading strategies: {e}")
+            logger.warning("Failed to load trading strategies: %s", e)
 
     async def _load_market_analysis(self) -> None:
         """Load market analysis guidelines."""
@@ -394,7 +394,7 @@ class RAGReader:
         }
 
         self.documents.append(document)
-        logger.info(f"Added knowledge document: {title}")
+        logger.info("Added knowledge document: %s", title)
 
     def get_knowledge_summary(self) -> dict[str, Any]:
         """

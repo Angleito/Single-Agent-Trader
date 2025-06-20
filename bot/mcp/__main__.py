@@ -36,7 +36,7 @@ def main():
 
             asyncio.run(standalone_main())
         except ImportError as e:
-            logger.exception(f"Could not import any MCP server version: {e}")
+            logger.exception("Could not import any MCP server version: %s", e)
             sys.exit(1)
 
 

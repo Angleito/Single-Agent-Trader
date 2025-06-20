@@ -109,7 +109,7 @@ class MCPOmniSearchClient:
         self.cache_ttl = cache_ttl
         self._cache: dict[str, dict[str, Any]] = {}
 
-        logger.info(f"🔍 MCP-OmniSearch Client: Initialized for {self.server_path}")
+        logger.info("🔍 MCP-OmniSearch Client: Initialized for %s", self.server_path)
 
     async def connect(self) -> bool:
         """Connect to the MCP-OmniSearch server."""
@@ -132,7 +132,7 @@ class MCPOmniSearchClient:
             return True
 
         except Exception as e:
-            logger.exception(f"Failed to connect to MCP-OmniSearch server: {e}")
+            logger.exception("Failed to connect to MCP-OmniSearch server: %s", e)
             return False
 
     async def disconnect(self) -> None:
@@ -146,7 +146,7 @@ class MCPOmniSearchClient:
             self._connected = False
             logger.info("Disconnected from MCP-OmniSearch server")
         except Exception as e:
-            logger.exception(f"Error during disconnect: {e}")
+            logger.exception("Error during disconnect: %s", e)
 
     async def _send_initialize(self) -> None:
         """Send initialization message to MCP server."""
@@ -272,13 +272,11 @@ class MCPOmniSearchClient:
                         )
                         financial_results.append(financial_result)
 
-            logger.info(
-                f"🔍 MCP-OmniSearch: Found {len(financial_results)} financial news results for '{query}'"
-            )
+            logger.info("🔍 MCP-OmniSearch: Found %s financial news results for '%s'", len(financial_results), query)
             return financial_results
 
         except Exception as e:
-            logger.exception(f"Financial news search failed for '{query}': {e}")
+            logger.exception("Financial news search failed for '%s': %s", query, e)
             return []
 
     async def search_crypto_sentiment(self, symbol: str) -> SentimentAnalysis:
@@ -329,13 +327,11 @@ class MCPOmniSearchClient:
                 risk_factors=self._extract_risk_factors(response_text),
             )
 
-            logger.info(
-                f"🔍 MCP-OmniSearch: {base_symbol} sentiment - {sentiment.overall_sentiment} (score: {sentiment.sentiment_score:.2f})"
-            )
+            logger.info("🔍 MCP-OmniSearch: %s sentiment - %s (score: %s)", base_symbol, sentiment.overall_sentiment, sentiment.sentiment_score:.2f)
             return sentiment
 
         except Exception as e:
-            logger.exception(f"Crypto sentiment search failed for {base_symbol}: {e}")
+            logger.exception("Crypto sentiment search failed for %s: %s", base_symbol, e)
             return self._get_fallback_sentiment(base_symbol)
 
     async def search_nasdaq_sentiment(self) -> SentimentAnalysis:
@@ -380,13 +376,11 @@ class MCPOmniSearchClient:
                 risk_factors=self._extract_risk_factors(response_text),
             )
 
-            logger.info(
-                f"🔍 MCP-OmniSearch: NASDAQ sentiment - {sentiment.overall_sentiment} (score: {sentiment.sentiment_score:.2f})"
-            )
+            logger.info("🔍 MCP-OmniSearch: NASDAQ sentiment - %s (score: %s)", sentiment.overall_sentiment, sentiment.sentiment_score:.2f)
             return sentiment
 
         except Exception as e:
-            logger.exception(f"NASDAQ sentiment search failed: {e}")
+            logger.exception("NASDAQ sentiment search failed: %s", e)
             return self._get_fallback_sentiment("NASDAQ")
 
     async def search_market_correlation(
@@ -428,15 +422,11 @@ class MCPOmniSearchClient:
                 direction="neutral",
             )
 
-            logger.info(
-                f"🔍 MCP-OmniSearch: {crypto_base}-{nasdaq_base} correlation - neutral weak (0.000)"
-            )
+            logger.info("🔍 MCP-OmniSearch: %s-%s correlation - neutral weak (0.000)", crypto_base, nasdaq_base)
             return correlation
 
         except Exception as e:
-            logger.exception(
-                f"Market correlation search failed for {crypto_base}-{nasdaq_base}: {e}"
-            )
+            logger.exception("Market correlation search failed for %s-%s: %s", crypto_base, nasdaq_base, e)
             return self._get_fallback_correlation(crypto_base, nasdaq_base, timeframe)
 
     def _analyze_sentiment(self, text: str) -> str:

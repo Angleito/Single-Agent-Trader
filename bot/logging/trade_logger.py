@@ -141,9 +141,7 @@ class TradeLogger:
         self._append_json_log(self.decisions_file, decision_log)
 
         # Human-readable log
-        self.logger.info(
-            f"Trade Decision: {trade_action.action} {market_state.symbol} @ ${market_state.current_price} | "
-            f"RSI={indicators.get('rsi', 'N/A')} | "
+logger.info("Trade Decision: %s %s @ $%s | " "RSI=%s | ", trade_action.action, market_state.symbol, market_state.current_price, indicators.get('rsi', 'N/A'))
             f"Wave={indicators.get('cipher_b_wave', 'N/A')} | "
             f"Memory={decision_log['similar_experiences']} experiences | "
             f"ID={experience_id}"
@@ -151,7 +149,7 @@ class TradeLogger:
 
         # Log detailed rationale if available
         if trade_action.rationale:
-            self.logger.info(f"Rationale: {trade_action.rationale[:200]}...")
+            self.logger.info("Rationale: %s...", trade_action.rationale[:200])
 
     def log_memory_query(
         self,
@@ -178,9 +176,7 @@ class TradeLogger:
 
         self._append_json_log(self.memory_file, memory_log)
 
-        self.memory_logger.debug(
-            f"Memory query returned {len(results)} experiences in {execution_time_ms:.1f}ms"
-        )
+        self.memory_logger.debug("Memory query returned %s experiences in %sms", len(results), execution_time_ms:.1f)
 
     def log_trade_outcome(
         self,
@@ -218,15 +214,12 @@ class TradeLogger:
 
         # Human-readable summary
         pnl_str = f"+${pnl:.2f}" if pnl > 0 else f"-${abs(pnl):.2f}"
-        self.logger.info(
-            f"Trade Completed: {experience_id} | "
-            f"Entry=${entry_price} Exit=${exit_price} | "
-            f"PnL={pnl_str} ({outcome_log['pnl_pct']:.1f}%) | "
+logger.info("Trade Completed: %s | " "Entry=$%s Exit=$%s | " "PnL=%s (%s%) | ", experience_id, entry_price, exit_price, pnl_str, outcome_log['pnl_pct']:.1f)
             f"Duration={duration_minutes:.0f}min"
         )
 
         if insights:
-            self.logger.info(f"Insights: {insights}")
+            self.logger.info("Insights: %s", insights)
 
     def log_pattern_statistics(self, pattern_stats: dict[str, dict[str, Any]]) -> None:
         """
@@ -252,9 +245,7 @@ class TradeLogger:
         )
 
         for pattern, stats in sorted_patterns[:5]:
-            self.memory_logger.info(
-                f"Pattern '{pattern}': {stats['success_rate']:.1%} win rate "
-                f"({stats['count']} trades, avg PnL=${stats['avg_pnl']:.2f})"
+logger.info("Pattern '%s': %s win rate " "(%s trades, avg PnL=$%s)", pattern, stats['success_rate']:.1%, stats['count'], stats['avg_pnl']:.2f)
             )
 
     def log_position_update(
@@ -275,13 +266,7 @@ class TradeLogger:
             max_favorable: Maximum profit seen
             max_adverse: Maximum loss seen
         """
-        self.logger.debug(
-            f"Position Update: {trade_id} | "
-            f"Price=${current_price} | "
-            f"Unrealized PnL=${unrealized_pnl:.2f} | "
-            f"Max Profit=${max_favorable:.2f} | "
-            f"Max Loss=${max_adverse:.2f}"
-        )
+logger.debug("Position Update: %s | " "Price=$%s | " "Unrealized PnL=$%s | " "Max Profit=$%s | " "Max Loss=$%s" ), trade_id, current_price, unrealized_pnl:.2f, max_favorable:.2f, max_adverse:.2f)
 
     def log_memory_storage(
         self,
@@ -310,9 +295,7 @@ class TradeLogger:
 
         self._append_json_log(self.memory_file, storage_log)
 
-        self.memory_logger.debug(
-            f"Stored experience {experience_id} with patterns: {', '.join(patterns)}"
-        )
+        self.memory_logger.debug("Stored experience %s with patterns: %s", experience_id, ', '.join(patterns))
 
     def _append_json_log(self, file_path: Path, data: dict[str, Any]) -> None:
         """Append JSON data to log file."""
@@ -320,4 +303,4 @@ class TradeLogger:
             with open(file_path, "a") as f:
                 f.write(json.dumps(data) + "\n")
         except Exception as e:
-            self.logger.exception(f"Failed to write JSON log: {e}")
+            self.logger.exception("Failed to write JSON log: %s", e)

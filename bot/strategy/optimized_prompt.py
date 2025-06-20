@@ -100,8 +100,8 @@ OVERRIDE AUTHORITY: You can trade with mixed Cipher B if momentum is very strong
             return formatted_prompt
 
         except Exception as e:
-            logger.exception(f"Error formatting optimized prompt: {e}")
-            logger.debug(f"Available keys in llm_input: {list(llm_input.keys())}")
+            logger.exception("Error formatting optimized prompt: %s", e)
+            logger.debug("Available keys in llm_input: %s", list(llm_input.keys()))
             # Fallback to minimal prompt
             return self._get_minimal_fallback_prompt(llm_input)
 
@@ -288,9 +288,7 @@ class PromptOptimizer:
             elif self.current_strategy == "moderate":
                 self.current_strategy = "aggressive"
 
-            logger.info(
-                f"Increased compression to {self.current_strategy} due to slow response time: {avg_response_time:.2f}s"
-            )
+            logger.info("Increased compression to %s due to slow response time: %ss", self.current_strategy, avg_response_time:.2f)
 
         elif avg_response_time < target_response_time * 0.8:
             # Response time good, can reduce compression for better quality
@@ -299,9 +297,7 @@ class PromptOptimizer:
             elif self.current_strategy == "moderate":
                 self.current_strategy = "conservative"
 
-            logger.info(
-                f"Reduced compression to {self.current_strategy} due to good response time: {avg_response_time:.2f}s"
-            )
+            logger.info("Reduced compression to %s due to good response time: %ss", self.current_strategy, avg_response_time:.2f)
 
         # Apply compression strategy
         compression_ratio = self.compression_strategies[self.current_strategy]

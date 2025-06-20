@@ -56,12 +56,7 @@ class FeeCalculator:
         self.current_volume = 0
         self.current_tier = self._get_fee_tier(0)
 
-        logger.info(
-            f"Initialized FeeCalculator with rates: "
-            f"Spot Maker: {self.spot_maker_fee_rate:.4f}, "
-            f"Spot Taker: {self.spot_taker_fee_rate:.4f}, "
-            f"Futures: {self.futures_fee_rate:.4f}"
-        )
+        logger.info("Initialized FeeCalculator with rates: " "Spot Maker: %s, " "Spot Taker: %s, " "Futures: %s" ), self.spot_maker_fee_rate:.4f, self.spot_taker_fee_rate:.4f, self.futures_fee_rate:.4f)
 
     def calculate_trade_fees(
         self,
@@ -110,15 +105,13 @@ class FeeCalculator:
             # Determine the appropriate fee rate
             if self.enable_futures:
                 fee_rate = self.futures_fee_rate
-                logger.debug(f"Using futures fee rate: {fee_rate:.4f}")
+                logger.debug("Using futures fee rate: %s", fee_rate:.4f)
             else:
                 # Use current tier rates for spot trading
                 fee_rate = (
                     self.taker_fee_rate if is_market_order else self.maker_fee_rate
                 )
-                logger.debug(
-                    f"Using spot {'taker' if is_market_order else 'maker'} fee rate: {fee_rate:.4f} (Volume: ${self.current_volume:,.2f})"
-                )
+                logger.debug("Using spot %s fee rate: %s (Volume: $%s)", 'taker' if is_market_order else 'maker', fee_rate:.4f, self.current_volume:,.2f)
 
             # Calculate entry fee
             entry_fee = position_value * Decimal(str(fee_rate))
@@ -140,16 +133,12 @@ class FeeCalculator:
                 net_position_value=net_position_value,
             )
 
-            logger.debug(
-                f"Calculated fees for ${position_value:.2f} position: "
-                f"Entry: ${entry_fee:.2f}, Exit: ${exit_fee:.2f}, "
-                f"Total: ${total_fee:.2f}, Net: ${net_position_value:.2f}"
-            )
+            logger.debug("Calculated fees for $%s position: " "Entry: $%s, Exit: $%s, " "Total: $%s, Net: $%s" ), position_value:.2f, entry_fee:.2f, exit_fee:.2f, total_fee:.2f, net_position_value:.2f)
 
             return fees
 
         except Exception as e:
-            logger.exception(f"Error calculating trade fees: {e}")
+            logger.exception("Error calculating trade fees: %s", e)
             # Return zero fees as fallback
             return TradeFees(
                 entry_fee=Decimal("0"),
@@ -323,15 +312,13 @@ class FeeCalculator:
                 is_market_order,
             )
 
-            logger.info(
-                f"Adjusted position size for fees: {trade_action.size_pct}% -> {adjusted_action.size_pct}% "
-                f"(${initial_fees.total_fee:.2f} total fees)"
+            logger.info("Adjusted position size for fees: %s% -> %s% " "($%s total fees)", trade_action.size_pct, adjusted_action.size_pct, initial_fees.total_fee:.2f)
             )
 
             return adjusted_action, final_fees
 
         except Exception as e:
-            logger.exception(f"Error adjusting position size for fees: {e}")
+            logger.exception("Error adjusting position size for fees: %s", e)
             # Return original action as fallback
             return trade_action, TradeFees(
                 entry_fee=Decimal("0"),
@@ -395,15 +382,12 @@ class FeeCalculator:
             fee_percentage = float(fees.total_fee / position_value)
             min_move_percentage = fee_percentage / leverage
 
-            logger.debug(
-                f"Minimum profitable move for ${position_value:.2f} position "
-                f"with {leverage}x leverage: {min_move_percentage:.4%}"
-            )
+            logger.debug("Minimum profitable move for $%s position " "with %sx leverage: %s" ), position_value:.2f, leverage, min_move_percentage:.4%)
 
             return Decimal(str(min_move_percentage))
 
         except Exception as e:
-            logger.exception(f"Error calculating minimum profitable move: {e}")
+            logger.exception("Error calculating minimum profitable move: %s", e)
             return Decimal("0.001")  # 0.1% fallback
 
     def validate_trade_profitability(
@@ -466,7 +450,7 @@ class FeeCalculator:
             return True, "Trade profitability validated"
 
         except Exception as e:
-            logger.exception(f"Error validating trade profitability: {e}")
+            logger.exception("Error validating trade profitability: %s", e)
             return True, "Validation error - allowing trade"
 
     def _get_fee_tier(self, volume: float) -> dict[str, float]:
@@ -510,10 +494,7 @@ class FeeCalculator:
             self.maker_fee_rate = self.current_tier["maker"]
             self.taker_fee_rate = self.current_tier["taker"]
 
-            logger.info(
-                f"Updated fee tier based on ${monthly_volume:,.2f} volume: "
-                f"Maker: {self.maker_fee_rate:.4%}, Taker: {self.taker_fee_rate:.4%}"
-            )
+            logger.info("Updated fee tier based on $%s volume: " "Maker: %s, Taker: %s" ), monthly_volume:,.2f, self.maker_fee_rate:.4%, self.taker_fee_rate:.4%)
 
     def get_fee_summary(self) -> dict[str, float]:
         """

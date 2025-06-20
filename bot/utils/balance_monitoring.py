@@ -136,7 +136,7 @@ class BalanceOperationMonitor:
                     metadata=metadata,
                 )
             except Exception as e:
-                self.logger.debug(f"Enhanced metrics recording failed: {e}")
+                self.logger.debug("Enhanced metrics recording failed: %s", e)
 
         async with self._lock:
             event = BalanceOperationEvent(
@@ -151,17 +151,7 @@ class BalanceOperationMonitor:
             self.events.append(event)
             self.active_operations[correlation_id] = event
 
-            self.logger.debug(
-                f"Balance operation started: {component}.{operation}",
-                extra=get_balance_operation_context(
-                    correlation_id,
-                    operation,
-                    additional_context={
-                        "component": component,
-                        "event_type": "operation_start",
-                        "metadata": metadata,
-                    },
-                ),
+logger.debug("Balance operation started: %s.%s", extra=get_balance_operation_context( correlation_id, operation, additional_context=%s, ),, component, operation,  "component": component, "event_type": "operation_start", "metadata": metadata, )
             )
 
         return start_time or time.perf_counter()
@@ -212,15 +202,12 @@ class BalanceOperationMonitor:
                     metadata=metadata,
                 )
             except Exception as e:
-                self.logger.debug(f"Enhanced metrics completion recording failed: {e}")
+                self.logger.debug("Enhanced metrics completion recording failed: %s", e)
 
         async with self._lock:
             start_event = self.active_operations.pop(correlation_id, None)
             if not start_event:
-                self.logger.warning(
-                    f"No start event found for correlation_id: {correlation_id}",
-                    extra={"correlation_id": correlation_id, "status": status},
-                )
+logger.warning("No start event found for correlation_id: %s", extra=%s, ), correlation_id, "correlation_id": correlation_id, "status": status)
                 return
 
             # Calculate duration
@@ -250,7 +237,7 @@ class BalanceOperationMonitor:
                         metadata=metadata,
                     )
                 except Exception as e:
-                    self.logger.debug(f"Enhanced metrics final recording failed: {e}")
+                    self.logger.debug("Enhanced metrics final recording failed: %s", e)
 
             # Create completion event
             completion_event = BalanceOperationEvent(
@@ -277,22 +264,7 @@ class BalanceOperationMonitor:
                 await self._track_error_pattern(completion_event)
 
             # Log completion
-            self.logger.info(
-                f"Balance operation completed: {start_event.component}.{start_event.operation}",
-                extra=get_balance_operation_context(
-                    correlation_id,
-                    start_event.operation,
-                    balance_amount=balance_amount,
-                    duration_ms=duration_ms,
-                    success=(status == "success"),
-                    error_category=error_category,
-                    additional_context={
-                        "component": start_event.component,
-                        "event_type": "operation_complete",
-                        "final_status": status,
-                        "metadata": completion_event.metadata,
-                    },
-                ),
+logger.info("Balance operation completed: %s.%s", extra=get_balance_operation_context( correlation_id, start_event.operation, balance_amount=balance_amount, duration_ms=duration_ms, success=(status == "success"), error_category=error_category, additional_context=%s, ),, start_event.component, start_event.operation,  "component": start_event.component, "event_type": "operation_complete", "final_status": status, "metadata": completion_event.metadata, )
             )
 
     async def _update_performance_metrics(self, event: BalanceOperationEvent) -> None:
@@ -598,7 +570,7 @@ async def start_monitoring_cleanup_task(interval_minutes: int = 15) -> None:
         except asyncio.CancelledError:
             break
         except Exception as e:
-            monitor.logger.exception(f"Error in monitoring cleanup task: {e}")
+            monitor.logger.exception("Error in monitoring cleanup task: %s", e)
 
 
 def generate_monitoring_report() -> dict[str, Any]:
@@ -638,7 +610,7 @@ def generate_monitoring_report() -> dict[str, Any]:
                 "prometheus_metrics_available": True,
             }
         except Exception as e:
-            logger.warning(f"Failed to include enhanced metrics in report: {e}")
+            logger.warning("Failed to include enhanced metrics in report: %s", e)
             base_report["monitoring_features"] = {
                 "enhanced_metrics_enabled": False,
                 "alerting_enabled": False,
@@ -665,7 +637,7 @@ def get_enhanced_metrics_summary() -> dict[str, Any]:
 
             return get_metrics_summary()
         except Exception as e:
-            logger.exception(f"Failed to get enhanced metrics summary: {e}")
+            logger.exception("Failed to get enhanced metrics summary: %s", e)
             return {"error": str(e)}
     return {"error": "Enhanced monitoring not available"}
 
@@ -678,7 +650,7 @@ def get_prometheus_metrics() -> list[str]:
 
             return get_prometheus_metrics()
         except Exception as e:
-            logger.exception(f"Failed to get Prometheus metrics: {e}")
+            logger.exception("Failed to get Prometheus metrics: %s", e)
             return []
     return []
 
@@ -691,7 +663,7 @@ async def trigger_alert_evaluation() -> list:
 
             return await trigger_alert_evaluation()
         except Exception as e:
-            logger.exception(f"Failed to trigger alert evaluation: {e}")
+            logger.exception("Failed to trigger alert evaluation: %s", e)
             return []
     return []
 
@@ -715,7 +687,7 @@ def enable_enhanced_monitoring() -> bool:
             logger.info("✅ Enhanced balance monitoring enabled")
             return True
         except Exception as e:
-            logger.exception(f"Failed to enable enhanced monitoring: {e}")
+            logger.exception("Failed to enable enhanced monitoring: %s", e)
             return False
     else:
         logger.warning("Enhanced monitoring components not available")

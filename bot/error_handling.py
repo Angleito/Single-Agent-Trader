@@ -141,7 +141,7 @@ class ErrorBoundary:
         self._is_degraded = False
 
     async def __aenter__(self):
-        logger.debug(f"Entering error boundary for {self.component_name}")
+        logger.debug("Entering error boundary for %s", self.component_name)
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -174,25 +174,20 @@ class ErrorBoundary:
         self.error_history.append(error_context)
 
         # Log error with full context
-        logger.error(
-            f"Error boundary triggered in {self.component_name}: {exception}",
-            extra={"error_context": error_context.__dict__},
-        )
+        logger.error("Error boundary triggered in %s: %s", extra=%s, ), self.component_name, exception, "error_context": error_context.__dict__)
 
         # Mark component as degraded if error count exceeds threshold
         if self.error_count >= self.max_retries:
             self._is_degraded = True
-            logger.warning(f"Component {self.component_name} marked as degraded")
+            logger.warning("Component %s marked as degraded", self.component_name)
 
         # Execute fallback behavior if available
         if self.fallback_behavior:
             try:
-                logger.info(f"Executing fallback behavior for {self.component_name}")
+                logger.info("Executing fallback behavior for %s", self.component_name)
                 await self._execute_fallback(exception, error_context)
             except Exception as fallback_error:
-                logger.exception(
-                    f"Fallback failed for {self.component_name}: {fallback_error}",
-                    extra={"original_error": str(exception)},
+                logger.exception("Fallback failed for %s: %s", extra=%s,, self.component_name, fallback_error, "original_error": str(exception))
                 )
 
     async def _execute_fallback(
@@ -216,7 +211,7 @@ class ErrorBoundary:
         self.error_count = 0
         self._is_degraded = False
         self.error_history.clear()
-        logger.info(f"Error boundary reset for {self.component_name}")
+        logger.info("Error boundary reset for %s", self.component_name)
 
 
 class TradeSaga:
@@ -255,11 +250,11 @@ class TradeSaga:
         self.start_time = datetime.now(UTC)
         self.status = "executing"
 
-        logger.info(f"Starting saga execution: {self.saga_id}")
+        logger.info("Starting saga execution: %s", self.saga_id)
 
         try:
             for i, (step_action, step_name) in enumerate(self.steps):
-                logger.debug(f"Executing saga step {i}: {step_name}")
+                logger.debug("Executing saga step %s: %s", i, step_name)
 
                 # Execute step
                 if asyncio.iscoroutinefunction(step_action):
@@ -269,19 +264,17 @@ class TradeSaga:
 
                 # Record successful step
                 self.completed_steps.append((i, step_name, result, datetime.now(UTC)))
-                logger.debug(f"Saga step {i} completed successfully")
+                logger.debug("Saga step %s completed successfully", i)
 
             self.status = "completed"
             self.end_time = datetime.now(UTC)
-            logger.info(f"Saga {self.saga_id} completed successfully")
+            logger.info("Saga %s completed successfully", self.saga_id)
             return True
 
         except Exception as e:
             self.status = "failed"
             self.end_time = datetime.now(UTC)
-            logger.exception(
-                f"Saga {self.saga_id} failed at step {len(self.completed_steps)}: {e}"
-            )
+            logger.exception("Saga %s failed at step %s: %s", self.saga_id, len(self.completed_steps), e)
 
             # Execute compensation actions
             await self._compensate()
@@ -289,7 +282,7 @@ class TradeSaga:
 
     async def _compensate(self) -> None:
         """Execute compensation actions in reverse order."""
-        logger.info(f"Starting compensation for saga {self.saga_id}")
+        logger.info("Starting compensation for saga %s", self.saga_id)
 
         # Execute compensation actions in reverse order of completion
         for i in reversed(range(len(self.completed_steps))):
@@ -300,24 +293,21 @@ class TradeSaga:
 
                 if compensation_action:
                     try:
-                        logger.debug(
-                            f"Executing compensation for step {step_index}: {step_name}"
-                        )
+                        logger.debug("Executing compensation for step %s: %s", step_index, step_name)
 
                         if asyncio.iscoroutinefunction(compensation_action):
                             await compensation_action(result)
                         else:
                             compensation_action(result)
 
-                        logger.debug(f"Compensation for step {step_index} completed")
+                        logger.debug("Compensation for step %s completed", step_index)
 
                     except Exception as comp_error:
-                        logger.exception(
-                            f"Compensation failed for step {step_index} ({step_name}): {comp_error}",
+                        logger.exception("Compensation failed for step %s (%s): %s",, step_index, step_name, comp_error)
                             extra={"saga_id": self.saga_id, "original_result": result},
                         )
 
-        logger.info(f"Compensation completed for saga {self.saga_id}")
+        logger.info("Compensation completed for saga %s", self.saga_id)
 
     def get_status(self) -> dict[str, Any]:
         """Get saga status and execution details."""
@@ -371,7 +361,7 @@ class GracefulDegradation:
         self.service_health[service_name] = ServiceHealth(name=service_name)
         self.degradation_thresholds[service_name] = degradation_threshold
 
-        logger.info(f"Registered service {service_name} with fallback strategy")
+        logger.info("Registered service %s with fallback strategy", service_name)
 
     async def execute_with_fallback(
         self, service_name: str, primary_action: Callable[..., Any], *args, **kwargs
@@ -383,7 +373,7 @@ class GracefulDegradation:
 
         # Use fallback if service is degraded
         if service_name in self.degraded_services:
-            logger.info(f"Service {service_name} is degraded, using fallback")
+            logger.info("Service %s is degraded, using fallback", service_name)
             return await self._execute_fallback(service_name, *args, **kwargs)
 
         try:
@@ -403,7 +393,7 @@ class GracefulDegradation:
 
             # Use fallback if available
             if service_name in self.fallback_strategies:
-                logger.warning(f"Service {service_name} failed, using fallback: {e}")
+                logger.warning("Service %s failed, using fallback: %s", service_name, e)
                 return await self._execute_fallback(service_name, *args, **kwargs)
             else:
                 # No fallback available - re-raise exception
@@ -419,9 +409,7 @@ class GracefulDegradation:
             else:
                 return fallback_strategy(*args, **kwargs)
         except Exception as fallback_error:
-            logger.exception(
-                f"Fallback strategy failed for {service_name}: {fallback_error}"
-            )
+            logger.exception("Fallback strategy failed for %s: %s", service_name, fallback_error)
             raise
 
     async def _handle_service_failure(
@@ -439,9 +427,7 @@ class GracefulDegradation:
         if service_health.consecutive_failures >= threshold:
             self.degraded_services.add(service_name)
             service_health.status = ServiceStatus.DEGRADED
-            logger.warning(
-                f"Service {service_name} marked as degraded after {service_health.consecutive_failures} failures"
-            )
+            logger.warning("Service %s marked as degraded after %s failures", service_name, service_health.consecutive_failures)
         else:
             service_health.status = ServiceStatus.UNHEALTHY
 
@@ -459,7 +445,7 @@ class GracefulDegradation:
         self.degraded_services.discard(service_name)
 
         if service_name in self.degraded_services:
-            logger.info(f"Service {service_name} recovered from degraded state")
+            logger.info("Service %s recovered from degraded state", service_name)
 
     def get_service_status(self, service_name: str) -> ServiceHealth | None:
         """Get health status for a specific service."""
@@ -524,11 +510,7 @@ class EnhancedExceptionHandler:
         self.exception_history.append(error_context)
 
         # Log structured exception data
-        logger.error(
-            f"Exception in {component}.{operation}: {exception}",
-            extra={
-                "error_context": error_context.__dict__,
-                "exception_type": type(exception).__name__,
+        logger.error("Exception in %s.%s: %s", extra={ "error_context": error_context.__dict__, "exception_type": type(exception).__name__,, component, operation, exception)
                 "should_retry": error_context.should_retry,
             },
         )
@@ -710,10 +692,7 @@ class BalanceErrorHandler:
                 recommendations["reason"] = (
                     "Multiple consecutive insufficient balance errors detected"
                 )
-                logger.critical(
-                    f"Critical: {self.consecutive_insufficient_balance_errors} consecutive "
-                    f"insufficient balance errors. Trading should be halted."
-                )
+                logger.critical("Critical: %s consecutive " "insufficient balance errors. Trading should be halted." ), self.consecutive_insufficient_balance_errors)
         else:
             self.consecutive_insufficient_balance_errors = 0
 
@@ -829,16 +808,13 @@ def retry_with_backoff(
                     last_exception = e
 
                     if attempt == max_retries:
-                        logger.exception(
-                            f"Function {func.__name__} failed after {max_retries} retries: {e}"
-                        )
+                        logger.exception("Function %s failed after %s retries: %s", func.__name__, max_retries, e)
                         raise
 
                     # Calculate delay with exponential backoff
                     delay = min(base_delay * (exponential_base**attempt), max_delay)
 
-                    logger.warning(
-                        f"Function {func.__name__} failed (attempt {attempt + 1}/{max_retries + 1}), "
+                    logger.warning("Function %s failed (attempt %s/%s), ", func.__name__, attempt + 1, max_retries + 1)
                         f"retrying in {delay:.2f}s: {e}"
                     )
 
@@ -862,16 +838,13 @@ def retry_with_backoff(
                     last_exception = e
 
                     if attempt == max_retries:
-                        logger.exception(
-                            f"Function {func.__name__} failed after {max_retries} retries: {e}"
-                        )
+                        logger.exception("Function %s failed after %s retries: %s", func.__name__, max_retries, e)
                         raise
 
                     # Calculate delay with exponential backoff
                     delay = min(base_delay * (exponential_base**attempt), max_delay)
 
-                    logger.warning(
-                        f"Function {func.__name__} failed (attempt {attempt + 1}/{max_retries + 1}), "
+                    logger.warning("Function %s failed (attempt %s/%s), ", func.__name__, attempt + 1, max_retries + 1)
                         f"retrying in {delay:.2f}s: {e}"
                     )
 

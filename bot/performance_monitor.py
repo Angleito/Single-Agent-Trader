@@ -399,7 +399,7 @@ class ResourceMonitor:
                 )
 
             except Exception as e:
-                logger.warning(f"Error monitoring resources: {e}")
+                logger.warning("Error monitoring resources: %s", e)
 
             await asyncio.sleep(interval)
 
@@ -539,14 +539,14 @@ class AlertManager:
         log_level = (
             logging.WARNING if alert.level == AlertLevel.WARNING else logging.ERROR
         )
-        logger.log(log_level, f"Performance Alert: {alert.message}")
+        logger.log(log_level, "Performance Alert: %s", alert.message)
 
         # Notify callbacks
         for callback in self._alert_callbacks:
             try:
                 callback(alert)
             except Exception as e:
-                logger.exception(f"Alert callback failed: {e}")
+                logger.exception("Alert callback failed: %s", e)
 
     def get_recent_alerts(
         self, duration: timedelta = timedelta(hours=1)

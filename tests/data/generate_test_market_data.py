@@ -54,7 +54,7 @@ class MarketDataGenerator:
         self, periods: int = 2000, frequency: str = "1min"
     ) -> pd.DataFrame:
         """Generate default market data with normal volatility."""
-        logger.info(f"Generating default market data: {periods} periods")
+        logger.info("Generating default market data: %s periods", periods)
 
         timestamps = pd.date_range("2024-01-01", periods=periods, freq=frequency)
 
@@ -78,9 +78,7 @@ class MarketDataGenerator:
     ) -> pd.DataFrame:
         """Generate trending market data (positive trend_strength = bullish)."""
         direction = "bullish" if trend_strength > 0 else "bearish"
-        logger.info(
-            f"Generating {direction} trending data: {periods} periods, strength {trend_strength}"
-        )
+        logger.info("Generating %s trending data: %s periods, strength %s", direction, periods, trend_strength)
 
         timestamps = pd.date_range("2024-01-01", periods=periods, freq=frequency)
 
@@ -103,9 +101,7 @@ class MarketDataGenerator:
         self, periods: int = 2000, range_size: float = 0.05, frequency: str = "1min"
     ) -> pd.DataFrame:
         """Generate ranging/sideways market data."""
-        logger.info(
-            f"Generating ranging market data: {periods} periods, range {range_size}"
-        )
+        logger.info("Generating ranging market data: %s periods, range %s", periods, range_size)
 
         timestamps = pd.date_range("2024-01-01", periods=periods, freq=frequency)
 
@@ -131,9 +127,7 @@ class MarketDataGenerator:
         frequency: str = "1min",
     ) -> pd.DataFrame:
         """Generate high volatility market data."""
-        logger.info(
-            f"Generating volatile market data: {periods} periods, vol factor {volatility_factor}"
-        )
+        logger.info("Generating volatile market data: %s periods, vol factor %s", periods, volatility_factor)
 
         timestamps = pd.date_range("2024-01-01", periods=periods, freq=frequency)
 
@@ -168,9 +162,7 @@ class MarketDataGenerator:
         frequency: str = "1min",
     ) -> pd.DataFrame:
         """Generate data with gaps and extreme moves."""
-        logger.info(
-            f"Generating gap data: {periods} periods, gaps every {gap_frequency} periods"
-        )
+        logger.info("Generating gap data: %s periods, gaps every %s periods", periods, gap_frequency)
 
         timestamps = pd.date_range("2024-01-01", periods=periods, freq=frequency)
 
@@ -207,9 +199,7 @@ class MarketDataGenerator:
         self, periods: int = 2000, volume_factor: float = 0.3, frequency: str = "1min"
     ) -> pd.DataFrame:
         """Generate market data with low volume conditions."""
-        logger.info(
-            f"Generating low volume data: {periods} periods, vol factor {volume_factor}"
-        )
+        logger.info("Generating low volume data: %s periods, vol factor %s", periods, volume_factor)
 
         # Generate base market data
         data = self.generate_default_data(periods, frequency)
@@ -229,7 +219,7 @@ class MarketDataGenerator:
         self, periods: int = 2000, frequency: str = "1min"
     ) -> pd.DataFrame:
         """Generate data simulating crypto weekend trading patterns."""
-        logger.info(f"Generating crypto weekend data: {periods} periods")
+        logger.info("Generating crypto weekend data: %s periods", periods)
 
         timestamps = pd.date_range("2024-01-01", periods=periods, freq=frequency)
 
@@ -336,7 +326,7 @@ class MarketDataGenerator:
         # Check for non-positive values
         for col in ["open", "high", "low", "close", "volume"]:
             if (df[col] <= 0).any():
-                logger.warning(f"Non-positive values found in {col} - fixing")
+                logger.warning("Non-positive values found in %s - fixing", col)
                 df[col] = df[col].clip(lower=self.min_price if col != "volume" else 0.1)
 
 
@@ -366,8 +356,8 @@ class TestDataSuite:
         if sizes is None:
             sizes = [1000, 5000, 10000]
 
-        logger.info(f"Generating test data for {len(self.scenarios)} scenarios")
-        logger.info(f"Data sizes: {sizes}")
+        logger.info("Generating test data for %s scenarios", len(self.scenarios))
+        logger.info("Data sizes: %s", sizes)
 
         generated_files = {}
 
@@ -378,7 +368,7 @@ class TestDataSuite:
                 filename = f"market_data_{scenario}_{size}.csv"
                 filepath = self.output_dir / filename
 
-                logger.info(f"Generating {scenario} data with {size} periods")
+                logger.info("Generating %s data with %s periods", scenario, size)
 
                 # Generate data based on scenario
                 if scenario == "default":
@@ -398,14 +388,14 @@ class TestDataSuite:
                 elif scenario == "crypto_weekend":
                     data = self.generator.generate_crypto_weekend_data(size)
                 else:
-                    logger.warning(f"Unknown scenario: {scenario}, using default")
+                    logger.warning("Unknown scenario: %s, using default", scenario)
                     data = self.generator.generate_default_data(size)
 
                 # Save data
                 data.to_csv(filepath)
                 scenario_files.append(str(filepath))
 
-                logger.info(f"Saved: {filepath} ({len(data)} rows)")
+                logger.info("Saved: %s (%s rows)", filepath, len(data))
 
             generated_files[scenario] = scenario_files
 
@@ -439,7 +429,7 @@ class TestDataSuite:
                 data = self.generator.generate_gap_data(size)
 
             data.to_csv(filepath)
-            logger.info(f"Generated standard file: {filepath}")
+            logger.info("Generated standard file: %s", filepath)
 
     def generate_data_summary(self) -> dict:
         """Generate summary of all test data."""
@@ -476,7 +466,7 @@ class TestDataSuite:
         with open(summary_file, "w") as f:
             json.dump(summary, f, indent=2)
 
-        logger.info(f"Generated summary: {summary_file}")
+        logger.info("Generated summary: %s", summary_file)
         return summary
 
 
@@ -530,11 +520,11 @@ def main():
     sizes = [int(s.strip()) for s in args.sizes.split(",")]
 
     logger.info("VuManChu Test Data Generator")
-    logger.info(f"Output directory: {args.output_dir}")
-    logger.info(f"Scenarios: {scenarios}")
-    logger.info(f"Sizes: {sizes}")
-    logger.info(f"Base price: {args.base_price}")
-    logger.info(f"Random seed: {args.random_seed}")
+    logger.info("Output directory: %s", args.output_dir)
+    logger.info("Scenarios: %s", scenarios)
+    logger.info("Sizes: %s", sizes)
+    logger.info("Base price: %s", args.base_price)
+    logger.info("Random seed: %s", args.random_seed)
 
     # Initialize generator
     generator = MarketDataGenerator(
@@ -555,7 +545,7 @@ def main():
                 filename = f"market_data_{scenario}_{size}.csv"
                 filepath = Path(args.output_dir) / filename
 
-                logger.info(f"Generating {scenario} data: {size} periods")
+                logger.info("Generating %s data: %s periods", scenario, size)
 
                 if scenario == "default":
                     data = generator.generate_default_data(size)
@@ -576,11 +566,11 @@ def main():
                 data.to_csv(filepath)
                 scenario_files.append(str(filepath))
 
-                logger.info(f"Saved: {filepath} ({len(data)} rows)")
+                logger.info("Saved: %s (%s rows)", filepath, len(data))
 
             generated_files[scenario] = scenario_files
         else:
-            logger.warning(f"Unknown scenario: {scenario}")
+            logger.warning("Unknown scenario: %s", scenario)
 
     # Generate standard files
     test_suite._generate_standard_files()
@@ -589,8 +579,8 @@ def main():
     summary = test_suite.generate_data_summary()
 
     logger.info("Test data generation completed")
-    logger.info(f"Generated {len(summary['files'])} files")
-    logger.info(f"Total scenarios: {len(generated_files)}")
+    logger.info("Generated %s files", len(summary['files']))
+    logger.info("Total scenarios: %s", len(generated_files))
 
     return generated_files
 

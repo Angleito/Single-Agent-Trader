@@ -242,7 +242,7 @@ class LLMLogParser:
         """Parse the entire log file and return counts."""
         try:
             if not self.log_file.exists():
-                logger.warning(f"Log file not found: {self.log_file}")
+                logger.warning("Log file not found: %s", self.log_file)
                 return {"requests": 0, "responses": 0, "decisions": 0, "metrics": 0}
 
             with open(self.log_file) as f:
@@ -262,7 +262,7 @@ class LLMLogParser:
             }
 
         except Exception as e:
-            logger.exception(f"Error parsing log file: {e}")
+            logger.exception("Error parsing log file: %s", e)
             return {"requests": 0, "responses": 0, "decisions": 0, "metrics": 0}
 
     def _parse_line(self, line: str) -> dict[str, Any] | None:
@@ -295,7 +295,7 @@ class LLMLogParser:
             return None
 
         except Exception as e:
-            logger.exception(f"Error parsing line '{line[:100]}...': {e}")
+            logger.exception("Error parsing line '%s...': %s", line[:100], e)
             return None
 
     def _create_typed_entry(self, event_type: EventType, data: dict[str, Any]):
@@ -361,7 +361,7 @@ class LLMLogParser:
             return None
 
         except Exception as e:
-            logger.exception(f"Error creating typed entry for {event_type}: {e}")
+            logger.exception("Error creating typed entry for %s: %s", event_type, e)
             return None
 
     def _store_entry(self, event_type: EventType, entry):
@@ -475,7 +475,7 @@ class LLMLogParser:
             try:
                 callback(data)
             except Exception as e:
-                logger.exception(f"Error in callback: {e}")
+                logger.exception("Error in callback: %s", e)
 
     def add_callback(self, callback: Callable[[dict[str, Any]], None]):
         """Add callback for real-time notifications."""
@@ -511,9 +511,7 @@ class LLMLogParser:
             # Start from end of file if it exists
             if self.log_file.exists():
                 self._last_position = self.log_file.stat().st_size
-                logger.info(
-                    f"Starting log monitoring from position {self._last_position}"
-                )
+                logger.info("Starting log monitoring from position %s", self._last_position)
 
             while not self._stop_event.is_set():
                 if self.log_file.exists():
@@ -534,14 +532,14 @@ class LLMLogParser:
                                     self._parse_line(line)
 
                     except Exception as e:
-                        logger.exception(f"Error reading log file: {e}")
+                        logger.exception("Error reading log file: %s", e)
                 else:
-                    logger.debug(f"Log file not found: {self.log_file}")
+                    logger.debug("Log file not found: %s", self.log_file)
 
                 time.sleep(poll_interval)
 
         except Exception as e:
-            logger.exception(f"Error in log monitoring: {e}")
+            logger.exception("Error in log monitoring: %s", e)
 
     def get_aggregated_metrics(
         self, time_window: timedelta | None = None

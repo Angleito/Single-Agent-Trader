@@ -104,7 +104,7 @@ class SystemHealthMonitor:
         else:
             self.recovery_actions[name] = []
 
-        logger.info(f"Registered component {name} for health monitoring")
+        logger.info("Registered component %s for health monitoring", name)
 
     def add_recovery_action(
         self, component_name: str, recovery_action: RecoveryAction
@@ -114,9 +114,7 @@ class SystemHealthMonitor:
             self.recovery_actions[component_name] = []
 
         self.recovery_actions[component_name].append(recovery_action)
-        logger.info(
-            f"Added recovery action {recovery_action.name} for {component_name}"
-        )
+        logger.info("Added recovery action %s for %s", recovery_action.name, component_name)
 
     async def start_monitoring(self) -> None:
         """Start continuous health monitoring."""
@@ -158,7 +156,7 @@ class SystemHealthMonitor:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.exception(f"Error in health monitoring loop: {e}")
+                logger.exception("Error in health monitoring loop: %s", e)
                 await asyncio.sleep(self.check_interval)
 
     async def _collect_system_metrics(self) -> None:
@@ -222,7 +220,7 @@ class SystemHealthMonitor:
                 self.system_metrics = self.system_metrics[-1000:]
 
         except Exception as e:
-            logger.exception(f"Failed to collect system metrics: {e}")
+            logger.exception("Failed to collect system metrics: %s", e)
 
     async def _check_all_components(self) -> None:
         """Check health of all registered components."""
@@ -249,9 +247,7 @@ class SystemHealthMonitor:
             if is_healthy:
                 # Component is healthy
                 if component_health.status != ServiceStatus.HEALTHY:
-                    logger.info(
-                        f"Component {component_name} recovered to healthy state"
-                    )
+                    logger.info("Component %s recovered to healthy state", component_name)
 
                 component_health.status = ServiceStatus.HEALTHY
                 component_health.consecutive_failures = 0
@@ -264,9 +260,7 @@ class SystemHealthMonitor:
                 component_health.consecutive_failures += 1
                 component_health.last_error = "Health check returned unhealthy status"
 
-                logger.warning(
-                    f"Component {component_name} is unhealthy "
-                    f"(consecutive failures: {component_health.consecutive_failures})"
+                logger.warning("Component %s is unhealthy " "(consecutive failures: %s)", component_name, component_health.consecutive_failures)
                 )
 
             component_health.last_check = datetime.now(UTC)
@@ -280,7 +274,7 @@ class SystemHealthMonitor:
             component_health.last_error = str(e)
             component_health.last_check = datetime.now(UTC)
 
-            logger.exception(f"Health check failed for {component_name}: {e}")
+            logger.exception("Health check failed for %s: %s", component_name, e)
 
     async def _analyze_and_recover(self) -> None:
         """Analyze component health and trigger recovery actions."""
@@ -316,7 +310,7 @@ class SystemHealthMonitor:
             alerts.append(f"High response time: {metrics.response_time_avg:.1f}ms")
 
         if alerts:
-            logger.warning(f"System threshold alerts: {', '.join(alerts)}")
+            logger.warning("System threshold alerts: %s", ', '.join(alerts))
 
     def _needs_recovery(self, health: ServiceHealth) -> bool:
         """Determine if a component needs recovery action."""
@@ -333,10 +327,10 @@ class SystemHealthMonitor:
         recovery_actions = self.recovery_actions.get(component_name, [])
 
         if not recovery_actions:
-            logger.warning(f"No recovery actions configured for {component_name}")
+            logger.warning("No recovery actions configured for %s", component_name)
             return
 
-        logger.info(f"Triggering recovery for {component_name}")
+        logger.info("Triggering recovery for %s", component_name)
         health.recovery_attempts += 1
 
         for recovery_action in recovery_actions:
@@ -345,7 +339,7 @@ class SystemHealthMonitor:
                 continue
 
             try:
-                logger.info(f"Executing recovery action: {recovery_action.name}")
+                logger.info("Executing recovery action: %s", recovery_action.name)
 
                 # Execute recovery action
                 if asyncio.iscoroutinefunction(recovery_action.action):
@@ -358,16 +352,14 @@ class SystemHealthMonitor:
                 recovery_action.attempt_count += 1
                 recovery_action.success_count += 1
 
-                logger.info(
-                    f"Recovery action {recovery_action.name} completed successfully"
-                )
+                logger.info("Recovery action %s completed successfully", recovery_action.name)
                 break
 
             except Exception as e:
                 recovery_action.last_attempt = current_time
                 recovery_action.attempt_count += 1
 
-                logger.exception(f"Recovery action {recovery_action.name} failed: {e}")
+                logger.exception("Recovery action %s failed: %s", recovery_action.name, e)
 
     def _can_attempt_recovery(
         self, recovery_action: RecoveryAction, current_time: datetime
@@ -475,18 +467,14 @@ class ErrorRecoveryManager:
     ) -> bool:
         """Execute recovery strategy for a specific error type."""
         if error_type not in self.recovery_strategies:
-            logger.warning(
-                f"No recovery strategy available for error type: {error_type}"
-            )
+            logger.warning("No recovery strategy available for error type: %s", error_type)
             return False
 
         recovery_start = datetime.now(UTC)
         recovery_strategy = self.recovery_strategies[error_type]
 
         try:
-            logger.info(
-                f"Starting recovery for {error_type} in component {component_name}"
-            )
+            logger.info("Starting recovery for %s in component %s", error_type, component_name)
 
             # Execute recovery strategy
             success = await recovery_strategy(error_context, component_name)
@@ -506,14 +494,14 @@ class ErrorRecoveryManager:
             self.recovery_history.append(recovery_record)
 
             if success:
-                logger.info(f"Recovery successful for {error_type}")
+                logger.info("Recovery successful for %s", error_type)
             else:
-                logger.warning(f"Recovery failed for {error_type}")
+                logger.warning("Recovery failed for %s", error_type)
 
             return success
 
         except Exception as e:
-            logger.exception(f"Recovery strategy failed for {error_type}: {e}")
+            logger.exception("Recovery strategy failed for %s: %s", error_type, e)
 
             # Record failed recovery attempt
             recovery_record = {
@@ -535,7 +523,7 @@ class ErrorRecoveryManager:
         self, error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from network connection errors."""
-        logger.info(f"Attempting network recovery for component {component}")
+        logger.info("Attempting network recovery for component %s", component)
 
         # Wait for network to stabilize
         await asyncio.sleep(2)
@@ -549,7 +537,7 @@ class ErrorRecoveryManager:
                     logger.info("Network connectivity restored")
                     return True
         except Exception as e:
-            logger.warning(f"Network connectivity test failed: {e}")
+            logger.warning("Network connectivity test failed: %s", e)
 
         return False
 
@@ -557,7 +545,7 @@ class ErrorRecoveryManager:
         self, error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from authentication errors."""
-        logger.info(f"Attempting authentication recovery for component {component}")
+        logger.info("Attempting authentication recovery for component %s", component)
 
         # This would typically involve:
         # 1. Refreshing API tokens
@@ -574,7 +562,7 @@ class ErrorRecoveryManager:
         self, error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from data integrity errors."""
-        logger.info(f"Attempting data integrity recovery for component {component}")
+        logger.info("Attempting data integrity recovery for component %s", component)
 
         # This would typically involve:
         # 1. Clearing corrupted caches
@@ -584,7 +572,7 @@ class ErrorRecoveryManager:
         # Clear any cached data mentioned in error context
         cache_keys = error_context.get("cache_keys", [])
         for key in cache_keys:
-            logger.debug(f"Clearing cache key: {key}")
+            logger.debug("Clearing cache key: %s", key)
             # Implementation would clear actual cache
 
         await asyncio.sleep(0.5)
@@ -596,7 +584,7 @@ class ErrorRecoveryManager:
         self, error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from position state inconsistencies."""
-        logger.info(f"Attempting position state recovery for component {component}")
+        logger.info("Attempting position state recovery for component %s", component)
 
         # This would typically involve:
         # 1. Reconciling positions with exchange
@@ -605,7 +593,7 @@ class ErrorRecoveryManager:
 
         symbol = error_context.get("symbol", "")
         if symbol:
-            logger.debug(f"Reconciling positions for symbol: {symbol}")
+            logger.debug("Reconciling positions for symbol: %s", symbol)
 
         await asyncio.sleep(1)
 
@@ -616,12 +604,12 @@ class ErrorRecoveryManager:
         self, error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from API rate limit errors."""
-        logger.info(f"Attempting rate limit recovery for component {component}")
+        logger.info("Attempting rate limit recovery for component %s", component)
 
         # Extract rate limit information from context
         retry_after = error_context.get("retry_after", 60)
 
-        logger.info(f"Waiting {retry_after} seconds for rate limit to reset")
+        logger.info("Waiting %s seconds for rate limit to reset", retry_after)
         await asyncio.sleep(retry_after)
 
         logger.info("Rate limit recovery completed")
@@ -631,7 +619,7 @@ class ErrorRecoveryManager:
         self, error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from WebSocket connection errors."""
-        logger.info(f"Attempting WebSocket recovery for component {component}")
+        logger.info("Attempting WebSocket recovery for component %s", component)
 
         # This would typically involve:
         # 1. Closing existing connections
@@ -647,7 +635,7 @@ class ErrorRecoveryManager:
         self, error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from database connection errors."""
-        logger.info(f"Attempting database recovery for component {component}")
+        logger.info("Attempting database recovery for component %s", component)
 
         # This would typically involve:
         # 1. Closing existing connections
@@ -663,7 +651,7 @@ class ErrorRecoveryManager:
         self, error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from memory-related errors."""
-        logger.info(f"Attempting memory recovery for component {component}")
+        logger.info("Attempting memory recovery for component %s", component)
 
         # This would typically involve:
         # 1. Clearing memory caches

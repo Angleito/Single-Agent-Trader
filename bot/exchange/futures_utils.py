@@ -114,29 +114,25 @@ class FuturesContractManager:
                                     )
 
                     except (ValueError, IndexError) as e:
-                        logger.debug(f"Could not parse date from {product_id}: {e}")
+                        logger.debug("Could not parse date from %s: %s", product_id, e)
                         continue
 
             if not futures_contracts:
-                logger.warning(f"No active futures contracts found for {base_currency}")
+                logger.warning("No active futures contracts found for %s", base_currency)
                 return None
 
             # Sort by expiry date and get the nearest one (front month)
             futures_contracts.sort(key=lambda x: x["expiry"])
             selected_contract = futures_contracts[0]
 
-            logger.info(
-                f"Selected {base_currency} futures contract: {selected_contract['symbol']} "
-                f"(expires in {selected_contract['days_to_expiry']} days)"
+            logger.info("Selected %s futures contract: %s " "(expires in %s days)", base_currency, selected_contract['symbol'], selected_contract['days_to_expiry'])
             )
 
             # Log all available contracts for debugging
             if len(futures_contracts) > 1:
-                logger.debug(f"Other available {base_currency} contracts:")
+                logger.debug("Other available %s contracts:", base_currency)
                 for contract in futures_contracts[1:]:
-                    logger.debug(
-                        f"  - {contract['symbol']} (expires in {contract['days_to_expiry']} days)"
-                    )
+                    logger.debug("  - %s (expires in %s days)", contract['symbol'], contract['days_to_expiry'])
 
             self._current_contract = selected_contract["symbol"]
             self._last_update = datetime.utcnow()
@@ -144,7 +140,7 @@ class FuturesContractManager:
             return selected_contract["symbol"]
 
         except Exception as e:
-            logger.exception(f"Failed to get active futures contract: {e}")
+            logger.exception("Failed to get active futures contract: %s", e)
             return None
 
     def get_cached_contract(self) -> str | None:

@@ -105,7 +105,7 @@ class PerformanceMonitor:
         try:
             self.docker_client = docker.from_env()
         except Exception as e:
-            logger.warning(f"Docker client not available: {e}")
+            logger.warning("Docker client not available: %s", e)
 
     async def inject_test_event(self, event_type: str) -> str:
         """Inject a test event and return its ID."""
@@ -136,9 +136,9 @@ class PerformanceMonitor:
                 f"python -c \"import json; print(json.dumps({{'event_id': '{event_id}', 'type': 'market_update', 'price': 50000.0}}));\"",
                 stream=False,
             )
-            logger.debug(f"Triggered market update: {event_id}")
+            logger.debug("Triggered market update: %s", event_id)
         except Exception as e:
-            logger.exception(f"Failed to trigger market update: {e}")
+            logger.exception("Failed to trigger market update: %s", e)
 
     async def _trigger_decision(self, event_id: str):
         """Trigger an AI decision."""
@@ -148,9 +148,9 @@ class PerformanceMonitor:
                 f"python -c \"import json; print(json.dumps({{'event_id': '{event_id}', 'type': 'trigger_decision'}}));\"",
                 stream=False,
             )
-            logger.debug(f"Triggered AI decision: {event_id}")
+            logger.debug("Triggered AI decision: %s", event_id)
         except Exception as e:
-            logger.exception(f"Failed to trigger decision: {e}")
+            logger.exception("Failed to trigger decision: %s", e)
 
     async def _trigger_indicators(self, event_id: str):
         """Trigger indicator calculation."""
@@ -160,9 +160,9 @@ class PerformanceMonitor:
                 f"python -c \"import json; print(json.dumps({{'event_id': '{event_id}', 'type': 'calculate_indicators'}}));\"",
                 stream=False,
             )
-            logger.debug(f"Triggered indicators: {event_id}")
+            logger.debug("Triggered indicators: %s", event_id)
         except Exception as e:
-            logger.exception(f"Failed to trigger indicators: {e}")
+            logger.exception("Failed to trigger indicators: %s", e)
 
     async def monitor_messages(self, duration: int = 60):
         """Monitor WebSocket messages and measure latency."""
@@ -202,7 +202,7 @@ class PerformanceMonitor:
                             )
 
                             self.metrics.add_latency(measurement)
-                            logger.info(f"Latency for {event_id}: {bot_latency:.3f}s")
+                            logger.info("Latency for %s: %ss", event_id, bot_latency:.3f)
 
                             # Clean up
                             del self.message_timestamps[event_id]
@@ -210,13 +210,13 @@ class PerformanceMonitor:
                     except TimeoutError:
                         continue
                     except Exception as e:
-                        logger.exception(f"Error processing message: {e}")
+                        logger.exception("Error processing message: %s", e)
                         self.metrics.error_counts["message_processing"] = (
                             self.metrics.error_counts.get("message_processing", 0) + 1
                         )
 
         except Exception as e:
-            logger.exception(f"WebSocket connection error: {e}")
+            logger.exception("WebSocket connection error: %s", e)
             self.metrics.error_counts["connection"] = (
                 self.metrics.error_counts.get("connection", 0) + 1
             )
@@ -261,12 +261,12 @@ class PerformanceMonitor:
                         )
 
                     except Exception as e:
-                        logger.debug(f"Error getting stats for {container_name}: {e}")
+                        logger.debug("Error getting stats for %s: %s", container_name, e)
 
                 await asyncio.sleep(interval)
 
             except Exception as e:
-                logger.exception(f"Container monitoring error: {e}")
+                logger.exception("Container monitoring error: %s", e)
                 await asyncio.sleep(interval)
 
     def _calculate_cpu_percent(self, stats: dict) -> float:
@@ -295,7 +295,7 @@ class PerformanceMonitor:
 
     async def run_latency_test(self, duration: int = 60, test_interval: int = 10):
         """Run latency test with periodic test events."""
-        logger.info(f"Starting latency test for {duration} seconds")
+        logger.info("Starting latency test for %s seconds", duration)
 
         # Start monitoring tasks
         monitor_task = asyncio.create_task(self.monitor_messages(duration))
@@ -310,7 +310,7 @@ class PerformanceMonitor:
             # Inject test event
             event_type = event_types[test_count % len(event_types)]
             event_id = await self.inject_test_event(event_type)
-            logger.info(f"Injected test event: {event_id}")
+            logger.info("Injected test event: %s", event_id)
 
             test_count += 1
             await asyncio.sleep(test_interval)
@@ -344,21 +344,21 @@ class PerformanceMonitor:
         if latency_stats:
             logger.info("\nLatency Statistics (seconds):")
             for event_type, stats in latency_stats.items():
-                logger.info(f"\n{event_type}:")
-                logger.info(f"  Count: {stats['count']}")
-                logger.info(f"  Min: {stats['min']:.3f}s")
-                logger.info(f"  Max: {stats['max']:.3f}s")
-                logger.info(f"  Mean: {stats['mean']:.3f}s")
-                logger.info(f"  Median: {stats['median']:.3f}s")
-                logger.info(f"  P95: {stats['p95']:.3f}s")
-                logger.info(f"  P99: {stats['p99']:.3f}s")
+                logger.info("\n%s:", event_type)
+                logger.info("  Count: %s", stats['count'])
+                logger.info("  Min: %ss", stats['min']:.3f)
+                logger.info("  Max: %ss", stats['max']:.3f)
+                logger.info("  Mean: %ss", stats['mean']:.3f)
+                logger.info("  Median: %ss", stats['median']:.3f)
+                logger.info("  P95: %ss", stats['p95']:.3f)
+                logger.info("  P99: %ss", stats['p99']:.3f)
         else:
             logger.warning("No latency measurements collected")
 
         # Message rates
         logger.info("\nMessage Rates (per second):")
         for msg_type, rate in sorted(self.metrics.message_rates.items()):
-            logger.info(f"  {msg_type}: {rate:.2f} msg/s")
+            logger.info("  %s: %s msg/s", msg_type, rate:.2f)
 
         # Container statistics
         if self.metrics.container_stats:
@@ -368,19 +368,15 @@ class PerformanceMonitor:
                     cpu_values = [s["cpu_percent"] for s in stats_list]
                     memory_values = [s["memory_mb"] for s in stats_list]
 
-                    logger.info(f"\n{container}:")
-                    logger.info(
-                        f"  CPU - Avg: {statistics.mean(cpu_values):.1f}%, Max: {max(cpu_values):.1f}%"
-                    )
-                    logger.info(
-                        f"  Memory - Avg: {statistics.mean(memory_values):.1f}MB, Max: {max(memory_values):.1f}MB"
-                    )
+                    logger.info("\n%s:", container)
+                    logger.info("  CPU - Avg: %s%, Max: %s%", statistics.mean(cpu_values):.1f, max(cpu_values):.1f)
+                    logger.info("  Memory - Avg: %sMB, Max: %sMB", statistics.mean(memory_values):.1f, max(memory_values):.1f)
 
         # Error summary
         if self.metrics.error_counts:
             logger.info("\nErrors:")
             for error_type, count in self.metrics.error_counts.items():
-                logger.info(f"  {error_type}: {count}")
+                logger.info("  %s: %s", error_type, count)
         else:
             logger.info("\nNo errors detected ✓")
 
@@ -406,7 +402,7 @@ class PerformanceMonitor:
         with open(filepath, "w") as f:
             json.dump(results, f, indent=2)
 
-        logger.info(f"\nResults saved to: {filepath}")
+        logger.info("\nResults saved to: %s", filepath)
 
     def _summarize_container_stats(self) -> dict:
         """Summarize container statistics."""
@@ -475,7 +471,7 @@ async def main():
     latency_stats = metrics.get_latency_stats()
     for event_type, stats in latency_stats.items():
         if stats["p99"] > 1.0:  # 1 second threshold
-            logger.warning(f"High P99 latency for {event_type}: {stats['p99']:.3f}s")
+            logger.warning("High P99 latency for %s: %ss", event_type, stats['p99']:.3f)
             sys.exit(1)
 
     sys.exit(0)

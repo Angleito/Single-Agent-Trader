@@ -1028,7 +1028,7 @@ class CipherBSignals:
             )
 
         except Exception as e:
-            logger.exception(f"Error in Cipher B signals calculation: {e}")
+            logger.exception("Error in Cipher B signals calculation: %s", e)
 
         return result
 

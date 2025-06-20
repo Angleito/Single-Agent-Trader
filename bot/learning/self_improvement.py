@@ -155,11 +155,7 @@ class SelfImprovementEngine:
             "new_insights": await self._generate_insights(recent_experiences),
         }
 
-        logger.info(
-            f"Performance analysis complete: {total_trades} trades, "
-            f"{analysis['success_rate']:.1%} success rate, "
-            f"${total_pnl:.2f} total PnL"
-        )
+        logger.info("Performance analysis complete: %s trades, " "%s success rate, " "$%s total PnL" ), total_trades, analysis['success_rate']:.1%, total_pnl:.2f)
 
         return analysis
 

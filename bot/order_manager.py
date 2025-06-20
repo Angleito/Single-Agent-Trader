@@ -70,9 +70,7 @@ class OrderManager:
         # Load persisted state
         self._load_state()
 
-        logger.info(
-            f"Initialized OrderManager with {len(self._active_orders)} active orders"
-        )
+        logger.info("Initialized OrderManager with %s active orders", len(self._active_orders))
 
     async def start(self) -> None:
         """Start the order manager background tasks."""
@@ -153,9 +151,7 @@ class OrderManager:
             # Persist state
             self._save_state()
 
-            logger.info(
-                f"Created order {order_id}: {side} {quantity} {symbol} ({order_type})"
-            )
+            logger.info("Created order %s: %s %s %s (%s)", order_id, side, quantity, symbol, order_type)
             return order.copy()
 
     def add_order(self, order: Order) -> None:
@@ -179,7 +175,7 @@ class OrderManager:
                 self._order_history.append(order)
             # Persist state
             self._save_state()
-            logger.info(f"Added existing order {order.id} with status {order.status}")
+            logger.info("Added existing order %s with status %s", order.id, order.status)
 
     def update_order_status(
         self,
@@ -202,7 +198,7 @@ class OrderManager:
         """
         with self._lock:
             if order_id not in self._active_orders:
-                logger.warning(f"Order {order_id} not found for status update")
+                logger.warning("Order %s not found for status update", order_id)
                 return None
 
             order = self._active_orders[order_id]
@@ -250,7 +246,7 @@ class OrderManager:
                     self._timeout_tasks[order_id].cancel()
                     del self._timeout_tasks[order_id]
 
-                logger.info(f"Order {order_id} completed with status {status}")
+                logger.info("Order %s completed with status %s", order_id, status)
 
             # Trigger callbacks
             if event:
@@ -349,9 +345,7 @@ class OrderManager:
         """
         with self._lock:
             if order_id not in self._active_orders:
-                logger.warning(
-                    f"Cannot cancel order {order_id}: not found in active orders"
-                )
+                logger.warning("Cannot cancel order %s: not found in active orders", order_id)
                 return False
 
             order = self._active_orders[order_id]
@@ -362,15 +356,13 @@ class OrderManager:
                 OrderStatus.REJECTED,
                 OrderStatus.FAILED,
             ]:
-                logger.warning(
-                    f"Cannot cancel order {order_id}: already completed with status {order.status}"
-                )
+                logger.warning("Cannot cancel order %s: already completed with status %s", order_id, order.status)
                 return False
 
             # Update status to cancelled
             self.update_order_status(order_id, OrderStatus.CANCELLED)
 
-            logger.info(f"Order {order_id} cancelled")
+            logger.info("Order %s cancelled", order_id)
             return True
 
     def cancel_all_orders(
@@ -404,9 +396,7 @@ class OrderManager:
                 if self.cancel_order(order_id):
                     cancelled_count += 1
 
-            logger.info(
-                f"Cancelled {cancelled_count} orders"
-                + (f" for {symbol}" if symbol else "")
+            logger.info("Cancelled %s orders" + (" for %s" if symbol else ""), cancelled_count, symbol)
             )
             return cancelled_count
 
@@ -520,9 +510,7 @@ class OrderManager:
                     if order_id in self._active_orders:
                         order = self._active_orders[order_id]
                         if order.status in [OrderStatus.PENDING, OrderStatus.OPEN]:
-                            logger.warning(
-                                f"Order {order_id} timed out after {timeout_seconds}s"
-                            )
+                            logger.warning("Order %s timed out after %ss", order_id, timeout_seconds)
                             self.update_order_status(order_id, OrderStatus.CANCELLED)
                             self._trigger_callbacks(order_id, OrderEvent.EXPIRED)
 
@@ -550,7 +538,7 @@ class OrderManager:
                 try:
                     callback(order_id, event)
                 except Exception as e:
-                    logger.exception(f"Order callback error for {order_id}: {e}")
+                    logger.exception("Order callback error for %s: %s", order_id, e)
 
             # Clean up callbacks for completed orders
             if event in [
@@ -610,7 +598,7 @@ class OrderManager:
             logger.debug("Order state saved successfully")
 
         except Exception as e:
-            logger.exception(f"Failed to save order state: {e}")
+            logger.exception("Failed to save order state: %s", e)
 
     def _load_state(self) -> None:
         """Load state from files."""
@@ -642,7 +630,7 @@ class OrderManager:
                         filled_quantity=Decimal(order_data["filled_quantity"]),
                     )
 
-                logger.info(f"Loaded {len(self._active_orders)} active orders")
+                logger.info("Loaded %s active orders", len(self._active_orders))
 
             # Load order history
             if self.history_file.exists():
@@ -673,10 +661,10 @@ class OrderManager:
                         )
                     )
 
-                logger.info(f"Loaded {len(self._order_history)} historical orders")
+                logger.info("Loaded %s historical orders", len(self._order_history))
 
         except Exception as e:
-            logger.exception(f"Failed to load order state: {e}")
+            logger.exception("Failed to load order state: %s", e)
             # Continue with empty state
 
     def clear_old_history(self, days_to_keep: int = 7) -> None:
@@ -696,7 +684,7 @@ class OrderManager:
 
             removed_count = original_count - len(self._order_history)
             if removed_count > 0:
-                logger.info(f"Removed {removed_count} old order records")
+                logger.info("Removed %s old order records", removed_count)
                 self._save_state()
 
     def reset_orders(self) -> None:

@@ -143,10 +143,10 @@ class MessageFlowValidator:
         """Connect to dashboard WebSocket."""
         try:
             self.websocket = await websockets.connect(self.dashboard_url)
-            logger.info(f"Connected to dashboard at {self.dashboard_url}")
+            logger.info("Connected to dashboard at %s", self.dashboard_url)
             return True
         except Exception as e:
-            logger.exception(f"Failed to connect: {e}")
+            logger.exception("Failed to connect: %s", e)
             return False
 
     async def disconnect(self):
@@ -171,9 +171,9 @@ class MessageFlowValidator:
                         data = json.loads(message)
                         data["received_at"] = datetime.utcnow().isoformat()
                         self.received_messages.append(data)
-                        logger.debug(f"Received message: {data.get('type', 'unknown')}")
+                        logger.debug("Received message: %s", data.get('type', 'unknown'))
                     except json.JSONDecodeError as e:
-                        logger.exception(f"Failed to parse message: {e}")
+                        logger.exception("Failed to parse message: %s", e)
 
                 except TimeoutError:
                     # No message received, continue
@@ -183,7 +183,7 @@ class MessageFlowValidator:
                     break
 
         except Exception as e:
-            logger.exception(f"Error in message listener: {e}")
+            logger.exception("Error in message listener: %s", e)
 
     def validate_message_schema(
         self, message: dict[str, Any]
@@ -308,18 +308,18 @@ class MessageFlowValidator:
                 }
 
             await self.websocket.send(json.dumps(message))
-            logger.info(f"Sent test stimulus: {stimulus_type}")
+            logger.info("Sent test stimulus: %s", stimulus_type)
             return True
 
         except Exception as e:
-            logger.exception(f"Failed to send stimulus: {e}")
+            logger.exception("Failed to send stimulus: %s", e)
             return False
 
     async def test_message_type(
         self, message_type: MessageType, timeout: float = 10.0
     ) -> bool:
         """Test a specific message type."""
-        logger.info(f"\nTesting message type: {message_type}")
+        logger.info("\nTesting message type: %s", message_type)
 
         # Clear previous messages
         self.received_messages.clear()
@@ -367,18 +367,18 @@ class MessageFlowValidator:
             self.validation_results.append(result)
 
             if result.valid:
-                logger.info(f"✓ {message_type}: Valid message received")
+                logger.info("✓ %s: Valid message received", message_type)
                 if result.warnings:
                     for warning in result.warnings:
-                        logger.warning(f"  ⚠ {warning}")
+                        logger.warning("  ⚠ %s", warning)
             else:
-                logger.error(f"✗ {message_type}: Invalid message")
+                logger.error("✗ %s: Invalid message", message_type)
                 for error in result.errors:
-                    logger.error(f"  - {error}")
+                    logger.error("  - %s", error)
 
             return result.valid
         else:
-            logger.warning(f"✗ {message_type}: No message received within {timeout}s")
+            logger.warning("✗ %s: No message received within %ss", message_type, timeout)
             self.validation_results.append(
                 MessageValidationResult(
                     message_type=message_type,
@@ -430,8 +430,8 @@ class MessageFlowValidator:
             return True
         else:
             logger.error("✗ Message ordering: Messages arrived out of order")
-            logger.error(f"  Sent: {sent_sequence}")
-            logger.error(f"  Received: {received_sequence}")
+            logger.error("  Sent: %s", sent_sequence)
+            logger.error("  Received: %s", received_sequence)
             return False
 
     async def test_all_message_types(self):
@@ -481,24 +481,20 @@ class MessageFlowValidator:
         total = len(type_results)
 
         logger.info("\nMessage Type Tests:")
-        logger.info(f"  Total: {total}")
-        logger.info(f"  Passed: {passed}")
-        logger.info(f"  Failed: {total - passed}")
+        logger.info("  Total: %s", total)
+        logger.info("  Passed: %s", passed)
+        logger.info("  Failed: %s", total - passed)
 
         for msg_type, result in type_results.items():
             status = "✓" if result else "✗"
-            logger.info(f"  {status} {msg_type}")
+            logger.info("  %s %s", status, msg_type)
 
         # Ordering test
-        logger.info(
-            f"\nMessage Ordering: {'✓ Passed' if ordering_result else '✗ Failed'}"
-        )
+        logger.info("\nMessage Ordering: %s", '✓ Passed' if ordering_result else '✗ Failed')
 
         # Overall result
         all_passed = passed == total and ordering_result
-        logger.info(
-            f"\nOverall Result: {'✓ ALL TESTS PASSED' if all_passed else '✗ SOME TESTS FAILED'}"
-        )
+        logger.info("\nOverall Result: %s", '✓ ALL TESTS PASSED' if all_passed else '✗ SOME TESTS FAILED')
 
         # Save detailed results
         results_file = "tests/docker/results/message_flow_results.json"
@@ -528,7 +524,7 @@ class MessageFlowValidator:
                 indent=2,
             )
 
-        logger.info(f"\nDetailed results saved to: {results_file}")
+        logger.info("\nDetailed results saved to: %s", results_file)
 
         # Exit with appropriate code
         sys.exit(0 if all_passed else 1)

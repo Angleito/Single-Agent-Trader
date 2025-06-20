@@ -182,9 +182,7 @@ class ExperienceManager:
             experience_id: Experience ID from memory
         """
         self.pending_experiences[order_id] = experience_id
-        logger.info(
-            f"🔗 Experience Manager: Linked order {order_id} to experience {experience_id[:8]}..."
-        )
+        logger.info("🔗 Experience Manager: Linked order %s to experience %s...", order_id, experience_id[:8])
 
     def start_tracking_trade(
         self, order: Order, trade_action: TradeAction, market_state: MarketState
@@ -203,9 +201,7 @@ class ExperienceManager:
         # Check if we have an experience for this order
         experience_id = self.pending_experiences.get(order.id)
         if not experience_id:
-            logger.warning(
-                f"⚠️ Experience Manager: No experience found for order {order.id}"
-            )
+            logger.warning("⚠️ Experience Manager: No experience found for order %s", order.id)
             return None
 
         # Create active trade tracking
@@ -334,7 +330,7 @@ class ExperienceManager:
                 break
 
         if not active_trade:
-            logger.warning(f"No active trade found for exit order {exit_order.id}")
+            logger.warning("No active trade found for exit order %s", exit_order.id)
             return False
 
         # Mark trade as complete
@@ -438,16 +434,14 @@ class ExperienceManager:
                 for trade_id in stale_trades:
                     trade = self.active_trades[trade_id]
                     if (current_time - trade.entry_time).total_seconds() / 3600 > 48:
-                        logger.error(
-                            f"Removing stale trade {trade_id} - open for over 48 hours"
-                        )
+                        logger.error("Removing stale trade %s - open for over 48 hours", trade_id)
                         del self.active_trades[trade_id]
 
                 # Wait before next check
                 await asyncio.sleep(300)  # Check every 5 minutes
 
             except Exception as e:
-                logger.exception(f"Error in trade monitoring: {e}")
+                logger.exception("Error in trade monitoring: %s", e)
                 await asyncio.sleep(60)
 
     async def _schedule_trade_reflection(
@@ -468,9 +462,7 @@ class ExperienceManager:
             reflection = self._generate_trade_reflection(completed_trade)
 
             if reflection:
-                logger.info(
-                    f"Trade reflection for {completed_trade.trade_id}: {reflection}"
-                )
+                logger.info("Trade reflection for %s: %s", completed_trade.trade_id, reflection)
 
                 # Could store this reflection or use it for pattern analysis
                 # This is where we'd integrate with the self-improvement engine
@@ -478,7 +470,7 @@ class ExperienceManager:
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            logger.exception(f"Error in trade reflection: {e}")
+            logger.exception("Error in trade reflection: %s", e)
 
     def _generate_trade_reflection(self, trade: ActiveTrade) -> str:
         """Generate reflection insights from completed trade."""

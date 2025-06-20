@@ -842,7 +842,7 @@ class WaveTrend:
             # Print the full traceback for debugging
             import traceback
 
-            logger.exception(f"Full traceback: {traceback.format_exc()}")
+            logger.exception("Full traceback: %s", traceback.format_exc())
             return pd.Series(dtype="float64", index=src.index), pd.Series(
                 dtype="float64", index=src.index
             )

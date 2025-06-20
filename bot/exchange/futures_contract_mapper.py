@@ -42,13 +42,13 @@ class FuturesContractMapper:
         """
         prefix = FuturesContractMapper.FUTURES_PREFIXES.get(spot_symbol)
         if not prefix:
-            logger.warning(f"No futures mapping for {spot_symbol}")
+            logger.warning("No futures mapping for %s", spot_symbol)
             return spot_symbol
 
         month = FuturesContractMapper.get_current_contract_month()
         futures_symbol = f"{prefix}-{month}-CDE"
 
-        logger.info(f"Mapped {spot_symbol} to futures contract {futures_symbol}")
+        logger.info("Mapped %s to futures contract %s", spot_symbol, futures_symbol)
         return futures_symbol
 
     @staticmethod
@@ -71,8 +71,8 @@ class FuturesContractMapper:
         # Reverse lookup
         for spot, fut_prefix in FuturesContractMapper.FUTURES_PREFIXES.items():
             if fut_prefix == prefix:
-                logger.info(f"Mapped futures {futures_symbol} back to {spot}")
+                logger.info("Mapped futures %s back to %s", futures_symbol, spot)
                 return spot
 
-        logger.warning(f"No spot mapping for futures {futures_symbol}")
+        logger.warning("No spot mapping for futures %s", futures_symbol)
         return futures_symbol

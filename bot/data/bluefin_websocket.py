@@ -132,16 +132,7 @@ class BluefinWebSocketClient:
         self._message_count = 0
         self._error_count = 0
 
-        logger.info(
-            f"Initialized BluefinWebSocketClient for {symbol} with {interval} candles on {self.network} network",
-            extra={
-                "symbol": symbol,
-                "interval": interval,
-                "network": self.network,
-                "notification_ws_url": self.NOTIFICATION_WS_URL,
-                "dapi_ws_url": self.DAPI_WS_URL,
-            },
-        )
+        logger.info("Initialized BluefinWebSocketClient for %s with %s candles on %s network", extra=%s, ), symbol, interval, self.network,  "symbol": symbol, "interval": interval, "network": self.network, "notification_ws_url": self.NOTIFICATION_WS_URL, "dapi_ws_url": self.DAPI_WS_URL, )
 
     async def connect(self) -> None:
         """Establish WebSocket connection and start data streaming."""
@@ -149,7 +140,7 @@ class BluefinWebSocketClient:
             logger.warning("Already connected to Bluefin WebSocket")
             return
 
-        logger.info(f"Connecting to Bluefin WebSocket at {self.NOTIFICATION_WS_URL}")
+        logger.info("Connecting to Bluefin WebSocket at %s", self.NOTIFICATION_WS_URL)
 
         # Start connection task
         self._connection_task = asyncio.create_task(self._connection_handler())
@@ -274,13 +265,9 @@ class BluefinWebSocketClient:
             # Additional delay for consecutive failures
             if consecutive_failures > 3:
                 delay = min(delay * 1.5, 120)
-                logger.warning(
-                    f"Multiple consecutive failures ({consecutive_failures}), extending delay"
-                )
+                logger.warning("Multiple consecutive failures (%s), extending delay", consecutive_failures)
 
-            logger.info(
-                f"Reconnecting to Bluefin in {delay:.1f}s (attempt {self._reconnect_attempts}/{self._max_reconnect_attempts})"
-            )
+            logger.info("Reconnecting to Bluefin in %ss (attempt %s/%s)", delay:.1f, self._reconnect_attempts, self._max_reconnect_attempts)
 
             await asyncio.sleep(delay)
 
@@ -328,7 +315,7 @@ class BluefinWebSocketClient:
         }
         self._pending_subscriptions[global_id] = f"globalUpdates:{self.symbol}"
         await self._send_message(global_subscription)
-        logger.info(f"Subscribing to globalUpdates for {self.symbol} (ID: {global_id})")
+        logger.info("Subscribing to globalUpdates for %s (ID: %s)", self.symbol, global_id)
 
         # Subscribe to ticker updates for price data
         ticker_id = self._get_next_subscription_id()
@@ -342,7 +329,7 @@ class BluefinWebSocketClient:
         }
         self._pending_subscriptions[ticker_id] = f"ticker:{self.symbol}"
         await self._send_message(ticker_subscription)
-        logger.info(f"Subscribing to ticker for {self.symbol} (ID: {ticker_id})")
+        logger.info("Subscribing to ticker for %s (ID: %s)", self.symbol, ticker_id)
 
         # Subscribe to kline data for candlestick updates
         kline_id = self._get_next_subscription_id()
@@ -357,9 +344,7 @@ class BluefinWebSocketClient:
         }
         self._pending_subscriptions[kline_id] = f"kline:{self.symbol}@{self.interval}"
         await self._send_message(kline_subscription)
-        logger.info(
-            f"Subscribing to kline data for {self.symbol}@{self.interval} (ID: {kline_id})"
-        )
+        logger.info("Subscribing to kline data for %s@%s (ID: %s)", self.symbol, self.interval, kline_id)
 
         # Subscribe to trade data for real-time price updates
         trade_id = self._get_next_subscription_id()
@@ -373,7 +358,7 @@ class BluefinWebSocketClient:
         }
         self._pending_subscriptions[trade_id] = f"trade:{self.symbol}"
         await self._send_message(trade_subscription)
-        logger.info(f"Subscribing to trade data for {self.symbol} (ID: {trade_id})")
+        logger.info("Subscribing to trade data for %s (ID: %s)", self.symbol, trade_id)
 
         # Channels will be tracked after subscription confirmation
 
@@ -395,9 +380,7 @@ class BluefinWebSocketClient:
                         if isinstance(data, dict)
                         else "unknown"
                     )
-                    logger.debug(
-                        f"WebSocket message #{self._message_count} type: {msg_type}"
-                    )
+                    logger.debug("WebSocket message #%s type: %s", self._message_count, msg_type)
 
                 await self._process_message(data)
 
@@ -455,27 +438,23 @@ class BluefinWebSocketClient:
                 if sub_id in self._pending_subscriptions:
                     channel = self._pending_subscriptions.pop(sub_id)
                     self._subscribed_channels.add(channel)
-                    logger.info(
-                        f"Subscription confirmed: {channel} (ID: {sub_id}, result: {data['result']})"
-                    )
+                    logger.info("Subscription confirmed: %s (ID: %s, result: %s)", channel, sub_id, data['result'])
                 else:
-                    logger.debug(f"Subscription {sub_id} confirmed: {data['result']}")
+                    logger.debug("Subscription %s confirmed: %s", sub_id, data['result'])
                 return
 
             elif "error" in data:
                 # Subscription error
                 if sub_id in self._pending_subscriptions:
                     channel = self._pending_subscriptions.pop(sub_id)
-                    logger.error(
-                        f"Subscription failed: {channel} (ID: {sub_id}, error: {data['error']})"
-                    )
+                    logger.error("Subscription failed: %s (ID: %s, error: %s)", channel, sub_id, data['error'])
                 else:
-                    logger.error(f"Subscription {sub_id} failed: {data['error']}")
+                    logger.error("Subscription %s failed: %s", sub_id, data['error'])
                 return
 
         # Handle error messages
         if "error" in data:
-            logger.error(f"WebSocket error: {data['error']}")
+            logger.error("WebSocket error: %s", data['error'])
             return
 
         # Handle Bluefin-specific event names from WebSocket API
@@ -501,7 +480,7 @@ class BluefinWebSocketClient:
             elif channel == "orderbook" or "orderbook" in str(channel):
                 await self._handle_orderbook_update(data)
             elif self._message_count % 100 == 0:
-                logger.debug(f"Unhandled event/channel: {event_name or channel}")
+                logger.debug("Unhandled event/channel: %s", event_name or channel)
 
     async def _handle_trade_update(self, data: dict[str, Any]) -> None:
         """
@@ -540,7 +519,7 @@ class BluefinWebSocketClient:
                     # Update current candle
                     await self._update_candle_with_trade(trade_data)
 
-                    logger.debug(f"Trade: {self.symbol} {side} {size} @ {price}")
+                    logger.debug("Trade: %s %s %s @ %s", self.symbol, side, size, price)
 
         except (ValueError, KeyError, TypeError) as e:
             exception_handler.log_exception_with_context(
@@ -595,7 +574,7 @@ class BluefinWebSocketClient:
                         volume=self._current_candle.volume,
                     )
 
-                logger.debug(f"Ticker update: {self.symbol} = {last_price}")
+                logger.debug("Ticker update: %s = %s", self.symbol, last_price)
 
         except (ValueError, KeyError, TypeError) as e:
             exception_handler.log_exception_with_context(
@@ -630,7 +609,7 @@ class BluefinWebSocketClient:
         """
         # For now, just log that we received orderbook data
         # Full orderbook handling can be implemented if needed
-        logger.debug(f"Received orderbook update for {self.symbol}")
+        logger.debug("Received orderbook update for %s", self.symbol)
 
     async def _handle_bluefin_ticker_update(self, data: dict[str, Any]) -> None:
         """
@@ -680,7 +659,7 @@ class BluefinWebSocketClient:
                         # Update current candle
                         await self._update_candle_with_trade(trade_data)
 
-                        logger.debug(f"Ticker update: {self.symbol} = ${current_price}")
+                        logger.debug("Ticker update: %s = $%s", self.symbol, current_price)
 
                     break
 
@@ -758,9 +737,7 @@ class BluefinWebSocketClient:
                         # Update current candle
                         await self._update_candle_with_trade(trade_data)
 
-                        logger.debug(
-                            f"Trade: {self.symbol} {trade_data['side']} {size} @ ${price}"
-                        )
+                        logger.debug("Trade: %s %s %s @ $%s", self.symbol, trade_data['side'], size, price)
 
         except (ValueError, KeyError, TypeError, ArithmeticError) as e:
             exception_handler.log_exception_with_context(
@@ -883,9 +860,7 @@ class BluefinWebSocketClient:
                                 operation="handle_bluefin_kline_update",
                             )
 
-                    logger.debug(
-                        f"Kline update: {self.symbol} ${close_val} volume: {volume_val}"
-                    )
+                    logger.debug("Kline update: %s $%s volume: %s", self.symbol, close_val, volume_val)
 
         except (ValueError, KeyError, TypeError) as e:
             exception_handler.log_exception_with_context(
@@ -983,7 +958,7 @@ class BluefinWebSocketClient:
             volume=Decimal("0"),
         )
 
-        logger.debug(f"Created new {self.interval} candle at {candle_timestamp}")
+        logger.debug("Created new %s candle at %s", self.interval, candle_timestamp)
 
     async def _candle_aggregator(self) -> None:
         """
@@ -1157,7 +1132,7 @@ class BluefinWebSocketClient:
             else:
                 msg_type = "unknown"
 
-            logger.debug(f"Sent Bluefin message: {msg_type}")
+            logger.debug("Sent Bluefin message: %s", msg_type)
         except (ConnectionClosed, WebSocketException) as e:
             exception_handler.log_exception_with_context(
                 e,
@@ -1214,9 +1189,7 @@ class BluefinWebSocketClient:
 
         while not self._connected:
             if (datetime.now(UTC) - start_time).total_seconds() > timeout:
-                logger.warning(
-                    f"Timeout waiting for WebSocket connection after {timeout}s"
-                )
+                logger.warning("Timeout waiting for WebSocket connection after %ss", timeout)
                 return False
 
             await asyncio.sleep(0.1)

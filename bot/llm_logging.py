@@ -192,7 +192,7 @@ class ChatCompletionLogger:
         if temperature is not None:
             log_entry["temperature"] = temperature
 
-        self.logger.info(f"LLM_REQUEST: {json.dumps(log_entry, cls=DecimalEncoder)}")
+        self.logger.info("LLM_REQUEST: %s", json.dumps(log_entry, cls=DecimalEncoder))
         return request_id
 
     def log_completion_response(
@@ -297,9 +297,7 @@ class ChatCompletionLogger:
             },
         }
 
-        self.logger.info(
-            f"TRADING_DECISION: {json.dumps(log_entry, cls=DecimalEncoder)}"
-        )
+        self.logger.info("TRADING_DECISION: %s", json.dumps(log_entry, cls=DecimalEncoder))
 
     def log_performance_metrics(self) -> dict[str, Any]:
         """
@@ -339,7 +337,7 @@ class ChatCompletionLogger:
             **metrics,
         }
 
-        self.logger.info(f"PERFORMANCE: {json.dumps(log_entry, cls=DecimalEncoder)}")
+        self.logger.info("PERFORMANCE: %s", json.dumps(log_entry, cls=DecimalEncoder))
         return metrics
 
     def _calculate_cost(self, model: str, token_usage: dict[str, int]) -> float:
@@ -408,9 +406,7 @@ class LangChainCallbackHandler(BaseCallbackHandler):
         run_id = kwargs.get("run_id", "unknown")
         self._chain_starts[str(run_id)] = time.time()
 
-        self.logger.debug(
-            f"Chain started: {serialized.get('name', 'unknown')} - {run_id}"
-        )
+        self.logger.debug("Chain started: %s - %s", serialized.get('name', 'unknown'), run_id)
 
     def on_chain_end(self, outputs: dict[str, Any], **kwargs: Any) -> None:
         """Called when a chain finishes running."""
@@ -418,7 +414,7 @@ class LangChainCallbackHandler(BaseCallbackHandler):
         start_time = self._chain_starts.pop(run_id, time.time())
         duration = time.time() - start_time
 
-        self.logger.debug(f"Chain completed in {duration:.3f}s - {run_id}")
+        self.logger.debug("Chain completed in %ss - %s", duration:.3f, run_id)
 
     def on_llm_start(
         self, serialized: dict[str, Any], prompts: list[str], **kwargs: Any
@@ -476,7 +472,7 @@ class LangChainCallbackHandler(BaseCallbackHandler):
                                 "completion_tokens_details"
                             ]
             except Exception as e:
-                self.logger.warning(f"Error extracting token usage: {e}")
+                self.logger.warning("Error extracting token usage: %s", e)
                 token_usage = None
 
             # Log the response
@@ -505,7 +501,7 @@ class LangChainCallbackHandler(BaseCallbackHandler):
 
             self._current_request_id = None
 
-        self.logger.error(f"LLM error: {error}")
+        self.logger.error("LLM error: %s", error)
 
     def _extract_market_context_from_prompt(self, prompt: str) -> dict[str, Any] | None:
         """
@@ -573,7 +569,7 @@ class LangChainCallbackHandler(BaseCallbackHandler):
             return context if context else None
 
         except Exception as e:
-            self.logger.warning(f"Failed to extract market context from prompt: {e}")
+            self.logger.warning("Failed to extract market context from prompt: %s", e)
             return None
 
 

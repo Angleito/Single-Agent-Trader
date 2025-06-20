@@ -2812,16 +2812,14 @@ class ConfigurationMonitor:
         current_hash = self.settings.generate_config_hash()
 
         if current_hash != self.initial_hash:
-            logger.info(
-                f"Configuration change detected: {self.initial_hash} -> {current_hash}"
-            )
+            logger.info("Configuration change detected: %s -> %s", self.initial_hash, current_hash)
 
             # Notify callbacks
             for callback in self.change_callbacks:
                 try:
                     callback(self.settings, self.initial_hash, current_hash)
                 except Exception as e:
-                    logger.exception(f"Error in configuration change callback: {e}")
+                    logger.exception("Error in configuration change callback: %s", e)
 
             self.initial_hash = current_hash
             return True

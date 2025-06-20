@@ -672,13 +672,7 @@ class RSIMFIIndicator:
             # Check for NaN values
             nan_count = col_series.isna().sum()
             if nan_count > 0:
-                logger.warning(
-                    f"NaN values in {col} for RSI+MFI calculation",
-                    extra={
-                        "indicator": "rsimfi",
-                        "issue": "input_nan_values",
-                        "column": col,
-                        "nan_count": int(nan_count),
+                logger.warning("NaN values in %s for RSI+MFI calculation", extra={ "indicator": "rsimfi", "issue": "input_nan_values", "column": col, "nan_count": int(nan_count),, col)
                         "total_points": len(col_series),
                         "nan_percentage": round((nan_count / len(col_series)) * 100, 2),
                     },
@@ -687,13 +681,7 @@ class RSIMFIIndicator:
             # Check for zero or negative prices
             invalid_prices = (col_series <= 0).sum()
             if invalid_prices > 0:
-                logger.warning(
-                    f"Invalid price values in {col} for RSI+MFI calculation",
-                    extra={
-                        "indicator": "rsimfi",
-                        "issue": "invalid_prices",
-                        "column": col,
-                        "invalid_count": int(invalid_prices),
+                logger.warning("Invalid price values in %s for RSI+MFI calculation", extra={ "indicator": "rsimfi", "issue": "invalid_prices", "column": col, "invalid_count": int(invalid_prices),, col)
                         "min_price": (
                             float(col_series.min()) if not col_series.empty else 0
                         ),

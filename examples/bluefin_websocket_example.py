@@ -21,10 +21,7 @@ logger = logging.getLogger(__name__)
 
 async def on_candle_update(candle: MarketData):
     """Callback function called when a new candle is completed."""
-    logger.info(
-        f"New candle: {candle.symbol} @ {candle.timestamp} | "
-        f"O: {candle.open} H: {candle.high} L: {candle.low} C: {candle.close} V: {candle.volume}"
-    )
+    logger.info("New candle: %s @ %s | " "O: %s H: %s L: %s C: %s V: %s" ), candle.symbol, candle.timestamp, candle.open, candle.high, candle.low, candle.close, candle.volume)
 
 
 async def main():
@@ -33,7 +30,7 @@ async def main():
     symbol = "SUI-PERP"
     interval = "1m"  # 1-minute candles
 
-    logger.info(f"Starting Bluefin WebSocket client for {symbol}")
+    logger.info("Starting Bluefin WebSocket client for %s", symbol)
 
     # Create WebSocket client with network specification
     # Network can be "mainnet" or "testnet", or None to use environment variable
@@ -61,40 +58,37 @@ async def main():
 
             # Log status every 30 seconds
             if int((datetime.now() - start_time).total_seconds()) % 30 == 0:
-                logger.info(f"Status: {status}")
+                logger.info("Status: %s", status)
 
                 # Get latest price
                 latest_price = ws_client.get_latest_price()
                 if latest_price:
-                    logger.info(f"Latest price: {symbol} = ${latest_price}")
+                    logger.info("Latest price: %s = $%s", symbol, latest_price)
 
                 # Get recent candles
                 candles = ws_client.get_candles(limit=5)
-                logger.info(f"Recent {len(candles)} candles in buffer")
+                logger.info("Recent %s candles in buffer", len(candles))
 
             await asyncio.sleep(1)
 
         # Get final statistics
         logger.info("\n=== Final Statistics ===")
         final_status = ws_client.get_status()
-        logger.info(f"Messages received: {final_status['message_count']}")
-        logger.info(f"Errors: {final_status['error_count']}")
-        logger.info(f"Candles collected: {final_status['candles_buffered']}")
-        logger.info(f"Ticks collected: {final_status['ticks_buffered']}")
+        logger.info("Messages received: %s", final_status['message_count'])
+        logger.info("Errors: %s", final_status['error_count'])
+        logger.info("Candles collected: %s", final_status['candles_buffered'])
+        logger.info("Ticks collected: %s", final_status['ticks_buffered'])
 
         # Display last few candles
         last_candles = ws_client.get_candles(limit=10)
-        logger.info(f"\nLast {len(last_candles)} candles:")
+        logger.info("\nLast %s candles:", len(last_candles))
         for candle in last_candles:
-            logger.info(
-                f"  {candle.timestamp}: O={candle.open} H={candle.high} "
-                f"L={candle.low} C={candle.close} V={candle.volume}"
-            )
+            logger.info("  %s: O=%s H=%s " "L=%s C=%s V=%s" ), candle.timestamp, candle.open, candle.high, candle.low, candle.close, candle.volume)
 
     except KeyboardInterrupt:
         logger.info("Interrupted by user")
     except Exception as e:
-        logger.exception(f"Error: {e}")
+        logger.exception("Error: %s", e)
     finally:
         # Disconnect
         logger.info("Disconnecting from WebSocket...")

@@ -96,7 +96,7 @@ class ComprehensiveMonitoringSystem:
             await self._demonstrate_monitoring()
 
         except Exception as e:
-            logger.exception(f"❌ Failed to start monitoring system: {e}")
+            logger.exception("❌ Failed to start monitoring system: %s", e)
             await self.stop()
             raise
 
@@ -116,7 +116,7 @@ class ComprehensiveMonitoringSystem:
 
             logger.info("✅ All monitoring components stopped successfully")
         except Exception as e:
-            logger.exception(f"❌ Error stopping monitoring system: {e}")
+            logger.exception("❌ Error stopping monitoring system: %s", e)
 
     async def _run_initial_diagnostics(self) -> None:
         """Run initial diagnostic checks."""
@@ -126,24 +126,24 @@ class ComprehensiveMonitoringSystem:
             # Run quick diagnostics
             report = await self.diagnostic_tools.run_quick_diagnostic()
 
-            logger.info(f"📋 Diagnostic Report ID: {report.report_id}")
-            logger.info(f"🎯 Overall Status: {report.overall_status}")
+            logger.info("📋 Diagnostic Report ID: %s", report.report_id)
+            logger.info("🎯 Overall Status: %s", report.overall_status)
 
             # Log key findings
             if report.results:
                 passed_checks = sum(1 for r in report.results if r.status == "pass")
                 total_checks = len(report.results)
-                logger.info(f"✅ Checks Passed: {passed_checks}/{total_checks}")
+                logger.info("✅ Checks Passed: %s/%s", passed_checks, total_checks)
 
                 # Log any failures
                 failed_checks = [r for r in report.results if r.status == "fail"]
                 if failed_checks:
                     logger.warning("⚠️ Failed Checks:")
                     for check in failed_checks:
-                        logger.warning(f"  - {check.check_name}: {check.message}")
+                        logger.warning("  - %s: %s", check.check_name, check.message)
 
         except Exception as e:
-            logger.exception(f"❌ Initial diagnostics failed: {e}")
+            logger.exception("❌ Initial diagnostics failed: %s", e)
 
     async def _demonstrate_monitoring(self) -> None:
         """Demonstrate monitoring capabilities."""
@@ -153,41 +153,37 @@ class ComprehensiveMonitoringSystem:
             # Test connectivity monitoring
             logger.info("Testing connectivity monitoring...")
             connectivity_status = await self.bluefin_client.get_connectivity_status()
-            logger.info(
-                f"📡 Connection Status: {connectivity_status['connection']['connected']}"
-            )
-            logger.info(
-                f"📊 Success Rate: {connectivity_status['metrics']['success_rate']:.1f}%"
-            )
+            logger.info("📡 Connection Status: %s", connectivity_status['connection']['connected'])
+            logger.info("📊 Success Rate: %s%", connectivity_status['metrics']['success_rate']:.1f)
 
             # Test comprehensive connectivity test
             logger.info("Running comprehensive connectivity test...")
             connectivity_test = (
                 await self.bluefin_client.run_comprehensive_connectivity_test()
             )
-            logger.info(f"🧪 Connectivity Test: {connectivity_test['overall_status']}")
+            logger.info("🧪 Connectivity Test: %s", connectivity_test['overall_status'])
 
             # Show service discovery results
             logger.info("Checking service discovery...")
             discovery_status = self.service_discovery.get_discovery_status()
-            logger.info(f"🔍 Services Discovered: {discovery_status['total_services']}")
-            logger.info(f"💚 Healthy Services: {discovery_status['healthy_services']}")
+            logger.info("🔍 Services Discovered: %s", discovery_status['total_services'])
+            logger.info("💚 Healthy Services: %s", discovery_status['healthy_services'])
 
             # Show performance metrics
             logger.info("Checking performance metrics...")
             metrics_summary = self.performance_collector.get_metrics_summary()
             if metrics_summary["collection_status"]["is_collecting"]:
                 logger.info("📈 Performance metrics are being collected")
-                logger.info(f"📊 Total Metrics: {metrics_summary['metrics_count']}")
+                logger.info("📊 Total Metrics: %s", metrics_summary['metrics_count'])
 
             # Show auto recovery status
             logger.info("Checking auto recovery...")
             recovery_status = self.auto_recovery.get_recovery_status()
-            logger.info(f"🔄 Recovery Rules: {recovery_status['total_rules']}")
-            logger.info(f"✅ Enabled Rules: {recovery_status['enabled_rules']}")
+            logger.info("🔄 Recovery Rules: %s", recovery_status['total_rules'])
+            logger.info("✅ Enabled Rules: %s", recovery_status['enabled_rules'])
 
         except Exception as e:
-            logger.exception(f"❌ Error demonstrating monitoring: {e}")
+            logger.exception("❌ Error demonstrating monitoring: %s", e)
 
     async def get_system_status(self) -> dict:
         """Get comprehensive system status."""
@@ -226,7 +222,7 @@ class ComprehensiveMonitoringSystem:
                 "dashboard": {"url": "http://localhost:9090", "active": True},
             }
         except Exception as e:
-            logger.exception(f"Error getting system status: {e}")
+            logger.exception("Error getting system status: %s", e)
             return {"error": str(e)}
 
     async def run_diagnostic_suite(self) -> dict:
@@ -240,26 +236,24 @@ class ComprehensiveMonitoringSystem:
                 include_stress_tests=False,  # Skip stress tests for this example
             )
 
-            logger.info(f"📋 Comprehensive Diagnostic Report: {report.overall_status}")
+            logger.info("📋 Comprehensive Diagnostic Report: %s", report.overall_status)
 
             # Log summary
             if hasattr(report, "summary"):
                 summary = report.summary
-                logger.info(f"✅ Success Rate: {summary.get('success_rate', 0):.1f}%")
-                logger.info(
-                    f"⏱️  Total Duration: {summary.get('total_duration_ms', 0):.1f}ms"
-                )
+                logger.info("✅ Success Rate: %s%", summary.get('success_rate', 0):.1f)
+                logger.info("⏱️  Total Duration: %sms", summary.get('total_duration_ms', 0):.1f)
 
                 # Log recommendations
                 if summary.get("recommendations"):
                     logger.info("💡 Recommendations:")
                     for rec in summary["recommendations"][:3]:  # Show top 3
-                        logger.info(f"  - {rec}")
+                        logger.info("  - %s", rec)
 
             return report.__dict__
 
         except Exception as e:
-            logger.exception(f"❌ Diagnostic suite failed: {e}")
+            logger.exception("❌ Diagnostic suite failed: %s", e)
             return {"error": str(e)}
 
 
@@ -273,7 +267,7 @@ async def main():
 
     # Setup signal handlers for graceful shutdown
     def signal_handler(signum, frame):
-        logger.info(f"Received signal {signum}, initiating shutdown...")
+        logger.info("Received signal %s, initiating shutdown...", signum)
         raise KeyboardInterrupt
 
     signal.signal(signal.SIGINT, signal_handler)
@@ -302,16 +296,10 @@ async def main():
             if current_time - last_status_report >= status_report_interval:
                 system_status = await monitoring_system.get_system_status()
                 logger.info("📊 System Status Update:")
-                logger.info(f"  🏥 Health: {system_status['health_monitor']['status']}")
-                logger.info(
-                    f"  🔍 Services: {system_status['service_discovery']['healthy_services']}/{system_status['service_discovery']['total_services']}"
-                )
-                logger.info(
-                    f"  📈 Metrics: {system_status['performance_metrics']['metrics_count']} collected"
-                )
-                logger.info(
-                    f"  🔄 Recoveries: {system_status['auto_recovery']['recent_recoveries']} recent"
-                )
+                logger.info("  🏥 Health: %s", system_status['health_monitor']['status'])
+                logger.info("  🔍 Services: %s/%s", system_status['service_discovery']['healthy_services'], system_status['service_discovery']['total_services'])
+                logger.info("  📈 Metrics: %s collected", system_status['performance_metrics']['metrics_count'])
+                logger.info("  🔄 Recoveries: %s recent", system_status['auto_recovery']['recent_recoveries'])
 
                 last_status_report = current_time
 
@@ -323,9 +311,7 @@ async def main():
                 if "error" not in diagnostic_result:
                     logger.info("✅ Periodic diagnostics completed successfully")
                 else:
-                    logger.warning(
-                        f"⚠️ Periodic diagnostics had issues: {diagnostic_result['error']}"
-                    )
+                    logger.warning("⚠️ Periodic diagnostics had issues: %s", diagnostic_result['error'])
 
                 last_diagnostic = current_time
 
@@ -335,7 +321,7 @@ async def main():
     except KeyboardInterrupt:
         logger.info("🛑 Shutdown requested by user")
     except Exception as e:
-        logger.exception(f"❌ Unexpected error: {e}")
+        logger.exception("❌ Unexpected error: %s", e)
     finally:
         # Cleanup
         await monitoring_system.stop()

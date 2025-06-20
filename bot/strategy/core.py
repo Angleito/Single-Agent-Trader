@@ -61,7 +61,7 @@ class CoreStrategy:
 
     async def _strategy_error_fallback(self, error: Exception, context: dict) -> None:
         """Fallback behavior for strategy errors."""
-        logger.warning(f"Strategy error fallback triggered: {error}")
+        logger.warning("Strategy error fallback triggered: %s", error)
 
         # Increment error count
         self._analysis_error_count += 1
@@ -90,15 +90,12 @@ class CoreStrategy:
             is_healthy = error_rate < 0.5 and self._analysis_error_count < 5
 
             if not is_healthy:
-                logger.warning(
-                    f"Strategy health check failed: error_rate={error_rate:.2%}, "
-                    f"consecutive_errors={self._analysis_error_count}"
-                )
+                logger.warning("Strategy health check failed: error_rate=%s, " "consecutive_errors=%s" ), error_rate:.2%, self._analysis_error_count)
 
             return is_healthy
 
         except Exception as e:
-            logger.exception(f"Strategy health check error: {e}")
+            logger.exception("Strategy health check error: %s", e)
             return False
 
     async def _reset_strategy_state(self, component_name: str, health: Any) -> None:
@@ -147,11 +144,11 @@ class CoreStrategy:
                 rationale=rationale,
             )
 
-            logger.info(f"Core strategy decision: {action} ({rationale})")
+            logger.info("Core strategy decision: %s (%s)", action, rationale)
             return trade_action
 
         except Exception as e:
-            logger.exception(f"Error in core strategy analysis: {e}")
+            logger.exception("Error in core strategy analysis: %s", e)
             return self._get_safe_action()
 
     def _get_market_bias(self, indicators: IndicatorData) -> str:
@@ -390,7 +387,7 @@ class CoreStrategy:
         # Ensure size doesn't exceed maximum
         if validated.size_pct > self.max_size_pct:
             validated.size_pct = self.max_size_pct
-            logger.warning(f"Position size capped at {self.max_size_pct}%")
+            logger.warning("Position size capped at %s%", self.max_size_pct)
 
         # Ensure reasonable TP/SL levels
         if validated.take_profit_pct > 10.0:

@@ -79,7 +79,7 @@ class SinglePositionFIFOTest:
 
         # Start with no position
         current_position = self.position_manager.get_position(symbol)
-        logger.info(f"Initial position: {current_position.side}")
+        logger.info("Initial position: %s", current_position.side)
 
         # Test 1: Open LONG position
         long_action = self.create_trade_action("LONG", 10)
@@ -89,9 +89,9 @@ class SinglePositionFIFOTest:
         )
 
         logger.info("\nAttempting LONG when flat:")
-        logger.info(f"  Validated action: {validated.action}")
-        logger.info(f"  Risk approved: {approved}")
-        logger.info(f"  Reason: {reason}")
+        logger.info("  Validated action: %s", validated.action)
+        logger.info("  Risk approved: %s", approved)
+        logger.info("  Reason: %s", reason)
 
         assert approved, "Should be able to open LONG when flat"
         assert modified.action == "LONG", "Action should remain LONG"
@@ -103,9 +103,7 @@ class SinglePositionFIFOTest:
         current_position = self.position_manager.update_position_from_order(
             long_order, long_order.price
         )
-        logger.info(
-            f"Position after LONG: {current_position.side} {current_position.size} @ {current_position.entry_price}"
-        )
+        logger.info("Position after LONG: %s %s @ %s", current_position.side, current_position.size, current_position.entry_price)
 
         # Test 2: Try to open another LONG while one exists
         long_action2 = self.create_trade_action("LONG", 10)
@@ -115,9 +113,9 @@ class SinglePositionFIFOTest:
         )
 
         logger.info("\nAttempting LONG when already LONG:")
-        logger.info(f"  Validated action: {validated2.action}")
-        logger.info(f"  Risk approved: {approved2}")
-        logger.info(f"  Reason: {reason2}")
+        logger.info("  Validated action: %s", validated2.action)
+        logger.info("  Risk approved: %s", approved2)
+        logger.info("  Reason: %s", reason2)
 
         assert not approved2, "Should NOT be able to open another LONG"
         assert modified2.action == "HOLD", "Action should be changed to HOLD"
@@ -133,9 +131,9 @@ class SinglePositionFIFOTest:
         )
 
         logger.info("\nAttempting SHORT when LONG:")
-        logger.info(f"  Validated action: {validated3.action}")
-        logger.info(f"  Risk approved: {approved3}")
-        logger.info(f"  Reason: {reason3}")
+        logger.info("  Validated action: %s", validated3.action)
+        logger.info("  Risk approved: %s", approved3)
+        logger.info("  Reason: %s", reason3)
 
         assert not approved3, "Should NOT be able to open SHORT while LONG"
         assert modified3.action == "HOLD", "Action should be changed to HOLD"
@@ -148,9 +146,9 @@ class SinglePositionFIFOTest:
         )
 
         logger.info("\nAttempting CLOSE when LONG:")
-        logger.info(f"  Validated action: {validated4.action}")
-        logger.info(f"  Risk approved: {approved4}")
-        logger.info(f"  Reason: {reason4}")
+        logger.info("  Validated action: %s", validated4.action)
+        logger.info("  Risk approved: %s", approved4)
+        logger.info("  Reason: %s", reason4)
 
         assert approved4, "Should be able to CLOSE existing position"
         assert modified4.action == "CLOSE", "Action should remain CLOSE"
@@ -162,9 +160,7 @@ class SinglePositionFIFOTest:
         current_position = self.position_manager.update_position_from_order(
             close_order, close_order.price
         )
-        logger.info(
-            f"Position after CLOSE: {current_position.side}, P&L: ${current_position.realized_pnl}"
-        )
+        logger.info("Position after CLOSE: %s, P&L: $%s", current_position.side, current_position.realized_pnl)
 
         # Test 5: Can open new position after closing
         short_action2 = self.create_trade_action("SHORT", 10)
@@ -174,9 +170,9 @@ class SinglePositionFIFOTest:
         )
 
         logger.info("\nAttempting SHORT when flat (after close):")
-        logger.info(f"  Validated action: {validated5.action}")
-        logger.info(f"  Risk approved: {approved5}")
-        logger.info(f"  Reason: {reason5}")
+        logger.info("  Validated action: %s", validated5.action)
+        logger.info("  Risk approved: %s", approved5)
+        logger.info("  Reason: %s", reason5)
 
         assert approved5, "Should be able to open SHORT after closing previous position"
         assert modified5.action == "SHORT", "Action should remain SHORT"
@@ -198,9 +194,7 @@ class SinglePositionFIFOTest:
         position = self.position_manager.update_position_from_order(
             buy_order, buy_order.price
         )
-        logger.info(
-            f"Opened position: {position.side} {position.size} @ {position.entry_price}"
-        )
+        logger.info("Opened position: %s %s @ %s", position.side, position.size, position.entry_price)
 
         # Get FIFO report
         fifo_report = self.position_manager.get_tax_lots_report(symbol)
@@ -216,9 +210,9 @@ class SinglePositionFIFOTest:
         validated = self.validator.validate(add_action, current_position)
 
         logger.info("\nValidator result when trying to add to position:")
-        logger.info(f"  Input action: {add_action.action}")
-        logger.info(f"  Validated action: {validated.action}")
-        logger.info(f"  Rationale: {validated.rationale}")
+        logger.info("  Input action: %s", add_action.action)
+        logger.info("  Validated action: %s", validated.action)
+        logger.info("  Rationale: %s", validated.rationale)
 
         assert (
             validated.action == "HOLD"
@@ -232,7 +226,7 @@ class SinglePositionFIFOTest:
             sell_order, sell_order.price
         )
 
-        logger.info(f"\nClosed position: P&L = ${position.realized_pnl}")
+        logger.info("\nClosed position: P&L = $%s", position.realized_pnl)
 
         # Final FIFO report
         final_report = self.position_manager.get_tax_lots_report(symbol)
@@ -262,7 +256,7 @@ class SinglePositionFIFOTest:
         position = self.position_manager.update_position_from_order(
             buy_order, buy_order.price
         )
-        logger.info(f"Step 1 - Opened LONG: {position.size} @ {position.entry_price}")
+        logger.info("Step 1 - Opened LONG: %s @ %s", position.size, position.entry_price)
 
         # Step 2: Try to go SHORT directly (should fail)
         current_position = self.position_manager.get_position(symbol)
@@ -273,9 +267,9 @@ class SinglePositionFIFOTest:
         )
 
         logger.info("\nStep 2 - Trying to SHORT while LONG:")
-        logger.info(f"  Approved: {approved}")
-        logger.info(f"  Modified action: {modified.action}")
-        logger.info(f"  Reason: {reason}")
+        logger.info("  Approved: %s", approved)
+        logger.info("  Modified action: %s", modified.action)
+        logger.info("  Reason: %s", reason)
 
         assert not approved, "Direct reversal should not be allowed"
 
@@ -286,7 +280,7 @@ class SinglePositionFIFOTest:
         position = self.position_manager.update_position_from_order(
             close_order, close_order.price
         )
-        logger.info(f"\nStep 3 - Closed LONG: P&L = ${position.realized_pnl}")
+        logger.info("\nStep 3 - Closed LONG: P&L = $%s", position.realized_pnl)
 
         # Step 4: Now can open SHORT position
         current_position = self.position_manager.get_position(symbol)
@@ -297,8 +291,8 @@ class SinglePositionFIFOTest:
         )
 
         logger.info("\nStep 4 - Trying to SHORT after closing:")
-        logger.info(f"  Approved: {approved2}")
-        logger.info(f"  Action: {modified2.action}")
+        logger.info("  Approved: %s", approved2)
+        logger.info("  Action: %s", modified2.action)
 
         assert approved2, "Should be able to SHORT after closing LONG"
         assert modified2.action == "SHORT", "Action should remain SHORT"

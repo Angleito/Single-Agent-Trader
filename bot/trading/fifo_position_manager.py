@@ -85,9 +85,7 @@ class FIFOPositionManager:
             Updated position in legacy format
         """
         if order.status != OrderStatus.FILLED:
-            logger.warning(
-                f"Attempted to update position with non-filled order: {order}"
-            )
+            logger.warning("Attempted to update position with non-filled order: %s", order)
             return self.get_position(order.symbol)
 
         with self._lock:
@@ -118,13 +116,11 @@ class FIFOPositionManager:
             sales = fifo_pos.sell_fifo(
                 order.filled_quantity, fill_price, order.timestamp
             )
-            logger.info(f"Closed SHORT position with {len(sales)} lot sales")
+            logger.info("Closed SHORT position with %s lot sales", len(sales))
         else:
             # Opening or adding to LONG position
             lot = fifo_pos.add_lot(order.filled_quantity, fill_price, order.timestamp)
-            logger.info(
-                f"Added lot {lot.lot_id} with {lot.quantity} units at {lot.purchase_price}"
-            )
+            logger.info("Added lot %s with %s units at %s", lot.lot_id, lot.quantity, lot.purchase_price)
 
     def _handle_sell_order(
         self, fifo_pos: FIFOPosition, order: Order, current_price: Decimal
@@ -160,13 +156,11 @@ class FIFOPositionManager:
                 )
 
             except ValueError as e:
-                logger.exception(f"Error selling FIFO: {e}")
+                logger.exception("Error selling FIFO: %s", e)
         else:
             # For futures, this would open a SHORT position
             # For spot trading, we typically don't support shorting
-            logger.warning(
-                f"Attempted to sell {order.filled_quantity} units with no long position"
-            )
+            logger.warning("Attempted to sell %s units with no long position", order.filled_quantity)
 
     def get_all_positions(self) -> dict[str, Position]:
         """Get all active positions in legacy format."""
@@ -236,7 +230,7 @@ class FIFOPositionManager:
                 await f.write(json.dumps(state, indent=2))
 
         except Exception as e:
-            logger.exception(f"Failed to save position state: {e}")
+            logger.exception("Failed to save position state: %s", e)
 
     def _save_state_sync(self) -> None:
         """Save position state to file synchronously (fallback method)."""
@@ -278,7 +272,7 @@ class FIFOPositionManager:
             self._state_file.write_text(json.dumps(state, indent=2))
 
         except Exception as e:
-            logger.exception(f"Failed to save position state (sync): {e}")
+            logger.exception("Failed to save position state (sync): %s", e)
 
     def reconcile_position_from_exchange(
         self,
@@ -350,14 +344,14 @@ class FIFOPositionManager:
                 # No event loop running, do synchronous save
                 self._save_state_sync()
         except Exception as e:
-            logger.exception(f"Failed to save state: {e}")
+            logger.exception("Failed to save state: %s", e)
 
     def _handle_save_error(self, task: asyncio.Task) -> None:
         """Handle errors from async save task."""
         try:
             task.result()
         except Exception as e:
-            logger.exception(f"Async save failed: {e}")
+            logger.exception("Async save failed: %s", e)
 
     def _load_state(self) -> None:
         """Load position state from file."""
@@ -373,9 +367,7 @@ class FIFOPositionManager:
             try:
                 state = json.loads(content)
             except json.JSONDecodeError as e:
-                logger.warning(
-                    f"Invalid JSON in FIFO positions file: {e}. Starting with clean state"
-                )
+                logger.warning("Invalid JSON in FIFO positions file: %s. Starting with clean state", e)
                 return
 
             # Restore position history
@@ -415,8 +407,8 @@ class FIFOPositionManager:
 
                 self._positions[symbol] = fifo_pos
 
-            logger.info(f"Loaded {len(self._positions)} positions from state file")
+            logger.info("Loaded %s positions from state file", len(self._positions))
 
         except Exception as e:
-            logger.exception(f"Failed to load position state: {e}")
+            logger.exception("Failed to load position state: %s", e)
             # Continue with empty state

@@ -102,16 +102,14 @@ class RateLimiter:
         # Check for rapid-fire requests (more than 10 requests in 1 second)
         recent_requests = [t for t in history if time.time() - t < 1.0]
         if len(recent_requests) > 10:
-            logger.warning(f"Suspicious pattern detected for {ip}: rapid-fire requests")
+            logger.warning("Suspicious pattern detected for %s: rapid-fire requests", ip)
             return True
 
         # Check for consistent high-frequency requests
         one_minute_ago = time.time() - 60
         minute_requests = [t for t in history if t > one_minute_ago]
         if len(minute_requests) > self.requests_per_minute * 2:
-            logger.warning(
-                f"Suspicious pattern detected for {ip}: sustained high frequency"
-            )
+            logger.warning("Suspicious pattern detected for %s: sustained high frequency", ip)
             return True
 
         return False
@@ -142,9 +140,7 @@ class RateLimiter:
             _, _, blocked_until = self.buckets[ip]
             if blocked_until > current_time:
                 retry_after = int(blocked_until - current_time)
-                logger.warning(
-                    f"Blocked IP {ip} attempted request. Blocked for {retry_after}s"
-                )
+                logger.warning("Blocked IP %s attempted request. Blocked for %ss", ip, retry_after)
                 return JSONResponse(
                     status_code=429,
                     content={
@@ -164,9 +160,7 @@ class RateLimiter:
             # Block the IP
             blocked_until = current_time + self.block_duration
             self.buckets[ip] = (0, current_time, blocked_until)
-            logger.warning(
-                f"Blocking IP {ip} for {self.block_duration}s due to suspicious pattern"
-            )
+            logger.warning("Blocking IP %s for %ss due to suspicious pattern", ip, self.block_duration)
 
             return JSONResponse(
                 status_code=429,
@@ -198,7 +192,7 @@ class RateLimiter:
         else:
             # No tokens available
             retry_after = 60 - int(current_time - last_update)
-            logger.info(f"Rate limit exceeded for IP {ip}")
+            logger.info("Rate limit exceeded for IP %s", ip)
 
             return JSONResponse(
                 status_code=429,

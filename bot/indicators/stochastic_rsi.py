@@ -115,9 +115,7 @@ class StochasticRSI:
         # Check for sufficient data
         min_required = max(stoch_len, rsi_len) + max(smooth_k, smooth_d)
         if len(src) < min_required:
-            logger.warning(
-                f"Insufficient data for Stochastic RSI: need {min_required}, got {len(src)}"
-            )
+            logger.warning("Insufficient data for Stochastic RSI: need %s, got %s", min_required, len(src))
             return pd.Series(dtype="float64", index=src.index), pd.Series(
                 dtype="float64", index=src.index
             )

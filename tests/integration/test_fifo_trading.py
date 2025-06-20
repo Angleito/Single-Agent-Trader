@@ -74,9 +74,7 @@ class FIFOTradingTest:
         position = self.position_manager.update_position_from_order(
             order1, order1.price
         )
-        logger.info(
-            f"After Buy 1: Position = {position.side} {position.size} @ {position.entry_price}"
-        )
+        logger.info("After Buy 1: Position = %s %s @ %s", position.side, position.size, position.entry_price)
 
         # Buy 0.5 BTC at $42,000
         order2 = self.create_test_order(
@@ -89,9 +87,7 @@ class FIFOTradingTest:
         position = self.position_manager.update_position_from_order(
             order2, order2.price
         )
-        logger.info(
-            f"After Buy 2: Position = {position.side} {position.size} @ {position.entry_price}"
-        )
+        logger.info("After Buy 2: Position = %s %s @ %s", position.side, position.size, position.entry_price)
 
         # Get tax lots report
         lots_report = self.position_manager.get_tax_lots_report(symbol)
@@ -109,10 +105,8 @@ class FIFOTradingTest:
         position = self.position_manager.update_position_from_order(
             order3, order3.price
         )
-        logger.info(
-            f"\nAfter Sell 1: Position = {position.side} {position.size} @ {position.entry_price}"
-        )
-        logger.info(f"Realized P&L: ${position.realized_pnl}")
+        logger.info("\nAfter Sell 1: Position = %s %s @ %s", position.side, position.size, position.entry_price)
+        logger.info("Realized P&L: $%s", position.realized_pnl)
 
         # Get updated tax lots report
         lots_report = self.position_manager.get_tax_lots_report(symbol)
@@ -130,8 +124,8 @@ class FIFOTradingTest:
         position = self.position_manager.update_position_from_order(
             order4, order4.price
         )
-        logger.info(f"\nAfter Sell 2: Position = {position.side} {position.size}")
-        logger.info(f"Total Realized P&L: ${position.realized_pnl}")
+        logger.info("\nAfter Sell 2: Position = %s %s", position.side, position.size)
+        logger.info("Total Realized P&L: $%s", position.realized_pnl)
 
         # Final tax lots report
         lots_report = self.position_manager.get_tax_lots_report(symbol)
@@ -145,8 +139,8 @@ class FIFOTradingTest:
         expected_pnl = Decimal("3750") + Decimal("1000")
         actual_pnl = self.position_manager.fifo_manager.get_realized_pnl(symbol)
 
-        logger.info(f"\nExpected P&L: ${expected_pnl}")
-        logger.info(f"Actual P&L: ${actual_pnl}")
+        logger.info("\nExpected P&L: $%s", expected_pnl)
+        logger.info("Actual P&L: $%s", actual_pnl)
 
         assert abs(actual_pnl - expected_pnl) < Decimal(
             "0.01"
@@ -171,9 +165,7 @@ class FIFOTradingTest:
         for quantity, price, order_id in buys:
             order = self.create_test_order(symbol, "BUY", quantity, price, order_id)
             position = self.position_manager.update_position_from_order(order, price)
-            logger.info(
-                f"Buy {quantity} ETH @ ${price}: Total position = {position.size} ETH"
-            )
+            logger.info("Buy %s ETH @ $%s: Total position = %s ETH", quantity, price, position.size)
 
         # Show all lots
         lots_report = self.position_manager.get_tax_lots_report(symbol)
@@ -193,8 +185,8 @@ class FIFOTradingTest:
         )
 
         logger.info("\nAfter selling 4 ETH @ $2,500:")
-        logger.info(f"Remaining position: {position.size} ETH")
-        logger.info(f"Realized P&L: ${position.realized_pnl}")
+        logger.info("Remaining position: %s ETH", position.size)
+        logger.info("Realized P&L: $%s", position.realized_pnl)
 
         # Show remaining lots
         lots_report = self.position_manager.get_tax_lots_report(symbol)
@@ -235,7 +227,7 @@ class FIFOTradingTest:
         position = self.position_manager.update_position_from_order(
             buy_order, buy_order.price
         )
-        logger.info(f"Opened position: {position.size} SOL @ ${position.entry_price}")
+        logger.info("Opened position: %s SOL @ $%s", position.size, position.entry_price)
 
         # Close position
         sell_order = self.create_test_order(
@@ -248,7 +240,7 @@ class FIFOTradingTest:
         position = self.position_manager.update_position_from_order(
             sell_order, sell_order.price
         )
-        logger.info(f"Closed position: P&L = ${position.realized_pnl}")
+        logger.info("Closed position: P&L = $%s", position.realized_pnl)
         assert position.side == "FLAT", "Position should be FLAT"
 
         # Reopen position
@@ -262,7 +254,7 @@ class FIFOTradingTest:
         position = self.position_manager.update_position_from_order(
             buy_order2, buy_order2.price
         )
-        logger.info(f"Reopened position: {position.size} SOL @ ${position.entry_price}")
+        logger.info("Reopened position: %s SOL @ $%s", position.size, position.entry_price)
 
         # Check total realized P&L includes previous trade
         total_pnl = self.position_manager.fifo_manager.get_realized_pnl(symbol)
@@ -302,18 +294,14 @@ class FIFOTradingTest:
             fifo_pos = fifo_manager.update_position_from_order(order, price)
             avg_pos = avg_manager.update_position_from_order(order, price)
 
-            logger.info(f"\nAfter {side} {quantity} @ ${price}:")
-            logger.info(
-                f"  FIFO: Size={fifo_pos.size}, Entry=${fifo_pos.entry_price}, P&L=${fifo_pos.realized_pnl}"
-            )
-            logger.info(
-                f"  AVG:  Size={avg_pos.size}, Entry=${avg_pos.entry_price}, P&L=${avg_pos.realized_pnl}"
-            )
+            logger.info("\nAfter %s %s @ $%s:", side, quantity, price)
+            logger.info("  FIFO: Size=%s, Entry=$%s, P&L=$%s", fifo_pos.size, fifo_pos.entry_price, fifo_pos.realized_pnl)
+            logger.info("  AVG:  Size=%s, Entry=$%s, P&L=$%s", avg_pos.size, avg_pos.entry_price, avg_pos.realized_pnl)
 
         # FIFO should show $500 profit (sold first lot bought at $1.00)
         # Average cost would show $400 profit (sold at avg cost of $1.10)
         fifo_pnl = fifo_manager.fifo_manager.get_realized_pnl(symbol)
-        logger.info(f"\nFIFO Realized P&L: ${fifo_pnl}")
+        logger.info("\nFIFO Realized P&L: $%s", fifo_pnl)
 
         assert fifo_pnl == Decimal("500"), f"Expected FIFO P&L $500, got ${fifo_pnl}"
         logger.info("✅ Test 4 PASSED: FIFO accounting working as expected")

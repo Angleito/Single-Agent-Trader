@@ -238,15 +238,13 @@ class CipherA:
 
             # Handle any exceptions
             if isinstance(core_result, Exception):
-                logger.error(f"Core indicators calculation failed: {core_result}")
+                logger.error("Core indicators calculation failed: %s", core_result)
                 return await self.calculate_async(df)  # Fallback
             if isinstance(ema_result, Exception):
-                logger.error(f"EMA ribbon calculation failed: {ema_result}")
+                logger.error("EMA ribbon calculation failed: %s", ema_result)
                 return await self.calculate_async(df)  # Fallback
             if isinstance(advanced_result, Exception):
-                logger.error(
-                    f"Advanced indicators calculation failed: {advanced_result}"
-                )
+                logger.error("Advanced indicators calculation failed: %s", advanced_result)
                 return await self.calculate_async(df)  # Fallback
 
             # Combine results
@@ -262,7 +260,7 @@ class CipherA:
             return result
 
         except Exception as e:
-            logger.exception(f"Parallel indicator calculation failed: {e}")
+            logger.exception("Parallel indicator calculation failed: %s", e)
             # Fallback to sequential calculation
             return await self.calculate_async(df)
 
@@ -428,7 +426,7 @@ class CipherA:
                         ] = True
 
             except Exception as e:
-                logger.warning(f"Error calculating divergences: {e}")
+                logger.warning("Error calculating divergences: %s", e)
                 # Set default values if divergence calculation fails
                 result["wt_divergence_bullish"] = pd.Series(False, index=result.index)
                 result["wt_divergence_bearish"] = pd.Series(False, index=result.index)
@@ -511,9 +509,7 @@ class CipherA:
         required_cols = ["open", "high", "low", "close", "volume"]
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
-            logger.error(
-                f"Missing required columns for Cipher A calculation: {missing_cols}"
-            )
+            logger.error("Missing required columns for Cipher A calculation: %s", missing_cols)
             return df.copy()
 
         # Check for sufficient data
@@ -523,8 +519,7 @@ class CipherA:
         )  # Buffer for lookbacks
 
         if len(df) < min_length:
-            logger.warning(
-                f"Insufficient data for Cipher A calculation. Need {min_length}, got {len(df)}. "
+            logger.warning("Insufficient data for Cipher A calculation. Need %s, got %s. ", min_length, len(df))
                 f"Returning DataFrame with fallback indicator values."
             )
             # Return DataFrame with safe fallback values instead of empty calculations
@@ -554,16 +549,12 @@ class CipherA:
         # Validate data quality
         close_prices = df["close"]
         if close_prices.isna().sum() > len(df) * 0.1:  # More than 10% NaN
-            logger.warning(
-                f"High percentage of NaN values in close prices: {close_prices.isna().sum()}/{len(df)}"
-            )
+            logger.warning("High percentage of NaN values in close prices: %s/%s", close_prices.isna().sum(), len(df))
 
         # Check for zero or negative prices
         invalid_prices = (close_prices <= 0).sum()
         if invalid_prices > 0:
-            logger.warning(
-                f"Found {invalid_prices} invalid (zero or negative) prices in close data"
-            )
+            logger.warning("Found %s invalid (zero or negative) prices in close data", invalid_prices)
 
         result = df.copy()
 
@@ -687,9 +678,7 @@ class CipherA:
                             ] = True
 
             except Exception as div_error:
-                logger.warning(
-                    f"Error calculating divergences in Cipher A: {div_error}"
-                )
+                logger.warning("Error calculating divergences in Cipher A: %s", div_error)
                 # Set default divergence columns
                 result["wt_divergence_bullish"] = pd.Series(False, index=result.index)
                 result["wt_divergence_bearish"] = pd.Series(False, index=result.index)
@@ -713,7 +702,7 @@ class CipherA:
             logger.debug("Cipher A calculation completed successfully")
 
         except Exception as e:
-            logger.exception(f"Error in Cipher A calculation: {e!s}")
+            logger.exception("Error in Cipher A calculation: %s", e!s)
             # Add error indicators
             result["cipher_a_error"] = True
             result["cipher_a_signal"] = 0
@@ -831,12 +820,10 @@ class CipherA:
             )
             signals[conflicting] = 0
 
-            logger.debug(
-                f"Generated {(signals == 1).sum()} bullish and {(signals == -1).sum()} bearish signals"
-            )
+            logger.debug("Generated %s bullish and %s bearish signals", (signals == 1).sum(), (signals == -1).sum())
 
         except Exception as e:
-            logger.exception(f"Error generating enhanced signals: {e!s}")
+            logger.exception("Error generating enhanced signals: %s", e!s)
             signals = pd.Series(0, index=df.index, dtype="int64")
 
         return signals
@@ -864,7 +851,7 @@ class CipherA:
                 df["rsi_oversold"] = df["rsi"] < 30.0  # Standard RSI oversold
 
         except Exception as e:
-            logger.warning(f"Error adding compatibility indicators: {e!s}")
+            logger.warning("Error adding compatibility indicators: %s", e!s)
 
     def get_latest_values(self, df: pd.DataFrame) -> dict[str, Any]:
         """
@@ -1123,7 +1110,7 @@ class CipherA:
             return interpretation
 
         except Exception as e:
-            logger.exception(f"Error interpreting signals: {e!s}")
+            logger.exception("Error interpreting signals: %s", e!s)
             return "Error interpreting signals."
 
 
@@ -1317,8 +1304,7 @@ class CipherB:
         )  # Buffer for lookbacks
 
         if len(df) < min_length:
-            logger.warning(
-                f"Insufficient data for Cipher B calculation. Need {min_length}, got {len(df)}. "
+            logger.warning("Insufficient data for Cipher B calculation. Need %s, got %s. ", min_length, len(df))
                 f"Returning DataFrame with fallback indicator values."
             )
             # Return DataFrame with safe fallback values instead of empty calculations
@@ -1458,7 +1444,7 @@ class CipherB:
                             ] = True
 
             except Exception as div_error:
-                logger.warning(f"Error calculating divergences: {div_error}")
+                logger.warning("Error calculating divergences: %s", div_error)
                 # Set default divergence columns
                 result["wt_divergence_bullish"] = pd.Series(False, index=result.index)
                 result["wt_divergence_bearish"] = pd.Series(False, index=result.index)
@@ -1474,7 +1460,7 @@ class CipherB:
             logger.debug("Cipher B calculation completed successfully")
 
         except Exception as e:
-            logger.exception(f"Error in Cipher B calculation: {e!s}")
+            logger.exception("Error in Cipher B calculation: %s", e!s)
             # Add error indicators
             result["cipher_b_error"] = True
             result["cipher_b_signal"] = 0
@@ -1561,7 +1547,7 @@ class CipherB:
                     result[col] = pd.Series(default, index=result.index)
 
         except Exception as e:
-            logger.warning(f"Error integrating Cipher B signals: {e!s}")
+            logger.warning("Error integrating Cipher B signals: %s", e!s)
             # Ensure minimum required columns exist
             default_columns = {
                 "buy_circle": False,
@@ -1697,12 +1683,10 @@ class CipherB:
             conflicting = bullish_signals & bearish_signals
             signals[conflicting] = 0
 
-            logger.debug(
-                f"Generated {(signals == 1).sum()} bullish and {(signals == -1).sum()} bearish Cipher B signals"
-            )
+            logger.debug("Generated %s bullish and %s bearish Cipher B signals", (signals == 1).sum(), (signals == -1).sum())
 
         except Exception as e:
-            logger.exception(f"Error generating enhanced Cipher B signals: {e!s}")
+            logger.exception("Error generating enhanced Cipher B signals: %s", e!s)
             signals = pd.Series(0, index=df.index, dtype="int64")
 
         return signals
@@ -1757,7 +1741,7 @@ class CipherB:
             )
 
         except Exception as e:
-            logger.warning(f"Error adding legacy indicators: {e!s}")
+            logger.warning("Error adding legacy indicators: %s", e!s)
             # Ensure these columns exist even if calculation fails
             if "vwap" not in df.columns:
                 df["vwap"] = (
@@ -1795,7 +1779,7 @@ class CipherB:
 
             return wave.astype("float64")
         except Exception as e:
-            logger.exception(f"Error calculating wave indicator: {e!s}")
+            logger.exception("Error calculating wave indicator: %s", e!s)
             return pd.Series(dtype="float64", index=df.index)
 
     def get_latest_values(self, df: pd.DataFrame) -> dict[str, Any]:
@@ -2040,7 +2024,7 @@ class CipherB:
             return interpretation
 
         except Exception as e:
-            logger.exception(f"Error interpreting Cipher B signals: {e!s}")
+            logger.exception("Error interpreting Cipher B signals: %s", e!s)
             return "Error interpreting signals."
 
 
@@ -2107,9 +2091,7 @@ class VuManChuIndicators:
         # Check data sufficiency before starting calculations
         min_required = 100  # VuManChu indicators need ~80 + buffer
         if len(df) < min_required:
-            logger.warning(
-                f"Insufficient data for reliable VuManChu calculation. "
-                f"Have {len(df)} candles, need {min_required}. "
+            logger.warning("Insufficient data for reliable VuManChu calculation. " "Have %s candles, need %s. ", len(df), min_required)
                 f"Calculations may be unreliable."
             )
 
@@ -2124,7 +2106,7 @@ class VuManChuIndicators:
             try:
                 result = self.cipher_a.calculate(result)
             except Exception as e:
-                logger.exception(f"Cipher A calculation failed: {e}")
+                logger.exception("Cipher A calculation failed: %s", e)
                 # Add fallback values for Cipher A
                 result = self._add_cipher_a_fallbacks(result)
 
@@ -2133,7 +2115,7 @@ class VuManChuIndicators:
             try:
                 result = self.cipher_b.calculate(result)
             except Exception as e:
-                logger.exception(f"Cipher B calculation failed: {e}")
+                logger.exception("Cipher B calculation failed: %s", e)
                 # Add fallback values for Cipher B
                 result = self._add_cipher_b_fallbacks(result)
 
@@ -2153,7 +2135,7 @@ class VuManChuIndicators:
             logger.debug("VuManChu Cipher calculation completed successfully")
 
         except Exception as e:
-            logger.exception(f"Error in comprehensive indicator calculation: {e!s}")
+            logger.exception("Error in comprehensive indicator calculation: %s", e!s)
             # Add error indicators
             result["calculation_error"] = True
 
@@ -2221,7 +2203,7 @@ class VuManChuIndicators:
                     )
 
         except Exception as e:
-            logger.warning(f"Error adding utility indicators: {e!s}")
+            logger.warning("Error adding utility indicators: %s", e!s)
 
         return result
 
@@ -2303,7 +2285,7 @@ class VuManChuIndicators:
             )
 
         except Exception as e:
-            logger.warning(f"Error adding combined analysis: {e!s}")
+            logger.warning("Error adding combined analysis: %s", e!s)
 
         return result
 
@@ -2330,7 +2312,7 @@ class VuManChuIndicators:
                 logger.debug("No dominance candles provided for analysis")
                 return result
 
-            logger.debug(f"Processing {len(dominance_candles)} dominance candles")
+            logger.debug("Processing %s dominance candles", len(dominance_candles))
 
             # Convert dominance candles to DataFrame for analysis
             dominance_data = []
@@ -2467,12 +2449,10 @@ class VuManChuIndicators:
                     if not result.empty:
                         result.loc[result.index[-1], col] = val
 
-                logger.debug(
-                    f"Added dominance analysis with {len(dominance_indicators) + len(dominance_patterns)} indicators"
-                )
+                logger.debug("Added dominance analysis with %s indicators", len(dominance_indicators) + len(dominance_patterns))
 
         except Exception as e:
-            logger.exception(f"Error in dominance analysis: {e!s}")
+            logger.exception("Error in dominance analysis: %s", e!s)
             # Ensure basic dominance columns exist even on error
             default_dominance_cols = {
                 "dominance_cipher_a_signal": 0,
@@ -2564,7 +2544,7 @@ class VuManChuIndicators:
             }
 
         except Exception as e:
-            logger.warning(f"Error calculating dominance-price divergence: {e}")
+            logger.warning("Error calculating dominance-price divergence: %s", e)
             return {"dominance_price_divergence": "ERROR"}
 
     def _analyze_dominance_sentiment(
@@ -2644,7 +2624,7 @@ class VuManChuIndicators:
             }
 
         except Exception as e:
-            logger.warning(f"Error analyzing dominance sentiment: {e}")
+            logger.warning("Error analyzing dominance sentiment: %s", e)
             return {
                 "dominance_sentiment": "NEUTRAL",
                 "dominance_sentiment_score": 0.0,
@@ -2858,7 +2838,7 @@ class VuManChuIndicators:
             return interpretation
 
         except Exception as e:
-            logger.exception(f"Error generating combined interpretation: {e!s}")
+            logger.exception("Error generating combined interpretation: %s", e!s)
             return "Error generating signal interpretation."
 
     def _add_cipher_a_fallbacks(self, df: pd.DataFrame) -> pd.DataFrame:

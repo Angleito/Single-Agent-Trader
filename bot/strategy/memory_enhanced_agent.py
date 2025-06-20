@@ -79,11 +79,7 @@ SENTIMENT-ENHANCED CONTEXT:
 IMPORTANT: Consider these past experiences and sentiment correlations when making your decision, but adapt to current unique conditions.
 """
 
-        logger.info(
-            f"🧠 Memory-Enhanced LLM Agent: Initialized "
-            f"(memory={'✅ enabled' if self._memory_available else '❌ disabled'}, "
-            f"optimized_prompts={'✅ enabled' if self._use_optimized_prompts else '❌ disabled'}, "
-            f"api_parallelization={'✅ enabled' if self._enable_api_parallelization else '❌ disabled'})"
+        logger.info("🧠 Memory-Enhanced LLM Agent: Initialized " "(memory=%s, " "optimized_prompts=%s, " "api_parallelization=%s)", '✅ enabled' if self._memory_available else '❌ disabled', '✅ enabled' if self._use_optimized_prompts else '❌ disabled', '✅ enabled' if self._enable_api_parallelization else '❌ disabled')
         )
 
     async def analyze_market(self, market_state: MarketState) -> TradeAction:
@@ -116,7 +112,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             return result
 
         except Exception as e:
-            logger.exception(f"Error in memory-enhanced analysis: {e}")
+            logger.exception("Error in memory-enhanced analysis: %s", e)
             # Fall back to base implementation
             return await super().analyze_market(market_state)
 
@@ -150,11 +146,11 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
 
             # Handle exceptions in parallel operations
             if isinstance(pattern_insights, Exception):
-                logger.debug(f"Pattern insights failed: {pattern_insights}")
+                logger.debug("Pattern insights failed: %s", pattern_insights)
                 pattern_insights = "No pattern insights available"
 
             if isinstance(sentiment_enhanced_context, Exception):
-                logger.debug(f"Sentiment context failed: {sentiment_enhanced_context}")
+                logger.debug("Sentiment context failed: %s", sentiment_enhanced_context)
                 sentiment_enhanced_context = ""
         else:
             # Sequential execution if parallelization is disabled
@@ -192,19 +188,14 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             result = self._get_fallback_decision(market_state)
 
         # Log memory-enhanced decision
-        logger.info(
-            f"🤖 Memory+Sentiment-Enhanced Decision: {result.action} | "
-            f"Similar experiences: {len(similar_experiences)} | "
+        logger.info("🤖 Memory+Sentiment-Enhanced Decision: %s | " "Similar experiences: %s | ", result.action, len(similar_experiences))
             f"Memory context: {'✅ Applied' if memory_context != 'No similar past experiences found.' else '❌ None'} | "
             f"Sentiment context: {'✅ Applied' if 'sentiment' in sentiment_enhanced_context_str.lower() else '❌ None'}"
         )
 
         # Log detailed memory context used
         if similar_experiences:
-            logger.debug(
-                f"Top 3 similar experiences: "
-                f"{[exp.experience_id for exp in similar_experiences[:3]]}"
-            )
+            logger.debug("Top 3 similar experiences: " "%s" ), [exp.experience_id for exp in similar_experiences[:3]])
 
             # Log success rates of similar trades
             successful_similar = sum(
@@ -212,8 +203,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                 for exp in similar_experiences
                 if exp.outcome and exp.outcome.get("success", False)
             )
-            logger.debug(
-                f"Similar trade success rate: {successful_similar}/{len(similar_experiences)} "
+            logger.debug("Similar trade success rate: %s/%s ", successful_similar, len(similar_experiences))
                 f"({successful_similar/len(similar_experiences)*100:.1f}%)"
             )
 
@@ -276,10 +266,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
         if self._enable_api_parallelization:
             optimization_mode.append("parallel_apis")
 
-        logger.info(
-            f"🚀 Memory-Enhanced Decision Complete: {total_execution_time:.3f}s | "
-            f"Action: {result.action} | "
-            f"Optimizations: {'+'.join(optimization_mode) if optimization_mode else 'none'} | "
+        logger.info("🚀 Memory-Enhanced Decision Complete: %ss | " "Action: %s | " "Optimizations: %s | ", total_execution_time:.3f, result.action, '+'.join(optimization_mode) if optimization_mode else 'none')
             f"Experiences: {len(similar_experiences)}"
         )
 
@@ -322,7 +309,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
 
 
         except Exception as e:
-            logger.exception(f"Failed to retrieve memories: {e}")
+            logger.exception("Failed to retrieve memories: %s", e)
             return []
 
     def _format_memory_context(self, experiences: list[TradingExperience]) -> str:
@@ -419,7 +406,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             )
 
         except Exception as e:
-            logger.exception(f"Failed to get pattern insights: {e}")
+            logger.exception("Failed to get pattern insights: %s", e)
             return "Pattern analysis temporarily unavailable."
 
     def _enhance_with_memory(
@@ -587,7 +574,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                 return "No sentiment-enhanced context available"
 
         except Exception as e:
-            logger.exception(f"Error generating sentiment-enhanced context: {e}")
+            logger.exception("Error generating sentiment-enhanced context: %s", e)
             return f"Error generating sentiment context: {e!s}"
 
     async def _get_financial_sentiment_context(self, market_state: MarketState) -> str:
@@ -618,7 +605,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                             base_symbol
                         )
                     except Exception as e:
-                        logger.debug(f"Crypto sentiment search failed: {e}")
+                        logger.debug("Crypto sentiment search failed: %s", e)
                         return None
 
                 async def get_market_correlation():
@@ -627,7 +614,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                             base_symbol, "QQQ"
                         )
                     except Exception as e:
-                        logger.debug(f"Market correlation search failed: {e}")
+                        logger.debug("Market correlation search failed: %s", e)
                         return None
 
                 # Execute both API calls in parallel - This is the key performance improvement
@@ -645,7 +632,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                         )
                     )
                 except Exception as e:
-                    logger.debug(f"Crypto sentiment search failed: {e}")
+                    logger.debug("Crypto sentiment search failed: %s", e)
                     crypto_sentiment = None
 
                 try:
@@ -655,7 +642,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                         )
                     )
                 except Exception as e:
-                    logger.debug(f"Market correlation search failed: {e}")
+                    logger.debug("Market correlation search failed: %s", e)
                     correlation = None
 
             # Process crypto sentiment results
@@ -696,8 +683,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             method_type = (
                 "parallel" if self._enable_api_parallelization else "sequential"
             )
-            logger.debug(
-                f"⚡ Sentiment context ({method_type}): {execution_time:.3f}s | "
+            logger.debug("⚡ Sentiment context (%s): %ss | ", method_type, execution_time:.3f)
                 f"Sentiment: {'✅' if crypto_sentiment and not isinstance(crypto_sentiment, Exception) else '❌'} | "
                 f"Correlation: {'✅' if correlation and not isinstance(correlation, Exception) else '❌'}"
             )
@@ -705,7 +691,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             return "\n".join(context_lines) if context_lines else ""
 
         except Exception as e:
-            logger.warning(f"Failed to get financial sentiment context: {e}")
+            logger.warning("Failed to get financial sentiment context: %s", e)
             return ""
 
     async def _analyze_sentiment_pattern_correlation(
@@ -771,7 +757,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             return "\n".join(correlation_lines)
 
         except Exception as e:
-            logger.warning(f"Failed to analyze sentiment-pattern correlation: {e}")
+            logger.warning("Failed to analyze sentiment-pattern correlation: %s", e)
             return ""
 
     async def _analyze_sentiment_trends(self, market_state: MarketState) -> str:
@@ -826,7 +812,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             return "\n".join(trend_lines)
 
         except Exception as e:
-            logger.warning(f"Failed to analyze sentiment trends: {e}")
+            logger.warning("Failed to analyze sentiment trends: %s", e)
             return ""
 
     async def _get_recent_experiences_with_sentiment(
@@ -881,7 +867,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             return sentiment_experiences
 
         except Exception as e:
-            logger.warning(f"Failed to get recent experiences with sentiment: {e}")
+            logger.warning("Failed to get recent experiences with sentiment: %s", e)
             return []
 
     async def _store_sentiment_data_for_learning(
@@ -910,7 +896,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                             base_symbol
                         )
                     except Exception as e:
-                        logger.debug(f"Crypto sentiment for storage failed: {e}")
+                        logger.debug("Crypto sentiment for storage failed: %s", e)
                         return None
 
                 async def get_correlation_for_storage():
@@ -919,7 +905,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                             base_symbol, "QQQ"
                         )
                     except Exception as e:
-                        logger.debug(f"Market correlation for storage failed: {e}")
+                        logger.debug("Market correlation for storage failed: %s", e)
                         return None
 
                 # Execute both storage API calls in parallel - Key performance improvement
@@ -937,7 +923,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                         )
                     )
                 except Exception as e:
-                    logger.debug(f"Crypto sentiment for storage failed: {e}")
+                    logger.debug("Crypto sentiment for storage failed: %s", e)
                     crypto_sentiment = None
 
                 try:
@@ -947,7 +933,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                         )
                     )
                 except Exception as e:
-                    logger.debug(f"Market correlation for storage failed: {e}")
+                    logger.debug("Market correlation for storage failed: %s", e)
                     correlation = None
 
             # Process sentiment data
@@ -983,9 +969,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                 # This will be picked up when the trading experience is created
                 self._pending_sentiment_data = sentiment_data
 
-                logger.debug(
-                    f"Stored sentiment data for learning: {sentiment_data.get('overall_sentiment', 'unknown')} sentiment"
-                )
+                logger.debug("Stored sentiment data for learning: %s sentiment", sentiment_data.get('overall_sentiment', 'unknown'))
 
         except Exception as e:
-            logger.warning(f"Failed to store sentiment data for learning: {e}")
+            logger.warning("Failed to store sentiment data for learning: %s", e)

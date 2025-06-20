@@ -715,7 +715,7 @@ class CipherASignals:
 
         required_columns = ["open", "high", "low", "close"]
         if not all(col in ohlc_data.columns for col in required_columns):
-            logger.error(f"Missing required OHLC columns: {required_columns}")
+            logger.error("Missing required OHLC columns: %s", required_columns)
             empty_series = pd.Series(dtype=bool, index=ohlc_data.index)
             return {
                 "bull_candle": empty_series,
@@ -869,9 +869,7 @@ class CipherASignals:
         required_columns = ["open", "high", "low", "close"]
         missing_columns = [col for col in required_columns if col not in result.columns]
         if missing_columns:
-            logger.error(
-                f"Missing required columns for Cipher A signals: {missing_columns}"
-            )
+            logger.error("Missing required columns for Cipher A signals: %s", missing_columns)
             return result
 
         try:
@@ -1364,13 +1362,7 @@ class CipherASignals:
             if col in df.columns:
                 nan_count = df[col].isna().sum()
                 if nan_count > 0:
-                    logger.warning(
-                        f"NaN values in {col} column",
-                        extra={
-                            "indicator": "cipher_a_signals",
-                            "issue": "nan_values_in_price_data",
-                            "column": col,
-                            "nan_count": int(nan_count),
+                    logger.warning("NaN values in %s column", extra={ "indicator": "cipher_a_signals", "issue": "nan_values_in_price_data", "column": col, "nan_count": int(nan_count),, col)
                             "total_points": len(df),
                             "nan_percentage": round((nan_count / len(df)) * 100, 2),
                         },
@@ -1393,13 +1385,7 @@ class CipherASignals:
             for col in required_columns:
                 invalid_prices = (df[col] <= 0).sum()
                 if invalid_prices > 0:
-                    logger.warning(
-                        f"Invalid {col} prices detected",
-                        extra={
-                            "indicator": "cipher_a_signals",
-                            "issue": "invalid_prices",
-                            "column": col,
-                            "invalid_count": int(invalid_prices),
+                    logger.warning("Invalid %s prices detected", extra={ "indicator": "cipher_a_signals", "issue": "invalid_prices", "column": col, "invalid_count": int(invalid_prices),, col)
                             "min_price": (
                                 float(df[col].min()) if not df[col].empty else 0
                             ),

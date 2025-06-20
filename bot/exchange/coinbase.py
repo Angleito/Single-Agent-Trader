@@ -181,7 +181,7 @@ class CoinbaseResponseValidator:
             return all(self._validate_account_data(account) for account in accounts)
 
         except Exception as e:
-            logger.exception(f"Error validating account response: {e}")
+            logger.exception("Error validating account response: %s", e)
             return False
 
     def validate_balance_response(self, response: dict | object) -> bool:
@@ -214,10 +214,10 @@ class CoinbaseResponseValidator:
                 try:
                     balance_value = Decimal(str(balance_data.value))
                     if balance_value < 0:
-                        logger.warning(f"Invalid negative balance: {balance_value}")
+                        logger.warning("Invalid negative balance: %s", balance_value)
                         return False
                 except (ValueError, TypeError) as e:
-                    logger.warning(f"Invalid balance value format: {e}")
+                    logger.warning("Invalid balance value format: %s", e)
                     return False
 
             elif isinstance(response, dict):
@@ -229,10 +229,10 @@ class CoinbaseResponseValidator:
                 try:
                     balance_value = Decimal(str(response["balance"]))
                     if balance_value < 0:
-                        logger.warning(f"Invalid negative balance: {balance_value}")
+                        logger.warning("Invalid negative balance: %s", balance_value)
                         return False
                 except (ValueError, TypeError) as e:
-                    logger.warning(f"Invalid balance value format: {e}")
+                    logger.warning("Invalid balance value format: %s", e)
                     return False
             else:
                 logger.warning(
@@ -243,7 +243,7 @@ class CoinbaseResponseValidator:
             return True
 
         except Exception as e:
-            logger.exception(f"Error validating balance response: {e}")
+            logger.exception("Error validating balance response: %s", e)
             return False
 
     def validate_order_response(self, response: dict | object) -> bool:
@@ -277,7 +277,7 @@ class CoinbaseResponseValidator:
                 elif isinstance(order_data, dict) and field in order_data:
                     continue  # Dict format
                 else:
-                    logger.warning(f"Order response missing required field: {field}")
+                    logger.warning("Order response missing required field: %s", field)
                     return False
 
             # Validate order status
@@ -288,7 +288,7 @@ class CoinbaseResponseValidator:
 
             valid_statuses = ["OPEN", "FILLED", "CANCELLED", "PENDING", "REJECTED"]
             if status not in valid_statuses:
-                logger.warning(f"Invalid order status: {status}")
+                logger.warning("Invalid order status: %s", status)
                 return False
 
             # Validate side
@@ -298,13 +298,13 @@ class CoinbaseResponseValidator:
                 side = order_data.get("side")
 
             if side not in ["BUY", "SELL"]:
-                logger.warning(f"Invalid order side: {side}")
+                logger.warning("Invalid order side: %s", side)
                 return False
 
             return True
 
         except Exception as e:
-            logger.exception(f"Error validating order response: {e}")
+            logger.exception("Error validating order response: %s", e)
             return False
 
     def validate_position_response(self, response: dict | object) -> bool:
@@ -344,7 +344,7 @@ class CoinbaseResponseValidator:
             return True
 
         except Exception as e:
-            logger.exception(f"Error validating position response: {e}")
+            logger.exception("Error validating position response: %s", e)
             return False
 
     def _validate_account_data(self, account: dict) -> bool:
@@ -362,19 +362,19 @@ class CoinbaseResponseValidator:
             required_fields = ["uuid", "name", "currency"]
             for field in required_fields:
                 if field not in account:
-                    logger.warning(f"Account missing required field: {field}")
+                    logger.warning("Account missing required field: %s", field)
                     return False
 
             # Validate UUID format (basic check)
             uuid_str = account["uuid"]
             if not isinstance(uuid_str, str) or len(uuid_str) != 36:
-                logger.warning(f"Invalid account UUID format: {uuid_str}")
+                logger.warning("Invalid account UUID format: %s", uuid_str)
                 return False
 
             # Validate currency
             currency = account["currency"]
             if not isinstance(currency, str) or len(currency) < 2:
-                logger.warning(f"Invalid currency format: {currency}")
+                logger.warning("Invalid currency format: %s", currency)
                 return False
 
             # Validate balance if present
@@ -382,16 +382,16 @@ class CoinbaseResponseValidator:
                 try:
                     balance = Decimal(str(account["balance"]))
                     if balance < 0:
-                        logger.warning(f"Invalid negative account balance: {balance}")
+                        logger.warning("Invalid negative account balance: %s", balance)
                         return False
                 except (ValueError, TypeError) as e:
-                    logger.warning(f"Invalid account balance format: {e}")
+                    logger.warning("Invalid account balance format: %s", e)
                     return False
 
             return True
 
         except Exception as e:
-            logger.exception(f"Error validating account data: {e}")
+            logger.exception("Error validating account data: %s", e)
             return False
 
     def _validate_position_data(self, position: dict | object) -> bool:
@@ -419,28 +419,28 @@ class CoinbaseResponseValidator:
 
             # Validate product ID
             if not product_id or not isinstance(product_id, str):
-                logger.warning(f"Invalid position product_id: {product_id}")
+                logger.warning("Invalid position product_id: %s", product_id)
                 return False
 
             # Validate side if present
             if side and side not in ["LONG", "SHORT"]:
-                logger.warning(f"Invalid position side: {side}")
+                logger.warning("Invalid position side: %s", side)
                 return False
 
             # Validate size
             try:
                 size_decimal = Decimal(str(size))
                 if size_decimal < 0:
-                    logger.warning(f"Invalid negative position size: {size_decimal}")
+                    logger.warning("Invalid negative position size: %s", size_decimal)
                     return False
             except (ValueError, TypeError) as e:
-                logger.warning(f"Invalid position size format: {e}")
+                logger.warning("Invalid position size format: %s", e)
                 return False
 
             return True
 
         except Exception as e:
-            logger.exception(f"Error validating position data: {e}")
+            logger.exception("Error validating position data: %s", e)
             return False
 
     def get_validation_stats(self) -> dict[str, Any]:
@@ -483,15 +483,13 @@ class CoinbaseResponseValidator:
 
             # Basic type validation
             if not isinstance(response, dict | object):
-                logger.warning(f"Invalid response type: {type(response)}")
+                logger.warning("Invalid response type: %s", type(response))
                 return False
 
             # Check for error indicators in response
             if isinstance(response, dict):
                 if "error" in response or "errors" in response:
-                    logger.warning(
-                        f"Error in response: {response.get('error', response.get('errors'))}"
-                    )
+                    logger.warning("Error in response: %s", response.get('error', response.get('errors')))
                     return False
 
                 # Check for success indicators
@@ -507,7 +505,7 @@ class CoinbaseResponseValidator:
             return True
 
         except Exception as e:
-            logger.exception(f"Error validating exchange response: {e}")
+            logger.exception("Error validating exchange response: %s", e)
             return False
 
     def validate_order_creation_response(self, response: dict | object) -> bool:
@@ -567,7 +565,7 @@ class CoinbaseResponseValidator:
             return True
 
         except Exception as e:
-            logger.exception(f"Error validating order creation response: {e}")
+            logger.exception("Error validating order creation response: %s", e)
             self.validation_failures += 1
             return False
 
@@ -607,7 +605,7 @@ class CoinbaseResponseValidator:
             return True
 
         except Exception as e:
-            logger.exception(f"Error validating order cancellation response: {e}")
+            logger.exception("Error validating order cancellation response: %s", e)
             self.validation_failures += 1
             return False
 
@@ -637,7 +635,7 @@ class CoinbaseRateLimiter:
                 oldest_request = min(self.requests)
                 wait_time = self.window_seconds - (now - oldest_request)
                 if wait_time > 0:
-                    logger.debug(f"Rate limit reached, waiting {wait_time:.2f}s")
+                    logger.debug("Rate limit reached, waiting %ss", wait_time:.2f)
                     await asyncio.sleep(wait_time)
                     return await self.acquire()
 
@@ -812,18 +810,16 @@ class CoinbaseClient(BaseExchange):
 
         # Log detailed connection configuration
         logger.debug("CoinbaseClient Configuration Details:")
-        logger.debug(f"  Trading mode: {trading_mode}")
-        logger.debug(f"  Authentication method: {self.auth_method}")
-        logger.debug(f"  Sandbox mode: {self.sandbox}")
-        logger.debug(f"  Futures enabled: {self.enable_futures}")
-        logger.debug(f"  Futures account type: {self.futures_account_type}")
-        logger.debug(f"  Auto cash transfer: {self.auto_cash_transfer}")
-        logger.debug(f"  Max futures leverage: {self.max_futures_leverage}")
-        logger.debug(
-            f"  Rate limit: {self._rate_limiter.max_requests} req/{self._rate_limiter.window_seconds}s"
-        )
-        logger.debug(f"  Max retries: {self._max_retries}")
-        logger.debug(f"  Has credentials: {bool(self.auth_method != 'none')}")
+        logger.debug("  Trading mode: %s", trading_mode)
+        logger.debug("  Authentication method: %s", self.auth_method)
+        logger.debug("  Sandbox mode: %s", self.sandbox)
+        logger.debug("  Futures enabled: %s", self.enable_futures)
+        logger.debug("  Futures account type: %s", self.futures_account_type)
+        logger.debug("  Auto cash transfer: %s", self.auto_cash_transfer)
+        logger.debug("  Max futures leverage: %s", self.max_futures_leverage)
+        logger.debug("  Rate limit: %s req/%ss", self._rate_limiter.max_requests, self._rate_limiter.window_seconds)
+        logger.debug("  Max retries: %s", self._max_retries)
+        logger.debug("  Has credentials: %s", bool(self.auth_method != 'none'))
 
         # Log warning if in live trading mode
         if not self.dry_run:
@@ -928,31 +924,25 @@ class CoinbaseClient(BaseExchange):
             self._connected = True
             self._last_health_check = datetime.utcnow()
 
-            logger.info(
-                f"Connected to Coinbase {'Sandbox' if self.sandbox else 'Live'} successfully"
-            )
+            logger.info("Connected to Coinbase %s successfully", 'Sandbox' if self.sandbox else 'Live')
 
             # Load portfolio information
             await self._load_portfolios()
 
             # Log connection success details
             logger.debug("Connection Success Details:")
-            logger.debug(
-                f"  Environment: {'Sandbox' if self.sandbox else 'Production'}"
-            )
-            logger.debug(f"  Authentication method: {self.auth_method}")
-            logger.debug(f"  Health check timestamp: {self._last_health_check}")
-            logger.debug(f"  SDK available: {COINBASE_AVAILABLE}")
+            logger.debug("  Environment: %s", 'Sandbox' if self.sandbox else 'Production')
+            logger.debug("  Authentication method: %s", self.auth_method)
+            logger.debug("  Health check timestamp: %s", self._last_health_check)
+            logger.debug("  SDK available: %s", COINBASE_AVAILABLE)
 
             # Log account access test
             try:
                 accounts = await self._retry_request(self._client.get_accounts)
                 account_count = len(accounts.get("accounts", []))
-                logger.debug(
-                    f"  Account access test: SUCCESS ({account_count} accounts found)"
-                )
+                logger.debug("  Account access test: SUCCESS (%s accounts found)", account_count)
             except Exception as e:
-                logger.warning(f"  Account access test: FAILED ({e})")
+                logger.warning("  Account access test: FAILED (%s)", e)
 
             # Log futures capabilities if enabled
             if self.enable_futures:
@@ -961,11 +951,9 @@ class CoinbaseClient(BaseExchange):
                         self._client.get_fcm_balance_summary
                     )
                     logger.debug("  Futures access test: SUCCESS")
-                    logger.debug(
-                        f"  CFM account ready: {hasattr(balance_response, 'balance_summary')}"
-                    )
+                    logger.debug("  CFM account ready: %s", hasattr(balance_response, 'balance_summary'))
                 except Exception as e:
-                    logger.warning(f"  Futures access test: FAILED ({e})")
+                    logger.warning("  Futures access test: FAILED (%s)", e)
 
             # Load portfolios information
             await self._load_portfolios()
@@ -978,21 +966,19 @@ class CoinbaseClient(BaseExchange):
                 try:
                     await self.get_monthly_volume()
                 except Exception as e:
-                    logger.warning(
-                        f"Failed to get monthly volume during initialization: {e}"
-                    )
+                    logger.warning("Failed to get monthly volume during initialization: %s", e)
 
             return True
 
         except CoinbaseAuthenticationException as e:
-            logger.exception(f"Coinbase authentication failed: {e}")
+            logger.exception("Coinbase authentication failed: %s", e)
             raise ExchangeAuthError(f"Authentication failed: {e}") from e
         except CoinbaseConnectionException as e:
-            logger.exception(f"Coinbase connection failed: {e}")
+            logger.exception("Coinbase connection failed: %s", e)
             raise ExchangeConnectionError(f"Connection failed: {e}") from e
         except Exception as e:
-            logger.exception(f"Failed to connect to Coinbase: {e}")
-            logger.debug(f"Connection error traceback: {traceback.format_exc()}")
+            logger.exception("Failed to connect to Coinbase: %s", e)
+            logger.debug("Connection error traceback: %s", traceback.format_exc())
             raise ExchangeConnectionError(f"Unexpected error: {e}") from e
 
     async def _test_connection(self) -> None:
@@ -1002,11 +988,9 @@ class CoinbaseClient(BaseExchange):
             if self._client is None:
                 raise ExchangeConnectionError("Client not initialized")
             accounts = self._client.get_accounts()
-            logger.debug(
-                f"Connection test successful, found {len(accounts.get('accounts', []))} accounts"
-            )
+            logger.debug("Connection test successful, found %s accounts", len(accounts.get('accounts', [])))
         except Exception as e:
-            logger.exception(f"Connection test failed: {e}")
+            logger.exception("Connection test failed: %s", e)
             raise
 
     async def disconnect(self) -> None:
@@ -1018,7 +1002,7 @@ class CoinbaseClient(BaseExchange):
                     logger.info("Cleaning up before disconnect...")
                     # Could add cleanup logic here
             except Exception as e:
-                logger.warning(f"Error during cleanup: {e}")
+                logger.warning("Error during cleanup: %s", e)
 
         self._client = None
         self._connected = False
@@ -1052,7 +1036,7 @@ class CoinbaseClient(BaseExchange):
             return True
 
         except Exception as e:
-            logger.warning(f"Health check failed: {e}")
+            logger.warning("Health check failed: %s", e)
             self._connected = False
             return False
 
@@ -1060,7 +1044,7 @@ class CoinbaseClient(BaseExchange):
         """Execute a request with retry logic."""
         # In paper trading mode, don't make any real API calls
         if self.dry_run:
-            logger.debug(f"PAPER TRADING: Skipping API call to {func.__name__}")
+            logger.debug("PAPER TRADING: Skipping API call to %s", func.__name__)
             # Return mock responses for common methods
             if "get_accounts" in func.__name__:
                 return {"accounts": []}
@@ -1130,13 +1114,11 @@ class CoinbaseClient(BaseExchange):
                     )
                     await asyncio.sleep(wait_time)
                 else:
-                    logger.exception(
-                        f"Request failed after {self._max_retries + 1} attempts: {e}"
-                    )
+                    logger.exception("Request failed after %s attempts: %s", self._max_retries + 1, e)
                     raise
 
             except Exception as e:
-                logger.exception(f"Unexpected error in request: {e}")
+                logger.exception("Unexpected error in request: %s", e)
                 raise
 
         if last_exception:
@@ -1171,7 +1153,7 @@ class CoinbaseClient(BaseExchange):
                     self._portfolios = {}
 
             except Exception as e:
-                logger.debug(f"Could not fetch portfolios via API: {e}")
+                logger.debug("Could not fetch portfolios via API: %s", e)
                 self._portfolios = {}
 
             # If we have portfolios, try to identify the futures portfolio
@@ -1184,7 +1166,7 @@ class CoinbaseClient(BaseExchange):
                     # Check if this is the default portfolio
                     if portfolio.get("is_default"):
                         self._default_portfolio_id = portfolio_id
-                        logger.debug(f"Found default portfolio: {portfolio_id}")
+                        logger.debug("Found default portfolio: %s", portfolio_id)
 
                     # Check if this is a futures portfolio
                     if (
@@ -1194,16 +1176,16 @@ class CoinbaseClient(BaseExchange):
                         or portfolio_type == "cfm"
                     ):
                         self._futures_portfolio_id = portfolio_id
-                        logger.debug(f"Found futures portfolio: {portfolio_id}")
+                        logger.debug("Found futures portfolio: %s", portfolio_id)
 
-                logger.info(f"Loaded {len(self._portfolios)} portfolios")
+                logger.info("Loaded %s portfolios", len(self._portfolios))
                 if self._futures_portfolio_id:
-                    logger.info(f"Futures portfolio ID: {self._futures_portfolio_id}")
+                    logger.info("Futures portfolio ID: %s", self._futures_portfolio_id)
             else:
                 logger.debug("No portfolios found or portfolios API not available")
 
         except Exception as e:
-            logger.warning(f"Failed to load portfolios: {e}")
+            logger.warning("Failed to load portfolios: %s", e)
             self._portfolios = {}
 
     async def get_portfolios(self) -> list[dict[str, Any]]:
@@ -1239,7 +1221,7 @@ class CoinbaseClient(BaseExchange):
             try:
                 amount = Decimal(str(amount))
             except (ValueError, TypeError):
-                logger.exception(f"Invalid balance amount: {amount} (type: {type(amount)})")
+                logger.exception("Invalid balance amount: %s (type: %s)", amount, type(amount))
                 raise ValueError(f"Cannot convert to Decimal: {amount}")
 
         # Check for invalid values
@@ -1277,7 +1259,7 @@ class CoinbaseClient(BaseExchange):
             try:
                 amount = Decimal(str(amount))
             except (ValueError, TypeError):
-                logger.exception(f"Invalid crypto amount: {amount} (type: {type(amount)})")
+                logger.exception("Invalid crypto amount: %s (type: %s)", amount, type(amount))
                 raise ValueError(f"Cannot convert to Decimal: {amount}")
 
         # Check for invalid values
@@ -1325,7 +1307,7 @@ class CoinbaseClient(BaseExchange):
 
         if symbol in futures_mappings:
             futures_symbol = futures_mappings[symbol]
-            logger.info(f"Mapped {symbol} to futures contract {futures_symbol}")
+            logger.info("Mapped %s to futures contract %s", symbol, futures_symbol)
             return futures_symbol
 
         # For other symbols, try to find dated contracts
@@ -1347,7 +1329,7 @@ class CoinbaseClient(BaseExchange):
                 return active_contract
 
         # Fallback to original symbol
-        logger.info(f"Using {symbol} for futures trading")
+        logger.info("Using %s for futures trading", symbol)
         return symbol
 
     async def execute_trade_action(
@@ -1371,7 +1353,7 @@ class CoinbaseClient(BaseExchange):
         try:
             # Get the actual trading symbol (spot or futures contract)
             actual_symbol = await self.get_trading_symbol(symbol)
-            logger.info(f"Using trading symbol: {actual_symbol} (requested: {symbol})")
+            logger.info("Using trading symbol: %s (requested: %s)", actual_symbol, symbol)
 
             if trade_action.action == "HOLD":
                 logger.info("Action is HOLD - no trade executed")
@@ -1386,11 +1368,11 @@ class CoinbaseClient(BaseExchange):
                 )
 
             else:
-                logger.error(f"Unknown action: {trade_action.action}")
+                logger.error("Unknown action: %s", trade_action.action)
                 return None
 
         except Exception as e:
-            logger.exception(f"Failed to execute trade action: {e}")
+            logger.exception("Failed to execute trade action: %s", e)
             return None
 
     async def _open_position(
@@ -1418,7 +1400,7 @@ class CoinbaseClient(BaseExchange):
                     trade_action, symbol, current_price
                 )
         except Exception as e:
-            logger.exception(f"Failed to open position: {e}")
+            logger.exception("Failed to open position: %s", e)
             return None
 
     async def _open_futures_position(
@@ -1467,7 +1449,7 @@ class CoinbaseClient(BaseExchange):
                 quantity = Decimal(
                     "1"
                 )  # For CDE contracts, quantity is the number of contracts
-                logger.info(f"Futures contract {symbol}: FIXED 1 contract (0.1 ETH)")
+                logger.info("Futures contract %s: FIXED 1 contract (0.1 ETH)", symbol)
             else:
                 # Spot with leverage: use nano contract sizing
                 CONTRACT_SIZE = Decimal("0.1")  # 0.1 ETH per contract
@@ -1476,7 +1458,7 @@ class CoinbaseClient(BaseExchange):
                 num_contracts = 1
                 quantity = CONTRACT_SIZE * num_contracts  # 0.1 ETH
 
-                logger.info(f"Futures position: FIXED 1 contract = {quantity} ETH")
+                logger.info("Futures position: FIXED 1 contract = %s ETH", quantity)
 
             # Calculate actual notional value based on contracts
             actual_notional_value = quantity * current_price
@@ -1489,10 +1471,7 @@ class CoinbaseClient(BaseExchange):
                 transfer_amount = (
                     margin_required - futures_account.futures_balance + Decimal("10")
                 )  # Add buffer
-                logger.info(
-                    f"CFM balance ${futures_account.futures_balance} < margin required ${margin_required}. "
-                    f"Transferring ${transfer_amount} from CBI to CFM..."
-                )
+                logger.info("CFM balance $%s < margin required $%s. " "Transferring $%s from CBI to CFM..." ), futures_account.futures_balance, margin_required, transfer_amount)
 
                 transfer_success = await self.transfer_cash_to_futures(
                     amount=transfer_amount, reason="AUTO_REBALANCE"
@@ -1513,9 +1492,7 @@ class CoinbaseClient(BaseExchange):
                     logger.error("Cannot verify transfer - account info unavailable")
                     return None
 
-            logger.info(
-                f"Margin required: ${margin_required}, Available margin: ${available_margin}"
-            )
+            logger.info("Margin required: $%s, Available margin: $%s", margin_required, available_margin)
 
             # Determine order side
             side = cast(
@@ -1538,44 +1515,34 @@ class CoinbaseClient(BaseExchange):
 
             if order:
                 # Place stop loss and take profit orders - CRITICAL for risk management
-                logger.info(
-                    f"Placing protective orders: SL={trade_action.stop_loss_pct}%, TP={trade_action.take_profit_pct}%"
-                )
+                logger.info("Placing protective orders: SL=%s%, TP=%s%", trade_action.stop_loss_pct, trade_action.take_profit_pct)
 
                 try:
                     stop_loss_order = await self._place_stop_loss(
                         order, trade_action, current_price
                     )
                     if stop_loss_order:
-                        logger.info(
-                            f"✅ Stop loss order placed successfully: {stop_loss_order.id}"
-                        )
+                        logger.info("✅ Stop loss order placed successfully: %s", stop_loss_order.id)
                     else:
-                        logger.error(
-                            f"❌ CRITICAL: Stop loss order failed for position {order.id}"
-                        )
+                        logger.error("❌ CRITICAL: Stop loss order failed for position %s", order.id)
                         # Consider canceling the main order if stop loss fails
 
                     take_profit_order = await self._place_take_profit(
                         order, trade_action, current_price
                     )
                     if take_profit_order:
-                        logger.info(
-                            f"✅ Take profit order placed successfully: {take_profit_order.id}"
-                        )
+                        logger.info("✅ Take profit order placed successfully: %s", take_profit_order.id)
                     else:
-                        logger.warning(
-                            f"⚠️ Take profit order failed for position {order.id}"
-                        )
+                        logger.warning("⚠️ Take profit order failed for position %s", order.id)
 
                 except Exception as e:
-                    logger.exception(f"❌ CRITICAL ERROR placing protective orders: {e}")
+                    logger.exception("❌ CRITICAL ERROR placing protective orders: %s", e)
                     # Continue with trade but log the critical failure
 
             return order
 
         except Exception as e:
-            logger.exception(f"Failed to open futures position: {e}")
+            logger.exception("Failed to open futures position: %s", e)
             return None
 
     async def _open_spot_position(
@@ -1601,10 +1568,7 @@ class CoinbaseClient(BaseExchange):
 
         # Log fee information
         fee_rates = self.get_current_fee_rates()
-        logger.info(
-            f"Spot order fees - Maker: {fee_rates['maker']:.4%}, Taker: {fee_rates['taker']:.4%}, "
-            f"Volume: ${fee_rates['volume']:,.2f}"
-        )
+        logger.info("Spot order fees - Maker: %s, Taker: %s, " "Volume: $%s" ), fee_rates['maker']:.4%, fee_rates['taker']:.4%, fee_rates['volume']:,.2f)
 
         # Determine order side (BUY/SELL for spot)
         side = cast(
@@ -1618,38 +1582,28 @@ class CoinbaseClient(BaseExchange):
 
         if order:
             # Place stop loss and take profit orders - CRITICAL for risk management
-            logger.info(
-                f"Placing protective orders: SL={trade_action.stop_loss_pct}%, TP={trade_action.take_profit_pct}%"
-            )
+            logger.info("Placing protective orders: SL=%s%, TP=%s%", trade_action.stop_loss_pct, trade_action.take_profit_pct)
 
             try:
                 stop_loss_order = await self._place_stop_loss(
                     order, trade_action, current_price
                 )
                 if stop_loss_order:
-                    logger.info(
-                        f"✅ Stop loss order placed successfully: {stop_loss_order.id}"
-                    )
+                    logger.info("✅ Stop loss order placed successfully: %s", stop_loss_order.id)
                 else:
-                    logger.error(
-                        f"❌ CRITICAL: Stop loss order failed for position {order.id}"
-                    )
+                    logger.error("❌ CRITICAL: Stop loss order failed for position %s", order.id)
                     # Consider canceling the main order if stop loss fails
 
                 take_profit_order = await self._place_take_profit(
                     order, trade_action, current_price
                 )
                 if take_profit_order:
-                    logger.info(
-                        f"✅ Take profit order placed successfully: {take_profit_order.id}"
-                    )
+                    logger.info("✅ Take profit order placed successfully: %s", take_profit_order.id)
                 else:
-                    logger.warning(
-                        f"⚠️ Take profit order failed for position {order.id}"
-                    )
+                    logger.warning("⚠️ Take profit order failed for position %s", order.id)
 
             except Exception as e:
-                logger.exception(f"❌ CRITICAL ERROR placing protective orders: {e}")
+                logger.exception("❌ CRITICAL ERROR placing protective orders: %s", e)
                 # Continue with trade but log the critical failure
 
         return order
@@ -1697,9 +1651,7 @@ class CoinbaseClient(BaseExchange):
         """
         if self.dry_run:
             # Simulate order in dry-run mode
-            logger.info(
-                f"PAPER TRADING: Simulating {side} {quantity} {symbol} at market"
-            )
+            logger.info("PAPER TRADING: Simulating %s %s %s at market", side, quantity, symbol)
             return Order(
                 id=f"paper_{int(datetime.utcnow().timestamp() * 1000)}",
                 symbol=symbol,
@@ -1739,15 +1691,13 @@ class CoinbaseClient(BaseExchange):
             # Add default portfolio ID if available and not futures
             if self._default_portfolio_id and not self.enable_futures:
                 order_data["retail_portfolio_id"] = self._default_portfolio_id
-                logger.debug(
-                    f"Using default portfolio ID: {self._default_portfolio_id}"
-                )
+                logger.debug("Using default portfolio ID: %s", self._default_portfolio_id)
 
             if self._client is None:
                 logger.error("Client not initialized")
                 return None
 
-            logger.info(f"Placing {side} market order: {quantity} {symbol}")
+            logger.info("Placing %s market order: %s %s", side, quantity, symbol)
             result = await self._retry_request(
                 self._client.create_order, client_order_id, **order_data
             )
@@ -1782,7 +1732,7 @@ class CoinbaseClient(BaseExchange):
                         filled_quantity=Decimal("0"),
                     )
 
-                    logger.info(f"Market order placed successfully: {order_id}")
+                    logger.info("Market order placed successfully: %s", order_id)
                     return order
                 elif hasattr(result, "order_id"):
                     # Fallback for old format
@@ -1800,7 +1750,7 @@ class CoinbaseClient(BaseExchange):
                         filled_quantity=Decimal("0"),
                     )
 
-                    logger.info(f"Market order placed successfully: {order_id}")
+                    logger.info("Market order placed successfully: %s", order_id)
                     return order
                 elif isinstance(result, dict) and result.get("success"):
                     order_info = result.get("order", {})
@@ -1818,15 +1768,15 @@ class CoinbaseClient(BaseExchange):
                         filled_quantity=Decimal("0"),
                     )
 
-                    logger.info(f"Market order placed successfully: {order_id}")
+                    logger.info("Market order placed successfully: %s", order_id)
                     return order
                 else:
                     error_msg = str(result) if result else "Unknown error"
-                    logger.error(f"Order placement failed: {error_msg}")
+                    logger.error("Order placement failed: %s", error_msg)
                     raise ExchangeOrderError(f"Order placement failed: {error_msg}")
             except AttributeError as e:
-                logger.exception(f"Error parsing order response: {e}")
-                logger.exception(f"Response type: {type(result)}, Response: {result}")
+                logger.exception("Error parsing order response: %s", e)
+                logger.exception("Response type: %s, Response: %s", type(result), result)
                 raise ExchangeOrderError(f"Failed to parse order response: {e}") from e
 
         except CoinbaseAPIException as e:
@@ -1835,8 +1785,8 @@ class CoinbaseClient(BaseExchange):
             else:
                 raise ExchangeOrderError(f"API error: {e}") from e
         except Exception as e:
-            logger.exception(f"Failed to place market order: {e}")
-            logger.debug(f"Market order error traceback: {traceback.format_exc()}")
+            logger.exception("Failed to place market order: %s", e)
+            logger.debug("Market order error traceback: %s", traceback.format_exc())
             raise ExchangeOrderError(f"Failed to place market order: {e}") from e
 
     async def place_limit_order(
@@ -1859,9 +1809,7 @@ class CoinbaseClient(BaseExchange):
             Order object if successful
         """
         if self.dry_run:
-            logger.info(
-                f"PAPER TRADING: Simulating {side} {quantity} {symbol} limit @ {price}"
-            )
+            logger.info("PAPER TRADING: Simulating %s %s %s limit @ %s", side, quantity, symbol, price)
             return Order(
                 id=f"paper_limit_{int(datetime.utcnow().timestamp() * 1000)}",
                 symbol=symbol,
@@ -1905,7 +1853,7 @@ class CoinbaseClient(BaseExchange):
                 logger.error("Client not initialized")
                 return None
 
-            logger.info(f"Placing {side} limit order: {quantity} {symbol} @ {price}")
+            logger.info("Placing %s limit order: %s %s @ %s", side, quantity, symbol, price)
             result = await self._retry_request(
                 self._client.create_order, client_order_id, **order_data
             )
@@ -1928,13 +1876,13 @@ class CoinbaseClient(BaseExchange):
                     filled_quantity=Decimal("0"),
                 )
 
-                logger.info(f"Limit order placed successfully: {order_id}")
+                logger.info("Limit order placed successfully: %s", order_id)
                 return order
             else:
                 error_msg = result.get("error_response", {}).get(
                     "message", "Unknown error"
                 )
-                logger.error(f"Limit order placement failed: {error_msg}")
+                logger.error("Limit order placement failed: %s", error_msg)
                 raise ExchangeOrderError(f"Limit order placement failed: {error_msg}")
 
         except CoinbaseAPIException as e:
@@ -1943,8 +1891,8 @@ class CoinbaseClient(BaseExchange):
             else:
                 raise ExchangeOrderError(f"API error: {e}") from e
         except Exception as e:
-            logger.exception(f"Failed to place limit order: {e}")
-            logger.debug(f"Limit order error traceback: {traceback.format_exc()}")
+            logger.exception("Failed to place limit order: %s", e)
+            logger.debug("Limit order error traceback: %s", traceback.format_exc())
             raise ExchangeOrderError(f"Failed to place limit order: {e}") from e
 
     async def _place_stop_loss(
@@ -2029,9 +1977,7 @@ class CoinbaseClient(BaseExchange):
             Order object if successful
         """
         if self.dry_run:
-            logger.info(
-                f"PAPER TRADING: Simulating {side} {quantity} {symbol} stop @ {stop_price}"
-            )
+            logger.info("PAPER TRADING: Simulating %s %s %s stop @ %s", side, quantity, symbol, stop_price)
             return Order(
                 id=f"paper_stop_{int(datetime.utcnow().timestamp() * 1000)}",
                 symbol=symbol,
@@ -2092,9 +2038,7 @@ class CoinbaseClient(BaseExchange):
                 logger.error("Client not initialized")
                 return None
 
-            logger.info(
-                f"Placing {side} stop order: {quantity} {symbol} stop @ {stop_price_float}, limit @ {limit_price_float}"
-            )
+            logger.info("Placing %s stop order: %s %s stop @ %s, limit @ %s", side, quantity, symbol, stop_price_float, limit_price_float)
             result = await self._retry_request(
                 self._client.create_order, client_order_id, **order_data
             )
@@ -2118,13 +2062,13 @@ class CoinbaseClient(BaseExchange):
                     filled_quantity=Decimal("0"),
                 )
 
-                logger.info(f"Stop order placed successfully: {order_id}")
+                logger.info("Stop order placed successfully: %s", order_id)
                 return order
             else:
                 error_msg = result.get("error_response", {}).get(
                     "message", "Unknown error"
                 )
-                logger.error(f"Stop order placement failed: {error_msg}")
+                logger.error("Stop order placement failed: %s", error_msg)
                 raise ExchangeOrderError(f"Stop order placement failed: {error_msg}")
 
         except CoinbaseAPIException as e:
@@ -2133,8 +2077,8 @@ class CoinbaseClient(BaseExchange):
             else:
                 raise ExchangeOrderError(f"API error: {e}") from e
         except Exception as e:
-            logger.exception(f"Failed to place stop order: {e}")
-            logger.debug(f"Stop order error traceback: {traceback.format_exc()}")
+            logger.exception("Failed to place stop order: %s", e)
+            logger.debug("Stop order error traceback: %s", traceback.format_exc())
             raise ExchangeOrderError(f"Failed to place stop order: {e}") from e
 
     async def place_futures_market_order(
@@ -2160,9 +2104,7 @@ class CoinbaseClient(BaseExchange):
         """
         if self.dry_run:
             # Simulate futures order in dry-run mode
-            logger.info(
-                f"PAPER TRADING FUTURES: Simulating {side} {quantity} {symbol} at market (leverage: {leverage}x)"
-            )
+            logger.info("PAPER TRADING FUTURES: Simulating %s %s %s at market (leverage: %sx)", side, quantity, symbol, leverage)
             return Order(
                 id=f"paper_futures_{int(datetime.utcnow().timestamp() * 1000)}",
                 symbol=symbol,
@@ -2221,10 +2163,8 @@ class CoinbaseClient(BaseExchange):
                 logger.error("Client not initialized")
                 return None
 
-            logger.info(
-                f"Placing FUTURES {side} market order: {quantity} {symbol} (leverage: {leverage}x)"
-            )
-            logger.debug(f"Order data: {order_data}")
+            logger.info("Placing FUTURES %s market order: %s %s (leverage: %sx)", side, quantity, symbol, leverage)
+            logger.debug("Order data: %s", order_data)
             result = await self._retry_request(
                 self._client.create_order, client_order_id, **order_data
             )
@@ -2252,7 +2192,7 @@ class CoinbaseClient(BaseExchange):
                         filled_quantity=Decimal("0"),
                     )
 
-                    logger.info(f"Futures market order placed successfully: {order_id}")
+                    logger.info("Futures market order placed successfully: %s", order_id)
                     return order
                 elif hasattr(result, "order_id"):
                     # Fallback for old format
@@ -2270,7 +2210,7 @@ class CoinbaseClient(BaseExchange):
                         filled_quantity=Decimal("0"),
                     )
 
-                    logger.info(f"Futures market order placed successfully: {order_id}")
+                    logger.info("Futures market order placed successfully: %s", order_id)
                     return order
                 elif isinstance(result, dict) and result.get("success"):
                     order_info = result.get("order", {})
@@ -2288,17 +2228,17 @@ class CoinbaseClient(BaseExchange):
                         filled_quantity=Decimal("0"),
                     )
 
-                    logger.info(f"Futures market order placed successfully: {order_id}")
+                    logger.info("Futures market order placed successfully: %s", order_id)
                     return order
                 else:
                     error_msg = str(result) if result else "Unknown error"
-                    logger.error(f"Futures order placement failed: {error_msg}")
+                    logger.error("Futures order placement failed: %s", error_msg)
                     raise ExchangeOrderError(
                         f"Futures order placement failed: {error_msg}"
                     )
             except AttributeError as e:
-                logger.exception(f"Error parsing order response: {e}")
-                logger.exception(f"Response type: {type(result)}, Response: {result}")
+                logger.exception("Error parsing order response: %s", e)
+                logger.exception("Response type: %s, Response: %s", type(result), result)
                 raise ExchangeOrderError(f"Failed to parse order response: {e}") from e
 
         except CoinbaseAPIException as e:
@@ -2312,10 +2252,8 @@ class CoinbaseClient(BaseExchange):
             else:
                 raise ExchangeOrderError(f"Futures API error: {e}") from e
         except Exception as e:
-            logger.exception(f"Failed to place futures market order: {e}")
-            logger.debug(
-                f"Futures market order error traceback: {traceback.format_exc()}"
-            )
+            logger.exception("Failed to place futures market order: %s", e)
+            logger.debug("Futures market order error traceback: %s", traceback.format_exc())
             raise ExchangeOrderError(
                 f"Failed to place futures market order: {e}"
             ) from e
@@ -2341,7 +2279,7 @@ class CoinbaseClient(BaseExchange):
         if self.dry_run:
             # Return mock balance for paper trading with proper normalization
             mock_balance = self._normalize_balance(Decimal("10000.00"))
-            logger.debug(f"PAPER TRADING: Returning mock balance ${mock_balance}")
+            logger.debug("PAPER TRADING: Returning mock balance $%s", mock_balance)
             return mock_balance
 
         try:
@@ -2369,7 +2307,7 @@ class CoinbaseClient(BaseExchange):
             # Re-raise specific balance exceptions
             raise
         except Exception as e:
-            logger.exception(f"Failed to get account balance: {e}")
+            logger.exception("Failed to get account balance: %s", e)
             # Wrap generic exceptions in BalanceRetrievalError
             raise BalanceRetrievalError(
                 f"Failed to retrieve account balance: {e}",
@@ -2441,9 +2379,9 @@ class CoinbaseClient(BaseExchange):
 
             # Validate final balance
             if total_balance < Decimal("0"):
-                logger.warning(f"Retrieved negative spot balance: ${total_balance}")
+                logger.warning("Retrieved negative spot balance: $%s", total_balance)
 
-            logger.debug(f"Retrieved spot USD balance: {total_balance}")
+            logger.debug("Retrieved spot USD balance: %s", total_balance)
             return total_balance
 
         except (
@@ -2454,7 +2392,7 @@ class CoinbaseClient(BaseExchange):
             # Re-raise specific balance exceptions
             raise
         except Exception as e:
-            logger.exception(f"Failed to get spot balance: {e}")
+            logger.exception("Failed to get spot balance: %s", e)
             # Check for specific API error types
             if hasattr(e, "status_code") and e.status_code == 503:
                 raise BalanceServiceUnavailableError(
@@ -2556,11 +2494,9 @@ class CoinbaseClient(BaseExchange):
 
             # Validate balance value
             if futures_balance < Decimal("0"):
-                logger.warning(
-                    f"Retrieved negative futures balance: ${futures_balance}"
-                )
+                logger.warning("Retrieved negative futures balance: $%s", futures_balance)
 
-            logger.debug(f"Retrieved futures USD balance: {futures_balance}")
+            logger.debug("Retrieved futures USD balance: %s", futures_balance)
             return futures_balance
 
         except (
@@ -2571,12 +2507,12 @@ class CoinbaseClient(BaseExchange):
             # Re-raise specific balance exceptions
             raise
         except Exception as e:
-            logger.exception(f"Failed to get futures balance: {e}")
+            logger.exception("Failed to get futures balance: %s", e)
             # Try fallback method before raising final exception
             try:
                 return await self._get_futures_balance_fallback()
             except Exception as fallback_error:
-                logger.exception(f"Fallback futures balance also failed: {fallback_error}")
+                logger.exception("Fallback futures balance also failed: %s", fallback_error)
                 raise BalanceRetrievalError(
                     f"Failed to retrieve futures balance (primary and fallback): {e}",
                     account_type="CFM",
@@ -2650,7 +2586,7 @@ class CoinbaseClient(BaseExchange):
             # Re-raise specific balance exceptions
             raise
         except Exception as e:
-            logger.exception(f"Fallback futures balance failed: {e}")
+            logger.exception("Fallback futures balance failed: %s", e)
             raise BalanceRetrievalError(
                 f"Fallback futures balance retrieval failed: {e}",
                 account_type="CFM",
@@ -2735,7 +2671,7 @@ class CoinbaseClient(BaseExchange):
             return account_info
 
         except Exception as e:
-            logger.exception(f"Failed to get futures account info: {e}")
+            logger.exception("Failed to get futures account info: %s", e)
             return None
 
     async def get_margin_info(self) -> MarginInfo:
@@ -2831,7 +2767,7 @@ class CoinbaseClient(BaseExchange):
             return margin_info
 
         except Exception as e:
-            logger.exception(f"Failed to get margin info: {e}")
+            logger.exception("Failed to get margin info: %s", e)
             # Return default margin info
             return MarginInfo(
                 total_margin=Decimal("0"),
@@ -2875,10 +2811,10 @@ class CoinbaseClient(BaseExchange):
             )
 
             # Execute transfer via Coinbase API
-            logger.info(f"Transferring ${amount} from spot to futures for {reason}")
+            logger.info("Transferring $%s from spot to futures for %s", amount, reason)
 
             if self.dry_run:
-                logger.info(f"PAPER TRADING: Simulating transfer ${amount} CBI -> CFM")
+                logger.info("PAPER TRADING: Simulating transfer $%s CBI -> CFM", amount)
                 return True
 
             # Check if client is available
@@ -2899,7 +2835,7 @@ class CoinbaseClient(BaseExchange):
                     self._client.schedule_futures_sweep, usd_amount=str(amount)
                 )
 
-                logger.info(f"Successfully scheduled futures sweep for ${amount}")
+                logger.info("Successfully scheduled futures sweep for $%s", amount)
 
                 # Wait a bit for the sweep to process
                 await asyncio.sleep(3)
@@ -2913,18 +2849,18 @@ class CoinbaseClient(BaseExchange):
                         balance_resp.balance_summary.cfm_usd_balance["value"]
                     )
                     if cfm_balance > 0:
-                        logger.info(f"Transfer completed. CFM balance: ${cfm_balance}")
+                        logger.info("Transfer completed. CFM balance: $%s", cfm_balance)
                         return True
 
                 logger.warning("Transfer scheduled but not yet completed")
                 return True  # Return true since sweep was scheduled
 
             except Exception as e:
-                logger.exception(f"Failed to schedule futures sweep: {e}")
+                logger.exception("Failed to schedule futures sweep: %s", e)
                 return False
 
         except Exception as e:
-            logger.exception(f"Failed to transfer cash to futures: {e}")
+            logger.exception("Failed to transfer cash to futures: %s", e)
             return False
 
     async def get_futures_positions(self, symbol: str | None = None) -> list[Position]:
@@ -3001,11 +2937,11 @@ class CoinbaseClient(BaseExchange):
                     )
                     positions.append(position)
 
-            logger.debug(f"Retrieved {len(positions)} futures positions")
+            logger.debug("Retrieved %s futures positions", len(positions))
             return positions
 
         except Exception as e:
-            logger.exception(f"Failed to get futures positions: {e}")
+            logger.exception("Failed to get futures positions: %s", e)
             # Fallback to regular positions API
             return await self.get_positions(symbol)
 
@@ -3057,11 +2993,11 @@ class CoinbaseClient(BaseExchange):
                     )
                     positions.append(position)
 
-            logger.debug(f"Retrieved {len(positions)} positions")
+            logger.debug("Retrieved %s positions", len(positions))
             return positions
 
         except Exception as e:
-            logger.exception(f"Failed to get positions: {e}")
+            logger.exception("Failed to get positions: %s", e)
             raise ExchangeConnectionError(f"Failed to get positions: {e}") from e
 
     async def cancel_order(self, order_id: str) -> bool:
@@ -3075,7 +3011,7 @@ class CoinbaseClient(BaseExchange):
             True if successful
         """
         if self.dry_run:
-            logger.info(f"PAPER TRADING: Simulating cancel order {order_id}")
+            logger.info("PAPER TRADING: Simulating cancel order %s", order_id)
             return True
 
         try:
@@ -3083,7 +3019,7 @@ class CoinbaseClient(BaseExchange):
             if self._client is None:
                 raise ExchangeConnectionError("Exchange client not initialized")
 
-            logger.info(f"Cancelling order: {order_id}")
+            logger.info("Cancelling order: %s", order_id)
             result = await self._retry_request(
                 self._client.cancel_orders, order_ids=[order_id]
             )
@@ -3099,14 +3035,14 @@ class CoinbaseClient(BaseExchange):
             cancelled_orders = result.get("results", [])
             for cancelled in cancelled_orders:
                 if cancelled.get("order_id") == order_id and cancelled.get("success"):
-                    logger.info(f"Order {order_id} cancelled successfully")
+                    logger.info("Order %s cancelled successfully", order_id)
                     return True
 
-            logger.warning(f"Order {order_id} cancellation may have failed")
+            logger.warning("Order %s cancellation may have failed", order_id)
             return False
 
         except Exception as e:
-            logger.exception(f"Failed to cancel order {order_id}: {e}")
+            logger.exception("Failed to cancel order %s: %s", order_id, e)
             return False
 
     async def cancel_all_orders(
@@ -3123,9 +3059,7 @@ class CoinbaseClient(BaseExchange):
             True if successful
         """
         if self.dry_run:
-            logger.info(
-                f"PAPER TRADING: Simulating cancel all orders{' for ' + symbol if symbol else ''}"
-            )
+            logger.info("PAPER TRADING: Simulating cancel all orders%s", ' for ' + symbol if symbol else '')
             return True
 
         try:
@@ -3151,14 +3085,10 @@ class CoinbaseClient(BaseExchange):
                     orders_to_cancel.append(order_id)
 
             if not orders_to_cancel:
-                logger.info(
-                    f"No open orders to cancel{' for ' + symbol if symbol else ''}"
-                )
+                logger.info("No open orders to cancel%s", ' for ' + symbol if symbol else '')
                 return True
 
-            logger.info(
-                f"Cancelling {len(orders_to_cancel)} orders{' for ' + symbol if symbol else ''}"
-            )
+            logger.info("Cancelling %s orders%s", len(orders_to_cancel), ' for ' + symbol if symbol else '')
             result = await self._retry_request(
                 self._client.cancel_orders, order_ids=orders_to_cancel
             )
@@ -3169,13 +3099,11 @@ class CoinbaseClient(BaseExchange):
                 if cancelled.get("success"):
                     successful_cancellations += 1
 
-            logger.info(
-                f"Successfully cancelled {successful_cancellations}/{len(orders_to_cancel)} orders"
-            )
+            logger.info("Successfully cancelled %s/%s orders", successful_cancellations, len(orders_to_cancel))
             return successful_cancellations == len(orders_to_cancel)
 
         except Exception as e:
-            logger.exception(f"Failed to cancel orders: {e}")
+            logger.exception("Failed to cancel orders: %s", e)
             return False
 
     async def get_order_status(self, order_id: str) -> OrderStatus | None:
@@ -3216,12 +3144,12 @@ class CoinbaseClient(BaseExchange):
             }
 
             status = status_mapping.get(status_str, OrderStatus.PENDING)
-            logger.debug(f"Order {order_id} status: {status_str} -> {status}")
+            logger.debug("Order %s status: %s -> %s", order_id, status_str, status)
 
             return status
 
         except Exception as e:
-            logger.exception(f"Failed to get order status for {order_id}: {e}")
+            logger.exception("Failed to get order status for %s: %s", order_id, e)
             return None
 
     def is_connected(self) -> bool:
@@ -3381,7 +3309,7 @@ class CoinbaseClient(BaseExchange):
                             volume += size * price
 
             except Exception as e:
-                logger.warning(f"Failed to get fills for volume calculation: {e}")
+                logger.warning("Failed to get fills for volume calculation: %s", e)
                 # Fallback to basic tier
                 volume = Decimal("0")
 
@@ -3410,13 +3338,11 @@ class CoinbaseClient(BaseExchange):
             elif volume >= 10000:
                 tier = "Active"
 
-            logger.info(
-                f"Updated monthly trading volume: ${volume:,.2f} (Tier: {tier})"
-            )
+            logger.info("Updated monthly trading volume: $%s (Tier: %s)", volume:,.2f, tier)
             return volume
 
         except Exception as e:
-            logger.exception(f"Failed to get monthly volume: {e}")
+            logger.exception("Failed to get monthly volume: %s", e)
             return self._monthly_volume
 
     def get_current_fee_rates(self) -> dict[str, float]:

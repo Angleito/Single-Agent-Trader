@@ -180,9 +180,7 @@ class WebSearchFormatter:
         # Content deduplication tracking
         self._content_hashes = set()
 
-        logger.info(
-            f"WebSearchFormatter initialized with {max_tokens_per_section} tokens per section"
-        )
+        logger.info("WebSearchFormatter initialized with %s tokens per section", max_tokens_per_section)
 
     async def format_news_results(self, news_items: list[dict]) -> str:
         """
@@ -198,7 +196,7 @@ class WebSearchFormatter:
             if not news_items:
                 return "📰 **NEWS ANALYSIS**\n\nNo recent news data available for analysis.\n"
 
-            logger.info(f"Formatting {len(news_items)} news items")
+            logger.info("Formatting %s news items", len(news_items))
 
             # Process and prioritize news items
             processed_items = await self._process_news_items(news_items)
@@ -537,7 +535,7 @@ class WebSearchFormatter:
             if isinstance(result, FormattedContent):
                 processed_items.append(result)
             elif isinstance(result, Exception):
-                logger.warning(f"Error processing news item: {result}")
+                logger.warning("Error processing news item: %s", result)
 
         return processed_items
 

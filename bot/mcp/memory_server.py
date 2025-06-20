@@ -106,7 +106,7 @@ class MCPMemoryServer:
         # Initialize trade logger
         self.trade_logger = TradeLogger()
 
-        logger.info(f"🧠 MCP Memory Server: Initialized client for {self.server_url}")
+        logger.info("🧠 MCP Memory Server: Initialized client for %s", self.server_url)
 
     async def connect(self) -> bool:
         """Connect to the MCP memory server."""
@@ -135,11 +135,11 @@ class MCPMemoryServer:
                     await self._load_local_cache()
                     return True
                 else:
-                    logger.warning(f"MCP server returned status {response.status}")
+                    logger.warning("MCP server returned status %s", response.status)
                     return False
 
         except Exception as e:
-            logger.exception(f"Failed to connect to MCP memory server: {e}")
+            logger.exception("Failed to connect to MCP memory server: %s", e)
             # Fall back to local-only mode
             await self._load_local_cache()
             return False
@@ -206,28 +206,23 @@ class MCPMemoryServer:
             try:
                 await self._store_remote(experience)
             except Exception as e:
-                logger.exception(f"Failed to store experience remotely: {e}")
+                logger.exception("Failed to store experience remotely: %s", e)
 
         # Persist locally
         await self._save_experience_local(experience)
 
-        logger.info(
-            f"💾 MCP Memory: Stored experience {experience.experience_id[:8]}... | "
-            f"Action: {trade_action.action} | Price: ${market_state.current_price} | "
-            f"Symbol: {market_state.symbol} | Patterns: {', '.join(experience.pattern_tags)}"
+        logger.info("💾 MCP Memory: Stored experience %s... | " "Action: %s | Price: $%s | " "Symbol: %s | Patterns: %s", experience.experience_id[:8], trade_action.action, market_state.current_price, market_state.symbol, ', '.join(experience.pattern_tags))
         )
 
         # Log detailed indicators if available
         if experience.indicators:
-            logger.debug(
-                f"MCP Memory: Indicators - RSI: {experience.indicators.get('rsi', 'N/A'):.1f}, "
+            logger.debug("MCP Memory: Indicators - RSI: %s, ", experience.indicators.get('rsi', 'N/A'):.1f)
                 f"Cipher B: {experience.indicators.get('cipher_b_wave', 'N/A'):.1f}, "
                 f"EMA Trend: {'Bull' if experience.indicators.get('ema_fast', 0) > experience.indicators.get('ema_slow', 0) else 'Bear'}"
             )
 
         if experience.dominance_data:
-            logger.debug(
-                f"MCP Memory: Dominance - Stablecoin: {experience.dominance_data.get('stablecoin_dominance', 'N/A'):.2f}%, "
+            logger.debug("MCP Memory: Dominance - Stablecoin: %s%, ", experience.dominance_data.get('stablecoin_dominance', 'N/A'):.2f)
                 f"USDT: {experience.dominance_data.get('usdt_dominance', 'N/A'):.2f}%"
             )
 
@@ -263,7 +258,7 @@ class MCPMemoryServer:
             True if update successful
         """
         if experience_id not in self.memory_cache:
-            logger.warning(f"Experience {experience_id} not found in cache")
+            logger.warning("Experience %s not found in cache", experience_id)
             return False
 
         experience = self.memory_cache[experience_id]
@@ -308,14 +303,12 @@ class MCPMemoryServer:
         # Persist locally
         await self._save_experience_local(experience)
 
-        logger.info(
-            f"📊 MCP Memory: Updated experience {experience_id[:8]}... with outcome | "
-            f"PnL: ${pnl:.2f} ({'✅ WIN' if experience.outcome['success'] else '❌ LOSS'}) | "
+        logger.info("📊 MCP Memory: Updated experience %s... with outcome | " "PnL: $%s (%s) | ", experience_id[:8], pnl:.2f, '✅ WIN' if experience.outcome['success'] else '❌ LOSS')
             f"Duration: {duration_minutes:.1f}min | Price Change: {price_change_pct:+.2f}%"
         )
 
         if experience.learned_insights:
-            logger.debug(f"MCP Memory: Insights - {experience.learned_insights}")
+            logger.debug("MCP Memory: Insights - %s", experience.learned_insights)
 
         return True
 
@@ -367,8 +360,7 @@ class MCPMemoryServer:
         # Calculate execution time
         execution_time_ms = (time.time() - start_time) * 1000
 
-        logger.info(
-            f"🔍 MCP Memory: Query completed | Found {len(results)} similar experiences "
+        logger.info("🔍 MCP Memory: Query completed | Found %s similar experiences ", len(results))
             f"(from {len(self.memory_cache)} total) | Time: {execution_time_ms:.1f}ms"
         )
 
@@ -377,9 +369,7 @@ class MCPMemoryServer:
             top_result = scored_experiences[0] if scored_experiences else None
             if top_result:
                 similarity, exp = top_result
-                logger.debug(
-                    f"MCP Memory: Best match - Similarity: {similarity:.3f} | "
-                    f"Action: {exp.decision.get('action')} | "
+                logger.debug("MCP Memory: Best match - Similarity: %s | " "Action: %s | ", similarity:.3f, exp.decision.get('action'))
                     f"Outcome: {'WIN' if exp.outcome and exp.outcome['success'] else 'LOSS'} | "
                     f"PnL: ${exp.outcome['pnl']:.2f}"
                     if exp.outcome
@@ -767,9 +757,9 @@ class MCPMemoryServer:
                 timeout=aiohttp.ClientTimeout(total=5),
             ) as response:
                 if response.status != 201:
-                    logger.warning(f"Failed to store remotely: {response.status}")
+                    logger.warning("Failed to store remotely: %s", response.status)
         except Exception as e:
-            logger.exception(f"Remote storage error: {e}")
+            logger.exception("Remote storage error: %s", e)
 
     async def _update_remote(self, experience: TradingExperience) -> None:
         """Update experience on remote MCP server."""
@@ -781,9 +771,7 @@ class MCPMemoryServer:
         headers["Content-Type"] = "application/json"
 
         try:
-            logger.debug(
-                f"Updating remote experience {experience.experience_id[:8]}..."
-            )
+            logger.debug("Updating remote experience %s...", experience.experience_id[:8])
             async with self._session.put(
                 f"{self.server_url}/memories/{experience.experience_id}",
                 headers=headers,
@@ -791,19 +779,15 @@ class MCPMemoryServer:
                 timeout=aiohttp.ClientTimeout(total=5),
             ) as response:
                 if response.status not in [200, 204]:
-                    logger.warning(f"Failed to update remotely: {response.status}")
+                    logger.warning("Failed to update remotely: %s", response.status)
                 else:
-                    logger.debug(
-                        f"Remote update successful for {experience.experience_id[:8]}"
-                    )
+                    logger.debug("Remote update successful for %s", experience.experience_id[:8])
         except TimeoutError:
-            logger.warning(
-                f"Remote update timed out for {experience.experience_id[:8]}"
-            )
+            logger.warning("Remote update timed out for %s", experience.experience_id[:8])
         except aiohttp.ClientError as e:
-            logger.warning(f"Remote update network error: {e}")
+            logger.warning("Remote update network error: %s", e)
         except Exception as e:
-            logger.exception(f"Remote update error: {e}")
+            logger.exception("Remote update error: %s", e)
 
     async def __aenter__(self) -> "MCPMemoryServer":
         """Async context manager entry."""
@@ -837,7 +821,7 @@ class MCPMemoryServer:
                 None, lambda: file_path.write_text(experience.json(indent=2))
             )
         except Exception as e:
-            logger.exception(f"Failed to save experience locally: {e}")
+            logger.exception("Failed to save experience locally: %s", e)
 
     async def _load_local_cache(self) -> None:
         """Load experiences from local storage into cache."""
@@ -854,10 +838,10 @@ class MCPMemoryServer:
                             self.pattern_index[pattern] = []
                         self.pattern_index[pattern].append(experience.experience_id)
 
-            logger.info(f"Loaded {len(self.memory_cache)} experiences from local cache")
+            logger.info("Loaded %s experiences from local cache", len(self.memory_cache))
 
         except Exception as e:
-            logger.exception(f"Failed to load local cache: {e}")
+            logger.exception("Failed to load local cache: %s", e)
 
     async def _save_local_cache(self) -> None:
         """Save current cache to local storage."""
@@ -902,7 +886,7 @@ class MCPMemoryServer:
 
             removed_count += 1
 
-        logger.info(f"Cleaned up {removed_count} old memories")
+        logger.info("Cleaned up %s old memories", removed_count)
         return removed_count
 
 

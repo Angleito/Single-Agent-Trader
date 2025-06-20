@@ -221,9 +221,9 @@ class LoadTestSuite:
             try:
                 result = await test()
                 results.append(result)
-                logger.info(f"Completed test: {result.test_name}")
+                logger.info("Completed test: %s", result.test_name)
             except Exception as e:
-                logger.exception(f"Test failed: {test.__name__} - {e}")
+                logger.exception("Test failed: %s - %s", test.__name__, e)
                 # Create a failure result
                 failure_result = LoadTestResult(
                     test_name=test.__name__,
@@ -293,7 +293,7 @@ class LoadTestSuite:
                 response_times.append((op_end - op_start) * 1000)
                 successful_ops += 1
             except Exception as e:
-                logger.warning(f"Batch processing failed: {e}")
+                logger.warning("Batch processing failed: %s", e)
                 failed_ops += 1
 
         end_time = time.perf_counter()
@@ -367,7 +367,7 @@ class LoadTestSuite:
                     response_times.append(response_time)
                     successful_ops += 1
                 except Exception as e:
-                    logger.warning(f"Concurrent calculation failed: {e}")
+                    logger.warning("Concurrent calculation failed: %s", e)
                     failed_ops += 1
 
         end_time = time.perf_counter()
@@ -447,7 +447,7 @@ class LoadTestSuite:
 
         for result in results:
             if isinstance(result, Exception):
-                logger.warning(f"LLM analysis failed: {result}")
+                logger.warning("LLM analysis failed: %s", result)
                 failed_ops += 1
             else:
                 response_times.append(result)
@@ -524,7 +524,7 @@ class LoadTestSuite:
                 response_times.append((op_end - op_start) * 1000)
                 successful_ops += 1
             except Exception as e:
-                logger.warning(f"Memory leak test operation failed: {e}")
+                logger.warning("Memory leak test operation failed: %s", e)
                 failed_ops += 1
 
             operation_count += 1
@@ -620,7 +620,7 @@ class LoadTestSuite:
                     response_times.append(response_time)
                     successful_ops += 1
                 except Exception as e:
-                    logger.warning(f"Sustained load operation failed: {e}")
+                    logger.warning("Sustained load operation failed: %s", e)
                     failed_ops += 1
 
                 next_operation_time += interval
@@ -672,7 +672,7 @@ class LoadTestSuite:
         num_bursts = 3
 
         for burst_num in range(num_bursts):
-            logger.info(f"Executing burst {burst_num + 1}/{num_bursts}")
+            logger.info("Executing burst %s/%s", burst_num + 1, num_bursts)
 
             # Create burst of operations
             tasks = []
@@ -688,15 +688,13 @@ class LoadTestSuite:
             # Process results
             for result in results:
                 if isinstance(result, Exception):
-                    logger.warning(f"Burst operation failed: {result}")
+                    logger.warning("Burst operation failed: %s", result)
                     failed_ops += 1
                 else:
                     response_times.append(result)
                     successful_ops += 1
 
-            logger.info(
-                f"Burst {burst_num + 1} completed in {burst_end - burst_start:.2f}s"
-            )
+            logger.info("Burst %s completed in %ss", burst_num + 1, burst_end - burst_start:.2f)
 
             # Wait before next burst
             if burst_num < num_bursts - 1:
@@ -800,7 +798,7 @@ class LoadTestSuite:
                 recovery_times.append((recovery_end - recovery_start) * 1000)
                 failed_ops += 1
 
-                logger.debug(f"Error recovery for: {type(e).__name__}")
+                logger.debug("Error recovery for: %s", type(e).__name__)
 
         end_time = time.perf_counter()
         current_memory, peak_memory = tracemalloc.get_traced_memory()
@@ -846,7 +844,7 @@ class LoadTestSuite:
         max_load = 20
 
         while current_load <= max_load:
-            logger.info(f"Testing load level: {current_load}")
+            logger.info("Testing load level: %s", current_load)
 
             # Create operations at current load level
             tasks = []
@@ -875,14 +873,12 @@ class LoadTestSuite:
             # Check memory usage
             current_mem = self.process.memory_info().rss / 1024 / 1024
             if current_mem > initial_memory * 5:  # 5x memory increase
-                logger.warning(f"Memory limit approached at load level {current_load}")
+                logger.warning("Memory limit approached at load level %s", current_load)
                 break
 
             # Check response time degradation
             if load_time > 30000:  # 30 second threshold
-                logger.warning(
-                    f"Response time limit exceeded at load level {current_load}"
-                )
+                logger.warning("Response time limit exceeded at load level %s", current_load)
                 break
 
             current_load += 2
