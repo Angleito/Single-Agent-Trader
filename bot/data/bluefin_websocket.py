@@ -132,7 +132,19 @@ class BluefinWebSocketClient:
         self._message_count = 0
         self._error_count = 0
 
-        logger.info("Initialized BluefinWebSocketClient for %s with %s candles on %s network", extra=%s ), symbol, interval, self.network,  "symbol": symbol, "interval": interval, "network": self.network, "notification_ws_url": self.NOTIFICATION_WS_URL, "dapi_ws_url": self.DAPI_WS_URL, )
+        logger.info(
+            "Initialized BluefinWebSocketClient for %s with %s candles on %s network",
+            symbol,
+            interval,
+            self.network,
+            extra={
+                "symbol": symbol,
+                "interval": interval,
+                "network": self.network,
+                "notification_ws_url": self.NOTIFICATION_WS_URL,
+                "dapi_ws_url": self.DAPI_WS_URL,
+            }
+        )
 
     async def connect(self) -> None:
         """Establish WebSocket connection and start data streaming."""
@@ -267,7 +279,7 @@ class BluefinWebSocketClient:
                 delay = min(delay * 1.5, 120)
                 logger.warning("Multiple consecutive failures (%s), extending delay", consecutive_failures)
 
-            logger.info("Reconnecting to Bluefin in %ss (attempt %s/%s)", delay:.1f, self._reconnect_attempts, self._max_reconnect_attempts)
+            logger.info("Reconnecting to Bluefin in %.1fs (attempt %s/%s)", delay, self._reconnect_attempts, self._max_reconnect_attempts)
 
             await asyncio.sleep(delay)
 
@@ -438,23 +450,23 @@ class BluefinWebSocketClient:
                 if sub_id in self._pending_subscriptions:
                     channel = self._pending_subscriptions.pop(sub_id)
                     self._subscribed_channels.add(channel)
-                    logger.info("Subscription confirmed: %s (ID: %s, result: %s)", channel, sub_id, data['result'])
+                    logger.info("Subscription confirmed: %s (ID: %s, result: %s)", channel, sub_id, data["result"])
                 else:
-                    logger.debug("Subscription %s confirmed: %s", sub_id, data['result'])
+                    logger.debug("Subscription %s confirmed: %s", sub_id, data["result"])
                 return
 
             elif "error" in data:
                 # Subscription error
                 if sub_id in self._pending_subscriptions:
                     channel = self._pending_subscriptions.pop(sub_id)
-                    logger.error("Subscription failed: %s (ID: %s, error: %s)", channel, sub_id, data['error'])
+                    logger.error("Subscription failed: %s (ID: %s, error: %s)", channel, sub_id, data["error"])
                 else:
-                    logger.error("Subscription %s failed: %s", sub_id, data['error'])
+                    logger.error("Subscription %s failed: %s", sub_id, data["error"])
                 return
 
         # Handle error messages
         if "error" in data:
-            logger.error("WebSocket error: %s", data['error'])
+            logger.error("WebSocket error: %s", data["error"])
             return
 
         # Handle Bluefin-specific event names from WebSocket API
@@ -737,7 +749,7 @@ class BluefinWebSocketClient:
                         # Update current candle
                         await self._update_candle_with_trade(trade_data)
 
-                        logger.debug("Trade: %s %s %s @ $%s", self.symbol, trade_data['side'], size, price)
+                        logger.debug("Trade: %s %s %s @ $%s", self.symbol, trade_data["side"], size, price)
 
         except (ValueError, KeyError, TypeError, ArithmeticError) as e:
             exception_handler.log_exception_with_context(

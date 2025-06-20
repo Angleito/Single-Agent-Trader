@@ -288,7 +288,7 @@ class PromptOptimizer:
             elif self.current_strategy == "moderate":
                 self.current_strategy = "aggressive"
 
-            logger.info("Increased compression to %s due to slow response time: %ss", self.current_strategy, avg_response_time:.2f)
+            logger.info("Increased compression to %s due to slow response time: %.2fs", self.current_strategy, avg_response_time)
 
         elif avg_response_time < target_response_time * 0.8:
             # Response time good, can reduce compression for better quality
@@ -297,7 +297,7 @@ class PromptOptimizer:
             elif self.current_strategy == "moderate":
                 self.current_strategy = "conservative"
 
-            logger.info("Reduced compression to %s due to good response time: %ss", self.current_strategy, avg_response_time:.2f)
+            logger.info("Reduced compression to %s due to good response time: %.2fs", self.current_strategy, avg_response_time)
 
         # Apply compression strategy
         compression_ratio = self.compression_strategies[self.current_strategy]

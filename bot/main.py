@@ -724,7 +724,7 @@ class TradingEngine:
             time_since_last_trade = (current_time - last_trade_time).total_seconds()
 
             if time_since_last_trade < min_interval:
-                self.logger.debug("⏱️ Waiting for trade interval: %ss / %ss", time_since_last_trade:.1f, min_interval)
+                self.logger.debug("⏱️ Waiting for trade interval: %.1fs / %ds", time_since_last_trade, min_interval)
                 return False
 
         return True
@@ -992,8 +992,7 @@ class TradingEngine:
                                     if (
                                         stats["count"] >= 3
                                     ):  # Only show patterns with enough samples
-logger.info("  %s: %s win rate " "(%s trades, avg PnL=$%s)", pattern, stats['success_rate']:.1%, stats['count'], stats['avg_pnl']:.2f)
-                                        )
+                                        logger.info("  %s: %.1%% win rate (%s trades, avg PnL=$%.2f)", pattern, stats['success_rate']*100, stats['count'], stats['avg_pnl'])
                         except Exception as e:
                             self.logger.debug("Could not retrieve pattern statistics: %s", e)
 
@@ -1135,14 +1134,13 @@ logger.info("  %s: %s win rate " "(%s trades, avg PnL=$%s)", pattern, stats['suc
                     # For scalping, we don't need 24h of data - just enough for indicators
                     if len(data) >= min_candles_required:
                         hours_available = (len(data) * interval_seconds) / 3600
-                        self.logger.info("✅ Loaded %s historical candles (%s hours at %s intervals) for scalping analysis", len(data), hours_available:.1f, self.interval)
+                        self.logger.info("✅ Loaded %s historical candles (%.1f hours at %s intervals) for scalping analysis", len(data), hours_available, self.interval)
                         historical_data_loaded = True
                         self.trading_enabled = True
                     elif len(data) >= 50:
                         hours_available = (len(data) * interval_seconds) / 3600
-logger.warning("⚠️ Limited data available (%s hours, %s candles). ", hours_available:.2f, len(data))
-                            f"Starting with reduced data for scalping..."
-                        )
+                        logger.warning("⚠️ Limited data available (%.2f hours, %s candles). "
+                            "Starting with reduced data for scalping...", hours_available, len(data))
                         historical_data_loaded = True
                         self.trading_enabled = (
                             True  # Enable for scalping with limited data
@@ -1153,9 +1151,8 @@ logger.warning("⚠️ Limited data available (%s hours, %s candles). ", hours_a
                     self.trading_enabled = True
                 elif len(data) >= 50:
                     # Fallback with warning
-logger.warning("⚠️ Limited historical data available: %s candles. ", len(data))
-                        f"Indicators may be unreliable until more data is accumulated."
-                    )
+                    logger.warning("⚠️ Limited historical data available: %s candles. "
+                        "Indicators may be unreliable until more data is accumulated.", len(data))
                     historical_data_loaded = True
                     self.trading_enabled = (
                         False  # Don't enable trading with limited data
@@ -1204,13 +1201,8 @@ logger.warning("⚠️ Limited historical data available: %s candles. ", len(dat
                         tick_rate = status.get("tick_rate_per_second", 0)
                         current_price = status.get("current_price", "N/A")
 
-logger.info("⏳ Waiting for real-time data... Elapsed: %ss\n", int(elapsed_time))
-                            f"   📊 Current candles: {len(data)} available\n"
-                            f"   🌐 WebSocket connected: {status.get('websocket_connected', False)}\n"
-                            f"   📈 Tick rate: {tick_rate:.1f} ticks/sec\n"
-                            f"   💰 Current price: ${current_price}\n"
-                            f"   ⚡ Trading enabled: {self.trading_enabled}"
-                        )
+                        self.logger.info("⏳ Waiting for real-time data... Elapsed: %ds\n   📊 Current candles: %s available\n   🌐 WebSocket connected: %s\n   📈 Tick rate: %.1f ticks/sec\n   💰 Current price: $%s\n   ⚡ Trading enabled: %s", 
+                                        int(elapsed_time), len(data), status.get('websocket_connected', False), tick_rate, current_price, self.trading_enabled)
                     else:
                         # Standard provider status
                         if self.market_data is not None:
@@ -1226,19 +1218,13 @@ logger.info("⏳ Waiting for real-time data... Elapsed: %ss\n", int(elapsed_time
                             (len(data) * interval_seconds) / 3600 if data else 0
                         )
 
-logger.info("⏳ Waiting for data... Elapsed: %ss\n", int(elapsed_time))
-                            f"   📊 Historical: {len(data)}/{candles_per_24h} candles ({hours_available:.1f}/24 hours)\n"
-                            f"   🌐 WebSocket connected: {status.get('websocket_connected', False)}\n"
-                            f"   📈 WebSocket data: {status.get('websocket_data_received', False)}\n"
-                            f"   💰 Latest price: ${status.get('latest_price', 'N/A')}\n"
-                            f"   ⚡ Trading enabled: {self.trading_enabled}"
-                        )
+                        self.logger.info("⏳ Waiting for data... Elapsed: %ds\n   📊 Historical: %s/%s candles (%.1f/24 hours)\n   🌐 WebSocket connected: %s\n   📈 WebSocket data: %s\n   💰 Latest price: $%s\n   ⚡ Trading enabled: %s", 
+                                        int(elapsed_time), len(data), candles_per_24h, hours_available, status.get('websocket_connected', False), 
+                                        status.get('websocket_data_received', False), status.get('latest_price', 'N/A'), self.trading_enabled)
                 except ImportError:
                     # RealtimeMarketDataProvider not available, just log basic info
-logger.info("⏳ Waiting for data... Elapsed: %ss\n", int(elapsed_time))
-                        f"   📊 Current candles: {len(data)} available\n"
-                        f"   ⚡ Trading enabled: {self.trading_enabled}"
-                    )
+                    self.logger.info("⏳ Waiting for data... Elapsed: %ds\n   📊 Current candles: %s available\n   ⚡ Trading enabled: %s", 
+                                    int(elapsed_time), len(data), self.trading_enabled)
 
             await asyncio.sleep(1)
 
@@ -1562,9 +1548,7 @@ logger.info("⏳ Waiting for data... Elapsed: %ss\n", int(elapsed_time))
 
                 # Validate data sufficiency before indicator calculation
                 if len(df) < 100:
-logger.warning("Insufficient data for reliable indicators: %s candles. ", len(df))
-                        f"Using fallback values until more data is available."
-                    )
+                    self.logger.warning("Insufficient data for reliable indicators: %s candles. Using fallback values until more data is available.", len(df))
                     indicator_state = self._get_fallback_indicator_state()
                 else:
                     # Calculate indicators with dominance candle support - add error boundary
@@ -1760,7 +1744,7 @@ logger.warning("Insufficient data for reliable indicators: %s candles. ", len(df
                 self.logger.info("⚡ Scalping analysis: %s candle at %s - Price: $%s", self.interval, latest_candle.timestamp.strftime('%H:%M:%S.%f')[:-3], current_price)
 
                 # Get LLM trading decision with performance tracking
-logger.debug("🤔 Requesting trading decision from " "%s LLM Agent" ), 'Memory-Enhanced' if self._memory_available else 'Standard')
+                self.logger.debug("🤔 Requesting trading decision from %s LLM Agent", 'Memory-Enhanced' if self._memory_available else 'Standard')
                 with self.performance_monitor.track_operation(
                     "llm_response",
                     {
@@ -1843,9 +1827,8 @@ logger.debug("🤔 Requesting trading decision from " "%s LLM Agent" ), 'Memory-
                     # Validate the trade action for basic structure only
                     validated_action = self.validator.validate(trade_action)
 
-logger.info("Loop %s: Price=$%s | " "LLM=%s | " "Action=%s (%s%) | ", loop_count, current_price, trade_action.action, validated_action.action, validated_action.size_pct)
-                        f"Risk=LLM_OVERRIDE - AI has final say"
-                    )
+                    self.logger.info("Loop %s: Price=$%s | LLM=%s | Action=%s (%s%%) | Risk=LLM_OVERRIDE - AI has final say", 
+                                    loop_count, current_price, trade_action.action, validated_action.action, validated_action.size_pct)
 
                     # Execute LLM decision immediately without risk management filtering
                     await self._execute_trade(
@@ -1867,9 +1850,8 @@ logger.info("Loop %s: Price=$%s | " "LLM=%s | " "Action=%s (%s%) | ", loop_count
                         )
                     )
 
-logger.info("Loop %s: Price=$%s | " "LLM=%s | " "Action=%s (%s%) | ", loop_count, current_price, trade_action.action, final_action.action, final_action.size_pct)
-                        f"Risk={risk_reason}"
-                    )
+                    self.logger.info("Loop %s: Price=$%s | LLM=%s | Action=%s (%s%%) | Risk=%s", 
+                                    loop_count, current_price, trade_action.action, final_action.action, final_action.size_pct, risk_reason)
 
                     # Execute trade if approved
                     if risk_approved and final_action.action != "HOLD":
@@ -1920,7 +1902,7 @@ logger.info("Loop %s: Price=$%s | " "LLM=%s | " "Action=%s (%s%) | ", loop_count
                                 if (
                                     stats["count"] >= 2
                                 ):  # Show patterns with at least 2 samples
-logger.info("  📈 %s: %s win rate | " "%s trades | Avg PnL: $%s" ), pattern, stats['success_rate']:.1%, stats['count'], stats['avg_pnl']:.2f)
+                                    self.logger.info("  📈 %s: %.1f%% win rate | %s trades | Avg PnL: $%.2f", pattern, stats['success_rate']*100, stats['count'], stats['avg_pnl'])
                     except Exception as e:
                         self.logger.debug("Could not retrieve pattern statistics: %s", e)
 
@@ -1928,13 +1910,13 @@ logger.info("  📈 %s: %s win rate | " "%s trades | Avg PnL: $%s" ), pattern, s
                 if (datetime.now(UTC) - last_status_log).total_seconds() > 120:
                     if self.market_data is not None:
                         data_status = self.market_data.get_data_status()
-logger.info("🔄 Trading Status: Loop #%s | " "WebSocket: %s | ", loop_count, '✓' if data_status.get('websocket_connected') else '✗')
-                            f"Latest Price: ${data_status.get('latest_price', 'N/A')} | "
-                            f"OmniSearch: {'✓ Active' if hasattr(self, 'omnisearch_client') else '✗ Disabled'}"
-                        )
+                        self.logger.info("🔄 Trading Status: Loop #%s | WebSocket: %s | Latest Price: $%s | OmniSearch: %s", 
+                                        loop_count, '✓' if data_status.get('websocket_connected') else '✗', 
+                                        data_status.get('latest_price', 'N/A'), 
+                                        '✓ Active' if hasattr(self, 'omnisearch_client') else '✗ Disabled')
                     else:
-logger.info("🔄 Trading Status: Loop #%s | " "Market Data: ✗ Not Initialized | " "OmniSearch: %s", loop_count, '✓ Active' if hasattr(self, 'omnisearch_client') else '✗ Disabled')
-                        )
+                        self.logger.info("🔄 Trading Status: Loop #%s | Market Data: ✗ Not Initialized | OmniSearch: %s", 
+                                        loop_count, '✓ Active' if hasattr(self, 'omnisearch_client') else '✗ Disabled')
                     last_status_log = datetime.now(UTC)
 
                 # Update paper trading performance periodically (every 10 loops or ~150 seconds)
@@ -1984,7 +1966,7 @@ logger.info("🔄 Trading Status: Loop #%s | " "Market Data: ✗ Not Initialized
 
                 # Implement exponential backoff for error recovery
                 error_sleep = min(30, 1 * (loop_count % 5 + 1))
-                self.logger.info("Waiting %ss before retry...", error_sleep)
+                self.logger.info("Waiting %ds before retry...", error_sleep)
                 await asyncio.sleep(error_sleep)
                 continue
 
@@ -2039,7 +2021,7 @@ logger.info("🔄 Trading Status: Loop #%s | " "Market Data: ✗ Not Initialized
             experience_id: Experience ID if trade decision was recorded
         """
         try:
-logger.info("📦 Executing trade: %s %s% | " "Experience ID: %s..." ), trade_action.action, trade_action.size_pct, experience_id[:8] if experience_id else 'None')
+            self.logger.info("📦 Executing trade: %s %s%% | Experience ID: %s...", trade_action.action, trade_action.size_pct, experience_id[:8] if experience_id else 'None')
             self.logger.debug("Trade execution started at %s", datetime.now(UTC).isoformat())
 
             # Track trade execution performance
@@ -2054,7 +2036,7 @@ logger.info("📦 Executing trade: %s %s% | " "Experience ID: %s..." ), trade_ac
                 "LONG",
                 "SHORT",
             ]:
-logger.warning("Cannot open new %s position - already have " "%s position with size %s" ), trade_action.action, self.current_position.side, self.current_position.size)
+                self.logger.warning("Cannot open new %s position - already have %s position with size %s", trade_action.action, self.current_position.side, self.current_position.size)
                 console.print(
                     f"[yellow]⚠ Trade rejected: Already have open {self.current_position.side} position[/yellow]"
                 )
@@ -2202,8 +2184,7 @@ logger.warning("Cannot open new %s position - already have " "%s position with s
                     # Log paper trading account status if in dry run
                     if self.dry_run and self.paper_account:
                         account_status = self.paper_account.get_account_status()
-logger.info("Paper account: $%s equity, " "P&L: $%s " "(%s%)", account_status['equity']:,.2f, account_status['total_pnl']:,.2f, account_status['roi_percent']:.2f)
-                        )
+                        self.logger.info("Paper account: $%,.2f equity, P&L: $%,.2f (%.2f%%)", account_status['equity'], account_status['total_pnl'], account_status['roi_percent'])
 
                     self.logger.debug("Trade execution completed at %s", datetime.now(UTC).isoformat())
                 else:
@@ -2817,7 +2798,7 @@ logger.info("Paper account: $%s equity, " "P&L: $%s " "(%s%)", account_status['e
                             or Decimal("0"),
                         )
 
-logger.info("Reconciled position: %s %s %s " "at $%s" ), position_side, size, self.actual_trading_symbol, self.current_position.entry_price)
+                        self.logger.info("Reconciled position: %s %s %s at $%s", position_side, size, self.actual_trading_symbol, self.current_position.entry_price)
                         console.print(
                             f"    [yellow]⚠ Found existing {position_side} position: "
                             f"{size} {self.actual_trading_symbol} at ${self.current_position.entry_price}[/yellow]"
@@ -2991,14 +2972,12 @@ logger.info("Reconciled position: %s %s %s " "at $%s" ), position_side, size, se
             if trade_action.action == "LONG":
                 # Require both wave and money flow to be bullish
                 if wave_bullish and money_flow_bullish:
-logger.info("Cipher B filter: LONG signal CONFIRMED - " "Wave: %s (bullish), ", cipher_b_wave:.2f)
-                        f"Money Flow: {cipher_b_money_flow:.2f} (bullish)"
-                    )
+                    self.logger.info("Cipher B filter: LONG signal CONFIRMED - Wave: %.2f (bullish), Money Flow: %.2f (bullish)", cipher_b_wave, cipher_b_money_flow)
                     return trade_action
                 else:
-logger.info("Cipher B filter: LONG signal FILTERED OUT - " "Wave: %s (%s), ", cipher_b_wave:.2f, 'bullish' if wave_bullish else 'bearish')
-                        f"Money Flow: {cipher_b_money_flow:.2f} ({'bullish' if money_flow_bullish else 'bearish'})"
-                    )
+                    self.logger.info("Cipher B filter: LONG signal FILTERED OUT - Wave: %.2f (%s), Money Flow: %.2f (%s)", 
+                                    cipher_b_wave, 'bullish' if wave_bullish else 'bearish', 
+                                    cipher_b_money_flow, 'bullish' if money_flow_bullish else 'bearish')
                     # Convert to HOLD with explanation
                     return TradeAction(
                         action="HOLD",
@@ -3014,14 +2993,12 @@ logger.info("Cipher B filter: LONG signal FILTERED OUT - " "Wave: %s (%s), ", ci
             elif trade_action.action == "SHORT":
                 # Require both wave and money flow to be bearish
                 if wave_bearish and money_flow_bearish:
-logger.info("Cipher B filter: SHORT signal CONFIRMED - " "Wave: %s (bearish), ", cipher_b_wave:.2f)
-                        f"Money Flow: {cipher_b_money_flow:.2f} (bearish)"
-                    )
+                    self.logger.info("Cipher B filter: SHORT signal CONFIRMED - Wave: %.2f (bearish), Money Flow: %.2f (bearish)", cipher_b_wave, cipher_b_money_flow)
                     return trade_action
                 else:
-logger.info("Cipher B filter: SHORT signal FILTERED OUT - " "Wave: %s (%s), ", cipher_b_wave:.2f, 'bearish' if wave_bearish else 'bullish')
-                        f"Money Flow: {cipher_b_money_flow:.2f} ({'bearish' if money_flow_bearish else 'bullish'})"
-                    )
+                    self.logger.info("Cipher B filter: SHORT signal FILTERED OUT - Wave: %.2f (%s), Money Flow: %.2f (%s)", 
+                                    cipher_b_wave, 'bearish' if wave_bearish else 'bullish', 
+                                    cipher_b_money_flow, 'bearish' if money_flow_bearish else 'bullish')
                     # Convert to HOLD with explanation
                     return TradeAction(
                         action="HOLD",

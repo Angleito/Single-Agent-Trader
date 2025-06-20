@@ -2836,7 +2836,7 @@ class ConfigurationMonitor:
             for callback in self.change_callbacks:
                 try:
                     callback(self.settings, self.initial_hash, current_hash)
-                except Exception as e:
+                except Exception:
                     logger.exception("Error in configuration change callback")
 
             self.initial_hash = current_hash

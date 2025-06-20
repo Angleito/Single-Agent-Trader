@@ -323,7 +323,7 @@ class WebSocketPublisher:
         if self._consecutive_failures > 3:
             delay = min(delay * 1.5, 120)  # Extended delay for persistent issues
 
-        logger.warning("Reconnecting in %ss (attempt %s/%s, failures: %s)", delay:.1f, self._retry_count, self.max_retries, self._consecutive_failures)
+        logger.warning("Reconnecting in %.1fs (attempt %s/%s, failures: %s)", delay, self._retry_count, self.max_retries, self._consecutive_failures)
 
         await asyncio.sleep(delay)
 
@@ -382,12 +382,10 @@ class WebSocketPublisher:
                 current_time = time.time()
                 if current_time - self._queue_stats["last_queue_warning"] > 30:
                     self._queue_stats["last_queue_warning"] = current_time
-                    logger.warning("Message queue full (size: %s/%s), ", current_queue_size, self.queue_size)
-                        f"dropping {message_type} message. "
-                        f"Stats: sent={self._queue_stats['messages_sent']}, "
-                        f"dropped={self._queue_stats['messages_dropped']}, "
-                        f"queue_full_events={self._queue_stats['queue_full_events']}"
-                    )
+                    logger.warning("Message queue full (size: %s/%s), dropping %s message. Stats: sent=%s, dropped=%s, queue_full_events=%s", 
+                                  current_queue_size, self.queue_size, message_type, 
+                                  self._queue_stats['messages_sent'], self._queue_stats['messages_dropped'], 
+                                  self._queue_stats['queue_full_events'])
 
                 # For critical messages, try to make room by dropping older non-priority messages
                 if is_priority and current_queue_size > self.queue_size * 0.9:

@@ -228,7 +228,7 @@ class CommandConsumer:
 
         except aiohttp.ClientError as e:
             logger.debug("Connection error polling for commands: %s", e)
-        except Exception as e:
+        except Exception:
             logger.exception("Unexpected error polling for commands")
 
     async def _process_command(self, cmd_data: dict[str, Any]):

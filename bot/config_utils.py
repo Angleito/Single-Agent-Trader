@@ -659,7 +659,7 @@ class ConfigManager:
             self.create_config_backup(settings, backup_name)
 
         new_settings = settings.apply_profile(new_profile)
-        logger.info("Switched from %s to " "%s profile" ), settings.profile.value, new_profile.value)
+        logger.info("Switched from %s to %s profile", settings.profile.value, new_profile.value)
         return new_settings
 
     def _settings_to_env_format(self, settings: Settings) -> str:

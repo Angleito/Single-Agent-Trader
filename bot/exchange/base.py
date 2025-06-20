@@ -890,7 +890,7 @@ class BaseExchange(ABC):
 
                     return validation_result.get("balance", balance)
 
-                except BalanceValidationError as ve:
+                except BalanceValidationError:
                     logger.exception("Balance validation error")
                     # Return original balance if validation fails but log the issue
                     return balance

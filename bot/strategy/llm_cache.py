@@ -279,8 +279,9 @@ class LLMResponseCache:
             self.stats["hits"] += 1
 
             # Log cache hit for performance monitoring
-            logger.info("🎯 LLM Cache HIT: %s " "(age: %ss, " "hits: %s)", cached_entry.response.action, time.time() - cached_entry.timestamp:.1f, cached_entry.hit_count)
-            )
+            age_seconds = time.time() - cached_entry.timestamp
+            logger.info("🎯 LLM Cache HIT: %s (age: %.1fs, hits: %s)", 
+                       cached_entry.response.action, age_seconds, cached_entry.hit_count)
 
             return cached_entry.response
 
@@ -294,8 +295,7 @@ class LLMResponseCache:
         # Cache the response
         self._store_response(cache_key, response, market_state)
 
-        logger.info("🔄 LLM Cache MISS: %s " "(compute_time: %ss)", response.action, compute_time:.2f)
-        )
+        logger.info("🔄 LLM Cache MISS: %s (compute_time: %.2fs)", response.action, compute_time)
 
         return response
 
@@ -345,8 +345,7 @@ class LLMResponseCache:
 
         self.cache[cache_key] = entry
 
-        logger.debug("Cached LLM response: %s " "(confidence: %s)", response.action, confidence_score:.2f)
-        )
+        logger.debug("Cached LLM response: %s (confidence: %.2f)", response.action, confidence_score)
 
     def _calculate_confidence_score(
         self, response: TradeAction, market_state: MarketState

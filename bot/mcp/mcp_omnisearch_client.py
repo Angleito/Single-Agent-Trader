@@ -327,7 +327,7 @@ class MCPOmniSearchClient:
                 risk_factors=self._extract_risk_factors(response_text),
             )
 
-            logger.info("🔍 MCP-OmniSearch: %s sentiment - %s (score: %s)", base_symbol, sentiment.overall_sentiment, sentiment.sentiment_score:.2f)
+            logger.info("🔍 MCP-OmniSearch: %s sentiment - %s (score: %.2f)", base_symbol, sentiment.overall_sentiment, sentiment.sentiment_score)
             return sentiment
 
         except Exception as e:
@@ -376,7 +376,7 @@ class MCPOmniSearchClient:
                 risk_factors=self._extract_risk_factors(response_text),
             )
 
-            logger.info("🔍 MCP-OmniSearch: NASDAQ sentiment - %s (score: %s)", sentiment.overall_sentiment, sentiment.sentiment_score:.2f)
+            logger.info("🔍 MCP-OmniSearch: NASDAQ sentiment - %s (score: %.2f)", sentiment.overall_sentiment, sentiment.sentiment_score)
             return sentiment
 
         except Exception as e:

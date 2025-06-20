@@ -118,20 +118,31 @@ class FuturesContractManager:
                         continue
 
             if not futures_contracts:
-                logger.warning("No active futures contracts found for %s", base_currency)
+                logger.warning(
+                    "No active futures contracts found for %s", base_currency
+                )
                 return None
 
             # Sort by expiry date and get the nearest one (front month)
             futures_contracts.sort(key=lambda x: x["expiry"])
             selected_contract = futures_contracts[0]
 
-            logger.info("Selected %s futures contract: %s (expires in %s days)", base_currency, selected_contract['symbol'], selected_contract['days_to_expiry'])
+            logger.info(
+                "Selected %s futures contract: %s (expires in %s days)",
+                base_currency,
+                selected_contract["symbol"],
+                selected_contract["days_to_expiry"],
+            )
 
             # Log all available contracts for debugging
             if len(futures_contracts) > 1:
                 logger.debug("Other available %s contracts:", base_currency)
                 for contract in futures_contracts[1:]:
-                    logger.debug("  - %s (expires in %s days)", contract['symbol'], contract['days_to_expiry'])
+                    logger.debug(
+                        "  - %s (expires in %s days)",
+                        contract["symbol"],
+                        contract["days_to_expiry"],
+                    )
 
             self._current_contract = selected_contract["symbol"]
             self._last_update = datetime.utcnow()

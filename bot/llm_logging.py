@@ -406,7 +406,7 @@ class LangChainCallbackHandler(BaseCallbackHandler):
         run_id = kwargs.get("run_id", "unknown")
         self._chain_starts[str(run_id)] = time.time()
 
-        self.logger.debug("Chain started: %s - %s", serialized.get('name', 'unknown'), run_id)
+        self.logger.debug("Chain started: %s - %s", serialized.get("name", "unknown"), run_id)
 
     def on_chain_end(self, outputs: dict[str, Any], **kwargs: Any) -> None:
         """Called when a chain finishes running."""
@@ -414,7 +414,7 @@ class LangChainCallbackHandler(BaseCallbackHandler):
         start_time = self._chain_starts.pop(run_id, time.time())
         duration = time.time() - start_time
 
-        self.logger.debug("Chain completed in %ss - %s", duration:.3f, run_id)
+        self.logger.debug("Chain completed in %.3fs - %s", duration, run_id)
 
     def on_llm_start(
         self, serialized: dict[str, Any], prompts: list[str], **kwargs: Any

@@ -92,7 +92,21 @@ class BalanceValidator:
         self.validation_count = 0
         self.error_count = 0
 
-        logger.info("BalanceValidator initialized with thresholds:\n" "  • Balance range: $%s - $%s\n" "  • Max change: %s% or $%s\n" "  • Precision: %s decimal places\n" "  • Anomaly threshold: %s%\n" "  • Max margin ratio: %s" ), self.thresholds.min_balance, self.thresholds.max_balance, self.thresholds.max_balance_change_pct, self.thresholds.max_absolute_change, self.thresholds.decimal_places, self.thresholds.anomaly_threshold_pct, self.thresholds.max_margin_ratio:.1%)
+        logger.info(
+            "BalanceValidator initialized with thresholds:\n"
+            "  • Balance range: $%s - $%s\n"
+            "  • Max change: %s%% or $%s\n"
+            "  • Precision: %s decimal places\n"
+            "  • Anomaly threshold: %s%%\n"
+            "  • Max margin ratio: %.1f%%",
+            self.thresholds.min_balance,
+            self.thresholds.max_balance,
+            self.thresholds.max_balance_change_pct,
+            self.thresholds.max_absolute_change,
+            self.thresholds.decimal_places,
+            self.thresholds.anomaly_threshold_pct,
+            self.thresholds.max_margin_ratio * 100
+        )
 
     def validate_balance_range(
         self, balance: Decimal, context: str = "balance_check"
@@ -251,7 +265,12 @@ class BalanceValidator:
             self.balance_history.append(change_record)
             self._cleanup_old_history()
 
-            logger.debug("✅ Balance change validation passed: $%s -> $%s " "(%s%, %s)", old_normalized, new_normalized, change_pct:.2f, operation_type)
+            logger.debug(
+                "✅ Balance change validation passed: $%s -> $%s (%.2f%%, %s)",
+                old_normalized,
+                new_normalized,
+                change_pct,
+                operation_type
             )
 
             return {
@@ -501,7 +520,12 @@ class BalanceValidator:
                         validation_type="margin",
                     )
 
-            logger.debug("✅ Margin validation passed: balance=$%s, " "used=$%s, ratio=%s" ), normalized_balance, normalized_used_margin, margin_ratio:.1%)
+            logger.debug(
+                "✅ Margin validation passed: balance=$%s, used=$%s, ratio=%.1f%%",
+                normalized_balance,
+                normalized_used_margin,
+                margin_ratio * 100
+            )
 
             return {
                 "valid": True,
@@ -575,7 +599,12 @@ class BalanceValidator:
                     validation_type="reconciliation",
                 )
 
-            logger.debug("✅ Balance reconciliation passed: calculated=$%s, " "reported=$%s, difference=%s%" ), calc_normalized, reported_normalized, diff_pct:.4f)
+            logger.debug(
+                "✅ Balance reconciliation passed: calculated=$%s, reported=$%s, difference=%.4f%%",
+                calc_normalized,
+                reported_normalized,
+                diff_pct
+            )
 
             return {
                 "valid": True,

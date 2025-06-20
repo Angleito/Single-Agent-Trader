@@ -110,13 +110,13 @@ class PositionManager:
             "  • Enhanced validation: enabled\n"
             "  • Max position value: $%s",
             len(self._positions),
-            'enabled' if self.use_fifo else 'disabled',
-            'enabled' if self.paper_account else 'disabled',
+            "enabled" if self.use_fifo else "disabled",
+            "enabled" if self.paper_account else "disabled",
             f"{self._max_position_value:,.2f}"
         )
         if self.paper_account:
             account_status = self.paper_account.get_account_status()
-            logger.info("Paper trading account: $%.2f equity, %s open positions", account_status['equity'], account_status['open_positions'])
+            logger.info("Paper trading account: $%.2f equity, %s open positions", account_status["equity"], account_status["open_positions"])
 
     def get_position(self, symbol: str) -> Position:
         """
@@ -1370,8 +1370,7 @@ class PositionManager:
             else:
                 validation_report["overall_health"] = 100.0
 
-            logger.info("Position validation complete: %s/%s valid " "(%s% health)", validation_report['positions_valid'], validation_report['positions_checked'], validation_report['overall_health']:.1f)
-            )
+            logger.info("Position validation complete: %s/%s valid (%.1f%% health)", validation_report["positions_valid"], validation_report["positions_checked"], validation_report["overall_health"])
 
             return validation_report
 

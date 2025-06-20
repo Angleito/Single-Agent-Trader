@@ -157,7 +157,7 @@ class SystemHealthMonitor:
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except Exception:
                 logger.exception("Error in health monitoring loop")
                 await asyncio.sleep(self.check_interval)
 
@@ -221,7 +221,7 @@ class SystemHealthMonitor:
             if len(self.system_metrics) > 1000:
                 self.system_metrics = self.system_metrics[-1000:]
 
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to collect system metrics")
 
     async def _check_all_components(self) -> None:

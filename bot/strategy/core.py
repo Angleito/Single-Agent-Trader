@@ -90,7 +90,7 @@ class CoreStrategy:
             is_healthy = error_rate < 0.5 and self._analysis_error_count < 5
 
             if not is_healthy:
-                logger.warning("Strategy health check failed: error_rate=%s, " "consecutive_errors=%s" ), error_rate:.2%, self._analysis_error_count)
+                logger.warning("Strategy health check failed: error_rate=%.2f%%, consecutive_errors=%s", error_rate * 100, self._analysis_error_count)
 
             return is_healthy
 

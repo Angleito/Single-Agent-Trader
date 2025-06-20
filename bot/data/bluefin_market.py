@@ -263,13 +263,17 @@ class BluefinMarketDataProvider:
 
                             # Check if we have sufficient data
                             if historical_data and len(historical_data) >= 100:
-                                logger.info("✅ Successfully fetched %s candles ", len(historical_data))
-                                    f"from {hours}-hour range - sufficient for indicators"
+                                logger.info(
+                                    "✅ Successfully fetched %s candles from %s-hour range - sufficient for indicators",
+                                    len(historical_data),
+                                    hours
                                 )
                                 break
                             elif historical_data:
-                                logger.warning("⚠️ Got %s candles from %s-hour range ", len(historical_data), hours)
-                                    f"- trying longer range"
+                                logger.warning(
+                                    "⚠️ Got %s candles from %s-hour range - trying longer range",
+                                    len(historical_data),
+                                    hours
                                 )
                             else:
                                 logger.warning("❌ No data from %s-hour range - trying longer range", hours)
@@ -280,8 +284,9 @@ class BluefinMarketDataProvider:
 
                     # If still insufficient data, generate fallback data
                     if not historical_data or len(historical_data) < 100:
-                        logger.warning("⚠️ Historical data insufficient (%s candles). ", len(historical_data) if historical_data else 0)
-                            f"Generating synthetic data for indicator initialization."
+                        logger.warning(
+                            "⚠️ Historical data insufficient (%s candles). Generating synthetic data for indicator initialization.",
+                            len(historical_data) if historical_data else 0
                         )
                         historical_data = (
                             await self._generate_fallback_historical_data()
@@ -321,10 +326,10 @@ class BluefinMarketDataProvider:
 
             # Final data validation
             final_candle_count = len(self._ohlcv_cache)
-            logger.info("✅ Bluefin market data connection complete. " "Total candles available: %s" ), final_candle_count)
+            logger.info("✅ Bluefin market data connection complete. Total candles available: %s", final_candle_count)
 
             if final_candle_count < 100:
-                logger.error("🚨 CRITICAL: Only %s candles available! " "Indicators may not work properly." ), final_candle_count)
+                logger.error("🚨 CRITICAL: Only %s candles available! Indicators may not work properly.", final_candle_count)
 
         except Exception as e:
             logger.exception("💥 Failed to connect to Bluefin market data: %s", e)
@@ -460,8 +465,10 @@ class BluefinMarketDataProvider:
                         self._ohlcv_cache = historical_data[
                             -self._extended_history_limit :
                         ]
-                        logger.info("✅ Loaded %s historical candles ", len(self._ohlcv_cache))
-                            f"(limited to {self._extended_history_limit})"
+                        logger.info(
+                            "✅ Loaded %s historical candles (limited to %s)",
+                            len(self._ohlcv_cache),
+                            self._extended_history_limit
                         )
                     else:
                         self._ohlcv_cache = historical_data
@@ -475,8 +482,9 @@ class BluefinMarketDataProvider:
                         logger.info("✅ Loaded %s historical candles", len(self._ohlcv_cache))
                     else:
                         # Insufficient real data - pad with synthetic data if needed
-                        logger.warning("⚠️ Only %s real candles available. ", len(historical_data))
-                            f"Padding with synthetic data for indicator reliability."
+                        logger.warning(
+                            "⚠️ Only %s real candles available. Padding with synthetic data for indicator reliability.",
+                            len(historical_data)
                         )
 
                         # Generate synthetic data to reach minimum requirements
@@ -492,8 +500,11 @@ class BluefinMarketDataProvider:
                                 await self._generate_fallback_historical_data()
                             )
 
-                        logger.info("✅ Total candles after padding: %s ", len(self._ohlcv_cache))
-                            f"({len(historical_data)} real + {len(self._ohlcv_cache) - len(historical_data)} synthetic)"
+                        logger.info(
+                            "✅ Total candles after padding: %s (%s real + %s synthetic)",
+                            len(self._ohlcv_cache),
+                            len(historical_data),
+                            len(self._ohlcv_cache) - len(historical_data)
                         )
             else:
                 # No historical data available - use pure synthetic fallback
@@ -890,8 +901,10 @@ class BluefinMarketDataProvider:
 
         # Log data sufficiency status periodically
         if len(self._ohlcv_cache) % 50 == 0:  # Every 50 candles
-            logger.info("📊 Data status: %s candles available ", len(self._ohlcv_cache))
-                f"({'✅ sufficient' if len(self._ohlcv_cache) >= 100 else '⚠️ insufficient'} for indicators)"
+            logger.info(
+                "📊 Data status: %s candles available (%s for indicators)",
+                len(self._ohlcv_cache),
+                "✅ sufficient" if len(self._ohlcv_cache) >= 100 else "⚠️ insufficient"
             )
 
     def _interval_to_seconds(self, interval: str) -> int:
@@ -1007,7 +1020,13 @@ class BluefinMarketDataProvider:
         Returns:
             List of MarketData objects
         """
-        logger.info("🔄 Fetching candles from Bluefin service: %s %s " "(limit: %s, range: %s to %s)", symbol, interval, limit, start_time, end_time)
+        logger.info(
+            "🔄 Fetching candles from Bluefin service: %s %s (limit: %s, range: %s to %s)",
+            symbol,
+            interval,
+            limit,
+            start_time,
+            end_time
         )
 
         try:
@@ -1020,7 +1039,10 @@ class BluefinMarketDataProvider:
             )
             api_key = os.getenv("BLUEFIN_SERVICE_API_KEY")
 
-            logger.debug("🔗 Connecting to Bluefin service at %s " "(has_api_key: %s)", service_url, bool(api_key))
+            logger.debug(
+                "🔗 Connecting to Bluefin service at %s (has_api_key: %s)",
+                service_url,
+                bool(api_key)
             )
 
             async with BluefinServiceClient(service_url, api_key) as service_client:
@@ -1045,7 +1067,10 @@ class BluefinMarketDataProvider:
                 bluefin_interval = interval_map.get(interval, "1m")
 
                 if bluefin_interval != interval:
-                    logger.warning("⚠️ Interval %s not supported by Bluefin, " "using %s instead (may affect granularity)", interval, bluefin_interval)
+                    logger.warning(
+                        "⚠️ Interval %s not supported by Bluefin, using %s instead (may affect granularity)",
+                        interval,
+                        bluefin_interval
                     )
 
                 # Prepare request parameters with enhanced validation
@@ -1254,9 +1279,17 @@ class BluefinMarketDataProvider:
         optimal_required = 200
 
         if candle_count < min_required:
-            logger.error("🚨 Insufficient data for reliable indicator calculations! " "Have %s candles, need minimum %s." ), candle_count, min_required)
+            logger.error(
+                "🚨 Insufficient data for reliable indicator calculations! Have %s candles, need minimum %s.",
+                candle_count,
+                min_required
+            )
         elif candle_count < optimal_required:
-            logger.warning("⚠️ Suboptimal data for indicator calculations. " "Have %s candles, recommend %s." ), candle_count, optimal_required)
+            logger.warning(
+                "⚠️ Suboptimal data for indicator calculations. Have %s candles, recommend %s.",
+                candle_count,
+                optimal_required
+            )
         else:
             logger.info("✅ Sufficient data for reliable indicator calculations: %s candles", candle_count)
 
@@ -1364,8 +1397,12 @@ class BluefinMarketDataProvider:
                 self._price_cache["price"] = candles[-1].close
                 self._cache_timestamps["price"] = datetime.now(UTC)
 
-            logger.info("✅ Generated %s synthetic candles for %s ", len(candles), self.symbol)
-                f"(price range: ${candles[0].close} - ${candles[-1].close})"
+            logger.info(
+                "✅ Generated %s synthetic candles for %s (price range: $%s - $%s)",
+                len(candles),
+                self.symbol,
+                candles[0].close,
+                candles[-1].close
             )
 
             return candles
@@ -1472,8 +1509,11 @@ class BluefinMarketDataProvider:
                 synthetic_candles.append(synthetic_candle)
                 current_price = close_price
 
-            logger.info("✅ Generated %s synthetic padding candles ", len(synthetic_candles))
-                f"(price range: ${synthetic_candles[0].close} -> ${synthetic_candles[-1].close})"
+            logger.info(
+                "✅ Generated %s synthetic padding candles (price range: $%s -> $%s)",
+                len(synthetic_candles),
+                synthetic_candles[0].close,
+                synthetic_candles[-1].close
             )
 
             return synthetic_candles
@@ -1570,7 +1610,7 @@ class BluefinMarketDataProvider:
                             pass
 
                 except json.JSONDecodeError:
-                    logger.exception("Invalid JSON in WebSocket message: %s", message!r)
+                    logger.exception("Invalid JSON in WebSocket message: %r", message)
                 except Exception as e:
                     logger.exception("Error handling WebSocket message: %s", e)
 

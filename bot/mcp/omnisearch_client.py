@@ -144,7 +144,7 @@ class RateLimiter:
             # Calculate wait time until oldest request expires
             wait_time = self.window_seconds - (current_time - self.requests[0])
             if wait_time > 0:
-                logger.warning("Rate limit reached, waiting %ss", wait_time:.1f)
+                logger.warning("Rate limit reached, waiting %.1fs", wait_time)
                 await asyncio.sleep(wait_time)
                 return await self.acquire()  # Retry after waiting
 
@@ -365,8 +365,8 @@ class OmniSearchClient:
             if self.cache:
                 self.cache.set(cache_key, sentiment.dict())
 
-            logger.info("🔍 OmniSearch: %s sentiment - %s " "(score: %s, confidence: %s)", base_symbol, sentiment.overall_sentiment, sentiment.sentiment_score:.2f, sentiment.confidence:.2f)
-            )
+            logger.info("🔍 OmniSearch: %s sentiment - %s (score: %.2f, confidence: %.2f)",
+                       base_symbol, sentiment.overall_sentiment, sentiment.sentiment_score, sentiment.confidence)
 
             return sentiment
 
@@ -422,8 +422,8 @@ class OmniSearchClient:
             if self.cache:
                 self.cache.set(cache_key, sentiment.dict(), ttl=300)  # 5 minutes
 
-            logger.info("🔍 OmniSearch: NASDAQ sentiment - %s " "(score: %s)", sentiment.overall_sentiment, sentiment.sentiment_score:.2f)
-            )
+            logger.info("🔍 OmniSearch: NASDAQ sentiment - %s (score: %.2f)",
+                       sentiment.overall_sentiment, sentiment.sentiment_score)
 
             return sentiment
 
@@ -484,7 +484,14 @@ class OmniSearchClient:
 
                 # Check for extremely large values that might be percentages, timeframe values, or other units
                 if abs(correlation_coeff) > 10.0:
-                    logger.warning("Extremely large correlation value %s from API for %s-%s. " "Timeframe: %s. Likely incorrect unit or data mixup. Raw API response: %s" ), correlation_coeff, crypto_base, nasdaq_base, timeframe, correlation_data)
+                    logger.warning(
+                        "Extremely large correlation value %s from API for %s-%s. Timeframe: %s. Likely incorrect unit or data mixup. Raw API response: %s",
+                        correlation_coeff,
+                        crypto_base,
+                        nasdaq_base,
+                        timeframe,
+                        correlation_data
+                    )
 
                     # Check if this might be a timeframe value (e.g., 30 from "30d")
                     timeframe_numeric = None
@@ -496,7 +503,7 @@ class OmniSearchClient:
                         timeframe_numeric
                         and abs(correlation_coeff) == timeframe_numeric
                     ):
-                        logger.error("Correlation coefficient %s matches timeframe %s! " "API likely returned timeframe value instead of correlation. Defaulting to 0.0." ), correlation_coeff, timeframe)
+                        logger.error("Correlation coefficient %s matches timeframe %s! API likely returned timeframe value instead of correlation. Defaulting to 0.0.", correlation_coeff, timeframe)
                         correlation_coeff = 0.0
                     elif abs(correlation_coeff) <= 100.0:
                         # If it looks like a percentage (e.g., 30 meaning 30%), normalize it
@@ -513,9 +520,8 @@ class OmniSearchClient:
                     correlation_coeff = max(-1.0, min(1.0, correlation_coeff))
 
             except (ValueError, TypeError) as e:
-                logger.exception("Invalid correlation coefficient type %s: %s ", type(raw_correlation_coeff), raw_correlation_coeff)
-                    f"from API for {crypto_base}-{nasdaq_base}. Using fallback value 0.0. Error: {e}"
-                )
+                logger.exception("Invalid correlation coefficient type %s: %s from API for %s-%s. Using fallback value 0.0. Error: %s", 
+                               type(raw_correlation_coeff), raw_correlation_coeff, crypto_base, nasdaq_base, e)
                 correlation_coeff = 0.0
 
             # Determine correlation strength and direction
@@ -572,8 +578,7 @@ class OmniSearchClient:
             if self.cache:
                 self.cache.set(cache_key, correlation.dict(), ttl=1800)  # 30 minutes
 
-            logger.info("🔍 OmniSearch: %s-%s correlation - " "%s %s (%s)", crypto_base, nasdaq_base, direction, strength, correlation_coeff:.3f)
-            )
+            logger.info("🔍 OmniSearch: %s-%s correlation - %s %s (%.3f)", crypto_base, nasdaq_base, direction, strength, correlation_coeff)
 
             return correlation
 

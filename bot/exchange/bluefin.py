@@ -330,7 +330,7 @@ class BluefinClient(BaseExchange):
             logger.info("Symbol %s validated for %s", bluefin_symbol, self.network_name)
             return True
 
-        except Exception as e:
+        except Exception:
             logger.exception("Symbol validation failed for %s", symbol)
             return False
 
@@ -418,7 +418,7 @@ class BluefinClient(BaseExchange):
             # Get and cache contract information
             await self._load_contract_info()
 
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to initialize Bluefin client")
             if not self.dry_run:
                 raise
@@ -573,10 +573,10 @@ class BluefinClient(BaseExchange):
                 logger.error("Unknown action: %s", trade_action.action)
                 return None
 
-        except ValueError as e:
+        except ValueError:
             logger.exception("Symbol validation error")
             return None
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to execute trade action")
             return None
 
@@ -617,7 +617,7 @@ class BluefinClient(BaseExchange):
             )
             return bluefin_symbol
 
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to convert symbol %s", symbol)
             # Fallback to original behavior for backward compatibility
             symbol_map = {
@@ -776,7 +776,7 @@ class BluefinClient(BaseExchange):
 
             return order
 
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to open position")
             return None
 
@@ -800,7 +800,7 @@ class BluefinClient(BaseExchange):
                 symbol, cast(Literal["BUY", "SELL"], side), abs(position.size)
             )
 
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to close position")
             return None
 
@@ -1012,7 +1012,7 @@ class BluefinClient(BaseExchange):
             logger.debug("Retrieved %s positions from Bluefin", len(positions))
             return positions
 
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to get positions")
             return []
 
@@ -1314,7 +1314,7 @@ class BluefinClient(BaseExchange):
                 logger.warning("Order %s cancellation failed", order_id)
                 return False
 
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to cancel order %s", order_id)
             return False
 
@@ -1352,7 +1352,7 @@ class BluefinClient(BaseExchange):
                 )
                 return True  # Return True to avoid errors during shutdown
 
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to cancel all orders")
             return False
 
@@ -1393,7 +1393,7 @@ class BluefinClient(BaseExchange):
             # Get account info from service
             account_data = await self._service_client.get_account_data()
             return account_data.get("address")
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to get account address")
         return None
 
@@ -1412,7 +1412,7 @@ class BluefinClient(BaseExchange):
 
             return response.get("status") == "success"
 
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to set leverage")
             return False
 
@@ -1551,7 +1551,7 @@ class BluefinClient(BaseExchange):
                 logger.warning("No candlestick data returned for %s", bluefin_symbol)
                 return []
 
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to fetch historical candles from Bluefin")
             return []
 

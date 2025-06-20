@@ -211,20 +211,26 @@ class MCPMemoryServer:
         # Persist locally
         await self._save_experience_local(experience)
 
-        logger.info("💾 MCP Memory: Stored experience %s... | " "Action: %s | Price: $%s | " "Symbol: %s | Patterns: %s", experience.experience_id[:8], trade_action.action, market_state.current_price, market_state.symbol, ', '.join(experience.pattern_tags))
-        )
+        logger.info("💾 MCP Memory: Stored experience %s... | Action: %s | Price: $%s | Symbol: %s | Patterns: %s", experience.experience_id[:8], trade_action.action, market_state.current_price, market_state.symbol, ", ".join(experience.pattern_tags))
 
         # Log detailed indicators if available
         if experience.indicators:
-            logger.debug("MCP Memory: Indicators - RSI: %s, ", experience.indicators.get('rsi', 'N/A'):.1f)
-                f"Cipher B: {experience.indicators.get('cipher_b_wave', 'N/A'):.1f}, "
-                f"EMA Trend: {'Bull' if experience.indicators.get('ema_fast', 0) > experience.indicators.get('ema_slow', 0) else 'Bear'}"
-            )
+            rsi_val = experience.indicators.get("rsi", "N/A")
+            cipher_val = experience.indicators.get("cipher_b_wave", "N/A")
+            ema_fast = experience.indicators.get("ema_fast", 0)
+            ema_slow = experience.indicators.get("ema_slow", 0)
+            ema_trend = "Bull" if ema_fast > ema_slow else "Bear"
+            logger.debug("MCP Memory: Indicators - RSI: %.1f, Cipher B: %.1f, EMA Trend: %s",
+                        float(rsi_val) if rsi_val != "N/A" else 0.0,
+                        float(cipher_val) if cipher_val != "N/A" else 0.0,
+                        ema_trend)
 
         if experience.dominance_data:
-            logger.debug("MCP Memory: Dominance - Stablecoin: %s%, ", experience.dominance_data.get('stablecoin_dominance', 'N/A'):.2f)
-                f"USDT: {experience.dominance_data.get('usdt_dominance', 'N/A'):.2f}%"
-            )
+            stablecoin_dom = experience.dominance_data.get("stablecoin_dominance", "N/A")
+            usdt_dom = experience.dominance_data.get("usdt_dominance", "N/A")
+            logger.debug("MCP Memory: Dominance - Stablecoin: %.2f%%, USDT: %.2f%%",
+                        float(stablecoin_dom) if stablecoin_dom != "N/A" else 0.0,
+                        float(usdt_dom) if usdt_dom != "N/A" else 0.0)
 
         # Log memory storage
         self.trade_logger.log_memory_storage(
@@ -303,9 +309,9 @@ class MCPMemoryServer:
         # Persist locally
         await self._save_experience_local(experience)
 
-        logger.info("📊 MCP Memory: Updated experience %s... with outcome | " "PnL: $%s (%s) | ", experience_id[:8], pnl:.2f, '✅ WIN' if experience.outcome['success'] else '❌ LOSS')
-            f"Duration: {duration_minutes:.1f}min | Price Change: {price_change_pct:+.2f}%"
-        )
+        outcome_text = "✅ WIN" if experience.outcome["success"] else "❌ LOSS"
+        logger.info("📊 MCP Memory: Updated experience %s... with outcome | PnL: $%.2f (%s) | Duration: %.1fmin | Price Change: %+.2f%%",
+                   experience_id[:8], pnl, outcome_text, duration_minutes, price_change_pct)
 
         if experience.learned_insights:
             logger.debug("MCP Memory: Insights - %s", experience.learned_insights)
@@ -360,21 +366,18 @@ class MCPMemoryServer:
         # Calculate execution time
         execution_time_ms = (time.time() - start_time) * 1000
 
-        logger.info("🔍 MCP Memory: Query completed | Found %s similar experiences ", len(results))
-            f"(from {len(self.memory_cache)} total) | Time: {execution_time_ms:.1f}ms"
-        )
+        logger.info("🔍 MCP Memory: Query completed | Found %s similar experiences (from %s total) | Time: %.1fms",
+                   len(results), len(self.memory_cache), execution_time_ms)
 
         # Log top results if any
         if results:
             top_result = scored_experiences[0] if scored_experiences else None
             if top_result:
                 similarity, exp = top_result
-                logger.debug("MCP Memory: Best match - Similarity: %s | " "Action: %s | ", similarity:.3f, exp.decision.get('action'))
-                    f"Outcome: {'WIN' if exp.outcome and exp.outcome['success'] else 'LOSS'} | "
-                    f"PnL: ${exp.outcome['pnl']:.2f}"
-                    if exp.outcome
-                    else "No outcome"
-                )
+                outcome_text = "WIN" if exp.outcome and exp.outcome["success"] else "LOSS"
+                pnl_text = f"${exp.outcome['pnl']:.2f}" if exp.outcome else "No outcome"
+                logger.debug("MCP Memory: Best match - Similarity: %.3f | Action: %s | Outcome: %s | PnL: %s",
+                           similarity, exp.decision.get("action"), outcome_text, pnl_text)
 
         # Log query details
         query_dict = {

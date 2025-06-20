@@ -56,7 +56,12 @@ class FeeCalculator:
         self.current_volume = 0
         self.current_tier = self._get_fee_tier(0)
 
-        logger.info("Initialized FeeCalculator with rates: " "Spot Maker: %s, " "Spot Taker: %s, " "Futures: %s" ), self.spot_maker_fee_rate:.4f, self.spot_taker_fee_rate:.4f, self.futures_fee_rate:.4f)
+        logger.info(
+            "Initialized FeeCalculator with rates: Spot Maker: %.4f, Spot Taker: %.4f, Futures: %.4f",
+            self.spot_maker_fee_rate,
+            self.spot_taker_fee_rate,
+            self.futures_fee_rate,
+        )
 
     def calculate_trade_fees(
         self,
@@ -105,13 +110,18 @@ class FeeCalculator:
             # Determine the appropriate fee rate
             if self.enable_futures:
                 fee_rate = self.futures_fee_rate
-                logger.debug("Using futures fee rate: %s", fee_rate:.4f)
+                logger.debug("Using futures fee rate: %.4f", fee_rate)
             else:
                 # Use current tier rates for spot trading
                 fee_rate = (
                     self.taker_fee_rate if is_market_order else self.maker_fee_rate
                 )
-                logger.debug("Using spot %s fee rate: %s (Volume: $%s)", 'taker' if is_market_order else 'maker', fee_rate:.4f, self.current_volume:,.2f)
+                logger.debug(
+                    "Using spot %s fee rate: %.4f (Volume: $%,.2f)",
+                    "taker" if is_market_order else "maker",
+                    fee_rate,
+                    self.current_volume,
+                )
 
             # Calculate entry fee
             entry_fee = position_value * Decimal(str(fee_rate))
@@ -133,7 +143,14 @@ class FeeCalculator:
                 net_position_value=net_position_value,
             )
 
-            logger.debug("Calculated fees for $%s position: " "Entry: $%s, Exit: $%s, " "Total: $%s, Net: $%s" ), position_value:.2f, entry_fee:.2f, exit_fee:.2f, total_fee:.2f, net_position_value:.2f)
+            logger.debug(
+                "Calculated fees for $%.2f position: Entry: $%.2f, Exit: $%.2f, Total: $%.2f, Net: $%.2f",
+                position_value,
+                entry_fee,
+                exit_fee,
+                total_fee,
+                net_position_value,
+            )
 
             return fees
 
@@ -312,7 +329,11 @@ class FeeCalculator:
                 is_market_order,
             )
 
-            logger.info("Adjusted position size for fees: %s% -> %s% " "($%s total fees)", trade_action.size_pct, adjusted_action.size_pct, initial_fees.total_fee:.2f)
+            logger.info(
+                "Adjusted position size for fees: %s%% -> %s%% ($%.2f total fees)",
+                trade_action.size_pct,
+                adjusted_action.size_pct,
+                initial_fees.total_fee,
             )
 
             return adjusted_action, final_fees
@@ -382,7 +403,12 @@ class FeeCalculator:
             fee_percentage = float(fees.total_fee / position_value)
             min_move_percentage = fee_percentage / leverage
 
-            logger.debug("Minimum profitable move for $%s position " "with %sx leverage: %s" ), position_value:.2f, leverage, min_move_percentage:.4%)
+            logger.debug(
+                "Minimum profitable move for $%.2f position with %sx leverage: %.4f%%",
+                position_value,
+                leverage,
+                min_move_percentage * 100,
+            )
 
             return Decimal(str(min_move_percentage))
 
@@ -494,7 +520,12 @@ class FeeCalculator:
             self.maker_fee_rate = self.current_tier["maker"]
             self.taker_fee_rate = self.current_tier["taker"]
 
-            logger.info("Updated fee tier based on $%s volume: " "Maker: %s, Taker: %s" ), monthly_volume:,.2f, self.maker_fee_rate:.4%, self.taker_fee_rate:.4%)
+            logger.info(
+                "Updated fee tier based on $%,.2f volume: Maker: %.4f%%, Taker: %.4f%%",
+                monthly_volume,
+                self.maker_fee_rate * 100,
+                self.taker_fee_rate * 100,
+            )
 
     def get_fee_summary(self) -> dict[str, float]:
         """
