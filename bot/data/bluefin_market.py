@@ -256,7 +256,6 @@ class BluefinMarketDataProvider:
                             expected_candles = int((hours * 3600) / interval_seconds)
 
                             logger.info("🔍 Attempting to fetch %s hours of historical data " "(~%s candles at %s interval)", hours, expected_candles, self.interval)
-                            )
 
                             historical_data = await self.fetch_historical_data(
                                 start_time=start_time, end_time=end_time

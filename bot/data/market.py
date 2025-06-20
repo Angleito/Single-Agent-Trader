@@ -82,12 +82,14 @@ class WebSocketMessageValidator:
             # Check required top-level fields
             required_fields = ["channel", "timestamp", "events"]
             if not all(field in message for field in required_fields):
-                logger.warning("Ticker message missing required fields: %s", required_fields)
+                logger.warning(
+                    "Ticker message missing required fields: %s", required_fields
+                )
                 return False
 
             # Validate channel
             if message["channel"] != "ticker":
-                logger.warning("Invalid ticker channel: %s", message['channel'])
+                logger.warning("Invalid ticker channel: %s", message["channel"])
                 return False
 
             # Validate timestamp
@@ -128,12 +130,14 @@ class WebSocketMessageValidator:
             # Check required fields
             required_fields = ["channel", "events"]
             if not all(field in message for field in required_fields):
-                logger.warning("Trade message missing required fields: %s", required_fields)
+                logger.warning(
+                    "Trade message missing required fields: %s", required_fields
+                )
                 return False
 
             # Validate channel
             if message["channel"] != "market_trades":
-                logger.warning("Invalid trade channel: %s", message['channel'])
+                logger.warning("Invalid trade channel: %s", message["channel"])
                 return False
 
             # Validate message timing
@@ -279,7 +283,7 @@ class WebSocketMessageValidator:
 
             # Validate side
             if trade["side"] not in ["BUY", "SELL"]:
-                logger.warning("Invalid trade side: %s", trade['side'])
+                logger.warning("Invalid trade side: %s", trade["side"])
                 return False
 
             return True
@@ -343,7 +347,9 @@ class WebSocketMessageValidator:
             if "." in price_str:
                 decimal_places = len(price_str.split(".")[1])
                 if decimal_places > 8:  # More than 8 decimal places is unusual
-                    logger.warning("Excessive precision in price: %s decimals", decimal_places)
+                    logger.warning(
+                        "Excessive precision in price: %s decimals", decimal_places
+                    )
                     return False
 
             return True
@@ -372,12 +378,16 @@ class WebSocketMessageValidator:
 
             # Check for messages from the future (more than 5 seconds)
             if message_time > current_time + timedelta(seconds=5):
-                logger.warning("Future timestamp detected: %s vs %s", message_time, current_time)
+                logger.warning(
+                    "Future timestamp detected: %s vs %s", message_time, current_time
+                )
                 return False
 
             # Check for very stale messages (more than 30 seconds old)
             if current_time - message_time > timedelta(seconds=30):
-                logger.warning("Stale message detected: %s vs %s", message_time, current_time)
+                logger.warning(
+                    "Stale message detected: %s vs %s", message_time, current_time
+                )
                 return False
 
             return True
@@ -458,9 +468,15 @@ class MarketDataProvider:
         self._websocket_data_received = False
         self._first_websocket_data_time: datetime | None = None
 
-        logger.info("Initialized MarketDataProvider for %s at %s", self.symbol, self.interval)
+        logger.info(
+            "Initialized MarketDataProvider for %s at %s", self.symbol, self.interval
+        )
         if self._data_symbol != self.symbol:
-            logger.info("Using %s for historical data (trading: %s)", self._data_symbol, self.symbol)
+            logger.info(
+                "Using %s for historical data (trading: %s)",
+                self._data_symbol,
+                self.symbol,
+            )
 
     def _get_data_symbol(self, symbol: str) -> str:
         """
@@ -482,7 +498,11 @@ class MarketDataProvider:
         if "-" in symbol and len(symbol.split("-")) >= 3:
             # This is likely a futures contract, convert to spot
             spot_symbol = FuturesContractMapper.futures_to_spot_symbol(symbol)
-            logger.debug("Converted futures symbol %s to spot symbol %s for data fetching", symbol, spot_symbol)
+            logger.debug(
+                "Converted futures symbol %s to spot symbol %s for data fetching",
+                symbol,
+                spot_symbol,
+            )
             return spot_symbol
 
         # This is already a spot symbol
@@ -519,14 +539,25 @@ class MarketDataProvider:
             )
 
             # Use SDK's built-in JWT generator for WebSocket authentication
-            logger.debug("Generating JWT with API key: %s... (length: %s)", cdp_api_key[:50], len(cdp_api_key))
-            logger.debug("Private key length: %s, starts with: %s...", len(cdp_private_key), cdp_private_key[:20])
+            logger.debug(
+                "Generating JWT with API key: %s... (length: %s)",
+                cdp_api_key[:50],
+                len(cdp_api_key),
+            )
+            logger.debug(
+                "Private key length: %s, starts with: %s...",
+                len(cdp_private_key),
+                cdp_private_key[:20],
+            )
 
             try:
                 jwt_token = jwt_generator.build_ws_jwt(cdp_api_key, cdp_private_key)
 
                 if jwt_token:
-                    logger.info("Successfully generated WebSocket JWT token using SDK (length: %s)", len(jwt_token))
+                    logger.info(
+                        "Successfully generated WebSocket JWT token using SDK (length: %s)",
+                        len(jwt_token),
+                    )
                     logger.debug("JWT preview: %s...", jwt_token[:50])
                     return jwt_token
                 else:
@@ -536,14 +567,18 @@ class MarketDataProvider:
                     return None
 
             except Exception as jwt_error:
-                logger.exception("Exception in jwt_generator.build_ws_jwt: %s", jwt_error)
+                logger.exception(
+                    "Exception in jwt_generator.build_ws_jwt: %s", jwt_error
+                )
                 import traceback
 
                 logger.debug("JWT generation traceback: %s", traceback.format_exc())
                 return None
 
         except Exception as e:
-            logger.warning("Failed to generate WebSocket JWT token (outer exception): %s", e)
+            logger.warning(
+                "Failed to generate WebSocket JWT token (outer exception): %s", e
+            )
             import traceback
 
             logger.debug("Outer exception traceback: %s", traceback.format_exc())
@@ -570,13 +605,18 @@ class MarketDataProvider:
                 try:
                     await self.fetch_historical_data()
                 except Exception as e:
-                    logger.warning("Failed to fetch historical data, continuing with WebSocket only: %s", e)
+                    logger.warning(
+                        "Failed to fetch historical data, continuing with WebSocket only: %s",
+                        e,
+                    )
 
             # Try to get current price to ensure connectivity
             try:
                 current_price = await self.fetch_latest_price()
                 if current_price:
-                    logger.info("Successfully fetched current price: $%s", current_price)
+                    logger.info(
+                        "Successfully fetched current price: $%s", current_price
+                    )
             except Exception as e:
                 logger.warning("Could not fetch current price: %s", e)
 
@@ -687,7 +727,9 @@ class MarketDataProvider:
         batch_size = 300  # Safe batch size for API
         all_data = []
 
-        logger.info("Fetching %s candles in batches of %s", required_candles, batch_size)
+        logger.info(
+            "Fetching %s candles in batches of %s", required_candles, batch_size
+        )
 
         # Calculate the actual start time if not provided
         if start_time is None:
@@ -712,7 +754,13 @@ class MarketDataProvider:
             if batch_start < start_time:
                 batch_start = start_time
 
-            logger.info("Fetching batch %s/%s: %s to %s", batch_num + 1, batches_needed, batch_start, current_end)
+            logger.info(
+                "Fetching batch %s/%s: %s to %s",
+                batch_num + 1,
+                batches_needed,
+                batch_start,
+                current_end,
+            )
 
             try:
                 # Fetch this batch
@@ -721,7 +769,9 @@ class MarketDataProvider:
                 )
                 if batch_data:
                     all_data.extend(batch_data)
-                    logger.info("Batch %s completed: %s candles", batch_num + 1, len(batch_data))
+                    logger.info(
+                        "Batch %s completed: %s candles", batch_num + 1, len(batch_data)
+                    )
                 else:
                     logger.warning("Batch %s returned no data", batch_num + 1)
 
@@ -754,7 +804,11 @@ class MarketDataProvider:
         self._last_update = datetime.now(UTC)
         self._cache_timestamps["ohlcv"] = self._last_update
 
-        logger.info("Successfully fetched %s candles across %s batches", len(unique_data), batches_needed)
+        logger.info(
+            "Successfully fetched %s candles across %s batches",
+            len(unique_data),
+            batches_needed,
+        )
         self._validate_data_sufficiency(len(unique_data))
 
         return unique_data
@@ -797,7 +851,9 @@ class MarketDataProvider:
                 return batch_data
 
         except Exception as e:
-            logger.exception("Failed to fetch batch from %s to %s: %s", start_time, end_time, e)
+            logger.exception(
+                "Failed to fetch batch from %s to %s: %s", start_time, end_time, e
+            )
             return []
 
     async def fetch_historical_data(
@@ -850,7 +906,11 @@ class MarketDataProvider:
                 # Reduce time range to fit within API limits
                 safe_time_range = 300 * api_interval_seconds
                 max_candles = int(safe_time_range / interval_seconds)
-                logger.warning("Adjusted candle limit from %s to %s due to API granularity mismatch", self.candle_limit, max_candles)
+                logger.warning(
+                    "Adjusted candle limit from %s to %s due to API granularity mismatch",
+                    self.candle_limit,
+                    max_candles,
+                )
 
         default_start = end_time - timedelta(seconds=interval_seconds * max_candles)
         start_time = start_time or default_start
@@ -861,21 +921,40 @@ class MarketDataProvider:
 
         # Final safety check - ensure we never exceed 350 candles
         if expected_candles > 350:
-            logger.error("Calculated %s candles which exceeds API limit of 350!", expected_candles)
+            logger.error(
+                "Calculated %s candles which exceeds API limit of 350!",
+                expected_candles,
+            )
             # Adjust start_time to ensure we stay under limit
             safe_seconds = 300 * api_interval_seconds  # Use 300 to be extra safe
             start_time = end_time - timedelta(seconds=safe_seconds)
             time_diff = safe_seconds
             expected_candles = 300
-            logger.warning("Adjusted start_time to %s to stay within API limits", start_time)
+            logger.warning(
+                "Adjusted start_time to %s to stay within API limits", start_time
+            )
 
-        logger.info("Fetching historical data for %s from %s to %s", self._data_symbol, start_time, end_time)
-        logger.info("Requesting %s candles at %s granularity (requested: %s)", expected_candles, api_granularity, granularity)
+        logger.info(
+            "Fetching historical data for %s from %s to %s",
+            self._data_symbol,
+            start_time,
+            end_time,
+        )
+        logger.info(
+            "Requesting %s candles at %s granularity (requested: %s)",
+            expected_candles,
+            api_granularity,
+            granularity,
+        )
 
         # Warn if we're not getting enough data for indicators
         min_required_for_indicators = 100  # VuManChu needs ~80 + buffer
         if expected_candles < min_required_for_indicators:
-            logger.warning("Fetching only %s candles, but indicators need at least %s for reliable calculations. Consider increasing candle_limit.", expected_candles, min_required_for_indicators)
+            logger.warning(
+                "Fetching only %s candles, but indicators need at least %s for reliable calculations. Consider increasing candle_limit.",
+                expected_candles,
+                min_required_for_indicators,
+            )
 
         try:
             # Use public API endpoint for historical candles with data symbol
@@ -1055,7 +1134,12 @@ class MarketDataProvider:
                     delay = min(
                         2**self._reconnect_attempts, 60
                     )  # Exponential backoff, max 60s
-                    logger.info("Reconnecting in %ss (attempt %s/%s)", delay, self._reconnect_attempts, self._max_reconnect_attempts)
+                    logger.info(
+                        "Reconnecting in %ss (attempt %s/%s)",
+                        delay,
+                        self._reconnect_attempts,
+                        self._max_reconnect_attempts,
+                    )
                     await asyncio.sleep(delay)
                 else:
                     logger.exception(
@@ -1110,11 +1194,20 @@ class MarketDataProvider:
                     if isinstance(subscription, dict)
                     else "unknown"
                 )
-                logger.debug("Sent subscription %s/%s: %s", i+1, len(subscriptions), channel_name)
+                logger.debug(
+                    "Sent subscription %s/%s: %s",
+                    i + 1,
+                    len(subscriptions),
+                    channel_name,
+                )
                 # Small delay between subscriptions to avoid overwhelming the server
                 await asyncio.sleep(0.1)
 
-            logger.info("Subscribed to %s WebSocket feeds for %s", len(subscriptions), self.symbol)
+            logger.info(
+                "Subscribed to %s WebSocket feeds for %s",
+                len(subscriptions),
+                self.symbol,
+            )
 
             # Reset reconnection counter on successful connection
             self._reconnect_attempts = 0
@@ -1128,7 +1221,12 @@ class MarketDataProvider:
 
                     # Log first few messages for debugging
                     if message_count <= 5:
-                        logger.debug("WebSocket message #%s: %s - %s", message_count, parsed_message.get('channel', 'unknown'), parsed_message.get('type', 'unknown'))
+                        logger.debug(
+                            "WebSocket message #%s: %s - %s",
+                            message_count,
+                            parsed_message.get("channel", "unknown"),
+                            parsed_message.get("type", "unknown"),
+                        )
 
                     # Add to queue for non-blocking processing
                     try:
@@ -1196,7 +1294,9 @@ class MarketDataProvider:
 
         if channel == "subscriptions":
             # Subscription confirmation message
-            logger.info("WebSocket subscriptions confirmed: %s", message.get('events', []))
+            logger.info(
+                "WebSocket subscriptions confirmed: %s", message.get("events", [])
+            )
         elif channel == "heartbeats":
             # Heartbeat messages - just log occasionally to confirm connection
             events = message.get("events", [])
@@ -1218,12 +1318,16 @@ class MarketDataProvider:
                 self._ws_validator.validation_failures += 1
                 logger.warning("Rejected invalid trade message")
         elif msg_type == "error":
-            logger.error("WebSocket error: %s", message.get('message', 'Unknown error'))
+            logger.error("WebSocket error: %s", message.get("message", "Unknown error"))
             # Log the full error message for debugging
-            logger.debug("Full WebSocket error message: %s", json.dumps(message, indent=2))
+            logger.debug(
+                "Full WebSocket error message: %s", json.dumps(message, indent=2)
+            )
         else:
             # Log any unhandled message types for debugging
-            logger.debug("Unhandled WebSocket message - Channel: %s, Type: %s", channel, msg_type)
+            logger.debug(
+                "Unhandled WebSocket message - Channel: %s, Type: %s", channel, msg_type
+            )
             logger.debug("Message: %s", json.dumps(message, indent=2))
 
     async def _handle_ticker_update(self, message: dict[str, Any]) -> None:
@@ -1259,7 +1363,11 @@ class MarketDataProvider:
                         if not self._websocket_data_received:
                             self._websocket_data_received = True
                             self._first_websocket_data_time = datetime.now(UTC)
-                            logger.info("First WebSocket market data received for %s at $%s", self.symbol, price)
+                            logger.info(
+                                "First WebSocket market data received for %s at $%s",
+                                self.symbol,
+                                price,
+                            )
 
                         # Update last update time to keep connection status fresh
                         self._last_update = datetime.now(UTC)
@@ -1334,13 +1442,23 @@ class MarketDataProvider:
                             "trade_id": trade.get("trade_id", ""),
                         }
 
-                        logger.debug("Trade update: %s %s %s @ $%s", self.symbol, trade_data['side'], trade_data['size'], trade_data['price'])
+                        logger.debug(
+                            "Trade update: %s %s %s @ $%s",
+                            self.symbol,
+                            trade_data["side"],
+                            trade_data["size"],
+                            trade_data["price"],
+                        )
 
                         # Mark that we've received real WebSocket data
                         if not self._websocket_data_received:
                             self._websocket_data_received = True
                             self._first_websocket_data_time = datetime.now(UTC)
-                            logger.info("First WebSocket market data received for %s via trade at $%s", self.symbol, trade_data['price'])
+                            logger.info(
+                                "First WebSocket market data received for %s via trade at $%s",
+                                self.symbol,
+                                trade_data["price"],
+                            )
 
                         # Update last update time to keep connection status fresh
                         self._last_update = datetime.now(UTC)
@@ -1442,7 +1560,6 @@ class MarketDataProvider:
         df = pd.DataFrame(df_data)
         return df.set_index("timestamp")
 
-
     def subscribe_to_updates(self, callback: Callable[[MarketData], None]) -> None:
         """
         Subscribe to real-time data updates.
@@ -1486,7 +1603,9 @@ class MarketDataProvider:
                     task = asyncio.create_task(self._safe_callback_sync(callback, data))
                     tasks.append(task)
             except Exception as e:
-                logger.exception("Error creating subscriber task for %s: %s", callback.__name__, e)
+                logger.exception(
+                    "Error creating subscriber task for %s: %s", callback.__name__, e
+                )
 
         # Don't wait for all tasks to complete - fire and forget for non-blocking behavior
         # Tasks will run in background without blocking the caller
@@ -1496,7 +1615,9 @@ class MarketDataProvider:
         try:
             await callback(data)
         except Exception as e:
-            logger.exception("Error in async subscriber callback %s: %s", callback.__name__, e)
+            logger.exception(
+                "Error in async subscriber callback %s: %s", callback.__name__, e
+            )
 
     async def _safe_callback_sync(self, callback: Callable, data: MarketData) -> None:
         """Safely execute sync callback in thread pool."""
@@ -1510,7 +1631,9 @@ class MarketDataProvider:
                 return
             await loop.run_in_executor(None, callback, data)
         except Exception as e:
-            logger.exception("Error in sync subscriber callback %s: %s", callback.__name__, e)
+            logger.exception(
+                "Error in sync subscriber callback %s: %s", callback.__name__, e
+            )
 
     def is_connected(self) -> bool:
         """
@@ -1678,11 +1801,18 @@ class MarketDataProvider:
 
             for supported_interval, seconds in supported_intervals:
                 if seconds >= interval_seconds:
-                    logger.warning("Interval %s not supported by Coinbase API, using %s instead", interval, supported_interval)
+                    logger.warning(
+                        "Interval %s not supported by Coinbase API, using %s instead",
+                        interval,
+                        supported_interval,
+                    )
                     return granularity_map[supported_interval]
 
             # Default to ONE_DAY if interval is larger than all supported
-            logger.warning("Interval %s not supported by Coinbase API, defaulting to ONE_DAY", interval)
+            logger.warning(
+                "Interval %s not supported by Coinbase API, defaulting to ONE_DAY",
+                interval,
+            )
             return "ONE_DAY"
 
         return granularity_map[interval]
@@ -1754,7 +1884,13 @@ class MarketDataProvider:
             if data.high < max(data.open, data.close) or data.low > min(
                 data.open, data.close
             ):
-                logger.warning("Inconsistent OHLC data: High=%s, Low=%s, Open=%s, Close=%s", data.high, data.low, data.open, data.close)
+                logger.warning(
+                    "Inconsistent OHLC data: High=%s, Low=%s, Open=%s, Close=%s",
+                    data.high,
+                    data.low,
+                    data.open,
+                    data.close,
+                )
                 return False
 
             # Check for extreme price movements (compared to previous candle)
@@ -1762,7 +1898,10 @@ class MarketDataProvider:
                 last_price = self._ohlcv_cache[-1].close
                 price_change = abs(data.close - last_price) / last_price
                 if price_change > self._max_price_deviation:
-                    logger.warning("Extreme price movement detected: %s change", price_change:.2%)
+                    logger.warning(
+                        "Extreme price movement detected: %.2f%% change",
+                        price_change * 100,
+                    )
                     # Don't reject, but log for monitoring
 
             return True
@@ -1791,12 +1930,20 @@ class MarketDataProvider:
             # Check for excessive price deviation (>20% change)
             change_pct = abs(new_price - last_price) / last_price
             if change_pct > 0.20:  # 20% max change
-                logger.warning("Suspicious price change: %s from %s to %s", change_pct:.2%, last_price, new_price)
+                logger.warning(
+                    "Suspicious price change: %.2f%% from %s to %s",
+                    change_pct * 100,
+                    last_price,
+                    new_price,
+                )
                 return False
 
             # Check for price spikes (>50% in single update)
             if change_pct > 0.50:
-                logger.error("Extreme price spike detected: %s change - rejecting data", change_pct:.2%)
+                logger.error(
+                    "Extreme price spike detected: %.2f%% change - rejecting data",
+                    change_pct * 100,
+                )
                 return False
 
             return True
@@ -1818,11 +1965,22 @@ class MarketDataProvider:
         optimal_required = 200  # Optimal for stable calculations
 
         if candle_count < min_required:
-            logger.error("Insufficient data for reliable indicator calculations! Have %s candles, need minimum %s. Indicators may produce unreliable signals or errors.", candle_count, min_required)
+            logger.error(
+                "Insufficient data for reliable indicator calculations! Have %s candles, need minimum %s. Indicators may produce unreliable signals or errors.",
+                candle_count,
+                min_required,
+            )
         elif candle_count < optimal_required:
-            logger.warning("Suboptimal data for indicator calculations. Have %s candles, recommend %s for best accuracy. Early indicator values may be less reliable.", candle_count, optimal_required)
+            logger.warning(
+                "Suboptimal data for indicator calculations. Have %s candles, recommend %s for best accuracy. Early indicator values may be less reliable.",
+                candle_count,
+                optimal_required,
+            )
         else:
-            logger.info("Sufficient data for reliable indicator calculations: %s candles", candle_count)
+            logger.info(
+                "Sufficient data for reliable indicator calculations: %s candles",
+                candle_count,
+            )
 
     def clear_cache(self) -> None:
         """
@@ -2019,7 +2177,6 @@ class MarketDataClient:
         df = pd.DataFrame(df_data)
         df = df.set_index("timestamp")
         return df.sort_index()
-
 
 
 # Factory function for easy client creation

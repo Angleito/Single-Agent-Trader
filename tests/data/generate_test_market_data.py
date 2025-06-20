@@ -78,7 +78,12 @@ class MarketDataGenerator:
     ) -> pd.DataFrame:
         """Generate trending market data (positive trend_strength = bullish)."""
         direction = "bullish" if trend_strength > 0 else "bearish"
-        logger.info("Generating %s trending data: %s periods, strength %s", direction, periods, trend_strength)
+        logger.info(
+            "Generating %s trending data: %s periods, strength %s",
+            direction,
+            periods,
+            trend_strength,
+        )
 
         timestamps = pd.date_range("2024-01-01", periods=periods, freq=frequency)
 
@@ -101,7 +106,9 @@ class MarketDataGenerator:
         self, periods: int = 2000, range_size: float = 0.05, frequency: str = "1min"
     ) -> pd.DataFrame:
         """Generate ranging/sideways market data."""
-        logger.info("Generating ranging market data: %s periods, range %s", periods, range_size)
+        logger.info(
+            "Generating ranging market data: %s periods, range %s", periods, range_size
+        )
 
         timestamps = pd.date_range("2024-01-01", periods=periods, freq=frequency)
 
@@ -127,7 +134,11 @@ class MarketDataGenerator:
         frequency: str = "1min",
     ) -> pd.DataFrame:
         """Generate high volatility market data."""
-        logger.info("Generating volatile market data: %s periods, vol factor %s", periods, volatility_factor)
+        logger.info(
+            "Generating volatile market data: %s periods, vol factor %s",
+            periods,
+            volatility_factor,
+        )
 
         timestamps = pd.date_range("2024-01-01", periods=periods, freq=frequency)
 
@@ -162,7 +173,11 @@ class MarketDataGenerator:
         frequency: str = "1min",
     ) -> pd.DataFrame:
         """Generate data with gaps and extreme moves."""
-        logger.info("Generating gap data: %s periods, gaps every %s periods", periods, gap_frequency)
+        logger.info(
+            "Generating gap data: %s periods, gaps every %s periods",
+            periods,
+            gap_frequency,
+        )
 
         timestamps = pd.date_range("2024-01-01", periods=periods, freq=frequency)
 
@@ -199,7 +214,11 @@ class MarketDataGenerator:
         self, periods: int = 2000, volume_factor: float = 0.3, frequency: str = "1min"
     ) -> pd.DataFrame:
         """Generate market data with low volume conditions."""
-        logger.info("Generating low volume data: %s periods, vol factor %s", periods, volume_factor)
+        logger.info(
+            "Generating low volume data: %s periods, vol factor %s",
+            periods,
+            volume_factor,
+        )
 
         # Generate base market data
         data = self.generate_default_data(periods, frequency)
@@ -579,7 +598,7 @@ def main():
     summary = test_suite.generate_data_summary()
 
     logger.info("Test data generation completed")
-    logger.info("Generated %s files", len(summary['files']))
+    logger.info("Generated %s files", len(summary["files"]))
     logger.info("Total scenarios: %s", len(generated_files))
 
     return generated_files

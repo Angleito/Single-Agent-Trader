@@ -274,7 +274,6 @@ class PerformanceBenchmarks:
             iterations=10,
         )
 
-
     def benchmark_llm_initialization(self) -> BenchmarkResult:
         """Benchmark LLM agent initialization time."""
 
@@ -446,7 +445,6 @@ class PerformanceBenchmarks:
             iterations=3,
         )
 
-
     def benchmark_data_serialization(self) -> BenchmarkResult:
         """Benchmark data serialization performance."""
 
@@ -517,7 +515,7 @@ class PerformanceBenchmarks:
             try:
                 result = func()
             except Exception as e:
-                logger.warning("Benchmark iteration %s failed: %s", i+1, e)
+                logger.warning("Benchmark iteration %s failed: %s", i + 1, e)
                 continue
             end_time = time.perf_counter()
 

@@ -103,15 +103,20 @@ class PositionManager:
         # Initialization complete
         self._initializing = False
 
-        logger.info("Initialized Enhanced PositionManager with %s active positions\n", len(self._positions))
-            f"  • FIFO tracking: {'enabled' if self.use_fifo else 'disabled'}\n"
-            f"  • Paper trading: {'enabled' if self.paper_account else 'disabled'}\n"
-            f"  • Enhanced validation: enabled\n"
-            f"  • Max position value: ${self._max_position_value:,.2f}"
+        logger.info(
+            "Initialized Enhanced PositionManager with %s active positions\n"
+            "  • FIFO tracking: %s\n"
+            "  • Paper trading: %s\n"
+            "  • Enhanced validation: enabled\n"
+            "  • Max position value: $%s",
+            len(self._positions),
+            'enabled' if self.use_fifo else 'disabled',
+            'enabled' if self.paper_account else 'disabled',
+            f"{self._max_position_value:,.2f}"
         )
         if self.paper_account:
             account_status = self.paper_account.get_account_status()
-            logger.info("Paper trading account: $%s equity, %s open positions", account_status['equity']:,.2f, account_status['open_positions'])
+            logger.info("Paper trading account: $%.2f equity, %s open positions", account_status['equity'], account_status['open_positions'])
 
     def get_position(self, symbol: str) -> Position:
         """

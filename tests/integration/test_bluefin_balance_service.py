@@ -305,9 +305,7 @@ class TestBluefinBalanceServiceIntegration:
 
         # Calculate total unrealized P&L from positions
         positions = positions_data["data"]
-        sum(
-            Decimal(pos.get("unrealizedPnl", "0")) for pos in positions
-        )
+        sum(Decimal(pos.get("unrealizedPnl", "0")) for pos in positions)
 
         # Verify position data structure
         for position in positions:

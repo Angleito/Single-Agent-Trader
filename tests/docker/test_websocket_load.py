@@ -332,8 +332,8 @@ class WebSocketLoadTester:
         logger.info("%s", '=' * 60)
 
         logger.info("\nMessage Statistics:")
-        logger.info("  Messages Sent: %s", self.metrics.messages_sent:,)
-        logger.info("  Messages Failed: %s", self.metrics.messages_failed:,)
+        logger.info("  Messages Sent: %s", self.metrics.messages_sent:)
+        logger.info("  Messages Failed: %s", self.metrics.messages_failed:)
         logger.info("  Success Rate: %s%", (self.metrics.messages_sent / (self.metrics.messages_sent + self.metrics.messages_failed) * 100):.1f)
         logger.info("  Throughput: %s msg/s", self.metrics.messages_per_second:.1f)
 

@@ -9,7 +9,7 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from threading import Lock
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 import aiofiles
 
@@ -85,7 +85,9 @@ class FIFOPositionManager:
             Updated position in legacy format
         """
         if order.status != OrderStatus.FILLED:
-            logger.warning("Attempted to update position with non-filled order: %s", order)
+            logger.warning(
+                "Attempted to update position with non-filled order: %s", order
+            )
             return self.get_position(order.symbol)
 
         with self._lock:
@@ -120,7 +122,12 @@ class FIFOPositionManager:
         else:
             # Opening or adding to LONG position
             lot = fifo_pos.add_lot(order.filled_quantity, fill_price, order.timestamp)
-            logger.info("Added lot %s with %s units at %s", lot.lot_id, lot.quantity, lot.purchase_price)
+            logger.info(
+                "Added lot %s with %s units at %s",
+                lot.lot_id,
+                lot.quantity,
+                lot.purchase_price,
+            )
 
     def _handle_sell_order(
         self, fifo_pos: FIFOPosition, order: Order, current_price: Decimal
@@ -160,7 +167,10 @@ class FIFOPositionManager:
         else:
             # For futures, this would open a SHORT position
             # For spot trading, we typically don't support shorting
-            logger.warning("Attempted to sell %s units with no long position", order.filled_quantity)
+            logger.warning(
+                "Attempted to sell %s units with no long position",
+                order.filled_quantity,
+            )
 
     def get_all_positions(self) -> dict[str, Position]:
         """Get all active positions in legacy format."""
@@ -367,7 +377,10 @@ class FIFOPositionManager:
             try:
                 state = json.loads(content)
             except json.JSONDecodeError as e:
-                logger.warning("Invalid JSON in FIFO positions file: %s. Starting with clean state", e)
+                logger.warning(
+                    "Invalid JSON in FIFO positions file: %s. Starting with clean state",
+                    e,
+                )
                 return
 
             # Restore position history

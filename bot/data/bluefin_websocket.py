@@ -132,7 +132,7 @@ class BluefinWebSocketClient:
         self._message_count = 0
         self._error_count = 0
 
-        logger.info("Initialized BluefinWebSocketClient for %s with %s candles on %s network", extra=%s, ), symbol, interval, self.network,  "symbol": symbol, "interval": interval, "network": self.network, "notification_ws_url": self.NOTIFICATION_WS_URL, "dapi_ws_url": self.DAPI_WS_URL, )
+        logger.info("Initialized BluefinWebSocketClient for %s with %s candles on %s network", extra=%s ), symbol, interval, self.network,  "symbol": symbol, "interval": interval, "network": self.network, "notification_ws_url": self.NOTIFICATION_WS_URL, "dapi_ws_url": self.DAPI_WS_URL, )
 
     async def connect(self) -> None:
         """Establish WebSocket connection and start data streaming."""

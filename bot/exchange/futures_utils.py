@@ -125,8 +125,7 @@ class FuturesContractManager:
             futures_contracts.sort(key=lambda x: x["expiry"])
             selected_contract = futures_contracts[0]
 
-            logger.info("Selected %s futures contract: %s " "(expires in %s days)", base_currency, selected_contract['symbol'], selected_contract['days_to_expiry'])
-            )
+            logger.info("Selected %s futures contract: %s (expires in %s days)", base_currency, selected_contract['symbol'], selected_contract['days_to_expiry'])
 
             # Log all available contracts for debugging
             if len(futures_contracts) > 1:

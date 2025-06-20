@@ -197,7 +197,11 @@ class SommiPatterns:
             )
 
             if len(htf_data) < min_required:
-                logger.warning("Insufficient HTF data for WaveTrend calculation: %s < %s", len(htf_data), min_required)
+                logger.warning(
+                    "Insufficient HTF data for WaveTrend calculation: %s < %s",
+                    len(htf_data),
+                    min_required,
+                )
                 return self._empty_htf_series(price_data.index)
 
             # Calculate WaveTrend on higher timeframe
@@ -298,7 +302,9 @@ class SommiPatterns:
                 # Fallback for single data point
                 resample_rule = f"{multiplier}T"
 
-            logger.debug("Inferred frequency from time difference, using %s", resample_rule)
+            logger.debug(
+                "Inferred frequency from time difference, using %s", resample_rule
+            )
         else:
             # Extract numeric part and unit
             match = re.match(r"(\d*)([A-Z]+)", freq)
@@ -310,7 +316,9 @@ class SommiPatterns:
             else:
                 resample_rule = f"{multiplier}T"
 
-            logger.debug("Using detected frequency %s, resampling with %s", freq, resample_rule)
+            logger.debug(
+                "Using detected frequency %s, resampling with %s", freq, resample_rule
+            )
 
         return resample_rule
 
@@ -668,7 +676,11 @@ class SommiPatterns:
             )
 
             if len(price_data) < min_required:
-                logger.warning("Insufficient data for Sommi analysis: %s < %s", len(price_data), min_required)
+                logger.warning(
+                    "Insufficient data for Sommi analysis: %s < %s",
+                    len(price_data),
+                    min_required,
+                )
                 return price_data.copy()
 
             result = price_data.copy()
@@ -787,7 +799,6 @@ class SommiPatterns:
                 )
                 .dropna()
             )
-
 
         except Exception as e:
             logger.exception("Error resampling for HTF: %s", e)

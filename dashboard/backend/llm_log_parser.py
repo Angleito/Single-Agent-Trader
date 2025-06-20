@@ -511,7 +511,9 @@ class LLMLogParser:
             # Start from end of file if it exists
             if self.log_file.exists():
                 self._last_position = self.log_file.stat().st_size
-                logger.info("Starting log monitoring from position %s", self._last_position)
+                logger.info(
+                    "Starting log monitoring from position %s", self._last_position
+                )
 
             while not self._stop_event.is_set():
                 if self.log_file.exists():

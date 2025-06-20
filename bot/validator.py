@@ -61,7 +61,7 @@ class TradeValidator:
             return validated_action
 
         except Exception as e:
-            logger.exception("Validation failed: %s", e)
+            logger.exception("Validation failed")
             return self._get_default_hold_action(f"Validation error: {e!s}")
 
     def _parse_llm_output(
@@ -130,7 +130,9 @@ class TradeValidator:
                 original_action = normalized["action"]
                 normalized["action"] = action_mappings[action]
                 logger.info(
-                    "Normalized action '%s' to '%s'", original_action, normalized['action']
+                    "Normalized action '%s' to '%s'",
+                    original_action,
+                    normalized["action"],
                 )
             else:
                 normalized["action"] = action
@@ -167,7 +169,9 @@ class TradeValidator:
         if validated.action in ["LONG", "SHORT"] and validated.size_pct == 0:
             validated.size_pct = 5  # Default 5% position size
             logger.info(
-                "Set default position size: %s%% for %s", validated.size_pct, validated.action
+                "Set default position size: %s%% for %s",
+                validated.size_pct,
+                validated.action,
             )
 
         if validated.size_pct > self.max_size_pct:
@@ -184,7 +188,9 @@ class TradeValidator:
 
         if validated.take_profit_pct > self.max_tp_pct:
             logger.warning(
-                "Take profit capped from %s%% to %s%%", validated.take_profit_pct, self.max_tp_pct
+                "Take profit capped from %s%% to %s%%",
+                validated.take_profit_pct,
+                self.max_tp_pct,
             )
             validated.take_profit_pct = self.max_tp_pct
 
@@ -196,7 +202,9 @@ class TradeValidator:
 
         if validated.stop_loss_pct > self.max_sl_pct:
             logger.warning(
-                "Stop loss capped from %s%% to %s%%", validated.stop_loss_pct, self.max_sl_pct
+                "Stop loss capped from %s%% to %s%%",
+                validated.stop_loss_pct,
+                self.max_sl_pct,
             )
             validated.stop_loss_pct = self.max_sl_pct
 
@@ -221,7 +229,6 @@ class TradeValidator:
         # Business rule validations
         return self._apply_business_rules(validated, current_position)
 
-
     def _apply_business_rules(
         self, action: TradeAction, current_position: Position | None = None
     ) -> TradeAction:
@@ -243,7 +250,8 @@ class TradeValidator:
             if validated.action in ["LONG", "SHORT"]:
                 logger.warning(
                     "Cannot open new %s position - existing %s position. Changing to HOLD.",
-                    validated.action, current_position.side
+                    validated.action,
+                    current_position.side,
                 )
                 return self._get_default_hold_action(
                     f"Position exists ({current_position.side}) - only CLOSE or HOLD allowed"

@@ -174,7 +174,12 @@ class ErrorBoundary:
         self.error_history.append(error_context)
 
         # Log error with full context
-        logger.error("Error boundary triggered in %s: %s", extra=%s, ), self.component_name, exception, "error_context": error_context.__dict__)
+        logger.error(
+            "Error boundary triggered in %s: %s",
+            self.component_name,
+            exception,
+            extra={"error_context": error_context.__dict__},
+        )
 
         # Mark component as degraded if error count exceeds threshold
         if self.error_count >= self.max_retries:
@@ -187,7 +192,11 @@ class ErrorBoundary:
                 logger.info("Executing fallback behavior for %s", self.component_name)
                 await self._execute_fallback(exception, error_context)
             except Exception as fallback_error:
-                logger.exception("Fallback failed for %s: %s", extra=%s,, self.component_name, fallback_error, "original_error": str(exception))
+                logger.exception(
+                    "Fallback failed for %s: %s",
+                    self.component_name,
+                    fallback_error,
+                    extra={"original_error": str(exception)},
                 )
 
     async def _execute_fallback(
@@ -274,7 +283,12 @@ class TradeSaga:
         except Exception as e:
             self.status = "failed"
             self.end_time = datetime.now(UTC)
-            logger.exception("Saga %s failed at step %s: %s", self.saga_id, len(self.completed_steps), e)
+            logger.exception(
+                "Saga %s failed at step %s: %s",
+                self.saga_id,
+                len(self.completed_steps),
+                e,
+            )
 
             # Execute compensation actions
             await self._compensate()
@@ -293,7 +307,11 @@ class TradeSaga:
 
                 if compensation_action:
                     try:
-                        logger.debug("Executing compensation for step %s: %s", step_index, step_name)
+                        logger.debug(
+                            "Executing compensation for step %s: %s",
+                            step_index,
+                            step_name,
+                        )
 
                         if asyncio.iscoroutinefunction(compensation_action):
                             await compensation_action(result)
@@ -303,7 +321,11 @@ class TradeSaga:
                         logger.debug("Compensation for step %s completed", step_index)
 
                     except Exception as comp_error:
-                        logger.exception("Compensation failed for step %s (%s): %s",, step_index, step_name, comp_error)
+                        logger.exception(
+                            "Compensation failed for step %s (%s): %s",
+                            step_index,
+                            step_name,
+                            comp_error,
                             extra={"saga_id": self.saga_id, "original_result": result},
                         )
 
@@ -409,7 +431,9 @@ class GracefulDegradation:
             else:
                 return fallback_strategy(*args, **kwargs)
         except Exception as fallback_error:
-            logger.exception("Fallback strategy failed for %s: %s", service_name, fallback_error)
+            logger.exception(
+                "Fallback strategy failed for %s: %s", service_name, fallback_error
+            )
             raise
 
     async def _handle_service_failure(
@@ -427,7 +451,11 @@ class GracefulDegradation:
         if service_health.consecutive_failures >= threshold:
             self.degraded_services.add(service_name)
             service_health.status = ServiceStatus.DEGRADED
-            logger.warning("Service %s marked as degraded after %s failures", service_name, service_health.consecutive_failures)
+            logger.warning(
+                "Service %s marked as degraded after %s failures",
+                service_name,
+                service_health.consecutive_failures,
+            )
         else:
             service_health.status = ServiceStatus.UNHEALTHY
 
@@ -510,7 +538,14 @@ class EnhancedExceptionHandler:
         self.exception_history.append(error_context)
 
         # Log structured exception data
-        logger.error("Exception in %s.%s: %s", extra={ "error_context": error_context.__dict__, "exception_type": type(exception).__name__,, component, operation, exception)
+        logger.error(
+            "Exception in %s.%s: %s",
+            component,
+            operation,
+            exception,
+            extra={
+                "error_context": error_context.__dict__,
+                "exception_type": type(exception).__name__,
                 "should_retry": error_context.should_retry,
             },
         )
@@ -692,7 +727,10 @@ class BalanceErrorHandler:
                 recommendations["reason"] = (
                     "Multiple consecutive insufficient balance errors detected"
                 )
-                logger.critical("Critical: %s consecutive " "insufficient balance errors. Trading should be halted." ), self.consecutive_insufficient_balance_errors)
+                logger.critical(
+                    "Critical: %s consecutive insufficient balance errors. Trading should be halted.",
+                    self.consecutive_insufficient_balance_errors,
+                )
         else:
             self.consecutive_insufficient_balance_errors = 0
 
@@ -808,14 +846,24 @@ def retry_with_backoff(
                     last_exception = e
 
                     if attempt == max_retries:
-                        logger.exception("Function %s failed after %s retries: %s", func.__name__, max_retries, e)
+                        logger.exception(
+                            "Function %s failed after %s retries: %s",
+                            func.__name__,
+                            max_retries,
+                            e,
+                        )
                         raise
 
                     # Calculate delay with exponential backoff
                     delay = min(base_delay * (exponential_base**attempt), max_delay)
 
-                    logger.warning("Function %s failed (attempt %s/%s), ", func.__name__, attempt + 1, max_retries + 1)
-                        f"retrying in {delay:.2f}s: {e}"
+                    logger.warning(
+                        "Function %s failed (attempt %s/%s), retrying in %.2fs: %s",
+                        func.__name__,
+                        attempt + 1,
+                        max_retries + 1,
+                        delay,
+                        e,
                     )
 
                     await asyncio.sleep(delay)
@@ -838,14 +886,24 @@ def retry_with_backoff(
                     last_exception = e
 
                     if attempt == max_retries:
-                        logger.exception("Function %s failed after %s retries: %s", func.__name__, max_retries, e)
+                        logger.exception(
+                            "Function %s failed after %s retries: %s",
+                            func.__name__,
+                            max_retries,
+                            e,
+                        )
                         raise
 
                     # Calculate delay with exponential backoff
                     delay = min(base_delay * (exponential_base**attempt), max_delay)
 
-                    logger.warning("Function %s failed (attempt %s/%s), ", func.__name__, attempt + 1, max_retries + 1)
-                        f"retrying in {delay:.2f}s: {e}"
+                    logger.warning(
+                        "Function %s failed (attempt %s/%s), retrying in %.2fs: %s",
+                        func.__name__,
+                        attempt + 1,
+                        max_retries + 1,
+                        delay,
+                        e,
                     )
 
                     import time

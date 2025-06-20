@@ -7,18 +7,15 @@ and evolves trading parameters based on performance.
 
 import logging
 from collections import defaultdict
-from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import numpy as np
 from pydantic import BaseModel, Field
 
 from bot.config import settings
 from bot.mcp.memory_server import MCPMemoryServer, TradingExperience
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +152,11 @@ class SelfImprovementEngine:
             "new_insights": await self._generate_insights(recent_experiences),
         }
 
-        logger.info("Performance analysis complete: %s trades, " "%s success rate, " "$%s total PnL" ), total_trades, analysis['success_rate']:.1%, total_pnl:.2f)
+        logger.info(
+            f"Performance analysis complete: {total_trades} trades, "
+            f"{analysis['success_rate']:.1%} success rate, "
+            f"${total_pnl:.2f} total PnL"
+        )
 
         return analysis
 

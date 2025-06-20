@@ -290,7 +290,7 @@ class WebSocketPublisher:
                 if self._connection_start_time is not None
                 else time.time()
             )
-            logger.info("Successfully connected to dashboard WebSocket in %ss", connection_time:.2f)
+            logger.info("Successfully connected to dashboard WebSocket in %.2fs", connection_time)
 
         except (TimeoutError, OSError, InvalidURI) as e:
             self._connected = False

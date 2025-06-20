@@ -286,7 +286,15 @@ class BluefinServiceClient:
         self._update_balance_performance_metrics(status, duration_ms, error)
 
         # Log audit entry
-        logger.debug("Balance client audit: %s - %s", extra=%s, ), operation, status,  "audit_entry": audit_entry, "operation_type": "balance_client_audit", )
+        logger.debug(
+            "Balance client audit: %s - %s",
+            operation,
+            status,
+            extra={
+                "audit_entry": audit_entry,
+                "operation_type": "balance_client_audit",
+            },
+        )
 
     def _update_balance_performance_metrics(
         self, status: str, duration_ms: float | None = None, error: str | None = None
@@ -529,7 +537,15 @@ class BluefinServiceClient:
             return True
         else:
             remaining_time = self.circuit_open_until - current_time
-            logger.warning("Circuit breaker reset not ready - %ss remaining", extra=%s, ), remaining_time:.1f,  "client_id": self.client_id, "remaining_seconds": remaining_time, "use_force_to_override": True, )
+            logger.warning(
+                "Circuit breaker reset not ready - %.1fs remaining",
+                remaining_time,
+                extra={
+                    "client_id": self.client_id,
+                    "remaining_seconds": remaining_time,
+                    "use_force_to_override": True,
+                },
+            )
             return False
 
     def get_circuit_breaker_status(self) -> dict[str, Any]:
@@ -558,7 +574,7 @@ class BluefinServiceClient:
     def _record_success(self):
         """Record successful operation - reset failure counters."""
         if self.consecutive_failures > 0:
-            logger.info("Operation succeeded, resetting failure count from %s", extra=%s, ), self.consecutive_failures, "client_id": self.client_id)
+            logger.info("Operation succeeded, resetting failure count from %s", self.consecutive_failures, extra={"client_id": self.client_id})
             self.consecutive_failures = 0
 
     def _record_failure(self):
@@ -568,7 +584,7 @@ class BluefinServiceClient:
         if self.consecutive_failures >= self.circuit_failure_threshold:
             self.circuit_open = True
             self.circuit_open_until = time.time() + self.circuit_recovery_timeout
-            logger.warning("Circuit breaker opened due to %s consecutive failures. " "Will retry after %ss", extra=%s, ), self.consecutive_failures, self.circuit_recovery_timeout, "client_id": self.client_id)
+            logger.warning("Circuit breaker opened due to %s consecutive failures. Will retry after %ss", self.consecutive_failures, self.circuit_recovery_timeout, extra={"client_id": self.client_id})
 
     def _calculate_retry_delay(self, attempt: int, operation: str = "default") -> float:
         """
@@ -610,7 +626,7 @@ class BluefinServiceClient:
 
         final_delay = capped_delay + jitter
 
-        logger.debug("Calculated retry delay for %s", extra=%s, ), operation,  "client_id": self.client_id, "attempt": attempt, "operation": operation, "base_delay": base_delay, "multiplier": multiplier, "capped_delay": capped_delay, "jitter": jitter, "final_delay": final_delay, )
+        logger.debug("Calculated retry delay for %s", operation, extra={"client_id": self.client_id, "attempt": attempt, "operation": operation, "base_delay": base_delay, "multiplier": multiplier, "capped_delay": capped_delay, "jitter": jitter, "final_delay": final_delay})
 
         return final_delay
 
@@ -640,21 +656,10 @@ class BluefinServiceClient:
 
                 if attempt < self._max_retries - 1:
                     delay = self._calculate_retry_delay(attempt, "api_call")
-                    logger.warning("Request failed (attempt %s/%s), ", attempt + 1, self._max_retries)
-                        f"retrying in {delay:.2f}s: {e}",
-                        extra={
-                            "client_id": self.client_id,
-                            "attempt": attempt + 1,
-                            "max_retries": self._max_retries,
-                            "delay": delay,
-                            "error_type": type(e).__name__,
-                        },
-                    )
+                    logger.warning("Request failed (attempt %s/%s), retrying in %.2fs: %s", attempt + 1, self._max_retries, delay, e, extra={"client_id": self.client_id, "attempt": attempt + 1, "max_retries": self._max_retries, "delay": delay, "error_type": type(e).__name__})
                     await asyncio.sleep(delay)
                 else:
-                    logger.exception("Request failed after %s attempts: %s", extra={ "client_id": self.client_id, "total_attempts": self._max_retries, "error_type": type(e).__name__,, self._max_retries, e)
-                        },
-                    )
+                    logger.exception("Request failed after %s attempts", self._max_retries, extra={"client_id": self.client_id, "total_attempts": self._max_retries, "error_type": type(e).__name__})
             except Exception as e:
                 exception_handler.log_exception_with_context(
                     e,
@@ -774,23 +779,16 @@ class BluefinServiceClient:
 
                     if self._connected:
                         self.consecutive_failures = 0
-                        logger.debug("Health check successful on attempt %s", extra=%s, ), attempt + 1,  "client_id": self.client_id, "status_code": resp.status, "connected": self._connected, "attempt": attempt + 1, )
+                        logger.debug("Health check successful on attempt %s", attempt + 1, extra={"client_id": self.client_id, "status_code": resp.status, "connected": self._connected, "attempt": attempt + 1})
                         return True
                     elif attempt < max_health_retries - 1:
-                        logger.debug("Health check failed (status %s), retrying in %ss",, resp.status, health_retry_delay)
-                            extra={
-                                "client_id": self.client_id,
-                                "status_code": resp.status,
-                                "attempt": attempt + 1,
-                                "max_retries": max_health_retries,
-                            },
-                        )
+                        logger.debug("Health check failed (status %s), retrying in %ss", resp.status, health_retry_delay, extra={"client_id": self.client_id, "status_code": resp.status, "attempt": attempt + 1, "max_retries": max_health_retries})
                         await asyncio.sleep(health_retry_delay)
                         continue
                     else:
-                        logger.warning("Health check failed after %s attempts: status %s", extra=%s, ), max_health_retries, resp.status,  "client_id": self.client_id, "status_code": resp.status, "total_attempts": max_health_retries, )
+                        logger.warning("Health check failed after %s attempts: status %s", max_health_retries, resp.status, extra={"client_id": self.client_id, "status_code": resp.status, "total_attempts": max_health_retries})
                 else:
-                    logger.warning("Health check session unavailable on attempt %s", extra=%s, ), attempt + 1,  "client_id": self.client_id, "attempt": attempt + 1, )
+                    logger.warning("Health check session unavailable on attempt %s", attempt + 1, extra={"client_id": self.client_id, "attempt": attempt + 1})
                     if attempt < max_health_retries - 1:
                         await asyncio.sleep(health_retry_delay)
                         continue
@@ -800,11 +798,7 @@ class BluefinServiceClient:
 
             except (ClientError, TimeoutError, OSError) as e:
                 if attempt < max_health_retries - 1:
-                    logger.debug("Health check network error on attempt %s, retrying: %s", extra={ "client_id": self.client_id, "error_type": type(e).__name__,, attempt + 1, e)
-                            "attempt": attempt + 1,
-                            "max_retries": max_health_retries,
-                        },
-                    )
+                    logger.debug("Health check network error on attempt %s, retrying: %s", attempt + 1, e, extra={"client_id": self.client_id, "error_type": type(e).__name__, "attempt": attempt + 1, "max_retries": max_health_retries})
                     await asyncio.sleep(health_retry_delay)
                     continue
                 else:
@@ -844,7 +838,7 @@ class BluefinServiceClient:
         # All attempts failed
         self._connected = False
         self.consecutive_failures += 1
-        logger.warning("Health check failed after %s resilient attempts", extra=%s, ), max_health_retries,  "client_id": self.client_id, "total_attempts": max_health_retries, "consecutive_failures": self.consecutive_failures, )
+        logger.warning("Health check failed after %s resilient attempts", max_health_retries, extra={"client_id": self.client_id, "total_attempts": max_health_retries, "consecutive_failures": self.consecutive_failures})
         return False
 
     async def _ensure_session(self) -> None:
@@ -1355,11 +1349,11 @@ class BluefinServiceClient:
             return {"status": "success", "order": result}
 
         except BluefinServiceAuthError as e:
-            logger.exception("Authentication failed placing order: %s", extra=%s, ), e, "client_id": self.client_id, "operation": "place_order")
+            logger.exception("Authentication failed placing order", extra={"client_id": self.client_id, "operation": "place_order"})
             return {"status": "error", "message": "Authentication failed"}
 
         except BluefinServiceRateLimitError as e:
-            logger.exception("Rate limited placing order: %s", extra=%s, ), e, "client_id": self.client_id, "operation": "place_order")
+            logger.exception("Rate limited placing order", extra={"client_id": self.client_id, "operation": "place_order"})
             return {
                 "status": "error",
                 "message": f"Rate limit exceeded, retry after {e.retry_after}s",
@@ -1367,7 +1361,7 @@ class BluefinServiceClient:
             }
 
         except BluefinServiceConnectionError as e:
-            logger.exception("Connection error placing order: %s", extra=%s, ), e, "client_id": self.client_id, "operation": "place_order")
+            logger.exception("Connection error placing order", extra={"client_id": self.client_id, "operation": "place_order"})
             return {"status": "error", "message": f"Connection error: {e!s}"}
 
         except Exception as e:
@@ -1407,9 +1401,7 @@ class BluefinServiceClient:
             BluefinServiceRateLimitError,
             BluefinServiceConnectionError,
         ) as e:
-            logger.exception("Service error canceling order %s: %s", extra={ "client_id": self.client_id, "operation": "cancel_order", "order_id": order_id, "error_type": type(e).__name__,, order_id, e)
-                },
-            )
+            logger.exception("Service error canceling order %s", order_id, extra={"client_id": self.client_id, "operation": "cancel_order", "order_id": order_id, "error_type": type(e).__name__})
             return False
 
         except Exception as e:
@@ -1449,9 +1441,7 @@ class BluefinServiceClient:
             BluefinServiceRateLimitError,
             BluefinServiceConnectionError,
         ) as e:
-            logger.exception("Service error getting ticker for %s: %s", extra={ "client_id": self.client_id, "operation": "get_market_ticker", "symbol": symbol, "error_type": type(e).__name__,, symbol, e)
-                },
-            )
+            logger.exception("Service error getting ticker for %s", symbol, extra={"client_id": self.client_id, "operation": "get_market_ticker", "symbol": symbol, "error_type": type(e).__name__})
             return {"price": "0", "error": str(e)}
 
         except Exception as e:
@@ -1493,9 +1483,7 @@ class BluefinServiceClient:
             BluefinServiceRateLimitError,
             BluefinServiceConnectionError,
         ) as e:
-            logger.exception("Service error setting leverage for %s: %s", extra={ "client_id": self.client_id, "operation": "set_leverage", "symbol": symbol, "leverage": leverage, "error_type": type(e).__name__,, symbol, e)
-                },
-            )
+            logger.exception("Service error setting leverage for %s", symbol, extra={"client_id": self.client_id, "operation": "set_leverage", "symbol": symbol, "leverage": leverage, "error_type": type(e).__name__})
             return False
 
         except Exception as e:
@@ -1541,13 +1529,11 @@ class BluefinServiceClient:
 
             # Validate candle data
             if self._validate_candle_data(candles):
-                logger.info("✅ Successfully retrieved %s validated candles",, len(candles))
-                    extra={
-                        "client_id": self.client_id,
-                        "operation": "get_candlestick_data",
-                        "candle_count": len(candles),
-                    },
-                )
+                logger.info("✅ Successfully retrieved %s validated candles", len(candles), extra={
+                    "client_id": self.client_id,
+                    "operation": "get_candlestick_data",
+                    "candle_count": len(candles),
+                })
                 return candles
             else:
                 logger.warning(
@@ -1561,14 +1547,10 @@ class BluefinServiceClient:
                 return []
 
         except (BluefinServiceAuthError, BluefinServiceRateLimitError) as e:
-            logger.exception("Service error getting candlestick data: %s", extra={ "client_id": self.client_id, "operation": "get_candlestick_data", "error_type": type(e).__name__,, e)
-                },
-            )
+            logger.exception("Service error getting candlestick data", extra={"client_id": self.client_id, "operation": "get_candlestick_data", "error_type": type(e).__name__})
             return []
         except BluefinServiceConnectionError as e:
-            logger.exception("Connection error getting candlestick data: %s", extra={ "client_id": self.client_id, "operation": "get_candlestick_data", "error_type": type(e).__name__,, e)
-                },
-            )
+            logger.exception("Connection error getting candlestick data", extra={"client_id": self.client_id, "operation": "get_candlestick_data", "error_type": type(e).__name__})
             return []
         except Exception as e:
             exception_handler.log_exception_with_context(
@@ -1638,18 +1620,16 @@ class BluefinServiceClient:
                 # Ensure session is valid before each attempt
                 await self._ensure_session()
 
-                logger.debug("Making HTTP request (attempt %s/%s)",, attempt + 1, self._max_retries)
-                    extra={
-                        "client_id": self.client_id,
-                        "method": method,
-                        "url": url,
-                        "operation": operation,
-                        "attempt": attempt + 1,
-                        "has_json_data": bool(json_data),
-                        "has_params": bool(params),
-                        "session_request_count": self._session_request_count,
-                    },
-                )
+                logger.debug("Making HTTP request (attempt %s/%s)", attempt + 1, self._max_retries, extra={
+                    "client_id": self.client_id,
+                    "method": method,
+                    "url": url,
+                    "operation": operation,
+                    "attempt": attempt + 1,
+                    "has_json_data": bool(json_data),
+                    "has_params": bool(params),
+                    "session_request_count": self._session_request_count,
+                })
 
                 request_kwargs: dict[str, Any] = {}
                 if json_data is not None:
@@ -1719,7 +1699,7 @@ class BluefinServiceClient:
                             # For rate limiting, wait and retry if we have attempts left
                             if attempt < self._max_retries - 1:
                                 wait_time = min(retry_after, 30)  # Cap wait time at 30s
-                                logger.info("Waiting %ss for rate limit reset", extra=%s, ), wait_time,  "client_id": self.client_id, "operation": operation, )
+                                logger.info("Waiting %ss for rate limit reset", wait_time, extra={"client_id": self.client_id, "operation": operation})
                                 await asyncio.sleep(wait_time)
                                 continue
                             else:
@@ -1733,7 +1713,19 @@ class BluefinServiceClient:
 
                             if attempt < self._max_retries - 1:
                                 delay = self._calculate_retry_delay(attempt)
-                                logger.warning("Request failed, retrying in %ss", extra=%s, ), delay:.2f,  "client_id": self.client_id, "operation": operation, "status_code": resp.status, "error_response": error_text[:200], "attempt": attempt + 1, "max_retries": self._max_retries, "delay": delay, )
+                                logger.warning(
+                                    "Request failed, retrying in %.2fs",
+                                    delay,
+                                    extra={
+                                        "client_id": self.client_id,
+                                        "operation": operation,
+                                        "status_code": resp.status,
+                                        "error_response": error_text[:200],
+                                        "attempt": attempt + 1,
+                                        "max_retries": self._max_retries,
+                                        "delay": delay,
+                                    },
+                                )
                                 await asyncio.sleep(delay)
                                 continue
                             else:
@@ -1766,7 +1758,13 @@ class BluefinServiceClient:
 
                 if attempt < self._max_retries - 1:
                     delay = self._calculate_retry_delay(attempt)
-                    logger.warning("Network error, retrying in %ss", extra={ "client_id": self.client_id, "operation": operation, "error_type": type(e).__name__,, delay:.2f)
+                    logger.warning(
+                        "Network error, retrying in %.2fs",
+                        delay,
+                        extra={
+                            "client_id": self.client_id,
+                            "operation": operation,
+                            "error_type": type(e).__name__,
                             "error_message": str(e),
                             "attempt": attempt + 1,
                             "max_retries": self._max_retries,
@@ -1907,7 +1905,7 @@ class BluefinServiceClient:
                     logger.debug("⚠️ Invalid OHLC relationship in candle %s: O=%s, H=%s, L=%s, C=%s, tolerance=%s", i, open_p, high_p, low_p, close_p, tolerance)
                     continue
                 if max_price - min_price > avg_price * 0.5:
-                    logger.debug("⚠️ Suspicious price spread in candle %s: range=%s, avg=%s", i, max_price-min_price:.6f, avg_price:.6f)
+                    logger.debug("⚠️ Suspicious price spread in candle %s: range=%.6f, avg=%.6f", i, max_price-min_price, avg_price)
                     continue
 
                 valid_count += 1
@@ -1920,7 +1918,7 @@ class BluefinServiceClient:
 
         # Lower the threshold to 40% since we've identified data quality issues from the source
         if validation_rate < 0.4:
-            logger.warning("⚠️ Low validation rate: %s (%s/%s valid)", validation_rate:.1%, valid_count, total_candles)
+            logger.warning("⚠️ Low validation rate: %.1f%% (%s/%s valid)", validation_rate * 100, valid_count, total_candles)
 
             # Analyze validation failure patterns
             failure_reasons = {
@@ -2018,8 +2016,8 @@ class BluefinServiceClient:
                         high_ok = high_p >= max_oc
                         low_ok = low_p <= min_oc
 
-                        logger.warning("Sample candle %s: O=%s, H=%s, L=%s, C=%s, V=%s", i, open_p:.8f, high_p:.8f, low_p:.8f, close_p:.8f, volume:.4f)
-                        logger.warning("  OHLC check: H>=%s? %s (%s >= %s), L<=%s? %s (%s <= %s)", max_oc:.8f, high_ok, high_p:.8f, max_oc:.8f, min_oc:.8f, low_ok, low_p:.8f, min_oc:.8f)
+                        logger.warning("Sample candle %s: O=%.8f, H=%.8f, L=%.8f, C=%.8f, V=%.4f", i, open_p, high_p, low_p, close_p, volume)
+                        logger.warning("  OHLC check: H>=%.8f? %s (%.8f >= %.8f), L<=%.8f? %s (%.8f <= %.8f)", max_oc, high_ok, high_p, max_oc, min_oc, low_ok, low_p, min_oc)
                         sample_count += 1
                 except Exception as e:
                     exception_handler.log_exception_with_context(
@@ -2037,7 +2035,7 @@ class BluefinServiceClient:
 
             return False
 
-        logger.info("✅ Candle validation passed: %s (%s/%s valid)", validation_rate:.1%, valid_count, total_candles)
+        logger.info("✅ Candle validation passed: %.1f%% (%s/%s valid)", validation_rate * 100, valid_count, total_candles)
         return True
 
     # Comprehensive Connectivity Monitoring Methods
@@ -2517,7 +2515,7 @@ class BluefinServiceClient:
                 if hasattr(self._service_client, "get_circuit_breaker_status"):
                     service_health = self._service_client.get_circuit_breaker_status()
         except Exception as e:
-            logger.debug("Could not get service health status: %s", extra=%s, ), e, "client_id": self.client_id)
+            logger.debug("Could not get service health status: %s", e, extra={"client_id": self.client_id})
 
         return {
             "balance_operation_failures": getattr(

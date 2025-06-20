@@ -249,7 +249,6 @@ class DockerLogParser:
                 timestamp, log_level, logger_name, message, container
             )
 
-
         except Exception as e:
             logger.exception("Error parsing log line '%s': %s", line, e)
             return None

@@ -314,9 +314,12 @@ class ConfigurationValidator:
             return skip_result
 
         try:
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as session, session.get("https://8.8.8.8") as response:
+            async with (
+                aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as session,
+                session.get("https://8.8.8.8") as response,
+            ):
                 if response.status == 200:
                     return {
                         "name": "internet_connectivity",
@@ -481,9 +484,12 @@ class ConfigurationValidator:
             # Test if endpoints are reachable
             test_url = f"{endpoints.rest_api}/ping"
 
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as session, session.get(test_url) as response:
+            async with (
+                aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as session,
+                session.get(test_url) as response,
+            ):
                 if response.status == 200:
                     return {
                         "name": "bluefin_endpoints",
@@ -523,11 +529,14 @@ class ConfigurationValidator:
             }
 
             # Test with a minimal request to models endpoint
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=15)
-            ) as session, session.get(
-                "https://api.openai.com/v1/models", headers=headers
-            ) as response:
+            async with (
+                aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(total=15)
+                ) as session,
+                session.get(
+                    "https://api.openai.com/v1/models", headers=headers
+                ) as response,
+            ):
                 if response.status == 200:
                     return {
                         "name": "openai_api",
@@ -579,9 +588,12 @@ class ConfigurationValidator:
                 "params": [],
             }
 
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=15)
-            ) as session, session.post(rpc_url, json=payload) as response:
+            async with (
+                aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(total=15)
+                ) as session,
+                session.post(rpc_url, json=payload) as response,
+            ):
                 if response.status == 200:
                     data = await response.json()
                     if "result" in data:
@@ -625,9 +637,12 @@ class ConfigurationValidator:
             # Test ticker endpoint (public, no auth required)
             test_url = f"{endpoints.rest_api}/ticker24hr"
 
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=15)
-            ) as session, session.get(test_url) as response:
+            async with (
+                aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(total=15)
+                ) as session,
+                session.get(test_url) as response,
+            ):
                 if response.status == 200:
                     return {
                         "name": "bluefin_api",
@@ -635,9 +650,7 @@ class ConfigurationValidator:
                         "message": f"Bluefin API accessible ({network})",
                     }
                 elif response.status == 429:
-                    self.warnings.append(
-                        "Bluefin API rate limited - this is normal"
-                    )
+                    self.warnings.append("Bluefin API rate limited - this is normal")
                     return {
                         "name": "bluefin_api",
                         "status": "warning",
@@ -2791,7 +2804,6 @@ class Settings(BaseSettings):
         }
 
 
-
 class ConfigurationMonitor:
     """Monitor configuration changes and provide hot-reloading capabilities."""
 
@@ -2803,7 +2815,9 @@ class ConfigurationMonitor:
         self.validation_cache: dict[str, Any] = {}
         self.cache_ttl = 300  # 5 minutes
 
-    def register_change_callback(self, callback: Callable[[Any, str, str], None]) -> None:
+    def register_change_callback(
+        self, callback: Callable[[Any, str, str], None]
+    ) -> None:
         """Register a callback to be called when configuration changes."""
         self.change_callbacks.append(callback)
 
@@ -2812,14 +2826,18 @@ class ConfigurationMonitor:
         current_hash = self.settings.generate_config_hash()
 
         if current_hash != self.initial_hash:
-            logger.info("Configuration change detected: %s -> %s", self.initial_hash, current_hash)
+            logger.info(
+                "Configuration change detected: %s -> %s",
+                self.initial_hash,
+                current_hash,
+            )
 
             # Notify callbacks
             for callback in self.change_callbacks:
                 try:
                     callback(self.settings, self.initial_hash, current_hash)
                 except Exception as e:
-                    logger.exception("Error in configuration change callback: %s", e)
+                    logger.exception("Error in configuration change callback")
 
             self.initial_hash = current_hash
             return True

@@ -274,7 +274,10 @@ class BaseExchange(ABC):
             degradation_threshold=2,
         )
 
-        logger.info("Initialized %s exchange with error handling and balance validation", self.exchange_name)
+        logger.info(
+            "Initialized %s exchange with error handling and balance validation",
+            self.exchange_name,
+        )
 
     async def validate_balance_update(
         self,
@@ -317,7 +320,11 @@ class BaseExchange(ABC):
 
             # Check for negative balance in most cases (some DEXs allow negative due to unrealized PnL)
             if new_balance < Decimal("0") and not metadata.get("allow_negative", False):
-                logger.warning("Negative balance detected: $%s for operation %s", new_balance, operation_type)
+                logger.warning(
+                    "Negative balance detected: $%s for operation %s",
+                    new_balance,
+                    operation_type,
+                )
 
             # Check for unrealistic balance values
             max_reasonable_balance = Decimal("1000000000")  # $1B threshold
@@ -330,7 +337,9 @@ class BaseExchange(ABC):
 
             # Update last validated balance
             self._last_validated_balance = new_balance
-            logger.debug("✅ Balance validation passed: $%s (%s)", new_balance, operation_type)
+            logger.debug(
+                "✅ Balance validation passed: $%s (%s)", new_balance, operation_type
+            )
 
             return {
                 "valid": True,
@@ -343,7 +352,9 @@ class BaseExchange(ABC):
             # Re-raise balance validation errors
             raise
         except Exception as e:
-            logger.exception("Balance validation error in %s: %s", self.exchange_name, e)
+            logger.exception(
+                "Balance validation error in %s: %s", self.exchange_name, e
+            )
             raise BalanceValidationError(
                 f"Balance validation failed for {operation_type}: {e}",
                 invalid_value=str(new_balance) if new_balance is not None else None,
@@ -389,7 +400,9 @@ class BaseExchange(ABC):
                 )
 
             if used_margin > balance:
-                logger.warning("Used margin ($%s) exceeds balance ($%s)", used_margin, balance)
+                logger.warning(
+                    "Used margin ($%s) exceeds balance ($%s)", used_margin, balance
+                )
 
             available_margin = balance - used_margin
             margin_ratio = (
@@ -409,7 +422,7 @@ class BaseExchange(ABC):
             # Re-raise balance validation errors
             raise
         except Exception as e:
-            logger.exception("Margin validation error in %s: %s", self.exchange_name, e)
+            logger.exception("Margin validation error in %s", self.exchange_name)
             raise BalanceValidationError(
                 f"Margin validation failed: {e}",
                 invalid_value=f"balance:{balance}, used_margin:{used_margin}",
@@ -470,7 +483,14 @@ class BaseExchange(ABC):
             }
 
             if not is_within_tolerance:
-                logger.warning("Balance reconciliation outside tolerance: " "calculated=$%s, reported=$%s, " "difference=%s% (tolerance: %s%)", calculated_balance, exchange_reported_balance, relative_difference:.2f, tolerance_pct)
+                logger.warning(
+                    "Balance reconciliation outside tolerance: "
+                    "calculated=$%.2f, reported=$%.2f, "
+                    "difference=%.2f%% (tolerance: %.2f%%)",
+                    calculated_balance,
+                    exchange_reported_balance,
+                    relative_difference,
+                    tolerance_pct,
                 )
 
             return result
@@ -479,7 +499,9 @@ class BaseExchange(ABC):
             # Re-raise balance validation errors
             raise
         except Exception as e:
-            logger.exception("Balance reconciliation error in %s: %s", self.exchange_name, e)
+            logger.exception(
+                "Balance reconciliation error in %s: %s", self.exchange_name, e
+            )
             raise BalanceValidationError(
                 f"Balance reconciliation failed: {e}",
                 invalid_value=f"calculated:{calculated_balance}, reported:{exchange_reported_balance}",
@@ -530,7 +552,9 @@ class BaseExchange(ABC):
 
     async def _trading_fallback(self, *args, **kwargs) -> Order | None:
         """Fallback for trading operations."""
-        logger.info("Using trading fallback for %s - returning None", self.exchange_name)
+        logger.info(
+            "Using trading fallback for %s - returning None", self.exchange_name
+        )
         return None  # No order placed in fallback mode
 
     async def connect_with_error_handling(self) -> bool:
@@ -854,7 +878,12 @@ class BaseExchange(ABC):
                     )
 
                     if not validation_result["valid"]:
-                        logger.warning("⚠️ Balance validation failed for %s: " "%s).get('message', 'Unknown error')}", self.exchange_name, validation_result.get('error', {)
+                        logger.warning(
+                            "⚠️ Balance validation failed for %s: %s",
+                            self.exchange_name,
+                            validation_result.get("error", {}).get(
+                                "message", "Unknown error"
+                            ),
                         )
                         # Return the balance anyway but log the issue
                         # In production, you might want to trigger alerts here
@@ -862,7 +891,7 @@ class BaseExchange(ABC):
                     return validation_result.get("balance", balance)
 
                 except BalanceValidationError as ve:
-                    logger.exception("Balance validation error: %s", ve)
+                    logger.exception("Balance validation error")
                     # Return original balance if validation fails but log the issue
                     return balance
 

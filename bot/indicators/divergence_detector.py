@@ -191,7 +191,6 @@ class DivergenceDetector:
         # Filter fractals by minimum distance
         return self._filter_fractals_by_distance(fractals)
 
-
     def _filter_fractals_by_distance(
         self, fractals: list[FractalPoint]
     ) -> list[FractalPoint]:
@@ -712,7 +711,4 @@ class DivergenceDetector:
         cutoff_index = latest_index - lookback_bars
 
         # Filter for recent signals
-        return [
-            div for div in divergences if div.end_fractal.index >= cutoff_index
-        ]
-
+        return [div for div in divergences if div.end_fractal.index >= cutoff_index]

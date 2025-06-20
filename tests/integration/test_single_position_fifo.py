@@ -103,7 +103,12 @@ class SinglePositionFIFOTest:
         current_position = self.position_manager.update_position_from_order(
             long_order, long_order.price
         )
-        logger.info("Position after LONG: %s %s @ %s", current_position.side, current_position.size, current_position.entry_price)
+        logger.info(
+            "Position after LONG: %s %s @ %s",
+            current_position.side,
+            current_position.size,
+            current_position.entry_price,
+        )
 
         # Test 2: Try to open another LONG while one exists
         long_action2 = self.create_trade_action("LONG", 10)
@@ -160,7 +165,11 @@ class SinglePositionFIFOTest:
         current_position = self.position_manager.update_position_from_order(
             close_order, close_order.price
         )
-        logger.info("Position after CLOSE: %s, P&L: $%s", current_position.side, current_position.realized_pnl)
+        logger.info(
+            "Position after CLOSE: %s, P&L: $%s",
+            current_position.side,
+            current_position.realized_pnl,
+        )
 
         # Test 5: Can open new position after closing
         short_action2 = self.create_trade_action("SHORT", 10)
@@ -194,7 +203,12 @@ class SinglePositionFIFOTest:
         position = self.position_manager.update_position_from_order(
             buy_order, buy_order.price
         )
-        logger.info("Opened position: %s %s @ %s", position.side, position.size, position.entry_price)
+        logger.info(
+            "Opened position: %s %s @ %s",
+            position.side,
+            position.size,
+            position.entry_price,
+        )
 
         # Get FIFO report
         fifo_report = self.position_manager.get_tax_lots_report(symbol)
@@ -256,7 +270,9 @@ class SinglePositionFIFOTest:
         position = self.position_manager.update_position_from_order(
             buy_order, buy_order.price
         )
-        logger.info("Step 1 - Opened LONG: %s @ %s", position.size, position.entry_price)
+        logger.info(
+            "Step 1 - Opened LONG: %s @ %s", position.size, position.entry_price
+        )
 
         # Step 2: Try to go SHORT directly (should fail)
         current_position = self.position_manager.get_position(symbol)

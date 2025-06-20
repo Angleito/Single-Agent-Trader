@@ -171,7 +171,9 @@ class MessageFlowValidator:
                         data = json.loads(message)
                         data["received_at"] = datetime.utcnow().isoformat()
                         self.received_messages.append(data)
-                        logger.debug("Received message: %s", data.get('type', 'unknown'))
+                        logger.debug(
+                            "Received message: %s", data.get("type", "unknown")
+                        )
                     except json.JSONDecodeError as e:
                         logger.exception("Failed to parse message: %s", e)
 
@@ -378,7 +380,9 @@ class MessageFlowValidator:
 
             return result.valid
         else:
-            logger.warning("✗ %s: No message received within %ss", message_type, timeout)
+            logger.warning(
+                "✗ %s: No message received within %ss", message_type, timeout
+            )
             self.validation_results.append(
                 MessageValidationResult(
                     message_type=message_type,
@@ -490,11 +494,16 @@ class MessageFlowValidator:
             logger.info("  %s %s", status, msg_type)
 
         # Ordering test
-        logger.info("\nMessage Ordering: %s", '✓ Passed' if ordering_result else '✗ Failed')
+        logger.info(
+            "\nMessage Ordering: %s", "✓ Passed" if ordering_result else "✗ Failed"
+        )
 
         # Overall result
         all_passed = passed == total and ordering_result
-        logger.info("\nOverall Result: %s", '✓ ALL TESTS PASSED' if all_passed else '✗ SOME TESTS FAILED')
+        logger.info(
+            "\nOverall Result: %s",
+            "✓ ALL TESTS PASSED" if all_passed else "✗ SOME TESTS FAILED",
+        )
 
         # Save detailed results
         results_file = "tests/docker/results/message_flow_results.json"

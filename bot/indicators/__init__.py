@@ -26,7 +26,7 @@ def calculate_atr(
     highs: list[float] | np.ndarray,
     lows: list[float] | np.ndarray,
     closes: list[float] | np.ndarray,
-    period: int = 14
+    period: int = 14,
 ) -> float:
     """Calculate Average True Range for volatility measurement."""
     if len(highs) < period + 1:
@@ -48,9 +48,7 @@ def calculate_atr(
 
 
 def calculate_support_resistance(
-    highs: list[float] | np.ndarray,
-    lows: list[float] | np.ndarray,
-    window: int = 20
+    highs: list[float] | np.ndarray, lows: list[float] | np.ndarray, window: int = 20
 ) -> dict[str, float]:
     """Calculate basic support and resistance levels."""
     if len(highs) < window or len(lows) < window:

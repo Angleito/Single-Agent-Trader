@@ -201,7 +201,12 @@ class TradingViewDataFeed:
         sorted_bars = sorted(bars, key=lambda x: x.timestamp)
         self.price_data[symbol][resolution] = sorted_bars
 
-        logger.info("Added %s price bars for %s at %s resolution", len(sorted_bars), symbol, resolution)
+        logger.info(
+            "Added %s price bars for %s at %s resolution",
+            len(sorted_bars),
+            symbol,
+            resolution,
+        )
 
     def get_history(
         self,
@@ -257,7 +262,9 @@ class TradingViewDataFeed:
                 "v": [bar.volume for bar in filtered_bars],
             }
 
-            logger.info("Returning %s bars for %s %s", len(filtered_bars), symbol, resolution)
+            logger.info(
+                "Returning %s bars for %s %s", len(filtered_bars), symbol, resolution
+            )
             return response
 
         except Exception as e:
@@ -347,7 +354,12 @@ class TradingViewDataFeed:
         if len(self.ai_decisions[symbol]) > 1000:
             self.ai_decisions[symbol] = self.ai_decisions[symbol][-1000:]
 
-        logger.info("Added AI decision for %s: %s at %s", symbol, decision.decision.value, decision.price)
+        logger.info(
+            "Added AI decision for %s: %s at %s",
+            symbol,
+            decision.decision.value,
+            decision.price,
+        )
 
     def add_technical_indicator(self, symbol: str, indicator: TechnicalIndicator):
         """Add technical indicator data point"""
@@ -396,7 +408,12 @@ class TradingViewDataFeed:
             return study_data
 
         except Exception as e:
-            logger.exception("Error getting indicator values for %s %s: %s", symbol, indicator_name, e)
+            logger.exception(
+                "Error getting indicator values for %s %s: %s",
+                symbol,
+                indicator_name,
+                e,
+            )
             return []
 
     def get_real_time_bar(self, symbol: str, resolution: str) -> dict[str, Any] | None:
@@ -475,7 +492,9 @@ class TradingViewDataFeed:
                     resolution
                 ][-5000:]
 
-            logger.info("Created new bar for %s %s at %s", symbol, resolution, new_bar.timestamp)
+            logger.info(
+                "Created new bar for %s %s at %s", symbol, resolution, new_bar.timestamp
+            )
 
         except Exception as e:
             logger.exception("Error creating new bar for %s: %s", symbol, e)
@@ -562,7 +581,6 @@ def convert_bot_trade_to_ai_decision(
             indicator_values=trade_data.get("indicators", {}),
         )
 
-
     except Exception as e:
         logger.exception("Error converting bot trade to AI decision: %s", e)
         return None
@@ -594,7 +612,6 @@ def convert_indicator_data_to_technical_indicator(
             value=indicator_data.get("value", 0),
             parameters=indicator_data.get("parameters", {}),
         )
-
 
     except Exception as e:
         logger.exception("Error converting indicator data: %s", e)

@@ -347,13 +347,18 @@ class DominanceDataProvider:
 
             async with self._session.get(global_url, headers=headers) as response:
                 if response.status != 200:
-                    logger.error("Failed to fetch CoinMarketCap data: %s", response.status)
+                    logger.error(
+                        "Failed to fetch CoinMarketCap data: %s", response.status
+                    )
                     return None
 
                 data = await response.json()
 
                 if data.get("status", {}).get("error_code") != 0:
-                    logger.error("CoinMarketCap API error: %s", data.get('status', {}).get('error_message'))
+                    logger.error(
+                        "CoinMarketCap API error: %s",
+                        data.get("status", {}).get("error_message"),
+                    )
                     return None
 
                 # Extract global metrics
@@ -439,7 +444,11 @@ class DominanceDataProvider:
             ]
 
             if len(valid_data) < 20:
-                logger.warning("Insufficient valid dominance data for trend calculation: %s valid points out of %s total", len(valid_data), len(self._dominance_cache))
+                logger.warning(
+                    "Insufficient valid dominance data for trend calculation: %s valid points out of %s total",
+                    len(valid_data),
+                    len(self._dominance_cache),
+                )
                 return
 
             # Extract only valid dominance values
@@ -453,7 +462,10 @@ class DominanceDataProvider:
             ]
 
             if len(dominance_values) < 20:
-                logger.warning("Insufficient numeric dominance data after cleaning: %s values", len(dominance_values))
+                logger.warning(
+                    "Insufficient numeric dominance data after cleaning: %s values",
+                    len(dominance_values),
+                )
                 return
 
             # Create DataFrame with clean data
@@ -704,7 +716,9 @@ class DominanceCandleBuilder:
                 raise ValueError(f"Snapshot at index {i} missing total_stablecoin_cap")
 
         self.snapshots = sorted(snapshots, key=lambda x: x.timestamp)
-        logger.info("Initialized DominanceCandleBuilder with %s snapshots", len(snapshots))
+        logger.info(
+            "Initialized DominanceCandleBuilder with %s snapshots", len(snapshots)
+        )
 
     def build_candles(self, interval: str = "3T") -> list[DominanceCandleData]:
         """
@@ -870,7 +884,11 @@ class DominanceCandleBuilder:
             raise ValueError("Cannot calculate indicators on empty candles list")
 
         if len(candles) < max(rsi_period, ema_slow):
-            logger.warning("Insufficient data for indicators. Have %s, need %s", len(candles), max(rsi_period, ema_slow))
+            logger.warning(
+                "Insufficient data for indicators. Have %s, need %s",
+                len(candles),
+                max(rsi_period, ema_slow),
+            )
             return {
                 "candles": candles,
                 "summary": {"insufficient_data": True},
@@ -939,7 +957,9 @@ class DominanceCandleBuilder:
                 ),
             }
 
-            logger.info("Calculated technical indicators for %s candles", len(updated_candles))
+            logger.info(
+                "Calculated technical indicators for %s candles", len(updated_candles)
+            )
 
             return {
                 "candles": updated_candles,
@@ -1345,7 +1365,11 @@ class DominanceCandleBuilder:
                     all_divergences, key=lambda x: x["timestamp_index"]
                 )
 
-            logger.info("Detected %s bullish and %s bearish divergences", len(bullish_divergences), len(bearish_divergences))
+            logger.info(
+                "Detected %s bullish and %s bearish divergences",
+                len(bullish_divergences),
+                len(bearish_divergences),
+            )
 
             return {
                 "bullish_divergences": bullish_divergences,
@@ -1522,7 +1546,12 @@ class DominanceCandleBuilder:
 
             is_valid = len(errors) == 0 and quality_score >= 80
 
-            logger.info("Validation complete. Quality score: %.1f%%, Errors: %s, Warnings: %s", quality_score, len(errors), len(warnings))
+            logger.info(
+                "Validation complete. Quality score: %.1f%%, Errors: %s, Warnings: %s",
+                quality_score,
+                len(errors),
+                len(warnings),
+            )
 
             return {
                 "is_valid": is_valid,
@@ -1702,7 +1731,13 @@ class DominanceCandleBuilder:
             # Ensure score is within bounds
             integrity_score = max(0, min(100, base_score))
 
-            logger.info("Data integrity check complete. Score: %s%%, Issues: %s, Gaps: %s, Duplicates: %s", integrity_score, len(issues), len(gaps), len(duplicates))
+            logger.info(
+                "Data integrity check complete. Score: %s%%, Issues: %s, Gaps: %s, Duplicates: %s",
+                integrity_score,
+                len(issues),
+                len(gaps),
+                len(duplicates),
+            )
 
             return {
                 "integrity_score": integrity_score,
@@ -2026,9 +2061,7 @@ class DominanceCandleBuilder:
 
             # Validate RSI range (0-100)
             if candle.rsi is not None and not (0 <= candle.rsi <= 100):
-                errors.append(
-                    f"Candle {index}: RSI {candle.rsi} out of range (0-100)"
-                )
+                errors.append(f"Candle {index}: RSI {candle.rsi} out of range (0-100)")
                 valid = False
 
             # Validate EMA values (should be positive for dominance percentages)

@@ -105,7 +105,9 @@ class CommandConsumer:
         if not self.session:
             timeout = aiohttp.ClientTimeout(total=10)
             self.session = aiohttp.ClientSession(timeout=timeout)
-            logger.info("Command consumer initialized - Dashboard URL: %s", self.dashboard_url)
+            logger.info(
+                "Command consumer initialized - Dashboard URL: %s", self.dashboard_url
+            )
 
     async def close(self):
         """Close HTTP session and cleanup."""
@@ -130,7 +132,9 @@ class CommandConsumer:
             self.callbacks[command_type] = callback
             logger.info("Registered callback for command type: %s", command_type)
         else:
-            logger.warning("Unknown command type for callback registration: %s", command_type)
+            logger.warning(
+                "Unknown command type for callback registration: %s", command_type
+            )
 
     async def start_polling(self):
         """Start the command polling loop."""
@@ -149,8 +153,8 @@ class CommandConsumer:
             except asyncio.CancelledError:
                 logger.info("Command polling cancelled")
                 break
-            except Exception as e:
-                logger.exception("Error in command polling loop: %s", e)
+            except Exception:
+                logger.exception("Error in command polling loop")
                 await asyncio.sleep(self.poll_interval * 2)  # Back off on errors
 
     async def stop_polling(self) -> None:
@@ -225,7 +229,7 @@ class CommandConsumer:
         except aiohttp.ClientError as e:
             logger.debug("Connection error polling for commands: %s", e)
         except Exception as e:
-            logger.exception("Unexpected error polling for commands: %s", e)
+            logger.exception("Unexpected error polling for commands")
 
     async def _process_command(self, cmd_data: dict[str, Any]):
         """Process a single command."""
@@ -240,7 +244,9 @@ class CommandConsumer:
                 attempts=cmd_data.get("attempts", 0),
             )
 
-            logger.info("Processing command: %s (ID: %s)", command.command_type, command.id)
+            logger.info(
+                "Processing command: %s (ID: %s)", command.command_type, command.id
+            )
 
             # Validate command
             if not self._validate_command(command):
@@ -275,7 +281,9 @@ class CommandConsumer:
                 await self._remove_command_from_queue(command.id)
 
         except Exception as e:
-            logger.exception("Error processing command %s: %s", cmd_data.get('id', 'unknown'), e)
+            logger.exception(
+                "Error processing command %s: %s", cmd_data.get("id", "unknown"), e
+            )
             await self._report_command_status(
                 cmd_data.get("id", "unknown"), "failed", str(e)
             )
@@ -291,7 +299,9 @@ class CommandConsumer:
 
         # Check if emergency stopped (only allow resume commands)
         if self.emergency_stopped and command.command_type not in ["resume_trading"]:
-            logger.warning("Bot is emergency stopped, ignoring command: %s", command.command_type)
+            logger.warning(
+                "Bot is emergency stopped, ignoring command: %s", command.command_type
+            )
             return False
 
         # Validate command-specific parameters
@@ -328,7 +338,7 @@ class CommandConsumer:
 
         # Validate action
         if parameters["action"] not in ["buy", "sell", "close"]:
-            logger.error("Invalid trade action: %s", parameters['action'])
+            logger.error("Invalid trade action: %s", parameters["action"])
             return False
 
         # Validate size percentage
@@ -367,7 +377,7 @@ class CommandConsumer:
             return result
 
         except Exception as e:
-            logger.exception("Error executing command %s: %s", command.id, e)
+            logger.exception("Error executing command %s", command.id)
             return False, str(e)
 
     async def _execute_emergency_stop(self, callback) -> tuple[bool, str]:
@@ -466,9 +476,13 @@ class CommandConsumer:
                 f"{self.dashboard_url}/api/bot/commands/status", json=data
             ) as response:
                 if response.status == 200:
-                    logger.debug("Reported command status: %s -> %s", command_id, status)
+                    logger.debug(
+                        "Reported command status: %s -> %s", command_id, status
+                    )
                 else:
-                    logger.warning("Failed to report command status: HTTP %s", response.status)
+                    logger.warning(
+                        "Failed to report command status: HTTP %s", response.status
+                    )
 
         except Exception as e:
             logger.debug("Error reporting command status: %s", e)
@@ -485,7 +499,9 @@ class CommandConsumer:
                 if response.status == 200:
                     logger.debug("Removed completed command from queue: %s", command_id)
                 else:
-                    logger.debug("Could not remove command from queue: HTTP %s", response.status)
+                    logger.debug(
+                        "Could not remove command from queue: HTTP %s", response.status
+                    )
 
         except Exception as e:
             logger.debug("Error removing command from queue: %s", e)

@@ -180,7 +180,10 @@ class WebSearchFormatter:
         # Content deduplication tracking
         self._content_hashes = set()
 
-        logger.info("WebSearchFormatter initialized with %s tokens per section", max_tokens_per_section)
+        logger.info(
+            "WebSearchFormatter initialized with %s tokens per section",
+            max_tokens_per_section,
+        )
 
     async def format_news_results(self, news_items: list[dict]) -> str:
         """
@@ -210,10 +213,7 @@ class WebSearchFormatter:
             )
 
             # Format for LLM consumption
-            return self._format_news_for_llm(
-                sorted_items[:10]
-            )  # Top 10 items
-
+            return self._format_news_for_llm(sorted_items[:10])  # Top 10 items
 
         except Exception as e:
             logger.error(f"Error formatting news results: {e}", exc_info=True)
@@ -741,9 +741,7 @@ class WebSearchFormatter:
             ]
             crypto_bonus = 0.1 if any(term in text for term in crypto_terms) else 0.0
 
-            return min(
-                total_score + crypto_bonus + max_category_score * 0.5, 1.0
-            )
+            return min(total_score + crypto_bonus + max_category_score * 0.5, 1.0)
 
         except Exception:
             return 0.1
@@ -846,9 +844,7 @@ class WebSearchFormatter:
                 0.1 if any(term in title.lower() for term in high_impact_terms) else 0.0
             )
 
-            return min(
-                high_impact_score + price_score + event_score + title_bonus, 1.0
-            )
+            return min(high_impact_score + price_score + event_score + title_bonus, 1.0)
 
         except Exception:
             return 0.2

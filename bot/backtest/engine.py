@@ -98,7 +98,9 @@ class BacktestEngine:
         self.current_position: BacktestTrade | None = None
         self.equity_curve: list[tuple[datetime, Decimal]] = []
 
-        logger.info("Initialized BacktestEngine with $%s starting balance", initial_balance)
+        logger.info(
+            "Initialized BacktestEngine with $%s starting balance", initial_balance
+        )
 
     async def run_backtest(
         self,
@@ -152,7 +154,10 @@ class BacktestEngine:
         return results
 
     def _prepare_data(
-        self, data: pd.DataFrame, start_date: datetime | None = None, end_date: datetime | None = None
+        self,
+        data: pd.DataFrame,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
     ) -> pd.DataFrame:
         """
         Prepare and filter historical data for backtesting.

@@ -176,7 +176,7 @@ class EMAribbon:
             for i, length in enumerate(self.lengths, 1):
                 ema_start = time.perf_counter()
 
-                logger.debug("Calculating EMA%s", extra=%s_calculation", "ema_length": length, }, ), i,  "indicator": "ema_ribbon", "step": "ema{i)
+                logger.debug("Calculating EMA%s", i, extra={"indicator": "ema_ribbon", "step": f"ema{i}_calculation", "ema_length": length})
 
                 ema_values = ta.ema(result["close"], length=length)
 
@@ -224,7 +224,7 @@ class EMAribbon:
                         )
                 else:
                     result[f"ema{i}"] = pd.Series(dtype="float64", index=df.index)
-                    logger.error("Failed to calculate EMA%s", extra=%s, ), i,  "indicator": "ema_ribbon", "error_type": "ema_calculation_failed", "ema_number": i, "ema_length": length, )
+                    logger.error("Failed to calculate EMA%s", extra=%s ), i,  "indicator": "ema_ribbon", "error_type": "ema_calculation_failed", "ema_number": i, "ema_length": length, )
 
                 ema_duration = (time.perf_counter() - ema_start) * 1000
                 ema_calculation_times.append(ema_duration)

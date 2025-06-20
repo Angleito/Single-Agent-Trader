@@ -69,7 +69,11 @@ class BluefinConfigTester:
             print(f"ℹ️  {message}")
 
     def add_result(
-        self, test_name: str, status: str, message: str, details: dict[str, Any] | None = None
+        self,
+        test_name: str,
+        status: str,
+        message: str,
+        details: dict[str, Any] | None = None,
     ) -> None:
         """Add test result."""
         result = {
@@ -201,9 +205,12 @@ class BluefinConfigTester:
         test_url = f"{rest_api}/ticker24hr"
 
         try:
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=15)
-            ) as session, session.get(test_url) as response:
+            async with (
+                aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(total=15)
+                ) as session,
+                session.get(test_url) as response,
+            ):
                 if response.status == 200:
                     data = await response.json()
                     ticker_count = len(data) if isinstance(data, list) else 1
@@ -261,9 +268,12 @@ class BluefinConfigTester:
         }
 
         try:
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=15)
-            ) as session, session.post(rpc_url, json=payload) as response:
+            async with (
+                aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(total=15)
+                ) as session,
+                session.post(rpc_url, json=payload) as response,
+            ):
                 if response.status == 200:
                     data = await response.json()
                     if "result" in data:
@@ -308,9 +318,12 @@ class BluefinConfigTester:
         try:
             # Test health endpoint
             health_url = f"{service_url.rstrip('/')}/health"
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as session, session.get(health_url) as response:
+            async with (
+                aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as session,
+                session.get(health_url) as response,
+            ):
                 if response.status == 200:
                     data = await response.json()
                     self.add_result(

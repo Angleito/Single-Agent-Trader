@@ -381,7 +381,9 @@ class MarketContextAnalyzer:
             )
 
         except Exception as e:
-            logger.error("Error analyzing crypto/NASDAQ correlation: %s", exc_info=True ), e)
+            logger.error(
+                "Error analyzing crypto/NASDAQ correlation: %s", e, exc_info=True
+            )
             return CorrelationAnalysis(
                 correlation_coefficient=0.0,
                 correlation_strength=CorrelationStrength.VERY_WEAK,

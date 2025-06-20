@@ -211,8 +211,10 @@ class BluefinClient(BaseExchange):
                 self.monitoring_enabled = False
 
         logger.info(
-            "Initialized BluefinClient (network=%s, "
-            "service_url=%s, dry_run=%s)", network, service_url, dry_run
+            "Initialized BluefinClient (network=%s, " "service_url=%s, dry_run=%s)",
+            network,
+            service_url,
+            dry_run,
         )
 
     def _normalize_balance(self, amount: Decimal) -> Decimal:
@@ -237,7 +239,9 @@ class BluefinClient(BaseExchange):
             try:
                 amount = Decimal(str(amount))
             except (ValueError, TypeError):
-                logger.exception("Invalid balance amount: %s (type: %s)", amount, type(amount))
+                logger.exception(
+                    "Invalid balance amount: %s (type: %s)", amount, type(amount)
+                )
                 raise ValueError(f"Cannot convert to Decimal: {amount}")
 
         # Check for invalid values
@@ -275,7 +279,9 @@ class BluefinClient(BaseExchange):
             try:
                 amount = Decimal(str(amount))
             except (ValueError, TypeError):
-                logger.exception("Invalid crypto amount: %s (type: %s)", amount, type(amount))
+                logger.exception(
+                    "Invalid crypto amount: %s (type: %s)", amount, type(amount)
+                )
                 raise ValueError(f"Cannot convert to Decimal: {amount}")
 
         # Check for invalid values
@@ -307,7 +313,9 @@ class BluefinClient(BaseExchange):
 
             # Check against known supported symbols
             if not is_bluefin_symbol_supported(bluefin_symbol, self.network_name):
-                logger.error("Symbol %s not supported on %s", bluefin_symbol, self.network_name)
+                logger.error(
+                    "Symbol %s not supported on %s", bluefin_symbol, self.network_name
+                )
                 return False
 
             # For additional validation, we could make an API call to get ticker data
@@ -323,7 +331,7 @@ class BluefinClient(BaseExchange):
             return True
 
         except Exception as e:
-            logger.exception("Symbol validation failed for %s: %s", symbol, e)
+            logger.exception("Symbol validation failed for %s", symbol)
             return False
 
     async def connect(self) -> bool:
@@ -344,7 +352,9 @@ class BluefinClient(BaseExchange):
                 try:
                     connected = await self._service_client.connect()
                 except Exception as service_error:
-                    logger.warning("Service client connection failed: %s", service_error)
+                    logger.warning(
+                        "Service client connection failed: %s", service_error
+                    )
                     connected = False
             else:
                 logger.debug("Service client not available or missing connect method")
@@ -394,7 +404,7 @@ class BluefinClient(BaseExchange):
             return True
 
         except Exception as e:
-            logger.exception("Failed to connect to Bluefin: %s", e)
+            logger.exception("Failed to connect to Bluefin")
             raise ExchangeConnectionError(f"Connection failed: {e}") from e
 
     async def _init_client(self) -> None:
@@ -409,7 +419,7 @@ class BluefinClient(BaseExchange):
             await self._load_contract_info()
 
         except Exception as e:
-            logger.exception("Failed to initialize Bluefin client: %s", e)
+            logger.exception("Failed to initialize Bluefin client")
             if not self.dry_run:
                 raise
             else:
@@ -501,7 +511,9 @@ class BluefinClient(BaseExchange):
                         "tick_size": Decimal("0.01"),
                         "min_notional": Decimal("10"),
                     }
-            logger.info("Using fallback contract info for %s symbols", len(self._contract_info))
+            logger.info(
+                "Using fallback contract info for %s symbols", len(self._contract_info)
+            )
 
     async def disconnect(self) -> None:
         """Disconnect from Bluefin."""
@@ -537,7 +549,9 @@ class BluefinClient(BaseExchange):
         try:
             # Validate symbol before proceeding
             if not await self.validate_symbol_exists(symbol):
-                logger.error("Symbol validation failed for %s, cannot execute trade", symbol)
+                logger.error(
+                    "Symbol validation failed for %s, cannot execute trade", symbol
+                )
                 return None
 
             # Convert symbol to Bluefin format (e.g., ETH-USD -> ETH-PERP)
@@ -560,10 +574,10 @@ class BluefinClient(BaseExchange):
                 return None
 
         except ValueError as e:
-            logger.exception("Symbol validation error: %s", e)
+            logger.exception("Symbol validation error")
             return None
         except Exception as e:
-            logger.exception("Failed to execute trade action: %s", e)
+            logger.exception("Failed to execute trade action")
             return None
 
     def _convert_symbol(self, symbol: str) -> str:
@@ -571,7 +585,9 @@ class BluefinClient(BaseExchange):
         try:
             # Validate the symbol first
             if not validate_symbol(symbol):
-                logger.warning("Invalid symbol format: %s, attempting conversion anyway", symbol)
+                logger.warning(
+                    "Invalid symbol format: %s, attempting conversion anyway", symbol
+                )
 
             # Convert to Bluefin perpetual format
             bluefin_symbol = to_bluefin_perp(symbol)
@@ -581,17 +597,28 @@ class BluefinClient(BaseExchange):
                 if self.network_name.lower() in ["testnet", "staging", "sui_staging"]:
                     # Get testnet fallback
                     fallback_symbol = get_testnet_symbol_fallback(bluefin_symbol)
-                    logger.warning("Symbol %s not available on %s, " "using fallback: %s" ), bluefin_symbol, self.network_name, fallback_symbol)
+                    logger.warning(
+                        "Symbol %s not available on %s, using fallback: %s",
+                        bluefin_symbol,
+                        self.network_name,
+                        fallback_symbol,
+                    )
                     bluefin_symbol = fallback_symbol
                 else:
-                    logger.error("Symbol %s not supported on %s", bluefin_symbol, self.network_name)
+                    logger.error(
+                        "Symbol %s not supported on %s",
+                        bluefin_symbol,
+                        self.network_name,
+                    )
                     raise ValueError(f"Unsupported symbol: {bluefin_symbol}")
 
-            logger.debug("Converted symbol %s to Bluefin format: %s", symbol, bluefin_symbol)
+            logger.debug(
+                "Converted symbol %s to Bluefin format: %s", symbol, bluefin_symbol
+            )
             return bluefin_symbol
 
         except Exception as e:
-            logger.exception("Failed to convert symbol %s: %s", symbol, e)
+            logger.exception("Failed to convert symbol %s", symbol)
             # Fallback to original behavior for backward compatibility
             symbol_map = {
                 "BTC-USD": "BTC-PERP",
@@ -605,9 +632,14 @@ class BluefinClient(BaseExchange):
             if not is_bluefin_symbol_supported(fallback_symbol, self.network_name):
                 if self.network_name.lower() in ["testnet", "staging", "sui_staging"]:
                     fallback_symbol = "BTC-PERP"  # Safe fallback for testnet
-                    logger.warning("All conversions failed, using safe testnet fallback: %s", fallback_symbol)
+                    logger.warning(
+                        "All conversions failed, using safe testnet fallback: %s",
+                        fallback_symbol,
+                    )
 
-            logger.warning("Using fallback conversion: %s -> %s", symbol, fallback_symbol)
+            logger.warning(
+                "Using fallback conversion: %s -> %s", symbol, fallback_symbol
+            )
             return fallback_symbol
 
     async def _open_position(
@@ -621,21 +653,39 @@ class BluefinClient(BaseExchange):
 
             # If balance is too low, log error and return None
             if account_balance <= Decimal("10"):
-                logger.error("Account balance $%s is too low for trading (minimum $10)", account_balance)
+                logger.error(
+                    "Account balance $%s is too low for trading (minimum $10)",
+                    account_balance,
+                )
                 return None
 
             # Calculate position size
             position_value = account_balance * Decimal(str(trade_action.size_pct / 100))
-            logger.info("Position value ($%s * %s%): $%s", account_balance, trade_action.size_pct, position_value)
+            logger.info(
+                "Position value ($%s * %s%): $%s",
+                account_balance,
+                trade_action.size_pct,
+                position_value,
+            )
 
             # Apply leverage
             leverage = trade_action.leverage or settings.trading.leverage
             notional_value = position_value * leverage
-            logger.info("Notional value ($%s * %sx leverage): $%s", position_value, leverage, notional_value)
+            logger.info(
+                "Notional value ($%s * %sx leverage): $%s",
+                position_value,
+                leverage,
+                notional_value,
+            )
 
             # Calculate quantity
             quantity = notional_value / current_price
-            logger.info("Calculated quantity ($%s / $%s): %s", notional_value, current_price, quantity)
+            logger.info(
+                "Calculated quantity ($%s / $%s): %s",
+                notional_value,
+                current_price,
+                quantity,
+            )
 
             # Round to contract specifications
             contract_info = self._contract_info.get(symbol, {})
@@ -646,19 +696,32 @@ class BluefinClient(BaseExchange):
             # Validate quantity
             min_qty = contract_info.get("min_quantity", Decimal("0.001"))
             if quantity < min_qty:
-                logger.warning("Quantity %s below minimum %s, adjusting to minimum", quantity, min_qty)
+                logger.warning(
+                    "Quantity %s below minimum %s, adjusting to minimum",
+                    quantity,
+                    min_qty,
+                )
                 quantity = min_qty
 
             # Final validation - ensure quantity is not zero
             if quantity <= Decimal("0"):
-                logger.error("Final quantity %s is zero or negative, cannot place order", quantity)
+                logger.error(
+                    "Final quantity %s is zero or negative, cannot place order",
+                    quantity,
+                )
                 return None
 
             # Determine order side
             side = ORDER_SIDE.BUY if trade_action.action == "LONG" else ORDER_SIDE.SELL
 
             # Final logging before order placement
-            logger.info("Placing %s order for %s %s at market price $%s", side, quantity, symbol, current_price)
+            logger.info(
+                "Placing %s order for %s %s at market price $%s",
+                side,
+                quantity,
+                symbol,
+                current_price,
+            )
 
             # Place market order
             order = await self.place_market_order(
@@ -670,34 +733,51 @@ class BluefinClient(BaseExchange):
                 await self._set_leverage(symbol, leverage)
 
                 # Place stop loss and take profit orders - CRITICAL for risk management
-                logger.info("Placing protective orders: SL=%s%, TP=%s%", trade_action.stop_loss_pct, trade_action.take_profit_pct)
+                logger.info(
+                    "Placing protective orders: SL=%s%, TP=%s%",
+                    trade_action.stop_loss_pct,
+                    trade_action.take_profit_pct,
+                )
 
                 try:
                     stop_loss_order = await self._place_stop_loss(
                         order, trade_action, current_price
                     )
                     if stop_loss_order:
-                        logger.info("✅ Stop loss order placed successfully: %s", stop_loss_order.id)
+                        logger.info(
+                            "✅ Stop loss order placed successfully: %s",
+                            stop_loss_order.id,
+                        )
                     else:
-                        logger.error("❌ CRITICAL: Stop loss order failed for position %s", order.id)
+                        logger.error(
+                            "❌ CRITICAL: Stop loss order failed for position %s",
+                            order.id,
+                        )
                         # Consider canceling the main order if stop loss fails
 
                     take_profit_order = await self._place_take_profit(
                         order, trade_action, current_price
                     )
                     if take_profit_order:
-                        logger.info("✅ Take profit order placed successfully: %s", take_profit_order.id)
+                        logger.info(
+                            "✅ Take profit order placed successfully: %s",
+                            take_profit_order.id,
+                        )
                     else:
-                        logger.warning("⚠️ Take profit order failed for position %s", order.id)
+                        logger.warning(
+                            "⚠️ Take profit order failed for position %s", order.id
+                        )
 
                 except Exception as e:
-                    logger.exception("❌ CRITICAL ERROR placing protective orders: %s", e)
+                    logger.exception(
+                        "❌ CRITICAL ERROR placing protective orders: %s", e
+                    )
                     # Continue with trade but log the critical failure
 
             return order
 
         except Exception as e:
-            logger.exception("Failed to open position: %s", e)
+            logger.exception("Failed to open position")
             return None
 
     async def _close_position(self, symbol: str) -> Order | None:
@@ -721,7 +801,7 @@ class BluefinClient(BaseExchange):
             )
 
         except Exception as e:
-            logger.exception("Failed to close position: %s", e)
+            logger.exception("Failed to close position")
             return None
 
     async def place_market_order(
@@ -739,7 +819,9 @@ class BluefinClient(BaseExchange):
             Order object if successful
         """
         if self.dry_run:
-            logger.info("PAPER TRADING: Simulating %s %s %s at market", side, quantity, symbol)
+            logger.info(
+                "PAPER TRADING: Simulating %s %s %s at market", side, quantity, symbol
+            )
             return Order(
                 id=f"paper_bluefin_{int(datetime.utcnow().timestamp() * 1000)}",
                 symbol=symbol,
@@ -792,7 +874,7 @@ class BluefinClient(BaseExchange):
                 raise ExchangeOrderError(f"Order placement failed: {error_msg}")
 
         except Exception as e:
-            logger.exception("Failed to place market order: %s", e)
+            logger.exception("Failed to place market order")
             if "insufficient" in str(e).lower():
                 raise ExchangeInsufficientFundsError(f"Insufficient funds: {e}") from e
             else:
@@ -818,7 +900,13 @@ class BluefinClient(BaseExchange):
             Order object if successful
         """
         if self.dry_run:
-            logger.info("PAPER TRADING: Simulating %s %s %s limit @ %s", side, quantity, symbol, price)
+            logger.info(
+                "PAPER TRADING: Simulating %s %s %s limit @ %s",
+                side,
+                quantity,
+                symbol,
+                price,
+            )
             return Order(
                 id=f"paper_limit_{int(datetime.utcnow().timestamp() * 1000)}",
                 symbol=symbol,
@@ -840,7 +928,9 @@ class BluefinClient(BaseExchange):
                 "orderType": "LIMIT",
             }
 
-            logger.info("Placing %s limit order: %s %s @ %s", side, quantity, symbol, price)
+            logger.info(
+                "Placing %s limit order: %s %s @ %s", side, quantity, symbol, price
+            )
 
             # Post order via service
             response = await self._service_client.place_order(order_data)
@@ -870,7 +960,7 @@ class BluefinClient(BaseExchange):
                 raise ExchangeOrderError(f"Limit order placement failed: {error_msg}")
 
         except Exception as e:
-            logger.exception("Failed to place limit order: %s", e)
+            logger.exception("Failed to place limit order")
             raise ExchangeOrderError(f"Failed to place limit order: {e}") from e
 
     async def get_positions(self, symbol: str | None = None) -> list[Position]:
@@ -923,7 +1013,7 @@ class BluefinClient(BaseExchange):
             return positions
 
         except Exception as e:
-            logger.exception("Failed to get positions: %s", e)
+            logger.exception("Failed to get positions")
             return []
 
     def _record_balance_operation(
@@ -1089,7 +1179,10 @@ class BluefinClient(BaseExchange):
                 logger.warning(
                     "Zero or negative balance in live mode - this will prevent trading"
                 )
-                logger.warning("Please ensure your Bluefin account has USDC balance. Current: $%s", total_balance)
+                logger.warning(
+                    "Please ensure your Bluefin account has USDC balance. Current: $%s",
+                    total_balance,
+                )
 
             # Record successful balance retrieval
             if self.monitoring_enabled and start_time is not None:
@@ -1176,10 +1269,12 @@ class BluefinClient(BaseExchange):
                         },
                     )
                 except Exception as monitoring_error:
-                    logger.debug("Failed to record unexpected error: %s", monitoring_error)
+                    logger.debug(
+                        "Failed to record unexpected error: %s", monitoring_error
+                    )
 
             # Wrap any other exceptions in BalanceRetrievalError
-            logger.exception("Unexpected error getting account balance: %s", e)
+            logger.exception("Unexpected error getting account balance")
             raise BalanceRetrievalError(
                 f"Failed to retrieve account balance: {e}",
                 account_type=str(account_type) if account_type else None,
@@ -1220,7 +1315,7 @@ class BluefinClient(BaseExchange):
                 return False
 
         except Exception as e:
-            logger.exception("Failed to cancel order %s: %s", order_id, e)
+            logger.exception("Failed to cancel order %s", order_id)
             return False
 
     async def cancel_all_orders(
@@ -1258,7 +1353,7 @@ class BluefinClient(BaseExchange):
                 return True  # Return True to avoid errors during shutdown
 
         except Exception as e:
-            logger.exception("Failed to cancel all orders: %s", e)
+            logger.exception("Failed to cancel all orders")
             return False
 
     def is_connected(self) -> bool:
@@ -1299,7 +1394,7 @@ class BluefinClient(BaseExchange):
             account_data = await self._service_client.get_account_data()
             return account_data.get("address")
         except Exception as e:
-            logger.exception("Failed to get account address: %s", e)
+            logger.exception("Failed to get account address")
         return None
 
     async def _set_leverage(self, symbol: str, leverage: int) -> bool:
@@ -1318,7 +1413,7 @@ class BluefinClient(BaseExchange):
             return response.get("status") == "success"
 
         except Exception as e:
-            logger.exception("Failed to set leverage: %s", e)
+            logger.exception("Failed to set leverage")
             return False
 
     async def _place_stop_loss(
@@ -1407,14 +1502,22 @@ class BluefinClient(BaseExchange):
         Returns:
             List of OHLCV data dictionaries
         """
-        logger.info("Fetching real historical data for %s " "(%s candles, %s interval) from Bluefin", symbol, limit, interval)
+        logger.info(
+            "Fetching real historical data for %s (%s candles, %s interval) from Bluefin",
+            symbol,
+            limit,
+            interval,
         )
 
         try:
             # Convert standard symbol to Bluefin format
             bluefin_symbol = self._convert_symbol(symbol)
 
-            logger.info("Fetching %s historical candles for %s " "(%s interval) from Bluefin service", limit, bluefin_symbol, interval)
+            logger.info(
+                "Fetching %s historical candles for %s (%s interval) from Bluefin service",
+                limit,
+                bluefin_symbol,
+                interval,
             )
 
             # Use service client to get candlestick data
@@ -1423,8 +1526,10 @@ class BluefinClient(BaseExchange):
             candles = await self._service_client.get_candlestick_data(params)
 
             if candles:
-                logger.info("Successfully fetched %s candles from Bluefin service ", len(candles))
-                    f"for {bluefin_symbol}"
+                logger.info(
+                    "Successfully fetched %s candles from Bluefin service for %s",
+                    len(candles),
+                    bluefin_symbol,
                 )
                 # Convert service response to expected format
                 formatted_candles = []
@@ -1447,7 +1552,7 @@ class BluefinClient(BaseExchange):
                 return []
 
         except Exception as e:
-            logger.exception("Failed to fetch historical candles from Bluefin: %s", e)
+            logger.exception("Failed to fetch historical candles from Bluefin")
             return []
 
     @property

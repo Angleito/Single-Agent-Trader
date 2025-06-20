@@ -151,7 +151,7 @@ class BalanceOperationMonitor:
             self.events.append(event)
             self.active_operations[correlation_id] = event
 
-logger.debug("Balance operation started: %s.%s", extra=get_balance_operation_context( correlation_id, operation, additional_context=%s, ),, component, operation,  "component": component, "event_type": "operation_start", "metadata": metadata, )
+logger.debug("Balance operation started: %s.%s", extra=get_balance_operation_context( correlation_id, operation, additional_context=%s ),, component, operation,  "component": component, "event_type": "operation_start", "metadata": metadata )
             )
 
         return start_time or time.perf_counter()

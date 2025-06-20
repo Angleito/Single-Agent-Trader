@@ -89,7 +89,8 @@ class ExchangeFactory:
 
         logger.info(
             "Created Coinbase client (auth_method=%s, sandbox=%s)",
-            client.auth_method, client.sandbox
+            client.auth_method,
+            client.sandbox,
         )
 
         return client
@@ -128,7 +129,9 @@ class ExchangeFactory:
 
         logger.info(
             "Created Bluefin client (network=%s, service_url=%s, has_key=%s)",
-            network, service_url, bool(private_key)
+            network,
+            service_url,
+            bool(private_key),
         )
 
         return client
