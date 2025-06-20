@@ -26,13 +26,13 @@ from bot.trading_types import MarketData
 class TestStartupValidation:
     """Test configuration loading and startup validation."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def temp_config_dir(self) -> Generator[Path, None, None]:
         """Create temporary directory for test configuration files."""
         with tempfile.TemporaryDirectory() as temp_dir:
             yield Path(temp_dir)
 
-    @pytest.fixture
+    @pytest.fixture()
     def valid_config_data(self) -> dict[str, Any]:
         """Create valid configuration data for testing."""
         return {
@@ -77,7 +77,7 @@ class TestStartupValidation:
             },
         }
 
-    @pytest.fixture
+    @pytest.fixture()
     def invalid_config_data(self):
         """Create invalid configuration data for testing."""
         return {
@@ -216,7 +216,7 @@ class TestStartupValidation:
             != aggressive_settings.trading.max_size_pct
         )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_trading_engine_startup_sequence(
         self, temp_config_dir, valid_config_data
     ):
@@ -326,7 +326,7 @@ class TestStartupValidation:
             word in warning_text for word in ["live", "production", "leverage", "risk"]
         )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_health_monitoring_initialization(self):
         """Test health monitoring initialization during startup."""
         with patch("bot.health.HealthMonitor") as mock_health_monitor:
@@ -433,7 +433,7 @@ class TestStartupValidation:
             # If it fails, should be a clear validation error
             assert "validation" in str(e).lower() or "field" in str(e).lower()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_startup_failure_recovery(self):
         """Test startup failure scenarios and recovery."""
         # Test market data connection failure

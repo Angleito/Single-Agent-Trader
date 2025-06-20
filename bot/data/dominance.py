@@ -204,10 +204,12 @@ class DominanceDataProvider:
                 return await self._fetch_coingecko_dominance()
             if self.data_source == "coinmarketcap":
                 return await self._fetch_coinmarketcap_dominance()
+        except Exception as e:
+            logger.exception("Error fetching dominance data: %s", e)
+            return None
+        else:
             logger.error("Unsupported data source: %s", self.data_source)
             return None
-
-        except Exception as e:
             logger.exception("Error fetching dominance data: %s", e)
             return None
 
@@ -305,6 +307,10 @@ class DominanceDataProvider:
                 stablecoin_velocity=velocity,
             )
 
+        except Exception as e:
+            logger.exception("Error in CoinGecko dominance fetch: %s", e)
+            return None
+        else:
             # Update cache
             self._dominance_cache.append(dominance_data)
             if (
@@ -319,10 +325,6 @@ class DominanceDataProvider:
                 self._calculate_trend_indicators()
 
             return dominance_data
-
-        except Exception as e:
-            logger.exception("Error in CoinGecko dominance fetch: %s", e)
-            return None
 
     async def _fetch_coinmarketcap_dominance(self) -> DominanceData | None:
         """Fetch dominance data from CoinMarketCap API (requires API key)."""

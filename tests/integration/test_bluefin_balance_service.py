@@ -28,7 +28,7 @@ from services.bluefin_sdk_service import (
 class TestBluefinBalanceServiceIntegration:
     """Test Bluefin service integration for balance operations."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_bluefin_client(self):
         """Create mock Bluefin client for testing."""
         client = Mock()
@@ -67,7 +67,7 @@ class TestBluefinBalanceServiceIntegration:
 
         return client
 
-    @pytest.fixture
+    @pytest.fixture()
     async def bluefin_service(self, mock_bluefin_client):
         """Create Bluefin service with mocked client."""
         service = BluefinSDKService()
@@ -90,7 +90,7 @@ class TestBluefinBalanceServiceIntegration:
         if hasattr(service, "client") and service.client:
             service.circuit_state = "CLOSED"  # Reset circuit breaker
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_service_startup_and_health_checks(self, mock_bluefin_client):
         """Test service startup sequence and health monitoring."""
         service = BluefinSDKService()
@@ -130,7 +130,7 @@ class TestBluefinBalanceServiceIntegration:
             assert "network" in health_status
             assert "uptime_seconds" in health_status
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_balance_retrieval_with_retry_logic(self, bluefin_service):
         """Test balance retrieval with retry mechanisms."""
         # Test successful balance retrieval
@@ -159,7 +159,7 @@ class TestBluefinBalanceServiceIntegration:
         assert balance_data["status"] == "success"
         assert call_count == 3  # Should have retried twice
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_error_handling_and_recovery_scenarios(self, bluefin_service):
         """Test comprehensive error handling and recovery."""
 
@@ -191,7 +191,7 @@ class TestBluefinBalanceServiceIntegration:
             assert bluefin_service.failure_count > 0
             assert bluefin_service.failure_types[expected_failure_type] > 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_circuit_breaker_functionality(self, bluefin_service):
         """Test circuit breaker for service resilience."""
 
@@ -237,7 +237,7 @@ class TestBluefinBalanceServiceIntegration:
         assert balance_data["status"] == "success"
         assert bluefin_service.circuit_state == "CLOSED"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_balance_data_validation_and_parsing(self, bluefin_service):
         """Test balance data validation and parsing."""
 
@@ -287,7 +287,7 @@ class TestBluefinBalanceServiceIntegration:
             assert available_balance > 0
             assert isinstance(available_balance, Decimal)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_position_balance_integration(self, bluefin_service):
         """Test position data integration with balance calculations."""
 
@@ -316,7 +316,7 @@ class TestBluefinBalanceServiceIntegration:
             assert Decimal(position["entryPrice"]) > 0
             assert Decimal(position["markPrice"]) > 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_service_performance_benchmarks(self, bluefin_service):
         """Test performance benchmarks for balance operations."""
 
@@ -359,7 +359,7 @@ class TestBluefinBalanceServiceIntegration:
         for metric, value in performance_metrics.items():
             print(f"  {metric}: {value:.2f}ms")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_concurrent_balance_operations(self, bluefin_service):
         """Test concurrent balance operations for thread safety."""
 
@@ -389,7 +389,7 @@ class TestBluefinBalanceServiceIntegration:
             else:  # Health tasks
                 assert result["status"] == "healthy"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_service_cleanup_and_shutdown(self, bluefin_service):
         """Test proper service cleanup and shutdown procedures."""
 
@@ -412,7 +412,7 @@ class TestBluefinBalanceServiceIntegration:
         # Verify cleanup completed
         assert bluefin_service._cleanup_complete
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_real_time_balance_updates(self, bluefin_service):
         """Test real-time balance update scenarios."""
 
@@ -441,7 +441,7 @@ class TestBluefinBalanceServiceIntegration:
         assert updated_available == initial_available - Decimal("100.50")
         assert updated_balance["data"]["equity"] == "9900.00"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_error_recovery_after_network_issues(self, bluefin_service):
         """Test error recovery after simulated network issues."""
 

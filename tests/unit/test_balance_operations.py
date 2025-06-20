@@ -96,18 +96,18 @@ class MockExchange(BaseExchange):
 class TestBalanceOperations:
     """Test cases for balance operations."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def temp_data_dir(self):
         """Create temporary directory for test data."""
         with tempfile.TemporaryDirectory() as temp_dir:
             yield Path(temp_dir)
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_exchange(self):
         """Create a mock exchange for testing."""
         return MockExchange()
 
-    @pytest.fixture
+    @pytest.fixture()
     def coinbase_validator(self):
         """Create a Coinbase response validator."""
         return CoinbaseResponseValidator()
@@ -153,7 +153,7 @@ class TestBalanceOperations:
             assert isinstance(normalized, Decimal)
             assert normalized >= 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_successful_balance_retrieval(self, mock_exchange):
         """Test successful balance retrieval from exchange."""
         mock_exchange._mock_balance = Decimal("25000.50")
@@ -163,7 +163,7 @@ class TestBalanceOperations:
         assert balance == Decimal("25000.50")
         assert isinstance(balance, Decimal)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_balance_retrieval_connection_error(self, mock_exchange):
         """Test balance retrieval handles connection errors."""
         mock_exchange._connection_error = True
@@ -171,7 +171,7 @@ class TestBalanceOperations:
         with pytest.raises(ExchangeConnectionError):
             await mock_exchange.get_account_balance()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_balance_retrieval_timeout_error(self, mock_exchange):
         """Test balance retrieval handles timeout errors."""
         mock_exchange._timeout_error = True
@@ -179,7 +179,7 @@ class TestBalanceOperations:
         with pytest.raises(TimeoutError):
             await mock_exchange.get_account_balance()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_balance_retrieval_with_error_handling(self, mock_exchange):
         """Test balance retrieval with error boundary protection."""
         mock_exchange._auth_error = True
@@ -364,7 +364,7 @@ class TestBalanceOperations:
         negative_dict = {"balance": "-500.00"}
         assert coinbase_validator.validate_balance_response(negative_dict) is False
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_balance_anomaly_detection(self, mock_exchange):
         """Test balance anomaly detection for suspicious changes."""
         previous_balance = Decimal(10000)
@@ -455,7 +455,7 @@ class TestBalanceOperations:
         assert isinstance(final_status["current_balance"], float)
         assert final_status["current_balance"] >= 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_balance_retry_logic(self, mock_exchange):
         """Test balance retrieval retry logic on failures."""
         call_count = 0

@@ -44,7 +44,7 @@ class TestWebSocketPerformance(unittest.TestCase):
                 )
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_message_queue_performance(self):
         """Test that message queue doesn't block WebSocket reception."""
         provider = MarketDataProvider("BTC-USD", "1m")
@@ -92,7 +92,7 @@ class TestWebSocketPerformance(unittest.TestCase):
 
         logger.info("✅ Queued 1000 messages in %.3fs", queue_time)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_subscriber_notification_performance(self):
         """Test that subscriber notifications don't block message processing."""
         provider = MarketDataProvider("BTC-USD", "1m")
@@ -132,7 +132,7 @@ class TestWebSocketPerformance(unittest.TestCase):
             "✅ Notified subscribers in %.3fs (non-blocking)", notification_time
         )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_async_indicator_performance(self):
         """Test async indicator calculation performance."""
         cipher_a = CipherA()
@@ -182,7 +182,7 @@ class TestWebSocketPerformance(unittest.TestCase):
         logger.info("   Async: %.3fs", async_time)
         logger.info("   Streaming: %.3fs", streaming_time)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_concurrent_processing(self):
         """Test that multiple processes can run concurrently without blocking."""
         provider = MarketDataProvider("BTC-USD", "1m")
@@ -250,7 +250,7 @@ class TestWebSocketPerformance(unittest.TestCase):
 
         logger.info("✅ Concurrent processing completed in %.3fs", concurrent_time)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_bluefin_websocket_performance(self):
         """Test Bluefin WebSocket performance improvements."""
         provider = BluefinMarketDataProvider("BTC-PERP", "1m")

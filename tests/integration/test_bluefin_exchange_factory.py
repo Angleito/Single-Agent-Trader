@@ -20,7 +20,7 @@ from bot.utils.symbol_utils import BluefinSymbolConverter
 class TestBluefinExchangeFactory:
     """Test Bluefin exchange factory configuration and service URL handling."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_settings(self):
         """Create mock settings for testing."""
         settings = Mock(spec=Settings)
@@ -35,7 +35,7 @@ class TestBluefinExchangeFactory:
         )
         return settings
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_bluefin_service_client(self):
         """Mock the BluefinServiceClient for testing."""
         with patch("bot.exchange.bluefin.BluefinServiceClient") as mock_client_class:
@@ -102,7 +102,7 @@ class TestBluefinExchangeFactory:
         # Should still create client but with None private key
         assert isinstance(client, BluefinClient)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_bluefin_client_service_connection(self, mock_bluefin_service_client):
         """Test Bluefin client establishes service connection properly."""
         with patch(
@@ -144,7 +144,7 @@ class TestBluefinExchangeFactory:
         with pytest.raises(ValueError, match="Unsupported exchange type"):
             ExchangeFactory.create_exchange(exchange_type="unsupported_exchange")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_bluefin_client_initialization_with_service(
         self, mock_bluefin_service_client
     ):
@@ -182,7 +182,7 @@ class TestBluefinExchangeFactory:
                 # Some symbols might not be supported, which is fine
                 logger.debug("Symbol %s not supported in test converter", symbol)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_exchange_factory_async_initialization(
         self, mock_settings, mock_bluefin_service_client
     ):
@@ -220,7 +220,7 @@ class TestBluefinExchangeFactory:
 
         assert client.dry_run is True
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_bluefin_client_service_health_check(
         self, mock_bluefin_service_client
     ):
@@ -279,7 +279,7 @@ class TestBluefinServiceUrlPassing:
             assert url.startswith("http")
             assert ":" in url
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_service_connection_retry_logic(self):
         """Test service connection retry logic."""
         with patch("bot.exchange.bluefin.BluefinServiceClient") as mock_client_class:

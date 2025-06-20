@@ -151,7 +151,7 @@ class TradingEngine:
         symbol: str = "BTC-USD",
         interval: str = "1m",  # Note: 15s was changed to 1m due to Bluefin API limitations
         config_file: str | None = None,
-        dry_run: bool = True,
+        dry_run: bool | None = None,
     ):
         """
         Initialize the trading engine.
@@ -160,11 +160,10 @@ class TradingEngine:
             symbol: Trading symbol
             interval: Candle interval
             config_file: Optional configuration file path
-            dry_run: Whether to run in dry-run mode
+            dry_run: Whether to run in dry-run mode (None = use config/env settings)
         """
         self.symbol = symbol
         self.interval = interval
-        self.dry_run = dry_run
         self._running = False
         self._shutdown_requested = False
         self._memory_available = False  # Initialize early to prevent AttributeError
@@ -175,6 +174,9 @@ class TradingEngine:
 
         # Load configuration
         self.settings = self._load_configuration(config_file, dry_run)
+
+        # Set dry_run from settings after configuration is loaded
+        self.dry_run = self.settings.system.dry_run
 
         # Setup logging
         self._setup_logging()
@@ -431,10 +433,8 @@ class TradingEngine:
             if self.current_position.side != "FLAT":
                 self.logger.info("Emergency stop: Closing all positions")
                 await self._close_all_positions()
-        except Exception as e:
-            self.logger.exception(
-                "Error closing positions during emergency stop: %s", e
-            )
+        except Exception:
+            self.logger.exception("Error closing positions during emergency stop")
 
         # Publish emergency stop status
         if self.websocket_publisher:
@@ -736,15 +736,17 @@ class TradingEngine:
 
         return True
 
-    def _load_configuration(self, config_file: str | None, dry_run: bool) -> Settings:
+    def _load_configuration(
+        self, config_file: str | None, dry_run: bool | None
+    ) -> Settings:
         """Load and validate configuration."""
         if config_file:
             settings = Settings.load_from_file(config_file)
         else:
             settings = create_settings()
 
-        # Override dry_run mode if specified
-        if dry_run != settings.system.dry_run:
+        # Override dry_run mode if explicitly specified
+        if dry_run is not None and dry_run != settings.system.dry_run:
             system_settings = settings.system.model_copy(update={"dry_run": dry_run})
             settings = settings.model_copy(update={"system": system_settings})
 
@@ -3365,7 +3367,9 @@ def cli() -> None:
 
 @cli.command()
 @click.option(
-    "--dry-run/--no-dry-run", default=True, help="Run in dry-run mode (default)"
+    "--dry-run/--no-dry-run",
+    default=None,
+    help="Override dry-run mode (respects config/env if not specified)",
 )
 @click.option("--symbol", default="BTC-USD", help="Trading symbol")
 @click.option(
@@ -3376,44 +3380,47 @@ def cli() -> None:
 @click.option("--config", default=None, help="Configuration file path")
 @click.option("--force", is_flag=True, help="Skip confirmation prompt for live trading")
 def live(
-    dry_run: bool, symbol: str, interval: str, config: str | None, force: bool
+    dry_run: bool | None, symbol: str, interval: str, config: str | None, force: bool
 ) -> None:
     """Start live trading bot."""
-    if dry_run:
-        console.print(
-            Panel(
-                f"🚀 Starting AI Trading Bot in DRY-RUN mode\n"
-                f"Symbol: {symbol}\n"
-                f"Interval: {interval}\n"
-                f"Mode: Paper Trading (No real orders)",
-                title="AI Trading Bot",
-                style="cyan",
-            )
-        )
-    else:
-        console.print(
-            Panel(
-                f"⚠️  Starting AI Trading Bot in LIVE mode\n"
-                f"Symbol: {symbol}\n"
-                f"Interval: {interval}\n"
-                f"Mode: Real Trading (Real money at risk!)",
-                title="AI Trading Bot",
-                style="red",
-            )
-        )
-
-        # Confirmation for live trading (skip if --force flag is used)
-        if not force and not click.confirm(
-            "Are you sure you want to trade with real money?"
-        ):
-            console.print("Cancelled live trading.")
-            sys.exit(0)
-
     try:
-        # Start the trading engine
+        # Create the trading engine to determine actual dry_run setting
         engine = TradingEngine(
             symbol=symbol, interval=interval, config_file=config, dry_run=dry_run
         )
+
+        # Display startup message based on actual configuration
+        if engine.dry_run:
+            console.print(
+                Panel(
+                    f"🚀 Starting AI Trading Bot in DRY-RUN mode\n"
+                    f"Symbol: {symbol}\n"
+                    f"Interval: {interval}\n"
+                    f"Mode: Paper Trading (No real orders)",
+                    title="AI Trading Bot",
+                    style="cyan",
+                )
+            )
+        else:
+            console.print(
+                Panel(
+                    f"⚠️  Starting AI Trading Bot in LIVE mode\n"
+                    f"Symbol: {symbol}\n"
+                    f"Interval: {interval}\n"
+                    f"Mode: Real Trading (Real money at risk!)",
+                    title="AI Trading Bot",
+                    style="red",
+                )
+            )
+
+            # Confirmation for live trading (skip if --force flag is used)
+            if not force and not click.confirm(
+                "Are you sure you want to trade with real money?"
+            ):
+                console.print("Cancelled live trading.")
+                sys.exit(0)
+
+        # Start the trading engine
         asyncio.run(engine.run())
     except KeyboardInterrupt:
         console.print("\n👋 Bot stopped by user")

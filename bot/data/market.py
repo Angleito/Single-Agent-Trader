@@ -812,6 +812,13 @@ class MarketDataProvider:
         self, start_time: datetime, end_time: datetime, granularity: str
     ) -> list[MarketData]:
         """Fetch a single batch of historical data."""
+
+        def _raise_session_error() -> None:
+            raise RuntimeError("HTTP session not initialized")
+
+        def _raise_api_error(status: int, text: str) -> None:
+            raise Exception(f"API request failed with status {status}: {text}")
+
         try:
             url = f"{self.COINBASE_REST_URL}/api/v3/brokerage/market/products/{self._data_symbol}/candles"
 
@@ -822,12 +829,10 @@ class MarketDataProvider:
             }
 
             if self._session is None:
-                raise RuntimeError("HTTP session not initialized")
+                _raise_session_error()
             async with self._session.get(url, params=params) as response:
                 if response.status != 200:
-                    raise Exception(
-                        f"API request failed with status {response.status}: {await response.text()}"
-                    )
+                    _raise_api_error(response.status, await response.text())
 
                 data = await response.json()
                 candles = data.get("candles", [])
