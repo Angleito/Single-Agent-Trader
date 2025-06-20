@@ -247,7 +247,7 @@ class FeeCalculator:
 
             if validation_result == "hold_close":
                 return self._create_zero_fee_result(trade_action, trade_action.size_pct)
-            elif validation_result is not None:
+            if validation_result is not None:
                 return self._create_zero_fee_result(trade_action)
 
             # Calculate intended position value

@@ -126,9 +126,9 @@ class BluefinWebSocketClient:
         # Subscription tracking
         self._subscribed_channels: set[str] = set()
         self._subscription_id = 1
-        self._pending_subscriptions: dict[
-            int, str
-        ] = {}  # Track pending subscription requests
+        self._pending_subscriptions: dict[int, str] = (
+            {}
+        )  # Track pending subscription requests
 
         # Tasks
         self._connection_task: asyncio.Task | None = None
@@ -1633,9 +1633,9 @@ class BluefinWebSocketClient:
             "current_candle": self._current_candle is not None,
             "ticks_buffered": len(self._tick_buffer),
             "use_trade_aggregation": self.use_trade_aggregation,
-            "trades_buffered": len(self._trade_buffer)
-            if self.use_trade_aggregation
-            else 0,
+            "trades_buffered": (
+                len(self._trade_buffer) if self.use_trade_aggregation else 0
+            ),
             "subscribed_channels": list(self._subscribed_channels),
             "pending_subscriptions": list(self._pending_subscriptions.values()),
             "subscription_id": self._subscription_id,

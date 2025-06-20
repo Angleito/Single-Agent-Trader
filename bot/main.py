@@ -175,9 +175,9 @@ class TradingEngine:
         self._shutdown_requested = False
         self._memory_available = False  # Initialize early to prevent AttributeError
         self._last_position_log_time: datetime | None = None
-        self._background_tasks: list[
-            asyncio.Task[Any]
-        ] = []  # Track background tasks for cleanup
+        self._background_tasks: list[asyncio.Task[Any]] = (
+            []
+        )  # Track background tasks for cleanup
 
         # Initialize basic configuration and setup
         self._initialize_basic_setup(config_file, dry_run)
@@ -1082,8 +1082,7 @@ class TradingEngine:
         """Setup fallback market data for Bluefin when native provider unavailable."""
         if is_high_frequency:
             return await self._setup_realtime_market_data(interval_seconds)
-        else:
-            return await self._setup_standard_market_data_fallback()
+        return await self._setup_standard_market_data_fallback()
 
     async def _setup_realtime_market_data(self, interval_seconds: int):
         """Setup real-time market data provider for high-frequency trading."""
@@ -1219,7 +1218,7 @@ class TradingEngine:
 
     async def _initialize_dominance_provider(self):
         """Initialize dominance data provider."""
-        if not self.dominance_provider:
+        if not hasattr(self, "dominance_provider") or not self.dominance_provider:
             return
 
         console.print("  • Connecting to stablecoin dominance data...")
@@ -1376,10 +1375,10 @@ class TradingEngine:
         if inspect.iscoroutine(data):
             self.logger.warning("Detected coroutine data, awaiting...")
             return await data
-        elif isinstance(data, asyncio.Task):
+        if isinstance(data, asyncio.Task):
             self.logger.warning("Detected asyncio.Task data, awaiting...")
             return await data
-        elif hasattr(data, "__await__"):
+        if hasattr(data, "__await__"):
             self.logger.warning("Detected awaitable object, awaiting...")
             return await data
 
@@ -1396,12 +1395,12 @@ class TradingEngine:
                 data,
             )
             return []
-        elif inspect.iscoroutine(data):
+        if inspect.iscoroutine(data):
             self.logger.error(
                 "Data is still a coroutine: %s. This should have been awaited.", data
             )
             return []
-        elif not isinstance(data, (list, tuple)):
+        if not isinstance(data, (list, tuple)):
             self.logger.warning(
                 "Unexpected data type: %s, converting to list", type(data)
             )
@@ -1419,8 +1418,7 @@ class TradingEngine:
             return self._process_24h_data_requirement(
                 data, min_candles_required, interval_seconds
             )
-        else:
-            return self._process_minimum_data_requirement(data, min_candles_required)
+        return self._process_minimum_data_requirement(data, min_candles_required)
 
     def _process_24h_data_requirement(
         self, data: list, min_candles_required: int, interval_seconds: int
@@ -1436,7 +1434,7 @@ class TradingEngine:
             )
             self.trading_enabled = True
             return True
-        elif len(data) >= 50:
+        if len(data) >= 50:
             hours_available = (len(data) * interval_seconds) / 3600
             self.logger.warning(
                 "⚠️ Limited data available (%.2f hours, %s candles). "
@@ -1461,7 +1459,7 @@ class TradingEngine:
             )
             self.trading_enabled = True
             return True
-        elif len(data) >= 50:
+        if len(data) >= 50:
             self.logger.warning(
                 "⚠️ Limited historical data available: %s candles. "
                 "Indicators may be unreliable until more data is accumulated.",
@@ -1896,12 +1894,11 @@ class TradingEngine:
             return await self._get_realtime_market_data(
                 loop_context["interval_seconds"]
             )
-        elif self.market_data is not None and hasattr(
+        if self.market_data is not None and hasattr(
             self.market_data, "get_latest_ohlcv"
         ):
             return await self._get_standard_market_data()
-        else:
-            return []
+        return []
 
     async def _get_realtime_market_data(self, interval_seconds: int) -> list:
         """Get market data from realtime provider."""
@@ -1918,8 +1915,7 @@ class TradingEngine:
                 )
 
             return latest_data
-        else:
-            return []
+        return []
 
     async def _get_standard_market_data(self) -> list:
         """Get market data from standard provider."""
@@ -1957,14 +1953,13 @@ class TradingEngine:
         if inspect.iscoroutine(latest_data):
             self.logger.warning("Detected coroutine data in main loop, awaiting...")
             return await latest_data
-        elif isinstance(latest_data, asyncio.Task):
+        if isinstance(latest_data, asyncio.Task):
             self.logger.warning("Detected asyncio.Task data in main loop, awaiting...")
             return await latest_data
-        elif hasattr(latest_data, "__await__"):
+        if hasattr(latest_data, "__await__"):
             self.logger.warning("Detected awaitable object in main loop, awaiting...")
             return await latest_data
-        else:
-            return latest_data
+        return latest_data
 
     async def _process_market_data_and_indicators(self, latest_data: list) -> tuple:
         """Process market data and calculate indicators."""
@@ -2018,13 +2013,14 @@ class TradingEngine:
             return self._get_fallback_indicator_state(), dominance_candles
 
         # Calculate indicators
-        return await self._compute_indicators(
-            market_data, dominance_candles
-        ), dominance_candles
+        return (
+            await self._compute_indicators(market_data, dominance_candles),
+            dominance_candles,
+        )
 
     async def _get_dominance_candles(self):
         """Generate dominance candlesticks if provider available."""
-        if not self.dominance_provider:
+        if not hasattr(self, "dominance_provider") or not self.dominance_provider:
             return None
 
         try:
@@ -2139,7 +2135,7 @@ class TradingEngine:
         """Process dominance data and update indicator dictionary."""
         dominance_obj = None
 
-        if not self.dominance_provider:
+        if not hasattr(self, "dominance_provider") or not self.dominance_provider:
             return dominance_obj
 
         try:
@@ -2173,24 +2169,36 @@ class TradingEngine:
     def _create_dominance_metrics(self, dominance_data) -> dict:
         """Create dominance metrics dictionary."""
         return {
-            "usdt_dominance": dominance_data.usdt_dominance
-            if dominance_data.usdt_dominance is not None
-            else 0.0,
-            "usdc_dominance": dominance_data.usdc_dominance
-            if dominance_data.usdc_dominance is not None
-            else 0.0,
-            "stablecoin_dominance": dominance_data.stablecoin_dominance
-            if dominance_data.stablecoin_dominance is not None
-            else 0.0,
-            "dominance_trend": dominance_data.dominance_24h_change
-            if dominance_data.dominance_24h_change is not None
-            else 0.0,
-            "dominance_rsi": dominance_data.dominance_rsi
-            if dominance_data.dominance_rsi is not None
-            else 50.0,
-            "stablecoin_velocity": dominance_data.stablecoin_velocity
-            if dominance_data.stablecoin_velocity is not None
-            else 1.0,
+            "usdt_dominance": (
+                dominance_data.usdt_dominance
+                if dominance_data.usdt_dominance is not None
+                else 0.0
+            ),
+            "usdc_dominance": (
+                dominance_data.usdc_dominance
+                if dominance_data.usdc_dominance is not None
+                else 0.0
+            ),
+            "stablecoin_dominance": (
+                dominance_data.stablecoin_dominance
+                if dominance_data.stablecoin_dominance is not None
+                else 0.0
+            ),
+            "dominance_trend": (
+                dominance_data.dominance_24h_change
+                if dominance_data.dominance_24h_change is not None
+                else 0.0
+            ),
+            "dominance_rsi": (
+                dominance_data.dominance_rsi
+                if dominance_data.dominance_rsi is not None
+                else 50.0
+            ),
+            "stablecoin_velocity": (
+                dominance_data.stablecoin_velocity
+                if dominance_data.stablecoin_velocity is not None
+                else 1.0
+            ),
         }
 
     def _get_default_dominance_values(self) -> dict:
@@ -2283,9 +2291,9 @@ class TradingEngine:
         with self.performance_monitor.track_operation(
             "llm_response",
             {
-                "agent_type": "memory_enhanced"
-                if self._memory_available
-                else "standard",
+                "agent_type": (
+                    "memory_enhanced" if self._memory_available else "standard"
+                ),
                 "symbol": self.symbol,
             },
         ):
@@ -2364,10 +2372,9 @@ class TradingEngine:
             return await self._execute_directional_trade(
                 trade_action, current_price, market_state, experience_id, loop_count
             )
-        else:
-            return await self._execute_non_directional_trade(
-                trade_action, current_price, market_state, experience_id, loop_count
-            )
+        return await self._execute_non_directional_trade(
+            trade_action, current_price, market_state, experience_id, loop_count
+        )
 
     async def _execute_directional_trade(
         self, trade_action, current_price, market_state, experience_id, loop_count
@@ -3036,7 +3043,7 @@ class TradingEngine:
         status_table.add_row("Uptime", str(uptime).split(".")[0])
 
         # Add dominance data if available
-        if self.dominance_provider:
+        if hasattr(self, "dominance_provider") and self.dominance_provider:
             dominance_data = self.dominance_provider.get_latest_dominance()
             if dominance_data:
                 status_table.add_row(

@@ -187,9 +187,9 @@ class BluefinMarketDataProvider:
                 "api_base_url": self._api_base_url,
                 "ws_url": self._ws_url,
                 "use_trade_aggregation": self.use_trade_aggregation,
-                "trade_aggregation_mode": "kline"
-                if not self.use_trade_aggregation
-                else "trade_aggregation",
+                "trade_aggregation_mode": (
+                    "kline" if not self.use_trade_aggregation else "trade_aggregation"
+                ),
             },
         )
 
@@ -991,9 +991,9 @@ class BluefinMarketDataProvider:
             "subscribers": len(self._subscribers),
             "extended_history_mode": self._extended_history_mode,
             "use_trade_aggregation": self.use_trade_aggregation,
-            "aggregation_mode": "trade->candle"
-            if self.use_trade_aggregation
-            else "kline",
+            "aggregation_mode": (
+                "trade->candle" if self.use_trade_aggregation else "kline"
+            ),
             "sub_minute_interval": self._is_sub_minute_interval(self.interval),
             "cache_status": {
                 key: self._is_cache_valid(key) for key in self._cache_timestamps
@@ -1010,9 +1010,11 @@ class BluefinMarketDataProvider:
                 "trades": ws_status.get("trades_buffered", 0),
                 "messages": ws_status.get("message_count", 0),
                 "use_trade_aggregation": ws_status.get("use_trade_aggregation", False),
-                "aggregation_active": ws_status.get("trades_buffered", 0) > 0
-                if self.use_trade_aggregation
-                else False,
+                "aggregation_active": (
+                    ws_status.get("trades_buffered", 0) > 0
+                    if self.use_trade_aggregation
+                    else False
+                ),
             }
 
         # Add data sufficiency information
@@ -1022,9 +1024,7 @@ class BluefinMarketDataProvider:
         status["data_quality"] = (
             "excellent"
             if total_cached_candles >= 200
-            else "good"
-            if total_cached_candles >= 100
-            else "insufficient"
+            else "good" if total_cached_candles >= 100 else "insufficient"
         )
 
         return status
@@ -1952,9 +1952,9 @@ class BluefinMarketDataProvider:
                     "symbol": self.symbol,
                     "interval": self.interval,
                     "use_trade_aggregation": self.use_trade_aggregation,
-                    "aggregation_mode": "trade->candle"
-                    if self.use_trade_aggregation
-                    else "kline",
+                    "aggregation_mode": (
+                        "trade->candle" if self.use_trade_aggregation else "kline"
+                    ),
                     "network": self.network,
                 },
             )

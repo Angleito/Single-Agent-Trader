@@ -368,9 +368,7 @@ def get_balance_operation_context(
             else (
                 "normal"
                 if duration_ms < 1000
-                else "slow"
-                if duration_ms < 5000
-                else "very_slow"
+                else "slow" if duration_ms < 5000 else "very_slow"
             )
         )
 

@@ -132,13 +132,13 @@ class TradingViewDataFeed:
 
     def __init__(self):
         self.symbols: dict[str, SymbolInfo] = {}
-        self.price_data: dict[
-            str, dict[str, list[OHLCVBar]]
-        ] = {}  # symbol -> resolution -> bars
+        self.price_data: dict[str, dict[str, list[OHLCVBar]]] = (
+            {}
+        )  # symbol -> resolution -> bars
         self.ai_decisions: dict[str, list[AIDecisionMarker]] = {}  # symbol -> decisions
-        self.indicators: dict[
-            str, dict[str, list[TechnicalIndicator]]
-        ] = {}  # symbol -> indicator_name -> values
+        self.indicators: dict[str, dict[str, list[TechnicalIndicator]]] = (
+            {}
+        )  # symbol -> indicator_name -> values
 
         # Initialize default symbols
         self._init_default_symbols()
@@ -666,7 +666,10 @@ def generate_sample_data():
             price=base_price + random.uniform(-100, 100),  # noqa: S311
             confidence=random.uniform(0.6, 0.95),  # noqa: S311
             reasoning=f"AI decision based on market analysis #{i + 1}",
-            indicator_values={"rsi": random.uniform(30, 70), "ema": base_price},  # noqa: S311
+            indicator_values={
+                "rsi": random.uniform(30, 70),
+                "ema": base_price,
+            },
         )
 
         feed.add_ai_decision("BTC-USD", marker)

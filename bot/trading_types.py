@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime  # noqa: TCH003
+from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Any, Literal
@@ -92,8 +92,8 @@ class Position(BaseModel):
     side: Literal["LONG", "SHORT", "FLAT"]
     size: Decimal
     entry_price: Decimal | None = None
-    unrealized_pnl: Decimal = Decimal("0")
-    realized_pnl: Decimal = Decimal("0")
+    unrealized_pnl: Decimal = Decimal(0)
+    realized_pnl: Decimal = Decimal(0)
     timestamp: datetime
 
     # Futures-specific fields
@@ -194,7 +194,7 @@ class Order(BaseModel):
     stop_price: Decimal | None = None
     status: OrderStatus
     timestamp: datetime
-    filled_quantity: Decimal = Decimal("0")
+    filled_quantity: Decimal = Decimal(0)
 
     model_config = ConfigDict(use_enum_values=True, arbitrary_types_allowed=True)
 
@@ -238,8 +238,8 @@ class FuturesAccountInfo(BaseModel):
 
     # Auto-transfer settings
     auto_cash_transfer_enabled: bool = True
-    min_cash_transfer_amount: Decimal = Decimal("100")
-    max_cash_transfer_amount: Decimal = Decimal("10000")
+    min_cash_transfer_amount: Decimal = Decimal(100)
+    max_cash_transfer_amount: Decimal = Decimal(10000)
 
     # Position limits
     max_leverage: int = 20
@@ -263,7 +263,7 @@ class FuturesOrder(BaseModel):
     stop_price: Decimal | None = None
     status: OrderStatus
     timestamp: datetime
-    filled_quantity: Decimal = Decimal("0")
+    filled_quantity: Decimal = Decimal(0)
 
     # Futures-specific fields
     leverage: int

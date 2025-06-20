@@ -331,7 +331,9 @@ class BluefinServiceClient:
                 times = self.balance_performance_metrics["balance_response_times"]
                 self.balance_performance_metrics["average_balance_response_time"] = sum(  # type: ignore[index]
                     times
-                ) / len(times)  # type: ignore[arg-type]
+                ) / len(
+                    times
+                )  # type: ignore[arg-type]
         else:
             self.balance_performance_metrics["failed_balance_requests"] += 1
 
@@ -1679,16 +1681,15 @@ class BluefinServiceClient:
                     },
                 )
                 return candles
-            else:
-                logger.warning(
-                    "⚠️ Received invalid candle data from service",
-                    extra={
-                        "client_id": self.client_id,
-                        "operation": "get_candlestick_data",
-                        "raw_candle_count": len(candles),
-                    },
-                )
-                return []
+            logger.warning(
+                "⚠️ Received invalid candle data from service",
+                extra={
+                    "client_id": self.client_id,
+                    "operation": "get_candlestick_data",
+                    "raw_candle_count": len(candles),
+                },
+            )
+            return []
 
         except (BluefinServiceAuthError, BluefinServiceRateLimitError) as e:
             logger.exception(
@@ -2707,12 +2708,11 @@ class BluefinServiceClient:
                     "successful_requests": success_count,
                     "details": f"Performance test: {success_rate:.1f}% success rate",
                 }, recommendations
-            else:
-                return {
-                    "status": "fail",
-                    "error": "No session available",
-                    "details": "Could not run performance test",
-                }, recommendations
+            return {
+                "status": "fail",
+                "error": "No session available",
+                "details": "Could not run performance test",
+            }, recommendations
 
         except Exception as e:
             return {
@@ -2758,9 +2758,9 @@ class BluefinServiceClient:
         }
 
         # Run all connectivity tests
-        test_results["tests"][
-            "basic_connectivity"
-        ] = await self._run_basic_connectivity_test(test_start)
+        test_results["tests"]["basic_connectivity"] = (
+            await self._run_basic_connectivity_test(test_start)
+        )
         test_results["tests"][
             "detailed_health"
         ] = await self._run_detailed_health_test()
