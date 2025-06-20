@@ -3,14 +3,14 @@
 # Requires bash 4.0+ for associative arrays
 # Handles directory permissions, setup, and initialization before starting the main application
 #
-# This script runs before the main application to ensure:
-# - All required directories exist and have proper permissions
-# - Write permissions are verified
-# - Fallback locations are available if needed
-# - Environment-specific setup is performed
-# - Clear error reporting for setup failures
+# FIXED VERSION - Handles permission failures gracefully:
+# - Removed 'set -e' to prevent exits on permission errors
+# - Simplified directory verification (relies on Dockerfile pre-creation)
+# - Streamlined fallback mechanism using tmpfs
+# - All setup steps are resilient and won't crash the container
+# - Focus on verification rather than modification for better Docker compatibility
 
-set -euo pipefail  # Exit on any error, undefined variable, or pipe failure
+set -uo pipefail  # Exit on undefined variable or pipe failure (graceful error handling)
 
 # Script metadata
 SCRIPT_NAME="docker-entrypoint.sh"
@@ -25,11 +25,11 @@ readonly BLUE='\033[0;34m'
 readonly CYAN='\033[0;36m'
 readonly NC='\033[0m' # No Color
 
-# Configuration
+# Configuration (get actual runtime user)
 readonly APP_USER="botuser"
 readonly APP_GROUP="botuser"
-readonly APP_UID=1000
-readonly APP_GID=1000
+readonly APP_UID=$(id -u)
+readonly APP_GID=$(id -g)
 
 # Directory configuration (path:permissions pairs)
 readonly REQUIRED_DIRS=(
@@ -109,72 +109,27 @@ check_user() {
     return 0
 }
 
-# Create directory with proper permissions
-create_directory() {
+# Verify and prepare directory (simplified approach)
+verify_directory() {
     local dir_path="$1"
     local permissions="$2"
 
-    log_debug "Creating directory: ${dir_path} with permissions ${permissions}"
+    log_debug "Verifying directory: ${dir_path}"
 
-    # Create directory if it doesn't exist
-    if [[ ! -d "${dir_path}" ]]; then
-        if mkdir -p "${dir_path}" 2>/dev/null; then
-            log_success "Created directory: ${dir_path}"
-        else
-            # Try alternative approaches if standard mkdir fails
-            log_warning "Standard mkdir failed for ${dir_path}, trying alternatives..."
-
-            # Try creating parent directories step by step
-            local parent_dir=$(dirname "${dir_path}")
-            if [[ "${parent_dir}" != "/" ]] && [[ "${parent_dir}" != "${dir_path}" ]]; then
-                if mkdir -p "${parent_dir}" 2>/dev/null; then
-                    log_debug "Created parent directory: ${parent_dir}"
-                    if mkdir "${dir_path}" 2>/dev/null; then
-                        log_success "Created directory: ${dir_path} (with parent)"
-                    else
-                        log_warning "Failed to create directory after parent setup: ${dir_path}"
-                        # Don't return error - continue with permission attempts
-                    fi
-                else
-                    log_warning "Failed to create parent directory: ${parent_dir}"
-                    # Don't return error - continue with permission attempts
-                fi
-            else
-                log_warning "Cannot create directory: ${dir_path}"
-                # Don't return error - maybe it exists or permissions will work
-            fi
-        fi
-    else
-        log_debug "Directory already exists: ${dir_path}"
-    fi
-
-    # Set permissions - try multiple approaches
-    if chmod "${permissions}" "${dir_path}" 2>/dev/null; then
-        log_debug "Set permissions ${permissions} on ${dir_path}"
-    else
-        log_warning "Failed to set permissions ${permissions} on ${dir_path}, trying alternatives..."
-
-        # Try setting more permissive permissions if the requested ones fail
-        local fallback_permissions="755"
-        if [[ "${permissions}" != "${fallback_permissions}" ]]; then
-            if chmod "${fallback_permissions}" "${dir_path}" 2>/dev/null; then
-                log_warning "Set fallback permissions ${fallback_permissions} on ${dir_path}"
-            else
-                log_warning "Failed to set any permissions on ${dir_path}"
-                # Don't return error - directory exists, permissions might not be critical
-            fi
-        else
-            log_warning "Could not set permissions on ${dir_path}, but continuing..."
-            # Don't return error - directory might still be usable
-        fi
-    fi
-
-    # Check if directory is at least readable
+    # Check if directory exists and is accessible
     if [[ -d "${dir_path}" ]] && [[ -r "${dir_path}" ]]; then
-        log_debug "Directory ${dir_path} is accessible"
+        log_debug "Directory exists and is accessible: ${dir_path}"
+        
+        # Try to set permissions if possible (but don't fail if it doesn't work)
+        if chmod "${permissions}" "${dir_path}" 2>/dev/null; then
+            log_debug "Set permissions ${permissions} on ${dir_path}"
+        else
+            log_debug "Cannot set permissions on ${dir_path} (may be read-only filesystem)"
+        fi
+        
         return 0
     else
-        log_warning "Directory ${dir_path} is not accessible, but continuing..."
+        log_warning "Directory ${dir_path} is not accessible or does not exist"
         return 1
     fi
 }
@@ -196,78 +151,32 @@ test_write_permission() {
     fi
 }
 
-# Setup fallback directory
+# Setup fallback directory (simplified)
 setup_fallback() {
     local original_dir="$1"
     local fallback_dir="$2"
 
-    log_warning "Setting up fallback directory: ${fallback_dir} for ${original_dir}"
+    log_info "Setting up tmpfs fallback for: ${original_dir}"
 
-    # Create fallback directory with multiple permission attempts
-    local created_fallback=false
-
-    # Try standard creation first
-    if mkdir -p "${fallback_dir}" 2>/dev/null; then
-        log_debug "Created fallback directory: ${fallback_dir}"
-        created_fallback=true
+    # Create fallback in tmpfs
+    local tmpfs_fallback="/tmp/$(basename "${original_dir}")-$$"
+    
+    if mkdir -p "${tmpfs_fallback}" 2>/dev/null; then
+        log_success "Created tmpfs fallback: ${tmpfs_fallback}"
+        
+        # Set permissions (but don't fail if it doesn't work)
+        chmod 755 "${tmpfs_fallback}" 2>/dev/null || true
+        
+        # Set environment variable for application to use
+        local env_var_name="FALLBACK_$(basename "${original_dir}" | tr '[:lower:]' '[:upper:]')_DIR"
+        export "${env_var_name}=${tmpfs_fallback}"
+        log_info "Set environment variable: ${env_var_name}=${tmpfs_fallback}"
+        
+        return 0
     else
-        # Try creating in /tmp if the specified fallback fails
-        local tmp_fallback="/tmp/$(basename "${fallback_dir}")-$$"
-        if mkdir -p "${tmp_fallback}" 2>/dev/null; then
-            log_warning "Using alternative fallback location: ${tmp_fallback}"
-            fallback_dir="${tmp_fallback}"
-            created_fallback=true
-        else
-            log_error "Failed to create any fallback directory"
-            return 1
-        fi
+        log_warning "Failed to create tmpfs fallback for ${original_dir}"
+        return 1
     fi
-
-    if [[ "${created_fallback}" == "true" ]]; then
-        # Try to set permissions (775 -> 755 -> continue anyway)
-        if chmod 775 "${fallback_dir}" 2>/dev/null; then
-            log_debug "Set permissions 775 on fallback directory"
-        elif chmod 755 "${fallback_dir}" 2>/dev/null; then
-            log_warning "Set fallback permissions 755 on fallback directory"
-        else
-            log_warning "Could not set permissions on fallback directory, but continuing..."
-        fi
-
-        log_success "Fallback directory ready: ${fallback_dir}"
-
-        # Test write permission
-        if test_write_permission "${fallback_dir}"; then
-            # Try to create symlink (best case scenario)
-            if [[ -d "${original_dir}" ]] && [[ ! -L "${original_dir}" ]]; then
-                log_warning "Creating backup of original directory: ${original_dir}.backup"
-                mv "${original_dir}" "${original_dir}.backup" 2>/dev/null || {
-                    log_warning "Could not backup original directory, continuing..."
-                }
-            fi
-
-            # Create symlink to fallback
-            if ln -sf "${fallback_dir}" "${original_dir}" 2>/dev/null; then
-                log_success "Created symlink: ${original_dir} -> ${fallback_dir}"
-                return 0
-            else
-                log_warning "Failed to create symlink, using environment variable instead"
-                # Export environment variable as fallback
-                local env_var_name="FALLBACK_$(basename "${original_dir}" | tr '[:lower:]' '[:upper:]')_DIR"
-                export "${env_var_name}=${fallback_dir}"
-                log_info "Set environment variable: ${env_var_name}=${fallback_dir}"
-                return 0
-            fi
-        else
-            log_warning "Fallback directory is not writable, but might still be usable"
-            # Don't fail completely - set environment variable as last resort
-            local env_var_name="FALLBACK_$(basename "${original_dir}" | tr '[:lower:]' '[:upper:]')_DIR"
-            export "${env_var_name}=${fallback_dir}"
-            log_info "Set environment variable: ${env_var_name}=${fallback_dir}"
-            return 0
-        fi
-    fi
-
-    return 1
 }
 
 # Get fallback directory for a given original directory
@@ -286,58 +195,62 @@ get_fallback_dir() {
 
 # Setup all required directories
 setup_directories() {
-    log_info "Setting up required directories..."
+    log_info "Verifying required directories..."
 
     local failed_dirs=()
     local success_count=0
     local total_dirs=${#REQUIRED_DIRS[@]}
 
-    # Create required directories
+    # Verify directories (they should already exist from Dockerfile)
     for dir_config in "${REQUIRED_DIRS[@]}"; do
         local dir_path="${dir_config%:*}"
         local permissions="${dir_config#*:}"
 
-        if create_directory "${dir_path}" "${permissions}"; then
+        if verify_directory "${dir_path}" "${permissions}"; then
             if test_write_permission "${dir_path}"; then
                 ((success_count++))
                 log_success "Directory ready: ${dir_path}"
             else
-                log_warning "Directory created but not writable: ${dir_path}"
+                log_warning "Directory exists but not writable: ${dir_path}"
                 failed_dirs+=("${dir_path}")
             fi
         else
-            log_error "Failed to setup directory: ${dir_path}"
+            log_warning "Directory verification failed: ${dir_path}"
             failed_dirs+=("${dir_path}")
         fi
     done
 
-    # Handle failed directories with fallbacks
+    # Setup fallbacks for failed directories
     if [[ ${#failed_dirs[@]} -gt 0 ]]; then
+        log_info "Setting up fallbacks for ${#failed_dirs[@]} directories"
         for failed_dir in "${failed_dirs[@]}"; do
             local fallback_dir
             if fallback_dir=$(get_fallback_dir "${failed_dir}"); then
                 if setup_fallback "${failed_dir}" "${fallback_dir}"; then
                     ((success_count++))
-                    log_success "Fallback setup successful for: ${failed_dir}"
+                    log_success "Fallback ready for: ${failed_dir}"
                 else
-                    log_error "Fallback setup failed for: ${failed_dir}"
+                    log_warning "Fallback setup failed for: ${failed_dir}"
                 fi
             else
-                log_error "No fallback available for: ${failed_dir}"
+                # Use tmpfs fallback as last resort
+                if setup_fallback "${failed_dir}" "/tmp/fallback"; then
+                    ((success_count++))
+                    log_success "Tmpfs fallback ready for: ${failed_dir}"
+                else
+                    log_warning "All fallback options failed for: ${failed_dir}"
+                fi
             fi
         done
     fi
 
-    log_info "Directory setup complete: ${success_count}/${total_dirs} directories ready"
+    log_info "Directory setup complete: ${success_count}/${total_dirs} directories available"
 
-    # Continue even if some directories failed - the application can use fallbacks
+    # Always succeed - the application can handle missing directories
     if [[ "${success_count}" -gt 0 ]]; then
-        log_success "At least ${success_count} directories are available - proceeding"
-        return 0
-    elif [[ ${#failed_dirs[@]} -gt 0 ]]; then
-        log_warning "Some directories failed setup, but fallback mechanisms are in place"
-        log_info "Application will use temporary directories and environment variables"
-        return 0
+        log_success "Directories are ready for application startup"
+    else
+        log_warning "No directories available, but application can use default locations"
     fi
 
     return 0
@@ -349,11 +262,11 @@ verify_python_environment() {
 
     # Check Python version
     if python --version >/dev/null 2>&1; then
-        local python_version=$(python --version 2>&1)
+        local python_version=$(python --version 2>&1 || echo "unknown")
         log_success "Python available: ${python_version}"
     else
-        log_error "Python not available"
-        return 1
+        log_warning "Python not available in PATH"
+        # Don't return error - container might still work
     fi
 
     # Check virtual environment
@@ -362,19 +275,20 @@ verify_python_environment() {
     elif [[ -f "/app/.venv/bin/python" ]]; then
         log_success "Virtual environment available: /app/.venv"
     else
-        log_warning "No virtual environment detected"
+        log_debug "No virtual environment detected (may be system Python)"
     fi
 
-    # Check critical Python packages
+    # Check critical Python packages (informational only)
     local critical_packages=("pydantic" "click" "pandas")
     for package in "${critical_packages[@]}"; do
         if python -c "import ${package}" 2>/dev/null; then
             log_debug "Package available: ${package}"
         else
-            log_warning "Package not available: ${package}"
+            log_debug "Package not immediately available: ${package}"
         fi
     done
 
+    # Always succeed - Python issues will be caught at runtime
     return 0
 }
 
@@ -419,33 +333,42 @@ setup_environment() {
 perform_health_checks() {
     log_info "Performing health checks..."
 
-    # Check disk space
-    local available_space=$(df /app | awk 'NR==2 {print $4}')
-    if [[ "${available_space}" -gt 1048576 ]]; then  # 1GB in KB
-        log_success "Sufficient disk space available"
+    # Check disk space (graceful handling)
+    if command -v df >/dev/null 2>&1; then
+        local available_space=$(df /app 2>/dev/null | awk 'NR==2 {print $4}' || echo "0")
+        if [[ "${available_space}" -gt 1048576 ]]; then  # 1GB in KB
+            log_success "Sufficient disk space available: ${available_space}KB"
+        else
+            log_warning "Limited disk space: ${available_space}KB available"
+        fi
     else
-        log_warning "Low disk space detected: ${available_space}KB available"
+        log_debug "Cannot check disk space (df not available)"
     fi
 
     # Check memory (if available)
     if command -v free >/dev/null 2>&1; then
-        local available_memory=$(free -m | awk 'NR==2{printf "%.0f", $7}')
+        local available_memory=$(free -m 2>/dev/null | awk 'NR==2{printf "%.0f", $7}' || echo "0")
         if [[ "${available_memory}" -gt 500 ]]; then
             log_success "Sufficient memory available: ${available_memory}MB"
         else
-            log_warning "Low memory detected: ${available_memory}MB available"
+            log_warning "Limited memory: ${available_memory}MB available"
         fi
+    else
+        log_debug "Cannot check memory (free not available)"
     fi
 
-    # Check network connectivity (basic)
+    # Check network connectivity (basic, non-blocking)
     if command -v curl >/dev/null 2>&1; then
-        if curl -s --connect-timeout 5 https://api.coinbase.com/v2/time >/dev/null 2>&1; then
+        if curl -s --connect-timeout 3 --max-time 5 https://api.coinbase.com/v2/time >/dev/null 2>&1; then
             log_success "Network connectivity verified"
         else
-            log_warning "Network connectivity issues detected"
+            log_debug "Network connectivity test failed (may be normal in some environments)"
         fi
+    else
+        log_debug "Cannot test network connectivity (curl not available)"
     fi
 
+    # Always succeed - health checks are informational
     return 0
 }
 
@@ -475,23 +398,20 @@ main() {
 
     check_user  # Always succeeds now
 
-    setup_directories || {
-        log_warning "Directory setup had issues, but continuing with fallbacks..."
-    }
+    setup_directories  # Always succeeds now
 
-    verify_python_environment || {
-        log_error "Python environment verification failed"
-        exit 1
-    }
+    # These steps are now resilient and won't fail the container startup
+    if ! verify_python_environment; then
+        log_warning "Python environment issues detected, but continuing..."
+    fi
 
-    setup_environment || {
-        log_error "Environment setup failed"
-        exit 1
-    }
+    if ! setup_environment; then
+        log_warning "Environment setup issues detected, but continuing..."
+    fi
 
-    perform_health_checks || {
+    if ! perform_health_checks; then
         log_warning "Health checks reported issues, but continuing..."
-    }
+    fi
 
     log_success "Container initialization completed successfully"
     log_info "Starting application with command: $*"

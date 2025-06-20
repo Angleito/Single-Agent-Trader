@@ -69,6 +69,8 @@ ARG BUILD_DATE
 ARG VCS_REF
 ARG VERSION=0.1.0
 ARG EXCHANGE_TYPE=coinbase
+ARG USER_ID=1000
+ARG GROUP_ID=1000
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -98,9 +100,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /tmp/* /var/tmp/*
 
-# Create non-root user
-RUN groupadd --gid 1000 botuser \
-    && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash botuser
+# Create non-root user with dynamic UID/GID
+RUN groupadd --gid ${GROUP_ID} botuser \
+    && useradd --uid ${USER_ID} --gid ${GROUP_ID} --create-home --shell /bin/bash botuser
 
 # Set work directory
 WORKDIR /app
@@ -116,11 +118,35 @@ COPY --chown=botuser:botuser bot/ ./bot/
 COPY --chown=botuser:botuser pyproject.toml ./
 
 # Create required directories with proper Ubuntu permissions
-RUN mkdir -p /app/config /app/logs /app/data /app/prompts /app/tmp \
+# This comprehensive directory setup reduces the burden on the entrypoint script
+# and ensures proper permissions for the botuser (1000:1000)
+RUN echo "Creating application directories..." \
+    # Main application directories
+    && mkdir -p /app/config /app/logs /app/data /app/prompts /app/tmp \
+    # MCP and memory system directories
+    && mkdir -p /app/data/mcp_memory /app/logs/mcp \
+    # Exchange-specific logging directories
+    && mkdir -p /app/logs/bluefin /app/logs/trades \
+    # Trading data directories
+    && mkdir -p /app/data/orders /app/data/paper_trading /app/data/positions /app/data/bluefin /app/data/omnisearch_cache \
+    # Set ownership to botuser:botuser (${USER_ID}:${GROUP_ID}) for all application directories
+    && echo "Setting directory ownership to botuser:botuser (${USER_ID}:${GROUP_ID})..." \
     && chown -R botuser:botuser /app \
+    # Set base directory permissions (755 - read/execute for all, write for owner)
+    && echo "Setting directory permissions..." \
     && chmod 755 /app \
-    && chmod 775 /app/logs /app/data /app/tmp \
-    && chmod 755 /app/config /app/prompts
+    # Set writable directory permissions (775 - read/write/execute for owner and group)
+    && chmod 775 /app/logs /app/logs/mcp /app/logs/bluefin /app/logs/trades \
+    && chmod 775 /app/data /app/data/mcp_memory /app/data/orders /app/data/paper_trading /app/data/positions /app/data/bluefin /app/data/omnisearch_cache \
+    && chmod 775 /app/tmp \
+    # Set read-only directory permissions (755 - read allowed, no write access)
+    && chmod 755 /app/config /app/prompts \
+    # Verify directory creation and permissions
+    && echo "Verifying directory structure..." \
+    && ls -la /app/ \
+    && ls -la /app/data/ \
+    && ls -la /app/logs/ \
+    && echo "Directory setup complete - all required directories created with proper ownership (botuser:botuser ${USER_ID}:${GROUP_ID})"
 
 # Copy prompt files
 COPY --chown=botuser:botuser prompts/*.txt ./prompts/

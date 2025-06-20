@@ -800,8 +800,8 @@ class MarketContextAnalyzer:
 
     async def _calculate_regime_dependent_correlation(
         self,
-        _crypto_data: dict[str, Any],
-        _nasdaq_data: dict[str, Any],
+        crypto_data: dict[str, Any],
+        nasdaq_data: dict[str, Any],
         crypto_aligned: list[float],
         nasdaq_aligned: list[float],
     ) -> dict[str, float]:
@@ -1294,7 +1294,7 @@ class MarketContextAnalyzer:
         except Exception:
             return 0.1
 
-    def _estimate_regime_duration(self, _sentiment_data: dict[str, Any]) -> int | None:
+    def _estimate_regime_duration(self, sentiment_data: dict[str, Any]) -> int | None:
         """Estimate how long current regime has been in place."""
         try:
             # In a full implementation, this would track regime changes over time

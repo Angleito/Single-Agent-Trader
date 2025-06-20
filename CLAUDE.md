@@ -95,9 +95,13 @@ poetry run pytest tests/unit/test_indicators.py
 
 # This script:
 # - Creates required directories (logs/, data/, etc.)
-# - Sets proper permissions for your OS
-# - Updates .env with correct UID/GID settings
-# - Prevents "permission denied" errors
+# - Sets proper permissions and ownership for your OS user
+# - Updates .env with correct HOST_UID/HOST_GID settings
+# - Prevents "permission denied" errors during container startup
+# - Tests write permissions and provides troubleshooting guidance
+
+# If the script fails or you encounter issues, manually set ownership:
+sudo chown -R 1000:1000 ./logs ./data ./tmp
 ```
 
 ### Docker Operations (Simplified for macOS)

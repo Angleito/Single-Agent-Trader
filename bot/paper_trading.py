@@ -1166,7 +1166,7 @@ class PaperTradingAccount:
         return order
 
     def _create_failed_order(
-        self, action: TradeAction, symbol: str, _reason: str
+        self, action: TradeAction, symbol: str, reason: str
     ) -> Order:
         """Create a failed order object."""
         return Order(

@@ -6,16 +6,16 @@
 # - Runtime platform specifications prevent architecture conflicts
 #
 # USER PERMISSIONS:
-# - Each service uses its built-in non-root user from Dockerfile (bluefin, botuser, memoryserver, mcp)
-# - Volume permissions are handled by the container users to avoid host user conflicts
-# - If volume permission errors occur, run: sudo chown -R 1000:1000 ./logs ./data
-# - Bluefin service specifically uses UID 1001, so: sudo chown -R 1001:1001 ./logs/bluefin
+# - Services use host user mapping via HOST_UID and HOST_GID environment variables
+# - Volume permissions are handled by matching container users to host user
+# - If volume permission errors occur, run: ./setup-docker-permissions.sh
+# - This script sets up directories and updates .env with correct UID/GID values
 #
 # DEPLOYMENT NOTES:
 # - Use: DOCKER_DEFAULT_PLATFORM=linux/amd64 docker-compose up
 # - For building: docker-compose build --platform linux/amd64
 # - All Dockerfiles include --platform=linux/amd64 specifications
-# - Recommended: Use ./scripts/start-trading-bot.sh for proper user permission handling
+# - Recommended: Run ./setup-docker-permissions.sh first, then docker-compose up
 
 services:
   # Bluefin SDK Service - Isolated container for Bluefin DEX operations
@@ -115,13 +115,15 @@ services:
         VCS_REF: ${VCS_REF:-$(git rev-parse --short HEAD)}
         VERSION: ${VERSION:-0.1.0}
         EXCHANGE_TYPE: coinbase
+        USER_ID: ${HOST_UID:-1000}
+        GROUP_ID: ${HOST_GID:-1000}
     image: ai-trading-bot:coinbase-${VERSION:-latest}
     platform: linux/amd64
     container_name: ai-trading-bot
     restart: unless-stopped
 
-    # SECURITY HARDENING - VPS-optimized Container Security
-    # Note: Using built-in 'botuser' user from Dockerfile instead of host user override
+    # SECURITY HARDENING - VPS-optimized Container Security (Balanced for functionality)
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"  # Run as host user for volume permissions
     read_only: true     # Read-only root filesystem
     security_opt:
       - no-new-privileges:false  # Allow privilege operations for VPS compatibility
@@ -130,12 +132,15 @@ services:
     cap_drop:
       - ALL             # Drop all capabilities
     cap_add:
-      - NET_BIND_SERVICE  # Only add required capabilities
+      - NET_BIND_SERVICE  # Network binding capability
       - SYS_ADMIN       # Required for Ubuntu container operations
+      - CHOWN           # File ownership operations
+      - FOWNER          # File ownership checks
+      - FSETID          # File permission setting
     tmpfs:
-      - /tmp:noexec,nosuid,size=150m  # Increased for Ubuntu optimization
-      - /var/tmp:noexec,nosuid,size=50m   # Ubuntu additional temp space
-      - /app/tmp:noexec,nosuid,size=100m  # App-specific temp space
+      - /tmp:noexec,nosuid,size=150m  # System temp space only
+      - /var/tmp:noexec,nosuid,size=50m   # System temp space only
+      # Note: /app/data and /app/logs are mounted as volumes, not tmpfs
 
     # Override the default command - TRADING MODE WITH 1-MINUTE INTERVALS
     # Note: dry-run mode is controlled by SYSTEM__DRY_RUN environment variable

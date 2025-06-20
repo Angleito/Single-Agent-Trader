@@ -431,7 +431,7 @@ class SystemHealthMonitor:
         }
 
     def get_health_history(
-        self, _component_name: str, hours: int = 24
+        self, component_name: str, hours: int = 24
     ) -> list[dict[str, Any]]:
         """Get health history for a component."""
         # This would typically be stored in a time-series database
@@ -534,7 +534,7 @@ class ErrorRecoveryManager:
             return False
 
     async def _recover_network_connection(
-        self, _error_context: dict[str, Any], component: str
+        self, error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from network connection errors."""
         logger.info("Attempting network recovery for component %s", component)
@@ -559,7 +559,7 @@ class ErrorRecoveryManager:
         return False
 
     async def _recover_authentication(
-        self, _error_context: dict[str, Any], component: str
+        self, error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from authentication errors."""
         logger.info("Attempting authentication recovery for component %s", component)
@@ -633,7 +633,7 @@ class ErrorRecoveryManager:
         return True
 
     async def _recover_websocket_connection(
-        self, _error_context: dict[str, Any], component: str
+        self, error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from WebSocket connection errors."""
         logger.info("Attempting WebSocket recovery for component %s", component)
@@ -649,7 +649,7 @@ class ErrorRecoveryManager:
         return True
 
     async def _recover_database_connection(
-        self, _error_context: dict[str, Any], component: str
+        self, error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from database connection errors."""
         logger.info("Attempting database recovery for component %s", component)
@@ -665,7 +665,7 @@ class ErrorRecoveryManager:
         return True
 
     async def _recover_memory_issue(
-        self, _error_context: dict[str, Any], component: str
+        self, error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from memory-related errors."""
         logger.info("Attempting memory recovery for component %s", component)

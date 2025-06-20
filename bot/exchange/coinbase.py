@@ -3174,7 +3174,7 @@ class CoinbaseClient(BaseExchange):
             return False
 
     async def cancel_all_orders(
-        self, symbol: str | None = None, _status: str | None = None
+        self, symbol: str | None = None, status: str | None = None
     ) -> bool:
         """
         Cancel all open orders, optionally filtered by symbol.
