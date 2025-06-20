@@ -18,7 +18,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_EVEN, Decimal, getcontext
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 from .config import settings
 from .fee_calculator import fee_calculator
@@ -229,11 +229,11 @@ class PaperTradingAccount:
     def _record_balance_operation(
         self,
         operation: str,
-        balance_before: Optional[float] = None,
-        balance_after: Optional[float] = None,
+        balance_before: float | None = None,
+        balance_after: float | None = None,
         success: bool = True,
-        error_type: Optional[str] = None,
-        metadata: Optional[dict] = None,
+        error_type: str | None = None,
+        metadata: dict | None = None,
     ) -> None:
         """Record a balance operation in the monitoring system."""
         try:
