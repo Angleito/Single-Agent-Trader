@@ -34,7 +34,7 @@ print_status "INFO" "Host user: $HOST_UID:$HOST_GID ($(whoami):$(id -gn))"
 if [ -d "./logs" ]; then
     LOGS_OWNER=$(stat -f "%u:%g" ./logs)
     print_status "INFO" "Logs directory owner: $LOGS_OWNER"
-    
+
     if [ "$LOGS_OWNER" = "$HOST_UID:$HOST_GID" ]; then
         print_status "SUCCESS" "Logs directory permissions match host user"
     else
@@ -54,8 +54,8 @@ docker run --rm \
     -v "$(pwd)/logs:/test/logs" \
     alpine:latest \
     /bin/sh -c "
-        echo 'Docker permission test' > /test/logs/docker-permission-test.txt && 
-        echo 'Container can write to host volume' && 
+        echo 'Docker permission test' > /test/logs/docker-permission-test.txt &&
+        echo 'Container can write to host volume' &&
         rm /test/logs/docker-permission-test.txt &&
         echo 'Container can delete from host volume'
     "
@@ -76,7 +76,7 @@ if command -v docker-compose >/dev/null 2>&1; then
     docker-compose config > /dev/null 2>&1
     if [ $? -eq 0 ]; then
         print_status "SUCCESS" "docker-compose configuration is valid"
-        
+
         # Show the resolved user configuration for ai-trading-bot service
         USER_CONFIG=$(docker-compose config | grep -A 20 "ai-trading-bot:" | grep "user:" | head -1 | sed 's/.*user: //')
         print_status "INFO" "ai-trading-bot service will run as user: $USER_CONFIG"

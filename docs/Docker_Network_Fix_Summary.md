@@ -41,7 +41,7 @@ networks:
 
 **Bluefin Compose File Service Updates:**
 - `bluefin-service`: Uses `bluefin-service`, `bluefin` aliases
-- `ai-trading-bot-bluefin`: Uses `ai-trading-bot-bluefin`, `trading-bot-bluefin` aliases  
+- `ai-trading-bot-bluefin`: Uses `ai-trading-bot-bluefin`, `trading-bot-bluefin` aliases
 - `mcp-memory`: Uses `mcp-memory`, `memory-server` aliases
 - `dashboard-backend`: Uses `dashboard-backend-bluefin`, `dashboard-backend`, `api` aliases
 - `dashboard-frontend`: Uses `dashboard-frontend-bluefin`, `dashboard-frontend`, `frontend` aliases
@@ -120,7 +120,7 @@ docker-compose up -d
 
 #### Option 2: Bluefin Configuration
 ```bash
-# Create network if it doesn't exist  
+# Create network if it doesn't exist
 docker network create trading-network
 
 # Start Bluefin services
@@ -132,7 +132,7 @@ docker-compose -f docker-compose.bluefin.yml up -d
 # For Coinbase
 EXCHANGE_TYPE=coinbase ./scripts/start-trading-bot.sh
 
-# For Bluefin  
+# For Bluefin
 EXCHANGE_TYPE=bluefin ./scripts/start-trading-bot.sh
 ```
 
@@ -188,7 +188,7 @@ curl http://mcp-omnisearch:8767/status
 
 The `trading-network` is configured with:
 - Bridge driver for container isolation
-- Custom subnet (172.21.0.0/16) 
+- Custom subnet (172.21.0.0/16)
 - Inter-container communication enabled
 - No external connectivity unless explicitly exposed via ports
 - Security-hardened containers with minimal capabilities

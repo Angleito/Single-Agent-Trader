@@ -1,16 +1,16 @@
 # Docker Compose for AI Trading Bot with Dashboard
-# 
+#
 # PLATFORM COMPATIBILITY:
 # - All services explicitly target linux/amd64 for X64 Linux deployment
 # - Build contexts specify platforms to ensure consistent builds
 # - Runtime platform specifications prevent architecture conflicts
-# 
+#
 # USER PERMISSIONS:
 # - Uses HOST_UID and HOST_GID environment variables for volume permissions
 # - Containers run as the host user to avoid permission issues with mounted volumes
 # - Default to 1000:1000 if environment variables are not set (Ubuntu VPS compatibility)
 # - Run: ./scripts/start-trading-bot.sh to automatically set correct user permissions
-# 
+#
 # DEPLOYMENT NOTES:
 # - Use: DOCKER_DEFAULT_PLATFORM=linux/amd64 docker-compose up
 # - For building: docker-compose build --platform linux/amd64
@@ -30,7 +30,7 @@ services:
     container_name: bluefin-service
     restart: unless-stopped
 
-    # SECURITY HARDENING - VPS-optimized Container Security  
+    # SECURITY HARDENING - VPS-optimized Container Security
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"  # Run as host user for volume permissions
     read_only: true     # Read-only root filesystem
     security_opt:

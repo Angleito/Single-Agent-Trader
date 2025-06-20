@@ -169,9 +169,9 @@ class TradingEngine:
         self._shutdown_requested = False
         self._memory_available = False  # Initialize early to prevent AttributeError
         self._last_position_log_time: datetime | None = None
-        self._background_tasks: list[
-            asyncio.Task[Any]
-        ] = []  # Track background tasks for cleanup
+        self._background_tasks: list[asyncio.Task[Any]] = (
+            []
+        )  # Track background tasks for cleanup
 
         # Load configuration
         self.settings = self._load_configuration(config_file, dry_run)
@@ -326,14 +326,14 @@ class TradingEngine:
         self.current_position = Position(
             symbol=symbol,
             side="FLAT",
-            size=Decimal("0"),
+            size=Decimal(0),
             timestamp=datetime.now(UTC),
         )
 
         # Performance tracking
         self.trade_count = 0
         self.successful_trades = 0
-        self.total_pnl = Decimal("0")
+        self.total_pnl = Decimal(0)
         self.start_time = datetime.now(UTC)
 
         # Trading interval control
@@ -353,15 +353,12 @@ class TradingEngine:
         performance_thresholds = PerformanceThresholds()
 
         # Customize thresholds for trading environment
-        if (
-            interval
-            in [
-                "1s",
-                "5s",
-                "10s",
-                "15s",
-            ]
-        ):  # High-frequency trading (Note: sub-minute intervals converted to 1m on Bluefin)
+        if interval in [
+            "1s",
+            "5s",
+            "10s",
+            "15s",
+        ]:  # High-frequency trading (Note: sub-minute intervals converted to 1m on Bluefin)
             performance_thresholds.indicator_calculation_ms = 50
             performance_thresholds.market_data_processing_ms = 25
             performance_thresholds.trade_execution_ms = 500
@@ -672,8 +669,7 @@ class TradingEngine:
                         "Async method detected, skipping fresh data check"
                     )
                     return False
-                else:
-                    latest_data = method(limit=1)
+                latest_data = method(limit=1)
             else:
                 latest_data = []
         except Exception as e:
@@ -1297,7 +1293,7 @@ class TradingEngine:
                     )
                     self.data_validation_complete = True
                     break
-                elif elapsed_time > 10:
+                if elapsed_time > 10:
                     # After 10 seconds, proceed if we have historical data even without WebSocket
                     self.logger.warning(
                         "⚠️ Proceeding with historical data only for scalping. WebSocket data not yet received "
@@ -1497,7 +1493,7 @@ class TradingEngine:
         # Publish initial performance state to dashboard
         if self.websocket_publisher and self.websocket_publisher.connected:
             # Get initial price if available
-            initial_price = Decimal("0")
+            initial_price = Decimal(0)
             try:
                 if self.market_data is not None:
                     latest_data = self.market_data.get_latest_ohlcv(limit=1)
@@ -1534,12 +1530,11 @@ class TradingEngine:
                         )
                         await asyncio.sleep(5)  # Wait for WebSocket reconnection
                         continue
-                    else:
-                        # Only attempt manual reconnection if WebSocket handler isn't trying
-                        self.logger.warning("Attempting manual reconnection...")
-                        if self.market_data is not None:
-                            await self.market_data.connect()
-                        continue
+                    # Only attempt manual reconnection if WebSocket handler isn't trying
+                    self.logger.warning("Attempting manual reconnection...")
+                    if self.market_data is not None:
+                        await self.market_data.connect()
+                    continue
 
                 # Get latest market data - handle different provider types
                 import inspect
@@ -2373,9 +2368,7 @@ class TradingEngine:
                                 if experience_id and previous_position.entry_price:
                                     entry_price = previous_position.entry_price
                                     exit_price = order.price or current_price
-                                    pnl = previous_position.unrealized_pnl or Decimal(
-                                        "0"
-                                    )
+                                    pnl = previous_position.unrealized_pnl or Decimal(0)
 
                                     # Calculate duration (approximate - would need actual entry time)
                                     duration_minutes = 0.0  # Placeholder - would calculate from entry time
@@ -2527,7 +2520,7 @@ class TradingEngine:
                 )
 
             # Update risk manager with P&L
-            self.risk_manager.update_daily_pnl(Decimal("0"), pnl)
+            self.risk_manager.update_daily_pnl(Decimal(0), pnl)
 
             # Update experience manager with trade progress
             if self.experience_manager:
@@ -2559,9 +2552,9 @@ class TradingEngine:
             flat_position = Position(
                 symbol=self.actual_trading_symbol,
                 side="FLAT",
-                size=Decimal("0"),
+                size=Decimal(0),
                 entry_price=None,
-                unrealized_pnl=Decimal("0"),
+                unrealized_pnl=Decimal(0),
                 timestamp=datetime.now(UTC),
             )
             await self.websocket_publisher.publish_position_update(
@@ -3047,8 +3040,7 @@ class TradingEngine:
                             symbol=self.actual_trading_symbol,
                             side=position_side,
                             size=abs(size),
-                            entry_price=self.current_position.entry_price
-                            or Decimal("0"),
+                            entry_price=self.current_position.entry_price or Decimal(0),
                         )
 
                         self.logger.info(
@@ -3237,27 +3229,26 @@ class TradingEngine:
                         cipher_b_money_flow,
                     )
                     return trade_action
-                else:
-                    self.logger.info(
-                        "Cipher B filter: LONG signal FILTERED OUT - Wave: %.2f (%s), Money Flow: %.2f (%s)",
-                        cipher_b_wave,
-                        "bullish" if wave_bullish else "bearish",
-                        cipher_b_money_flow,
-                        "bullish" if money_flow_bullish else "bearish",
-                    )
-                    # Convert to HOLD with explanation
-                    return TradeAction(
-                        action="HOLD",
-                        size_pct=0,
-                        take_profit_pct=1.0,
-                        stop_loss_pct=1.0,
-                        leverage=trade_action.leverage,
-                        reduce_only=False,
-                        rationale=f"Cipher B filter: LONG rejected - Wave:{cipher_b_wave:.2f}, MF:{cipher_b_money_flow:.2f}",
-                    )
+                self.logger.info(
+                    "Cipher B filter: LONG signal FILTERED OUT - Wave: %.2f (%s), Money Flow: %.2f (%s)",
+                    cipher_b_wave,
+                    "bullish" if wave_bullish else "bearish",
+                    cipher_b_money_flow,
+                    "bullish" if money_flow_bullish else "bearish",
+                )
+                # Convert to HOLD with explanation
+                return TradeAction(
+                    action="HOLD",
+                    size_pct=0,
+                    take_profit_pct=1.0,
+                    stop_loss_pct=1.0,
+                    leverage=trade_action.leverage,
+                    reduce_only=False,
+                    rationale=f"Cipher B filter: LONG rejected - Wave:{cipher_b_wave:.2f}, MF:{cipher_b_money_flow:.2f}",
+                )
 
             # Check signal alignment for SHORT trades
-            elif trade_action.action == "SHORT":
+            if trade_action.action == "SHORT":
                 # Require both wave and money flow to be bearish
                 if wave_bearish and money_flow_bearish:
                     self.logger.info(
@@ -3266,24 +3257,23 @@ class TradingEngine:
                         cipher_b_money_flow,
                     )
                     return trade_action
-                else:
-                    self.logger.info(
-                        "Cipher B filter: SHORT signal FILTERED OUT - Wave: %.2f (%s), Money Flow: %.2f (%s)",
-                        cipher_b_wave,
-                        "bearish" if wave_bearish else "bullish",
-                        cipher_b_money_flow,
-                        "bearish" if money_flow_bearish else "bullish",
-                    )
-                    # Convert to HOLD with explanation
-                    return TradeAction(
-                        action="HOLD",
-                        size_pct=0,
-                        take_profit_pct=1.0,
-                        stop_loss_pct=1.0,
-                        leverage=trade_action.leverage,
-                        reduce_only=False,
-                        rationale=f"Cipher B filter: SHORT rejected - Wave:{cipher_b_wave:.2f}, MF:{cipher_b_money_flow:.2f}",
-                    )
+                self.logger.info(
+                    "Cipher B filter: SHORT signal FILTERED OUT - Wave: %.2f (%s), Money Flow: %.2f (%s)",
+                    cipher_b_wave,
+                    "bearish" if wave_bearish else "bullish",
+                    cipher_b_money_flow,
+                    "bearish" if money_flow_bearish else "bullish",
+                )
+                # Convert to HOLD with explanation
+                return TradeAction(
+                    action="HOLD",
+                    size_pct=0,
+                    take_profit_pct=1.0,
+                    stop_loss_pct=1.0,
+                    leverage=trade_action.leverage,
+                    reduce_only=False,
+                    rationale=f"Cipher B filter: SHORT rejected - Wave:{cipher_b_wave:.2f}, MF:{cipher_b_money_flow:.2f}",
+                )
 
             # Default fallback - should not reach here
             self.logger.warning(
@@ -3342,8 +3332,8 @@ class TradingEngine:
         if self.current_position.side != "FLAT":
             # Calculate max favorable/adverse excursion placeholders
             # In a full implementation, these would be tracked over the trade lifetime
-            max_favorable = abs(pnl) if pnl > 0 else Decimal("0")
-            max_adverse = abs(pnl) if pnl < 0 else Decimal("0")
+            max_favorable = abs(pnl) if pnl > 0 else Decimal(0)
+            max_adverse = abs(pnl) if pnl < 0 else Decimal(0)
 
             # Generate a simple trade ID for tracking
             trade_id = f"{self.current_position.side}_{self.current_position.size}_{self.symbol}"

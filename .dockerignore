@@ -70,7 +70,8 @@ docs/
 
 # Examples and scripts
 examples/
-scripts/
+scripts/*
+!scripts/docker-entrypoint.sh
 dashboard/
 nginx/
 
