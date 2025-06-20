@@ -101,7 +101,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /tmp/* /var/tmp/*
 
 # Create non-root user with dynamic UID/GID
-RUN groupadd --gid ${GROUP_ID} botuser \
+# Handle case where GID already exists (e.g., macOS staff group = 20)
+RUN (groupadd --gid ${GROUP_ID} botuser || true) \
     && useradd --uid ${USER_ID} --gid ${GROUP_ID} --create-home --shell /bin/bash botuser
 
 # Set work directory
