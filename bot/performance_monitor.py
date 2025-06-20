@@ -15,7 +15,7 @@ from collections import defaultdict, deque
 from collections.abc import Callable
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any, NamedTuple
 
@@ -149,7 +149,7 @@ class MetricsCollector:
             metrics = list(self._metrics_history[metric_name])
 
             if duration:
-                cutoff_time = datetime.utcnow() - duration
+                cutoff_time = datetime.now(UTC) - duration
                 metrics = [m for m in metrics if m.timestamp >= cutoff_time]
 
             return metrics
@@ -228,7 +228,7 @@ class LatencyTracker:
                 metric = PerformanceMetric(
                     name=f"latency.{timing_context.name}",
                     value=latency_ms,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(UTC),
                     unit="milliseconds",
                     tags=timing_context.tags,
                 )
@@ -317,7 +317,7 @@ class ResourceMonitor:
         """Internal resource monitoring loop."""
         while self._monitoring:
             try:
-                timestamp = datetime.utcnow()
+                timestamp = datetime.now(UTC)
 
                 # Memory metrics
                 memory_info = self.process.memory_info()
@@ -520,7 +520,7 @@ class AlertManager:
             metric_name=metric_name,
             current_value=current_value,
             threshold=threshold,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             tags=tags,
         )
 
@@ -528,7 +528,7 @@ class AlertManager:
         """Process an alert with cooldown logic."""
         # Check cooldown period
         last_alert_time = self._last_alert_times[alert.metric_name]
-        if datetime.utcnow() - last_alert_time < self._alert_cooldown:
+        if datetime.now(UTC) - last_alert_time < self._alert_cooldown:
             return
 
         # Record alert
@@ -552,7 +552,7 @@ class AlertManager:
         self, duration: timedelta = timedelta(hours=1)
     ) -> list[PerformanceAlert]:
         """Get recent alerts within the specified duration."""
-        cutoff_time = datetime.utcnow() - duration
+        cutoff_time = datetime.now(UTC) - duration
         return [alert for alert in self.alerts if alert.timestamp >= cutoff_time]
 
 
@@ -577,7 +577,7 @@ class BottleneckAnalyzer:
         """
         analysis: dict[str, Any] = {
             "analysis_period": duration.total_seconds(),
-            "timestamp": datetime.utcnow(),
+            "timestamp": datetime.now(UTC),
             "bottlenecks": [],
             "recommendations": [],
         }
@@ -761,7 +761,7 @@ class PerformanceMonitor:
             Performance summary dictionary
         """
         summary: dict[str, Any] = {
-            "timestamp": datetime.utcnow(),
+            "timestamp": datetime.now(UTC),
             "period_minutes": duration.total_seconds() / 60,
             "latency_summary": {},
             "resource_summary": {},

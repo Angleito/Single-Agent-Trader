@@ -1,7 +1,7 @@
 """Utilities for futures contract management."""
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ class FuturesContractManager:
 
             # Find futures contracts for the base currency
             futures_contracts = []
-            current_date = datetime.utcnow()
+            current_date = datetime.now(UTC)
 
             for product in products:
                 product_id = (
@@ -99,7 +99,7 @@ class FuturesContractManager:
                             month = month_map.get(month_str, 0)
 
                             if month > 0:
-                                expiry_date = datetime(year, month, day)
+                                expiry_date = datetime(year, month, day, tzinfo=UTC)
 
                                 # Only consider contracts that haven't expired
                                 if expiry_date > current_date:
@@ -145,7 +145,7 @@ class FuturesContractManager:
                     )
 
             self._current_contract = selected_contract["symbol"]
-            self._last_update = datetime.utcnow()
+            self._last_update = datetime.now(UTC)
 
             return selected_contract["symbol"]
 
@@ -157,6 +157,6 @@ class FuturesContractManager:
         """Get the cached contract if still valid."""
         if self._current_contract and self._last_update:
             # Cache for 1 hour
-            if (datetime.utcnow() - self._last_update).seconds < 3600:
+            if (datetime.now(UTC) - self._last_update).seconds < 3600:
                 return self._current_contract
         return None

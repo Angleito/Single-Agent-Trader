@@ -18,13 +18,12 @@ from .config import settings
 
 # Conditional imports for optional components
 try:
-    # Temporarily disable backtest import to debug async issue
-    # from .backtest.engine import BacktestEngine, BacktestResults, BacktestTrade
-    raise ImportError("Temporarily disabled for debugging")
+    # Import backtest components when pandas is available
+    from .backtest.engine import BacktestEngine, BacktestResults, BacktestTrade
 except ImportError:
     # Create dummy classes if pandas not available
     class _BacktestEngine:
-        def __init__(self, *args, **kwargs):
+        def __init__(self, *_args, **_kwargs):
             raise ImportError(
                 "Backtesting requires pandas. Install with: pip install pandas"
             )

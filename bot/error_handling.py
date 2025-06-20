@@ -144,7 +144,7 @@ class ErrorBoundary:
         logger.debug("Entering error boundary for %s", self.component_name)
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, _exc_tb):
         if exc_type is not None:
             await self._handle_error(exc_val)
             # Boundary contains the error - don't propagate
@@ -280,14 +280,13 @@ class TradeSaga:
             logger.info("Saga %s completed successfully", self.saga_id)
             return True
 
-        except Exception as e:
+        except Exception:
             self.status = "failed"
             self.end_time = datetime.now(UTC)
             logger.exception(
-                "Saga %s failed at step %s: %s",
+                "Saga %s failed at step %s",
                 self.saga_id,
                 len(self.completed_steps),
-                e,
             )
 
             # Execute compensation actions
@@ -320,12 +319,11 @@ class TradeSaga:
 
                         logger.debug("Compensation for step %s completed", step_index)
 
-                    except Exception as comp_error:
+                    except Exception:
                         logger.exception(
-                            "Compensation failed for step %s (%s): %s",
+                            "Compensation failed for step %s (%s)",
                             step_index,
                             step_name,
-                            comp_error,
                             extra={"saga_id": self.saga_id, "original_result": result},
                         )
 
@@ -430,9 +428,9 @@ class GracefulDegradation:
                 return await fallback_strategy(*args, **kwargs)
             else:
                 return fallback_strategy(*args, **kwargs)
-        except Exception as fallback_error:
+        except Exception:
             logger.exception(
-                "Fallback strategy failed for %s: %s", service_name, fallback_error
+                "Fallback strategy failed for %s", service_name
             )
             raise
 
@@ -847,10 +845,9 @@ def retry_with_backoff(
 
                     if attempt == max_retries:
                         logger.exception(
-                            "Function %s failed after %s retries: %s",
+                            "Function %s failed after %s retries",
                             func.__name__,
                             max_retries,
-                            e,
                         )
                         raise
 
@@ -887,10 +884,9 @@ def retry_with_backoff(
 
                     if attempt == max_retries:
                         logger.exception(
-                            "Function %s failed after %s retries: %s",
+                            "Function %s failed after %s retries",
                             func.__name__,
                             max_retries,
-                            e,
                         )
                         raise
 

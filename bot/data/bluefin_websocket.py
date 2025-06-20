@@ -118,9 +118,9 @@ class BluefinWebSocketClient:
         # Subscription tracking
         self._subscribed_channels: set[str] = set()
         self._subscription_id = 1
-        self._pending_subscriptions: dict[int, str] = (
-            {}
-        )  # Track pending subscription requests
+        self._pending_subscriptions: dict[
+            int, str
+        ] = {}  # Track pending subscription requests
 
         # Tasks
         self._connection_task: asyncio.Task | None = None
@@ -641,7 +641,7 @@ class BluefinWebSocketClient:
                 operation="handle_ticker_update",
             )
 
-    async def _handle_orderbook_update(self, data: dict[str, Any]) -> None:
+    async def _handle_orderbook_update(self, _data: dict[str, Any]) -> None:
         """
         Handle orderbook updates.
 

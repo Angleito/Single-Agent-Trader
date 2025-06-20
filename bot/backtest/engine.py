@@ -7,7 +7,7 @@ to evaluate trading strategies against historical data.
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Literal
 
@@ -129,8 +129,8 @@ class BacktestEngine:
         if data.empty:
             logger.error("No data available for backtesting")
             return BacktestResults(
-                start_date=start_date or datetime.now(),
-                end_date=end_date or datetime.now(),
+                start_date=start_date or datetime.now(UTC),
+                end_date=end_date or datetime.now(UTC),
             )
 
         # Calculate indicators
@@ -146,9 +146,10 @@ class BacktestEngine:
         results = self._calculate_results(data.index[0], data.index[-1])
 
         logger.info(
-            f"Backtest completed: {results.total_trades} trades, "
-            f"{results.win_rate:.1f}% win rate, "
-            f"{results.total_return_pct:.2f}% return"
+            "Backtest completed: %d trades, %.1f%% win rate, %.2f%% return",
+            results.total_trades,
+            results.win_rate,
+            results.total_return_pct,
         )
 
         return results
@@ -411,7 +412,7 @@ class BacktestEngine:
         self.trades.append(self.current_position)
         self.current_position = None
 
-        logger.debug(f"Closed position: {pnl:.2f} PnL ({reason})")
+        logger.debug("Closed position: %.2f PnL (%s)", pnl, reason)
 
     async def _check_exit_conditions(
         self, timestamp: datetime, market_data: pd.Series

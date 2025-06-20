@@ -116,7 +116,7 @@ class MarketStateHasher:
 
             # Create hash
             key_string = "|".join(key_components)
-            cache_key = hashlib.md5(key_string.encode()).hexdigest()
+            cache_key = hashlib.sha256(key_string.encode(), usedforsecurity=False).hexdigest()
 
             logger.debug("Generated cache key: %s from %s", cache_key, key_string)
             return cache_key
@@ -124,7 +124,7 @@ class MarketStateHasher:
         except Exception as e:
             logger.exception("Error generating cache key: %s", e)
             # Return timestamp-based key as fallback
-            return hashlib.md5(f"fallback_{time.time()}".encode()).hexdigest()
+            return hashlib.sha256(f"fallback_{time.time()}".encode(), usedforsecurity=False).hexdigest()
 
     def _bucket_value(self, value: float, tolerance: float) -> int:
         """

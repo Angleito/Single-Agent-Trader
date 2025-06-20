@@ -1026,7 +1026,9 @@ class CipherA:
                 "strength": (
                     "STRONG"
                     if confidence >= 50
-                    else "MODERATE" if confidence >= 25 else "WEAK"
+                    else "MODERATE"
+                    if confidence >= 25
+                    else "WEAK"
                 ),
                 "value": signal,
             },
@@ -1953,7 +1955,9 @@ class CipherB:
                 "strength": (
                     "STRONG"
                     if confidence >= 50
-                    else "MODERATE" if confidence >= 25 else "WEAK"
+                    else "MODERATE"
+                    if confidence >= 25
+                    else "WEAK"
                 ),
                 "value": signal,
             },
@@ -2430,7 +2434,7 @@ class VuManChuIndicators:
 
                 # Calculate dominance vs price divergence
                 dominance_divergence = self._calculate_dominance_price_divergence(
-                    result, dominance_with_cipher_a, dominance_with_cipher_b
+                    result, dominance_with_cipher_a
                 )
 
                 # Combined dominance sentiment analysis
@@ -2510,7 +2514,6 @@ class VuManChuIndicators:
         self,
         price_df: pd.DataFrame,
         dominance_cipher_a: pd.DataFrame,
-        dominance_cipher_b: pd.DataFrame,
     ) -> dict[str, Any]:
         """
         Calculate divergence between dominance indicators and price action.
@@ -2518,7 +2521,6 @@ class VuManChuIndicators:
         Args:
             price_df: Main price DataFrame with indicators
             dominance_cipher_a: Dominance data with Cipher A indicators
-            dominance_cipher_b: Dominance data with Cipher B indicators
 
         Returns:
             Dictionary with divergence analysis

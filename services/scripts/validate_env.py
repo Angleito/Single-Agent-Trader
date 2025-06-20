@@ -131,7 +131,7 @@ class EnvValidator:
         """Load and parse .env file."""
         env_vars = {}
         try:
-            with open(self.env_path) as f:
+            with self.env_path.open() as f:
                 line_num = 0
                 for line in f:
                     line_num += 1

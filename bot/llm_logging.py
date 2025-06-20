@@ -402,7 +402,7 @@ class LangChainCallbackHandler(BaseCallbackHandler):
         self._current_request_id: str | None = None
 
     def on_chain_start(
-        self, serialized: dict[str, Any], inputs: dict[str, Any], **kwargs: Any
+        self, serialized: dict[str, Any], _inputs: dict[str, Any], **kwargs: Any
     ) -> None:
         """Called when a chain starts running."""
         run_id = kwargs.get("run_id", "unknown")
@@ -412,7 +412,7 @@ class LangChainCallbackHandler(BaseCallbackHandler):
             "Chain started: %s - %s", serialized.get("name", "unknown"), run_id
         )
 
-    def on_chain_end(self, outputs: dict[str, Any], **kwargs: Any) -> None:
+    def on_chain_end(self, _outputs: dict[str, Any], **kwargs: Any) -> None:
         """Called when a chain finishes running."""
         run_id = str(kwargs.get("run_id", "unknown"))
         start_time = self._chain_starts.pop(run_id, time.time())
@@ -421,7 +421,7 @@ class LangChainCallbackHandler(BaseCallbackHandler):
         self.logger.debug("Chain completed in %.3fs - %s", duration, run_id)
 
     def on_llm_start(
-        self, serialized: dict[str, Any], prompts: list[str], **kwargs: Any
+        self, serialized: dict[str, Any], prompts: list[str], **_kwargs: Any
     ) -> None:
         """Called when an LLM starts generating."""
         if prompts and self.completion_logger:
@@ -451,7 +451,7 @@ class LangChainCallbackHandler(BaseCallbackHandler):
                 market_context=market_context,
             )
 
-    def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
+    def on_llm_end(self, response: LLMResult, **_kwargs: Any) -> None:
         """Called when an LLM finishes generating."""
         if self._current_request_id and self.completion_logger:
             # Calculate response time (approximation)
@@ -492,7 +492,7 @@ class LangChainCallbackHandler(BaseCallbackHandler):
 
             self._current_request_id = None
 
-    def on_llm_error(self, error: BaseException, **kwargs: Any) -> None:
+    def on_llm_error(self, error: BaseException, **_kwargs: Any) -> None:
         """Called when an LLM encounters an error."""
         if self._current_request_id and self.completion_logger:
             self.completion_logger.log_completion_response(

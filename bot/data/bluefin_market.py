@@ -846,7 +846,9 @@ class BluefinMarketDataProvider:
         status["data_quality"] = (
             "excellent"
             if total_cached_candles >= 200
-            else "good" if total_cached_candles >= 100 else "insufficient"
+            else "good"
+            if total_cached_candles >= 100
+            else "insufficient"
         )
 
         return status
@@ -1962,7 +1964,7 @@ class BluefinMarketDataClient:
         await self.connect()
         return self
 
-    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    async def __aexit__(self, exc_type: Any, exc_val: Any, _exc_tb: Any) -> None:
         """Async context manager exit."""
         await self.disconnect()
 

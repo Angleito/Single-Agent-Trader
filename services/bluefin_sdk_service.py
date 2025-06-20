@@ -799,7 +799,7 @@ class BluefinSDKService:
         """
         try:
             return self.symbol_converter.from_market_symbol(market_symbol)
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to convert market symbol to string")
             return str(market_symbol)
 
@@ -1817,7 +1817,7 @@ class BluefinSDKService:
             self.initialized = False
             self._cleanup_complete = True
             logger.info("Bluefin SDK service cleanup completed")
-        except Exception as e:
+        except Exception:
             logger.exception("Error during Bluefin SDK service cleanup")
 
     async def get_account_data(self) -> dict[str, Any]:
@@ -2435,7 +2435,7 @@ class BluefinSDKService:
                 logger.warning("Unexpected position type: %s", type(position))
                 return []
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error getting positions")
             return []
 
@@ -2544,7 +2544,7 @@ class BluefinSDKService:
         try:
             await self.client.cancel_order(order_id)
             return True
-        except Exception as e:
+        except Exception:
             logger.exception("Error canceling order")
             return False
 
@@ -2562,7 +2562,7 @@ class BluefinSDKService:
                 leverage=leverage,
             )
             return True
-        except Exception as e:
+        except Exception:
             logger.exception("Error setting leverage for %s", symbol)
             return False
 
@@ -2614,7 +2614,7 @@ class BluefinSDKService:
                         "❌ %s returned no data, trying next fallback", source_name
                     )
 
-            except Exception as e:
+            except Exception:
                 logger.exception(
                     "❌ %s failed with error, trying next fallback", source_name
                 )
@@ -3218,7 +3218,7 @@ class BluefinSDKService:
             else:
                 # For historical data, just use the original request
                 return await self._retry_request(_make_request)
-        except Exception as e:
+        except Exception:
             logger.exception("Error in REST API call after retries")
             return []
 
@@ -3866,9 +3866,9 @@ async def performance_metrics(request):
 
         # Performance metrics
         if hasattr(service, "_avg_response_time"):
-            metrics_data["performance"][
-                "avg_response_time_ms"
-            ] = service._avg_response_time
+            metrics_data["performance"]["avg_response_time_ms"] = (
+                service._avg_response_time
+            )
 
         # Resource metrics (if available)
         try:
@@ -3894,9 +3894,9 @@ async def performance_metrics(request):
                 "available_memory_gb": psutil.virtual_memory().available / (1024**3),
             }
         except ImportError:
-            metrics_data["resources"][
-                "note"
-            ] = "psutil not available for detailed metrics"
+            metrics_data["resources"]["note"] = (
+                "psutil not available for detailed metrics"
+            )
 
         # Rate limiting metrics
         current_time = time.time()
@@ -4121,9 +4121,9 @@ async def service_diagnostics(request):
                 diagnostics_data["recommendations"].append("High CPU usage detected")
 
         except ImportError:
-            perf_check["details"][
-                "note"
-            ] = "psutil not available for performance metrics"
+            perf_check["details"]["note"] = (
+                "psutil not available for performance metrics"
+            )
 
         diagnostics_data["checks"]["performance"] = perf_check
 
@@ -4275,7 +4275,7 @@ async def get_ticker(request):
                     "bestAsk": str(best_ask),
                 }
             )
-        except Exception as orderbook_error:
+        except Exception:
             logger.exception("Orderbook error")
 
         # Final fallback: REST API for ticker
@@ -4338,7 +4338,7 @@ async def get_ticker(request):
                                 )
                 finally:
                     logger.debug("HTTP session closed for ticker call")
-        except Exception as api_error:
+        except Exception:
             logger.exception("REST API ticker error")
 
         # Return default values if all methods fail

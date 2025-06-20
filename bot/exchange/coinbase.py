@@ -10,7 +10,7 @@ import decimal
 import logging
 import time
 import traceback
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Literal, cast
 
@@ -859,7 +859,7 @@ class CoinbaseClient(BaseExchange):
                 )
                 self._client = None
                 self._connected = True  # Set to True for paper trading
-                self._last_health_check = datetime.utcnow()
+                self._last_health_check = datetime.now(UTC)
 
                 # Initialize mock portfolios for paper trading
                 self._portfolios = {}
@@ -929,7 +929,7 @@ class CoinbaseClient(BaseExchange):
             await self._test_connection()
 
             self._connected = True
-            self._last_health_check = datetime.utcnow()
+            self._last_health_check = datetime.now(UTC)
 
             logger.info(
                 "Connected to Coinbase %s successfully",
@@ -1038,14 +1038,14 @@ class CoinbaseClient(BaseExchange):
 
         # In paper trading mode, always return healthy
         if self.dry_run:
-            self._last_health_check = datetime.utcnow()
+            self._last_health_check = datetime.now(UTC)
             return True
 
         try:
             # Only perform health check if enough time has passed
             if (
                 self._last_health_check
-                and datetime.utcnow() - self._last_health_check
+                and datetime.now(UTC) - self._last_health_check
                 < timedelta(seconds=settings.exchange.health_check_interval)
             ):
                 return True
@@ -1054,7 +1054,7 @@ class CoinbaseClient(BaseExchange):
             if self._client is None:
                 return False
             self._client.get_accounts()
-            self._last_health_check = datetime.utcnow()
+            self._last_health_check = datetime.now(UTC)
             return True
 
         except Exception as e:
@@ -1728,13 +1728,13 @@ class CoinbaseClient(BaseExchange):
                 "PAPER TRADING: Simulating %s %s %s at market", side, quantity, symbol
             )
             return Order(
-                id=f"paper_{int(datetime.utcnow().timestamp() * 1000)}",
+                id=f"paper_{int(datetime.now(UTC).timestamp() * 1000)}",
                 symbol=symbol,
                 side=cast(Literal["BUY", "SELL"], side),
                 type="MARKET",
                 quantity=quantity,
                 status=OrderStatus.FILLED,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
                 filled_quantity=quantity,
             )
 
@@ -1799,13 +1799,13 @@ class CoinbaseClient(BaseExchange):
 
                     order = Order(
                         id=order_id
-                        or f"cb_{int(datetime.utcnow().timestamp() * 1000)}",
+                        or f"cb_{int(datetime.now(UTC).timestamp() * 1000)}",
                         symbol=symbol,
                         side=cast(Literal["BUY", "SELL"], side),
                         type="MARKET",
                         quantity=quantity,
                         status=OrderStatus.PENDING,
-                        timestamp=datetime.utcnow(),
+                        timestamp=datetime.now(UTC),
                         filled_quantity=Decimal("0"),
                     )
 
@@ -1817,13 +1817,13 @@ class CoinbaseClient(BaseExchange):
 
                     order = Order(
                         id=order_id
-                        or f"cb_{int(datetime.utcnow().timestamp() * 1000)}",
+                        or f"cb_{int(datetime.now(UTC).timestamp() * 1000)}",
                         symbol=symbol,
                         side=cast(Literal["BUY", "SELL"], side),
                         type="MARKET",
                         quantity=quantity,
                         status=OrderStatus.PENDING,
-                        timestamp=datetime.utcnow(),
+                        timestamp=datetime.now(UTC),
                         filled_quantity=Decimal("0"),
                     )
 
@@ -1835,13 +1835,13 @@ class CoinbaseClient(BaseExchange):
 
                     order = Order(
                         id=order_id
-                        or f"cb_{int(datetime.utcnow().timestamp() * 1000)}",
+                        or f"cb_{int(datetime.now(UTC).timestamp() * 1000)}",
                         symbol=symbol,
                         side=cast(Literal["BUY", "SELL"], side),
                         type="MARKET",
                         quantity=quantity,
                         status=OrderStatus.PENDING,
-                        timestamp=datetime.utcnow(),
+                        timestamp=datetime.now(UTC),
                         filled_quantity=Decimal("0"),
                     )
 
@@ -1898,14 +1898,14 @@ class CoinbaseClient(BaseExchange):
                 price,
             )
             return Order(
-                id=f"paper_limit_{int(datetime.utcnow().timestamp() * 1000)}",
+                id=f"paper_limit_{int(datetime.now(UTC).timestamp() * 1000)}",
                 symbol=symbol,
                 side=cast(Literal["BUY", "SELL"], side),
                 type="LIMIT",
                 quantity=quantity,
                 price=price,
                 status=OrderStatus.OPEN,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
             )
 
         try:
@@ -1954,14 +1954,14 @@ class CoinbaseClient(BaseExchange):
 
                 order = Order(
                     id=order_id
-                    or f"cb_limit_{int(datetime.utcnow().timestamp() * 1000)}",
+                    or f"cb_limit_{int(datetime.now(UTC).timestamp() * 1000)}",
                     symbol=symbol,
                     side=cast(Literal["BUY", "SELL"], side),
                     type="LIMIT",
                     quantity=quantity,
                     price=price,
                     status=OrderStatus.OPEN,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(UTC),
                     filled_quantity=Decimal("0"),
                 )
 
@@ -2074,14 +2074,14 @@ class CoinbaseClient(BaseExchange):
                 stop_price,
             )
             return Order(
-                id=f"paper_stop_{int(datetime.utcnow().timestamp() * 1000)}",
+                id=f"paper_stop_{int(datetime.now(UTC).timestamp() * 1000)}",
                 symbol=symbol,
                 side=cast(Literal["BUY", "SELL"], side),
                 type="STOP",
                 quantity=quantity,
                 stop_price=stop_price,
                 status=OrderStatus.OPEN,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
             )
 
         try:
@@ -2152,7 +2152,7 @@ class CoinbaseClient(BaseExchange):
 
                 order = Order(
                     id=order_id
-                    or f"cb_stop_{int(datetime.utcnow().timestamp() * 1000)}",
+                    or f"cb_stop_{int(datetime.now(UTC).timestamp() * 1000)}",
                     symbol=symbol,
                     side=cast(Literal["BUY", "SELL"], side),
                     type="STOP_LIMIT",
@@ -2160,7 +2160,7 @@ class CoinbaseClient(BaseExchange):
                     price=Decimal(str(limit_price_float)),
                     stop_price=Decimal(str(stop_price_float)),
                     status=OrderStatus.OPEN,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(UTC),
                     filled_quantity=Decimal("0"),
                 )
 
@@ -2214,13 +2214,13 @@ class CoinbaseClient(BaseExchange):
                 leverage,
             )
             return Order(
-                id=f"paper_futures_{int(datetime.utcnow().timestamp() * 1000)}",
+                id=f"paper_futures_{int(datetime.now(UTC).timestamp() * 1000)}",
                 symbol=symbol,
                 side=cast(Literal["BUY", "SELL"], side),
                 type="MARKET",
                 quantity=quantity,
                 status=OrderStatus.FILLED,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
                 filled_quantity=quantity,
             )
 
@@ -2296,13 +2296,13 @@ class CoinbaseClient(BaseExchange):
 
                     order = Order(
                         id=order_id
-                        or f"cb_futures_{int(datetime.utcnow().timestamp() * 1000)}",
+                        or f"cb_futures_{int(datetime.now(UTC).timestamp() * 1000)}",
                         symbol=symbol,
                         side=cast(Literal["BUY", "SELL"], side),
                         type="MARKET",
                         quantity=quantity,
                         status=OrderStatus.PENDING,
-                        timestamp=datetime.utcnow(),
+                        timestamp=datetime.now(UTC),
                         filled_quantity=Decimal("0"),
                     )
 
@@ -2316,13 +2316,13 @@ class CoinbaseClient(BaseExchange):
 
                     order = Order(
                         id=order_id
-                        or f"cb_futures_{int(datetime.utcnow().timestamp() * 1000)}",
+                        or f"cb_futures_{int(datetime.now(UTC).timestamp() * 1000)}",
                         symbol=symbol,
                         side=cast(Literal["BUY", "SELL"], side),
                         type="MARKET",
                         quantity=quantity,
                         status=OrderStatus.PENDING,
-                        timestamp=datetime.utcnow(),
+                        timestamp=datetime.now(UTC),
                         filled_quantity=Decimal("0"),
                     )
 
@@ -2336,13 +2336,13 @@ class CoinbaseClient(BaseExchange):
 
                     order = Order(
                         id=order_id
-                        or f"cb_futures_{int(datetime.utcnow().timestamp() * 1000)}",
+                        or f"cb_futures_{int(datetime.now(UTC).timestamp() * 1000)}",
                         symbol=symbol,
                         side=cast(Literal["BUY", "SELL"], side),
                         type="MARKET",
                         quantity=quantity,
                         status=OrderStatus.PENDING,
-                        timestamp=datetime.utcnow(),
+                        timestamp=datetime.now(UTC),
                         filled_quantity=Decimal("0"),
                     )
 
@@ -2792,7 +2792,7 @@ class CoinbaseClient(BaseExchange):
                 max_position_size=total_balance
                 * Decimal(str(settings.trading.max_size_pct / 100)),
                 current_positions_count=len(await self.get_futures_positions()),
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
             )
 
             self._futures_account_info = account_info
@@ -2891,7 +2891,7 @@ class CoinbaseClient(BaseExchange):
                 is_overnight_position=False,  # Would need to check position timing
             )
 
-            self._last_margin_check = datetime.utcnow()
+            self._last_margin_check = datetime.now(UTC)
             return margin_info
 
         except Exception:
@@ -3056,7 +3056,7 @@ class CoinbaseClient(BaseExchange):
                         entry_price=avg_entry_price,
                         unrealized_pnl=unrealized_pnl,
                         realized_pnl=Decimal("0"),  # Not provided in API
-                        timestamp=datetime.utcnow(),
+                        timestamp=datetime.now(UTC),
                         is_futures=True,
                         leverage=self.max_futures_leverage,  # Actual leverage not in response
                         margin_used=Decimal("0"),  # Calculate from position if needed
@@ -3117,7 +3117,7 @@ class CoinbaseClient(BaseExchange):
                             "0"
                         ),  # Would need market data to calculate
                         realized_pnl=Decimal("0"),
-                        timestamp=datetime.utcnow(),
+                        timestamp=datetime.now(UTC),
                     )
                     positions.append(position)
 
@@ -3174,7 +3174,7 @@ class CoinbaseClient(BaseExchange):
             return False
 
     async def cancel_all_orders(
-        self, symbol: str | None = None, status: str | None = None
+        self, symbol: str | None = None, _status: str | None = None
     ) -> bool:
         """
         Cancel all open orders, optionally filtered by symbol.
@@ -3366,7 +3366,7 @@ class CoinbaseClient(BaseExchange):
                 symbol=symbol,
                 side="FLAT",
                 size=Decimal("0"),
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
             )
         )
 
@@ -3411,7 +3411,7 @@ class CoinbaseClient(BaseExchange):
             return Decimal("0")  # Basic tier
 
         # Check if we need to refresh volume
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         if (
             not force_refresh
             and self._last_volume_check

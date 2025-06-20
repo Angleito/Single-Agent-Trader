@@ -234,7 +234,7 @@ class SystemHealthMonitor:
     ) -> None:
         """Check health of a specific component."""
         component_health = self.component_health[component_name]
-        start_time = datetime.now()
+        start_time = datetime.now(timezone.utc)
 
         try:
             # Execute health check
@@ -244,7 +244,7 @@ class SystemHealthMonitor:
                 is_healthy = health_check()
 
             # Calculate response time
-            response_time = (datetime.now() - start_time).total_seconds() * 1000
+            response_time = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
 
             if is_healthy:
                 # Component is healthy
@@ -431,7 +431,7 @@ class SystemHealthMonitor:
         }
 
     def get_health_history(
-        self, component_name: str, hours: int = 24
+        self, _component_name: str, hours: int = 24
     ) -> list[dict[str, Any]]:
         """Get health history for a component."""
         # This would typically be stored in a time-series database
@@ -534,7 +534,7 @@ class ErrorRecoveryManager:
             return False
 
     async def _recover_network_connection(
-        self, error_context: dict[str, Any], component: str
+        self, _error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from network connection errors."""
         logger.info("Attempting network recovery for component %s", component)
@@ -559,7 +559,7 @@ class ErrorRecoveryManager:
         return False
 
     async def _recover_authentication(
-        self, error_context: dict[str, Any], component: str
+        self, _error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from authentication errors."""
         logger.info("Attempting authentication recovery for component %s", component)
@@ -576,7 +576,7 @@ class ErrorRecoveryManager:
         return True
 
     async def _recover_data_integrity(
-        self, error_context: dict[str, Any], component: str
+        self, _error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from data integrity errors."""
         logger.info("Attempting data integrity recovery for component %s", component)
@@ -598,7 +598,7 @@ class ErrorRecoveryManager:
         return True
 
     async def _recover_position_state(
-        self, error_context: dict[str, Any], component: str
+        self, _error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from position state inconsistencies."""
         logger.info("Attempting position state recovery for component %s", component)
@@ -618,7 +618,7 @@ class ErrorRecoveryManager:
         return True
 
     async def _recover_rate_limit(
-        self, error_context: dict[str, Any], component: str
+        self, _error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from API rate limit errors."""
         logger.info("Attempting rate limit recovery for component %s", component)
@@ -633,7 +633,7 @@ class ErrorRecoveryManager:
         return True
 
     async def _recover_websocket_connection(
-        self, error_context: dict[str, Any], component: str
+        self, _error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from WebSocket connection errors."""
         logger.info("Attempting WebSocket recovery for component %s", component)
@@ -649,7 +649,7 @@ class ErrorRecoveryManager:
         return True
 
     async def _recover_database_connection(
-        self, error_context: dict[str, Any], component: str
+        self, _error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from database connection errors."""
         logger.info("Attempting database recovery for component %s", component)
@@ -665,7 +665,7 @@ class ErrorRecoveryManager:
         return True
 
     async def _recover_memory_issue(
-        self, error_context: dict[str, Any], component: str
+        self, _error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from memory-related errors."""
         logger.info("Attempting memory recovery for component %s", component)

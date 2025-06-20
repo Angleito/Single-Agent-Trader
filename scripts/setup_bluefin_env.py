@@ -144,7 +144,7 @@ class BluefinEnvSetup:
 
         try:
             # Read current .env content
-            with open(self.env_file) as f:
+            with self.env_file.open() as f:
                 lines = f.readlines()
 
             # Update or add the API key
@@ -160,7 +160,7 @@ class BluefinEnvSetup:
                 lines.append(f"\nBLUEFIN_SERVICE_API_KEY={api_key}\n")
 
             # Write back to file
-            with open(self.env_file, "w") as f:
+            with self.env_file.open("w") as f:
                 f.writelines(lines)
 
             print(f"{Colors.GREEN}✅ Updated .env file with API key{Colors.END}")

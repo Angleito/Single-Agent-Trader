@@ -105,12 +105,12 @@ class RAGReader:
                 },
             }
 
-            with open(strategies_file, "w") as f:
+            with strategies_file.open("w") as f:
                 json.dump(default_strategies, f, indent=2)
 
         # Load strategies
         try:
-            with open(strategies_file) as f:
+            with strategies_file.open() as f:
                 strategies = json.load(f)
 
             for name, strategy in strategies.items():

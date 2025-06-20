@@ -5,16 +5,18 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
-from pathlib import Path
 from threading import Lock
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import aiofiles
 
 from bot.trading.lot import FIFOPosition, LotSale, TradeLot
 from bot.trading_types import Order, OrderStatus, Position
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +52,7 @@ class FIFOPositionManager:
                     entry_price=None,
                     unrealized_pnl=Decimal("0"),
                     realized_pnl=Decimal("0"),
-                    timestamp=datetime.now(),
+                    timestamp=datetime.now(UTC),
                 )
 
             side_literal: Literal["LONG", "SHORT", "FLAT"] = fifo_pos.side  # type: ignore
@@ -61,7 +63,7 @@ class FIFOPositionManager:
                 entry_price=fifo_pos.average_price,
                 unrealized_pnl=Decimal("0"),  # Calculated separately
                 realized_pnl=fifo_pos.total_realized_pnl,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(UTC),
             )
 
     def get_fifo_position(self, symbol: str) -> FIFOPosition:
@@ -313,11 +315,11 @@ class FIFOPositionManager:
 
             # Create a single synthetic lot representing the entire position
             synthetic_lot = TradeLot(
-                lot_id=f"exchange_reconcile_{symbol}_{datetime.now().isoformat()}",
+                lot_id=f"exchange_reconcile_{symbol}_{datetime.now(UTC).isoformat()}",
                 symbol=symbol,
                 quantity=size,
                 purchase_price=entry_price,
-                purchase_date=datetime.now(),
+                purchase_date=datetime.now(UTC),
                 remaining_quantity=size,
             )
 

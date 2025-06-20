@@ -7,15 +7,17 @@ and evolves trading parameters based on performance.
 
 import logging
 from collections import defaultdict
-from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import BaseModel, Field
 
 from bot.config import settings
 from bot.mcp.memory_server import MCPMemoryServer, TradingExperience
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 

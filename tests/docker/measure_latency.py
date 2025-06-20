@@ -12,6 +12,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import docker
 import websockets
@@ -408,8 +409,8 @@ class PerformanceMonitor:
             ],
         }
 
-        filepath = f"tests/docker/results/{filename}"
-        with open(filepath, "w") as f:
+        filepath = Path(f"tests/docker/results/{filename}")
+        with filepath.open("w") as f:
             json.dump(results, f, indent=2)
 
         logger.info("\nResults saved to: %s", filepath)

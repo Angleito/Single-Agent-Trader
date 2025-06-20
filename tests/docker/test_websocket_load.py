@@ -13,6 +13,7 @@ import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -465,9 +466,9 @@ class WebSocketLoadTester:
 
     def save_results(self, results: dict[str, Any]):
         """Save test results to file."""
-        results_file = "tests/docker/results/load_test_results.json"
+        results_file = Path("tests/docker/results/load_test_results.json")
 
-        with open(results_file, "w") as f:
+        with results_file.open("w") as f:
             json.dump(
                 {
                     "test_results": results,

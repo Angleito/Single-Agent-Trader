@@ -619,7 +619,7 @@ class ConfigManager:
         elif export_format.lower() == "env":
             export_path = self.config_dir / f"export_{timestamp}.env"
             env_content = self._settings_to_env_format(settings)
-            with open(export_path, "w") as f:
+            with export_path.open("w") as f:
                 f.write(env_content)
 
         else:

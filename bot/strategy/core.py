@@ -102,7 +102,7 @@ class CoreStrategy:
             logger.exception("Strategy health check error: %s", e)
             return False
 
-    async def _reset_strategy_state(self, component_name: str, health: Any) -> None:
+    async def _reset_strategy_state(self, _component_name: str, _health: Any) -> None:
         """Recovery action to reset strategy state."""
         logger.info("Resetting core strategy state")
 
@@ -307,7 +307,7 @@ class CoreStrategy:
         return sum(strength_factors) / len(strength_factors)
 
     def _calculate_risk_levels(
-        self, market_bias: str, indicators: IndicatorData
+        self, _market_bias: str, indicators: IndicatorData
     ) -> tuple[float, float]:
         """
         Calculate take profit and stop loss levels.

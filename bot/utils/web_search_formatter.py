@@ -620,8 +620,8 @@ class WebSearchFormatter:
 
         for item in items:
             # Create content hash for deduplication
-            content_hash = hashlib.md5(
-                (item.summary + " ".join(item.key_insights)).encode()
+            content_hash = hashlib.sha256(
+                (item.summary + " ".join(item.key_insights)).encode(), usedforsecurity=False
             ).hexdigest()
 
             if (

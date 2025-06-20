@@ -11,6 +11,7 @@ import logging
 import sys
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import websockets
@@ -334,8 +335,8 @@ class WebSocketConnectivityTester:
             )
 
         # Save results to file
-        results_file = "tests/docker/results/connectivity_test_results.json"
-        with open(results_file, "w") as f:
+        results_file = Path("tests/docker/results/connectivity_test_results.json")
+        with results_file.open("w") as f:
             json.dump(
                 {
                     "test_results": self.test_results,

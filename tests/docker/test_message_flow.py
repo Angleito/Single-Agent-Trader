@@ -14,6 +14,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 import websockets
@@ -506,8 +507,8 @@ class MessageFlowValidator:
         )
 
         # Save detailed results
-        results_file = "tests/docker/results/message_flow_results.json"
-        with open(results_file, "w") as f:
+        results_file = Path("tests/docker/results/message_flow_results.json")
+        with results_file.open("w") as f:
             json.dump(
                 {
                     "validation_results": [

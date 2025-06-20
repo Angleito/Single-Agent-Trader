@@ -888,7 +888,7 @@ class SommiPatterns:
         return signals
 
     def validate_pattern_conditions(
-        self, pattern_type: PatternType, current_data: dict, lookback_periods: int = 5
+        self, pattern_type: PatternType, current_data: dict
     ) -> bool:
         """
         Validate pattern conditions with additional timing checks.
@@ -896,7 +896,6 @@ class SommiPatterns:
         Args:
             pattern_type: Type of pattern to validate
             current_data: Current market data
-            lookback_periods: Periods to look back for validation
 
         Returns:
             True if pattern conditions are valid

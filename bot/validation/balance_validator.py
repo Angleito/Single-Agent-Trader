@@ -157,6 +157,17 @@ class BalanceValidator:
                     error_msg, error_code="NEGATIVE_BALANCE", validation_type="range"
                 )
 
+        except BalanceValidationError:
+            self.error_count += 1
+            raise
+        except Exception as e:
+            self.error_count += 1
+            error_msg = f"Balance range validation error: {e}"
+            self._log_validation_error(error_msg, context, "VALIDATION_ERROR")
+            raise BalanceValidationError(
+                error_msg, error_code="VALIDATION_ERROR", validation_type="range"
+            ) from e
+        else:
             logger.debug(
                 "✅ Balance range validation passed: $%s (%s)",
                 normalized_balance,
@@ -170,17 +181,6 @@ class BalanceValidator:
                 "context": context,
                 "validation_time": datetime.now(UTC),
             }
-
-        except BalanceValidationError:
-            self.error_count += 1
-            raise
-        except Exception as e:
-            self.error_count += 1
-            error_msg = f"Balance range validation error: {e}"
-            self._log_validation_error(error_msg, context, "VALIDATION_ERROR")
-            raise BalanceValidationError(
-                error_msg, error_code="VALIDATION_ERROR", validation_type="range"
-            ) from e
 
     def validate_balance_change(
         self,
@@ -268,6 +268,17 @@ class BalanceValidator:
                     error_msg, error_code="IMPOSSIBLE_CHANGE", validation_type="change"
                 )
 
+        except BalanceValidationError:
+            self.error_count += 1
+            raise
+        except Exception as e:
+            self.error_count += 1
+            error_msg = f"Balance change validation error: {e}"
+            self._log_validation_error(error_msg, operation_type, "VALIDATION_ERROR")
+            raise BalanceValidationError(
+                error_msg, error_code="VALIDATION_ERROR", validation_type="change"
+            ) from e
+        else:
             # Record the change
             self.balance_history.append(change_record)
             self._cleanup_old_history()
@@ -290,17 +301,6 @@ class BalanceValidator:
                 "message": "Balance change within acceptable limits",
                 "validation_time": datetime.now(UTC),
             }
-
-        except BalanceValidationError:
-            self.error_count += 1
-            raise
-        except Exception as e:
-            self.error_count += 1
-            error_msg = f"Balance change validation error: {e}"
-            self._log_validation_error(error_msg, operation_type, "VALIDATION_ERROR")
-            raise BalanceValidationError(
-                error_msg, error_code="VALIDATION_ERROR", validation_type="change"
-            ) from e
 
     def validate_balance_precision(
         self, balance: Decimal, is_crypto: bool = False
@@ -346,6 +346,17 @@ class BalanceValidator:
                         validation_type="precision",
                     )
 
+        except BalanceValidationError:
+            self.error_count += 1
+            raise
+        except Exception as e:
+            self.error_count += 1
+            error_msg = f"Balance precision validation error: {e}"
+            self._log_validation_error(error_msg, "precision_check", "VALIDATION_ERROR")
+            raise BalanceValidationError(
+                error_msg, error_code="VALIDATION_ERROR", validation_type="precision"
+            ) from e
+        else:
             # Normalize to correct precision
             normalized_balance = self._normalize_balance(balance, is_crypto)
 
@@ -360,17 +371,6 @@ class BalanceValidator:
                 "message": "Balance precision is correct",
                 "validation_time": datetime.now(UTC),
             }
-
-        except BalanceValidationError:
-            self.error_count += 1
-            raise
-        except Exception as e:
-            self.error_count += 1
-            error_msg = f"Balance precision validation error: {e}"
-            self._log_validation_error(error_msg, "precision_check", "VALIDATION_ERROR")
-            raise BalanceValidationError(
-                error_msg, error_code="VALIDATION_ERROR", validation_type="precision"
-            ) from e
 
     def detect_balance_anomalies(self, current_balance: Decimal) -> dict[str, Any]:
         """

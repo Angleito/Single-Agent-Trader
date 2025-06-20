@@ -40,7 +40,7 @@ except ImportError:
     # Mock jwt_generator module for when SDK is not available
     class MockJwtGenerator:
         @staticmethod
-        def build_ws_jwt(api_key, api_secret):
+        def build_ws_jwt(_api_key, _api_secret):
             return None
 
     jwt_generator = MockJwtGenerator()
@@ -1852,7 +1852,7 @@ class MarketDataProvider:
         """
         return MarketData(
             symbol=self.symbol,
-            timestamp=datetime.fromtimestamp(int(candle_data["start"])),
+            timestamp=datetime.fromtimestamp(int(candle_data["start"]), tz=UTC),
             open=Decimal(str(candle_data["open"])),
             high=Decimal(str(candle_data["high"])),
             low=Decimal(str(candle_data["low"])),
@@ -2035,7 +2035,7 @@ class MarketDataClient:
         await self.connect()
         return self
 
-    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    async def __aexit__(self, exc_type: Any, exc_val: Any, _exc_tb: Any) -> None:
         """Async context manager exit."""
         await self.disconnect()
 

@@ -482,7 +482,7 @@ class TestDataSuite:
 
         # Save summary
         summary_file = self.output_dir / "test_data_summary.json"
-        with open(summary_file, "w") as f:
+        with summary_file.open("w") as f:
             json.dump(summary, f, indent=2)
 
         logger.info("Generated summary: %s", summary_file)

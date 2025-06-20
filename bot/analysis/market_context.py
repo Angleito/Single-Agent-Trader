@@ -476,7 +476,7 @@ class MarketContextAnalyzer:
             )
 
         except Exception as e:
-            logger.error(f"Error detecting market regime: {e}", exc_info=True)
+            logger.exception("Error detecting market regime")
             return MarketRegime(
                 regime_type=MarketRegimeType.UNKNOWN,
                 confidence=0.0,
@@ -539,7 +539,7 @@ class MarketContextAnalyzer:
             )
 
         except Exception as e:
-            logger.error(f"Error assessing risk sentiment: {e}", exc_info=True)
+            logger.exception("Error assessing risk sentiment")
             return RiskSentiment(
                 fear_greed_index=50.0,  # Neutral
                 sentiment_level=SentimentLevel.NEUTRAL,
@@ -619,7 +619,7 @@ class MarketContextAnalyzer:
             )
 
         except Exception as e:
-            logger.error(f"Error calculating momentum alignment: {e}", exc_info=True)
+            logger.exception("Error calculating momentum alignment")
             return MomentumAlignment(
                 directional_alignment=0.0,
                 strength_alignment=0.0,
@@ -728,7 +728,7 @@ class MarketContextAnalyzer:
             return "\n".join(summary_lines)
 
         except Exception as e:
-            logger.error(f"Error generating context summary: {e}", exc_info=True)
+            logger.exception("Error generating context summary")
             return "Error: Could not generate market context summary"
 
     # Helper methods
@@ -738,12 +738,11 @@ class MarketContextAnalyzer:
         try:
             if "prices" in data:
                 return [float(p) for p in data["prices"]]
-            elif "ohlcv" in data:
+            if "ohlcv" in data:
                 return [float(candle["close"]) for candle in data["ohlcv"]]
-            elif "candles" in data:
+            if "candles" in data:
                 return [float(candle["close"]) for candle in data["candles"]]
-            else:
-                return []
+            return []
         except (ValueError, KeyError, TypeError):
             return []
 
@@ -801,8 +800,8 @@ class MarketContextAnalyzer:
 
     async def _calculate_regime_dependent_correlation(
         self,
-        crypto_data: dict[str, Any],
-        nasdaq_data: dict[str, Any],
+        _crypto_data: dict[str, Any],
+        _nasdaq_data: dict[str, Any],
         crypto_aligned: list[float],
         nasdaq_aligned: list[float],
     ) -> dict[str, float]:
@@ -864,23 +863,21 @@ class MarketContextAnalyzer:
         """Classify correlation strength based on absolute value."""
         if abs_correlation > 0.8:
             return CorrelationStrength.VERY_STRONG
-        elif abs_correlation > 0.6:
+        if abs_correlation > 0.6:
             return CorrelationStrength.STRONG
-        elif abs_correlation > 0.4:
+        if abs_correlation > 0.4:
             return CorrelationStrength.MODERATE
-        elif abs_correlation > 0.2:
+        if abs_correlation > 0.2:
             return CorrelationStrength.WEAK
-        else:
-            return CorrelationStrength.VERY_WEAK
+        return CorrelationStrength.VERY_WEAK
 
     def _determine_correlation_direction(self, correlation: float) -> str:
         """Determine correlation direction."""
         if correlation > 0.1:
             return "POSITIVE"
-        elif correlation < -0.1:
+        if correlation < -0.1:
             return "NEGATIVE"
-        else:
-            return "UNCORRELATED"
+        return "UNCORRELATED"
 
     def _calculate_correlation_reliability(
         self, correlation: float, p_value: float, sample_size: int, stability: float
@@ -1297,7 +1294,7 @@ class MarketContextAnalyzer:
         except Exception:
             return 0.1
 
-    def _estimate_regime_duration(self, sentiment_data: dict[str, Any]) -> int | None:
+    def _estimate_regime_duration(self, _sentiment_data: dict[str, Any]) -> int | None:
         """Estimate how long current regime has been in place."""
         try:
             # In a full implementation, this would track regime changes over time

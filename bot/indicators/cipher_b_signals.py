@@ -518,7 +518,6 @@ class CipherBSignals:
         show_wt_div: bool = True,
         show_rsi_div: bool = False,
         show_stoch_div: bool = False,
-        show_wt_div_add: bool = True,
     ) -> dict[str, Any]:
         """
         Comprehensive Cipher B signal analysis.
@@ -528,7 +527,6 @@ class CipherBSignals:
             show_wt_div: Show WaveTrend divergences
             show_rsi_div: Show RSI divergences
             show_stoch_div: Show Stochastic RSI divergences
-            show_wt_div_add: Show additional WaveTrend divergences
 
         Returns:
             Dictionary with all Cipher B signals and analysis

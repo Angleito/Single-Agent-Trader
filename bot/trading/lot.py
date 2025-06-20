@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import uuid4
@@ -122,7 +122,7 @@ class FIFOPosition(BaseModel):
             symbol=self.symbol,
             quantity=quantity,
             purchase_price=price,
-            purchase_date=purchase_date or datetime.now(),
+            purchase_date=purchase_date or datetime.now(UTC),
             remaining_quantity=quantity,
         )
         self.lots.append(lot)
@@ -157,7 +157,7 @@ class FIFOPosition(BaseModel):
 
         sales = []
         remaining_to_sell = quantity
-        sale_date = sale_date or datetime.now()
+        sale_date = sale_date or datetime.now(UTC)
 
         # Sort lots by purchase date (FIFO)
         sorted_lots = sorted(self.lots, key=lambda x: x.purchase_date)

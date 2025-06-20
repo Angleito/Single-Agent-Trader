@@ -169,9 +169,9 @@ class TradingEngine:
         self._shutdown_requested = False
         self._memory_available = False  # Initialize early to prevent AttributeError
         self._last_position_log_time: datetime | None = None
-        self._background_tasks: list[asyncio.Task[Any]] = (
-            []
-        )  # Track background tasks for cleanup
+        self._background_tasks: list[
+            asyncio.Task[Any]
+        ] = []  # Track background tasks for cleanup
 
         # Load configuration
         self.settings = self._load_configuration(config_file, dry_run)
@@ -219,8 +219,8 @@ class TradingEngine:
                     rate_limit_window=60,
                 )
                 self.logger.info("Successfully initialized OmniSearch client")
-            except Exception as e:
-                self.logger.exception("Failed to initialize OmniSearch client: %s", e)
+            except Exception:
+                self.logger.exception("Failed to initialize OmniSearch client")
                 self.logger.warning("Continuing without OmniSearch integration")
                 self.omnisearch_client = None
 
@@ -231,8 +231,8 @@ class TradingEngine:
             try:
                 self.websocket_publisher = WebSocketPublisher(self.settings)
                 self.logger.info("WebSocketPublisher initialized successfully")
-            except Exception as e:
-                self.logger.exception("Failed to initialize WebSocket publisher: %s", e)
+            except Exception:
+                self.logger.exception("Failed to initialize WebSocket publisher")
                 self.logger.warning("Continuing without WebSocket publishing")
                 self.websocket_publisher = None
 
@@ -246,8 +246,8 @@ class TradingEngine:
                 self.command_consumer = CommandConsumer()
                 self._register_command_callbacks()
                 self.logger.info("Successfully initialized command consumer")
-            except Exception as e:
-                self.logger.exception("Failed to initialize command consumer: %s", e)
+            except Exception:
+                self.logger.exception("Failed to initialize command consumer")
                 self.logger.warning("Continuing without dashboard control")
                 self.command_consumer = None
 
@@ -276,8 +276,8 @@ class TradingEngine:
                 )
                 self.logger.info("Successfully initialized memory-enhanced agent")
                 self._memory_available = True
-            except Exception as e:
-                self.logger.exception("Failed to initialize MCP components: %s", e)
+            except Exception:
+                self.logger.exception("Failed to initialize MCP components")
                 self.logger.warning("Falling back to standard LLM agent")
                 self.llm_agent = LLMAgent(
                     model_provider=self.settings.llm.provider,
@@ -353,12 +353,15 @@ class TradingEngine:
         performance_thresholds = PerformanceThresholds()
 
         # Customize thresholds for trading environment
-        if interval in [
-            "1s",
-            "5s",
-            "10s",
-            "15s",
-        ]:  # High-frequency trading (Note: sub-minute intervals converted to 1m on Bluefin)
+        if (
+            interval
+            in [
+                "1s",
+                "5s",
+                "10s",
+                "15s",
+            ]
+        ):  # High-frequency trading (Note: sub-minute intervals converted to 1m on Bluefin)
             performance_thresholds.indicator_calculation_ms = 50
             performance_thresholds.market_data_processing_ms = 25
             performance_thresholds.trade_execution_ms = 500
@@ -495,8 +498,8 @@ class TradingEngine:
                     message=f"Risk limits updated: {parameters}",
                 )
 
-        except Exception as e:
-            self.logger.exception("Error updating risk limits: %s", e)
+        except Exception:
+            self.logger.exception("Error updating risk limits")
             raise
 
     async def _handle_manual_trade(self, parameters: dict) -> bool:
@@ -535,8 +538,8 @@ class TradingEngine:
 
             return success
 
-        except Exception as e:
-            self.logger.exception("Error executing manual trade: %s", e)
+        except Exception:
+            self.logger.exception("Error executing manual trade")
             return False
 
     async def _close_all_positions(self) -> None:
@@ -551,8 +554,8 @@ class TradingEngine:
                     rationale="Emergency position closure",
                 )
                 await self._execute_trade_action(close_action)
-        except Exception as e:
-            self.logger.exception("Error closing positions: %s", e)
+        except Exception:
+            self.logger.exception("Error closing positions")
 
     def _handle_performance_alert(self, alert) -> None:
         """
@@ -598,8 +601,8 @@ class TradingEngine:
                 if hasattr(self, "_background_tasks"):
                     self._background_tasks.append(alert_task)
 
-        except Exception as e:
-            self.logger.exception("Error handling performance alert: %s", e)
+        except Exception:
+            self.logger.exception("Error handling performance alert")
 
     def _ensure_market_data_available(self) -> bool:
         """
@@ -822,8 +825,8 @@ class TradingEngine:
             console.print(
                 "\n[yellow]Received interrupt signal, shutting down...[/yellow]"
             )
-        except Exception as e:
-            self.logger.exception("Critical error in trading engine: %s", e)
+        except Exception:
+            self.logger.exception("Critical error in trading engine")
             console.print(f"[red]Critical error: {e}[/red]")
             raise
         finally:
@@ -832,8 +835,8 @@ class TradingEngine:
                 shutdown_called = True
                 try:
                     await self._shutdown()
-                except Exception as e:
-                    self.logger.exception("Error in shutdown: %s", e)
+                except Exception:
+                    self.logger.exception("Error in shutdown")
                     # Force cleanup of dominance provider session as last resort
                     if hasattr(self, "dominance_provider") and self.dominance_provider:
                         if hasattr(self.dominance_provider, "_session"):
@@ -842,7 +845,7 @@ class TradingEngine:
     def _setup_signal_handlers(self) -> None:
         """Setup signal handlers for graceful shutdown."""
 
-        def signal_handler(signum: int, frame: Any) -> None:
+        def signal_handler(signum: int, _frame: Any) -> None:
             self.logger.info("Received signal %s, requesting shutdown...", signum)
             self._shutdown_requested = True
 
@@ -2110,8 +2113,8 @@ class TradingEngine:
                 if sleep_time > 0:
                     await asyncio.sleep(sleep_time)
 
-            except Exception as e:
-                self.logger.exception("Error in trading loop: %s", e)
+            except Exception:
+                self.logger.exception("Error in trading loop")
                 console.print(f"[red]Loop error: {e}[/red]")
 
                 # Implement exponential backoff for error recovery
@@ -2150,8 +2153,8 @@ class TradingEngine:
             await self._execute_trade(trade_action, current_price)
             return True
 
-        except Exception as e:
-            self.logger.exception("Error executing trade action: %s", e)
+        except Exception:
+            self.logger.exception("Error executing trade action")
             return False
 
     async def _execute_trade(
@@ -2372,8 +2375,8 @@ class TradingEngine:
             else:
                 console.print("[red]✗ Trade execution failed[/red]")
 
-        except Exception as e:
-            self.logger.exception("Trade execution error: %s", e)
+        except Exception:
+            self.logger.exception("Trade execution error")
             console.print(f"[red]Trade execution error: {e}[/red]")
 
     def _get_interval_seconds(self, interval: str) -> int:
@@ -2731,8 +2734,8 @@ class TradingEngine:
 
             return summary
 
-        except Exception as e:
-            self.logger.exception("Failed to get performance summary: %s", e)
+        except Exception:
+            self.logger.exception("Failed to get performance summary")
             return {
                 "error": str(e),
                 "timestamp": datetime.now(UTC).isoformat(),
@@ -2883,8 +2886,8 @@ class TradingEngine:
 
             console.print("[green]✓ Shutdown complete[/green]")
 
-        except Exception as e:
-            self.logger.exception("Error during shutdown: %s", e)
+        except Exception:
+            self.logger.exception("Error during shutdown")
             console.print(f"[red]Shutdown error: {e}[/red]")
         finally:
             # Final cleanup - ensure all async sessions are closed
@@ -2998,8 +3001,8 @@ class TradingEngine:
             self.logger.info("No matching positions found for trading symbol")
             console.print("    [green]✓ No existing positions detected[/green]")
 
-        except Exception as e:
-            self.logger.exception("Failed to reconcile positions: %s", e)
+        except Exception:
+            self.logger.exception("Failed to reconcile positions")
             console.print(f"    [red]✗ Position reconciliation failed: {e}[/red]")
             # Continue with FLAT position assumption on error
 
@@ -3078,7 +3081,7 @@ class TradingEngine:
                     )
                     history_file = Path("data/paper_trading/session_trades.json")
                     history_file.parent.mkdir(parents=True, exist_ok=True)
-                    with open(history_file, "w") as f:
+                    with history_file.open("w") as f:
                         f.write(trade_history)
                     console.print(
                         f"[green]✓ Trade history exported to {history_file}[/green]"
@@ -3222,8 +3225,8 @@ class TradingEngine:
             )
             return trade_action
 
-        except Exception as e:
-            self.logger.exception("Error in Cipher B filtering: %s", e)
+        except Exception:
+            self.logger.exception("Error in Cipher B filtering")
             # On error, allow the original trade action to prevent system failure
             return trade_action
 
@@ -3512,13 +3515,13 @@ def export_trades(days: int, export_format: str, output: str | None) -> None:
         )
 
         if not output:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
             output = f"paper_trades_{timestamp}.{export_format}"
 
         output_path = Path(output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(output_path, "w") as f:
+        with output_path.open("w") as f:
             f.write(trade_history)
 
         console.print(f"[green]✅ Trade history exported to {output_path}[/green]")

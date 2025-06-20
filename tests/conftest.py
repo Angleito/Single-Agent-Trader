@@ -625,7 +625,7 @@ async def async_context_manager():
             self.entered = True
             return self
 
-        async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        async def __aexit__(self, exc_type: Any, exc_val: Any, _exc_tb: Any) -> None:
             self.exited = True
 
     return AsyncContextManager()

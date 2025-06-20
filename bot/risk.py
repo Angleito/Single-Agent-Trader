@@ -9,7 +9,7 @@ to protect the trading account.
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -82,7 +82,7 @@ class TradingCircuitBreaker:
         if self.state == "OPEN":
             if (
                 self.last_failure_time
-                and datetime.now() - self.last_failure_time
+                and datetime.now(UTC) - self.last_failure_time
                 > timedelta(seconds=self.timeout)
             ):
                 self.state = "HALF_OPEN"
@@ -114,7 +114,7 @@ class TradingCircuitBreaker:
             severity: Severity level (low, medium, high, critical)
         """
         failure_record = FailureRecord(
-            timestamp=datetime.now(),
+            timestamp=datetime.now(UTC),
             failure_type=failure_type,
             error_message=error_message,
             severity=severity,
@@ -122,7 +122,7 @@ class TradingCircuitBreaker:
 
         self.failure_history.append(failure_record)
         self.failure_count += 1
-        self.last_failure_time = datetime.now()
+        self.last_failure_time = datetime.now(UTC)
 
         # Critical failures immediately open circuit
         if severity == "critical":
@@ -146,7 +146,7 @@ class TradingCircuitBreaker:
             )
 
         # Keep only recent failure history
-        cutoff_time = datetime.now() - timedelta(hours=24)
+        cutoff_time = datetime.now(UTC) - timedelta(hours=24)
         self.failure_history = [
             f for f in self.failure_history if f.timestamp >= cutoff_time
         ]
@@ -164,7 +164,7 @@ class TradingCircuitBreaker:
                 max(
                     0,
                     self.timeout
-                    - (datetime.now() - self.last_failure_time).total_seconds(),
+                    - (datetime.now(UTC) - self.last_failure_time).total_seconds(),
                 )
                 if self.last_failure_time and self.state == "OPEN"
                 else 0
@@ -173,7 +173,7 @@ class TradingCircuitBreaker:
                 [
                     f
                     for f in self.failure_history
-                    if f.timestamp >= datetime.now() - timedelta(hours=1)
+                    if f.timestamp >= datetime.now(UTC) - timedelta(hours=1)
                 ]
             ),
         }
@@ -228,7 +228,7 @@ class APIFailureProtection:
 
                 # Success - reset failure counters
                 self.consecutive_failures = 0
-                self.last_success_time = datetime.now()
+                self.last_success_time = datetime.now(UTC)
                 return result
 
             except Exception as e:
@@ -360,7 +360,7 @@ class EmergencyStopManager:
         """
         self.is_stopped = True
         self.stop_reason = reason
-        self.stop_timestamp = datetime.now()
+        self.stop_timestamp = datetime.now(UTC)
 
         trigger_record = {
             "timestamp": self.stop_timestamp,
@@ -376,7 +376,7 @@ class EmergencyStopManager:
         )
 
         # Keep only recent trigger history
-        cutoff_time = datetime.now() - timedelta(hours=24)
+        cutoff_time = datetime.now(UTC) - timedelta(hours=24)
         self.trigger_history = [
             t for t in self.trigger_history if t["timestamp"] >= cutoff_time
         ]
@@ -676,14 +676,14 @@ class RiskManager:
             return True, modified_action, "Advanced risk checks passed"
 
         except Exception as e:
-            logger.exception("Risk evaluation error: %s", e)
+            logger.exception("Risk evaluation error")
             self.circuit_breaker.record_failure("risk_evaluation_error", str(e), "high")
             return False, self._get_hold_action("Risk evaluation error"), "Error"
 
     def validate_balance_for_trade(
         self,
         trade_action: TradeAction,
-        current_price: Decimal,
+        _current_price: Decimal,
         estimated_fees: Decimal = Decimal("0"),
     ) -> tuple[bool, str]:
         """
@@ -769,7 +769,7 @@ class RiskManager:
             return True, "Balance validation successful"
 
         except Exception as e:
-            logger.exception("Error in balance validation for trade: %s", e)
+            logger.exception("Error in balance validation for trade")
             return False, f"Balance validation error: {e}"
 
     def _calculate_current_margin_usage(self) -> Decimal:
@@ -795,7 +795,7 @@ class RiskManager:
         Returns:
             True if daily loss limit exceeded
         """
-        today = date.today()
+        today = datetime.now(UTC).date()
 
         if today not in self._daily_pnl:
             return False
@@ -902,7 +902,7 @@ class RiskManager:
         return modified
 
     def _calculate_position_risk(
-        self, trade_action: TradeAction, current_price: Decimal, trade_fees: Any = None
+        self, trade_action: TradeAction, _current_price: Decimal, trade_fees: Any = None
     ) -> dict[str, Any]:
         """
         Calculate risk metrics for a position.
@@ -1068,7 +1068,7 @@ class RiskManager:
             # Check position timestamp is not too old
             if position.timestamp:
                 age_hours = (
-                    datetime.now() - position.timestamp.replace(tzinfo=None)
+                    datetime.now(UTC) - position.timestamp.replace(tzinfo=None)
                 ).total_seconds() / 3600
                 if age_hours > 168:  # 1 week
                     return {
@@ -1084,7 +1084,7 @@ class RiskManager:
             }
 
         except Exception as e:
-            logger.exception("Position validation error: %s", e)
+            logger.exception("Position validation error")
             return {
                 "valid": False,
                 "reason": f"Validation error: {e}",
@@ -1141,11 +1141,11 @@ class RiskManager:
                 )
 
             # Store metrics history
-            metrics["timestamp"] = datetime.now()
+            metrics["timestamp"] = datetime.now(UTC)
             self._risk_metrics_history.append(metrics)
 
             # Keep only recent history (last 24 hours of samples)
-            cutoff_time = datetime.now() - timedelta(hours=24)
+            cutoff_time = datetime.now(UTC) - timedelta(hours=24)
             self._risk_metrics_history = [
                 m
                 for m in self._risk_metrics_history
@@ -1155,8 +1155,8 @@ class RiskManager:
 
             return metrics
 
-        except Exception as e:
-            logger.exception("Risk metrics monitoring error: %s", e)
+        except Exception:
+            logger.exception("Risk metrics monitoring error")
             return {}
 
     def _count_consecutive_losses(self) -> int:
@@ -1168,7 +1168,7 @@ class RiskManager:
         if not self._risk_metrics_history:
             return 0.0
 
-        five_minutes_ago = datetime.now() - timedelta(minutes=5)
+        five_minutes_ago = datetime.now(UTC) - timedelta(minutes=5)
         recent_metrics = [
             m
             for m in self._risk_metrics_history[-10:]  # Last 10 samples
@@ -1198,7 +1198,7 @@ class RiskManager:
 
     def _calculate_daily_loss_percentage(self) -> float:
         """Calculate daily loss as percentage of account."""
-        today = date.today()
+        today = datetime.now(UTC).date()
         if today not in self._daily_pnl:
             return 0.0
 
@@ -1390,7 +1390,7 @@ class RiskManager:
             realized_pnl: Realized profit/loss
             unrealized_pnl: Unrealized profit/loss
         """
-        today = date.today()
+        today = datetime.now(UTC).date()
 
         if today not in self._daily_pnl:
             self._daily_pnl[today] = DailyPnL(date=today)
@@ -1444,8 +1444,8 @@ class RiskManager:
                     new_balance,
                 )
 
-        except BalanceValidationError as e:
-            logger.exception("❌ Balance validation error during update: %s", e)
+        except BalanceValidationError:
+            logger.exception("❌ Balance validation error during update")
             # Still update the balance but log the issue
             self._account_balance = new_balance
             logger.warning(
@@ -1453,8 +1453,8 @@ class RiskManager:
                 old_balance,
                 new_balance,
             )
-        except Exception as e:
-            logger.exception("❌ Unexpected error during balance validation: %s", e)
+        except Exception:
+            logger.exception("❌ Unexpected error during balance validation")
             # Still update the balance but log the issue
             self._account_balance = new_balance
             logger.warning(
@@ -1470,7 +1470,7 @@ class RiskManager:
         Returns:
             RiskMetrics object with current status
         """
-        today = date.today()
+        today = datetime.now(UTC).date()
         daily_data = self._daily_pnl.get(today, DailyPnL(date=today))
 
         # Get position count from position manager if available
@@ -1511,7 +1511,7 @@ class RiskManager:
             Dictionary with daily summary
         """
         if target_date is None:
-            target_date = date.today()
+            target_date = datetime.now(UTC).date()
 
         daily_data = self._daily_pnl.get(target_date, DailyPnL(date=target_date))
 

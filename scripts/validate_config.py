@@ -306,7 +306,7 @@ class ConfigurationTester:
         filepath = Path(filepath)
         filepath.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(filepath, "w") as f:
+        with filepath.open("w") as f:
             json.dump(report, f, indent=2, default=str)
 
         print(f"📄 Report exported to: {filepath}")
@@ -318,7 +318,7 @@ class ConfigurationTester:
 
         monitor = self.settings.create_configuration_monitor()
 
-        def on_config_change(settings, old_hash, new_hash):
+        def on_config_change(_settings, old_hash, new_hash):
             print(f"🔄 Configuration change detected: {old_hash} -> {new_hash}")
 
         monitor.register_change_callback(on_config_change)

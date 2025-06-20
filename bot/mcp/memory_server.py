@@ -165,7 +165,7 @@ class MCPMemoryServer:
         self,
         market_state: MarketState,
         trade_action: TradeAction,
-        additional_context: dict[str, Any] | None = None,
+        _additional_context: dict[str, Any] | None = None,
     ) -> str:
         """
         Store a new trading experience in memory.
@@ -830,7 +830,7 @@ class MCPMemoryServer:
         self,
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
-        exc_tb: Any,
+        _exc_tb: Any,
     ) -> None:
         """Async context manager exit."""
         await self.disconnect()
@@ -859,7 +859,7 @@ class MCPMemoryServer:
         """Load experiences from local storage into cache."""
         try:
             for file_path in self.local_storage_path.glob("*.json"):
-                with open(file_path) as f:
+                with file_path.open() as f:
                     data = json.load(f)
                     experience = TradingExperience(**data)
                     self.memory_cache[experience.experience_id] = experience

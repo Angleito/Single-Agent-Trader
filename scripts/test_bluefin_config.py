@@ -449,7 +449,7 @@ class BluefinConfigTester:
         filepath = Path(filepath)
         filepath.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(filepath, "w") as f:
+        with filepath.open("w") as f:
             json.dump(self.results, f, indent=2, default=str)
 
         print(f"📄 Results exported to: {filepath}")

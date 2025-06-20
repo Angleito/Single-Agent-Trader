@@ -36,7 +36,7 @@ def get_g004_files() -> list[str]:
                 file_path = line.split(":")[0]
                 files_with_errors.add(file_path)
 
-        return sorted(list(files_with_errors))
+        return sorted(files_with_errors)
     except Exception as e:
         print(f"Error running ruff: {e}")
         return []
@@ -61,7 +61,7 @@ def fix_simple_f_string_logging(content: str) -> str:
 
     def replace_f_string(match):
         logger_call = match.group(1)
-        log_level = match.group(2)
+        match.group(2)
         f_string_content = match.group(3)
 
         # Find all {var} patterns
@@ -107,7 +107,7 @@ def fix_multiline_f_string_logging(content: str) -> str:
             next_line = lines[i + 1].strip()
 
             # Check if next line starts with f"
-            if next_line.startswith('f"') or next_line.startswith("f'"):
+            if next_line.startswith(('f"', "f'")):
                 indent = logger_match.group(1)
                 logger_func = logger_match.group(2)
 

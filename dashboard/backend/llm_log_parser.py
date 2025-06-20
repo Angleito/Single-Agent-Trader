@@ -245,7 +245,7 @@ class LLMLogParser:
                 logger.warning("Log file not found: %s", self.log_file)
                 return {"requests": 0, "responses": 0, "decisions": 0, "metrics": 0}
 
-            with open(self.log_file) as f:
+            with self.log_file.open() as f:
                 content = f.read()
 
             lines = content.splitlines()
@@ -522,7 +522,7 @@ class LLMLogParser:
                         current_size = self.log_file.stat().st_size
                         if current_size > self._last_position:
                             # Read new content
-                            with open(self.log_file) as f:
+                            with self.log_file.open() as f:
                                 f.seek(self._last_position)
                                 new_content = f.read()
                                 self._last_position = f.tell()

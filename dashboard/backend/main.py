@@ -235,9 +235,7 @@ class ConnectionManager:
         }
 
         # Connection tracking for personalized replay
-        self.connection_metadata = (
-            {}
-        )  # websocket -> {connected_at, last_message_id, categories}
+        self.connection_metadata = {}  # websocket -> {connected_at, last_message_id, categories}
 
         # Performance tracking
         self.stats = {
@@ -639,7 +637,7 @@ class LogStreamer:
                 logger.warning("Log file not found: %s", file_path)
                 return
 
-            with open(file_path) as f:
+            with file_path.open() as f:
                 # Go to end of file
                 f.seek(0, 2)
 

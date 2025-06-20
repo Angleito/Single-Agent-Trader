@@ -365,8 +365,8 @@ class BaseExchange(ABC):
         self,
         balance: Decimal,
         used_margin: Decimal,
-        position_value: Decimal | None = None,
-        leverage: int | None = None,
+        _position_value: Decimal | None = None,
+        _leverage: int | None = None,
     ) -> dict[str, Any]:
         """
         Validate margin requirements and calculations.
@@ -526,7 +526,7 @@ class BaseExchange(ABC):
             "validation_method": "inline_validation_with_balance_exceptions",
         }
 
-    async def _exchange_error_fallback(self, error: Exception, context: dict) -> None:
+    async def _exchange_error_fallback(self, error: Exception, _context: dict) -> None:
         """Fallback behavior for exchange errors."""
         logger.warning("Exchange error fallback triggered: %s", error)
 
@@ -545,12 +545,12 @@ class BaseExchange(ABC):
                 self.exchange_name,
             )
 
-    async def _connection_fallback(self, *args, **kwargs) -> bool:
+    async def _connection_fallback(self, *_args, **_kwargs) -> bool:
         """Fallback for connection failures."""
         logger.info("Using connection fallback for %s", self.exchange_name)
         return False  # Indicate connection is unavailable
 
-    async def _trading_fallback(self, *args, **kwargs) -> Order | None:
+    async def _trading_fallback(self, *_args, **_kwargs) -> Order | None:
         """Fallback for trading operations."""
         logger.info(
             "Using trading fallback for %s - returning None", self.exchange_name
@@ -767,7 +767,7 @@ class BaseExchange(ABC):
         """
 
     # Optional methods for futures trading
-    async def get_futures_positions(self, symbol: str | None = None) -> list[Position]:
+    async def get_futures_positions(self, _symbol: str | None = None) -> list[Position]:
         """
         Get current futures positions.
 
@@ -780,7 +780,7 @@ class BaseExchange(ABC):
         return []
 
     async def get_futures_account_info(
-        self, refresh: bool = False
+        self, _refresh: bool = False
     ) -> FuturesAccountInfo | None:
         """
         Get comprehensive futures account information.
@@ -807,8 +807,8 @@ class BaseExchange(ABC):
         symbol: str,
         side: Literal["BUY", "SELL"],
         quantity: Decimal,
-        leverage: int | None = None,
-        reduce_only: bool = False,
+        _leverage: int | None = None,
+        _reduce_only: bool = False,
     ) -> Order | None:
         """
         Place a futures market order with leverage.

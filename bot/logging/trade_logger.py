@@ -331,7 +331,7 @@ class TradeLogger:
     def _append_json_log(self, file_path: Path, data: dict[str, Any]) -> None:
         """Append JSON data to log file."""
         try:
-            with open(file_path, "a") as f:
+            with file_path.open("a") as f:
                 f.write(json.dumps(data) + "\n")
         except Exception as e:
             self.logger.exception("Failed to write JSON log: %s", e)

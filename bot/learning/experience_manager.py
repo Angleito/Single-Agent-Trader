@@ -119,8 +119,8 @@ class ExperienceManager:
         for trade in self.active_trades.values():
             if trade.realized_pnl is None:
                 logger.warning(
-                    f"Trade {trade.trade_id} still active at shutdown, "
-                    "marking as incomplete"
+                    "Trade %s still active at shutdown, marking as incomplete",
+                    trade.trade_id,
                 )
 
         logger.info("🛑 Experience Manager: Stopped")

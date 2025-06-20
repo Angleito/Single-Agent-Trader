@@ -193,7 +193,7 @@ class OrderManager:
         order_id: str,
         status: OrderStatus,
         filled_quantity: Decimal | None = None,
-        fill_price: Decimal | None = None,
+        _fill_price: Decimal | None = None,
     ) -> Order | None:
         """
         Update order status and fill information.
@@ -383,7 +383,7 @@ class OrderManager:
             return True
 
     def cancel_all_orders(
-        self, symbol: str | None = None, status: str | None = None
+        self, symbol: str | None = None, _status: str | None = None
     ) -> int:
         """
         Cancel all active orders.
@@ -593,7 +593,7 @@ class OrderManager:
                     "filled_quantity": str(order.filled_quantity),
                 }
 
-            with open(self.orders_file, "w") as f:
+            with self.orders_file.open("w") as f:
                 json.dump(orders_data, f, indent=2)
 
             # Save order history (last 500 entries)
@@ -616,7 +616,7 @@ class OrderManager:
                     }
                 )
 
-            with open(self.history_file, "w") as f:
+            with self.history_file.open("w") as f:
                 json.dump(history_data, f, indent=2)
 
             logger.debug("Order state saved successfully")
@@ -629,7 +629,7 @@ class OrderManager:
         try:
             # Load active orders
             if self.orders_file.exists():
-                with open(self.orders_file) as f:
+                with self.orders_file.open() as f:
                     orders_data = json.load(f)
 
                 for order_id, order_data in orders_data.items():
@@ -658,7 +658,7 @@ class OrderManager:
 
             # Load order history
             if self.history_file.exists():
-                with open(self.history_file) as f:
+                with self.history_file.open() as f:
                     history_data = json.load(f)
 
                 for order_data in history_data:

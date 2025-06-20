@@ -34,7 +34,7 @@ def setup_logging(verbose: bool = False):
 
 def save_results_to_file(results: dict[str, Any], output_file: Path):
     """Save test results to JSON file."""
-    with open(output_file, "w") as f:
+    with output_file.open("w") as f:
         json.dump(results, f, indent=2, default=str)
     print(f"Results saved to: {output_file}")
 
@@ -246,7 +246,9 @@ def generate_html_report(results: dict[str, Any], output_file: Path):
             status_class = (
                 "good"
                 if error_rate < 1
-                else "warning" if error_rate < 5 else "critical"
+                else "warning"
+                if error_rate < 5
+                else "critical"
             )
 
             content_sections.append(
@@ -272,7 +274,7 @@ def generate_html_report(results: dict[str, Any], output_file: Path):
         timestamp=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"), content=content
     )
 
-    with open(output_file, "w") as f:
+    with output_file.open("w") as f:
         f.write(html_content)
 
     print(f"HTML report generated: {output_file}")

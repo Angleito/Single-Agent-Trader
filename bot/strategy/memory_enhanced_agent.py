@@ -898,7 +898,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             return []
 
     async def _store_sentiment_data_for_learning(
-        self, market_state: MarketState, trade_action: TradeAction
+        self, market_state: MarketState, _trade_action: TradeAction
     ) -> None:
         """
         Store sentiment analysis results with trading experiences for future learning.
@@ -985,7 +985,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             # Store in market state snapshot for memory server
             if sentiment_data and self.memory_server:
                 # Create a temporary market state snapshot with sentiment data
-                market_state_snapshot = {
+                {
                     "symbol": market_state.symbol,
                     "price": float(market_state.current_price),
                     "sentiment_data": sentiment_data,

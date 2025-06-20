@@ -623,7 +623,9 @@ FINANCIAL INTELLIGENCE INTEGRATION:
                 direction = (
                     "🟢"
                     if candle.close > candle.open
-                    else "🔴" if candle.close < candle.open else "⚪"
+                    else "🔴"
+                    if candle.close < candle.open
+                    else "⚪"
                 )
                 change_pct = (
                     ((candle.close - candle.open) / candle.open * 100)
@@ -669,7 +671,9 @@ FINANCIAL INTELLIGENCE INTEGRATION:
                 trend_direction = (
                     "RISING"
                     if overall_trend > 0.1
-                    else "FALLING" if overall_trend < -0.1 else "SIDEWAYS"
+                    else "FALLING"
+                    if overall_trend < -0.1
+                    else "SIDEWAYS"
                 )
                 trend_line = f"Overall Trend: {trend_direction} ({overall_trend:+.2f}% over {len(recent_candles)} candles)"
             else:

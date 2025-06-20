@@ -276,7 +276,7 @@ async def main():
     monitoring_system = ComprehensiveMonitoringSystem(BLUEFIN_SERVICE_URL)
 
     # Setup signal handlers for graceful shutdown
-    def signal_handler(signum, frame):
+    def signal_handler(signum, _frame):
         logger.info("Received signal %s, initiating shutdown...", signum)
         raise KeyboardInterrupt
 

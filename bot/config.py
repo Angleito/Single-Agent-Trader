@@ -36,10 +36,10 @@ except ImportError:
             async def __aexit__(self, *args):
                 pass
 
-            def get(self, *args, **kwargs):
+            def get(self, *_args, **_kwargs):
                 return MockResponse()
 
-            def post(self, *args, **kwargs):
+            def post(self, *_args, **_kwargs):
                 return MockResponse()
 
         class ClientTimeout:
@@ -2448,7 +2448,7 @@ class Settings(BaseSettings):
                 },
             )
 
-        with open(path, "w") as f:
+        with path.open("w") as f:
             json.dump(data, f, indent=2, default=str)
 
         # Add metadata
@@ -2461,7 +2461,7 @@ class Settings(BaseSettings):
         }
 
         metadata_path = path.with_suffix(".metadata.json")
-        with open(metadata_path, "w") as f:
+        with metadata_path.open("w") as f:
             json.dump(metadata, f, indent=2)
 
     @classmethod
@@ -2471,7 +2471,7 @@ class Settings(BaseSettings):
         if not path.exists():
             raise FileNotFoundError(f"Configuration file not found: {path}")
 
-        with open(path) as f:
+        with path.open() as f:
             config_data = json.load(f)
 
         return cls(**config_data)

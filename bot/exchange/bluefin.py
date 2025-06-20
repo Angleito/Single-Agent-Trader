@@ -9,7 +9,7 @@ import asyncio
 import decimal
 import logging
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, Literal, cast
 
@@ -362,7 +362,7 @@ class BluefinClient(BaseExchange):
             if connected:
                 logger.info("Successfully connected to Bluefin DEX via service")
                 self._connected = True
-                self._last_health_check = datetime.utcnow()
+                self._last_health_check = datetime.now(UTC)
                 await self._init_client()
                 return True
             else:
@@ -373,7 +373,7 @@ class BluefinClient(BaseExchange):
                         "All trades will be simulated."
                     )
                     self._connected = True  # Allow dry run to continue
-                    self._last_health_check = datetime.utcnow()
+                    self._last_health_check = datetime.now(UTC)
                     await self._init_client()
                     return True
                 else:
@@ -383,7 +383,7 @@ class BluefinClient(BaseExchange):
                         "Position queries and order execution will not work!"
                     )
                     self._connected = True
-                    self._last_health_check = datetime.utcnow()
+                    self._last_health_check = datetime.now(UTC)
                     await self._init_client()
                     return True
 
@@ -807,13 +807,13 @@ class BluefinClient(BaseExchange):
                 "PAPER TRADING: Simulating %s %s %s at market", side, quantity, symbol
             )
             return Order(
-                id=f"paper_bluefin_{int(datetime.utcnow().timestamp() * 1000)}",
+                id=f"paper_bluefin_{int(datetime.now(UTC).timestamp() * 1000)}",
                 symbol=symbol,
                 side=cast(Literal["BUY", "SELL"], side),
                 type="MARKET",
                 quantity=quantity,
                 status=OrderStatus.FILLED,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
                 filled_quantity=quantity,
             )
 
@@ -840,13 +840,13 @@ class BluefinClient(BaseExchange):
             if response.get("status") == "success":
                 order_data = response.get("order", {})
                 order = Order(
-                    id=order_data.get("id", f"bluefin_{datetime.utcnow().timestamp()}"),
+                    id=order_data.get("id", f"bluefin_{datetime.now(UTC).timestamp()}"),
                     symbol=symbol,
                     side=cast(Literal["BUY", "SELL"], side),
                     type="MARKET",
                     quantity=quantity,
                     status=OrderStatus.PENDING,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(UTC),
                     filled_quantity=Decimal("0"),
                 )
 
@@ -892,14 +892,14 @@ class BluefinClient(BaseExchange):
                 price,
             )
             return Order(
-                id=f"paper_limit_{int(datetime.utcnow().timestamp() * 1000)}",
+                id=f"paper_limit_{int(datetime.now(UTC).timestamp() * 1000)}",
                 symbol=symbol,
                 side=cast(Literal["BUY", "SELL"], side),
                 type="LIMIT",
                 quantity=quantity,
                 price=price,
                 status=OrderStatus.OPEN,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
             )
 
         try:
@@ -924,7 +924,7 @@ class BluefinClient(BaseExchange):
                 order_data = response.get("order", {})
                 order = Order(
                     id=order_data.get(
-                        "id", f"bluefin_limit_{datetime.utcnow().timestamp()}"
+                        "id", f"bluefin_limit_{datetime.now(UTC).timestamp()}"
                     ),
                     symbol=symbol,
                     side=cast(Literal["BUY", "SELL"], side),
@@ -932,7 +932,7 @@ class BluefinClient(BaseExchange):
                     quantity=quantity,
                     price=price,
                     status=OrderStatus.OPEN,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(UTC),
                     filled_quantity=Decimal("0"),
                 )
 
@@ -986,7 +986,7 @@ class BluefinClient(BaseExchange):
                         entry_price=Decimal(str(pos_data.get("avgPrice", "0"))),
                         unrealized_pnl=Decimal(str(pos_data.get("unrealizedPnl", "0"))),
                         realized_pnl=Decimal(str(pos_data.get("realizedPnl", "0"))),
-                        timestamp=datetime.utcnow(),
+                        timestamp=datetime.now(UTC),
                         is_futures=True,
                         leverage=pos_data.get("leverage", 1),
                         margin_used=Decimal(str(pos_data.get("margin", "0"))),
@@ -1303,7 +1303,7 @@ class BluefinClient(BaseExchange):
             return False
 
     async def cancel_all_orders(
-        self, symbol: str | None = None, status: str | None = None
+        self, symbol: str | None = None, _status: str | None = None
     ) -> bool:
         """
         Cancel all open orders.
@@ -1560,7 +1560,7 @@ class BluefinClient(BaseExchange):
         side: Literal["BUY", "SELL"],
         quantity: Decimal,
         leverage: int | None = None,
-        reduce_only: bool = False,
+        _reduce_only: bool = False,
     ) -> Order | None:
         """All orders on Bluefin are futures orders."""
         # Set leverage if specified

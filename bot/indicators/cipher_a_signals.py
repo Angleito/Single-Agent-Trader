@@ -261,10 +261,7 @@ class CipherASignals:
         wt_cross_up = oversold_cross_up
 
         # Calculate diamond patterns
-        # redDiamond = wtGreenCross and wtCrossDown
         red_diamond = wt_green_cross & wt_cross_down
-
-        # greenDiamond = wtRedCross and wtCrossUp
         green_diamond = wt_red_cross & wt_cross_up
 
         # Performance logging
@@ -409,11 +406,7 @@ class CipherASignals:
             pass
 
         yellow_cross_up = (
-            red_diamond
-            & wt2_below_max
-            & wt2_above_os3
-            & rsi_below_max
-            & rsi_above_min
+            red_diamond & wt2_below_max & wt2_above_os3 & rsi_below_max & rsi_above_min
             # & rsimfi_condition_up  # Uncomment to enable RSI+MFI filter
         )
 

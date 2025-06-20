@@ -9,7 +9,7 @@ sub-2 second response times with 80% latency reduction.
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from statistics import mean, median
 from typing import Any
 
@@ -83,8 +83,8 @@ class LLMPerformanceMonitor:
         self.hourly_stats: dict[str, PerformanceStats] = {}
 
         # Performance tracking
-        self.monitoring_start_time = datetime.now()
-        self.last_stats_calculation = datetime.now()
+        self.monitoring_start_time = datetime.now(UTC)
+        self.last_stats_calculation = datetime.now(UTC)
 
         # Alerting thresholds
         self.slow_response_threshold_ms = target_response_time_ms * 1.5  # 3 seconds
@@ -117,7 +117,7 @@ class LLMPerformanceMonitor:
             error_occurred: Whether an error occurred during processing
         """
         metric = PerformanceMetrics(
-            timestamp=datetime.now(),
+            timestamp=datetime.now(UTC),
             response_time_ms=response_time_ms,
             prompt_size_chars=prompt_size_chars,
             cache_hit=cache_hit,
@@ -190,7 +190,7 @@ class LLMPerformanceMonitor:
             return PerformanceStats()
 
         # Filter recent metrics (last hour)
-        one_hour_ago = datetime.now() - timedelta(hours=1)
+        one_hour_ago = datetime.now(UTC) - timedelta(hours=1)
         recent_metrics = [
             m for m in self.metrics_history if m.timestamp >= one_hour_ago
         ]
@@ -242,7 +242,7 @@ class LLMPerformanceMonitor:
             Formatted performance report string
         """
         stats = self.get_current_stats()
-        uptime = datetime.now() - self.monitoring_start_time
+        uptime = datetime.now(UTC) - self.monitoring_start_time
 
         # Performance status
         if stats.target_achieved:

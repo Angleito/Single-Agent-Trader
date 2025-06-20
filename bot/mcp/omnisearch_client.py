@@ -721,7 +721,7 @@ class OmniSearchClient:
         local_file = self.local_storage_path / f"news_{hash(query) % 1000}.json"
         if local_file.exists():
             try:
-                with open(local_file) as f:
+                with local_file.open() as f:
                     cached_data = json.load(f)
                     for item in cached_data[:limit]:
                         fallback_results.append(FinancialNewsResult(**item))

@@ -103,7 +103,7 @@ class TestStartupValidation:
         """Test loading configuration from file."""
         # Create config file
         config_file = temp_config_dir / "test_config.json"
-        with open(config_file, "w") as f:
+        with config_file.open("w") as f:
             json.dump(valid_config_data, f)
 
         # Load configuration
@@ -124,7 +124,7 @@ class TestStartupValidation:
         """Test configuration validation catches errors."""
         # Create invalid config file
         config_file = temp_config_dir / "invalid_config.json"
-        with open(config_file, "w") as f:
+        with config_file.open("w") as f:
             json.dump(invalid_config_data, f)
 
         # Loading should fail with validation errors
@@ -135,7 +135,7 @@ class TestStartupValidation:
         """Test environment variables override configuration file."""
         # Create config file
         config_file = temp_config_dir / "test_config.json"
-        with open(config_file, "w") as f:
+        with config_file.open("w") as f:
             json.dump(valid_config_data, f)
 
         # Set environment variables
@@ -196,7 +196,7 @@ class TestStartupValidation:
         config_files = {}
         for profile, config in profiles.items():
             config_file = temp_config_dir / f"{profile}_config.json"
-            with open(config_file, "w") as f:
+            with config_file.open("w") as f:
                 json.dump(config, f)
             config_files[profile] = str(config_file)
 
@@ -223,7 +223,7 @@ class TestStartupValidation:
         """Test complete trading engine startup sequence."""
         # Create config file
         config_file = temp_config_dir / "startup_test.json"
-        with open(config_file, "w") as f:
+        with config_file.open("w") as f:
             json.dump(valid_config_data, f)
 
         # Mock all external dependencies
@@ -311,7 +311,7 @@ class TestStartupValidation:
         }
 
         config_file = temp_config_dir / "warning_config.json"
-        with open(config_file, "w") as f:
+        with config_file.open("w") as f:
             json.dump(warning_config, f)
 
         settings = Settings.load_from_file(str(config_file))
@@ -421,7 +421,7 @@ class TestStartupValidation:
         }
 
         config_file = temp_config_dir / "old_format.json"
-        with open(config_file, "w") as f:
+        with config_file.open("w") as f:
             json.dump(old_format_config, f)
 
         # Should handle old format gracefully (or provide clear error)
@@ -480,7 +480,7 @@ class TestStartupValidation:
         live_config = valid_config_data.copy()
         live_config["system"]["dry_run"] = False
 
-        with open(config_file, "w") as f:
+        with config_file.open("w") as f:
             json.dump(live_config, f)
 
         # Create engine with explicit dry_run=True override

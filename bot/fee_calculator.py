@@ -65,7 +65,7 @@ class FeeCalculator:
 
     def calculate_trade_fees(
         self,
-        trade_action: TradeAction,
+        _trade_action: TradeAction,
         position_value: Decimal,
         current_price: Decimal,
         is_market_order: bool = True,
@@ -420,7 +420,7 @@ class FeeCalculator:
         self,
         trade_action: TradeAction,
         position_value: Decimal,
-        current_price: Decimal,
+        _current_price: Decimal,
         leverage: int | None = None,
     ) -> tuple[bool, str]:
         """

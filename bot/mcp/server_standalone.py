@@ -37,7 +37,7 @@ class MemoryStore:
         """Load persisted memories from disk."""
         for file_path in self.storage_path.glob("*.json"):
             try:
-                with open(file_path) as f:
+                with file_path.open() as f:
                     memory = json.load(f)
                     self.memories[memory["id"]] = memory
             except Exception as e:
@@ -52,7 +52,7 @@ class MemoryStore:
         # Persist to disk
         try:
             file_path = self.storage_path / f"{memory_id}.json"
-            with open(file_path, "w") as f:
+            with file_path.open("w") as f:
                 json.dump(data, f, indent=2)
         except Exception as e:
             logger.exception("Failed to persist memory %s: %s", memory_id, e)
@@ -65,7 +65,7 @@ class MemoryStore:
         """List all memories."""
         return list(self.memories.values())
 
-    def query(self, criteria: dict[str, Any]) -> list[dict[str, Any]]:
+    def query(self, _criteria: dict[str, Any]) -> list[dict[str, Any]]:
         """Query memories based on criteria."""
         # Simple implementation - return all for now
         # In production, implement similarity search
@@ -132,7 +132,7 @@ async def get_experience(experience_id: str) -> dict[str, Any]:
 
 @app.post("/query")
 async def query_experiences(
-    market_state: dict[str, Any], query_params: dict[str, Any] | None = None
+    _market_state: dict[str, Any], query_params: dict[str, Any] | None = None
 ) -> dict[str, Any]:
     """Query similar experiences."""
     try:

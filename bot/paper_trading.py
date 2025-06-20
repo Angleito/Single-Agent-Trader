@@ -356,7 +356,7 @@ class PaperTradingAccount:
         self,
         new_balance: Decimal,
         operation: str = "unknown",
-        metadata: dict | None = None,
+        _metadata: dict | None = None,
     ) -> bool:
         """
         Validate a balance update before applying it.
@@ -1166,7 +1166,7 @@ class PaperTradingAccount:
         return order
 
     def _create_failed_order(
-        self, action: TradeAction, symbol: str, reason: str
+        self, action: TradeAction, symbol: str, _reason: str
     ) -> Order:
         """Create a failed order object."""
         return Order(
@@ -1674,7 +1674,7 @@ class PaperTradingAccount:
 
                     # Write to temporary file first, then rename for atomic operation
                     temp_account_file = self.account_file.with_suffix(".tmp")
-                    with open(temp_account_file, "w") as f:
+                    with temp_account_file.open("w") as f:
                         json.dump(account_data, f, indent=2)
                     temp_account_file.rename(self.account_file)
                     logger.info(
@@ -1742,7 +1742,7 @@ class PaperTradingAccount:
 
                     # Atomic write for trades file
                     temp_trades_file = self.trades_file.with_suffix(".tmp")
-                    with open(temp_trades_file, "w") as f:
+                    with temp_trades_file.open("w") as f:
                         json.dump(trades_data, f, indent=2)
                     temp_trades_file.rename(self.trades_file)
                     logger.info(
@@ -1773,7 +1773,7 @@ class PaperTradingAccount:
 
                     # Atomic write for performance file
                     temp_perf_file = self.performance_file.with_suffix(".tmp")
-                    with open(temp_perf_file, "w") as f:
+                    with temp_perf_file.open("w") as f:
                         json.dump(performance_data, f, indent=2)
                     temp_perf_file.rename(self.performance_file)
                     logger.info(
@@ -1936,7 +1936,7 @@ class PaperTradingAccount:
 
             # Atomic write for session trades
             temp_session_file = session_trades_file.with_suffix(".tmp")
-            with open(temp_session_file, "w") as f:
+            with temp_session_file.open("w") as f:
                 json.dump(session_data, f, indent=2)
             temp_session_file.rename(session_trades_file)
 
@@ -1958,7 +1958,7 @@ class PaperTradingAccount:
         try:
             # Load account state
             if self.account_file.exists():
-                with open(self.account_file) as f:
+                with self.account_file.open() as f:
                     account_data = json.load(f)
 
                 self.starting_balance = self._normalize_balance(
@@ -1994,7 +1994,7 @@ class PaperTradingAccount:
 
             # Load trades
             if self.trades_file.exists():
-                with open(self.trades_file) as f:
+                with self.trades_file.open() as f:
                     trades_data = json.load(f)
 
                 # Load open trades
@@ -2065,7 +2065,7 @@ class PaperTradingAccount:
 
             # Load performance data
             if self.performance_file.exists():
-                with open(self.performance_file) as f:
+                with self.performance_file.open() as f:
                     performance_data = json.load(f)
 
                 for date, metrics_data in performance_data.items():

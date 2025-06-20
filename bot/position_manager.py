@@ -707,7 +707,7 @@ class PositionManager:
                     "timestamp": position.timestamp.isoformat(),
                 }
 
-            with open(self.positions_file, "w") as f:
+            with self.positions_file.open("w") as f:
                 json.dump(positions_data, f, indent=2)
 
             # Save position history (last 100 entries)
@@ -727,7 +727,7 @@ class PositionManager:
                     }
                 )
 
-            with open(self.history_file, "w") as f:
+            with self.history_file.open("w") as f:
                 json.dump(history_data, f, indent=2)
 
             logger.debug("Position state saved successfully (sync)")
@@ -814,7 +814,7 @@ class PositionManager:
             # Load active positions
             if self.positions_file.exists():
                 try:
-                    with open(self.positions_file) as f:
+                    with self.positions_file.open() as f:
                         content = f.read().strip()
                         if not content:
                             logger.info(
@@ -880,7 +880,7 @@ class PositionManager:
             # Load position history
             if self.history_file.exists():
                 try:
-                    with open(self.history_file) as f:
+                    with self.history_file.open() as f:
                         content = f.read().strip()
                         if not content:
                             logger.info(
