@@ -646,7 +646,9 @@ class ConfigManager:
             return settings
 
         except Exception as e:
-            logger.exception("Failed to import configuration from %s: %s", import_path, e)
+            logger.exception(
+                "Failed to import configuration from %s: %s", import_path, e
+            )
             return None
 
     def switch_profile(
@@ -659,7 +661,9 @@ class ConfigManager:
             self.create_config_backup(settings, backup_name)
 
         new_settings = settings.apply_profile(new_profile)
-        logger.info("Switched from %s to %s profile", settings.profile.value, new_profile.value)
+        logger.info(
+            "Switched from %s to %s profile", settings.profile.value, new_profile.value
+        )
         return new_settings
 
     def _settings_to_env_format(self, settings: Settings) -> str:
@@ -685,7 +689,9 @@ class ConfigManager:
         # This method is kept for backward compatibility
         # The actual template is now in .env.example
         template_path = Path(".env.template")
-        logger.info("Use .env.example as the template file. Legacy template: %s", template_path)
+        logger.info(
+            "Use .env.example as the template file. Legacy template: %s", template_path
+        )
         return template_path
 
 
@@ -811,7 +817,10 @@ class HealthMonitor:
             name: comp["status"] for name, comp in health_status["components"].items()
         }
 
-        logger.info("Health check completed. Overall status: %s", health_status['overall_status'])
+        logger.info(
+            "Health check completed. Overall status: %s",
+            health_status["overall_status"],
+        )
         return health_status
 
     def get_status_summary(self) -> dict[str, Any]:
@@ -1070,7 +1079,9 @@ def setup_configuration(
         try:
             environment = Environment(env_var)
         except ValueError:
-            logger.warning("Unknown environment '%s', defaulting to development", env_var)
+            logger.warning(
+                "Unknown environment '%s', defaulting to development", env_var
+            )
             environment = Environment.DEVELOPMENT
 
     # Detect profile from environment variable
@@ -1079,7 +1090,9 @@ def setup_configuration(
         try:
             profile = TradingProfile(profile_var)
         except ValueError:
-            logger.warning("Unknown trading profile '%s', defaulting to moderate", profile_var)
+            logger.warning(
+                "Unknown trading profile '%s', defaulting to moderate", profile_var
+            )
             profile = TradingProfile.MODERATE
 
     # Load from config file if provided

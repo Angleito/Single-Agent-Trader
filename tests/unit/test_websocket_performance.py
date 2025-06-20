@@ -90,7 +90,7 @@ class TestWebSocketPerformance(unittest.TestCase):
         await asyncio.sleep(0.2)  # Allow processor to stop
         processor_task.cancel()
 
-        logger.info("✅ Queued 1000 messages in %ss", queue_time:.3f)
+        logger.info("✅ Queued 1000 messages in %.3fs", queue_time)
 
     @pytest.mark.asyncio()
     async def test_subscriber_notification_performance(self):
@@ -121,12 +121,16 @@ class TestWebSocketPerformance(unittest.TestCase):
         notification_time = time.time() - start_time
 
         # Should complete immediately (tasks run in background)
-        assert notification_time < 0.005, "Subscriber notification should be non-blocking"
+        assert (
+            notification_time < 0.005
+        ), "Subscriber notification should be non-blocking"
 
         # Wait a bit for background tasks to complete
         await asyncio.sleep(0.1)
 
-        logger.info("✅ Notified subscribers in %ss (non-blocking)", notification_time:.3f)
+        logger.info(
+            "✅ Notified subscribers in %.3fs (non-blocking)", notification_time
+        )
 
     @pytest.mark.asyncio()
     async def test_async_indicator_performance(self):
@@ -174,9 +178,9 @@ class TestWebSocketPerformance(unittest.TestCase):
         assert async_time < sync_time * 2, "Async calculation should not be much slower"
 
         logger.info("✅ Indicator calculation times:")
-        logger.info("   Sync: %ss", sync_time:.3f)
-        logger.info("   Async: %ss", async_time:.3f)
-        logger.info("   Streaming: %ss", streaming_time:.3f)
+        logger.info("   Sync: %.3fs", sync_time)
+        logger.info("   Async: %.3fs", async_time)
+        logger.info("   Streaming: %.3fs", streaming_time)
 
     @pytest.mark.asyncio()
     async def test_concurrent_processing(self):
@@ -244,7 +248,7 @@ class TestWebSocketPerformance(unittest.TestCase):
         for i, result in enumerate(results[:-1]):  # Exclude message simulation task
             assert not isinstance(result, Exception), f"Task {i + 1} should not fail"
 
-        logger.info("✅ Concurrent processing completed in %ss", concurrent_time:.3f)
+        logger.info("✅ Concurrent processing completed in %.3fs", concurrent_time)
 
     @pytest.mark.asyncio()
     async def test_bluefin_websocket_performance(self):
@@ -281,7 +285,7 @@ class TestWebSocketPerformance(unittest.TestCase):
         await asyncio.sleep(0.1)
         processor_task.cancel()
 
-        logger.info("✅ Bluefin queued 500 messages in %ss", queue_time:.3f)
+        logger.info("✅ Bluefin queued 500 messages in %.3fs", queue_time)
 
     def test_data_integrity(self):
         """Test that optimizations don't break data integrity."""
@@ -321,7 +325,10 @@ class TestWebSocketPerformance(unittest.TestCase):
             non_nan_count = sync_result[indicator].notna().sum()
             assert non_nan_count > 50, f"Indicator {indicator} has too many NaN values"
 
-        logger.info("✅ Data integrity verified - %s indicators present", len(required_indicators))
+        logger.info(
+            "✅ Data integrity verified - %s indicators present",
+            len(required_indicators),
+        )
 
 
 if __name__ == "__main__":

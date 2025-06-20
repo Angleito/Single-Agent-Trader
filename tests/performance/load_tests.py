@@ -694,7 +694,9 @@ class LoadTestSuite:
                     response_times.append(result)
                     successful_ops += 1
 
-            logger.info("Burst %s completed in %ss", burst_num + 1, burst_end - burst_start:.2f)
+            logger.info(
+                "Burst %s completed in %.2fs", burst_num + 1, burst_end - burst_start
+            )
 
             # Wait before next burst
             if burst_num < num_bursts - 1:
@@ -878,7 +880,9 @@ class LoadTestSuite:
 
             # Check response time degradation
             if load_time > 30000:  # 30 second threshold
-                logger.warning("Response time limit exceeded at load level %s", current_load)
+                logger.warning(
+                    "Response time limit exceeded at load level %s", current_load
+                )
                 break
 
             current_load += 2

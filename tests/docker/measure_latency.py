@@ -202,7 +202,7 @@ class PerformanceMonitor:
                             )
 
                             self.metrics.add_latency(measurement)
-                            logger.info("Latency for %s: %ss", event_id, bot_latency:.3f)
+                            logger.info("Latency for %s: %.3fs", event_id, bot_latency)
 
                             # Clean up
                             del self.message_timestamps[event_id]
@@ -261,7 +261,9 @@ class PerformanceMonitor:
                         )
 
                     except Exception as e:
-                        logger.debug("Error getting stats for %s: %s", container_name, e)
+                        logger.debug(
+                            "Error getting stats for %s: %s", container_name, e
+                        )
 
                 await asyncio.sleep(interval)
 
@@ -345,20 +347,20 @@ class PerformanceMonitor:
             logger.info("\nLatency Statistics (seconds):")
             for event_type, stats in latency_stats.items():
                 logger.info("\n%s:", event_type)
-                logger.info("  Count: %s", stats['count'])
-                logger.info("  Min: %ss", stats['min']:.3f)
-                logger.info("  Max: %ss", stats['max']:.3f)
-                logger.info("  Mean: %ss", stats['mean']:.3f)
-                logger.info("  Median: %ss", stats['median']:.3f)
-                logger.info("  P95: %ss", stats['p95']:.3f)
-                logger.info("  P99: %ss", stats['p99']:.3f)
+                logger.info("  Count: %s", stats["count"])
+                logger.info("  Min: %.3fs", stats["min"])
+                logger.info("  Max: %.3fs", stats["max"])
+                logger.info("  Mean: %.3fs", stats["mean"])
+                logger.info("  Median: %.3fs", stats["median"])
+                logger.info("  P95: %.3fs", stats["p95"])
+                logger.info("  P99: %.3fs", stats["p99"])
         else:
             logger.warning("No latency measurements collected")
 
         # Message rates
         logger.info("\nMessage Rates (per second):")
         for msg_type, rate in sorted(self.metrics.message_rates.items()):
-            logger.info("  %s: %s msg/s", msg_type, rate:.2f)
+            logger.info("  %s: %.2f msg/s", msg_type, rate)
 
         # Container statistics
         if self.metrics.container_stats:
@@ -369,8 +371,16 @@ class PerformanceMonitor:
                     memory_values = [s["memory_mb"] for s in stats_list]
 
                     logger.info("\n%s:", container)
-                    logger.info("  CPU - Avg: %s%, Max: %s%", statistics.mean(cpu_values):.1f, max(cpu_values):.1f)
-                    logger.info("  Memory - Avg: %sMB, Max: %sMB", statistics.mean(memory_values):.1f, max(memory_values):.1f)
+                    logger.info(
+                        "  CPU - Avg: %.1f%, Max: %.1f%",
+                        statistics.mean(cpu_values),
+                        max(cpu_values),
+                    )
+                    logger.info(
+                        "  Memory - Avg: %.1fMB, Max: %.1fMB",
+                        statistics.mean(memory_values),
+                        max(memory_values),
+                    )
 
         # Error summary
         if self.metrics.error_counts:
@@ -471,7 +481,7 @@ async def main():
     latency_stats = metrics.get_latency_stats()
     for event_type, stats in latency_stats.items():
         if stats["p99"] > 1.0:  # 1 second threshold
-            logger.warning("High P99 latency for %s: %ss", event_type, stats['p99']:.3f)
+            logger.warning("High P99 latency for %s: %.3fs", event_type, stats["p99"])
             sys.exit(1)
 
     sys.exit(0)

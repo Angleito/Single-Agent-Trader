@@ -128,7 +128,9 @@ class WebSocketLoadTester:
         self, duration: int = 60, messages_per_second: int = 100
     ):
         """Test sustained message load."""
-        logger.info("\nTesting sustained load: %s msg/s for %ss", messages_per_second, duration)
+        logger.info(
+            "\nTesting sustained load: %s msg/s for %ss", messages_per_second, duration
+        )
 
         # Start resource monitoring
         monitor_task = asyncio.create_task(self.monitor_resources())
@@ -171,7 +173,9 @@ class WebSocketLoadTester:
         self, burst_size: int = 1000, burst_count: int = 10, burst_interval: float = 5.0
     ):
         """Test burst message patterns."""
-        logger.info("\nTesting burst load: %s bursts of %s messages", burst_count, burst_size)
+        logger.info(
+            "\nTesting burst load: %s bursts of %s messages", burst_count, burst_size
+        )
 
         # Start resource monitoring
         monitor_task = asyncio.create_task(self.monitor_resources())
@@ -263,7 +267,9 @@ class WebSocketLoadTester:
         queue_size = int(os.getenv("SYSTEM__WEBSOCKET_QUEUE_SIZE", "100"))
         messages_to_send = queue_size * overflow_factor
 
-        logger.info("Queue size: %s, sending: %s messages", queue_size, messages_to_send)
+        logger.info(
+            "Queue size: %s, sending: %s messages", queue_size, messages_to_send
+        )
 
         # Start resource monitoring
         monitor_task = asyncio.create_task(self.monitor_resources())
@@ -327,34 +333,44 @@ class WebSocketLoadTester:
 
     def print_metrics(self, test_name: str):
         """Print test metrics."""
-        logger.info("\n%s", '=' * 60)
+        logger.info("\n%s", "=" * 60)
         logger.info("%s - Results", test_name)
-        logger.info("%s", '=' * 60)
+        logger.info("%s", "=" * 60)
 
         logger.info("\nMessage Statistics:")
-        logger.info("  Messages Sent: %s", self.metrics.messages_sent:)
-        logger.info("  Messages Failed: %s", self.metrics.messages_failed:)
-        logger.info("  Success Rate: %s%", (self.metrics.messages_sent / (self.metrics.messages_sent + self.metrics.messages_failed) * 100):.1f)
-        logger.info("  Throughput: %s msg/s", self.metrics.messages_per_second:.1f)
+        logger.info("  Messages Sent: %s", self.metrics.messages_sent)
+        logger.info("  Messages Failed: %s", self.metrics.messages_failed)
+        logger.info(
+            "  Success Rate: %.1f%%",
+            (
+                self.metrics.messages_sent
+                / (self.metrics.messages_sent + self.metrics.messages_failed)
+                * 100
+            ),
+        )
+        logger.info("  Throughput: %.1f msg/s", self.metrics.messages_per_second)
 
         logger.info("\nLatency Statistics (ms):")
-        logger.info("  Min: %s", self.metrics.min_latency * 1000:.2f)
-        logger.info("  Max: %s", self.metrics.max_latency * 1000:.2f)
-        logger.info("  Avg: %s", self.metrics.avg_latency * 1000:.2f)
-        logger.info("  P95: %s", self.metrics.p95_latency * 1000:.2f)
-        logger.info("  P99: %s", self.metrics.p99_latency * 1000:.2f)
+        logger.info("  Min: %.2f", self.metrics.min_latency * 1000)
+        logger.info("  Max: %.2f", self.metrics.max_latency * 1000)
+        logger.info("  Avg: %.2f", self.metrics.avg_latency * 1000)
+        logger.info("  P95: %.2f", self.metrics.p95_latency * 1000)
+        logger.info("  P99: %.2f", self.metrics.p99_latency * 1000)
 
         logger.info("\nResource Usage:")
-        logger.info("  Memory Start: %s MB", self.metrics.memory_start:.1f)
-        logger.info("  Memory Peak: %s MB", self.metrics.memory_peak:.1f)
-        logger.info("  Memory End: %s MB", self.metrics.memory_end:.1f)
-        logger.info("  Memory Growth: %s MB", self.metrics.memory_end - self.metrics.memory_start:.1f)
-        logger.info("  CPU Average: %s%", self.metrics.cpu_avg:.1f)
-        logger.info("  CPU Peak: %s%", self.metrics.cpu_peak:.1f)
+        logger.info("  Memory Start: %.1f MB", self.metrics.memory_start)
+        logger.info("  Memory Peak: %.1f MB", self.metrics.memory_peak)
+        logger.info("  Memory End: %.1f MB", self.metrics.memory_end)
+        logger.info(
+            "  Memory Growth: %.1f MB",
+            self.metrics.memory_end - self.metrics.memory_start,
+        )
+        logger.info("  CPU Average: %.1f%%", self.metrics.cpu_avg)
+        logger.info("  CPU Peak: %.1f%%", self.metrics.cpu_peak)
 
         logger.info("\nConnection Stats:")
         logger.info("  Connection Failures: %s", self.metrics.connection_failures)
-        logger.info("  Test Duration: %ss", self.metrics.test_duration:.1f)
+        logger.info("  Test Duration: %.1fs", self.metrics.test_duration)
 
     async def run_all_load_tests(self):
         """Run all load tests."""
@@ -478,10 +494,10 @@ class WebSocketLoadTester:
 
         for test_name, metrics in results.items():
             logger.info("\n%s:", test_name)
-            logger.info("  Success Rate: %s%", metrics['success_rate']:.1f)
-            logger.info("  Throughput: %s msg/s", metrics['throughput']:.1f)
-            logger.info("  Avg Latency: %s ms", metrics['latency']['avg_ms']:.2f)
-            logger.info("  Memory Growth: %s MB", metrics['memory']['growth_mb']:.1f)
+            logger.info("  Success Rate: %.1f%%", metrics["success_rate"])
+            logger.info("  Throughput: %.1f msg/s", metrics["throughput"])
+            logger.info("  Avg Latency: %.2f ms", metrics["latency"]["avg_ms"])
+            logger.info("  Memory Growth: %.1f MB", metrics["memory"]["growth_mb"])
 
             # Check for issues
             if metrics["success_rate"] < 99:

@@ -17,6 +17,9 @@ from typing import Any
 
 from .secure_logging import get_balance_operation_context
 
+# Module logger
+logger = logging.getLogger(__name__)
+
 # Import new monitoring components
 try:
     from bot.monitoring.balance_alerts import get_balance_alert_manager
@@ -24,7 +27,6 @@ try:
         get_balance_metrics_collector,
         record_operation_complete,
         record_operation_start,
-        record_timeout,
     )
 
     ENHANCED_MONITORING_AVAILABLE = True
@@ -151,7 +153,7 @@ class BalanceOperationMonitor:
             self.events.append(event)
             self.active_operations[correlation_id] = event
 
-            logger.debug(
+            self.logger.debug(
                 "Balance operation started: %s.%s",
                 component,
                 operation,
@@ -219,7 +221,7 @@ class BalanceOperationMonitor:
         async with self._lock:
             start_event = self.active_operations.pop(correlation_id, None)
             if not start_event:
-                logger.warning(
+                self.logger.warning(
                     "No start event found for correlation_id: %s",
                     correlation_id,
                     extra={"correlation_id": correlation_id, "status": status},
@@ -280,7 +282,7 @@ class BalanceOperationMonitor:
                 await self._track_error_pattern(completion_event)
 
             # Log completion
-            logger.info(
+            self.logger.info(
                 "Balance operation completed: %s.%s",
                 start_event.component,
                 start_event.operation,

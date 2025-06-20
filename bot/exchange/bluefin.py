@@ -387,22 +387,6 @@ class BluefinClient(BaseExchange):
                     await self._init_client()
                     return True
 
-            if not self.private_key and not self.dry_run:
-                logger.error(
-                    "Missing Bluefin private key. Please set BLUEFIN_PRIVATE_KEY "
-                    "environment variable."
-                )
-                raise ExchangeAuthError("Missing Bluefin private key")
-
-            logger.info("Connected to Bluefin %s successfully", self.network_name)
-
-            # Get account info if connected
-            if self._connected and self.private_key:
-                self._account_address = await self._get_account_address()
-                logger.info("Bluefin account: %s", self._account_address)
-
-            return True
-
         except Exception as e:
             logger.exception("Failed to connect to Bluefin")
             raise ExchangeConnectionError(f"Connection failed: {e}") from e

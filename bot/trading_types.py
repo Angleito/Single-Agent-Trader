@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-
-if TYPE_CHECKING:
-    from datetime import datetime
 
 
 class TradeAction(BaseModel):
@@ -349,3 +347,11 @@ OHLCVData = MarketData  # Alias for backward compatibility
 IndicatorValues = dict[str, float]  # Calculated indicator values
 MarketSnapshot = dict[str, Any]  # Complete market snapshot
 FuturesSnapshot = dict[str, Any]  # Futures-specific market snapshot
+
+# Rebuild models to ensure they're fully defined with all dependencies
+MarketData.model_rebuild()
+IndicatorData.model_rebuild()
+Position.model_rebuild()
+MarketState.model_rebuild()
+FuturesMarketState.model_rebuild()
+StablecoinDominance.model_rebuild()

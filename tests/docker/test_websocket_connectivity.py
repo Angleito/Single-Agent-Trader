@@ -306,27 +306,32 @@ class WebSocketConnectivityTester:
         logger.info("Total Tests: %s", total)
         logger.info("Passed: %s", passed)
         logger.info("Failed: %s", total - passed)
-        logger.info("Success Rate: %s%", (passed/total)*100:.1f)
+        logger.info("Success Rate: %.1f%%", (passed / total) * 100)
 
         # Print metrics
         logger.info("\nConnection Metrics:")
         if self.connection_metrics["handshake_time"]:
-            logger.info("  Handshake Time: %ss", self.connection_metrics['handshake_time']:.3f)
+            logger.info(
+                "  Handshake Time: %.3fs", self.connection_metrics["handshake_time"]
+            )
 
         if self.connection_metrics["ping_latency"]:
             avg_ping = sum(self.connection_metrics["ping_latency"]) / len(
                 self.connection_metrics["ping_latency"]
             )
-            logger.info("  Average Ping Latency: %ss", avg_ping:.3f)
+            logger.info("  Average Ping Latency: %.3fs", avg_ping)
 
         if self.connection_metrics["message_latency"]:
             avg_msg = sum(self.connection_metrics["message_latency"]) / len(
                 self.connection_metrics["message_latency"]
             )
-            logger.info("  Average Message Latency: %ss", avg_msg:.3f)
+            logger.info("  Average Message Latency: %.3fs", avg_msg)
 
         if self.connection_metrics["reconnection_time"]:
-            logger.info("  Reconnection Time: %ss", self.connection_metrics['reconnection_time']:.3f)
+            logger.info(
+                "  Reconnection Time: %.3fs",
+                self.connection_metrics["reconnection_time"],
+            )
 
         # Save results to file
         results_file = "tests/docker/results/connectivity_test_results.json"

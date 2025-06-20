@@ -21,8 +21,6 @@ try:
     # Temporarily disable backtest import to debug async issue
     # from .backtest.engine import BacktestEngine, BacktestResults, BacktestTrade
     raise ImportError("Temporarily disabled for debugging")
-
-    _BACKTEST_AVAILABLE = True
 except ImportError:
     # Create dummy classes if pandas not available
     class _BacktestEngine:

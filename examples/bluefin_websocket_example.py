@@ -21,7 +21,16 @@ logger = logging.getLogger(__name__)
 
 async def on_candle_update(candle: MarketData):
     """Callback function called when a new candle is completed."""
-    logger.info("New candle: %s @ %s | " "O: %s H: %s L: %s C: %s V: %s" ), candle.symbol, candle.timestamp, candle.open, candle.high, candle.low, candle.close, candle.volume)
+    logger.info(
+        "New candle: %s @ %s | " "O: %s H: %s L: %s C: %s V: %s",
+        candle.symbol,
+        candle.timestamp,
+        candle.open,
+        candle.high,
+        candle.low,
+        candle.close,
+        candle.volume,
+    )
 
 
 async def main():
@@ -74,16 +83,24 @@ async def main():
         # Get final statistics
         logger.info("\n=== Final Statistics ===")
         final_status = ws_client.get_status()
-        logger.info("Messages received: %s", final_status['message_count'])
-        logger.info("Errors: %s", final_status['error_count'])
-        logger.info("Candles collected: %s", final_status['candles_buffered'])
-        logger.info("Ticks collected: %s", final_status['ticks_buffered'])
+        logger.info("Messages received: %s", final_status["message_count"])
+        logger.info("Errors: %s", final_status["error_count"])
+        logger.info("Candles collected: %s", final_status["candles_buffered"])
+        logger.info("Ticks collected: %s", final_status["ticks_buffered"])
 
         # Display last few candles
         last_candles = ws_client.get_candles(limit=10)
         logger.info("\nLast %s candles:", len(last_candles))
         for candle in last_candles:
-            logger.info("  %s: O=%s H=%s " "L=%s C=%s V=%s" ), candle.timestamp, candle.open, candle.high, candle.low, candle.close, candle.volume)
+            logger.info(
+                "  %s: O=%s H=%s " "L=%s C=%s V=%s",
+                candle.timestamp,
+                candle.open,
+                candle.high,
+                candle.low,
+                candle.close,
+                candle.volume,
+            )
 
     except KeyboardInterrupt:
         logger.info("Interrupted by user")

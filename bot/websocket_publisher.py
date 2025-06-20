@@ -117,7 +117,8 @@ class WebSocketPublisher:
         }
 
         logger.info(
-            "WebSocketPublisher initialized - Primary URL: %s", self.dashboard_url
+            "WebSocketPublisher initialized - Primary URL: %s",
+            self.dashboard_url,
         )
         if self.fallback_urls:
             logger.info("Fallback URLs configured: %s", ", ".join(self.fallback_urls))
@@ -222,7 +223,9 @@ class WebSocketPublisher:
                                     )
                         except Exception as e:
                             logger.warning(
-                                "✗ Network connectivity to %s failed: %s", http_url, e
+                                "✗ Network connectivity to %s failed: %s",
+                                http_url,
+                                e,
                             )
 
                 except Exception as e:
@@ -416,7 +419,8 @@ class WebSocketPublisher:
                 if current_time - self._queue_stats["last_queue_warning"] > 30:
                     self._queue_stats["last_queue_warning"] = current_time
                     logger.warning(
-                        "Message queue full (size: %s/%s), dropping %s message. Stats: sent=%s, dropped=%s, queue_full_events=%s",
+                        "Message queue full (size: %s/%s), dropping %s message. "
+                        "Stats: sent=%s, dropped=%s, queue_full_events=%s",
                         current_queue_size,
                         self.queue_size,
                         message_type,
@@ -541,7 +545,8 @@ class WebSocketPublisher:
                                 )
                             except asyncio.QueueFull:
                                 logger.warning(
-                                    "Priority queue full, dropping priority message after connection loss"
+                                    "Priority queue full, dropping priority message "
+                                    "after connection loss"
                                 )
                         else:
                             logger.debug(

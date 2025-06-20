@@ -153,34 +153,42 @@ class ComprehensiveMonitoringSystem:
             # Test connectivity monitoring
             logger.info("Testing connectivity monitoring...")
             connectivity_status = await self.bluefin_client.get_connectivity_status()
-            logger.info("📡 Connection Status: %s", connectivity_status['connection']['connected'])
-            logger.info("📊 Success Rate: %s%", connectivity_status['metrics']['success_rate']:.1f)
+            logger.info(
+                "📡 Connection Status: %s",
+                connectivity_status["connection"]["connected"],
+            )
+            logger.info(
+                "📊 Success Rate: %.1f%%",
+                connectivity_status["metrics"]["success_rate"],
+            )
 
             # Test comprehensive connectivity test
             logger.info("Running comprehensive connectivity test...")
             connectivity_test = (
                 await self.bluefin_client.run_comprehensive_connectivity_test()
             )
-            logger.info("🧪 Connectivity Test: %s", connectivity_test['overall_status'])
+            logger.info("🧪 Connectivity Test: %s", connectivity_test["overall_status"])
 
             # Show service discovery results
             logger.info("Checking service discovery...")
             discovery_status = self.service_discovery.get_discovery_status()
-            logger.info("🔍 Services Discovered: %s", discovery_status['total_services'])
-            logger.info("💚 Healthy Services: %s", discovery_status['healthy_services'])
+            logger.info(
+                "🔍 Services Discovered: %s", discovery_status["total_services"]
+            )
+            logger.info("💚 Healthy Services: %s", discovery_status["healthy_services"])
 
             # Show performance metrics
             logger.info("Checking performance metrics...")
             metrics_summary = self.performance_collector.get_metrics_summary()
             if metrics_summary["collection_status"]["is_collecting"]:
                 logger.info("📈 Performance metrics are being collected")
-                logger.info("📊 Total Metrics: %s", metrics_summary['metrics_count'])
+                logger.info("📊 Total Metrics: %s", metrics_summary["metrics_count"])
 
             # Show auto recovery status
             logger.info("Checking auto recovery...")
             recovery_status = self.auto_recovery.get_recovery_status()
-            logger.info("🔄 Recovery Rules: %s", recovery_status['total_rules'])
-            logger.info("✅ Enabled Rules: %s", recovery_status['enabled_rules'])
+            logger.info("🔄 Recovery Rules: %s", recovery_status["total_rules"])
+            logger.info("✅ Enabled Rules: %s", recovery_status["enabled_rules"])
 
         except Exception as e:
             logger.exception("❌ Error demonstrating monitoring: %s", e)
@@ -241,8 +249,10 @@ class ComprehensiveMonitoringSystem:
             # Log summary
             if hasattr(report, "summary"):
                 summary = report.summary
-                logger.info("✅ Success Rate: %s%", summary.get('success_rate', 0):.1f)
-                logger.info("⏱️  Total Duration: %sms", summary.get('total_duration_ms', 0):.1f)
+                logger.info("✅ Success Rate: %.1f%%", summary.get("success_rate", 0))
+                logger.info(
+                    "⏱️  Total Duration: %.1fms", summary.get("total_duration_ms", 0)
+                )
 
                 # Log recommendations
                 if summary.get("recommendations"):
@@ -296,10 +306,22 @@ async def main():
             if current_time - last_status_report >= status_report_interval:
                 system_status = await monitoring_system.get_system_status()
                 logger.info("📊 System Status Update:")
-                logger.info("  🏥 Health: %s", system_status['health_monitor']['status'])
-                logger.info("  🔍 Services: %s/%s", system_status['service_discovery']['healthy_services'], system_status['service_discovery']['total_services'])
-                logger.info("  📈 Metrics: %s collected", system_status['performance_metrics']['metrics_count'])
-                logger.info("  🔄 Recoveries: %s recent", system_status['auto_recovery']['recent_recoveries'])
+                logger.info(
+                    "  🏥 Health: %s", system_status["health_monitor"]["status"]
+                )
+                logger.info(
+                    "  🔍 Services: %s/%s",
+                    system_status["service_discovery"]["healthy_services"],
+                    system_status["service_discovery"]["total_services"],
+                )
+                logger.info(
+                    "  📈 Metrics: %s collected",
+                    system_status["performance_metrics"]["metrics_count"],
+                )
+                logger.info(
+                    "  🔄 Recoveries: %s recent",
+                    system_status["auto_recovery"]["recent_recoveries"],
+                )
 
                 last_status_report = current_time
 
@@ -311,7 +333,10 @@ async def main():
                 if "error" not in diagnostic_result:
                     logger.info("✅ Periodic diagnostics completed successfully")
                 else:
-                    logger.warning("⚠️ Periodic diagnostics had issues: %s", diagnostic_result['error'])
+                    logger.warning(
+                        "⚠️ Periodic diagnostics had issues: %s",
+                        diagnostic_result["error"],
+                    )
 
                 last_diagnostic = current_time
 

@@ -328,8 +328,11 @@ class ConnectionManager:
             "error_count": 0,
         }
 
-        logger.info("WebSocket connection established from %s " "(Origin: %s). ", self.connection_metadata[websocket]['client_ip'], self.connection_metadata[websocket]['origin'])
-            f"Total connections: {len(self.active_connections)}"
+        logger.info(
+            "WebSocket connection established from %s (Origin: %s). "
+            f"Total connections: {len(self.active_connections)}",
+            self.connection_metadata[websocket]["client_ip"],
+            self.connection_metadata[websocket]["origin"],
         )
 
         # Send replay messages by category
@@ -358,7 +361,7 @@ class ConnectionManager:
         try:
             await websocket.send_text(json.dumps(status_message))
             total_sent += 1
-        except Exception as e:
+        except Exception:
             logger.exception("Error sending connection status")
             return
 
@@ -386,8 +389,10 @@ class ConnectionManager:
 
                         await websocket.send_text(json.dumps(replay_message))
                         total_sent += 1
-                    except Exception as e:
-                        logger.exception("Error sending replay message from %s", category)
+                    except Exception:
+                        logger.exception(
+                            "Error sending replay message from %s", category
+                        )
                         break
 
         # Send replay completion message
@@ -402,7 +407,7 @@ class ConnectionManager:
 
         try:
             await websocket.send_text(json.dumps(completion_message))
-        except Exception as e:
+        except Exception:
             logger.exception("Error sending replay completion")
 
         # Update connection metadata
@@ -420,7 +425,10 @@ class ConnectionManager:
         if websocket in self.connection_metadata:
             del self.connection_metadata[websocket]
 
-        logger.info("WebSocket connection closed. Total connections: %s", len(self.active_connections))
+        logger.info(
+            "WebSocket connection closed. Total connections: %s",
+            len(self.active_connections),
+        )
 
     async def broadcast(self, message: dict):
         """
@@ -455,7 +463,7 @@ class ConnectionManager:
             # Test JSON serialization
             json.dumps(message)
 
-        except (TypeError, ValueError) as e:
+        except (TypeError, ValueError):
             logger.exception("Invalid message for broadcast")
             # Create a safe fallback message
             message = {
@@ -486,7 +494,7 @@ class ConnectionManager:
             for connection in self.active_connections:
                 try:
                     await connection.send_text(json.dumps(message))
-                except Exception as e:
+                except Exception:
                     logger.exception("Error broadcasting to connection")
                     disconnected.add(connection)
 
@@ -585,9 +593,11 @@ class LogStreamer:
 
             # Stream logs in background
             self._stream_logs_task = asyncio.create_task(self._stream_logs())
-            logger.info("Started Docker-based log streaming for %s", self.container_name)
+            logger.info(
+                "Started Docker-based log streaming for %s", self.container_name
+            )
 
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to start Docker log streaming")
             logger.info("Falling back to file-based log streaming")
             await self._start_file_based_streaming()
@@ -612,9 +622,12 @@ class LogStreamer:
             if not self.file_watchers:
                 logger.warning("No log files found to watch")
             else:
-                logger.info("Started file-based log streaming for %s files", len(self.file_watchers))
+                logger.info(
+                    "Started file-based log streaming for %s files",
+                    len(self.file_watchers),
+                )
 
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to start file-based log streaming")
             self.running = False
 
@@ -654,7 +667,7 @@ class LogStreamer:
                         # No new data, sleep briefly
                         await asyncio.sleep(0.5)
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error watching log file %s", file_path)
 
     async def _stream_logs(self):
@@ -685,7 +698,7 @@ class LogStreamer:
 
                 await manager.broadcast(log_entry)
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error in log streaming")
         finally:
             self.running = False
@@ -749,7 +762,9 @@ async def lifespan(app: FastAPI):
         _delayed_startup_task = asyncio.create_task(start_log_streaming_delayed())
         logger.info("Log streamer initialization scheduled (file-based)")
     except Exception as e:
-        logger.warning("Failed to start log streamer: %s. Continuing without log streaming.", e)
+        logger.warning(
+            "Failed to start log streamer: %s. Continuing without log streaming.", e
+        )
 
     # Initialize TradingView feed with sample data for demo
     generate_sample_data()
@@ -826,7 +841,10 @@ async def lifespan(app: FastAPI):
         logger.info("Started LLM log real-time monitoring")
 
     except Exception as e:
-        logger.warning("Failed to initialize LLM log parser: %s. Continuing without LLM monitoring.", e)
+        logger.warning(
+            "Failed to initialize LLM log parser: %s. Continuing without LLM monitoring.",
+            e,
+        )
 
     yield
 
@@ -1063,7 +1081,12 @@ async def websocket_endpoint(websocket: WebSocket):
     user_agent = websocket.headers.get("user-agent", "Unknown")
     host = websocket.headers.get("host", "Unknown")
 
-    logger.info("WebSocket connection attempt - Origin: %s, Host: %s, User-Agent: %s", origin, host, user_agent)
+    logger.info(
+        "WebSocket connection attempt - Origin: %s, Host: %s, User-Agent: %s",
+        origin,
+        host,
+        user_agent,
+    )
 
     # Enhanced CORS validation for WebSocket connections
     cors_validation_passed = False
@@ -1081,15 +1104,27 @@ async def websocket_endpoint(websocket: WebSocket):
                 "ws://127.0.0.1:",
             ]
         ):
-            logger.info("WebSocket origin '%s' allowed as localhost development connection", origin)
+            logger.info(
+                "WebSocket origin '%s' allowed as localhost development connection",
+                origin,
+            )
             cors_validation_passed = True
         # Docker internal network origins
-        elif origin.startswith(("http://dashboard-frontend", "http://dashboard-backend")):
-            logger.info("WebSocket origin '%s' allowed as container network connection", origin)
+        elif origin.startswith(
+            ("http://dashboard-frontend", "http://dashboard-backend")
+        ):
+            logger.info(
+                "WebSocket origin '%s' allowed as container network connection", origin
+            )
             cors_validation_passed = True
         else:
-            logger.warning("WebSocket origin '%s' is NOT in allowed origins list", origin)
-            logger.warning("Allowed origins: %s... (showing first 5)", ', '.join(allowed_origins[:5]))
+            logger.warning(
+                "WebSocket origin '%s' is NOT in allowed origins list", origin
+            )
+            logger.warning(
+                "Allowed origins: %s... (showing first 5)",
+                ", ".join(allowed_origins[:5]),
+            )
 
             # In development, still allow connection but log warning
             if os.getenv("ENVIRONMENT", "development") == "development":
@@ -1104,7 +1139,12 @@ async def websocket_endpoint(websocket: WebSocket):
         cors_validation_passed = True  # Allow connections without origin header
 
     # Log connection details for debugging
-    logger.info("WebSocket connection details: Host=%s, User-Agent=%s, CORS=%s", host, user_agent[:50] if user_agent else 'Unknown', 'PASS' if cors_validation_passed else 'FAIL')
+    logger.info(
+        "WebSocket connection details: Host=%s, User-Agent=%s, CORS=%s",
+        host,
+        user_agent[:50] if user_agent else "Unknown",
+        "PASS" if cors_validation_passed else "FAIL",
+    )
 
     try:
         # Accept connection with detailed logging
@@ -1151,7 +1191,11 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             # Keep connection alive and handle client messages
             data = await websocket.receive_text()
-            logger.debug("Received WebSocket message: %s%s", data[:100], '...' if len(data) > 100 else '')
+            logger.debug(
+                "Received WebSocket message: %s%s",
+                data[:100],
+                "..." if len(data) > 100 else "",
+            )
 
             # Parse and validate client message
             try:
@@ -1539,7 +1583,6 @@ async def get_trading_data():
             },
             "bluefin_data": bluefin_data if exchange_type == "bluefin" else None,
         }
-
 
     except Exception as e:
         logger.exception("Error getting trading data")
@@ -2351,7 +2394,9 @@ async def broadcast_message(message: dict):
 class BotCommand:
     """Represents a command to be sent to the trading bot."""
 
-    def __init__(self, command_type: str, parameters: dict | None = None, priority: int = 5):
+    def __init__(
+        self, command_type: str, parameters: dict | None = None, priority: int = 5
+    ):
         self.id = f"cmd_{int(time.time() * 1000000)}"
         self.command_type = command_type
         self.parameters = parameters or {}

@@ -1008,7 +1008,7 @@ class TradingEngine:
                                     if (
                                         stats["count"] >= 3
                                     ):  # Only show patterns with enough samples
-                                        logger.info(
+                                        self.logger.info(
                                             "  %s: %.1%% win rate (%s trades, avg PnL=$%.2f)",
                                             pattern,
                                             stats["success_rate"] * 100,
@@ -1178,7 +1178,7 @@ class TradingEngine:
                         self.trading_enabled = True
                     elif len(data) >= 50:
                         hours_available = (len(data) * interval_seconds) / 3600
-                        logger.warning(
+                        self.logger.warning(
                             "⚠️ Limited data available (%.2f hours, %s candles). "
                             "Starting with reduced data for scalping...",
                             hours_available,
@@ -1198,7 +1198,7 @@ class TradingEngine:
                     self.trading_enabled = True
                 elif len(data) >= 50:
                     # Fallback with warning
-                    logger.warning(
+                    self.logger.warning(
                         "⚠️ Limited historical data available: %s candles. "
                         "Indicators may be unreliable until more data is accumulated.",
                         len(data),
