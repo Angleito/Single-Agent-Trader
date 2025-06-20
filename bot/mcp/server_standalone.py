@@ -65,7 +65,7 @@ class MemoryStore:
         """List all memories."""
         return list(self.memories.values())
 
-    def query(self, _criteria: dict[str, Any]) -> list[dict[str, Any]]:
+    def query(self, criteria: dict[str, Any]) -> list[dict[str, Any]]:
         """Query memories based on criteria."""
         # Simple implementation - return all for now
         # In production, implement similarity search
@@ -132,7 +132,7 @@ async def get_experience(experience_id: str) -> dict[str, Any]:
 
 @app.post("/query")
 async def query_experiences(
-    _market_state: dict[str, Any], query_params: dict[str, Any] | None = None
+    market_state: dict[str, Any], query_params: dict[str, Any] | None = None
 ) -> dict[str, Any]:
     """Query similar experiences."""
     try:

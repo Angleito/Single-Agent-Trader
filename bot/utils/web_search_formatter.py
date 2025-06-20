@@ -178,7 +178,7 @@ class WebSearchFormatter:
         }
 
         # Content deduplication tracking
-        self._content_hashes = set()
+        self._content_hashes: set[str] = set()
 
         logger.info(
             "WebSearchFormatter initialized with %s tokens per section",
@@ -761,16 +761,15 @@ class WebSearchFormatter:
 
             if hours_old < 1:
                 return 1.0
-            elif hours_old < 6:
+            if hours_old < 6:
                 return 0.9
-            elif hours_old < 24:
+            if hours_old < 24:
                 return 0.8
-            elif hours_old < 72:
+            if hours_old < 72:
                 return 0.6
-            elif hours_old < 168:  # 1 week
+            if hours_old < 168:  # 1 week
                 return 0.4
-            else:
-                return 0.2
+            return 0.2
 
         except Exception:
             return 0.5  # Default for unparseable dates
@@ -967,10 +966,9 @@ class WebSearchFormatter:
 
         if bullish_count > bearish_count:
             return "BULLISH"
-        elif bearish_count > bullish_count:
+        if bearish_count > bullish_count:
             return "BEARISH"
-        else:
-            return "NEUTRAL"
+        return "NEUTRAL"
 
     def _estimate_token_count(self, text: str) -> int:
         """Estimate token count for text (rough approximation)."""
@@ -1227,45 +1225,42 @@ class WebSearchFormatter:
         return f"""🌐 **COMPREHENSIVE MARKET CONTEXT ANALYSIS**
 
 ⏰ **Analysis Time**: {timestamp}
-📊 **Data Sources**: {' | '.join(data_sources)}
+📊 **Data Sources**: {" | ".join(data_sources)}
 🎯 **Optimized for**: AI Trading Decision Making"""
 
     def _get_sentiment_emoji_label(self, score: float) -> str:
         """Get emoji label for sentiment score."""
         if score > 0.5:
             return "🚀 STRONGLY BULLISH"
-        elif score > 0.2:
+        if score > 0.2:
             return "📈 BULLISH"
-        elif score > -0.2:
+        if score > -0.2:
             return "😐 NEUTRAL"
-        elif score > -0.5:
+        if score > -0.5:
             return "📉 BEARISH"
-        else:
-            return "💥 STRONGLY BEARISH"
+        return "💥 STRONGLY BEARISH"
 
     def _get_confidence_emoji(self, confidence: float) -> str:
         """Get emoji for confidence level."""
         if confidence > 0.8:
             return "🎯"
-        elif confidence > 0.6:
+        if confidence > 0.6:
             return "✅"
-        elif confidence > 0.4:
+        if confidence > 0.4:
             return "⚠️"
-        else:
-            return "❓"
+        return "❓"
 
     def _get_correlation_emoji(self, correlation: float) -> str:
         """Get emoji for correlation coefficient."""
         if correlation > 0.5:
             return "📈"
-        elif correlation > 0.2:
+        if correlation > 0.2:
             return "↗️"
-        elif correlation > -0.2:
+        if correlation > -0.2:
             return "↔️"
-        elif correlation > -0.5:
+        if correlation > -0.5:
             return "↘️"
-        else:
-            return "📉"
+        return "📉"
 
     def _get_strength_emoji(self, strength: str) -> str:
         """Get emoji for correlation strength."""

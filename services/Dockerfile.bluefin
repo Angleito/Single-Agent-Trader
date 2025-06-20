@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 python:3.12-slim
+FROM --platform=linux/amd64 python:3.11-slim
 
 # Build arguments for versioning
 ARG BUILD_DATE
@@ -110,7 +110,7 @@ if [ "\$UBUNTU_DEPLOYMENT" = "true" ]; then
             exit 1
         fi
     fi
-    
+
     # Check memory usage with Ubuntu-compatible commands
     if command -v free >/dev/null 2>&1; then
         MEM_USAGE=\$(free 2>/dev/null | grep Mem | awk '{printf("%.0f", \$3/\$2 * 100.0)}' || echo "0")
