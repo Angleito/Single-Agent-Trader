@@ -1467,39 +1467,31 @@ class BluefinSDKService:
             words = original_key.split()
             if len(words) in [12, 24]:
                 logger.info(
-                    f"Detected {len(words)}-word mnemonic phrase, converting to hex format",
+                    f"Detected {len(words)}-word mnemonic phrase, keeping original format for BluefinClient",
                     extra={
                         "service_id": self.service_id,
                         "mnemonic_word_count": len(words),
-                        "conversion_type": "mnemonic_to_hex",
+                        "format_type": "mnemonic_passthrough",
                     },
                 )
-                
+
                 # Basic mnemonic validation
                 if all(word.isalpha() and len(word) > 2 for word in words):
-                    try:
-                        # For now, we'll use a placeholder hex conversion
-                        # In a real implementation, you'd use a proper BIP39 library
-                        # This is a simple hash-based approach for demonstration
-                        import hashlib
-                        mnemonic_str = " ".join(words).lower()
-                        hex_key = hashlib.sha256(mnemonic_str.encode()).hexdigest()
-                        
-                        logger.info(
-                            "Successfully converted mnemonic to hex private key",
-                            extra={
-                                "service_id": self.service_id,
-                                "original_format": "mnemonic",
-                                "converted_format": "hex",
-                                "hex_length": len(hex_key),
-                            },
-                        )
-                        self.private_key = hex_key
-                        
-                    except Exception as mnemonic_err:
-                        key_validation_errors.append(f"Mnemonic conversion failed: {mnemonic_err!s}")
+                    logger.info(
+                        "Mnemonic validation passed, will pass directly to BluefinClient",
+                        extra={
+                            "service_id": self.service_id,
+                            "original_format": "mnemonic",
+                            "client_format": "mnemonic",
+                            "word_count": len(words),
+                        },
+                    )
+                    # Keep the original mnemonic for BluefinClient - it handles BIP39 conversion internally
+                    self.private_key = original_key
                 else:
-                    key_validation_errors.append("Invalid mnemonic format: words must be alphabetic and >2 characters")
+                    key_validation_errors.append(
+                        "Invalid mnemonic format: words must be alphabetic and >2 characters"
+                    )
             else:
                 # Check minimum length for hex keys (64 hex chars = 32 bytes)
                 if len(original_key) < 64:
@@ -1530,15 +1522,18 @@ class BluefinSDKService:
                         self.private_key = clean_key
 
                 except ValueError as hex_err:
-                    key_validation_errors.append(f"Invalid hexadecimal format: {hex_err!s}")
+                    key_validation_errors.append(
+                        f"Invalid hexadecimal format: {hex_err!s}"
+                    )
 
-            # Check for common patterns that indicate invalid keys
-            if self.private_key.count("0") == len(self.private_key):
-                key_validation_errors.append("All zeros - invalid private key")
-            elif self.private_key.count("f") == len(self.private_key.replace("F", "f")):
-                key_validation_errors.append(
-                    "All 0xf values - likely invalid private key"
-                )
+            # Check for common patterns that indicate invalid keys (only for hex keys)
+            if len(words) not in [12, 24]:  # Only validate hex patterns if not a mnemonic
+                if self.private_key.count("0") == len(self.private_key):
+                    key_validation_errors.append("All zeros - invalid private key")
+                elif self.private_key.count("f") == len(self.private_key.replace("F", "f")):
+                    key_validation_errors.append(
+                        "All 0xf values - likely invalid private key"
+                    )
 
             # If any validation errors, fail initialization
             if key_validation_errors:
