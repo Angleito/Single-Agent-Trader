@@ -240,11 +240,11 @@ class CoinbaseResponseValidator:
                 )
                 return False
 
-            return True
-
         except Exception:
             logger.exception("Error validating balance response")
             return False
+        else:
+            return True
 
     def validate_order_response(self, response: dict | object) -> bool:
         """
@@ -300,11 +300,11 @@ class CoinbaseResponseValidator:
                 logger.warning("Invalid order side: %s", side)
                 return False
 
-            return True
-
         except Exception:
             logger.exception("Error validating order response")
             return False
+        else:
+            return True
 
     def validate_position_response(self, response: dict | object) -> bool:
         """

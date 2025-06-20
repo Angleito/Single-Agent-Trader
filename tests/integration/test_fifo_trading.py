@@ -359,7 +359,7 @@ class FIFOTradingTest:
             return True
 
         except Exception as e:
-            logger.error(f"\n❌ TEST FAILED: {e}", exc_info=True)
+            logger.exception("\n❌ TEST FAILED: %s", e)
             return False
 
 

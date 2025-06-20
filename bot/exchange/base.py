@@ -495,8 +495,6 @@ class BaseExchange(ABC):
                     tolerance_pct,
                 )
 
-            return result
-
         except BalanceValidationError:
             # Re-raise balance validation errors
             raise
@@ -601,8 +599,6 @@ class BaseExchange(ABC):
                 # Return the order from the executed step
                 _, _, order_result, _ = saga.completed_steps[0]
                 return order_result
-
-            return None
 
         except Exception as e:
             # Log saga failure with enhanced context

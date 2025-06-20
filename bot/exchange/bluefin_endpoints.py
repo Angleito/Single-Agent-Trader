@@ -63,12 +63,11 @@ class BluefinEndpointConfig:
         """
         if network == "mainnet":
             return cls.MAINNET_ENDPOINTS
-        elif network == "testnet":
+        if network == "testnet":
             return cls.TESTNET_ENDPOINTS
-        else:
-            raise ValueError(
-                f"Unsupported network: {network}. Must be 'mainnet' or 'testnet'"
-            )
+        raise ValueError(
+            f"Unsupported network: {network}. Must be 'mainnet' or 'testnet'"
+        )
 
     @classmethod
     def get_network_from_env(cls) -> Literal["mainnet", "testnet"]:
@@ -86,7 +85,7 @@ class BluefinEndpointConfig:
             return "mainnet"
 
         # At this point we know network is either "mainnet" or "testnet"
-        return cast(Literal["mainnet", "testnet"], network)
+        return cast("Literal['mainnet', 'testnet']", network)
 
     @classmethod
     def get_current_endpoints(cls) -> BluefinEndpoints:

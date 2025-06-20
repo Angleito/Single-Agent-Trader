@@ -283,11 +283,11 @@ class WebSocketMessageValidator:
                 logger.warning("Invalid trade side: %s", trade["side"])
                 return False
 
-            return True
-
         except Exception:
             logger.exception("Error validating trade data")
             return False
+        else:
+            return True
 
     def get_validation_stats(self) -> dict[str, Any]:
         """
@@ -350,11 +350,11 @@ class WebSocketMessageValidator:
                     )
                     return False
 
-            return True
-
         except Exception:
             logger.exception("Error in data quality validation")
             return False
+        else:
+            return True
 
     def validate_message_timing(self, message: dict) -> bool:
         """
@@ -388,11 +388,11 @@ class WebSocketMessageValidator:
                 )
                 return False
 
-            return True
-
         except Exception:
             logger.exception("Error validating message timing")
             return False
+        else:
+            return True
 
 
 class MarketDataProvider:
@@ -561,13 +561,14 @@ class MarketDataProvider:
                 logger.warning(
                     "SDK jwt_generator returned None - this should not happen with valid credentials"
                 )
-                return None
 
             except Exception:
                 logger.exception("Exception in jwt_generator.build_ws_jwt: %s")
                 import traceback
 
                 logger.debug("JWT generation traceback: %s", traceback.format_exc())
+                return None
+            else:
                 return None
 
         except Exception as e:
@@ -1898,11 +1899,11 @@ class MarketDataProvider:
                     )
                     # Don't reject, but log for monitoring
 
-            return True
-
         except Exception:
             logger.exception("Error validating market data: %s")
             return False
+        else:
+            return True
 
     def _validate_price_data(
         self, new_price: Decimal, last_price: Decimal | None
@@ -1940,11 +1941,11 @@ class MarketDataProvider:
                 )
                 return False
 
-            return True
-
         except Exception:
             logger.exception("Error validating price data: %s")
             return True  # Default to allowing data on validation error
+        else:
+            return True
 
     def _validate_data_sufficiency(self, candle_count: int) -> None:
         """

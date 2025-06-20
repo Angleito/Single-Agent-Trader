@@ -59,13 +59,12 @@ class ExchangeFactory:
 
         if exchange_type == "coinbase":
             return ExchangeFactory._create_coinbase(dry_run, **kwargs)
-        elif exchange_type == "bluefin":
+        if exchange_type == "bluefin":
             return ExchangeFactory._create_bluefin(dry_run, **kwargs)
-        else:
-            raise ValueError(
-                f"Unsupported exchange type: {exchange_type}. "
-                "Supported exchanges: coinbase, bluefin"
-            )
+        raise ValueError(
+            f"Unsupported exchange type: {exchange_type}. "
+            "Supported exchanges: coinbase, bluefin"
+        )
 
     @staticmethod
     def _create_coinbase(dry_run: bool, **kwargs: Any) -> CoinbaseClient:

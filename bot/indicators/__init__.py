@@ -13,11 +13,11 @@ from .vumanchu import CipherA, CipherB, VuManChuIndicators
 __all__ = [
     "CipherA",
     "CipherB",
-    "VuManChuIndicators",
-    "RSIMFIIndicator",
-    "StochasticRSI",
-    "SchaffTrendCycle",
     "EMAribbon",
+    "RSIMFIIndicator",
+    "SchaffTrendCycle",
+    "StochasticRSI",
+    "VuManChuIndicators",
 ]
 
 
@@ -43,8 +43,7 @@ def calculate_atr(
 
     if len(true_ranges) >= period:
         return np.mean(true_ranges[-period:])
-    else:
-        return np.mean(true_ranges) if true_ranges else 0.0
+    return np.mean(true_ranges) if true_ranges else 0.0
 
 
 def calculate_support_resistance(

@@ -327,11 +327,12 @@ class BluefinClient(BaseExchange):
             # For live trading, we rely on the supported symbols list
             # In the future, we could add a ticker API call here for real-time validation
             logger.info("Symbol %s validated for %s", bluefin_symbol, self.network_name)
-            return True
 
         except Exception:
             logger.exception("Symbol validation failed for %s", symbol)
             return False
+        else:
+            return True
 
     async def connect(self) -> bool:
         """
@@ -382,11 +383,12 @@ class BluefinClient(BaseExchange):
             self._connected = True
             self._last_health_check = datetime.now(UTC)
             await self._init_client()
-            return True
 
         except Exception as e:
             logger.exception("Failed to connect to Bluefin")
             raise ExchangeConnectionError(f"Connection failed: {e}") from e
+        else:
+            return True
 
     async def _init_client(self) -> None:
         """Initialize the Bluefin client."""
@@ -547,13 +549,14 @@ class BluefinClient(BaseExchange):
                     trade_action, bluefin_symbol, current_price
                 )
             logger.error("Unknown action: %s", trade_action.action)
-            return None
 
         except ValueError:
             logger.exception("Symbol validation error")
             return None
         except Exception:
             logger.exception("Failed to execute trade action")
+            return None
+        else:
             return None
 
     def _convert_symbol(self, symbol: str) -> str:
@@ -591,7 +594,6 @@ class BluefinClient(BaseExchange):
             logger.debug(
                 "Converted symbol %s to Bluefin format: %s", symbol, bluefin_symbol
             )
-            return bluefin_symbol
 
         except Exception:
             logger.exception("Failed to convert symbol %s", symbol)
@@ -618,6 +620,8 @@ class BluefinClient(BaseExchange):
                 "Using fallback conversion: %s -> %s", symbol, fallback_symbol
             )
             return fallback_symbol
+        else:
+            return bluefin_symbol
 
     async def _open_position(
         self, trade_action: TradeAction, symbol: str, current_price: Decimal
@@ -749,12 +753,11 @@ class BluefinClient(BaseExchange):
                     logger.exception("❌ CRITICAL ERROR placing protective orders")
                     # Continue with trade but log the critical failure
 
-                return order
-            return order
-
         except Exception:
             logger.exception("Failed to open position")
             return None
+        else:
+            return order
 
     async def _close_position(self, symbol: str) -> Order | None:
         """Close existing position."""
@@ -983,11 +986,12 @@ class BluefinClient(BaseExchange):
                     positions.append(position)
 
             logger.debug("Retrieved %s positions from Bluefin", len(positions))
-            return positions
 
         except Exception:
             logger.exception("Failed to get positions")
             return []
+        else:
+            return positions
 
     def _record_balance_operation(
         self,
@@ -1179,8 +1183,6 @@ class BluefinClient(BaseExchange):
                 except Exception as e:
                     logger.debug("Failed to record successful balance operation: %s", e)
 
-            return total_balance
-
         except (
             BalanceRetrievalError,
             BalanceServiceUnavailableError,
@@ -1258,6 +1260,8 @@ class BluefinClient(BaseExchange):
                     "error_type": type(e).__name__,
                 },
             ) from e
+        else:
+            return total_balance
 
     async def cancel_order(self, order_id: str) -> bool:
         """
@@ -1284,10 +1288,11 @@ class BluefinClient(BaseExchange):
                 logger.info("Order %s cancelled successfully", order_id)
                 return True
             logger.warning("Order %s cancellation failed", order_id)
-            return False
 
         except Exception:
             logger.exception("Failed to cancel order %s", order_id)
+            return False
+        else:
             return False
 
     async def cancel_all_orders(
@@ -1321,11 +1326,12 @@ class BluefinClient(BaseExchange):
             logger.warning(
                 "Cancel all orders not yet implemented for live Bluefin trading"
             )
-            return True  # Return True to avoid errors during shutdown
 
         except Exception:
             logger.exception("Failed to cancel all orders")
             return False
+        else:
+            return True  # Return True to avoid errors during shutdown
 
     def is_connected(self) -> bool:
         """Check if client is connected."""
