@@ -117,7 +117,6 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
 
         except Exception:
             logger.exception("Error in memory-enhanced analysis")
-        else:
             # Fall back to base implementation
             return await super().analyze_market(market_state)
 
@@ -599,7 +598,6 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
 
         except Exception:
             logger.exception("Error generating sentiment-enhanced context")
-        else:
             return "Error generating sentiment context"
 
     async def _get_financial_sentiment_context(self, market_state: MarketState) -> str:
@@ -906,7 +904,6 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
 
         except Exception:
             logger.warning("Failed to get recent experiences with sentiment")
-        else:
             return []
 
     async def _store_sentiment_data_for_learning(

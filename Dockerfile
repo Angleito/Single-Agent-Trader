@@ -2,7 +2,7 @@
 # Multi-stage build optimized for Ubuntu deployment
 
 # Build stage
-FROM --platform=linux/amd64 python:3.11-slim AS builder
+FROM --platform=linux/amd64 python:3.12-slim AS builder
 
 # Build arguments
 ARG BUILD_DATE
@@ -62,7 +62,7 @@ RUN poetry config virtualenvs.in-project true \
 # For paper trading mode, the bot works without it
 
 # Production stage
-FROM --platform=linux/amd64 python:3.11-slim AS production
+FROM --platform=linux/amd64 python:3.12-slim AS production
 
 # Copy build arguments
 ARG BUILD_DATE

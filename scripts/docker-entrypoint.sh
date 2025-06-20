@@ -31,6 +31,10 @@ readonly APP_GROUP="botuser"
 readonly APP_UID=$(id -u)
 readonly APP_GID=$(id -g)
 
+# Python environment configuration
+readonly PYTHON_PATH="/app"
+readonly BOT_MODULE="bot"
+
 # Directory configuration (path:permissions pairs)
 readonly REQUIRED_DIRS=(
     "/app/logs:775"
@@ -256,17 +260,45 @@ setup_directories() {
     return 0
 }
 
-# Verify Python environment
+# Setup Python environment variables
+setup_python_environment() {
+    log_info "Setting up Python environment..."
+
+    # Set Python environment variables
+    export PYTHONPATH="${PYTHON_PATH}"
+    export PYTHONUNBUFFERED=1
+    export PYTHONDONTWRITEBYTECODE=1
+
+    log_success "Python environment variables set:"
+    log_info "  PYTHONPATH=${PYTHONPATH}"
+    log_info "  PYTHONUNBUFFERED=${PYTHONUNBUFFERED}"
+    log_info "  PYTHONDONTWRITEBYTECODE=${PYTHONDONTWRITEBYTECODE}"
+
+    return 0
+}
+
+# Verify Python installation and environment
 verify_python_environment() {
     log_info "Verifying Python environment..."
 
     # Check Python version
-    if python --version >/dev/null 2>&1; then
-        local python_version=$(python --version 2>&1 || echo "unknown")
-        log_success "Python available: ${python_version}"
+    if ! python --version >/dev/null 2>&1; then
+        log_error "Python not available in PATH"
+        log_error "Please ensure Python is installed and available"
+        return 1
+    fi
+
+    local python_version=$(python --version 2>&1 || echo "unknown")
+    log_success "Python available: ${python_version}"
+
+    # Check Python version is 3.12+
+    local python_major=$(python -c "import sys; print(sys.version_info.major)" 2>/dev/null || echo "0")
+    local python_minor=$(python -c "import sys; print(sys.version_info.minor)" 2>/dev/null || echo "0")
+
+    if [[ "${python_major}" -lt 3 ]] || [[ "${python_major}" -eq 3 && "${python_minor}" -lt 12 ]]; then
+        log_warning "Python ${python_major}.${python_minor} detected, but Python 3.12+ is recommended"
     else
-        log_warning "Python not available in PATH"
-        # Don't return error - container might still work
+        log_success "Python version is compatible (${python_major}.${python_minor})"
     fi
 
     # Check virtual environment
@@ -275,20 +307,109 @@ verify_python_environment() {
     elif [[ -f "/app/.venv/bin/python" ]]; then
         log_success "Virtual environment available: /app/.venv"
     else
-        log_debug "No virtual environment detected (may be system Python)"
+        log_debug "No virtual environment detected (using system Python)"
     fi
 
-    # Check critical Python packages (informational only)
-    local critical_packages=("pydantic" "click" "pandas")
-    for package in "${critical_packages[@]}"; do
+    # Verify working directory
+    if [[ ! -d "${PYTHON_PATH}" ]]; then
+        log_error "Python path directory does not exist: ${PYTHON_PATH}"
+        return 1
+    fi
+
+    if [[ ! -r "${PYTHON_PATH}" ]]; then
+        log_error "Python path directory is not readable: ${PYTHON_PATH}"
+        return 1
+    fi
+
+    log_success "Python environment verification completed"
+    return 0
+}
+
+# Check critical Python dependencies
+check_python_dependencies() {
+    log_info "Checking critical Python dependencies..."
+
+    local critical_packages=(
+        "pydantic:Configuration validation"
+        "click:CLI interface"
+        "pandas:Data analysis"
+        "numpy:Numerical computations"
+        "aiohttp:HTTP client"
+        "websockets:WebSocket connections"
+        "langchain:LLM integration"
+        "openai:OpenAI API client"
+    )
+
+    local missing_packages=()
+    local available_count=0
+
+    for package_info in "${critical_packages[@]}"; do
+        local package="${package_info%:*}"
+        local description="${package_info#*:}"
+
         if python -c "import ${package}" 2>/dev/null; then
-            log_debug "Package available: ${package}"
+            log_debug "✓ ${package} (${description})"
+            ((available_count++))
         else
-            log_debug "Package not immediately available: ${package}"
+            log_warning "✗ ${package} (${description}) - NOT AVAILABLE"
+            missing_packages+=("${package}")
         fi
     done
 
-    # Always succeed - Python issues will be caught at runtime
+    local total_packages=${#critical_packages[@]}
+    log_info "Dependencies check: ${available_count}/${total_packages} critical packages available"
+
+    if [[ ${#missing_packages[@]} -gt 0 ]]; then
+        log_warning "Missing packages: ${missing_packages[*]}"
+        log_warning "The bot may not function correctly without these dependencies"
+        return 1
+    else
+        log_success "All critical dependencies are available"
+        return 0
+    fi
+}
+
+# Validate bot module can be imported
+validate_bot_module() {
+    log_info "Validating bot module can be imported..."
+
+    # Check if bot module directory exists
+    if [[ ! -d "${PYTHON_PATH}/${BOT_MODULE}" ]]; then
+        log_error "Bot module directory not found: ${PYTHON_PATH}/${BOT_MODULE}"
+        log_error "Expected directory structure:"
+        log_error "  ${PYTHON_PATH}/"
+        log_error "  ├── ${BOT_MODULE}/"
+        log_error "  │   ├── __init__.py"
+        log_error "  │   └── main.py"
+        return 1
+    fi
+
+    # Check if __init__.py exists
+    if [[ ! -f "${PYTHON_PATH}/${BOT_MODULE}/__init__.py" ]]; then
+        log_error "Bot module __init__.py not found: ${PYTHON_PATH}/${BOT_MODULE}/__init__.py"
+        return 1
+    fi
+
+    # Try to import the bot module
+    if ! python -c "import ${BOT_MODULE}" 2>/dev/null; then
+        log_error "Failed to import bot module"
+        log_error "Python import error details:"
+        python -c "import ${BOT_MODULE}" 2>&1 | while IFS= read -r line; do
+            log_error "  ${line}"
+        done
+        return 1
+    fi
+
+    log_success "Bot module imported successfully"
+
+    # Check if main module exists and can be imported
+    if python -c "import ${BOT_MODULE}.main" 2>/dev/null; then
+        log_success "Bot main module validated"
+    else
+        log_warning "Bot main module could not be imported"
+        log_warning "This may cause issues when starting the application"
+    fi
+
     return 0
 }
 
@@ -299,22 +420,23 @@ setup_environment() {
     case "${ENVIRONMENT}" in
         "development")
             log_info "Development environment setup"
-            export PYTHONDONTWRITEBYTECODE=1
-            export PYTHONUNBUFFERED=1
+            export PYTHONOPTIMIZE=0
+            export DEBUG=true
             ;;
         "production")
             log_info "Production environment setup"
-            export PYTHONDONTWRITEBYTECODE=1
-            export PYTHONUNBUFFERED=1
             export PYTHONOPTIMIZE=1
+            export DEBUG=false
             ;;
         "testing")
             log_info "Testing environment setup"
             export TESTING=true
             export DEBUG=false
+            export PYTHONOPTIMIZE=0
             ;;
         *)
             log_warning "Unknown environment: ${ENVIRONMENT}, using defaults"
+            export PYTHONOPTIMIZE=0
             ;;
     esac
 
@@ -324,6 +446,79 @@ setup_environment() {
     else
         log_warning "LIVE TRADING MODE DETECTED (SYSTEM__DRY_RUN=false)"
         log_warning "This will place real trades with real money!"
+    fi
+
+    return 0
+}
+
+# Enhanced startup validation
+perform_startup_validation() {
+    log_info "Performing comprehensive startup validation..."
+
+    local validation_errors=()
+    local validation_warnings=()
+
+    # Check if we can create a simple Python script and run it
+    local test_script="/tmp/python_test_$$"
+    cat > "${test_script}" << 'EOF'
+import sys
+import os
+print(f"Python {sys.version}")
+print(f"Working directory: {os.getcwd()}")
+print(f"Python path: {sys.path}")
+EOF
+
+    if python "${test_script}" >/dev/null 2>&1; then
+        log_success "Python execution test passed"
+        rm -f "${test_script}"
+    else
+        log_error "Python execution test failed"
+        validation_errors+=("Python execution test failed")
+        rm -f "${test_script}"
+    fi
+
+    # Validate environment variables
+    local required_env_vars=("PYTHONPATH" "PYTHONUNBUFFERED" "PYTHONDONTWRITEBYTECODE")
+    for env_var in "${required_env_vars[@]}"; do
+        if [[ -n "${!env_var:-}" ]]; then
+            log_debug "✓ ${env_var}=${!env_var}"
+        else
+            log_warning "Environment variable not set: ${env_var}"
+            validation_warnings+=("Missing environment variable: ${env_var}")
+        fi
+    done
+
+    # Check for configuration files
+    local config_files=("config/development.json" "config/production.json" "prompts")
+    for config_path in "${config_files[@]}"; do
+        local full_path="${PYTHON_PATH}/${config_path}"
+        if [[ -e "${full_path}" ]]; then
+            log_debug "✓ Configuration exists: ${config_path}"
+        else
+            log_warning "Configuration missing: ${config_path}"
+            validation_warnings+=("Missing configuration: ${config_path}")
+        fi
+    done
+
+    # Summary
+    local error_count=${#validation_errors[@]}
+    local warning_count=${#validation_warnings[@]}
+
+    if [[ ${error_count} -gt 0 ]]; then
+        log_error "Startup validation failed with ${error_count} error(s):"
+        for error in "${validation_errors[@]}"; do
+            log_error "  - ${error}"
+        done
+        return 1
+    fi
+
+    if [[ ${warning_count} -gt 0 ]]; then
+        log_warning "Startup validation completed with ${warning_count} warning(s):"
+        for warning in "${validation_warnings[@]}"; do
+            log_warning "  - ${warning}"
+        done
+    else
+        log_success "Startup validation completed with no issues"
     fi
 
     return 0
@@ -372,11 +567,99 @@ perform_health_checks() {
     return 0
 }
 
+# Generate troubleshooting report
+generate_troubleshooting_report() {
+    log_error "==================== TROUBLESHOOTING REPORT ===================="
+    log_error "Container startup failed. Here's diagnostic information:"
+    log_error ""
+
+    # System information
+    log_error "System Information:"
+    log_error "  Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+    log_error "  Container ID: ${HOSTNAME:-unknown}"
+    log_error "  User: $(whoami 2>/dev/null || echo 'unknown') ($(id -u):$(id -g))"
+    log_error "  Shell: ${SHELL:-unknown}"
+    log_error "  Working Directory: $(pwd 2>/dev/null || echo 'unknown')"
+    log_error ""
+
+    # Environment variables
+    log_error "Critical Environment Variables:"
+    local env_vars=("PYTHONPATH" "PYTHONUNBUFFERED" "PYTHONDONTWRITEBYTECODE" "SYSTEM__ENVIRONMENT" "SYSTEM__DRY_RUN" "EXCHANGE__EXCHANGE_TYPE")
+    for var in "${env_vars[@]}"; do
+        log_error "  ${var}=${!var:-'<not set>'}"
+    done
+    log_error ""
+
+    # Python information
+    log_error "Python Environment:"
+    if command -v python >/dev/null 2>&1; then
+        log_error "  Python Path: $(command -v python)"
+        log_error "  Python Version: $(python --version 2>&1 || echo 'unknown')"
+        log_error "  Python Executable: $(python -c 'import sys; print(sys.executable)' 2>/dev/null || echo 'unknown')"
+        log_error "  Python Path: $(python -c 'import sys; print(sys.path)' 2>/dev/null || echo 'unknown')"
+    else
+        log_error "  Python: NOT FOUND"
+    fi
+    log_error ""
+
+    # Directory structure
+    log_error "Directory Structure:"
+    if [[ -d "/app" ]]; then
+        log_error "  /app directory exists"
+        log_error "  /app contents:"
+        ls -la /app 2>/dev/null | head -20 | while IFS= read -r line; do
+            log_error "    ${line}"
+        done
+
+        if [[ -d "/app/bot" ]]; then
+            log_error "  /app/bot directory exists"
+            log_error "  /app/bot contents:"
+            ls -la /app/bot 2>/dev/null | head -10 | while IFS= read -r line; do
+                log_error "    ${line}"
+            done
+        else
+            log_error "  /app/bot directory: NOT FOUND"
+        fi
+    else
+        log_error "  /app directory: NOT FOUND"
+    fi
+    log_error ""
+
+    # Permissions
+    log_error "Permission Issues:"
+    local test_dirs=("/app" "/app/logs" "/app/data" "/app/bot")
+    for dir in "${test_dirs[@]}"; do
+        if [[ -d "${dir}" ]]; then
+            local perms=$(ls -ld "${dir}" 2>/dev/null | awk '{print $1,$3,$4}' || echo "unknown")
+            log_error "  ${dir}: ${perms}"
+        else
+            log_error "  ${dir}: NOT FOUND"
+        fi
+    done
+    log_error ""
+
+    # Common solutions
+    log_error "Common Solutions:"
+    log_error "  1. Ensure the container has the correct user permissions:"
+    log_error "     ./setup-docker-permissions.sh"
+    log_error "  2. Check that all required directories exist in the container:"
+    log_error "     docker-compose build --no-cache"
+    log_error "  3. Verify Python and dependencies are installed:"
+    log_error "     poetry install"
+    log_error "  4. Check the Dockerfile builds correctly:"
+    log_error "     docker build -t ai-trading-bot ."
+    log_error "  5. Run the container with debug enabled:"
+    log_error "     docker run -e DEBUG=true ai-trading-bot"
+    log_error ""
+    log_error "=============================================================="
+}
+
 # Cleanup function for graceful shutdown
 cleanup() {
     local exit_code=$?
     if [[ ${exit_code} -ne 0 ]]; then
         log_error "Container initialization failed with exit code: ${exit_code}"
+        generate_troubleshooting_report
     else
         log_success "Container initialization completed successfully"
     fi
@@ -396,25 +679,69 @@ main() {
     # Run initialization steps
     log_info "Starting container initialization..."
 
-    check_user  # Always succeeds now
+    # Step 1: Check user (always succeeds)
+    check_user
 
-    setup_directories  # Always succeeds now
+    # Step 2: Setup directories (always succeeds with fallbacks)
+    setup_directories
 
-    # These steps are now resilient and won't fail the container startup
-    if ! verify_python_environment; then
-        log_warning "Python environment issues detected, but continuing..."
+    # Step 3: Setup Python environment variables (required)
+    if ! setup_python_environment; then
+        log_error "Failed to setup Python environment variables"
+        return 1
     fi
 
+    # Step 4: Verify Python installation (critical)
+    if ! verify_python_environment; then
+        log_error "Python environment verification failed"
+        log_error "Cannot proceed without a working Python installation"
+        return 1
+    fi
+
+    # Step 5: Check Python dependencies (warning if missing)
+    if ! check_python_dependencies; then
+        log_warning "Some Python dependencies are missing, but continuing..."
+        log_warning "The bot may not function correctly without all dependencies"
+    fi
+
+    # Step 6: Validate bot module import (critical)
+    if ! validate_bot_module; then
+        log_error "Bot module validation failed"
+        log_error "Cannot start the application without the bot module"
+        return 1
+    fi
+
+    # Step 7: Setup environment-specific configuration
     if ! setup_environment; then
         log_warning "Environment setup issues detected, but continuing..."
     fi
 
+    # Step 8: Perform comprehensive startup validation
+    if ! perform_startup_validation; then
+        log_error "Startup validation failed"
+        log_error "Critical issues detected that prevent safe startup"
+        return 1
+    fi
+
+    # Step 9: Health checks (informational)
     if ! perform_health_checks; then
         log_warning "Health checks reported issues, but continuing..."
     fi
 
     log_success "Container initialization completed successfully"
     log_info "Starting application with command: $*"
+    log_info "Working directory: $(pwd)"
+    log_info "Python path: ${PYTHONPATH}"
+
+    # Final pre-execution check
+    if [[ $# -eq 0 ]]; then
+        log_error "No command provided to execute"
+        log_error "Usage: docker run <image> <command> [args...]"
+        return 1
+    fi
+
+    # Log the final command being executed
+    log_info "Executing: $*"
 
     # Execute the original command
     exec "$@"

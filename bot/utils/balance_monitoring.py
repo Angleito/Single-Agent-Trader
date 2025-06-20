@@ -11,6 +11,7 @@ import contextlib
 import logging
 import time
 from collections import defaultdict, deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -32,10 +33,10 @@ try:
     ENHANCED_MONITORING_AVAILABLE = True
 except ImportError:
     ENHANCED_MONITORING_AVAILABLE = False
-    get_balance_alert_manager = None
-    get_balance_metrics_collector = None
-    record_operation_complete = None
-    record_operation_start = None
+    get_balance_alert_manager: Callable | None = None
+    get_balance_metrics_collector: Callable | None = None
+    record_operation_complete: Callable | None = None
+    record_operation_start: Callable | None = None
 
 
 @dataclass
@@ -66,7 +67,7 @@ class PerformanceMetrics:
     max_response_time: float = 0.0
     p95_response_time: float = 0.0
     p99_response_time: float = 0.0
-    response_times: deque = field(default_factory=lambda: deque(maxlen=1000))
+    response_times: deque[float] = field(default_factory=lambda: deque(maxlen=1000))
     error_counts_by_category: dict[str, int] = field(default_factory=dict)
     last_updated: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -91,7 +92,7 @@ class BalanceOperationMonitor:
         self.metrics_window_minutes = metrics_window_minutes
 
         # Event storage and correlation
-        self.events: deque = deque(maxlen=max_events)
+        self.events: deque[BalanceOperationEvent] = deque(maxlen=max_events)
         self.active_operations: dict[str, BalanceOperationEvent] = {}
         self.completed_operations: dict[str, list[BalanceOperationEvent]] = defaultdict(
             list
@@ -694,7 +695,7 @@ def get_prometheus_metrics() -> list[str]:
     return []
 
 
-async def trigger_alert_evaluation() -> list:
+async def trigger_alert_evaluation() -> list[Any]:
     """Trigger alert evaluation if alerting is available."""
     if ENHANCED_MONITORING_AVAILABLE:
         try:

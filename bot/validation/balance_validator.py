@@ -10,7 +10,7 @@ import logging
 from dataclasses import field
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_EVEN, Decimal, getcontext
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, NoReturn
 
 # Set decimal precision for financial calculations
 getcontext().prec = 28
@@ -228,21 +228,21 @@ class BalanceValidator:
             )
 
             # Validate percentage change
-            def _raise_excessive_change_pct_error(error_msg: str) -> None:
+            def _raise_excessive_change_pct_error(error_msg: str) -> NoReturn:
                 raise BalanceValidationError(
                     error_msg,
                     error_code="EXCESSIVE_CHANGE_PCT",
                     validation_type="change",
                 )
 
-            def _raise_excessive_change_abs_error(error_msg: str) -> None:
+            def _raise_excessive_change_abs_error(error_msg: str) -> NoReturn:
                 raise BalanceValidationError(
                     error_msg,
                     error_code="EXCESSIVE_CHANGE_ABS",
                     validation_type="change",
                 )
 
-            def _raise_impossible_change_error(error_msg: str) -> None:
+            def _raise_impossible_change_error(error_msg: str) -> NoReturn:
                 raise BalanceValidationError(
                     error_msg, error_code="IMPOSSIBLE_CHANGE", validation_type="change"
                 )
@@ -281,7 +281,9 @@ class BalanceValidator:
             raise
         except Exception as e:
 
-            def _raise_change_validation_error(error_msg: str, e: Exception) -> None:
+            def _raise_change_validation_error(
+                error_msg: str, e: Exception
+            ) -> NoReturn:
                 raise BalanceValidationError(
                     error_msg, error_code="VALIDATION_ERROR", validation_type="change"
                 ) from e
@@ -893,19 +895,19 @@ class BalanceValidator:
         )
         self.last_validation_time = datetime.now(UTC)
 
-    def _raise_balance_below_min(self, error_msg: str) -> None:
+    def _raise_balance_below_min(self, error_msg: str) -> NoReturn:
         """Raise error for balance below minimum threshold."""
         raise BalanceValidationError(
             error_msg, error_code="BALANCE_BELOW_MIN", validation_type="range"
         )
 
-    def _raise_balance_above_max(self, error_msg: str) -> None:
+    def _raise_balance_above_max(self, error_msg: str) -> NoReturn:
         """Raise error for balance above maximum threshold."""
         raise BalanceValidationError(
             error_msg, error_code="BALANCE_ABOVE_MAX", validation_type="range"
         )
 
-    def _raise_negative_balance(self, error_msg: str) -> None:
+    def _raise_negative_balance(self, error_msg: str) -> NoReturn:
         """Raise error for negative balance."""
         raise BalanceValidationError(
             error_msg, error_code="NEGATIVE_BALANCE", validation_type="range"
@@ -913,7 +915,7 @@ class BalanceValidator:
 
     def _raise_validation_error(
         self, error_msg: str, validation_type: str, cause: Exception
-    ) -> None:
+    ) -> NoReturn:
         """Raise general validation error."""
         raise BalanceValidationError(
             error_msg, error_code="VALIDATION_ERROR", validation_type=validation_type

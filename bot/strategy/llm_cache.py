@@ -125,7 +125,6 @@ class MarketStateHasher:
 
         except Exception:
             logger.exception("Error generating cache key")
-        else:
             # Return timestamp-based key as fallback
             return hashlib.sha256(
                 f"fallback_{time.time()}".encode(), usedforsecurity=False

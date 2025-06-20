@@ -247,7 +247,7 @@ class BluefinServiceClient:
         error: str | None = None,
         duration_ms: float | None = None,
         response_size: int | None = None,
-        metadata: dict | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """
         Record balance operation in client audit trail.
@@ -359,8 +359,8 @@ class BluefinServiceClient:
         error: Exception,
         duration_ms: float | None = None,
         endpoint: str | None = None,
-        additional_context: dict | None = None,
-    ) -> dict:
+        additional_context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """
         Generate comprehensive error context for balance operations.
 
@@ -467,11 +467,11 @@ class BluefinServiceClient:
         # Default to retry for unknown errors
         return True
 
-    def get_balance_audit_trail(self, limit: int = 50) -> list[dict]:
+    def get_balance_audit_trail(self, limit: int = 50) -> list[dict[str, Any]]:
         """Get recent balance operation audit trail."""
         return self.balance_operation_audit[-limit:]
 
-    def get_balance_performance_summary(self) -> dict:
+    def get_balance_performance_summary(self) -> dict[str, Any]:
         """Get balance operation performance summary."""
         metrics = self.balance_performance_metrics.copy()
 
@@ -1426,8 +1426,6 @@ class BluefinServiceClient:
                 operation="get_user_positions",
             )
             return []
-        else:
-            return positions
 
     async def place_order(self, order_data: dict[str, Any]) -> dict[str, Any]:
         """
@@ -1536,8 +1534,6 @@ class BluefinServiceClient:
                 operation="cancel_order",
             )
             return False
-        else:
-            return True
 
     async def get_market_ticker(self, symbol: str) -> dict[str, Any]:
         """
@@ -1640,8 +1636,6 @@ class BluefinServiceClient:
                 operation="set_leverage",
             )
             return False
-        else:
-            return True
 
     async def get_candlestick_data(self, params: dict[str, Any]) -> list[list[Any]]:
         """

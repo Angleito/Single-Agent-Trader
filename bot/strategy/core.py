@@ -100,7 +100,6 @@ class CoreStrategy:
 
         except Exception:
             logger.exception("Strategy health check error")
-        else:
             return False
 
     async def _reset_strategy_state(self, _component_name: str, _health: Any) -> None:
@@ -154,7 +153,6 @@ class CoreStrategy:
 
         except Exception:
             logger.exception("Error in core strategy analysis")
-        else:
             return self._get_safe_action()
 
     def _get_market_bias(self, indicators: IndicatorData) -> str:

@@ -91,46 +91,151 @@ from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-# Third-party imports
-import click
-from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
+# Third-party imports with error handling
+try:
+    import click
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+except ImportError as e:
+    print(f"❌ Critical dependency missing: {e}")
+    print("Install with: pip install click rich")
+    sys.exit(1)
 
-from .command_consumer import CommandConsumer
+# Initialize console early for error reporting
+console = Console()
 
-# Local imports
-from .config import Settings, create_settings
-from .data.dominance import DominanceDataProvider
-from .data.market import MarketDataProvider
-from .websocket_publisher import WebSocketPublisher
+# Startup diagnostics
+_startup_errors: list[str] = []
+_startup_warnings: list[str] = []
 
+
+def _safe_import(
+    module_path: str, class_name: str | None = None, required: bool = True
+) -> Any:
+    """Safely import a module or class with error handling."""
+    try:
+        # Handle relative imports by converting to absolute
+        if module_path.startswith("."):
+            # Convert relative to absolute import
+            full_module_path = f"bot{module_path}"
+        else:
+            full_module_path = module_path
+
+        if class_name:
+            module = __import__(full_module_path, fromlist=[class_name])
+            return getattr(module, class_name)
+        return __import__(full_module_path)
+    except ImportError as e:
+        error_msg = f"Failed to import {class_name or module_path}: {e}"
+        if required:
+            _startup_errors.append(error_msg)
+            console.print(f"❌ {error_msg}", style="red")
+            return None
+        _startup_warnings.append(error_msg)
+        console.print(f"⚠️  {error_msg}", style="yellow")
+        return None
+    except Exception as e:
+        error_msg = f"Unexpected error importing {class_name or module_path}: {e}"
+        if required:
+            _startup_errors.append(error_msg)
+            console.print(f"❌ {error_msg}", style="red")
+            return None
+        _startup_warnings.append(error_msg)
+        console.print(f"⚠️  {error_msg}", style="yellow")
+        return None
+
+
+# Core imports (required for basic functionality)
+try:
+    from .config import Settings, create_settings
+    from .trading_types import MarketState, Position, TradeAction
+    from .utils import setup_warnings_suppression
+    from .validator import TradeValidator
+except ImportError as e:
+    console.print(f"❌ Critical core component missing: {e}", style="red")
+    console.print("Bot cannot start without core components", style="red")
+    sys.exit(1)
+
+# Essential trading components
+try:
+    from .exchange.factory import ExchangeFactory
+    from .paper_trading import PaperTradingAccount
+    from .position_manager import PositionManager
+    from .risk import RiskManager
+except ImportError as e:
+    console.print(f"❌ Essential trading component missing: {e}", style="red")
+    _startup_errors.append(f"Essential trading component missing: {e}")
+
+# Market data providers
+MarketDataProvider = _safe_import(".data.market", "MarketDataProvider", required=True)
+DominanceDataProvider = _safe_import(
+    ".data.dominance", "DominanceDataProvider", required=False
+)
+
+# WebSocket and command handling
+WebSocketPublisher = _safe_import(
+    ".websocket_publisher", "WebSocketPublisher", required=False
+)
+CommandConsumer = _safe_import(".command_consumer", "CommandConsumer", required=False)
+
+# Type checking imports
 if TYPE_CHECKING:
     from .data.bluefin_market import BluefinMarketDataProvider
 
-    # Union type for all possible market data providers
     MarketDataProviderType = MarketDataProvider | BluefinMarketDataProvider | None
-else:
+elif MarketDataProvider is not None:
     MarketDataProviderType = MarketDataProvider | None
+else:
+    MarketDataProviderType = None
+
 import contextlib
 
-from .exchange.factory import ExchangeFactory
-from .indicators.vumanchu import VuManChuIndicators
-from .learning.experience_manager import ExperienceManager
-from .logging.trade_logger import TradeLogger
-from .mcp.memory_server import MCPMemoryServer
-from .mcp.omnisearch_client import OmniSearchClient
-from .paper_trading import PaperTradingAccount
-from .performance_monitor import PerformanceMonitor, PerformanceThresholds
-from .position_manager import PositionManager
-from .risk import RiskManager
-from .strategy.llm_agent import LLMAgent
-from .strategy.memory_enhanced_agent import MemoryEnhancedLLMAgent
-from .trading_types import MarketState, Position, TradeAction
-from .utils import setup_warnings_suppression
-from .validator import TradeValidator
+# Lazy loading for heavy components
+_lazy_imports = {
+    "VuManChuIndicators": (".indicators.vumanchu", "VuManChuIndicators"),
+    "LLMAgent": (".strategy.llm_agent", "LLMAgent"),
+    "MemoryEnhancedLLMAgent": (
+        ".strategy.memory_enhanced_agent",
+        "MemoryEnhancedLLMAgent",
+    ),
+    "ExperienceManager": (".learning.experience_manager", "ExperienceManager"),
+    "MCPMemoryServer": (".mcp.memory_server", "MCPMemoryServer"),
+    "OmniSearchClient": (".mcp.omnisearch_client", "OmniSearchClient"),
+    "TradeLogger": (".logging.trade_logger", "TradeLogger"),
+    "PerformanceMonitor": (".performance_monitor", "PerformanceMonitor"),
+    "PerformanceThresholds": (".performance_monitor", "PerformanceThresholds"),
+}
 
-console = Console()
+
+def _get_lazy_import(name: str) -> Any:
+    """Get a lazily imported component."""
+    if name not in _lazy_imports:
+        raise ValueError(f"Unknown lazy import: {name}")
+
+    module_path, class_name = _lazy_imports[name]
+    return _safe_import(module_path, class_name, required=False)
+
+
+def _check_startup_health() -> None:
+    """Check startup health and display diagnostics."""
+    if _startup_errors:
+        console.print("❌ Startup errors detected:", style="red bold")
+        for error in _startup_errors:
+            console.print(f"  • {error}", style="red")
+        console.print(
+            "\n🔧 Please fix these errors before starting the bot", style="yellow"
+        )
+        sys.exit(1)
+
+    if _startup_warnings:
+        console.print(
+            "⚠️  Startup warnings (bot will continue with reduced functionality):",
+            style="yellow bold",
+        )
+        for warning in _startup_warnings:
+            console.print(f"  • {warning}", style="yellow")
+        console.print("")
 
 
 class TradingEngine:
@@ -214,12 +319,24 @@ class TradingEngine:
             self.paper_account = PaperTradingAccount(starting_balance=balance)
 
     def _initialize_core_components(self):
-        """Initialize core trading components."""
+        """Initialize core trading components with error handling."""
         # Initialize components (market data will be initialized after exchange connection)
         self.market_data: MarketDataProviderType = None
+
+        # Initialize VuManChu indicators with lazy loading
         self.logger.debug("About to initialize VuManChu indicators...")
-        self.indicator_calc = VuManChuIndicators()
-        self.logger.debug("VuManChu indicators initialized successfully")
+        try:
+            VuManChuIndicators = _get_lazy_import("VuManChuIndicators")
+            if VuManChuIndicators:
+                self.indicator_calc = VuManChuIndicators()
+                self.logger.debug("VuManChu indicators initialized successfully")
+            else:
+                self.logger.warning("VuManChu indicators unavailable - using fallback")
+                self.indicator_calc = None
+        except Exception as e:
+            self.logger.warning("Failed to initialize VuManChu indicators: %s", e)
+            self.indicator_calc = None
+
         self.actual_trading_symbol = (
             self.symbol
         )  # Will be updated if futures are enabled
@@ -244,22 +361,29 @@ class TradingEngine:
         if self.settings.omnisearch.enabled:
             self.logger.info("OmniSearch integration enabled, initializing client...")
             try:
-                self.omnisearch_client = OmniSearchClient(
-                    server_url=self.settings.omnisearch.server_url,
-                    api_key=(
-                        self.settings.omnisearch.api_key.get_secret_value()
-                        if self.settings.omnisearch.api_key
-                        else None
-                    ),
-                    enable_cache=True,
-                    cache_ttl=self.settings.omnisearch.cache_ttl_seconds,
-                    rate_limit_requests=self.settings.omnisearch.rate_limit_requests_per_minute,
-                    rate_limit_window=60,
-                )
-                self.logger.info("Successfully initialized OmniSearch client")
-            except Exception:
-                self.logger.exception("Failed to initialize OmniSearch client")
-                self.logger.warning("Continuing without OmniSearch integration")
+                OmniSearchClient = _get_lazy_import("OmniSearchClient")
+                if OmniSearchClient:
+                    self.omnisearch_client = OmniSearchClient(
+                        server_url=self.settings.omnisearch.server_url,
+                        api_key=(
+                            self.settings.omnisearch.api_key.get_secret_value()
+                            if self.settings.omnisearch.api_key
+                            else None
+                        ),
+                        enable_cache=True,
+                        cache_ttl=self.settings.omnisearch.cache_ttl_seconds,
+                        rate_limit_requests=self.settings.omnisearch.rate_limit_requests_per_minute,
+                        rate_limit_window=60,
+                    )
+                    self.logger.info("Successfully initialized OmniSearch client")
+                else:
+                    self.logger.warning(
+                        "OmniSearch client unavailable - feature disabled"
+                    )
+                    self.omnisearch_client = None
+            except Exception as e:
+                self.logger.warning("Failed to initialize OmniSearch client: %s", e)
+                self.logger.info("Continuing without OmniSearch integration")
                 self.omnisearch_client = None
 
     def _initialize_websocket_components(self):
@@ -273,11 +397,17 @@ class TradingEngine:
         if self.settings.system.enable_websocket_publishing:
             self.logger.info("WebSocket publishing enabled, initializing publisher...")
             try:
-                self.websocket_publisher = WebSocketPublisher(self.settings)
-                self.logger.info("WebSocketPublisher initialized successfully")
-            except Exception:
-                self.logger.exception("Failed to initialize WebSocket publisher")
-                self.logger.warning("Continuing without WebSocket publishing")
+                if WebSocketPublisher:
+                    self.websocket_publisher = WebSocketPublisher(self.settings)
+                    self.logger.info("WebSocketPublisher initialized successfully")
+                else:
+                    self.logger.warning(
+                        "WebSocket publisher unavailable - feature disabled"
+                    )
+                    self.websocket_publisher = None
+            except Exception as e:
+                self.logger.warning("Failed to initialize WebSocket publisher: %s", e)
+                self.logger.info("Continuing without WebSocket publishing")
                 self.websocket_publisher = None
 
     def _initialize_command_consumer(self):
@@ -288,12 +418,18 @@ class TradingEngine:
                 "Dashboard control enabled, initializing command consumer..."
             )
             try:
-                self.command_consumer = CommandConsumer()
-                self._register_command_callbacks()
-                self.logger.info("Successfully initialized command consumer")
-            except Exception:
-                self.logger.exception("Failed to initialize command consumer")
-                self.logger.warning("Continuing without dashboard control")
+                if CommandConsumer:
+                    self.command_consumer = CommandConsumer()
+                    self._register_command_callbacks()
+                    self.logger.info("Successfully initialized command consumer")
+                else:
+                    self.logger.warning(
+                        "Command consumer unavailable - dashboard control disabled"
+                    )
+                    self.command_consumer = None
+            except Exception as e:
+                self.logger.warning("Failed to initialize command consumer: %s", e)
+                self.logger.info("Continuing without dashboard control")
                 self.command_consumer = None
 
     def _initialize_llm_agent(self):
@@ -309,6 +445,17 @@ class TradingEngine:
         """Initialize memory-enhanced LLM agent with MCP support."""
         self.logger.info("MCP memory system enabled, initializing components...")
         try:
+            MCPMemoryServer = _get_lazy_import("MCPMemoryServer")
+            ExperienceManager = _get_lazy_import("ExperienceManager")
+            MemoryEnhancedLLMAgent = _get_lazy_import("MemoryEnhancedLLMAgent")
+
+            if not all([MCPMemoryServer, ExperienceManager, MemoryEnhancedLLMAgent]):
+                self.logger.warning(
+                    "MCP components unavailable - falling back to standard agent"
+                )
+                self._initialize_standard_agent()
+                return
+
             self.memory_server = MCPMemoryServer(
                 server_url=self.settings.mcp.server_url,
                 api_key=(
@@ -328,18 +475,31 @@ class TradingEngine:
             )
             self.logger.info("Successfully initialized memory-enhanced agent")
             self._memory_available = True
-        except Exception:
-            self.logger.exception("Failed to initialize MCP components")
-            self.logger.warning("Falling back to standard LLM agent")
+        except Exception as e:
+            self.logger.warning("Failed to initialize MCP components: %s", e)
+            self.logger.info("Falling back to standard LLM agent")
             self._initialize_standard_agent()
 
     def _initialize_standard_agent(self):
         """Initialize standard LLM agent without memory."""
-        self.llm_agent = LLMAgent(
-            model_provider=self.settings.llm.provider,
-            model_name=self.settings.llm.model_name,
-            omnisearch_client=self.omnisearch_client,
-        )
+        try:
+            LLMAgent = _get_lazy_import("LLMAgent")
+            if LLMAgent:
+                self.llm_agent = LLMAgent(
+                    model_provider=self.settings.llm.provider,
+                    model_name=self.settings.llm.model_name,
+                    omnisearch_client=self.omnisearch_client,
+                )
+                self.logger.info("Successfully initialized standard LLM agent")
+            else:
+                self.logger.error(
+                    "LLM agent unavailable - bot cannot make trading decisions"
+                )
+                self.llm_agent = None
+        except Exception as e:
+            self.logger.error("Failed to initialize LLM agent: %s", e)
+            self.logger.error("Bot cannot make trading decisions without LLM agent")
+            self.llm_agent = None
 
     def _initialize_trading_infrastructure(self):
         """Initialize trading infrastructure components."""
@@ -370,15 +530,28 @@ class TradingEngine:
         """Initialize dominance data provider if enabled."""
         self.dominance_provider = None
         if self.settings.dominance.enable_dominance_data:
-            self.dominance_provider = DominanceDataProvider(
-                data_source=self.settings.dominance.data_source,
-                api_key=(
-                    self.settings.dominance.api_key.get_secret_value()
-                    if self.settings.dominance.api_key
-                    else None
-                ),
-                update_interval=self.settings.dominance.update_interval,
-            )
+            try:
+                if DominanceDataProvider:
+                    self.dominance_provider = DominanceDataProvider(
+                        data_source=self.settings.dominance.data_source,
+                        api_key=(
+                            self.settings.dominance.api_key.get_secret_value()
+                            if self.settings.dominance.api_key
+                            else None
+                        ),
+                        update_interval=self.settings.dominance.update_interval,
+                    )
+                    self.logger.info("Dominance data provider initialized")
+                else:
+                    self.logger.warning(
+                        "Dominance data provider unavailable - feature disabled"
+                    )
+                    self.dominance_provider = None
+            except Exception as e:
+                self.logger.warning(
+                    "Failed to initialize dominance data provider: %s", e
+                )
+                self.dominance_provider = None
 
     def _initialize_tracking(self):
         """Initialize position and performance tracking."""
@@ -403,23 +576,48 @@ class TradingEngine:
         self.data_validation_complete = False
 
         # Initialize structured trade logger for comprehensive logging
-        self.trade_logger = TradeLogger()
-        self.logger.info("Structured trade logger initialized")
+        try:
+            TradeLogger = _get_lazy_import("TradeLogger")
+            if TradeLogger:
+                self.trade_logger = TradeLogger()
+                self.logger.info("Structured trade logger initialized")
+            else:
+                self.logger.warning("Trade logger unavailable - using basic logging")
+                self.trade_logger = None
+        except Exception as e:
+            self.logger.warning("Failed to initialize trade logger: %s", e)
+            self.trade_logger = None
 
     def _initialize_performance_monitoring(self):
         """Initialize performance monitoring system."""
         self.logger.debug("Initializing performance monitoring system...")
-        performance_thresholds = PerformanceThresholds()
+        try:
+            PerformanceThresholds = _get_lazy_import("PerformanceThresholds")
+            PerformanceMonitor = _get_lazy_import("PerformanceMonitor")
 
-        # Customize thresholds based on trading frequency
-        self._configure_performance_thresholds(performance_thresholds)
+            if PerformanceThresholds and PerformanceMonitor:
+                performance_thresholds = PerformanceThresholds()
 
-        self.performance_monitor = PerformanceMonitor(performance_thresholds)
+                # Customize thresholds based on trading frequency
+                self._configure_performance_thresholds(performance_thresholds)
 
-        # Add alert callback for critical performance issues
-        self.performance_monitor.add_alert_callback(self._handle_performance_alert)
+                self.performance_monitor = PerformanceMonitor(performance_thresholds)
 
-    def _configure_performance_thresholds(self, thresholds: PerformanceThresholds):
+                # Add alert callback for critical performance issues
+                self.performance_monitor.add_alert_callback(
+                    self._handle_performance_alert
+                )
+                self.logger.info("Performance monitoring system initialized")
+            else:
+                self.logger.warning(
+                    "Performance monitoring unavailable - using basic monitoring"
+                )
+                self.performance_monitor = None
+        except Exception as e:
+            self.logger.warning("Failed to initialize performance monitoring: %s", e)
+            self.performance_monitor = None
+
+    def _configure_performance_thresholds(self, thresholds: Any):
         """Configure performance thresholds based on trading interval."""
         # High-frequency trading thresholds
         if self.interval in ["1s", "5s", "10s", "15s"]:
@@ -444,9 +642,53 @@ class TradingEngine:
             thresholds.trade_execution_ms *= 3
 
         self.logger.info("Performance monitoring system initialized")
+
+        # Final health check and component status report
+        self._log_component_status()
         self.logger.info(
             "Initialized TradingEngine for %s at %s", self.symbol, self.interval
         )
+
+    def _log_component_status(self):
+        """Log the status of all initialized components."""
+        components = {
+            "Indicators": self.indicator_calc is not None,
+            "LLM Agent": self.llm_agent is not None,
+            "Memory System": self._memory_available,
+            "WebSocket Publisher": self.websocket_publisher is not None,
+            "Command Consumer": self.command_consumer is not None,
+            "OmniSearch Client": self.omnisearch_client is not None,
+            "Dominance Provider": self.dominance_provider is not None,
+            "Trade Logger": self.trade_logger is not None,
+            "Performance Monitor": self.performance_monitor is not None,
+        }
+
+        active_components = [name for name, status in components.items() if status]
+        disabled_components = [
+            name for name, status in components.items() if not status
+        ]
+
+        self.logger.info("Component Status Summary:")
+        self.logger.info("  Active Components: %s", ", ".join(active_components))
+        if disabled_components:
+            self.logger.info(
+                "  Disabled Components: %s", ", ".join(disabled_components)
+            )
+
+        # Check for critical missing components
+        critical_missing = []
+        if not self.llm_agent:
+            critical_missing.append("LLM Agent")
+        if not self.indicator_calc:
+            critical_missing.append("Technical Indicators")
+
+        if critical_missing:
+            self.logger.warning(
+                "Critical components missing: %s", ", ".join(critical_missing)
+            )
+            self.logger.warning("Bot functionality will be severely limited")
+        else:
+            self.logger.info("All critical components initialized successfully")
 
     @property
     def exchange(self) -> Any:
@@ -1159,7 +1401,7 @@ class TradingEngine:
     async def _initialize_trading_components(self):
         """Initialize trading-related components."""
         await self._initialize_experience_manager()
-        await self._initialize_dominance_provider()
+        await self._connect_dominance_provider()
         await self._reconcile_positions()
 
     async def _initialize_experience_manager(self):
@@ -1216,8 +1458,8 @@ class TradingEngine:
         except Exception as e:
             self.logger.debug("Could not retrieve pattern statistics: %s", e)
 
-    async def _initialize_dominance_provider(self):
-        """Initialize dominance data provider."""
+    async def _connect_dominance_provider(self):
+        """Connect dominance data provider."""
         if not hasattr(self, "dominance_provider") or not self.dominance_provider:
             return
 
@@ -1229,18 +1471,13 @@ class TradingEngine:
             self.logger.warning("Failed to connect dominance data: %s", e)
             console.print("    [yellow]⚠ Dominance data unavailable[/yellow]")
 
-    async def _reconcile_positions(self):
-        """Check for existing positions on exchange."""
-        console.print("  • Checking for existing positions...")
-        # Position reconciliation logic is handled by existing method
-
     async def _initialize_dashboard_components(self):
         """Initialize dashboard-related components."""
-        await self._initialize_websocket_publisher()
-        await self._initialize_command_consumer()
+        await self._connect_websocket_publisher()
+        await self._start_command_consumer()
 
-    async def _initialize_websocket_publisher(self):
-        """Initialize WebSocket publisher for dashboard."""
+    async def _connect_websocket_publisher(self):
+        """Connect WebSocket publisher for dashboard."""
         if not self.websocket_publisher:
             return
 
@@ -1260,8 +1497,8 @@ class TradingEngine:
                 "    [yellow]⚠ Dashboard WebSocket connection failed[/yellow]"
             )
 
-    async def _initialize_command_consumer(self):
-        """Initialize command consumer for dashboard."""
+    async def _start_command_consumer(self):
+        """Start command consumer for dashboard."""
         if not self.command_consumer:
             return
 
@@ -3853,11 +4090,21 @@ def cli() -> None:
 )
 @click.option("--config", default=None, help="Configuration file path")
 @click.option("--force", is_flag=True, help="Skip confirmation prompt for live trading")
+@click.option("--skip-health-check", is_flag=True, help="Skip startup health checks")
 def live(
-    dry_run: bool | None, symbol: str, interval: str, config: str | None, force: bool
+    dry_run: bool | None,
+    symbol: str,
+    interval: str,
+    config: str | None,
+    force: bool,
+    skip_health_check: bool,
 ) -> None:
     """Start live trading bot."""
     try:
+        # Perform startup health checks unless skipped
+        if not skip_health_check:
+            _check_startup_health()
+
         # Create the trading engine to determine actual dry_run setting
         engine = TradingEngine(
             symbol=symbol, interval=interval, config_file=config, dry_run=dry_run
@@ -3898,11 +4145,33 @@ def live(
         asyncio.run(engine.run())
     except KeyboardInterrupt:
         console.print("\n👋 Bot stopped by user")
+    except ImportError as e:
+        console.print(f"❌ Import Error: {e}", style="red")
+        console.print(
+            "💡 Try running 'ai-trading-bot diagnose' to check component health",
+            style="cyan",
+        )
+        console.print(
+            "💡 Install missing dependencies with poetry install", style="cyan"
+        )
+        sys.exit(1)
     except Exception as e:
         import traceback
 
-        console.print(f"❌ Error: {e}", style="red")
-        console.print(f"Full traceback:\n{traceback.format_exc()}", style="yellow")
+        console.print(f"❌ Unexpected Error: {e}", style="red")
+        console.print(
+            "💡 Try running 'ai-trading-bot diagnose' for troubleshooting", style="cyan"
+        )
+
+        # Only show full traceback if it's not a common user error
+        if not any(
+            keyword in str(e).lower()
+            for keyword in ["api key", "connection", "permission", "config"]
+        ):
+            console.print(
+                f"🔧 Full traceback:\n{traceback.format_exc()}", style="yellow"
+            )
+
         sys.exit(1)
 
 
@@ -4107,6 +4376,44 @@ def init() -> None:
         console.print("🔧 Please edit .env with your API keys and configuration")
     else:
         console.print("❌ .env.example file not found", style="red")
+
+
+@cli.command()
+def diagnose() -> None:
+    """Run startup diagnostics and component health checks."""
+    console.print("🔍 Running startup diagnostics...", style="cyan bold")
+
+    # Check startup health
+    _check_startup_health()
+
+    # Import and check bot components
+    try:
+        from . import check_startup_health, get_startup_diagnostics
+
+        diagnostics = get_startup_diagnostics()
+        healthy, issues = check_startup_health()
+
+        console.print("📊 Component Status:", style="cyan bold")
+        for component, available in diagnostics["components"].items():
+            status = "✅" if available else "❌"
+            console.print(f"  {status} {component.replace('_', ' ').title()}")
+
+        if healthy:
+            console.print("✅ All critical components are healthy", style="green bold")
+        else:
+            console.print("⚠️  Issues detected:", style="yellow bold")
+            for issue in issues:
+                console.print(f"  • {issue}", style="yellow")
+
+        # Show version and core status
+        console.print(f"📦 Bot Version: {diagnostics['version']}")
+        console.print(
+            f"🔧 Core Imports: {'✅ Success' if diagnostics['core_imports_successful'] else '❌ Failed'}"
+        )
+
+    except Exception as e:
+        console.print(f"❌ Failed to run diagnostics: {e}", style="red")
+        console.print("This may indicate critical import failures", style="red")
 
 
 if __name__ == "__main__":

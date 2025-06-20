@@ -11,7 +11,7 @@ import logging
 import time
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, Literal, cast
+from typing import Any, Literal, NoReturn, cast
 
 from bot.config import settings
 from bot.trading_types import AccountType, Order, OrderStatus, Position, TradeAction
@@ -817,13 +817,13 @@ class BluefinClient(BaseExchange):
                 filled_quantity=quantity,
             )
 
-        def _raise_order_placement_error(error_msg: str) -> None:
+        def _raise_order_placement_error(error_msg: str) -> NoReturn:
             raise ExchangeOrderError(f"Order placement failed: {error_msg}")
 
-        def _raise_insufficient_funds_error(e: Exception) -> None:
+        def _raise_insufficient_funds_error(e: Exception) -> NoReturn:
             raise ExchangeInsufficientFundsError(f"Insufficient funds: {e}") from e
 
-        def _raise_market_order_error(e: Exception) -> None:
+        def _raise_market_order_error(e: Exception) -> NoReturn:
             raise ExchangeOrderError(f"Failed to place market order: {e}") from e
 
         try:
@@ -909,10 +909,10 @@ class BluefinClient(BaseExchange):
                 timestamp=datetime.now(UTC),
             )
 
-        def _raise_limit_order_placement_error(error_msg: str) -> None:
+        def _raise_limit_order_placement_error(error_msg: str) -> NoReturn:
             raise ExchangeOrderError(f"Limit order placement failed: {error_msg}")
 
-        def _raise_limit_order_error(e: Exception) -> None:
+        def _raise_limit_order_error(e: Exception) -> NoReturn:
             raise ExchangeOrderError(f"Failed to place limit order: {e}") from e
 
         try:

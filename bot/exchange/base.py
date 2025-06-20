@@ -11,7 +11,7 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, Literal
+from typing import Any, Literal, NoReturn
 
 from bot.error_handling import (
     ErrorBoundary,
@@ -467,7 +467,7 @@ class BaseExchange(ABC):
             BalanceValidationError: If reconciliation fails
         """
 
-        def _raise_null_reconciliation_error() -> None:
+        def _raise_null_reconciliation_error() -> NoReturn:
             raise BalanceValidationError(
                 "Balance values cannot be None for reconciliation",
                 invalid_value="null_balance",
@@ -493,7 +493,7 @@ class BaseExchange(ABC):
 
             is_within_tolerance = relative_difference <= tolerance_pct
 
-            {
+            validation_result = {
                 "valid": is_within_tolerance,
                 "calculated_balance": calculated_balance,
                 "exchange_reported_balance": exchange_reported_balance,
@@ -513,6 +513,8 @@ class BaseExchange(ABC):
                     relative_difference,
                     tolerance_pct,
                 )
+
+            return validation_result
 
         except BalanceValidationError:
             # Re-raise balance validation errors
@@ -616,6 +618,8 @@ class BaseExchange(ABC):
                 # Return the order from the executed step
                 _, _, order_result, _ = saga.completed_steps[0]
                 return order_result
+            # Saga succeeded but no steps completed, or saga failed
+            return None
 
         except Exception as e:
             # Log saga failure with enhanced context
