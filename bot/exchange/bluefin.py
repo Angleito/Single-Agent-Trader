@@ -10,7 +10,7 @@ import decimal
 import logging
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Literal, Optional, cast
+from typing import Any, Literal, cast
 
 from ..config import settings
 from ..trading_types import (
@@ -979,11 +979,11 @@ class BluefinClient(BaseExchange):
     def _record_balance_operation(
         self,
         operation: str,
-        balance_before: Optional[float] = None,
-        balance_after: Optional[float] = None,
+        balance_before: float | None = None,
+        balance_after: float | None = None,
         success: bool = True,
-        error_type: Optional[str] = None,
-        metadata: Optional[dict] = None,
+        error_type: str | None = None,
+        metadata: dict | None = None,
     ) -> None:
         """Record a balance operation in the monitoring system."""
         try:

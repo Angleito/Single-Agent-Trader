@@ -18,7 +18,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_EVEN, Decimal, getcontext
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from .config import settings
 from .fee_calculator import fee_calculator
