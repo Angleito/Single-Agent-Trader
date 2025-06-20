@@ -18,7 +18,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_EVEN, Decimal, getcontext
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from .config import settings
 from .fee_calculator import fee_calculator
@@ -126,7 +126,7 @@ class PaperTradingAccount:
     - State persistence between sessions
     """
 
-    def __init__(self, starting_balance: Decimal = None, data_dir: Path | None = None):
+    def __init__(self, starting_balance: Decimal | None = None, data_dir: Path | None = None):
         """
         Initialize paper trading account.
 
@@ -181,7 +181,7 @@ class PaperTradingAccount:
                 self.alert_manager = get_balance_alert_manager()
                 logger.info("✅ Paper trading monitoring enabled")
             except Exception as e:
-                logger.warning(f"Failed to initialize monitoring: {e}")
+                logger.warning("Failed to initialize monitoring: %s", e)
                 self.monitoring_enabled = False
 
         # State files
@@ -197,7 +197,7 @@ class PaperTradingAccount:
             self._record_account_initialization()
 
         logger.info(
-            f"Initialized paper trading account with ${self.current_balance:,.2f} and balance validation"
+            "Initialized paper trading account with $%s and balance validation", f"{self.current_balance:,.2f}"
         )
 
     def _record_account_initialization(self) -> None:
@@ -224,7 +224,7 @@ class PaperTradingAccount:
                     correlation_id=f"init_{int(time.time())}",
                 )
         except Exception as e:
-            logger.warning(f"Failed to record account initialization: {e}")
+            logger.warning("Failed to record account initialization: %s", e)
 
     def _record_balance_operation(
         self,
@@ -259,7 +259,7 @@ class PaperTradingAccount:
                     metadata=metadata,
                 )
         except Exception as e:
-            logger.debug(f"Failed to record balance operation {operation}: {e}")
+            logger.debug("Failed to record balance operation %s: %s", operation, e)
 
     def _normalize_balance(self, amount: Decimal) -> Decimal:
         """
@@ -283,7 +283,7 @@ class PaperTradingAccount:
             try:
                 amount = Decimal(str(amount))
             except (ValueError, TypeError):
-                logger.error(f"Invalid balance amount: {amount} (type: {type(amount)})")
+                logger.exception("Invalid balance amount: %s (type: %s)", amount, type(amount))
                 raise ValueError(f"Cannot convert to Decimal: {amount}")
 
         # Check for invalid values
@@ -297,7 +297,7 @@ class PaperTradingAccount:
 
         # Check for extremely large values (> $1 billion)
         if abs(amount) > Decimal("1000000000"):
-            logger.warning(f"Extremely large balance amount: {amount}")
+            logger.warning("Extremely large balance amount: %s", amount)
 
         # Quantize to 2 decimal places using banker's rounding
         return amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
@@ -323,7 +323,7 @@ class PaperTradingAccount:
             try:
                 amount = Decimal(str(amount))
             except (ValueError, TypeError):
-                logger.error(f"Invalid crypto amount: {amount} (type: {type(amount)})")
+                logger.exception("Invalid crypto amount: %s (type: %s)", amount, type(amount))
                 raise ValueError(f"Cannot convert to Decimal: {amount}")
 
         # Check for invalid values
@@ -337,16 +337,16 @@ class PaperTradingAccount:
 
         # Check for negative values (most crypto amounts should be positive)
         if amount < Decimal("0"):
-            logger.warning(f"Negative crypto amount: {amount}")
+            logger.warning("Negative crypto amount: %s", amount)
 
         # Check for extremely small values (dust)
         if Decimal("0") < amount < Decimal("0.00000001"):
-            logger.warning(f"Dust amount (< 1 satoshi): {amount}")
+            logger.warning("Dust amount (< 1 satoshi): %s", amount)
 
         return amount.quantize(Decimal("0.00000001"), rounding=ROUND_HALF_EVEN)
 
     def _validate_balance_update(
-        self, new_balance: Decimal, operation: str = "unknown", metadata: dict = None
+        self, new_balance: Decimal, operation: str = "unknown", metadata: dict | None = None
     ) -> bool:
         """
         Validate a balance update before applying it.
@@ -368,7 +368,7 @@ class PaperTradingAccount:
             # Check for critical issues
             if normalized_balance < Decimal("-1000"):
                 logger.error(
-                    f"Critical: Balance would become severely negative: ${normalized_balance} from {operation}"
+                    "Critical: Balance would become severely negative: $%s from %s", normalized_balance, operation
                 )
                 raise ValueError(
                     f"Balance update rejected: would result in ${normalized_balance}"
@@ -382,17 +382,17 @@ class PaperTradingAccount:
                 )
                 if change_ratio > Decimal("10"):  # 1000% change
                     logger.warning(
-                        f"Large balance change detected: ${self.current_balance} -> ${normalized_balance} from {operation}"
+                        "Large balance change detected: $%s -> $%s from %s", self.current_balance, normalized_balance, operation
                     )
 
             return True
 
         except Exception as e:
-            logger.error(f"Balance validation failed for {operation}: {e}")
+            logger.exception(f"Balance validation failed for {operation}: {e}")
             raise ValueError(f"Invalid balance update: {e}") from e
 
     def get_account_status(
-        self, current_prices: dict[str, Decimal] = None
+        self, current_prices: dict[str, Decimal] | None = None
     ) -> dict[str, Any]:
         """Get current account status."""
         with self._lock:
@@ -471,8 +471,8 @@ class PaperTradingAccount:
             try:
                 if action.action == "HOLD":
                     logger.info(
-                        f"🛑 PAPER TRADING DECISION: HOLD | Symbol: {symbol} | "
-                        f"Current Price: ${current_price} | Reason: {action.rationale}"
+                        "🛑 PAPER TRADING DECISION: HOLD | Symbol: %s | "
+                        "Current Price: $%s | Reason: %s", symbol, current_price, action.rationale
                     )
 
                     # Record HOLD decision in monitoring
@@ -492,15 +492,15 @@ class PaperTradingAccount:
 
                 # Log the trading decision with full context
                 logger.info(
-                    f"🎯 PAPER TRADING DECISION: {action.action} | Symbol: {symbol} | "
-                    f"Current Price: ${current_price} | Size: {action.size_pct}% | "
-                    f"Reason: {action.rationale}"
+                    "🎯 PAPER TRADING DECISION: %s | Symbol: %s | "
+                    "Current Price: $%s | Size: %s%% | "
+                    "Reason: %s", action.action, symbol, current_price, action.size_pct, action.rationale
                 )
 
                 # Calculate trade size based on action
                 trade_size = self._calculate_trade_size(action, current_price, symbol)
                 if trade_size <= 0:
-                    logger.warning(f"❌ Invalid trade size calculated: {trade_size}")
+                    logger.warning("❌ Invalid trade size calculated: %s", trade_size)
                     return None
 
                 # Log what would happen with real market execution
@@ -508,17 +508,20 @@ class PaperTradingAccount:
                 required_margin = trade_value / Decimal(str(settings.trading.leverage))
 
                 logger.info(
-                    f"📊 TRADE SIMULATION DETAILS:"
-                    f"\n  • Symbol: {symbol}"
-                    f"\n  • Action: {action.action}"
-                    f"\n  • Current Real Price: ${current_price}"
-                    f"\n  • Position Size: {trade_size} {symbol.split('-')[0]}"
-                    f"\n  • Position Value: ${trade_value:,.2f}"
-                    f"\n  • Leverage: {settings.trading.leverage}x"
-                    f"\n  • Required Margin: ${required_margin:,.2f}"
-                    f"\n  • Available Balance: ${self.equity - self.margin_used:,.2f}"
-                    f"\n  • Stop Loss: {action.stop_loss_pct}%"
-                    f"\n  • Take Profit: {action.take_profit_pct}%"
+                    "📊 TRADE SIMULATION DETAILS:"
+                    "\n  • Symbol: %s"
+                    "\n  • Action: %s"
+                    "\n  • Current Real Price: $%s"
+                    "\n  • Position Size: %s %s"
+                    "\n  • Position Value: $%s"
+                    "\n  • Leverage: %sx"
+                    "\n  • Required Margin: $%s"
+                    "\n  • Available Balance: $%s"
+                    "\n  • Stop Loss: %s%%"
+                    "\n  • Take Profit: %s%%", 
+                    symbol, action.action, current_price, trade_size, symbol.split('-')[0], 
+                    f"{trade_value:,.2f}", settings.trading.leverage, f"{required_margin:,.2f}", 
+                    f"{self.equity - self.margin_used:,.2f}", action.stop_loss_pct, action.take_profit_pct
                 )
 
                 # Apply realistic slippage based on real market conditions
@@ -527,10 +530,11 @@ class PaperTradingAccount:
                 slippage_pct = (slippage_amount / current_price) * 100
 
                 logger.info(
-                    f"📈 EXECUTION SIMULATION:"
-                    f"\n  • Market Price: ${current_price}"
-                    f"\n  • Execution Price: ${execution_price} (slippage: {slippage_pct:.3f}%)"
-                    f"\n  • Slippage Cost: ${slippage_amount * trade_size:.2f}"
+                    "📈 EXECUTION SIMULATION:"
+                    "\n  • Market Price: $%s"
+                    "\n  • Execution Price: $%s (slippage: %s%%)"
+                    "\n  • Slippage Cost: $%s",
+                    current_price, execution_price, f"{slippage_pct:.3f}", f"{slippage_amount * trade_size:.2f}"
                 )
 
                 # Calculate realistic trading fees using the fee calculator
@@ -542,10 +546,11 @@ class PaperTradingAccount:
                 fees = trade_fees.entry_fee
 
                 logger.info(
-                    f"💰 FEE CALCULATION:"
-                    f"\n  • Fee Rate: {trade_fees.fee_rate:.4%}"
-                    f"\n  • Entry Fee: ${fees:.4f}"
-                    f"\n  • Trade Value: ${trade_value:.2f}"
+                    "💰 FEE CALCULATION:"
+                    "\n  • Fee Rate: %s"
+                    "\n  • Entry Fee: $%s"
+                    "\n  • Trade Value: $%s",
+                    f"{trade_fees.fee_rate:.4%}", f"{fees:.4f}", f"{trade_value:.2f}"
                 )
 
                 # Check available balance
@@ -658,7 +663,7 @@ class PaperTradingAccount:
                 return order
 
             except Exception as e:
-                logger.error(f"❌ Error simulating paper trade: {e}")
+                logger.exception(f"❌ Error simulating paper trade: {e}")
 
                 # Record failed trade execution in monitoring
                 self._record_balance_operation(
@@ -829,7 +834,7 @@ class PaperTradingAccount:
                 self.current_balance = new_balance
                 logger.debug(f"✅ Balance update validated: ${self.current_balance}")
             except ValueError as e:
-                logger.error(
+                logger.exception(
                     f"❌ Balance validation failed during trade execution - trade rejected: {e}"
                 )
                 return self._create_failed_order(
@@ -1484,7 +1489,7 @@ class PaperTradingAccount:
 
             return metrics
 
-    def generate_daily_report(self, date: str = None) -> str:
+    def generate_daily_report(self, date: str | None = None) -> str:
         """Generate a daily performance report."""
         target_date = date or datetime.now(UTC).date().isoformat()
 
@@ -1494,7 +1499,7 @@ class PaperTradingAccount:
         metrics = self.daily_metrics[target_date]
         account_status = self.get_account_status()
 
-        report = f"""
+        return f"""
 🗓️  Daily Trading Report - {target_date}
 {'=' * 50}
 
@@ -1520,7 +1525,6 @@ class PaperTradingAccount:
 💸 Margin Used:      ${account_status['margin_used']:,.2f}
 💳 Available:        ${account_status['margin_available']:,.2f}
 """
-        return report
 
     def _save_state(self) -> None:
         """Save current state to files with robust error handling and logging."""
@@ -1575,7 +1579,7 @@ class PaperTradingAccount:
                     )
 
                 except Exception as e:
-                    logger.error(
+                    logger.exception(
                         f"❌ Failed to save account state to {self.account_file}: {type(e).__name__}: {e}"
                     )
                     raise OSError(f"Account save failed: {e}") from e
@@ -1636,7 +1640,7 @@ class PaperTradingAccount:
                     )
 
                 except Exception as e:
-                    logger.error(
+                    logger.exception(
                         f"❌ Failed to save trades to {self.trades_file}: {type(e).__name__}: {e}"
                     )
                     raise OSError(f"Trades save failed: {e}") from e
@@ -1663,7 +1667,7 @@ class PaperTradingAccount:
                     )
 
                 except Exception as e:
-                    logger.error(
+                    logger.exception(
                         f"❌ Failed to save performance data to {self.performance_file}: {type(e).__name__}: {e}"
                     )
                     raise OSError(f"Performance save failed: {e}") from e
@@ -1692,31 +1696,31 @@ class PaperTradingAccount:
 
             except OSError as e:
                 # IO-specific errors (permissions, disk space, etc.)
-                logger.error(
+                logger.exception(
                     f"🚨 CRITICAL: Paper trading state save failed due to IO error: {e}"
                 )
-                logger.error(f"🚨 Data directory: {self.data_dir}")
-                logger.error(
+                logger.exception(f"🚨 Data directory: {self.data_dir}")
+                logger.exception(
                     f"🚨 Files: account={self.account_file.exists()}, trades={self.trades_file.exists()}, perf={self.performance_file.exists()}"
                 )
                 raise  # Re-raise IO errors as they're critical
 
             except Exception as e:
                 # Catch-all for unexpected errors
-                logger.error(
+                logger.exception(
                     f"🚨 CRITICAL: Unexpected error during paper trading state save: {type(e).__name__}: {e}"
                 )
-                logger.error(
+                logger.exception(
                     f"🚨 Account state: balance={self.current_balance}, trades={self.trade_counter}"
                 )
-                logger.error(
+                logger.exception(
                     f"🚨 Data state: open_trades={len(self.open_trades)}, closed_trades={len(self.closed_trades)}"
                 )
 
                 # Log stack trace for debugging
                 import traceback
 
-                logger.error(f"🚨 Stack trace:\n{traceback.format_exc()}")
+                logger.exception(f"🚨 Stack trace:\n{traceback.format_exc()}")
 
                 raise  # Re-raise unexpected errors
 
@@ -1814,7 +1818,7 @@ class PaperTradingAccount:
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 f"❌ Failed to save session trades to {session_trades_file}: {type(e).__name__}: {e}"
             )
 
@@ -1962,10 +1966,10 @@ class PaperTradingAccount:
                 )
 
         except Exception as e:
-            logger.error(f"Failed to load paper trading state: {e}")
+            logger.exception(f"Failed to load paper trading state: {e}")
             # Continue with default state
 
-    def reset_account(self, new_balance: Decimal = None) -> None:
+    def reset_account(self, new_balance: Decimal | None = None) -> None:
         """Reset the paper trading account."""
         with self._lock:
             self.starting_balance = new_balance or Decimal("10000")
@@ -1983,7 +1987,7 @@ class PaperTradingAccount:
             self._save_state()
             logger.info(f"Paper trading account reset to ${self.starting_balance:,.2f}")
 
-    def get_monitoring_summary(self) -> Dict[str, Any]:
+    def get_monitoring_summary(self) -> dict[str, Any]:
         """Get comprehensive monitoring summary for paper trading."""
         summary = {
             "timestamp": datetime.now(UTC).isoformat(),
@@ -2049,7 +2053,7 @@ class PaperTradingAccount:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to enable monitoring: {e}")
+            logger.exception(f"Failed to enable monitoring: {e}")
             return False
 
     def disable_monitoring(self) -> None:
@@ -2070,7 +2074,7 @@ class PaperTradingAccount:
         self.monitoring_enabled = False
         logger.info("🔇 Paper trading monitoring disabled")
 
-    def get_prometheus_metrics(self) -> List[str]:
+    def get_prometheus_metrics(self) -> list[str]:
         """Get Prometheus format metrics for paper trading."""
         metrics = []
 
