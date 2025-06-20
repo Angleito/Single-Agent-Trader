@@ -65,15 +65,19 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     structlog \
     fastapi \
     uvicorn \
+    aiofiles \
+    pydantic \
     && pip cache purge
 
 # Ubuntu-optimized dependency installation with better error handling
 RUN pip install --no-cache-dir aiohttp==3.9.5 || \
     (echo "aiohttp installation failed, trying alternative..." && pip install --no-cache-dir httpx[http2])
 
-# Install Bluefin client with Ubuntu-specific handling
+# Install Bluefin client with multiple fallback options
 RUN pip install --no-cache-dir bluefin-v2-client || \
-    echo "WARNING: bluefin-v2-client installation failed - service will run without Bluefin support"
+    pip install --no-cache-dir --force-reinstall bluefin-v2-client || \
+    pip install --no-cache-dir git+https://github.com/fireflyprotocol/bluefin-v2-client-python.git || \
+    (echo "ERROR: All bluefin-v2-client installation methods failed" && exit 1)
 
 # Copy service code
 COPY bluefin_sdk_service.py /app/
