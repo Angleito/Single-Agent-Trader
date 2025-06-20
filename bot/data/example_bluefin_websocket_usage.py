@@ -25,7 +25,7 @@ async def on_new_candle(candle: MarketData):
         candle.low,
         candle.close,
         candle.volume,
-        candle.timestamp
+        candle.timestamp,
     )
 
 

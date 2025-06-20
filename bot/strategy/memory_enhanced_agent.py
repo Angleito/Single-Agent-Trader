@@ -79,7 +79,12 @@ SENTIMENT-ENHANCED CONTEXT:
 IMPORTANT: Consider these past experiences and sentiment correlations when making your decision, but adapt to current unique conditions.
 """
 
-        logger.info("🧠 Memory-Enhanced LLM Agent: Initialized (memory=%s, optimized_prompts=%s, api_parallelization=%s)", '✅ enabled' if self._memory_available else '❌ disabled', '✅ enabled' if self._use_optimized_prompts else '❌ disabled', '✅ enabled' if self._enable_api_parallelization else '❌ disabled')
+        logger.info(
+            "🧠 Memory-Enhanced LLM Agent: Initialized (memory=%s, optimized_prompts=%s, api_parallelization=%s)",
+            "✅ enabled" if self._memory_available else "❌ disabled",
+            "✅ enabled" if self._use_optimized_prompts else "❌ disabled",
+            "✅ enabled" if self._enable_api_parallelization else "❌ disabled",
+        )
 
     async def analyze_market(self, market_state: MarketState) -> TradeAction:
         """
@@ -187,15 +192,28 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             result = self._get_fallback_decision(market_state)
 
         # Log memory-enhanced decision
-        logger.info("🤖 Memory+Sentiment-Enhanced Decision: %s | Similar experiences: %s | Memory context: %s | Sentiment context: %s", 
-                   result.action, 
-                   len(similar_experiences),
-                   '✅ Applied' if memory_context != 'No similar past experiences found.' else '❌ None',
-                   '✅ Applied' if 'sentiment' in sentiment_enhanced_context_str.lower() else '❌ None')
+        logger.info(
+            "🤖 Memory+Sentiment-Enhanced Decision: %s | Similar experiences: %s | Memory context: %s | Sentiment context: %s",
+            result.action,
+            len(similar_experiences),
+            (
+                "✅ Applied"
+                if memory_context != "No similar past experiences found."
+                else "❌ None"
+            ),
+            (
+                "✅ Applied"
+                if "sentiment" in sentiment_enhanced_context_str.lower()
+                else "❌ None"
+            ),
+        )
 
         # Log detailed memory context used
         if similar_experiences:
-            logger.debug("Top 3 similar experiences: %s", [exp.experience_id for exp in similar_experiences[:3]])
+            logger.debug(
+                "Top 3 similar experiences: %s",
+                [exp.experience_id for exp in similar_experiences[:3]],
+            )
 
             # Log success rates of similar trades
             successful_similar = sum(
@@ -203,7 +221,12 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                 for exp in similar_experiences
                 if exp.outcome and exp.outcome.get("success", False)
             )
-            logger.debug("Similar trade success rate: %s/%s (%.1f%%)", successful_similar, len(similar_experiences), successful_similar/len(similar_experiences)*100)
+            logger.debug(
+                "Similar trade success rate: %s/%s (%.1f%%)",
+                successful_similar,
+                len(similar_experiences),
+                successful_similar / len(similar_experiences) * 100,
+            )
 
         # Store memory context for external logging access
         self._last_memory_context = {
@@ -264,7 +287,13 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
         if self._enable_api_parallelization:
             optimization_mode.append("parallel_apis")
 
-        logger.info("🚀 Memory-Enhanced Decision Complete: %.3fs | Action: %s | Optimizations: %s | Experiences: %s", total_execution_time, result.action, '+'.join(optimization_mode) if optimization_mode else 'none', len(similar_experiences))
+        logger.info(
+            "🚀 Memory-Enhanced Decision Complete: %.3fs | Action: %s | Optimizations: %s | Experiences: %s",
+            total_execution_time,
+            result.action,
+            "+".join(optimization_mode) if optimization_mode else "none",
+            len(similar_experiences),
+        )
 
         return result
 
@@ -302,7 +331,6 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             return await self.memory_server.query_similar_experiences(
                 market_state, query
             )
-
 
         except Exception as e:
             logger.exception("Failed to retrieve memories: %s", e)
@@ -679,10 +707,13 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             method_type = (
                 "parallel" if self._enable_api_parallelization else "sequential"
             )
-            logger.debug("⚡ Sentiment context (%s): %.3fs | "
+            logger.debug(
+                "⚡ Sentiment context (%s): %.3fs | "
                 f"Sentiment: {'✅' if crypto_sentiment and not isinstance(crypto_sentiment, Exception) else '❌'} | "
-                f"Correlation: {'✅' if correlation and not isinstance(correlation, Exception) else '❌'}", 
-                method_type, execution_time)
+                f"Correlation: {'✅' if correlation and not isinstance(correlation, Exception) else '❌'}",
+                method_type,
+                execution_time,
+            )
 
             return "\n".join(context_lines) if context_lines else ""
 
@@ -965,7 +996,10 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                 # This will be picked up when the trading experience is created
                 self._pending_sentiment_data = sentiment_data
 
-                logger.debug("Stored sentiment data for learning: %s sentiment", sentiment_data.get('overall_sentiment', 'unknown'))
+                logger.debug(
+                    "Stored sentiment data for learning: %s sentiment",
+                    sentiment_data.get("overall_sentiment", "unknown"),
+                )
 
         except Exception as e:
             logger.warning("Failed to store sentiment data for learning: %s", e)

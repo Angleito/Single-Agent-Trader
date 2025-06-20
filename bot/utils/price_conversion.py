@@ -73,16 +73,14 @@ def convert_from_18_decimal(
         # Check if conversion is needed
         if is_likely_18_decimal(decimal_value):
             converted_value = decimal_value / Decimal("1e18")
-            logger.debug("Converted %s from 18-decimal: " "%s -> %s (symbol: %s)", field_name or 'value', decimal_value, converted_value, symbol)
-            )
+            logger.debug("Converted %s from 18-decimal: %s -> %s (symbol: %s)", field_name or 'value', decimal_value, converted_value, symbol)
         else:
             converted_value = decimal_value
-            logger.debug("No conversion needed for %s: " "%s (symbol: %s)", field_name or 'value', decimal_value, symbol)
-            )
+            logger.debug("No conversion needed for %s: %s (symbol: %s)", field_name or 'value', decimal_value, symbol)
 
         # Validate the result
         if symbol and not is_price_valid(converted_value, symbol):
-            logger.warning("Price %s for %s is outside expected range. " "Original value: %s, Field: %s" ), converted_value, symbol, value, field_name)
+            logger.warning("Price %s for %s is outside expected range. Original value: %s, Field: %s", converted_value, symbol, value, field_name)
 
         return converted_value
 
@@ -198,9 +196,10 @@ def log_price_conversion_stats(
         symbol: Trading symbol
         field_name: Name of the field being converted
     """
-    logger.info("Price conversion stats for %s:%s - " "Original: %s, Converted: %s, " "Ratio: %s, ", symbol, field_name, original_value, converted_value, float(original_value) / float(converted_value) if converted_value != 0 else 'N/A')
-        f"Valid: {is_price_valid(converted_value, symbol)}"
-    )
+    logger.info("Price conversion stats for %s:%s - Original: %s, Converted: %s, Ratio: %s, Valid: %s", 
+                symbol, field_name, original_value, converted_value, 
+                float(original_value) / float(converted_value) if converted_value != 0 else 'N/A',
+                is_price_valid(converted_value, symbol))
 
 
 def get_current_real_price(symbol: str) -> float | None:

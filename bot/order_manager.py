@@ -397,7 +397,6 @@ class OrderManager:
                     cancelled_count += 1
 
             logger.info("Cancelled %s orders" + (" for %s" if symbol else ""), cancelled_count, symbol)
-            )
             return cancelled_count
 
     def register_callback(

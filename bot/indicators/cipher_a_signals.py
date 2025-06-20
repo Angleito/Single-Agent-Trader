@@ -409,7 +409,11 @@ class CipherASignals:
             pass
 
         yellow_cross_up = (
-            red_diamond & wt2_below_max & wt2_above_os3 & rsi_below_max & rsi_above_min
+            red_diamond
+            & wt2_below_max
+            & wt2_above_os3
+            & rsi_below_max
+            & rsi_above_min
             # & rsimfi_condition_up  # Uncomment to enable RSI+MFI filter
         )
 

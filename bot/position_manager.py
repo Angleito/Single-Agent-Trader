@@ -112,11 +112,15 @@ class PositionManager:
             len(self._positions),
             "enabled" if self.use_fifo else "disabled",
             "enabled" if self.paper_account else "disabled",
-            f"{self._max_position_value:,.2f}"
+            f"{self._max_position_value:,.2f}",
         )
         if self.paper_account:
             account_status = self.paper_account.get_account_status()
-            logger.info("Paper trading account: $%.2f equity, %s open positions", account_status["equity"], account_status["open_positions"])
+            logger.info(
+                "Paper trading account: $%.2f equity, %s open positions",
+                account_status["equity"],
+                account_status["open_positions"],
+            )
 
     def get_position(self, symbol: str) -> Position:
         """
@@ -196,11 +200,21 @@ class PositionManager:
                     closed_pos = self._positions.pop(symbol)
                     closed_pos.timestamp = datetime.now(UTC)
                     self._position_history.append(closed_pos)
-                    logger.info("Position closed for %s: %s PnL", symbol, closed_pos.realized_pnl)
+                    logger.info(
+                        "Position closed for %s: %s PnL",
+                        symbol,
+                        closed_pos.realized_pnl,
+                    )
             else:
                 # Active position - update or create
                 self._positions[symbol] = new_position
-                logger.info("Position updated for %s: %s %s @ %s", symbol, new_position.side, new_position.size, new_position.entry_price)
+                logger.info(
+                    "Position updated for %s: %s %s @ %s",
+                    symbol,
+                    new_position.side,
+                    new_position.size,
+                    new_position.entry_price,
+                )
 
             # Persist state
             self._save_state()
@@ -256,7 +270,13 @@ class PositionManager:
             # Persist state
             self._save_state()
 
-            logger.info("Position reconciled from exchange for %s: %s %s @ %s", symbol, side, size, entry_price)
+            logger.info(
+                "Position reconciled from exchange for %s: %s %s @ %s",
+                symbol,
+                side,
+                size,
+                entry_price,
+            )
 
             return new_position.copy()
 
@@ -923,7 +943,9 @@ class PositionManager:
                         )
                     )
 
-                logger.info("Loaded %s historical positions", len(self._position_history))
+                logger.info(
+                    "Loaded %s historical positions", len(self._position_history)
+                )
 
         except Exception as e:
             exception_handler.log_exception_with_context(
@@ -1343,7 +1365,9 @@ class PositionManager:
 
                 current_price = market_prices.get(symbol)
                 if not current_price:
-                    logger.warning("No market price available for validation of %s", symbol)
+                    logger.warning(
+                        "No market price available for validation of %s", symbol
+                    )
                     continue
 
                 validation_result = self.validate_position_integrity(
@@ -1370,7 +1394,12 @@ class PositionManager:
             else:
                 validation_report["overall_health"] = 100.0
 
-            logger.info("Position validation complete: %s/%s valid (%.1f%% health)", validation_report["positions_valid"], validation_report["positions_checked"], validation_report["overall_health"])
+            logger.info(
+                "Position validation complete: %s/%s valid (%.1f%% health)",
+                validation_report["positions_valid"],
+                validation_report["positions_checked"],
+                validation_report["overall_health"],
+            )
 
             return validation_report
 
@@ -1429,7 +1458,12 @@ class PositionManager:
                 tolerance = abs(expected_pnl * Decimal("0.05"))  # 5% tolerance
 
                 if pnl_diff > tolerance and tolerance > 0:
-                    logger.warning("Auto-correcting P&L for %s: %s -> %s", symbol, position.unrealized_pnl, expected_pnl)
+                    logger.warning(
+                        "Auto-correcting P&L for %s: %s -> %s",
+                        symbol,
+                        position.unrealized_pnl,
+                        expected_pnl,
+                    )
 
                     with self._lock:
                         if symbol in self._positions:

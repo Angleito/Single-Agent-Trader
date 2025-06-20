@@ -143,7 +143,7 @@ class BluefinWebSocketClient:
                 "network": self.network,
                 "notification_ws_url": self.NOTIFICATION_WS_URL,
                 "dapi_ws_url": self.DAPI_WS_URL,
-            }
+            },
         )
 
     async def connect(self) -> None:
@@ -277,9 +277,17 @@ class BluefinWebSocketClient:
             # Additional delay for consecutive failures
             if consecutive_failures > 3:
                 delay = min(delay * 1.5, 120)
-                logger.warning("Multiple consecutive failures (%s), extending delay", consecutive_failures)
+                logger.warning(
+                    "Multiple consecutive failures (%s), extending delay",
+                    consecutive_failures,
+                )
 
-            logger.info("Reconnecting to Bluefin in %.1fs (attempt %s/%s)", delay, self._reconnect_attempts, self._max_reconnect_attempts)
+            logger.info(
+                "Reconnecting to Bluefin in %.1fs (attempt %s/%s)",
+                delay,
+                self._reconnect_attempts,
+                self._max_reconnect_attempts,
+            )
 
             await asyncio.sleep(delay)
 
@@ -327,7 +335,9 @@ class BluefinWebSocketClient:
         }
         self._pending_subscriptions[global_id] = f"globalUpdates:{self.symbol}"
         await self._send_message(global_subscription)
-        logger.info("Subscribing to globalUpdates for %s (ID: %s)", self.symbol, global_id)
+        logger.info(
+            "Subscribing to globalUpdates for %s (ID: %s)", self.symbol, global_id
+        )
 
         # Subscribe to ticker updates for price data
         ticker_id = self._get_next_subscription_id()
@@ -356,7 +366,12 @@ class BluefinWebSocketClient:
         }
         self._pending_subscriptions[kline_id] = f"kline:{self.symbol}@{self.interval}"
         await self._send_message(kline_subscription)
-        logger.info("Subscribing to kline data for %s@%s (ID: %s)", self.symbol, self.interval, kline_id)
+        logger.info(
+            "Subscribing to kline data for %s@%s (ID: %s)",
+            self.symbol,
+            self.interval,
+            kline_id,
+        )
 
         # Subscribe to trade data for real-time price updates
         trade_id = self._get_next_subscription_id()
@@ -392,7 +407,9 @@ class BluefinWebSocketClient:
                         if isinstance(data, dict)
                         else "unknown"
                     )
-                    logger.debug("WebSocket message #%s type: %s", self._message_count, msg_type)
+                    logger.debug(
+                        "WebSocket message #%s type: %s", self._message_count, msg_type
+                    )
 
                 await self._process_message(data)
 
@@ -450,16 +467,28 @@ class BluefinWebSocketClient:
                 if sub_id in self._pending_subscriptions:
                     channel = self._pending_subscriptions.pop(sub_id)
                     self._subscribed_channels.add(channel)
-                    logger.info("Subscription confirmed: %s (ID: %s, result: %s)", channel, sub_id, data["result"])
+                    logger.info(
+                        "Subscription confirmed: %s (ID: %s, result: %s)",
+                        channel,
+                        sub_id,
+                        data["result"],
+                    )
                 else:
-                    logger.debug("Subscription %s confirmed: %s", sub_id, data["result"])
+                    logger.debug(
+                        "Subscription %s confirmed: %s", sub_id, data["result"]
+                    )
                 return
 
             elif "error" in data:
                 # Subscription error
                 if sub_id in self._pending_subscriptions:
                     channel = self._pending_subscriptions.pop(sub_id)
-                    logger.error("Subscription failed: %s (ID: %s, error: %s)", channel, sub_id, data["error"])
+                    logger.error(
+                        "Subscription failed: %s (ID: %s, error: %s)",
+                        channel,
+                        sub_id,
+                        data["error"],
+                    )
                 else:
                     logger.error("Subscription %s failed: %s", sub_id, data["error"])
                 return
@@ -671,7 +700,9 @@ class BluefinWebSocketClient:
                         # Update current candle
                         await self._update_candle_with_trade(trade_data)
 
-                        logger.debug("Ticker update: %s = $%s", self.symbol, current_price)
+                        logger.debug(
+                            "Ticker update: %s = $%s", self.symbol, current_price
+                        )
 
                     break
 
@@ -749,7 +780,13 @@ class BluefinWebSocketClient:
                         # Update current candle
                         await self._update_candle_with_trade(trade_data)
 
-                        logger.debug("Trade: %s %s %s @ $%s", self.symbol, trade_data["side"], size, price)
+                        logger.debug(
+                            "Trade: %s %s %s @ $%s",
+                            self.symbol,
+                            trade_data["side"],
+                            size,
+                            price,
+                        )
 
         except (ValueError, KeyError, TypeError, ArithmeticError) as e:
             exception_handler.log_exception_with_context(
@@ -872,7 +909,12 @@ class BluefinWebSocketClient:
                                 operation="handle_bluefin_kline_update",
                             )
 
-                    logger.debug("Kline update: %s $%s volume: %s", self.symbol, close_val, volume_val)
+                    logger.debug(
+                        "Kline update: %s $%s volume: %s",
+                        self.symbol,
+                        close_val,
+                        volume_val,
+                    )
 
         except (ValueError, KeyError, TypeError) as e:
             exception_handler.log_exception_with_context(
@@ -1052,7 +1094,9 @@ class BluefinWebSocketClient:
                     )
 
                     if ping_failures >= 3:
-                        logger.exception("Multiple ping failures, connection appears dead")
+                        logger.exception(
+                            "Multiple ping failures, connection appears dead"
+                        )
                         self._connected = False
                         break
 
@@ -1201,7 +1245,9 @@ class BluefinWebSocketClient:
 
         while not self._connected:
             if (datetime.now(UTC) - start_time).total_seconds() > timeout:
-                logger.warning("Timeout waiting for WebSocket connection after %ss", timeout)
+                logger.warning(
+                    "Timeout waiting for WebSocket connection after %ss", timeout
+                )
                 return False
 
             await asyncio.sleep(0.1)

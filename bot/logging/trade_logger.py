@@ -143,9 +143,16 @@ class TradeLogger:
         # Human-readable log
         rsi_val = indicators.get("rsi", "N/A")
         wave_val = indicators.get("cipher_b_wave", "N/A")
-        self.logger.info("Trade Decision: %s %s @ $%s | RSI=%s | Wave=%s | Memory=%s experiences | ID=%s",
-                         trade_action.action, market_state.symbol, market_state.current_price,
-                         rsi_val, wave_val, decision_log["similar_experiences"], experience_id)
+        self.logger.info(
+            "Trade Decision: %s %s @ $%s | RSI=%s | Wave=%s | Memory=%s experiences | ID=%s",
+            trade_action.action,
+            market_state.symbol,
+            market_state.current_price,
+            rsi_val,
+            wave_val,
+            decision_log["similar_experiences"],
+            experience_id,
+        )
 
         # Log detailed rationale if available
         if trade_action.rationale:
@@ -176,7 +183,11 @@ class TradeLogger:
 
         self._append_json_log(self.memory_file, memory_log)
 
-        self.memory_logger.debug("Memory query returned %s experiences in %.1fms", len(results), execution_time_ms)
+        self.memory_logger.debug(
+            "Memory query returned %s experiences in %.1fms",
+            len(results),
+            execution_time_ms,
+        )
 
     def log_trade_outcome(
         self,
@@ -214,8 +225,15 @@ class TradeLogger:
 
         # Human-readable summary
         pnl_str = f"+${pnl:.2f}" if pnl > 0 else f"-${abs(pnl):.2f}"
-        self.logger.info("Trade Completed: %s | Entry=$%s Exit=$%s | PnL=%s (%.1f%%) | Duration=%.0fmin",
-                         experience_id, entry_price, exit_price, pnl_str, outcome_log["pnl_pct"], duration_minutes)
+        self.logger.info(
+            "Trade Completed: %s | Entry=$%s Exit=$%s | PnL=%s (%.1f%%) | Duration=%.0fmin",
+            experience_id,
+            entry_price,
+            exit_price,
+            pnl_str,
+            outcome_log["pnl_pct"],
+            duration_minutes,
+        )
 
         if insights:
             self.logger.info("Insights: %s", insights)
@@ -249,7 +267,7 @@ class TradeLogger:
                 pattern,
                 stats["success_rate"] * 100,
                 stats["count"],
-                stats["avg_pnl"]
+                stats["avg_pnl"],
             )
 
     def log_position_update(
@@ -270,8 +288,14 @@ class TradeLogger:
             max_favorable: Maximum profit seen
             max_adverse: Maximum loss seen
         """
-        self.logger.debug("Position Update: %s | Price=$%s | Unrealized PnL=$%.2f | Max Profit=$%.2f | Max Loss=$%.2f",
-                          trade_id, current_price, unrealized_pnl, max_favorable, max_adverse)
+        self.logger.debug(
+            "Position Update: %s | Price=$%s | Unrealized PnL=$%.2f | Max Profit=$%.2f | Max Loss=$%.2f",
+            trade_id,
+            current_price,
+            unrealized_pnl,
+            max_favorable,
+            max_adverse,
+        )
 
     def log_memory_storage(
         self,
@@ -300,7 +324,9 @@ class TradeLogger:
 
         self._append_json_log(self.memory_file, storage_log)
 
-        self.memory_logger.debug("Stored experience %s with patterns: %s", experience_id, ", ".join(patterns))
+        self.memory_logger.debug(
+            "Stored experience %s with patterns: %s", experience_id, ", ".join(patterns)
+        )
 
     def _append_json_log(self, file_path: Path, data: dict[str, Any]) -> None:
         """Append JSON data to log file."""

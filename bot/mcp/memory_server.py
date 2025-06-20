@@ -211,7 +211,14 @@ class MCPMemoryServer:
         # Persist locally
         await self._save_experience_local(experience)
 
-        logger.info("💾 MCP Memory: Stored experience %s... | Action: %s | Price: $%s | Symbol: %s | Patterns: %s", experience.experience_id[:8], trade_action.action, market_state.current_price, market_state.symbol, ", ".join(experience.pattern_tags))
+        logger.info(
+            "💾 MCP Memory: Stored experience %s... | Action: %s | Price: $%s | Symbol: %s | Patterns: %s",
+            experience.experience_id[:8],
+            trade_action.action,
+            market_state.current_price,
+            market_state.symbol,
+            ", ".join(experience.pattern_tags),
+        )
 
         # Log detailed indicators if available
         if experience.indicators:
@@ -220,17 +227,23 @@ class MCPMemoryServer:
             ema_fast = experience.indicators.get("ema_fast", 0)
             ema_slow = experience.indicators.get("ema_slow", 0)
             ema_trend = "Bull" if ema_fast > ema_slow else "Bear"
-            logger.debug("MCP Memory: Indicators - RSI: %.1f, Cipher B: %.1f, EMA Trend: %s",
-                        float(rsi_val) if rsi_val != "N/A" else 0.0,
-                        float(cipher_val) if cipher_val != "N/A" else 0.0,
-                        ema_trend)
+            logger.debug(
+                "MCP Memory: Indicators - RSI: %.1f, Cipher B: %.1f, EMA Trend: %s",
+                float(rsi_val) if rsi_val != "N/A" else 0.0,
+                float(cipher_val) if cipher_val != "N/A" else 0.0,
+                ema_trend,
+            )
 
         if experience.dominance_data:
-            stablecoin_dom = experience.dominance_data.get("stablecoin_dominance", "N/A")
+            stablecoin_dom = experience.dominance_data.get(
+                "stablecoin_dominance", "N/A"
+            )
             usdt_dom = experience.dominance_data.get("usdt_dominance", "N/A")
-            logger.debug("MCP Memory: Dominance - Stablecoin: %.2f%%, USDT: %.2f%%",
-                        float(stablecoin_dom) if stablecoin_dom != "N/A" else 0.0,
-                        float(usdt_dom) if usdt_dom != "N/A" else 0.0)
+            logger.debug(
+                "MCP Memory: Dominance - Stablecoin: %.2f%%, USDT: %.2f%%",
+                float(stablecoin_dom) if stablecoin_dom != "N/A" else 0.0,
+                float(usdt_dom) if usdt_dom != "N/A" else 0.0,
+            )
 
         # Log memory storage
         self.trade_logger.log_memory_storage(
@@ -310,8 +323,14 @@ class MCPMemoryServer:
         await self._save_experience_local(experience)
 
         outcome_text = "✅ WIN" if experience.outcome["success"] else "❌ LOSS"
-        logger.info("📊 MCP Memory: Updated experience %s... with outcome | PnL: $%.2f (%s) | Duration: %.1fmin | Price Change: %+.2f%%",
-                   experience_id[:8], pnl, outcome_text, duration_minutes, price_change_pct)
+        logger.info(
+            "📊 MCP Memory: Updated experience %s... with outcome | PnL: $%.2f (%s) | Duration: %.1fmin | Price Change: %+.2f%%",
+            experience_id[:8],
+            pnl,
+            outcome_text,
+            duration_minutes,
+            price_change_pct,
+        )
 
         if experience.learned_insights:
             logger.debug("MCP Memory: Insights - %s", experience.learned_insights)
@@ -366,18 +385,29 @@ class MCPMemoryServer:
         # Calculate execution time
         execution_time_ms = (time.time() - start_time) * 1000
 
-        logger.info("🔍 MCP Memory: Query completed | Found %s similar experiences (from %s total) | Time: %.1fms",
-                   len(results), len(self.memory_cache), execution_time_ms)
+        logger.info(
+            "🔍 MCP Memory: Query completed | Found %s similar experiences (from %s total) | Time: %.1fms",
+            len(results),
+            len(self.memory_cache),
+            execution_time_ms,
+        )
 
         # Log top results if any
         if results:
             top_result = scored_experiences[0] if scored_experiences else None
             if top_result:
                 similarity, exp = top_result
-                outcome_text = "WIN" if exp.outcome and exp.outcome["success"] else "LOSS"
+                outcome_text = (
+                    "WIN" if exp.outcome and exp.outcome["success"] else "LOSS"
+                )
                 pnl_text = f"${exp.outcome['pnl']:.2f}" if exp.outcome else "No outcome"
-                logger.debug("MCP Memory: Best match - Similarity: %.3f | Action: %s | Outcome: %s | PnL: %s",
-                           similarity, exp.decision.get("action"), outcome_text, pnl_text)
+                logger.debug(
+                    "MCP Memory: Best match - Similarity: %.3f | Action: %s | Outcome: %s | PnL: %s",
+                    similarity,
+                    exp.decision.get("action"),
+                    outcome_text,
+                    pnl_text,
+                )
 
         # Log query details
         query_dict = {
@@ -554,9 +584,7 @@ class MCPMemoryServer:
 
         return patterns
 
-    def _extract_features(
-        self, market_state: MarketState
-    ) -> npt.NDArray[np.float64]:
+    def _extract_features(self, market_state: MarketState) -> npt.NDArray[np.float64]:
         """Extract feature vector from market state for similarity comparison."""
         features = []
 
@@ -662,10 +690,7 @@ class MCPMemoryServer:
         time_similarity = 0.8  # Placeholder
 
         # Weighted combination
-        return (
-            1 - time_weight
-        ) * feature_similarity + time_weight * time_similarity
-
+        return (1 - time_weight) * feature_similarity + time_weight * time_similarity
 
     async def _generate_insights(self, experience: TradingExperience) -> str:
         """Generate learning insights from completed trade."""
@@ -695,9 +720,7 @@ class MCPMemoryServer:
                 experience.dominance_data.get("dominance_24h_change", 0) < 0
                 and experience.decision["action"] == "LONG"
             ):
-                insights.append(
-                    "Falling dominance correctly predicted crypto strength"
-                )
+                insights.append("Falling dominance correctly predicted crypto strength")
         else:
             insights.append(f"Failed {experience.decision['action']} trade")
 
@@ -774,7 +797,9 @@ class MCPMemoryServer:
         headers["Content-Type"] = "application/json"
 
         try:
-            logger.debug("Updating remote experience %s...", experience.experience_id[:8])
+            logger.debug(
+                "Updating remote experience %s...", experience.experience_id[:8]
+            )
             async with self._session.put(
                 f"{self.server_url}/memories/{experience.experience_id}",
                 headers=headers,
@@ -784,9 +809,13 @@ class MCPMemoryServer:
                 if response.status not in [200, 204]:
                     logger.warning("Failed to update remotely: %s", response.status)
                 else:
-                    logger.debug("Remote update successful for %s", experience.experience_id[:8])
+                    logger.debug(
+                        "Remote update successful for %s", experience.experience_id[:8]
+                    )
         except TimeoutError:
-            logger.warning("Remote update timed out for %s", experience.experience_id[:8])
+            logger.warning(
+                "Remote update timed out for %s", experience.experience_id[:8]
+            )
         except aiohttp.ClientError as e:
             logger.warning("Remote update network error: %s", e)
         except Exception as e:
@@ -841,7 +870,9 @@ class MCPMemoryServer:
                             self.pattern_index[pattern] = []
                         self.pattern_index[pattern].append(experience.experience_id)
 
-            logger.info("Loaded %s experiences from local cache", len(self.memory_cache))
+            logger.info(
+                "Loaded %s experiences from local cache", len(self.memory_cache)
+            )
 
         except Exception as e:
             logger.exception("Failed to load local cache: %s", e)

@@ -272,7 +272,11 @@ class MCPOmniSearchClient:
                         )
                         financial_results.append(financial_result)
 
-            logger.info("🔍 MCP-OmniSearch: Found %s financial news results for '%s'", len(financial_results), query)
+            logger.info(
+                "🔍 MCP-OmniSearch: Found %s financial news results for '%s'",
+                len(financial_results),
+                query,
+            )
             return financial_results
 
         except Exception as e:
@@ -327,11 +331,18 @@ class MCPOmniSearchClient:
                 risk_factors=self._extract_risk_factors(response_text),
             )
 
-            logger.info("🔍 MCP-OmniSearch: %s sentiment - %s (score: %.2f)", base_symbol, sentiment.overall_sentiment, sentiment.sentiment_score)
+            logger.info(
+                "🔍 MCP-OmniSearch: %s sentiment - %s (score: %.2f)",
+                base_symbol,
+                sentiment.overall_sentiment,
+                sentiment.sentiment_score,
+            )
             return sentiment
 
         except Exception as e:
-            logger.exception("Crypto sentiment search failed for %s: %s", base_symbol, e)
+            logger.exception(
+                "Crypto sentiment search failed for %s: %s", base_symbol, e
+            )
             return self._get_fallback_sentiment(base_symbol)
 
     async def search_nasdaq_sentiment(self) -> SentimentAnalysis:
@@ -376,7 +387,11 @@ class MCPOmniSearchClient:
                 risk_factors=self._extract_risk_factors(response_text),
             )
 
-            logger.info("🔍 MCP-OmniSearch: NASDAQ sentiment - %s (score: %.2f)", sentiment.overall_sentiment, sentiment.sentiment_score)
+            logger.info(
+                "🔍 MCP-OmniSearch: NASDAQ sentiment - %s (score: %.2f)",
+                sentiment.overall_sentiment,
+                sentiment.sentiment_score,
+            )
             return sentiment
 
         except Exception as e:
@@ -422,11 +437,20 @@ class MCPOmniSearchClient:
                 direction="neutral",
             )
 
-            logger.info("🔍 MCP-OmniSearch: %s-%s correlation - neutral weak (0.000)", crypto_base, nasdaq_base)
+            logger.info(
+                "🔍 MCP-OmniSearch: %s-%s correlation - neutral weak (0.000)",
+                crypto_base,
+                nasdaq_base,
+            )
             return correlation
 
         except Exception as e:
-            logger.exception("Market correlation search failed for %s-%s: %s", crypto_base, nasdaq_base, e)
+            logger.exception(
+                "Market correlation search failed for %s-%s: %s",
+                crypto_base,
+                nasdaq_base,
+                e,
+            )
             return self._get_fallback_correlation(crypto_base, nasdaq_base, timeframe)
 
     def _analyze_sentiment(self, text: str) -> str:

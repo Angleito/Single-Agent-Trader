@@ -382,9 +382,9 @@ class WebSocketPublisher:
                 current_time = time.time()
                 if current_time - self._queue_stats["last_queue_warning"] > 30:
                     self._queue_stats["last_queue_warning"] = current_time
-                    logger.warning("Message queue full (size: %s/%s), dropping %s message. Stats: sent=%s, dropped=%s, queue_full_events=%s", 
-                                  current_queue_size, self.queue_size, message_type, 
-                                  self._queue_stats['messages_sent'], self._queue_stats['messages_dropped'], 
+                    logger.warning("Message queue full (size: %s/%s), dropping %s message. Stats: sent=%s, dropped=%s, queue_full_events=%s",
+                                  current_queue_size, self.queue_size, message_type,
+                                  self._queue_stats['messages_sent'], self._queue_stats['messages_dropped'],
                                   self._queue_stats['queue_full_events'])
 
                 # For critical messages, try to make room by dropping older non-priority messages
@@ -693,7 +693,7 @@ class WebSocketPublisher:
                 if self._last_pong_time is not None:
                     time_since_pong = time.time() - self._last_pong_time
                     if time_since_pong > 60:  # 60 seconds without pong
-                        logger.warning("No pong received for %ss, connection may be stale", time_since_pong:.1f)
+                        logger.warning("No pong received for %.1fs, connection may be stale", time_since_pong)
                         self._connected = False
                         break
 

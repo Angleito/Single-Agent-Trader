@@ -297,7 +297,9 @@ class ChatCompletionLogger:
             },
         }
 
-        self.logger.info("TRADING_DECISION: %s", json.dumps(log_entry, cls=DecimalEncoder))
+        self.logger.info(
+            "TRADING_DECISION: %s", json.dumps(log_entry, cls=DecimalEncoder)
+        )
 
     def log_performance_metrics(self) -> dict[str, Any]:
         """
@@ -406,7 +408,9 @@ class LangChainCallbackHandler(BaseCallbackHandler):
         run_id = kwargs.get("run_id", "unknown")
         self._chain_starts[str(run_id)] = time.time()
 
-        self.logger.debug("Chain started: %s - %s", serialized.get("name", "unknown"), run_id)
+        self.logger.debug(
+            "Chain started: %s - %s", serialized.get("name", "unknown"), run_id
+        )
 
     def on_chain_end(self, outputs: dict[str, Any], **kwargs: Any) -> None:
         """Called when a chain finishes running."""

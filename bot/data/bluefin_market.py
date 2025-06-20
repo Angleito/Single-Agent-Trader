@@ -255,7 +255,13 @@ class BluefinMarketDataProvider:
                             interval_seconds = self._interval_to_seconds(self.interval)
                             expected_candles = int((hours * 3600) / interval_seconds)
 
-                            logger.info("🔍 Attempting to fetch %s hours of historical data " "(~%s candles at %s interval)", hours, expected_candles, self.interval)
+                            logger.info(
+                                "🔍 Attempting to fetch %s hours of historical data "
+                                "(~%s candles at %s interval)",
+                                hours,
+                                expected_candles,
+                                self.interval,
+                            )
 
                             historical_data = await self.fetch_historical_data(
                                 start_time=start_time, end_time=end_time
@@ -266,34 +272,41 @@ class BluefinMarketDataProvider:
                                 logger.info(
                                     "✅ Successfully fetched %s candles from %s-hour range - sufficient for indicators",
                                     len(historical_data),
-                                    hours
+                                    hours,
                                 )
                                 break
                             elif historical_data:
                                 logger.warning(
                                     "⚠️ Got %s candles from %s-hour range - trying longer range",
                                     len(historical_data),
-                                    hours
+                                    hours,
                                 )
                             else:
-                                logger.warning("❌ No data from %s-hour range - trying longer range", hours)
+                                logger.warning(
+                                    "❌ No data from %s-hour range - trying longer range",
+                                    hours,
+                                )
 
                         except Exception as e:
-                            logger.exception("❌ Failed to fetch %s-hour data: %s", hours, e)
+                            logger.exception(
+                                "❌ Failed to fetch %s-hour data: %s", hours, e
+                            )
                             continue
 
                     # If still insufficient data, generate fallback data
                     if not historical_data or len(historical_data) < 100:
                         logger.warning(
                             "⚠️ Historical data insufficient (%s candles). Generating synthetic data for indicator initialization.",
-                            len(historical_data) if historical_data else 0
+                            len(historical_data) if historical_data else 0,
                         )
                         historical_data = (
                             await self._generate_fallback_historical_data()
                         )
 
                 except Exception as e:
-                    logger.exception("❌ Critical error in historical data fetching: %s", e)
+                    logger.exception(
+                        "❌ Critical error in historical data fetching: %s", e
+                    )
                     # Generate fallback data to ensure bot can start
                     logger.info("🎭 Generating fallback data to ensure bot startup")
                     historical_data = await self._generate_fallback_historical_data()
@@ -318,7 +331,9 @@ class BluefinMarketDataProvider:
             try:
                 current_price = await self.fetch_latest_price()
                 if current_price:
-                    logger.info("💰 Successfully fetched current price: $%s", current_price)
+                    logger.info(
+                        "💰 Successfully fetched current price: $%s", current_price
+                    )
             except Exception as e:
                 logger.warning("⚠️ Could not fetch current price: %s", e)
 
@@ -326,10 +341,16 @@ class BluefinMarketDataProvider:
 
             # Final data validation
             final_candle_count = len(self._ohlcv_cache)
-            logger.info("✅ Bluefin market data connection complete. Total candles available: %s", final_candle_count)
+            logger.info(
+                "✅ Bluefin market data connection complete. Total candles available: %s",
+                final_candle_count,
+            )
 
             if final_candle_count < 100:
-                logger.error("🚨 CRITICAL: Only %s candles available! Indicators may not work properly.", final_candle_count)
+                logger.error(
+                    "🚨 CRITICAL: Only %s candles available! Indicators may not work properly.",
+                    final_candle_count,
+                )
 
         except Exception as e:
             logger.exception("💥 Failed to connect to Bluefin market data: %s", e)
@@ -420,7 +441,12 @@ class BluefinMarketDataProvider:
             )
             start_time = default_start
 
-        logger.info("Fetching historical data for %s from %s to %s", self.symbol, start_time, end_time)
+        logger.info(
+            "Fetching historical data for %s from %s to %s",
+            self.symbol,
+            start_time,
+            end_time,
+        )
 
         try:
             # Try multiple approaches to get historical data
@@ -432,7 +458,10 @@ class BluefinMarketDataProvider:
                     self.symbol, granularity, start_time, end_time, required_candles
                 )
                 if historical_data and len(historical_data) > 0:
-                    logger.info("✅ Got %s candles from main Bluefin service", len(historical_data))
+                    logger.info(
+                        "✅ Got %s candles from main Bluefin service",
+                        len(historical_data),
+                    )
                 else:
                     logger.warning("⚠️ Main Bluefin service returned no data")
             except Exception as e:
@@ -447,7 +476,9 @@ class BluefinMarketDataProvider:
                     )
                     if fallback_data and len(fallback_data) > len(historical_data):
                         historical_data = fallback_data
-                        logger.info("✅ Direct API provided %s candles", len(historical_data))
+                        logger.info(
+                            "✅ Direct API provided %s candles", len(historical_data)
+                        )
                 except Exception as e:
                     logger.warning("⚠️ Direct API fallback failed: %s", e)
 
@@ -468,23 +499,28 @@ class BluefinMarketDataProvider:
                         logger.info(
                             "✅ Loaded %s historical candles (limited to %s)",
                             len(self._ohlcv_cache),
-                            self._extended_history_limit
+                            self._extended_history_limit,
                         )
                     else:
                         self._ohlcv_cache = historical_data
-                        logger.info("✅ Loaded %s historical candles (extended history)", len(self._ohlcv_cache))
+                        logger.info(
+                            "✅ Loaded %s historical candles (extended history)",
+                            len(self._ohlcv_cache),
+                        )
                 else:
                     # Normal case: limit to candle_limit but ensure minimum for indicators
                     self._extended_history_mode = False
 
                     if len(historical_data) >= 100:
                         self._ohlcv_cache = historical_data[-self.candle_limit :]
-                        logger.info("✅ Loaded %s historical candles", len(self._ohlcv_cache))
+                        logger.info(
+                            "✅ Loaded %s historical candles", len(self._ohlcv_cache)
+                        )
                     else:
                         # Insufficient real data - pad with synthetic data if needed
                         logger.warning(
                             "⚠️ Only %s real candles available. Padding with synthetic data for indicator reliability.",
-                            len(historical_data)
+                            len(historical_data),
                         )
 
                         # Generate synthetic data to reach minimum requirements
@@ -504,7 +540,7 @@ class BluefinMarketDataProvider:
                             "✅ Total candles after padding: %s (%s real + %s synthetic)",
                             len(self._ohlcv_cache),
                             len(historical_data),
-                            len(self._ohlcv_cache) - len(historical_data)
+                            len(self._ohlcv_cache) - len(historical_data),
                         )
             else:
                 # No historical data available - use pure synthetic fallback
@@ -534,7 +570,9 @@ class BluefinMarketDataProvider:
                 try:
                     return await self._generate_fallback_historical_data()
                 except Exception as fallback_error:
-                    logger.exception("💥 Even fallback data generation failed: %s", fallback_error)
+                    logger.exception(
+                        "💥 Even fallback data generation failed: %s", fallback_error
+                    )
                     raise BluefinDataError(
                         f"Complete data failure: {e}. Fallback also failed: {fallback_error}"
                     ) from e
@@ -648,7 +686,6 @@ class BluefinMarketDataProvider:
         df = pd.DataFrame(df_data)
         return df.set_index("timestamp")
 
-
     def subscribe_to_updates(self, callback: Callable[[MarketData], None]) -> None:
         """
         Subscribe to real-time data updates.
@@ -687,7 +724,9 @@ class BluefinMarketDataProvider:
                     # Create task for sync callback
                     asyncio.create_task(self._safe_callback_sync(callback, data))
             except Exception as e:
-                logger.exception("Error creating subscriber task for %s: %s", callback.__name__, e)
+                logger.exception(
+                    "Error creating subscriber task for %s: %s", callback.__name__, e
+                )
 
         # Don't wait for all tasks to complete - fire and forget for non-blocking behavior
 
@@ -696,7 +735,9 @@ class BluefinMarketDataProvider:
         try:
             await callback(data)
         except Exception as e:
-            logger.exception("Error in async subscriber callback %s: %s", callback.__name__, e)
+            logger.exception(
+                "Error in async subscriber callback %s: %s", callback.__name__, e
+            )
 
     async def _safe_callback_sync(self, callback: Callable, data: MarketData) -> None:
         """Safely execute sync callback in thread pool."""
@@ -710,7 +751,9 @@ class BluefinMarketDataProvider:
                 return
             await loop.run_in_executor(None, callback, data)
         except Exception as e:
-            logger.exception("Error in sync subscriber callback %s: %s", callback.__name__, e)
+            logger.exception(
+                "Error in sync subscriber callback %s: %s", callback.__name__, e
+            )
 
     async def _process_websocket_messages(self) -> None:
         """
@@ -864,11 +907,19 @@ class BluefinMarketDataProvider:
                 if latest_cached.timestamp == candle.timestamp:
                     self._ohlcv_cache[-1] = candle
                     should_add = False
-                    logger.debug("📝 Updated existing candle: %s @ %s", candle.symbol, candle.close)
+                    logger.debug(
+                        "📝 Updated existing candle: %s @ %s",
+                        candle.symbol,
+                        candle.close,
+                    )
                 else:
                     # Older candle - ignore
                     should_add = False
-                    logger.debug("⚠️ Ignoring old candle: %s vs latest %s", candle.timestamp, latest_cached.timestamp)
+                    logger.debug(
+                        "⚠️ Ignoring old candle: %s vs latest %s",
+                        candle.timestamp,
+                        latest_cached.timestamp,
+                    )
 
         if should_add:
             # Add new candle to cache
@@ -904,7 +955,7 @@ class BluefinMarketDataProvider:
             logger.info(
                 "📊 Data status: %s candles available (%s for indicators)",
                 len(self._ohlcv_cache),
-                "✅ sufficient" if len(self._ohlcv_cache) >= 100 else "⚠️ insufficient"
+                "✅ sufficient" if len(self._ohlcv_cache) >= 100 else "⚠️ insufficient",
             )
 
     def _interval_to_seconds(self, interval: str) -> int:
@@ -950,7 +1001,9 @@ class BluefinMarketDataProvider:
                     # Update cache
                     self._price_cache["price"] = price
                     self._cache_timestamps["price"] = datetime.now(UTC)
-                    logger.info("Fetched Bluefin ticker price: %s for %s", price, self.symbol)
+                    logger.info(
+                        "Fetched Bluefin ticker price: %s for %s", price, self.symbol
+                    )
                     return price
                 else:
                     logger.warning("No price data in ticker response: %s", ticker_data)
@@ -980,7 +1033,9 @@ class BluefinMarketDataProvider:
             async with self._session.get(url, params=params) as response:
                 if response.status != 200:
                     error_text = await response.text()
-                    logger.error("Bluefin ticker API error %s: %s", response.status, error_text)
+                    logger.error(
+                        "Bluefin ticker API error %s: %s", response.status, error_text
+                    )
                     return None
 
                 data = await response.json()
@@ -1026,7 +1081,7 @@ class BluefinMarketDataProvider:
             interval,
             limit,
             start_time,
-            end_time
+            end_time,
         )
 
         try:
@@ -1042,7 +1097,7 @@ class BluefinMarketDataProvider:
             logger.debug(
                 "🔗 Connecting to Bluefin service at %s (has_api_key: %s)",
                 service_url,
-                bool(api_key)
+                bool(api_key),
             )
 
             async with BluefinServiceClient(service_url, api_key) as service_client:
@@ -1070,7 +1125,7 @@ class BluefinMarketDataProvider:
                     logger.warning(
                         "⚠️ Interval %s not supported by Bluefin, using %s instead (may affect granularity)",
                         interval,
-                        bluefin_interval
+                        bluefin_interval,
                     )
 
                 # Prepare request parameters with enhanced validation
@@ -1112,14 +1167,19 @@ class BluefinMarketDataProvider:
                                 or low_val <= 0
                                 or close_val <= 0
                             ):
-                                logger.debug("⚠️ Skipping candle %s with invalid prices", i)
+                                logger.debug(
+                                    "⚠️ Skipping candle %s with invalid prices", i
+                                )
                                 invalid_candles += 1
                                 continue
 
                             if high_val < max(open_val, close_val) or low_val > min(
                                 open_val, close_val
                             ):
-                                logger.debug("⚠️ Fixing invalid OHLC relationships in candle %s", i)
+                                logger.debug(
+                                    "⚠️ Fixing invalid OHLC relationships in candle %s",
+                                    i,
+                                )
                                 # Fix invalid OHLC relationships
                                 high_val = max(open_val, high_val, low_val, close_val)
                                 low_val = min(open_val, high_val, low_val, close_val)
@@ -1138,7 +1198,9 @@ class BluefinMarketDataProvider:
                             candles.append(market_data)
 
                         else:
-                            logger.debug("⚠️ Skipping malformed candle %s: %s", i, candle)
+                            logger.debug(
+                                "⚠️ Skipping malformed candle %s: %s", i, candle
+                            )
                             invalid_candles += 1
 
                     except (ValueError, TypeError, IndexError) as e:
@@ -1147,9 +1209,16 @@ class BluefinMarketDataProvider:
                         continue
 
                 if invalid_candles > 0:
-                    logger.warning("⚠️ Skipped %s invalid candles out of %s total", invalid_candles, len(candle_data))
+                    logger.warning(
+                        "⚠️ Skipped %s invalid candles out of %s total",
+                        invalid_candles,
+                        len(candle_data),
+                    )
 
-                logger.info("✅ Successfully fetched %s valid candles from Bluefin service", len(candles))
+                logger.info(
+                    "✅ Successfully fetched %s valid candles from Bluefin service",
+                    len(candles),
+                )
                 return candles
 
         except Exception as e:
@@ -1213,12 +1282,16 @@ class BluefinMarketDataProvider:
 
             # Make API request to klines endpoint
             url = f"{self._api_base_url}/klines"
-            logger.info("Fetching candles from Bluefin API: %s with params: %s", url, params)
+            logger.info(
+                "Fetching candles from Bluefin API: %s with params: %s", url, params
+            )
 
             async with self._session.get(url, params=params) as response:
                 if response.status != 200:
                     error_text = await response.text()
-                    logger.error("Bluefin API error %s: %s", response.status, error_text)
+                    logger.error(
+                        "Bluefin API error %s: %s", response.status, error_text
+                    )
                     return []
 
                 data = await response.json()
@@ -1257,7 +1330,10 @@ class BluefinMarketDataProvider:
                         )
                         candles.append(market_data)
 
-                logger.info("Successfully fetched %s candles from Bluefin directly", len(candles))
+                logger.info(
+                    "Successfully fetched %s candles from Bluefin directly",
+                    len(candles),
+                )
                 return candles
 
         except aiohttp.ClientError as e:
@@ -1282,16 +1358,19 @@ class BluefinMarketDataProvider:
             logger.error(
                 "🚨 Insufficient data for reliable indicator calculations! Have %s candles, need minimum %s.",
                 candle_count,
-                min_required
+                min_required,
             )
         elif candle_count < optimal_required:
             logger.warning(
                 "⚠️ Suboptimal data for indicator calculations. Have %s candles, recommend %s.",
                 candle_count,
-                optimal_required
+                optimal_required,
             )
         else:
-            logger.info("✅ Sufficient data for reliable indicator calculations: %s candles", candle_count)
+            logger.info(
+                "✅ Sufficient data for reliable indicator calculations: %s candles",
+                candle_count,
+            )
 
     async def _generate_fallback_historical_data(self) -> list[MarketData]:
         """
@@ -1310,7 +1389,9 @@ class BluefinMarketDataProvider:
             try:
                 reference_price = await self.fetch_latest_price()
                 if reference_price:
-                    logger.info("💰 Using real price as reference: $%s", reference_price)
+                    logger.info(
+                        "💰 Using real price as reference: $%s", reference_price
+                    )
             except Exception as e:
                 logger.warning("⚠️ Could not get real price for reference: %s", e)
 
@@ -1402,7 +1483,7 @@ class BluefinMarketDataProvider:
                 len(candles),
                 self.symbol,
                 candles[0].close,
-                candles[-1].close
+                candles[-1].close,
             )
 
             return candles
@@ -1427,7 +1508,10 @@ class BluefinMarketDataProvider:
             minimal_candles = [minimal_candle] * 100
             self._ohlcv_cache = minimal_candles
 
-            logger.warning("⚠️ Using minimal fallback data: 100 identical candles at $%s", minimal_price)
+            logger.warning(
+                "⚠️ Using minimal fallback data: 100 identical candles at $%s",
+                minimal_price,
+            )
 
             return minimal_candles
 
@@ -1448,7 +1532,11 @@ class BluefinMarketDataProvider:
             return []
 
         needed_candles = target_count - len(real_data)
-        logger.info("🎭 Generating %s synthetic candles to pad %s real candles", needed_candles, len(real_data))
+        logger.info(
+            "🎭 Generating %s synthetic candles to pad %s real candles",
+            needed_candles,
+            len(real_data),
+        )
 
         try:
             # Use the earliest real candle as reference
@@ -1513,7 +1601,7 @@ class BluefinMarketDataProvider:
                 "✅ Generated %s synthetic padding candles (price range: $%s -> $%s)",
                 len(synthetic_candles),
                 synthetic_candles[0].close,
-                synthetic_candles[-1].close
+                synthetic_candles[-1].close,
             )
 
             return synthetic_candles
@@ -1838,7 +1926,9 @@ class BluefinMarketDataProvider:
         self._reconnect_attempts += 1
         delay = self._reconnect_delay * self._reconnect_attempts
 
-        logger.info("Scheduling reconnection attempt %s in %ss", self._reconnect_attempts, delay)
+        logger.info(
+            "Scheduling reconnection attempt %s in %ss", self._reconnect_attempts, delay
+        )
 
         self._reconnect_task = asyncio.create_task(self._reconnect_after_delay(delay))
 
@@ -2014,7 +2104,6 @@ class BluefinMarketDataClient:
         df = pd.DataFrame(df_data)
         df = df.set_index("timestamp")
         return df.sort_index()
-
 
 
 # Factory function for easy client creation

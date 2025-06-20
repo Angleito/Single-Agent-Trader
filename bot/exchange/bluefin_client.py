@@ -319,9 +319,9 @@ class BluefinServiceClient:
                     > 100
                 ):
                     self.balance_performance_metrics["balance_response_times"] = (
-                        self.balance_performance_metrics[
-                            "balance_response_times"
-                        ][-100:]
+                        self.balance_performance_metrics["balance_response_times"][
+                            -100:
+                        ]
                     )
 
                 # Update average
@@ -2571,9 +2571,7 @@ class BluefinServiceClient:
                     "status": (
                         "pass"
                         if success_rate >= 80
-                        else "degraded"
-                        if success_rate >= 60
-                        else "fail"
+                        else "degraded" if success_rate >= 60 else "fail"
                     ),
                     "response_time_ms": avg_response_time * 1000,
                     "success_rate": success_rate,
