@@ -348,7 +348,7 @@ def get_balance_operation_context(
     Returns:
         Dictionary with standardized balance operation context
     """
-    from datetime import datetime
+    from datetime import UTC, datetime
 
     context: dict[str, Any] = {
         "correlation_id": correlation_id,

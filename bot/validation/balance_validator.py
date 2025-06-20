@@ -147,7 +147,7 @@ class BalanceValidator:
                 self._raise_balance_above_max(error_msg)
 
             # Check for negative balance (additional safety check)
-            if normalized_balance < Decimal("0"):
+            if normalized_balance < Decimal(0):
                 error_msg = f"Negative balance detected: ${normalized_balance}"
                 self._log_validation_error(error_msg, context, "NEGATIVE")
                 self._raise_negative_balance(error_msg)
@@ -251,7 +251,7 @@ class BalanceValidator:
                 )
 
             # Check for impossible changes (e.g., balance going from 0 to very high instantly)
-            if old_normalized == Decimal("0") and new_normalized > Decimal("1000"):
+            if old_normalized == Decimal(0) and new_normalized > Decimal(1000):
                 error_msg = (
                     f"Impossible balance change: ${old_normalized} -> ${new_normalized} "
                     f"(zero to significant amount instantly)"
@@ -805,7 +805,7 @@ class BalanceValidator:
             anomalies.append("Repeated exact balance values")
 
         # Check for impossible precision (e.g., trading fees resulting in round numbers)
-        if current_balance > Decimal("100") and str(current_balance).endswith(".00"):
+        if current_balance > Decimal(100) and str(current_balance).endswith(".00"):
             # This might be suspicious for an actively trading account
             recent_trades = [
                 record

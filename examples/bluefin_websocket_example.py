@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 async def on_candle_update(candle: MarketData):
     """Callback function called when a new candle is completed."""
     logger.info(
-        "New candle: %s @ %s | " "O: %s H: %s L: %s C: %s V: %s",
+        "New candle: %s @ %s | O: %s H: %s L: %s C: %s V: %s",
         candle.symbol,
         candle.timestamp,
         candle.open,
@@ -93,7 +93,7 @@ async def main():
         logger.info("\nLast %s candles:", len(last_candles))
         for candle in last_candles:
             logger.info(
-                "  %s: O=%s H=%s " "L=%s C=%s V=%s",
+                "  %s: O=%s H=%s L=%s C=%s V=%s",
                 candle.timestamp,
                 candle.open,
                 candle.high,

@@ -3,7 +3,7 @@
 import json
 import logging
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -51,13 +51,13 @@ class FIFOTradingTest:
             quantity=quantity,
             price=price,
             status=OrderStatus.FILLED,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             filled_quantity=quantity,
         )
 
     def test_basic_fifo_flow(self):
         """Test basic FIFO buy and sell flow."""
-        logger.info("\n" + "=" * 80)
+        logger.info("\n%s", "=" * 80)
         logger.info("TEST 1: Basic FIFO Flow")
         logger.info("=" * 80)
 
@@ -67,8 +67,8 @@ class FIFOTradingTest:
         order1 = self.create_test_order(
             symbol=symbol,
             side="BUY",
-            quantity=Decimal("1"),
-            price=Decimal("40000"),
+            quantity=Decimal(1),
+            price=Decimal(40000),
             order_id="order_1",
         )
         position = self.position_manager.update_position_from_order(
@@ -86,7 +86,7 @@ class FIFOTradingTest:
             symbol=symbol,
             side="BUY",
             quantity=Decimal("0.5"),
-            price=Decimal("42000"),
+            price=Decimal(42000),
             order_id="order_2",
         )
         position = self.position_manager.update_position_from_order(
@@ -109,7 +109,7 @@ class FIFOTradingTest:
             symbol=symbol,
             side="SELL",
             quantity=Decimal("0.75"),
-            price=Decimal("45000"),
+            price=Decimal(45000),
             order_id="order_3",
         )
         position = self.position_manager.update_position_from_order(
@@ -133,7 +133,7 @@ class FIFOTradingTest:
             symbol=symbol,
             side="SELL",
             quantity=Decimal("0.75"),
-            price=Decimal("44000"),
+            price=Decimal(44000),
             order_id="order_4",
         )
         position = self.position_manager.update_position_from_order(
@@ -151,7 +151,7 @@ class FIFOTradingTest:
         # Lot 1: Bought 1 BTC @ $40,000, sold 0.75 @ $45,000 = $3,750 profit
         # Lot 2: Bought 0.5 BTC @ $42,000, sold 0.5 @ $44,000 = $1,000 profit
         # Total expected P&L: $4,750
-        expected_pnl = Decimal("3750") + Decimal("1000")
+        expected_pnl = Decimal(3750) + Decimal(1000)
         actual_pnl = self.position_manager.fifo_manager.get_realized_pnl(symbol)
 
         logger.info("\nExpected P&L: $%s", expected_pnl)
@@ -164,7 +164,7 @@ class FIFOTradingTest:
 
     def test_multiple_buys_partial_sells(self):
         """Test multiple buys with partial sells."""
-        logger.info("\n" + "=" * 80)
+        logger.info("\n%s", "=" * 80)
         logger.info("TEST 2: Multiple Buys with Partial Sells")
         logger.info("=" * 80)
 
@@ -172,9 +172,9 @@ class FIFOTradingTest:
 
         # Buy orders at different prices
         buys = [
-            (Decimal("2"), Decimal("2000"), "buy_1"),  # 2 ETH @ $2,000
-            (Decimal("1.5"), Decimal("2100"), "buy_2"),  # 1.5 ETH @ $2,100
-            (Decimal("3"), Decimal("2200"), "buy_3"),  # 3 ETH @ $2,200
+            (Decimal(2), Decimal(2000), "buy_1"),  # 2 ETH @ $2,000
+            (Decimal("1.5"), Decimal(2100), "buy_2"),  # 1.5 ETH @ $2,100
+            (Decimal(3), Decimal(2200), "buy_3"),  # 3 ETH @ $2,200
         ]
 
         for quantity, price, order_id in buys:
@@ -196,8 +196,8 @@ class FIFOTradingTest:
         sell_order = self.create_test_order(
             symbol=symbol,
             side="SELL",
-            quantity=Decimal("4"),  # Sell 4 ETH
-            price=Decimal("2500"),
+            quantity=Decimal(4),  # Sell 4 ETH
+            price=Decimal(2500),
             order_id="sell_1",
         )
         position = self.position_manager.update_position_from_order(
@@ -230,7 +230,7 @@ class FIFOTradingTest:
 
     def test_position_closure_and_reopening(self):
         """Test closing a position completely and reopening."""
-        logger.info("\n" + "=" * 80)
+        logger.info("\n%s", "=" * 80)
         logger.info("TEST 3: Position Closure and Reopening")
         logger.info("=" * 80)
 
@@ -240,8 +240,8 @@ class FIFOTradingTest:
         buy_order = self.create_test_order(
             symbol=symbol,
             side="BUY",
-            quantity=Decimal("100"),
-            price=Decimal("50"),
+            quantity=Decimal(100),
+            price=Decimal(50),
             order_id="sol_buy_1",
         )
         position = self.position_manager.update_position_from_order(
@@ -255,8 +255,8 @@ class FIFOTradingTest:
         sell_order = self.create_test_order(
             symbol=symbol,
             side="SELL",
-            quantity=Decimal("100"),
-            price=Decimal("60"),
+            quantity=Decimal(100),
+            price=Decimal(60),
             order_id="sol_sell_1",
         )
         position = self.position_manager.update_position_from_order(
@@ -269,8 +269,8 @@ class FIFOTradingTest:
         buy_order2 = self.create_test_order(
             symbol=symbol,
             side="BUY",
-            quantity=Decimal("50"),
-            price=Decimal("55"),
+            quantity=Decimal(50),
+            price=Decimal(55),
             order_id="sol_buy_2",
         )
         position = self.position_manager.update_position_from_order(
@@ -282,7 +282,7 @@ class FIFOTradingTest:
 
         # Check total realized P&L includes previous trade
         total_pnl = self.position_manager.fifo_manager.get_realized_pnl(symbol)
-        expected_pnl = Decimal("1000")  # 100 * (60 - 50)
+        expected_pnl = Decimal(1000)  # 100 * (60 - 50)
         assert (
             total_pnl == expected_pnl
         ), f"Expected total P&L ${expected_pnl}, got ${total_pnl}"
@@ -293,7 +293,7 @@ class FIFOTradingTest:
 
     def test_fifo_vs_average_cost(self):
         """Compare FIFO accounting with average cost method."""
-        logger.info("\n" + "=" * 80)
+        logger.info("\n%s", "=" * 80)
         logger.info("TEST 4: FIFO vs Average Cost Comparison")
         logger.info("=" * 80)
 
@@ -305,9 +305,9 @@ class FIFOTradingTest:
 
         # Make identical trades on both
         trades = [
-            ("BUY", Decimal("1000"), Decimal("1.00")),
-            ("BUY", Decimal("1000"), Decimal("1.20")),
-            ("SELL", Decimal("1000"), Decimal("1.50")),
+            ("BUY", Decimal(1000), Decimal("1.00")),
+            ("BUY", Decimal(1000), Decimal("1.20")),
+            ("SELL", Decimal(1000), Decimal("1.50")),
         ]
 
         for i, (side, quantity, price) in enumerate(trades):
@@ -337,12 +337,12 @@ class FIFOTradingTest:
         fifo_pnl = fifo_manager.fifo_manager.get_realized_pnl(symbol)
         logger.info("\nFIFO Realized P&L: $%s", fifo_pnl)
 
-        assert fifo_pnl == Decimal("500"), f"Expected FIFO P&L $500, got ${fifo_pnl}"
+        assert fifo_pnl == Decimal(500), f"Expected FIFO P&L $500, got ${fifo_pnl}"
         logger.info("✅ Test 4 PASSED: FIFO accounting working as expected")
 
     def run_all_tests(self):
         """Run all FIFO tests."""
-        logger.info("\n" + "=" * 80)
+        logger.info("\n%s", "=" * 80)
         logger.info("Starting FIFO Trading Tests")
         logger.info("=" * 80)
 
@@ -352,7 +352,7 @@ class FIFOTradingTest:
             self.test_position_closure_and_reopening()
             self.test_fifo_vs_average_cost()
 
-            logger.info("\n" + "=" * 80)
+            logger.info("\n%s", "=" * 80)
             logger.info("✅ ALL TESTS PASSED!")
             logger.info("=" * 80)
 

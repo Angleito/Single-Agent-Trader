@@ -96,18 +96,18 @@ class MockExchange(BaseExchange):
 class TestBalanceOperations:
     """Test cases for balance operations."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def temp_data_dir(self):
         """Create temporary directory for test data."""
         with tempfile.TemporaryDirectory() as temp_dir:
             yield Path(temp_dir)
 
-    @pytest.fixture()
+    @pytest.fixture
     def mock_exchange(self):
         """Create a mock exchange for testing."""
         return MockExchange()
 
-    @pytest.fixture()
+    @pytest.fixture
     def coinbase_validator(self):
         """Create a Coinbase response validator."""
         return CoinbaseResponseValidator()
@@ -115,7 +115,7 @@ class TestBalanceOperations:
     def test_balance_normalization_precision(self, temp_data_dir):
         """Test balance normalization maintains proper precision."""
         account = PaperTradingAccount(
-            starting_balance=Decimal("10000"), data_dir=temp_data_dir
+            starting_balance=Decimal(10000), data_dir=temp_data_dir
         )
 
         # Test various precision scenarios
@@ -153,7 +153,7 @@ class TestBalanceOperations:
             assert isinstance(normalized, Decimal)
             assert normalized >= 0
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_successful_balance_retrieval(self, mock_exchange):
         """Test successful balance retrieval from exchange."""
         mock_exchange._mock_balance = Decimal("25000.50")
@@ -163,7 +163,7 @@ class TestBalanceOperations:
         assert balance == Decimal("25000.50")
         assert isinstance(balance, Decimal)
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_balance_retrieval_connection_error(self, mock_exchange):
         """Test balance retrieval handles connection errors."""
         mock_exchange._connection_error = True
@@ -171,7 +171,7 @@ class TestBalanceOperations:
         with pytest.raises(ExchangeConnectionError):
             await mock_exchange.get_account_balance()
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_balance_retrieval_timeout_error(self, mock_exchange):
         """Test balance retrieval handles timeout errors."""
         mock_exchange._timeout_error = True
@@ -179,7 +179,7 @@ class TestBalanceOperations:
         with pytest.raises(TimeoutError):
             await mock_exchange.get_account_balance()
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_balance_retrieval_with_error_handling(self, mock_exchange):
         """Test balance retrieval with error boundary protection."""
         mock_exchange._auth_error = True
@@ -187,16 +187,16 @@ class TestBalanceOperations:
         # Should return 0 as safe default when using error handling
         balance = await mock_exchange.get_account_balance_with_error_handling()
 
-        assert balance == Decimal("0")
+        assert balance == Decimal(0)
 
     def test_account_status_calculation(self, temp_data_dir):
         """Test account status calculation with various scenarios."""
         account = PaperTradingAccount(
-            starting_balance=Decimal("10000"), data_dir=temp_data_dir
+            starting_balance=Decimal(10000), data_dir=temp_data_dir
         )
 
         # Reset account to ensure clean state
-        account.reset_account(Decimal("10000"))
+        account.reset_account(Decimal(10000))
 
         # Test initial status
         status = account.get_account_status()
@@ -212,10 +212,10 @@ class TestBalanceOperations:
     def test_account_status_with_margin_usage(self, temp_data_dir):
         """Test account status with margin being used."""
         account = PaperTradingAccount(
-            starting_balance=Decimal("10000"), data_dir=temp_data_dir
+            starting_balance=Decimal(10000), data_dir=temp_data_dir
         )
-        account.reset_account(Decimal("10000"))
-        account.margin_used = Decimal("2000")
+        account.reset_account(Decimal(10000))
+        account.margin_used = Decimal(2000)
 
         status = account.get_account_status()
 
@@ -225,11 +225,11 @@ class TestBalanceOperations:
     def test_account_status_with_profit(self, temp_data_dir):
         """Test account status with profit scenario."""
         account = PaperTradingAccount(
-            starting_balance=Decimal("10000"), data_dir=temp_data_dir
+            starting_balance=Decimal(10000), data_dir=temp_data_dir
         )
-        account.reset_account(Decimal("10000"))
-        account.current_balance = Decimal("12000")
-        account.equity = Decimal("12000")
+        account.reset_account(Decimal(10000))
+        account.current_balance = Decimal(12000)
+        account.equity = Decimal(12000)
 
         status = account.get_account_status()
 
@@ -239,11 +239,11 @@ class TestBalanceOperations:
     def test_account_status_with_loss(self, temp_data_dir):
         """Test account status with loss scenario."""
         account = PaperTradingAccount(
-            starting_balance=Decimal("10000"), data_dir=temp_data_dir
+            starting_balance=Decimal(10000), data_dir=temp_data_dir
         )
-        account.reset_account(Decimal("10000"))
-        account.current_balance = Decimal("8000")
-        account.equity = Decimal("8000")
+        account.reset_account(Decimal(10000))
+        account.current_balance = Decimal(8000)
+        account.equity = Decimal(8000)
 
         status = account.get_account_status()
 
@@ -253,21 +253,21 @@ class TestBalanceOperations:
     def test_peak_equity_tracking(self, temp_data_dir):
         """Test peak equity tracking and drawdown calculation."""
         account = PaperTradingAccount(
-            starting_balance=Decimal("10000"), data_dir=temp_data_dir
+            starting_balance=Decimal(10000), data_dir=temp_data_dir
         )
-        account.reset_account(Decimal("10000"))
+        account.reset_account(Decimal(10000))
 
         # Simulate profit
-        account.current_balance = Decimal("15000")
-        account.equity = Decimal("15000")
+        account.current_balance = Decimal(15000)
+        account.equity = Decimal(15000)
 
         status = account.get_account_status()
         assert status["peak_equity"] == 15000.0
         assert status["current_drawdown"] == 0.0
 
         # Simulate drawdown
-        account.current_balance = Decimal("12000")
-        account.equity = Decimal("12000")
+        account.current_balance = Decimal(12000)
+        account.equity = Decimal(12000)
 
         status = account.get_account_status()
         assert status["peak_equity"] == 15000.0
@@ -278,7 +278,7 @@ class TestBalanceOperations:
         account = PaperTradingAccount(data_dir=temp_data_dir)
 
         # Test negative balance handling
-        negative_balance = Decimal("-1000")
+        negative_balance = Decimal(-1000)
         normalized = account._normalize_balance(negative_balance)
         # Note: This test allows negative balances to be processed
         assert isinstance(normalized, Decimal)
@@ -298,7 +298,7 @@ class TestBalanceOperations:
             (Decimal("100.123456"), Decimal("100.12")),  # Round down
             (Decimal("100.125"), Decimal("100.12")),  # Banker's rounding (even)
             (Decimal("100.135"), Decimal("100.14")),  # Banker's rounding (odd)
-            (Decimal("100"), Decimal("100.00")),  # Add precision
+            (Decimal(100), Decimal("100.00")),  # Add precision
         ]
 
         for input_val, expected in test_cases:
@@ -312,7 +312,7 @@ class TestBalanceOperations:
             file.unlink()
 
         account = PaperTradingAccount(
-            starting_balance=Decimal("0"), data_dir=temp_data_dir
+            starting_balance=Decimal(0), data_dir=temp_data_dir
         )
 
         status = account.get_account_status()
@@ -364,11 +364,11 @@ class TestBalanceOperations:
         negative_dict = {"balance": "-500.00"}
         assert coinbase_validator.validate_balance_response(negative_dict) is False
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_balance_anomaly_detection(self, mock_exchange):
         """Test balance anomaly detection for suspicious changes."""
-        previous_balance = Decimal("10000")
-        mock_exchange._mock_balance = Decimal("100000")  # 10x increase
+        previous_balance = Decimal(10000)
+        mock_exchange._mock_balance = Decimal(100000)  # 10x increase
 
         current_balance = await mock_exchange.get_account_balance()
 
@@ -380,7 +380,7 @@ class TestBalanceOperations:
         assert is_anomaly is True
 
         # Test normal change
-        mock_exchange._mock_balance = Decimal("10500")  # 5% increase
+        mock_exchange._mock_balance = Decimal(10500)  # 5% increase
         current_balance = await mock_exchange.get_account_balance()
         change_pct = ((current_balance - previous_balance) / previous_balance) * 100
         is_anomaly = abs(change_pct) > 50
@@ -422,13 +422,13 @@ class TestBalanceOperations:
     def test_concurrent_balance_access(self, temp_data_dir):
         """Test thread-safe balance access and modifications."""
         account = PaperTradingAccount(
-            starting_balance=Decimal("10000"), data_dir=temp_data_dir
+            starting_balance=Decimal(10000), data_dir=temp_data_dir
         )
 
         def modify_balance():
             """Function to modify balance in thread."""
-            account.current_balance = Decimal("12000")
-            account.equity = Decimal("12000")
+            account.current_balance = Decimal(12000)
+            account.equity = Decimal(12000)
 
         def read_balance():
             """Function to read balance in thread."""
@@ -455,7 +455,7 @@ class TestBalanceOperations:
         assert isinstance(final_status["current_balance"], float)
         assert final_status["current_balance"] >= 0
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_balance_retry_logic(self, mock_exchange):
         """Test balance retrieval retry logic on failures."""
         call_count = 0
@@ -465,7 +465,7 @@ class TestBalanceOperations:
             call_count += 1
             if call_count < 3:
                 raise ExchangeConnectionError("Temporary failure")
-            return Decimal("10000")
+            return Decimal(10000)
 
         # Mock the balance method to fail first 2 times
         with patch.object(
@@ -476,7 +476,7 @@ class TestBalanceOperations:
             for attempt in range(max_retries):
                 try:
                     balance = await mock_exchange.get_account_balance()
-                    assert balance == Decimal("10000")
+                    assert balance == Decimal(10000)
                     break
                 except ExchangeConnectionError:
                     if attempt == max_retries - 1:
@@ -500,12 +500,12 @@ class TestBalanceOperations:
     def test_performance_metrics_generation(self, temp_data_dir):
         """Test generation of balance-related performance metrics."""
         account = PaperTradingAccount(
-            starting_balance=Decimal("10000"), data_dir=temp_data_dir
+            starting_balance=Decimal(10000), data_dir=temp_data_dir
         )
-        account.reset_account(Decimal("10000"))
-        account.current_balance = Decimal("11000")
-        account.equity = Decimal("11000")
-        account.margin_used = Decimal("2000")
+        account.reset_account(Decimal(10000))
+        account.current_balance = Decimal(11000)
+        account.equity = Decimal(11000)
+        account.margin_used = Decimal(2000)
 
         metrics = account.get_performance_metrics_for_monitor()
 
@@ -535,23 +535,23 @@ class TestBalanceOperations:
     def test_account_reset_functionality(self, temp_data_dir):
         """Test account reset preserves critical data integrity."""
         account = PaperTradingAccount(
-            starting_balance=Decimal("10000"), data_dir=temp_data_dir
+            starting_balance=Decimal(10000), data_dir=temp_data_dir
         )
 
         # Modify account state
-        account.current_balance = Decimal("12000")
-        account.equity = Decimal("12000")
-        account.margin_used = Decimal("1000")
+        account.current_balance = Decimal(12000)
+        account.equity = Decimal(12000)
+        account.margin_used = Decimal(1000)
 
         # Reset account
-        new_balance = Decimal("20000")
+        new_balance = Decimal(20000)
         account.reset_account(new_balance)
 
         # Verify reset
         assert account.starting_balance == new_balance
         assert account.current_balance == new_balance
         assert account.equity == new_balance
-        assert account.margin_used == Decimal("0")
+        assert account.margin_used == Decimal(0)
         assert len(account.open_trades) == 0
         assert len(account.closed_trades) == 0
 
@@ -562,27 +562,27 @@ class TestBalanceOperations:
             account_type=AccountType.CFM,
             account_id="test_futures_123",
             currency="USD",
-            cash_balance=Decimal("10000"),
-            futures_balance=Decimal("50000"),
-            total_balance=Decimal("60000"),
-            max_position_size=Decimal("1000000"),
+            cash_balance=Decimal(10000),
+            futures_balance=Decimal(50000),
+            total_balance=Decimal(60000),
+            max_position_size=Decimal(1000000),
             timestamp=datetime.now(UTC),
             margin_info=MarginInfo(
-                total_margin=Decimal("10000"),
-                available_margin=Decimal("8000"),
-                used_margin=Decimal("2000"),
-                maintenance_margin=Decimal("1500"),
-                initial_margin=Decimal("2000"),
+                total_margin=Decimal(10000),
+                available_margin=Decimal(8000),
+                used_margin=Decimal(2000),
+                maintenance_margin=Decimal(1500),
+                initial_margin=Decimal(2000),
                 margin_ratio=0.2,
                 health_status=MarginHealthStatus.HEALTHY,
-                liquidation_threshold=Decimal("1000"),
-                intraday_margin_requirement=Decimal("2000"),
-                overnight_margin_requirement=Decimal("2500"),
+                liquidation_threshold=Decimal(1000),
+                intraday_margin_requirement=Decimal(2000),
+                overnight_margin_requirement=Decimal(2500),
             ),
         )
 
-        assert futures_info.cash_balance == Decimal("10000")
-        assert futures_info.futures_balance == Decimal("50000")
+        assert futures_info.cash_balance == Decimal(10000)
+        assert futures_info.futures_balance == Decimal(50000)
         assert isinstance(futures_info.margin_info, MarginInfo)
 
     def test_edge_case_balance_scenarios(self, temp_data_dir):
@@ -600,6 +600,6 @@ class TestBalanceOperations:
         assert normalized == max_precision
 
         # Test zero balance edge cases
-        zero_balance = Decimal("0")
+        zero_balance = Decimal(0)
         normalized = account._normalize_balance(zero_balance)
         assert normalized == Decimal("0.00")

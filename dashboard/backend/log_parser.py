@@ -662,7 +662,7 @@ if __name__ == "__main__":
 
         # Print first few entries
         for i, log in enumerate(logs[:5]):
-            print(f"{i+1}. {log}")
+            print(f"{i + 1}. {log}")
 
         # Test streaming (for 10 seconds)
         print("\nTesting live log streaming for 10 seconds...")

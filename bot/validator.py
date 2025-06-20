@@ -335,12 +335,9 @@ class TradeValidator:
         cleaned = raw_output.strip()
 
         # Remove markdown code blocks
-        if cleaned.startswith("```json"):
-            cleaned = cleaned[7:]
-        if cleaned.startswith("```"):
-            cleaned = cleaned[3:]
-        if cleaned.endswith("```"):
-            cleaned = cleaned[:-3]
+        cleaned = cleaned.removeprefix("```json")
+        cleaned = cleaned.removeprefix("```")
+        cleaned = cleaned.removesuffix("```")
 
         # Remove any text before the first {
         brace_index = cleaned.find("{")

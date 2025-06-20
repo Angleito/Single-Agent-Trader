@@ -146,7 +146,7 @@ class OrderManager:
                 stop_price=stop_price,
                 status=OrderStatus.PENDING,
                 timestamp=datetime.now(UTC),
-                filled_quantity=Decimal("0"),
+                filled_quantity=Decimal(0),
             )
 
             # Add to active orders
@@ -248,7 +248,7 @@ class OrderManager:
                 event = OrderEvent.SUBMITTED
             elif (
                 filled_quantity
-                and filled_quantity > Decimal("0")
+                and filled_quantity > Decimal(0)
                 and filled_quantity < order.quantity
             ):
                 event = OrderEvent.PARTIALLY_FILLED

@@ -324,13 +324,10 @@ class BluefinClient(BaseExchange):
                 # In paper trading, accept all converted symbols
                 logger.debug("Paper trading: accepting symbol %s", bluefin_symbol)
                 return True
-            else:
-                # For live trading, we rely on the supported symbols list
-                # In the future, we could add a ticker API call here for real-time validation
-                logger.info(
-                    "Symbol %s validated for %s", bluefin_symbol, self.network_name
-                )
-                return True
+            # For live trading, we rely on the supported symbols list
+            # In the future, we could add a ticker API call here for real-time validation
+            logger.info("Symbol %s validated for %s", bluefin_symbol, self.network_name)
+            return True
 
         except Exception:
             logger.exception("Symbol validation failed for %s", symbol)
@@ -377,16 +374,15 @@ class BluefinClient(BaseExchange):
                 self._last_health_check = datetime.now(UTC)
                 await self._init_client()
                 return True
-            else:
-                # For testing: Allow connection without service in live mode
-                logger.warning(
-                    "⚠️ LIVE MODE: Proceeding without Bluefin service connection. "
-                    "Position queries and order execution will not work!"
-                )
-                self._connected = True
-                self._last_health_check = datetime.now(UTC)
-                await self._init_client()
-                return True
+            # For testing: Allow connection without service in live mode
+            logger.warning(
+                "⚠️ LIVE MODE: Proceeding without Bluefin service connection. "
+                "Position queries and order execution will not work!"
+            )
+            self._connected = True
+            self._last_health_check = datetime.now(UTC)
+            await self._init_client()
+            return True
 
         except Exception as e:
             logger.exception("Failed to connect to Bluefin")
@@ -544,15 +540,14 @@ class BluefinClient(BaseExchange):
             if trade_action.action == "HOLD":
                 logger.info("Action is HOLD - no trade executed")
                 return None
-            elif trade_action.action == "CLOSE":
+            if trade_action.action == "CLOSE":
                 return await self._close_position(bluefin_symbol)
-            elif trade_action.action in ["LONG", "SHORT"]:
+            if trade_action.action in ["LONG", "SHORT"]:
                 return await self._open_position(
                     trade_action, bluefin_symbol, current_price
                 )
-            else:
-                logger.error("Unknown action: %s", trade_action.action)
-                return None
+            logger.error("Unknown action: %s", trade_action.action)
+            return None
 
         except ValueError:
             logger.exception("Symbol validation error")
@@ -755,8 +750,7 @@ class BluefinClient(BaseExchange):
                     # Continue with trade but log the critical failure
 
                 return order
-            else:
-                return order
+            return order
 
         except Exception:
             logger.exception("Failed to open position")

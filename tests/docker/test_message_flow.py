@@ -380,19 +380,16 @@ class MessageFlowValidator:
                     logger.error("  - %s", error)
 
             return result.valid
-        else:
-            logger.warning(
-                "✗ %s: No message received within %ss", message_type, timeout
+        logger.warning("✗ %s: No message received within %ss", message_type, timeout)
+        self.validation_results.append(
+            MessageValidationResult(
+                message_type=message_type,
+                valid=False,
+                errors=[f"No message received within {timeout}s"],
+                warnings=[],
             )
-            self.validation_results.append(
-                MessageValidationResult(
-                    message_type=message_type,
-                    valid=False,
-                    errors=[f"No message received within {timeout}s"],
-                    warnings=[],
-                )
-            )
-            return False
+        )
+        return False
 
     async def test_message_ordering(self) -> bool:
         """Test that messages arrive in correct order."""
@@ -433,11 +430,10 @@ class MessageFlowValidator:
         if received_sequence == sent_sequence:
             logger.info("✓ Message ordering: Messages arrived in correct order")
             return True
-        else:
-            logger.error("✗ Message ordering: Messages arrived out of order")
-            logger.error("  Sent: %s", sent_sequence)
-            logger.error("  Received: %s", received_sequence)
-            return False
+        logger.error("✗ Message ordering: Messages arrived out of order")
+        logger.error("  Sent: %s", sent_sequence)
+        logger.error("  Received: %s", received_sequence)
+        return False
 
     async def test_all_message_types(self):
         """Test all message types."""

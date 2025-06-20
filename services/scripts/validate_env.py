@@ -465,7 +465,7 @@ class EnvValidator:
 
         # 3. Check for hex format (with or without 0x prefix)
         else:
-            hex_key = private_key[2:] if private_key.startswith("0x") else private_key
+            hex_key = private_key.removeprefix("0x")
 
             if len(hex_key) == HEX_KEY_LENGTH and all(
                 c in "0123456789abcdefABCDEF" for c in hex_key

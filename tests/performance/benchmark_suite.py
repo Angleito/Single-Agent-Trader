@@ -296,7 +296,7 @@ class PerformanceBenchmarks:
         test_position = Position(
             symbol="BTC-USD",
             side="FLAT",
-            size=Decimal("0"),
+            size=Decimal(0),
             timestamp=datetime.now(timezone.utc),
         )
 
@@ -313,7 +313,7 @@ class PerformanceBenchmarks:
             symbol="BTC-USD",
             interval="1m",
             timestamp=datetime.now(timezone.utc),
-            current_price=Decimal("50000"),
+            current_price=Decimal(50000),
             ohlcv_data=self.test_data.tail(10).to_dict("records"),
             indicators=test_indicators,
             current_position=test_position,
@@ -592,14 +592,14 @@ if __name__ == "__main__":
 
     # Print summary
     summary = suite.get_summary()
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("BENCHMARK SUITE RESULTS")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"Suite: {summary['suite_name']}")
     print(f"Description: {summary['description']}")
     print(f"Total Benchmarks: {summary['total_benchmarks']}")
     print(f"Total Duration: {summary['total_duration_seconds']:.2f} seconds")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     for result in summary["results"]:
         print(f"\n{result['name']}")
@@ -629,4 +629,4 @@ if __name__ == "__main__":
                 else:
                     print(f"    {key}: {value}")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")

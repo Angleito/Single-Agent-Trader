@@ -349,7 +349,7 @@ class SelfImprovementEngine:
                     confidence=0.7,
                     expected_improvement=0.1,
                 )
-            elif best_bucket == "large" and current_max_size < 25:
+            if best_bucket == "large" and current_max_size < 25:
                 return StrategyAdjustment(
                     parameter="max_size_pct",
                     current_value=current_max_size,

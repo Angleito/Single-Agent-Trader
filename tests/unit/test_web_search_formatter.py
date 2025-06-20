@@ -193,7 +193,7 @@ class TestWebSearchFormatter:
         assert formatter.max_tokens_per_section == 300
         assert formatter.max_total_tokens == 1500
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_format_news_results_empty(self):
         """Test formatting with empty news list."""
         formatter = WebSearchFormatter()
@@ -203,7 +203,7 @@ class TestWebSearchFormatter:
         assert "NEWS ANALYSIS" in result
         assert "No recent news data available" in result
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_format_news_results_basic(self):
         """Test basic news formatting."""
         formatter = WebSearchFormatter()
@@ -231,7 +231,7 @@ class TestWebSearchFormatter:
         assert "BULLISH" in result or "bullish" in result
         assert "Articles Analyzed: 2" in result
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_format_news_results_high_authority(self):
         """Test news formatting with high authority sources."""
         formatter = WebSearchFormatter()
@@ -251,7 +251,7 @@ class TestWebSearchFormatter:
         assert "NEWS ANALYSIS" in result
         assert "Fed" in result or "Federal" in result
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_format_sentiment_data_basic(self):
         """Test basic sentiment data formatting."""
         formatter = WebSearchFormatter()
@@ -274,7 +274,7 @@ class TestWebSearchFormatter:
         assert "Strong demand" in result
         assert "Regulatory concerns" in result
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_format_sentiment_data_bullish(self):
         """Test formatting strongly bullish sentiment."""
         formatter = WebSearchFormatter()
@@ -295,7 +295,7 @@ class TestWebSearchFormatter:
         assert "🎯" in result  # High confidence emoji
         assert "Massive buying pressure" in result
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_format_sentiment_data_bearish(self):
         """Test formatting strongly bearish sentiment."""
         formatter = WebSearchFormatter()
@@ -316,7 +316,7 @@ class TestWebSearchFormatter:
         assert "Panic selling" in result
         assert "VIX spike" in result
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_format_correlation_analysis_basic(self):
         """Test basic correlation analysis formatting."""
         formatter = WebSearchFormatter()
@@ -341,7 +341,7 @@ class TestWebSearchFormatter:
         assert "150" in result  # Sample size
         assert "✅" in result  # Significance indicator
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_format_correlation_analysis_with_rolling(self):
         """Test correlation formatting with rolling data."""
         formatter = WebSearchFormatter()
@@ -370,7 +370,7 @@ class TestWebSearchFormatter:
         assert "HIGH_VOLATILITY: 0.700" in result
         assert "LOW_VOLATILITY: 0.300" in result
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_format_market_context_comprehensive(self):
         """Test comprehensive market context formatting."""
         formatter = WebSearchFormatter()
@@ -451,7 +451,7 @@ class TestWebSearchFormatter:
         result2 = formatter.truncate_content("short", 3)
         assert result2 == "..."
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_extract_key_insights_comprehensive(self):
         """Test comprehensive key insights extraction."""
         formatter = WebSearchFormatter()
@@ -477,7 +477,7 @@ class TestWebSearchFormatter:
         assert any("breakout" in insight.lower() for insight in insights)
         assert any("bullish" in insight.lower() for insight in insights)
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_extract_key_insights_empty(self):
         """Test key insights extraction with empty data."""
         formatter = WebSearchFormatter()
@@ -487,7 +487,7 @@ class TestWebSearchFormatter:
         assert isinstance(insights, list)
         # Should handle empty data gracefully
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_extract_key_insights_error_handling(self):
         """Test key insights extraction error handling."""
         formatter = WebSearchFormatter()
@@ -749,7 +749,7 @@ class TestWebSearchFormatter:
         assert len(result) < len(long_content)
         assert result.endswith("...")
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_extract_news_insights(self):
         """Test news insights extraction."""
         formatter = WebSearchFormatter()
@@ -923,7 +923,7 @@ class TestWebSearchFormatter:
         )
         assert "significant" in implications.lower()
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_format_market_regime(self):
         """Test market regime formatting."""
         formatter = WebSearchFormatter()
@@ -952,7 +952,7 @@ class TestWebSearchFormatter:
         assert "Dovish Fed policy" in result
         assert "DOVISH" in result
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_format_risk_sentiment(self):
         """Test risk sentiment formatting."""
         formatter = WebSearchFormatter()
@@ -980,7 +980,7 @@ class TestWebSearchFormatter:
         assert "22.5" in result  # Volatility expectation
         assert "18.5" in result  # VIX level
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_format_momentum_alignment(self):
         """Test momentum alignment formatting."""
         formatter = WebSearchFormatter()
@@ -1031,7 +1031,7 @@ class TestWebSearchFormatter:
 
 
 # Fixtures for testing
-@pytest.fixture()
+@pytest.fixture
 def sample_news_items():
     """Sample news items for testing."""
     return [
@@ -1069,7 +1069,7 @@ def sample_news_items():
     ]
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_sentiment_result():
     """Sample sentiment result for testing."""
     return SentimentResult(
@@ -1089,7 +1089,7 @@ def sample_sentiment_result():
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_correlation_analysis():
     """Sample correlation analysis for testing."""
     return CorrelationAnalysis(
@@ -1115,7 +1115,7 @@ def sample_correlation_analysis():
 class TestWebSearchFormatterIntegration:
     """Integration tests for WebSearchFormatter."""
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_complete_news_formatting_workflow(self, sample_news_items):
         """Test complete news formatting workflow."""
         formatter = WebSearchFormatter()
@@ -1136,7 +1136,7 @@ class TestWebSearchFormatterIntegration:
         assert "regulatory" in result.lower() or "Regulatory" in result
         assert "breakout" in result.lower() or "Breakout" in result
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_complete_sentiment_formatting_workflow(
         self, sample_sentiment_result
     ):
@@ -1161,7 +1161,7 @@ class TestWebSearchFormatterIntegration:
         assert "Bitcoin" in result
         assert "Institutional" in result
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_complete_correlation_formatting_workflow(
         self, sample_correlation_analysis
     ):
@@ -1191,7 +1191,7 @@ class TestWebSearchFormatterIntegration:
         assert "HIGH_VOLATILITY" in result
         assert "LOW_VOLATILITY" in result
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_comprehensive_market_context_workflow(
         self, sample_news_items, sample_sentiment_result, sample_correlation_analysis
     ):
@@ -1223,7 +1223,7 @@ class TestWebSearchFormatterIntegration:
         assert "0.730" in result  # Correlation coefficient
         assert len(result) > 1000  # Should be comprehensive
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_key_insights_extraction_workflow(self):
         """Test complete key insights extraction workflow."""
         formatter = WebSearchFormatter()
@@ -1273,7 +1273,7 @@ class TestWebSearchFormatterIntegration:
             for keyword in ["breakout", "institutional", "surge", "significant"]
         )
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_token_optimization_workflow(self):
         """Test token optimization workflow with large content."""
         formatter = WebSearchFormatter(max_total_tokens=100)  # Small limit for testing
@@ -1302,7 +1302,7 @@ class TestWebSearchFormatterIntegration:
         assert "NEWS ANALYSIS" in result
         assert "Articles Analyzed: 10" in result
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_error_resilience_workflow(self):
         """Test error resilience across formatting workflows."""
         formatter = WebSearchFormatter()
@@ -1345,7 +1345,7 @@ class TestWebSearchFormatterIntegration:
         assert isinstance(correlation_result, str)
         assert "Error processing correlation data" in correlation_result
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_performance_benchmark(self):
         """Test performance with realistic data volumes."""
         formatter = WebSearchFormatter()
@@ -1358,8 +1358,8 @@ class TestWebSearchFormatterIntegration:
                 Comprehensive market analysis for day {i} shows various indicators
                 suggesting bullish/bearish momentum. Technical analysis reveals
                 support at {45000 + i * 100} with resistance near {55000 + i * 150}.
-                Volume indicators show {'increasing' if i % 2 == 0 else 'decreasing'} activity
-                with institutional sentiment remaining {'positive' if i % 3 == 0 else 'neutral'}.
+                Volume indicators show {"increasing" if i % 2 == 0 else "decreasing"} activity
+                with institutional sentiment remaining {"positive" if i % 3 == 0 else "neutral"}.
                 """,
                 "url": f"https://tradinganalysis.com/update-{i}",
                 "published_time": datetime.now(UTC) - timedelta(hours=i),

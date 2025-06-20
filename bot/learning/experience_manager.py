@@ -45,10 +45,10 @@ class ActiveTrade:
         self.exit_price: Decimal | None = None
 
         # Performance tracking
-        self.unrealized_pnl: Decimal = Decimal("0")
+        self.unrealized_pnl: Decimal = Decimal(0)
         self.realized_pnl: Decimal | None = None
-        self.max_favorable_excursion: Decimal = Decimal("0")  # Best unrealized PnL
-        self.max_adverse_excursion: Decimal = Decimal("0")  # Worst unrealized PnL
+        self.max_favorable_excursion: Decimal = Decimal(0)  # Best unrealized PnL
+        self.max_adverse_excursion: Decimal = Decimal(0)  # Worst unrealized PnL
 
         # Market snapshots
         self.market_snapshots: list[dict[str, Any]] = []
@@ -293,15 +293,17 @@ class ExperienceManager:
             else:  # SHORT
                 unrealized_pnl = (entry_price - current_price) * size
         else:
-            unrealized_pnl = Decimal("0")
+            unrealized_pnl = Decimal(0)
 
         active_trade.unrealized_pnl = unrealized_pnl
 
         # Track max favorable/adverse excursions
-        if unrealized_pnl > active_trade.max_favorable_excursion:
-            active_trade.max_favorable_excursion = unrealized_pnl
-        if unrealized_pnl < active_trade.max_adverse_excursion:
-            active_trade.max_adverse_excursion = unrealized_pnl
+        active_trade.max_favorable_excursion = max(
+            active_trade.max_favorable_excursion, unrealized_pnl
+        )
+        active_trade.max_adverse_excursion = min(
+            active_trade.max_adverse_excursion, unrealized_pnl
+        )
 
         # Capture market snapshot if enough time has passed
         if (
@@ -369,7 +371,7 @@ class ExperienceManager:
             else:  # Was SHORT
                 realized_pnl = (entry_price - exit_price) * size
         else:
-            realized_pnl = Decimal("0")
+            realized_pnl = Decimal(0)
 
         active_trade.realized_pnl = realized_pnl
 
@@ -581,7 +583,7 @@ class ExperienceManager:
         """Get summary of all active trades."""
         summary: dict[str, Any] = {
             "active_count": len(self.active_trades),
-            "total_unrealized_pnl": Decimal("0"),
+            "total_unrealized_pnl": Decimal(0),
             "trades": [],
         }
 

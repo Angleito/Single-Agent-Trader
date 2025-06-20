@@ -81,8 +81,7 @@ def _resolve_log_file_path(relative_path: str) -> Path | None:
         if path.exists() and path.is_file():
             logger.debug("Found log file at: %s", path)
             return path
-        else:
-            logger.debug("Log file not found at: %s", path)
+        logger.debug("Log file not found at: %s", path)
 
     # Log all attempted paths for debugging
     logger.warning(
@@ -409,7 +408,7 @@ class LLMLogParser:
                     market_context=data.get("market_context", {}),
                 )
 
-            elif event_type == EventType.COMPLETION_RESPONSE:
+            if event_type == EventType.COMPLETION_RESPONSE:
                 return LLMResponse(
                     timestamp=timestamp,
                     session_id=data["session_id"],
@@ -422,7 +421,7 @@ class LLMLogParser:
                     response_preview=data.get("response_preview"),
                 )
 
-            elif event_type == EventType.TRADING_DECISION:
+            if event_type == EventType.TRADING_DECISION:
                 return TradingDecision(
                     timestamp=timestamp,
                     session_id=data["session_id"],
@@ -437,7 +436,7 @@ class LLMLogParser:
                     indicators=data.get("indicators", {}),
                 )
 
-            elif event_type == EventType.PERFORMANCE_METRICS:
+            if event_type == EventType.PERFORMANCE_METRICS:
                 return PerformanceMetrics(
                     timestamp=timestamp,
                     session_id=data["session_id"],
@@ -738,8 +737,7 @@ class LLMLogParser:
             }
 
         # No data at all
-        else:
-            return {"no_data": True, "total_decisions": 0}
+        return {"no_data": True, "total_decisions": 0}
 
     def get_recent_activity(self, limit: int = 50) -> list[dict[str, Any]]:
         """Get recent activity across all event types."""

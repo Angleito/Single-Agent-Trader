@@ -81,10 +81,9 @@ def _resolve_directory_with_fallback(
         if _is_directory_writable(fallback_path):
             logger.debug(f"Using fallback {directory_name} directory: {fallback_path}")
             return fallback_path
-        else:
-            logger.warning(
-                f"Fallback {directory_name} directory is not writable: {fallback_path}"
-            )
+        logger.warning(
+            f"Fallback {directory_name} directory is not writable: {fallback_path}"
+        )
 
     # Try system temp directory as last resort
     try:

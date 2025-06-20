@@ -41,10 +41,10 @@ class BluefinEnvSetup:
 
     def print_header(self):
         """Print the setup script header."""
-        print(f"{Colors.BOLD}{Colors.BLUE}{'='*70}")
+        print(f"{Colors.BOLD}{Colors.BLUE}{'=' * 70}")
         print("🚀 Bluefin DEX Environment Setup Helper")
         print("🔧 Setting up your AI Trading Bot for Bluefin DEX")
-        print(f"{'='*70}{Colors.END}\n")
+        print(f"{'=' * 70}{Colors.END}\n")
 
     def generate_api_key(self, length: int = 32) -> str:
         """Generate a cryptographically secure API key."""

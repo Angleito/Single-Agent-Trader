@@ -29,23 +29,23 @@ from bot.trading_types import (
 class TestErrorHandlingIntegration:
     """Test error handling and failure recovery across the system."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def mock_market_data(self):
         """Create mock market data for testing."""
         return [
             MarketData(
                 symbol="BTC-USD",
                 timestamp=datetime.now(timezone.utc) - timedelta(minutes=i),
-                open=Decimal("50000"),
-                high=Decimal("50100"),
-                low=Decimal("49900"),
-                close=Decimal("50050"),
-                volume=Decimal("100"),
+                open=Decimal(50000),
+                high=Decimal(50100),
+                low=Decimal(49900),
+                close=Decimal(50050),
+                volume=Decimal(100),
             )
             for i in range(50, 0, -1)
         ]
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_api_connection_failures(self, mock_market_data):
         """Test handling of API connection failures."""
         # Test market data API failure
@@ -90,7 +90,7 @@ class TestErrorHandlingIntegration:
             with pytest.raises(ConnectionError):
                 await engine._initialize_components()
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_llm_service_outages(self, mock_market_data):
         """Test handling of LLM service outages."""
         # Test complete LLM service unavailability
@@ -156,7 +156,7 @@ class TestErrorHandlingIntegration:
                 # Expected to fail, system should handle this gracefully
                 pass
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_invalid_data_handling(self):
         """Test handling of invalid or corrupted market data."""
         # Test with corrupted/invalid OHLCV data
@@ -169,10 +169,10 @@ class TestErrorHandlingIntegration:
                     symbol="BTC-USD",
                     timestamp=datetime.now(timezone.utc),
                     open=Decimal("NaN"),
-                    high=Decimal("50100"),
-                    low=Decimal("49900"),
-                    close=Decimal("50050"),
-                    volume=Decimal("100"),
+                    high=Decimal(50100),
+                    low=Decimal(49900),
+                    close=Decimal(50050),
+                    volume=Decimal(100),
                 )
             ],
             # Data with negative prices
@@ -180,11 +180,11 @@ class TestErrorHandlingIntegration:
                 MarketData(
                     symbol="BTC-USD",
                     timestamp=datetime.now(timezone.utc),
-                    open=Decimal("-1000"),
-                    high=Decimal("50100"),
-                    low=Decimal("49900"),
-                    close=Decimal("50050"),
-                    volume=Decimal("100"),
+                    open=Decimal(-1000),
+                    high=Decimal(50100),
+                    low=Decimal(49900),
+                    close=Decimal(50050),
+                    volume=Decimal(100),
                 )
             ],
             # Data with impossible OHLC relationships (high < low)
@@ -192,11 +192,11 @@ class TestErrorHandlingIntegration:
                 MarketData(
                     symbol="BTC-USD",
                     timestamp=datetime.now(timezone.utc),
-                    open=Decimal("50000"),
-                    high=Decimal("49000"),  # High less than low
-                    low=Decimal("50000"),
-                    close=Decimal("50050"),
-                    volume=Decimal("100"),
+                    open=Decimal(50000),
+                    high=Decimal(49000),  # High less than low
+                    low=Decimal(50000),
+                    close=Decimal(50050),
+                    volume=Decimal(100),
                 )
             ],
         ]
@@ -224,7 +224,7 @@ class TestErrorHandlingIntegration:
                     for keyword in ["invalid", "data", "empty", "nan", "calculation"]
                 ), f"Scenario {i}: Unexpected exception: {e}"
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_order_execution_failures(self, mock_market_data):
         """Test handling of order execution failures."""
         # Test various order failure scenarios
@@ -238,7 +238,7 @@ class TestErrorHandlingIntegration:
                 side="BUY",
                 type="MARKET",
                 quantity=Decimal("0.1"),
-                price=Decimal("50000"),
+                price=Decimal(50000),
                 status=OrderStatus.PENDING,
                 timestamp=datetime.now(timezone.utc),
                 filled_quantity=Decimal("0.05"),  # Only half filled
@@ -250,10 +250,10 @@ class TestErrorHandlingIntegration:
                 side="BUY",
                 type="MARKET",
                 quantity=Decimal("0.1"),
-                price=Decimal("50000"),
+                price=Decimal(50000),
                 status=OrderStatus.REJECTED,
                 timestamp=datetime.now(timezone.utc),
-                filled_quantity=Decimal("0"),
+                filled_quantity=Decimal(0),
             ),
         ]
 
@@ -277,7 +277,7 @@ class TestErrorHandlingIntegration:
                     "bot.main.CoinbaseClient",
                     connect=AsyncMock(return_value=True),
                     execute_trade_action=AsyncMock(return_value=scenario),
-                    _get_account_balance=AsyncMock(return_value=Decimal("10000")),
+                    _get_account_balance=AsyncMock(return_value=Decimal(10000)),
                 ),
                 patch.multiple(
                     "bot.main.LLMAgent", is_available=Mock(return_value=True)
@@ -290,7 +290,7 @@ class TestErrorHandlingIntegration:
                 initial_position = engine.current_position.model_copy()
 
                 # Execute trade with failure scenario
-                await engine._execute_trade(trade_action, Decimal("50000"))
+                await engine._execute_trade(trade_action, Decimal(50000))
 
                 # Verify system handled failure gracefully
                 if scenario is None:
@@ -309,7 +309,7 @@ class TestErrorHandlingIntegration:
                     assert engine.current_position.side == initial_position.side
                     assert engine.current_position.size == initial_position.size
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_network_timeout_recovery(self, mock_market_data):
         """Test recovery from network timeouts and intermittent connectivity."""
         # Simulate intermittent network failures
@@ -352,7 +352,7 @@ class TestErrorHandlingIntegration:
                 # If it still fails, should be after max retries
                 assert call_count >= 2
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_data_corruption_recovery(self, mock_market_data):
         """Test recovery from data corruption scenarios."""
         # Test indicator calculation with corrupted data
@@ -404,7 +404,7 @@ class TestErrorHandlingIntegration:
                     for keyword in ["data", "invalid", "missing", "column", "type"]
                 ), f"Scenario {i}: Unexpected error: {e}"
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_memory_pressure_handling(self):
         """Test handling of memory pressure scenarios."""
         # Simulate large data processing
@@ -440,7 +440,7 @@ class TestErrorHandlingIntegration:
             # Should not crash with other exceptions
             assert "memory" in str(e).lower() or "size" in str(e).lower()
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_concurrent_operation_errors(self, mock_market_data):
         """Test handling of concurrent operation errors."""
         # Test multiple simultaneous operations
@@ -490,7 +490,7 @@ class TestErrorHandlingIntegration:
                             stop_loss_pct=1.0,
                             rationale="concurrent test",
                         ),
-                        Decimal("50000"),
+                        Decimal(50000),
                     )
                 )
                 trade_tasks.append(task)
@@ -504,7 +504,7 @@ class TestErrorHandlingIntegration:
                     # Should be expected timeout errors
                     assert isinstance(result, asyncio.TimeoutError)
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_graceful_degradation_scenarios(self, mock_market_data):
         """Test graceful degradation when components fail."""
         # Test system behavior when LLM is unavailable but other components work
@@ -586,7 +586,7 @@ class TestErrorHandlingIntegration:
         df = pd.DataFrame(data)
         return df.set_index("timestamp")
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_shutdown_during_active_operations(self, mock_market_data):
         """Test graceful shutdown during active trading operations."""
         # Test shutdown while operations are in progress
@@ -623,7 +623,7 @@ class TestErrorHandlingIntegration:
                         stop_loss_pct=1.0,
                         rationale="test",
                     ),
-                    Decimal("50000"),
+                    Decimal(50000),
                 )
             )
 

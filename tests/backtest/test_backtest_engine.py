@@ -13,7 +13,7 @@ from bot.backtest.engine import BacktestEngine, BacktestResults, BacktestTrade
 class TestBacktestEngine:
     """Test cases for the backtest engine."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def sample_data(self):
         """Create sample OHLCV data for backtesting."""
         # Create 1000 candles of sample data
@@ -44,17 +44,17 @@ class TestBacktestEngine:
 
     def test_backtest_engine_initialization(self):
         """Test backtest engine initialization."""
-        engine = BacktestEngine(initial_balance=Decimal("10000"))
+        engine = BacktestEngine(initial_balance=Decimal(10000))
 
-        assert engine.initial_balance == Decimal("10000")
-        assert engine.current_balance == Decimal("10000")
+        assert engine.initial_balance == Decimal(10000)
+        assert engine.current_balance == Decimal(10000)
         assert len(engine.trades) == 0
         assert engine.current_position is None
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_run_backtest_basic(self, sample_data):
         """Test basic backtest execution."""
-        engine = BacktestEngine(initial_balance=Decimal("10000"))
+        engine = BacktestEngine(initial_balance=Decimal(10000))
 
         # Run backtest on subset of data
         start_date = sample_data.index[100]  # Skip some data for indicator warmup
@@ -74,7 +74,7 @@ class TestBacktestEngine:
         assert results.total_trades >= 0
         assert isinstance(results.trades, list)
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_backtest_with_llm_strategy(self, sample_data):
         """Test backtest with LLM strategy (fallback mode)."""
         engine = BacktestEngine()
@@ -116,10 +116,10 @@ class TestBacktestEngine:
 
     def test_reset_state(self):
         """Test backtest state reset."""
-        engine = BacktestEngine(initial_balance=Decimal("10000"))
+        engine = BacktestEngine(initial_balance=Decimal(10000))
 
         # Modify state
-        engine.current_balance = Decimal("15000")
+        engine.current_balance = Decimal(15000)
         engine.trades = [BacktestTrade(entry_time=datetime.now(UTC), symbol="BTC-USD")]
         engine.current_position = BacktestTrade(
             entry_time=datetime.now(UTC), symbol="BTC-USD"
@@ -128,11 +128,11 @@ class TestBacktestEngine:
         # Reset
         engine._reset_state()
 
-        assert engine.current_balance == Decimal("10000")
+        assert engine.current_balance == Decimal(10000)
         assert len(engine.trades) == 0
         assert engine.current_position is None
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_trade_execution_flow(self):
         """Test trade execution in backtest."""
         engine = BacktestEngine()
@@ -158,9 +158,9 @@ class TestBacktestEngine:
         # Should have opened a position
         assert engine.current_position is not None
         assert engine.current_position.side == "LONG"
-        assert engine.current_position.entry_price == Decimal("50050")
+        assert engine.current_position.entry_price == Decimal(50050)
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_position_closing(self):
         """Test position closing in backtest."""
         engine = BacktestEngine()
@@ -170,7 +170,7 @@ class TestBacktestEngine:
             entry_time=datetime.now(UTC),
             symbol="BTC-USD",
             side="LONG",
-            entry_price=Decimal("50000"),
+            entry_price=Decimal(50000),
             size=Decimal("1.0"),
         )
 
@@ -179,7 +179,7 @@ class TestBacktestEngine:
         # Close position at profit
         await engine._close_backtest_position(
             timestamp=datetime.now(UTC),
-            price=Decimal("51000"),  # 2% profit
+            price=Decimal(51000),  # 2% profit
             reason="Take Profit",
         )
 
@@ -190,11 +190,11 @@ class TestBacktestEngine:
 
         # Check trade record
         trade = engine.trades[0]
-        assert trade.exit_price == Decimal("51000")
+        assert trade.exit_price == Decimal(51000)
         assert trade.pnl > 0
         assert trade.exit_reason == "Take Profit"
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_stop_loss_execution(self):
         """Test stop loss execution."""
         engine = BacktestEngine()
@@ -204,7 +204,7 @@ class TestBacktestEngine:
             entry_time=datetime.now(UTC),
             symbol="BTC-USD",
             side="LONG",
-            entry_price=Decimal("50000"),
+            entry_price=Decimal(50000),
             size=Decimal("1.0"),
         )
 
@@ -226,7 +226,7 @@ class TestBacktestEngine:
         assert len(engine.trades) == 1
         assert engine.trades[0].exit_reason == "Stop Loss"
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_take_profit_execution(self):
         """Test take profit execution."""
         engine = BacktestEngine()
@@ -236,7 +236,7 @@ class TestBacktestEngine:
             entry_time=datetime.now(UTC),
             symbol="BTC-USD",
             side="SHORT",
-            entry_price=Decimal("50000"),
+            entry_price=Decimal(50000),
             size=Decimal("1.0"),
         )
 
@@ -269,7 +269,7 @@ class TestBacktestEngine:
 
         assert results.total_trades == 0
         assert results.win_rate == 0
-        assert results.total_pnl == Decimal("0")
+        assert results.total_pnl == Decimal(0)
 
     def test_calculate_results_with_trades(self):
         """Test results calculation with sample trades."""
@@ -282,10 +282,10 @@ class TestBacktestEngine:
                 exit_time=datetime(2024, 1, 1, 1, tzinfo=UTC),
                 symbol="BTC-USD",
                 side="LONG",
-                entry_price=Decimal("50000"),
-                exit_price=Decimal("51000"),
+                entry_price=Decimal(50000),
+                exit_price=Decimal(51000),
                 size=Decimal("1.0"),
-                pnl=Decimal("1000"),
+                pnl=Decimal(1000),
                 duration_minutes=60,
             ),
             BacktestTrade(
@@ -293,10 +293,10 @@ class TestBacktestEngine:
                 exit_time=datetime(2024, 1, 2, 1, tzinfo=UTC),
                 symbol="BTC-USD",
                 side="SHORT",
-                entry_price=Decimal("51000"),
-                exit_price=Decimal("51500"),
+                entry_price=Decimal(51000),
+                exit_price=Decimal(51500),
                 size=Decimal("1.0"),
-                pnl=Decimal("-500"),
+                pnl=Decimal(-500),
                 duration_minutes=60,
             ),
         ]
@@ -310,5 +310,5 @@ class TestBacktestEngine:
         assert results.winning_trades == 1
         assert results.losing_trades == 1
         assert results.win_rate == 50.0
-        assert results.total_pnl == Decimal("500")
+        assert results.total_pnl == Decimal(500)
         assert results.avg_trade_duration == 60

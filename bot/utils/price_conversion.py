@@ -65,7 +65,7 @@ def convert_from_18_decimal(
         ValueError: If the input value is invalid
     """
     if value is None:
-        return Decimal("0")
+        return Decimal(0)
 
     try:
         # Convert to Decimal for precision

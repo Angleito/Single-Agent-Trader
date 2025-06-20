@@ -181,7 +181,7 @@ class MonitoringExporter:
             "",
             "# HELP trading_bot_health_status Health status of the trading bot (1=healthy, 0=unhealthy)",
             "# TYPE trading_bot_health_status gauge",
-            f'trading_bot_health_status{{environment="{self.settings.system.environment.value}"}} {1 if health['status'] == 'healthy' else 0}',
+            f'trading_bot_health_status{{environment="{self.settings.system.environment.value}"}} {1 if health["status"] == "healthy" else 0}',
             "",
         ]
 

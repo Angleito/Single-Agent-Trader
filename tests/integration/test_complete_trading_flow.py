@@ -27,7 +27,7 @@ from bot.trading_types import (
 class TestCompleteTradingFlow:
     """Test complete end-to-end trading flow integration."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def mock_market_data(self):
         """Create realistic mock market data for testing."""
         base_price = 50000
@@ -60,7 +60,7 @@ class TestCompleteTradingFlow:
 
         return market_data
 
-    @pytest.fixture()
+    @pytest.fixture
     def mock_llm_responses(self):
         """Create mock LLM responses for different market conditions."""
         return {
@@ -94,7 +94,7 @@ class TestCompleteTradingFlow:
             ),
         }
 
-    @pytest.fixture()
+    @pytest.fixture
     def mock_orders(self):
         """Create mock order responses."""
         return {
@@ -104,7 +104,7 @@ class TestCompleteTradingFlow:
                 side="BUY",
                 type="MARKET",
                 quantity=Decimal("0.1"),
-                price=Decimal("50000"),
+                price=Decimal(50000),
                 status=OrderStatus.FILLED,
                 timestamp=datetime.now(UTC),
                 filled_quantity=Decimal("0.1"),
@@ -115,7 +115,7 @@ class TestCompleteTradingFlow:
                 side="SELL",
                 type="MARKET",
                 quantity=Decimal("0.1"),
-                price=Decimal("50000"),
+                price=Decimal(50000),
                 status=OrderStatus.FILLED,
                 timestamp=datetime.now(UTC),
                 filled_quantity=Decimal("0.1"),
@@ -126,14 +126,14 @@ class TestCompleteTradingFlow:
                 side="BUY",
                 type="MARKET",
                 quantity=Decimal("0.1"),
-                price=Decimal("50000"),
+                price=Decimal(50000),
                 status=OrderStatus.REJECTED,
                 timestamp=datetime.now(UTC),
-                filled_quantity=Decimal("0"),
+                filled_quantity=Decimal(0),
             ),
         }
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_complete_trading_cycle_long_to_close(
         self, mock_market_data, mock_llm_responses, mock_orders
     ):
@@ -182,7 +182,7 @@ class TestCompleteTradingFlow:
                     return_value=None
                 ),  # Will be set dynamically
                 cancel_all_orders=AsyncMock(return_value=True),
-                _get_account_balance=AsyncMock(return_value=Decimal("10000")),
+                _get_account_balance=AsyncMock(return_value=Decimal(10000)),
             ),
         ):
             # Create trading engine with dry run
@@ -285,7 +285,7 @@ class TestCompleteTradingFlow:
 
             await engine._shutdown()
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_position_tracking_and_pnl_calculation(
         self, mock_market_data, mock_llm_responses, mock_orders
     ):
@@ -314,7 +314,7 @@ class TestCompleteTradingFlow:
                 execute_trade_action=AsyncMock(
                     return_value=mock_orders["successful_long"]
                 ),
-                _get_account_balance=AsyncMock(return_value=Decimal("10000")),
+                _get_account_balance=AsyncMock(return_value=Decimal(10000)),
             ),
         ):
             engine = TradingEngine(symbol="BTC-USD", interval="1m", dry_run=True)
@@ -324,28 +324,28 @@ class TestCompleteTradingFlow:
             engine.position_manager.reset_positions()
 
             # Open position
-            current_price = Decimal("50000")
+            current_price = Decimal(50000)
             engine.current_position.side = "LONG"
             engine.current_position.size = Decimal("0.1")
             engine.current_position.entry_price = current_price
 
             # Test P&L calculation with price increase
-            new_price = Decimal("51000")  # $1000 increase
+            new_price = Decimal(51000)  # $1000 increase
             await engine._update_position_tracking(new_price)
 
             expected_pnl = (new_price - current_price) * engine.current_position.size
             assert engine.current_position.unrealized_pnl == expected_pnl
-            assert expected_pnl == Decimal("100")  # $1000 * 0.1 = $100 profit
+            assert expected_pnl == Decimal(100)  # $1000 * 0.1 = $100 profit
 
             # Test P&L calculation with price decrease
-            new_price = Decimal("49000")  # $1000 decrease
+            new_price = Decimal(49000)  # $1000 decrease
             await engine._update_position_tracking(new_price)
 
             expected_pnl = (new_price - current_price) * engine.current_position.size
             assert engine.current_position.unrealized_pnl == expected_pnl
-            assert expected_pnl == Decimal("-100")  # $1000 * 0.1 = $100 loss
+            assert expected_pnl == Decimal(-100)  # $1000 * 0.1 = $100 loss
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_error_recovery_and_fallback_mechanisms(
         self, mock_market_data, mock_llm_responses
     ):
@@ -406,7 +406,7 @@ class TestCompleteTradingFlow:
                 # Expected behavior - should be caught in main loop
                 pass
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_market_data_connection_recovery(self, mock_market_data):
         """Test market data connection recovery mechanisms."""
         market_data_mock = Mock()
@@ -455,7 +455,7 @@ class TestCompleteTradingFlow:
             # Should attempt reconnection when disconnected
             assert market_data_mock.connect.call_count >= 1
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_risk_management_integration_in_flow(
         self, mock_market_data, mock_llm_responses
     ):
@@ -528,7 +528,7 @@ class TestCompleteTradingFlow:
         df = pd.DataFrame(data)
         return df.set_index("timestamp")
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_multiple_trading_cycles_consistency(
         self, mock_market_data, mock_llm_responses, mock_orders
     ):
@@ -568,7 +568,7 @@ class TestCompleteTradingFlow:
                 "bot.main.CoinbaseClient",
                 connect=AsyncMock(return_value=True),
                 execute_trade_action=AsyncMock(side_effect=cycle_orders),
-                _get_account_balance=AsyncMock(return_value=Decimal("10000")),
+                _get_account_balance=AsyncMock(return_value=Decimal(10000)),
             ),
         ):
             engine = TradingEngine(symbol="BTC-USD", interval="1m", dry_run=True)
@@ -641,7 +641,7 @@ class TestCompleteTradingFlow:
                     actual["trade_count"] == expected["trade_count"]
                 ), f"Cycle {i} trade count mismatch"
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_graceful_shutdown_integration(self, mock_market_data):
         """Test graceful shutdown preserves state and closes connections."""
         with (
@@ -686,7 +686,7 @@ class TestCompleteTradingFlow:
             assert engine.successful_trades == 4
             assert engine.current_position.side == "LONG"
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_balance_validation_throughout_trading_flow(
         self, mock_market_data, mock_llm_responses, mock_orders
     ):
@@ -720,7 +720,7 @@ class TestCompleteTradingFlow:
                 connect=AsyncMock(return_value=True),
                 disconnect=AsyncMock(return_value=True),
                 is_connected=Mock(return_value=True),
-                _get_account_balance=AsyncMock(return_value=Decimal("10000")),
+                _get_account_balance=AsyncMock(return_value=Decimal(10000)),
             ),
         ):
             engine = TradingEngine(symbol="BTC-USD", interval="1m", dry_run=True)
@@ -860,7 +860,7 @@ class TestCompleteTradingFlow:
 
             await engine._shutdown()
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_balance_precision_and_rounding_consistency(
         self, mock_market_data, mock_llm_responses
     ):
@@ -926,7 +926,7 @@ class TestCompleteTradingFlow:
                     if isinstance(value, float)
                 )
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_balance_edge_cases_in_trading_flow(self, mock_market_data):
         """Test balance handling in edge cases during trading flow."""
         with (
@@ -944,7 +944,7 @@ class TestCompleteTradingFlow:
                 connect=AsyncMock(return_value=True),
                 is_connected=Mock(return_value=True),
                 _get_account_balance=AsyncMock(
-                    return_value=Decimal("100")
+                    return_value=Decimal(100)
                 ),  # Small balance
             ),
             patch.multiple(
@@ -976,11 +976,11 @@ class TestCompleteTradingFlow:
                 symbol="BTC-USD",
                 side="BUY",
                 type="MARKET",
-                quantity=Decimal("0"),
+                quantity=Decimal(0),
                 price=current_price,
                 status=OrderStatus.REJECTED,
                 timestamp=datetime.now(UTC),
-                filled_quantity=Decimal("0"),
+                filled_quantity=Decimal(0),
             )
             engine.paper_account.execute_trade_action = Mock(return_value=failed_order)
 
@@ -1024,4 +1024,4 @@ class TestCompleteTradingFlow:
 
             # Balance changes should be reasonable (not zero due to precision)
             balance_change = initial_balance - engine.paper_account.current_balance
-            assert balance_change >= Decimal("0")  # Should have some fee impact
+            assert balance_change >= Decimal(0)  # Should have some fee impact

@@ -167,8 +167,7 @@ class StartupValidator:
             >= self.settings.risk.default_take_profit_pct
         ):
             issues.append(
-                "Stop loss should be smaller than take profit "
-                "for positive risk/reward"
+                "Stop loss should be smaller than take profit for positive risk/reward"
             )
 
         if self.settings.risk.max_concurrent_trades > 20:
@@ -330,7 +329,7 @@ class StartupValidator:
             # Check available memory
             memory = psutil.virtual_memory()
             if memory.available < 512 * 1024 * 1024:  # 512MB
-                return "Low available memory (<512MB). " "Performance may be affected."
+                return "Low available memory (<512MB). Performance may be affected."
 
             # Check disk space
             disk = psutil.disk_usage(".")

@@ -86,8 +86,7 @@ class RAGReader:
                 },
                 "mean_reversion": {
                     "description": (
-                        "Trade against extreme price movements expecting "
-                        "return to mean"
+                        "Trade against extreme price movements expecting return to mean"
                     ),
                     "entry_criteria": [
                         "RSI < 30 for oversold bounce",

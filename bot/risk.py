@@ -27,10 +27,10 @@ class DailyPnL:
     """Daily P&L tracking."""
 
     date: date
-    realized_pnl: Decimal = Decimal("0")
-    unrealized_pnl: Decimal = Decimal("0")
+    realized_pnl: Decimal = Decimal(0)
+    unrealized_pnl: Decimal = Decimal(0)
     trades_count: int = 0
-    max_drawdown: Decimal = Decimal("0")
+    max_drawdown: Decimal = Decimal(0)
 
 
 @dataclass
@@ -429,16 +429,16 @@ class RiskManager:
         self.leverage = settings.trading.leverage
         self.max_daily_loss_pct = settings.risk.max_daily_loss_pct
         self.max_concurrent_trades = settings.risk.max_concurrent_trades
-        self.max_position_size = Decimal("100000")  # Maximum absolute position size
+        self.max_position_size = Decimal(100000)  # Maximum absolute position size
         self.stop_loss_percentage: float = 2.0  # Default stop loss percentage
-        self.max_daily_loss: Decimal = Decimal("500")  # Maximum daily loss in USD
+        self.max_daily_loss: Decimal = Decimal(500)  # Maximum daily loss in USD
 
         # Position manager integration
         self.position_manager = position_manager
 
         # Risk tracking
         self._daily_pnl: dict[date, DailyPnL] = {}
-        self._account_balance = Decimal("10000")  # Default starting balance
+        self._account_balance = Decimal(10000)  # Default starting balance
 
         # Balance validation system
         self.balance_validator = BalanceValidator()
@@ -587,7 +587,7 @@ class RiskManager:
             balance_valid, balance_reason = self.validate_balance_for_trade(
                 modified_action,
                 current_price,
-                trade_fees.total_fee if trade_fees else Decimal("0"),
+                trade_fees.total_fee if trade_fees else Decimal(0),
             )
 
             if not balance_valid:
@@ -683,7 +683,7 @@ class RiskManager:
         self,
         trade_action: TradeAction,
         _current_price: Decimal,
-        estimated_fees: Decimal = Decimal("0"),
+        estimated_fees: Decimal = Decimal(0),
     ) -> tuple[bool, str]:
         """
         Validate account balance can support the proposed trade.
@@ -721,7 +721,7 @@ class RiskManager:
 
             # Check if balance after trade would be valid
             post_trade_balance = self._account_balance - estimated_fees
-            if post_trade_balance < Decimal("0"):
+            if post_trade_balance < Decimal(0):
                 return (
                     False,
                     f"Trade would result in negative balance: ${post_trade_balance}",
@@ -773,9 +773,9 @@ class RiskManager:
     def _calculate_current_margin_usage(self) -> Decimal:
         """Calculate current margin usage across all positions."""
         if not self.position_manager:
-            return Decimal("0")
+            return Decimal(0)
 
-        total_margin = Decimal("0")
+        total_margin = Decimal(0)
         positions = self.position_manager.get_all_positions()
 
         for position in positions:
@@ -802,7 +802,7 @@ class RiskManager:
         total_pnl = daily_data.realized_pnl + daily_data.unrealized_pnl
 
         max_loss_usd = self._account_balance * (
-            Decimal(str(self.max_daily_loss_pct)) / Decimal("100")
+            Decimal(str(self.max_daily_loss_pct)) / Decimal(100)
         )
 
         if total_pnl <= -max_loss_usd:
@@ -914,15 +914,15 @@ class RiskManager:
             Dictionary with risk metrics
         """
         if trade_action.size_pct == 0:
-            return {"max_loss_usd": Decimal("0"), "max_gain_usd": Decimal("0")}
+            return {"max_loss_usd": Decimal(0), "max_gain_usd": Decimal(0)}
 
         position_value = self._account_balance * (
-            Decimal(str(trade_action.size_pct)) / Decimal("100")
+            Decimal(str(trade_action.size_pct)) / Decimal(100)
         )
         leveraged_exposure = position_value * Decimal(str(self.leverage))
 
         # Calculate potential loss (stop loss) + fees
-        max_loss_pct = Decimal(str(trade_action.stop_loss_pct)) / Decimal("100")
+        max_loss_pct = Decimal(str(trade_action.stop_loss_pct)) / Decimal(100)
         max_loss_usd = leveraged_exposure * max_loss_pct
 
         # Add trading fees to the max loss
@@ -930,13 +930,13 @@ class RiskManager:
             max_loss_usd += trade_fees.total_fee
 
         # Calculate potential gain (take profit) - fees
-        max_gain_pct = Decimal(str(trade_action.take_profit_pct)) / Decimal("100")
+        max_gain_pct = Decimal(str(trade_action.take_profit_pct)) / Decimal(100)
         max_gain_usd = leveraged_exposure * max_gain_pct
 
         # Subtract trading fees from the max gain
         if trade_fees and trade_fees.total_fee > 0:
             max_gain_usd -= trade_fees.total_fee
-            max_gain_usd = max(Decimal("0"), max_gain_usd)  # Ensure non-negative
+            max_gain_usd = max(Decimal(0), max_gain_usd)  # Ensure non-negative
 
         # Recalculate risk/reward ratio with fees
         risk_reward_ratio = (
@@ -952,7 +952,7 @@ class RiskManager:
             "max_gain_usd": max_gain_usd,
             "risk_reward_ratio": risk_reward_ratio,
             "fees_included": trade_fees is not None,
-            "total_fees": trade_fees.total_fee if trade_fees else Decimal("0"),
+            "total_fees": trade_fees.total_fee if trade_fees else Decimal(0),
         }
 
     def _get_max_acceptable_loss(self) -> Decimal:
@@ -1046,7 +1046,7 @@ class RiskManager:
                 if price_deviation > Decimal("0.5"):  # 50% deviation threshold
                     return {
                         "valid": False,
-                        "reason": f"Entry price {position.entry_price} deviates {price_deviation*100:.1f}% from market {market_price}",
+                        "reason": f"Entry price {position.entry_price} deviates {price_deviation * 100:.1f}% from market {market_price}",
                         "severity": "medium",
                     }
 
@@ -1056,7 +1056,7 @@ class RiskManager:
                     pnl_diff = abs(position.unrealized_pnl - expected_pnl)
                     tolerance = abs(expected_pnl * Decimal("0.1"))  # 10% tolerance
 
-                    if pnl_diff > tolerance and tolerance > 0:
+                    if pnl_diff > tolerance > 0:
                         return {
                             "valid": False,
                             "reason": f"P&L inconsistency: expected {expected_pnl}, got {position.unrealized_pnl}",
@@ -1093,7 +1093,7 @@ class RiskManager:
     ) -> Decimal:
         """Calculate expected unrealized P&L for position validation."""
         if position.side == "FLAT" or position.entry_price is None:
-            return Decimal("0")
+            return Decimal(0)
 
         price_diff = current_price - position.entry_price
 
@@ -1375,7 +1375,7 @@ class RiskManager:
         )
 
     def update_daily_pnl(
-        self, realized_pnl: Decimal, unrealized_pnl: Decimal = Decimal("0")
+        self, realized_pnl: Decimal, unrealized_pnl: Decimal = Decimal(0)
     ) -> None:
         """
         Update daily P&L tracking.
@@ -1398,8 +1398,7 @@ class RiskManager:
 
         # Update max drawdown
         total_pnl = daily_data.realized_pnl + daily_data.unrealized_pnl
-        if total_pnl < daily_data.max_drawdown:
-            daily_data.max_drawdown = total_pnl
+        daily_data.max_drawdown = min(daily_data.max_drawdown, total_pnl)
 
     def update_account_balance(self, new_balance: Decimal) -> None:
         """
@@ -1487,7 +1486,7 @@ class RiskManager:
         return RiskMetrics(
             account_balance=self._account_balance,
             available_margin=self._get_available_margin(),
-            used_margin=Decimal("100") - self._get_available_margin(),
+            used_margin=Decimal(100) - self._get_available_margin(),
             daily_pnl=realized_pnl + unrealized_pnl,
             max_position_size=Decimal(str(self.max_size_pct)),
             current_positions=current_positions_count,

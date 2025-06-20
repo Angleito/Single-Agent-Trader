@@ -259,7 +259,7 @@ class LLMPerformanceMonitor:
 
         return f"""
 🚀 LLM PERFORMANCE OPTIMIZER REPORT
-{'=' * 45}
+{"=" * 45}
 
 {status_emoji} STATUS: {status_text}
 ⏱️  Uptime: {uptime.total_seconds() / 3600:.1f} hours
@@ -275,7 +275,7 @@ class LLMPerformanceMonitor:
 
 🎯 OPTIMIZATION RESULTS:
    Performance Improvement: {stats.performance_improvement_pct:+.1f}%
-   Target Achievement:      {'✅ YES' if stats.target_achieved else '❌ NO'}
+   Target Achievement:      {"✅ YES" if stats.target_achieved else "❌ NO"}
    Error Rate:             {stats.error_rate:.1f}%
 
 💾 CACHE EFFICIENCY:

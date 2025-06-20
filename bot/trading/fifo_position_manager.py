@@ -48,10 +48,10 @@ class FIFOPositionManager:
                 return Position(
                     symbol=symbol,
                     side="FLAT",
-                    size=Decimal("0"),
+                    size=Decimal(0),
                     entry_price=None,
-                    unrealized_pnl=Decimal("0"),
-                    realized_pnl=Decimal("0"),
+                    unrealized_pnl=Decimal(0),
+                    realized_pnl=Decimal(0),
                     timestamp=datetime.now(UTC),
                 )
 
@@ -61,7 +61,7 @@ class FIFOPositionManager:
                 side=side_literal,
                 size=fifo_pos.total_quantity,
                 entry_price=fifo_pos.average_price,
-                unrealized_pnl=Decimal("0"),  # Calculated separately
+                unrealized_pnl=Decimal(0),  # Calculated separately
                 realized_pnl=fifo_pos.total_realized_pnl,
                 timestamp=datetime.now(UTC),
             )
@@ -147,7 +147,7 @@ class FIFOPositionManager:
                 # Log each lot sale
                 for sale in sales:
                     logger.info(
-                        "Sold %s units from lot %s " "at %s, realized P&L: %s",
+                        "Sold %s units from lot %s at %s, realized P&L: %s",
                         sale.quantity_sold,
                         sale.lot_id,
                         sale.sale_price,
@@ -197,9 +197,9 @@ class FIFOPositionManager:
         with self._lock:
             if symbol:
                 fifo_pos = self._positions.get(symbol)
-                return fifo_pos.total_realized_pnl if fifo_pos else Decimal("0")
+                return fifo_pos.total_realized_pnl if fifo_pos else Decimal(0)
 
-            total_pnl = Decimal("0")
+            total_pnl = Decimal(0)
             for pos in self._positions.values():
                 total_pnl += pos.total_realized_pnl
             return total_pnl
@@ -313,7 +313,7 @@ class FIFOPositionManager:
             fifo_pos = FIFOPosition(
                 symbol=symbol,
                 side=side,
-                total_realized_pnl=Decimal("0"),
+                total_realized_pnl=Decimal(0),
             )
 
             # Create a single synthetic lot representing the entire position
@@ -334,7 +334,7 @@ class FIFOPositionManager:
             self._save_state()
 
             logger.info(
-                "FIFO position reconciled from exchange for %s: " "%s %s @ %s",
+                "FIFO position reconciled from exchange for %s: %s %s @ %s",
                 symbol,
                 side,
                 size,

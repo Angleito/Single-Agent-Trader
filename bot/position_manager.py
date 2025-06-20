@@ -96,7 +96,7 @@ class PositionManager:
         self._validation_errors = 0
         self._last_validation_check: datetime | None = None
         self._position_consistency_errors: list[dict[str, Any]] = []
-        self._max_position_value = Decimal("50000")  # Maximum position value in USD
+        self._max_position_value = Decimal(50000)  # Maximum position value in USD
 
         # Flag to avoid async operations during initialization
         self._initializing = True
@@ -147,10 +147,10 @@ class PositionManager:
             return Position(
                 symbol=symbol,
                 side="FLAT",
-                size=Decimal("0"),
+                size=Decimal(0),
                 entry_price=None,
-                unrealized_pnl=Decimal("0"),
-                realized_pnl=Decimal("0"),
+                unrealized_pnl=Decimal(0),
+                realized_pnl=Decimal(0),
                 timestamp=datetime.now(UTC),
             )
 
@@ -254,8 +254,8 @@ class PositionManager:
                 size=size,
                 entry_price=entry_price,
                 timestamp=datetime.now(UTC),
-                realized_pnl=Decimal("0"),
-                unrealized_pnl=Decimal("0"),
+                realized_pnl=Decimal(0),
+                unrealized_pnl=Decimal(0),
             )
 
             # Update position storage
@@ -297,11 +297,11 @@ class PositionManager:
         """
         with self._lock:
             if symbol not in self._positions:
-                return Decimal("0")
+                return Decimal(0)
 
             position = self._positions[symbol]
             if position.side == "FLAT" or position.entry_price is None:
-                return Decimal("0")
+                return Decimal(0)
 
             # Calculate unrealized P&L
             price_diff = current_price - position.entry_price
@@ -329,7 +329,7 @@ class PositionManager:
             realized_total = self.fifo_manager.get_realized_pnl()
 
             # Calculate unrealized P&L from active positions
-            unrealized_total = Decimal("0")
+            unrealized_total = Decimal(0)
             for symbol in self._positions:
                 position = self.get_position(symbol)
                 unrealized_total += position.unrealized_pnl
@@ -337,8 +337,8 @@ class PositionManager:
             return realized_total, unrealized_total
 
         with self._lock:
-            realized_total = Decimal("0")
-            unrealized_total = Decimal("0")
+            realized_total = Decimal(0)
+            unrealized_total = Decimal(0)
 
             # Sum from active positions
             for position in self._positions.values():
@@ -468,8 +468,8 @@ class PositionManager:
         target_date_end = target_date_start + timedelta(days=1)
 
         with self._lock:
-            daily_realized = Decimal("0")
-            daily_unrealized = Decimal("0")
+            daily_realized = Decimal(0)
+            daily_unrealized = Decimal(0)
             trades_count = 0
 
             # Check closed positions from target date
@@ -502,7 +502,7 @@ class PositionManager:
             total_realized, total_unrealized = self.calculate_total_pnl()
 
             # Calculate total exposure
-            total_exposure = Decimal("0")
+            total_exposure = Decimal(0)
             for position in self._positions.values():
                 if position.entry_price is not None:
                     total_exposure += position.size * position.entry_price
@@ -552,8 +552,8 @@ class PositionManager:
                 side=order_side,
                 size=abs(order_size),
                 entry_price=fill_price,
-                unrealized_pnl=Decimal("0"),
-                realized_pnl=Decimal("0"),
+                unrealized_pnl=Decimal(0),
+                realized_pnl=Decimal(0),
                 timestamp=datetime.now(UTC),
             )
         else:
@@ -575,14 +575,14 @@ class PositionManager:
                             current_pos.entry_price - fill_price
                         )
                 else:
-                    realized_pnl = Decimal("0")
+                    realized_pnl = Decimal(0)
 
                 new_position = Position(
                     symbol=order.symbol,
                     side="FLAT",
-                    size=Decimal("0"),
+                    size=Decimal(0),
                     entry_price=None,
-                    unrealized_pnl=Decimal("0"),
+                    unrealized_pnl=Decimal(0),
                     realized_pnl=current_pos.realized_pnl + realized_pnl,
                     timestamp=datetime.now(UTC),
                 )
@@ -611,7 +611,7 @@ class PositionManager:
                     side=new_side,
                     size=abs(new_size),
                     entry_price=new_entry_price,
-                    unrealized_pnl=Decimal("0"),
+                    unrealized_pnl=Decimal(0),
                     realized_pnl=current_pos.realized_pnl,
                     timestamp=datetime.now(UTC),
                 )
@@ -1015,19 +1015,19 @@ class PositionManager:
 
         return f"""
 🗓️  Daily Trading Report - {target_date}
-{'=' * 50}
+{"=" * 50}
 
 📊 Position Summary:
-   Active Positions: {summary['active_positions']}
-   Total Exposure:   ${summary['total_exposure']:,.2f}
-   Realized P&L:     ${summary['total_realized_pnl']:,.2f}
-   Unrealized P&L:   ${summary['total_unrealized_pnl']:,.2f}
-   Total P&L:        ${summary['total_pnl']:,.2f}
+   Active Positions: {summary["active_positions"]}
+   Total Exposure:   ${summary["total_exposure"]:,.2f}
+   Realized P&L:     ${summary["total_realized_pnl"]:,.2f}
+   Unrealized P&L:   ${summary["total_unrealized_pnl"]:,.2f}
+   Total P&L:        ${summary["total_pnl"]:,.2f}
 
 🔄 Today's Activity:
-   Closed Positions: {summary['closed_positions_today']}
-   Daily P&L:        ${daily_pnl['total_pnl']:,.2f}
-   Trades Count:     {daily_pnl['trades_count']}
+   Closed Positions: {summary["closed_positions_today"]}
+   Daily P&L:        ${daily_pnl["total_pnl"]:,.2f}
+   Trades Count:     {daily_pnl["trades_count"]}
 """
 
     def get_weekly_performance_summary(self) -> dict[str, Any]:
@@ -1196,7 +1196,7 @@ class PositionManager:
                     )
                     if price_deviation > Decimal("0.3"):  # 30% deviation warning
                         validation_result["warnings"].append(
-                            f"Entry price deviation {price_deviation*100:.1f}% from current market"
+                            f"Entry price deviation {price_deviation * 100:.1f}% from current market"
                         )
 
                 # Check P&L calculation consistency
@@ -1207,7 +1207,7 @@ class PositionManager:
                     pnl_diff = abs(position.unrealized_pnl - expected_pnl)
                     tolerance = abs(expected_pnl * Decimal("0.05"))  # 5% tolerance
 
-                    if pnl_diff > tolerance and tolerance > 0:
+                    if pnl_diff > tolerance > 0:
                         validation_result["warnings"].append(
                             f"P&L calculation drift: expected {expected_pnl}, got {position.unrealized_pnl}"
                         )
@@ -1262,7 +1262,7 @@ class PositionManager:
     ) -> Decimal:
         """Calculate expected unrealized P&L for validation."""
         if position.side == "FLAT" or not position.entry_price:
-            return Decimal("0")
+            return Decimal(0)
 
         price_diff = current_price - position.entry_price
 
@@ -1461,7 +1461,7 @@ class PositionManager:
                 pnl_diff = abs(position.unrealized_pnl - expected_pnl)
                 tolerance = abs(expected_pnl * Decimal("0.05"))  # 5% tolerance
 
-                if pnl_diff > tolerance and tolerance > 0:
+                if pnl_diff > tolerance > 0:
                     logger.warning(
                         "Auto-correcting P&L for %s: %s -> %s",
                         symbol,

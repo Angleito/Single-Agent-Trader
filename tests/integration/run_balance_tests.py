@@ -250,9 +250,8 @@ def main():
         print("   poetry run pytest tests/integration/ -k 'balance' -v")
 
         return True
-    else:
-        print("\n❌ Validation failed!")
-        return False
+    print("\n❌ Validation failed!")
+    return False
 
 
 if __name__ == "__main__":

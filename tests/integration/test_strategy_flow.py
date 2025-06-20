@@ -17,7 +17,7 @@ from bot.validator import TradeValidator
 class TestStrategyFlow:
     """Integration tests for the complete strategy decision flow."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def sample_market_data(self):
         """Create sample market data for testing."""
         dates = pd.date_range("2024-01-01", periods=100, freq="1h")
@@ -32,7 +32,7 @@ class TestStrategyFlow:
             index=dates,
         )
 
-    @pytest.fixture()
+    @pytest.fixture
     def strategy_components(self):
         """Create strategy components for testing."""
         return {
@@ -69,7 +69,7 @@ class TestStrategyFlow:
             current_position=Position(
                 symbol="BTC-USD",
                 side="FLAT",
-                size=Decimal("0"),
+                size=Decimal(0),
                 timestamp=datetime.now(UTC),
             ),
         )
@@ -135,12 +135,12 @@ class TestStrategyFlow:
         current_position = Position(
             symbol="BTC-USD",
             side="FLAT",
-            size=Decimal("0"),
+            size=Decimal(0),
             timestamp=datetime.now(UTC),
         )
 
         approved, final_action, reason = risk_manager.evaluate_risk(
-            high_risk_action, current_position, Decimal("50000")
+            high_risk_action, current_position, Decimal(50000)
         )
 
         # Risk manager should modify or reject the action
@@ -164,7 +164,7 @@ class TestStrategyFlow:
             symbol="BTC-USD",
             interval="1h",
             timestamp=datetime.now(UTC),
-            current_price=Decimal("50000"),
+            current_price=Decimal(50000),
             ohlcv_data=[],
             indicators=IndicatorData(
                 timestamp=datetime.now(UTC),
@@ -185,7 +185,7 @@ class TestStrategyFlow:
             current_position=Position(
                 symbol="BTC-USD",
                 side="FLAT",
-                size=Decimal("0"),
+                size=Decimal(0),
                 timestamp=datetime.now(UTC),
             ),
         )
@@ -207,13 +207,13 @@ class TestStrategyFlow:
             symbol="BTC-USD",
             interval="1h",
             timestamp=datetime.now(UTC),
-            current_price=Decimal("50000"),
+            current_price=Decimal(50000),
             ohlcv_data=[],
             indicators=IndicatorData(timestamp=datetime.now(UTC)),
             current_position=Position(
                 symbol="BTC-USD",
                 side="FLAT",
-                size=Decimal("0"),
+                size=Decimal(0),
                 timestamp=datetime.now(UTC),
             ),
         )

@@ -407,7 +407,7 @@ class LoadTestSuite:
             test_position = Position(
                 symbol="BTC-USD",
                 side="FLAT",
-                size=Decimal("0"),
+                size=Decimal(0),
                 timestamp=datetime.now(timezone.utc),
             )
 
@@ -425,7 +425,7 @@ class LoadTestSuite:
                 symbol="BTC-USD",
                 interval="1m",
                 timestamp=datetime.now(timezone.utc),
-                current_price=Decimal("50000"),
+                current_price=Decimal(50000),
                 ohlcv_data=[],
                 indicators=test_indicators,
                 current_position=test_position,
@@ -1086,9 +1086,9 @@ if __name__ == "__main__":
         results = await run_load_tests(config)
 
         # Print summary
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print("LOAD TEST RESULTS")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
 
         for result in results:
             print(f"\n{result.test_name}")
@@ -1113,6 +1113,6 @@ if __name__ == "__main__":
                     else:
                         print(f"    {key}: {value}")
 
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
 
     asyncio.run(main())

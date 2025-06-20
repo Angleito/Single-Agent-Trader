@@ -3,7 +3,7 @@
 import json
 import logging
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -65,13 +65,13 @@ class SinglePositionFIFOTest:
             quantity=quantity,
             price=price,
             status=OrderStatus.FILLED,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             filled_quantity=quantity,
         )
 
     def test_single_position_enforcement(self):
         """Test that only one position can be open at a time."""
-        logger.info("\n" + "=" * 80)
+        logger.info("\n%s", "=" * 80)
         logger.info("TEST 1: Single Position Enforcement")
         logger.info("=" * 80)
 
@@ -85,7 +85,7 @@ class SinglePositionFIFOTest:
         long_action = self.create_trade_action("LONG", 10)
         validated = self.validator.validate(long_action, current_position)
         approved, modified, reason = self.risk_manager.evaluate_risk(
-            validated, current_position, Decimal("40000")
+            validated, current_position, Decimal(40000)
         )
 
         logger.info("\nAttempting LONG when flat:")
@@ -98,7 +98,7 @@ class SinglePositionFIFOTest:
 
         # Execute the LONG trade
         long_order = self.create_test_order(
-            symbol, "BUY", Decimal("0.1"), Decimal("40000"), "long_1"
+            symbol, "BUY", Decimal("0.1"), Decimal(40000), "long_1"
         )
         current_position = self.position_manager.update_position_from_order(
             long_order, long_order.price
@@ -114,7 +114,7 @@ class SinglePositionFIFOTest:
         long_action2 = self.create_trade_action("LONG", 10)
         validated2 = self.validator.validate(long_action2, current_position)
         approved2, modified2, reason2 = self.risk_manager.evaluate_risk(
-            validated2, current_position, Decimal("41000")
+            validated2, current_position, Decimal(41000)
         )
 
         logger.info("\nAttempting LONG when already LONG:")
@@ -132,7 +132,7 @@ class SinglePositionFIFOTest:
         short_action = self.create_trade_action("SHORT", 10)
         validated3 = self.validator.validate(short_action, current_position)
         approved3, modified3, reason3 = self.risk_manager.evaluate_risk(
-            validated3, current_position, Decimal("39000")
+            validated3, current_position, Decimal(39000)
         )
 
         logger.info("\nAttempting SHORT when LONG:")
@@ -147,7 +147,7 @@ class SinglePositionFIFOTest:
         close_action = self.create_trade_action("CLOSE")
         validated4 = self.validator.validate(close_action, current_position)
         approved4, modified4, reason4 = self.risk_manager.evaluate_risk(
-            validated4, current_position, Decimal("42000")
+            validated4, current_position, Decimal(42000)
         )
 
         logger.info("\nAttempting CLOSE when LONG:")
@@ -160,7 +160,7 @@ class SinglePositionFIFOTest:
 
         # Execute the CLOSE
         close_order = self.create_test_order(
-            symbol, "SELL", Decimal("0.1"), Decimal("42000"), "close_1"
+            symbol, "SELL", Decimal("0.1"), Decimal(42000), "close_1"
         )
         current_position = self.position_manager.update_position_from_order(
             close_order, close_order.price
@@ -175,7 +175,7 @@ class SinglePositionFIFOTest:
         short_action2 = self.create_trade_action("SHORT", 10)
         validated5 = self.validator.validate(short_action2, current_position)
         approved5, modified5, reason5 = self.risk_manager.evaluate_risk(
-            validated5, current_position, Decimal("41500")
+            validated5, current_position, Decimal(41500)
         )
 
         logger.info("\nAttempting SHORT when flat (after close):")
@@ -190,7 +190,7 @@ class SinglePositionFIFOTest:
 
     def test_fifo_with_single_position(self):
         """Test FIFO tracking with single position rule."""
-        logger.info("\n" + "=" * 80)
+        logger.info("\n%s", "=" * 80)
         logger.info("TEST 2: FIFO Tracking with Single Position")
         logger.info("=" * 80)
 
@@ -198,7 +198,7 @@ class SinglePositionFIFOTest:
 
         # Open position
         buy_order = self.create_test_order(
-            symbol, "BUY", Decimal("1"), Decimal("2000"), "eth_buy_1"
+            symbol, "BUY", Decimal(1), Decimal(2000), "eth_buy_1"
         )
         position = self.position_manager.update_position_from_order(
             buy_order, buy_order.price
@@ -234,7 +234,7 @@ class SinglePositionFIFOTest:
 
         # Close position
         sell_order = self.create_test_order(
-            symbol, "SELL", Decimal("1"), Decimal("2200"), "eth_sell_1"
+            symbol, "SELL", Decimal(1), Decimal(2200), "eth_sell_1"
         )
         position = self.position_manager.update_position_from_order(
             sell_order, sell_order.price
@@ -257,7 +257,7 @@ class SinglePositionFIFOTest:
 
     def test_position_reversal_workflow(self):
         """Test the workflow for reversing a position."""
-        logger.info("\n" + "=" * 80)
+        logger.info("\n%s", "=" * 80)
         logger.info("TEST 3: Position Reversal Workflow")
         logger.info("=" * 80)
 
@@ -265,7 +265,7 @@ class SinglePositionFIFOTest:
 
         # Step 1: Open LONG position
         buy_order = self.create_test_order(
-            symbol, "BUY", Decimal("0.5"), Decimal("45000"), "btc_long"
+            symbol, "BUY", Decimal("0.5"), Decimal(45000), "btc_long"
         )
         position = self.position_manager.update_position_from_order(
             buy_order, buy_order.price
@@ -279,7 +279,7 @@ class SinglePositionFIFOTest:
         short_action = self.create_trade_action("SHORT", 10)
         validated = self.validator.validate(short_action, current_position)
         approved, modified, reason = self.risk_manager.evaluate_risk(
-            validated, current_position, Decimal("44000")
+            validated, current_position, Decimal(44000)
         )
 
         logger.info("\nStep 2 - Trying to SHORT while LONG:")
@@ -291,7 +291,7 @@ class SinglePositionFIFOTest:
 
         # Step 3: Close LONG position first
         close_order = self.create_test_order(
-            symbol, "SELL", Decimal("0.5"), Decimal("44000"), "btc_close"
+            symbol, "SELL", Decimal("0.5"), Decimal(44000), "btc_close"
         )
         position = self.position_manager.update_position_from_order(
             close_order, close_order.price
@@ -303,7 +303,7 @@ class SinglePositionFIFOTest:
         short_action2 = self.create_trade_action("SHORT", 10)
         validated2 = self.validator.validate(short_action2, current_position)
         approved2, modified2, reason2 = self.risk_manager.evaluate_risk(
-            validated2, current_position, Decimal("44000")
+            validated2, current_position, Decimal(44000)
         )
 
         logger.info("\nStep 4 - Trying to SHORT after closing:")
@@ -317,7 +317,7 @@ class SinglePositionFIFOTest:
 
     def run_all_tests(self):
         """Run all single position FIFO tests."""
-        logger.info("\n" + "=" * 80)
+        logger.info("\n%s", "=" * 80)
         logger.info("Starting Single Position FIFO Tests")
         logger.info("=" * 80)
 
@@ -326,7 +326,7 @@ class SinglePositionFIFOTest:
             self.test_fifo_with_single_position()
             self.test_position_reversal_workflow()
 
-            logger.info("\n" + "=" * 80)
+            logger.info("\n%s", "=" * 80)
             logger.info("✅ ALL TESTS PASSED!")
             logger.info("=" * 80)
 

@@ -89,22 +89,22 @@ class FeeCalculator:
                     "Position value must be positive for fee calculation"
                 )  # Reduced from warning to debug
                 return TradeFees(
-                    entry_fee=Decimal("0"),
-                    exit_fee=Decimal("0"),
-                    total_fee=Decimal("0"),
+                    entry_fee=Decimal(0),
+                    exit_fee=Decimal(0),
+                    total_fee=Decimal(0),
                     fee_rate=0.0,
-                    net_position_value=Decimal("0"),
+                    net_position_value=Decimal(0),
                 )
 
             # Check for zero or negative current price
             if current_price <= 0:
                 logger.warning("Current price must be positive for fee calculation")
                 return TradeFees(
-                    entry_fee=Decimal("0"),
-                    exit_fee=Decimal("0"),
-                    total_fee=Decimal("0"),
+                    entry_fee=Decimal(0),
+                    exit_fee=Decimal(0),
+                    total_fee=Decimal(0),
                     fee_rate=0.0,
-                    net_position_value=Decimal("0"),
+                    net_position_value=Decimal(0),
                 )
 
             # Determine the appropriate fee rate
@@ -156,9 +156,9 @@ class FeeCalculator:
             logger.exception("Error calculating trade fees")
             # Return zero fees as fallback
             return TradeFees(
-                entry_fee=Decimal("0"),
-                exit_fee=Decimal("0"),
-                total_fee=Decimal("0"),
+                entry_fee=Decimal(0),
+                exit_fee=Decimal(0),
+                total_fee=Decimal(0),
                 fee_rate=0.0,
                 net_position_value=position_value,
             )
@@ -191,11 +191,11 @@ class FeeCalculator:
             if trade_action.action in ["HOLD", "CLOSE"]:
                 # No adjustment needed for HOLD/CLOSE actions
                 return trade_action, TradeFees(
-                    entry_fee=Decimal("0"),
-                    exit_fee=Decimal("0"),
-                    total_fee=Decimal("0"),
+                    entry_fee=Decimal(0),
+                    exit_fee=Decimal(0),
+                    total_fee=Decimal(0),
                     fee_rate=0.0,
-                    net_position_value=Decimal("0"),
+                    net_position_value=Decimal(0),
                 )
 
             # Check for zero or negative account balance
@@ -204,11 +204,11 @@ class FeeCalculator:
                 adjusted_action = trade_action.copy()
                 adjusted_action.size_pct = 0
                 return adjusted_action, TradeFees(
-                    entry_fee=Decimal("0"),
-                    exit_fee=Decimal("0"),
-                    total_fee=Decimal("0"),
+                    entry_fee=Decimal(0),
+                    exit_fee=Decimal(0),
+                    total_fee=Decimal(0),
                     fee_rate=0.0,
-                    net_position_value=Decimal("0"),
+                    net_position_value=Decimal(0),
                 )
 
             # Check for zero or negative size percentage
@@ -217,11 +217,11 @@ class FeeCalculator:
                 adjusted_action = trade_action.copy()
                 adjusted_action.size_pct = 0
                 return adjusted_action, TradeFees(
-                    entry_fee=Decimal("0"),
-                    exit_fee=Decimal("0"),
-                    total_fee=Decimal("0"),
+                    entry_fee=Decimal(0),
+                    exit_fee=Decimal(0),
+                    total_fee=Decimal(0),
                     fee_rate=0.0,
-                    net_position_value=Decimal("0"),
+                    net_position_value=Decimal(0),
                 )
 
             # Check for zero or negative current price
@@ -230,11 +230,11 @@ class FeeCalculator:
                 adjusted_action = trade_action.copy()
                 adjusted_action.size_pct = 0
                 return adjusted_action, TradeFees(
-                    entry_fee=Decimal("0"),
-                    exit_fee=Decimal("0"),
-                    total_fee=Decimal("0"),
+                    entry_fee=Decimal(0),
+                    exit_fee=Decimal(0),
+                    total_fee=Decimal(0),
                     fee_rate=0.0,
-                    net_position_value=Decimal("0"),
+                    net_position_value=Decimal(0),
                 )
 
             # Calculate intended position value
@@ -340,11 +340,11 @@ class FeeCalculator:
             logger.exception("Error adjusting position size for fees")
             # Return original action as fallback
             return trade_action, TradeFees(
-                entry_fee=Decimal("0"),
-                exit_fee=Decimal("0"),
-                total_fee=Decimal("0"),
+                entry_fee=Decimal(0),
+                exit_fee=Decimal(0),
+                total_fee=Decimal(0),
                 fee_rate=0.0,
-                net_position_value=Decimal("0"),
+                net_position_value=Decimal(0),
             )
         else:
             return adjusted_action, final_fees
@@ -380,7 +380,7 @@ class FeeCalculator:
                     rationale="Fee calculation dummy action",
                 ),
                 position_value,
-                Decimal("1000"),  # Dummy price
+                Decimal(1000),  # Dummy price
                 is_market_order,
             )
 

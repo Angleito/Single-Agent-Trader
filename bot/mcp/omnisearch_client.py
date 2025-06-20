@@ -64,8 +64,7 @@ def get_data_directory(subdirectory: str = "omnisearch_cache") -> Path:
         if try_create_directory(fallback_path):
             logger.info("Using fallback data directory: %s", fallback_path)
             return fallback_path
-        else:
-            logger.warning("Could not create fallback directory: %s", fallback_path)
+        logger.warning("Could not create fallback directory: %s", fallback_path)
 
     # Try system temporary directory as last resort
     import tempfile
