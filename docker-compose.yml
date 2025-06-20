@@ -223,8 +223,6 @@ services:
 
     # Service dependencies with health check conditions for robust startup
     depends_on:
-      bluefin-service:
-        condition: service_healthy
       mcp-omnisearch:
         condition: service_healthy
       mcp-memory:
