@@ -25,14 +25,14 @@ try:
     from bot.exchange.bluefin_endpoints import get_notifications_url, get_websocket_url
 except ImportError:
     # Fallback endpoint resolver if centralized config is not available
-    def get_websocket_url(network: str = "mainnet") -> str:
+    def get_websocket_url(network: str | None = "mainnet") -> str:
         """Fallback WebSocket URL resolver."""
         if network.lower() == "testnet":
             return "wss://dapi.api.sui-staging.bluefin.io"
         else:
             return "wss://dapi.api.sui-prod.bluefin.io"
 
-    def get_notifications_url(network: str = "mainnet") -> str:
+    def get_notifications_url(network: str | None = "mainnet") -> str:
         """Fallback notifications URL resolver."""
         if network.lower() == "testnet":
             return "wss://notifications.api.sui-staging.bluefin.io"
@@ -88,9 +88,8 @@ class BluefinWebSocketClient:
         self.on_candle_update = on_candle_update
 
         # Determine network and set appropriate URLs using centralized configuration
-        self.network = (
-            network or os.getenv("EXCHANGE__BLUEFIN_NETWORK", "mainnet")
-        ).lower()
+        network_value = network or os.getenv("EXCHANGE__BLUEFIN_NETWORK", "mainnet")
+        self.network = network_value.lower() if network_value else "mainnet"
 
         # Set WebSocket URLs based on network
         if self.network == "testnet":
@@ -118,9 +117,9 @@ class BluefinWebSocketClient:
         # Subscription tracking
         self._subscribed_channels: set[str] = set()
         self._subscription_id = 1
-        self._pending_subscriptions: dict[
-            int, str
-        ] = {}  # Track pending subscription requests
+        self._pending_subscriptions: dict[int, str] = (
+            {}
+        )  # Track pending subscription requests
 
         # Tasks
         self._connection_task: asyncio.Task | None = None
@@ -512,7 +511,7 @@ class BluefinWebSocketClient:
             await self._handle_bluefin_kline_update(data)
         else:
             # Handle standard channels
-            channel = data.get("channel", data.get("ch"))
+            channel = data.get("channel", data.get("ch", ""))
 
             if channel == "trade" or "trade" in str(channel):
                 await self._handle_trade_update(data)

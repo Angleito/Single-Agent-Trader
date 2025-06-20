@@ -7,7 +7,7 @@ from .llm_agent import LLMAgent
 try:
     from .memory_enhanced_agent import MemoryEnhancedLLMAgent
 except ImportError:
-    MemoryEnhancedLLMAgent = type(None)
+    MemoryEnhancedLLMAgent = None  # type: ignore
 
 __all__ = [
     "LLMAgent",

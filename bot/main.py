@@ -169,9 +169,9 @@ class TradingEngine:
         self._shutdown_requested = False
         self._memory_available = False  # Initialize early to prevent AttributeError
         self._last_position_log_time: datetime | None = None
-        self._background_tasks: list[
-            asyncio.Task[Any]
-        ] = []  # Track background tasks for cleanup
+        self._background_tasks: list[asyncio.Task[Any]] = (
+            []
+        )  # Track background tasks for cleanup
 
         # Load configuration
         self.settings = self._load_configuration(config_file, dry_run)
@@ -353,15 +353,12 @@ class TradingEngine:
         performance_thresholds = PerformanceThresholds()
 
         # Customize thresholds for trading environment
-        if (
-            interval
-            in [
-                "1s",
-                "5s",
-                "10s",
-                "15s",
-            ]
-        ):  # High-frequency trading (Note: sub-minute intervals converted to 1m on Bluefin)
+        if interval in [
+            "1s",
+            "5s",
+            "10s",
+            "15s",
+        ]:  # High-frequency trading (Note: sub-minute intervals converted to 1m on Bluefin)
             performance_thresholds.indicator_calculation_ms = 50
             performance_thresholds.market_data_processing_ms = 25
             performance_thresholds.trade_execution_ms = 500
@@ -825,7 +822,7 @@ class TradingEngine:
             console.print(
                 "\n[yellow]Received interrupt signal, shutting down...[/yellow]"
             )
-        except Exception:
+        except Exception as e:
             self.logger.exception("Critical error in trading engine")
             console.print(f"[red]Critical error: {e}[/red]")
             raise
@@ -2113,7 +2110,7 @@ class TradingEngine:
                 if sleep_time > 0:
                     await asyncio.sleep(sleep_time)
 
-            except Exception:
+            except Exception as e:
                 self.logger.exception("Error in trading loop")
                 console.print(f"[red]Loop error: {e}[/red]")
 
@@ -2375,7 +2372,7 @@ class TradingEngine:
             else:
                 console.print("[red]✗ Trade execution failed[/red]")
 
-        except Exception:
+        except Exception as e:
             self.logger.exception("Trade execution error")
             console.print(f"[red]Trade execution error: {e}[/red]")
 
@@ -2734,7 +2731,7 @@ class TradingEngine:
 
             return summary
 
-        except Exception:
+        except Exception as e:
             self.logger.exception("Failed to get performance summary")
             return {
                 "error": str(e),
@@ -2886,7 +2883,7 @@ class TradingEngine:
 
             console.print("[green]✓ Shutdown complete[/green]")
 
-        except Exception:
+        except Exception as e:
             self.logger.exception("Error during shutdown")
             console.print(f"[red]Shutdown error: {e}[/red]")
         finally:
@@ -3001,7 +2998,7 @@ class TradingEngine:
             self.logger.info("No matching positions found for trading symbol")
             console.print("    [green]✓ No existing positions detected[/green]")
 
-        except Exception:
+        except Exception as e:
             self.logger.exception("Failed to reconcile positions")
             console.print(f"    [red]✗ Position reconciliation failed: {e}[/red]")
             # Continue with FLAT position assumption on error

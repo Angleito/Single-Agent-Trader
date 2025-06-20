@@ -234,7 +234,7 @@ class SystemHealthMonitor:
     ) -> None:
         """Check health of a specific component."""
         component_health = self.component_health[component_name]
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         try:
             # Execute health check
@@ -244,7 +244,7 @@ class SystemHealthMonitor:
                 is_healthy = health_check()
 
             # Calculate response time
-            response_time = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+            response_time = (datetime.now(UTC) - start_time).total_seconds() * 1000
 
             if is_healthy:
                 # Component is healthy

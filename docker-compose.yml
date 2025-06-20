@@ -679,4 +679,4 @@ volumes:
 networks:
   trading-network:
     name: trading-network
-    external: true
+    driver: bridge

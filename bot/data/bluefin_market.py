@@ -9,7 +9,7 @@ from collections import deque
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import aiohttp
 import pandas as pd
@@ -123,9 +123,13 @@ class BluefinMarketDataProvider:
             )
 
             self.network = os.getenv("EXCHANGE__BLUEFIN_NETWORK", "mainnet").lower()
-            self._api_base_url = get_rest_api_url(self.network)
-            self._ws_url = get_websocket_url(self.network)
-            self._notification_ws_url = get_notifications_url(self.network)
+            network_type = cast(
+                Literal["mainnet", "testnet"],
+                self.network if self.network in ["mainnet", "testnet"] else "mainnet",
+            )
+            self._api_base_url = get_rest_api_url(network_type)
+            self._ws_url = get_websocket_url(network_type)
+            self._notification_ws_url = get_notifications_url(network_type)
         except ImportError:
             # Fallback to hardcoded URLs if centralized config is not available
             self.network = os.getenv("EXCHANGE__BLUEFIN_NETWORK", "mainnet").lower()
@@ -846,9 +850,7 @@ class BluefinMarketDataProvider:
         status["data_quality"] = (
             "excellent"
             if total_cached_candles >= 200
-            else "good"
-            if total_cached_candles >= 100
-            else "insufficient"
+            else "good" if total_cached_candles >= 100 else "insufficient"
         )
 
         return status

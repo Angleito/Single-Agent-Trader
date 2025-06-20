@@ -7,7 +7,7 @@ readme = "README.md"
 packages = [{include = "bot"}]
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = "^3.11"
 pip = "^25.1.0"
 setuptools = "^80.9.0"
 pandas = "^2.2.0"
@@ -163,6 +163,17 @@ min_confidence = 95
 paths = ["bot"]
 ignore_decorators = ["@pytest.fixture", "@property", "@cached_property", "@click.command", "@click.option"]
 ignore_names = ["_*", "test_*", "setUp", "tearDown"]
+
+[tool.bandit]
+exclude_dirs = ["tests", "venv", ".venv", "node_modules"]
+skips = [
+    "B101",  # Skip assert statements (used in tests)
+    "B311",  # Skip random module warnings (used for test data generation, not crypto)
+    "B404",  # Skip subprocess import warnings (needed for MCP server)
+    "B603", "B607",  # Skip subprocess call warnings (MCP server startup)
+    "B110",  # Skip try/except pass (legitimate cleanup code)
+]
+severity = "medium"
 
 [tool.djlint]
 profile = "html"

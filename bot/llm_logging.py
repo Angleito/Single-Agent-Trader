@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 # Check LangChain availability first
 try:
@@ -402,20 +403,34 @@ class LangChainCallbackHandler(BaseCallbackHandler):
         self._current_request_id: str | None = None
 
     def on_chain_start(
-        self, serialized: dict[str, Any], _inputs: dict[str, Any], **kwargs: Any
-    ) -> None:
+        self,
+        serialized: dict[str, Any],
+        inputs: dict[str, Any],
+        *,
+        run_id: UUID,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> Any:
         """Called when a chain starts running."""
-        run_id = kwargs.get("run_id", "unknown")
         self._chain_starts[str(run_id)] = time.time()
 
         self.logger.debug(
             "Chain started: %s - %s", serialized.get("name", "unknown"), run_id
         )
 
-    def on_chain_end(self, _outputs: dict[str, Any], **kwargs: Any) -> None:
+    def on_chain_end(
+        self,
+        outputs: dict[str, Any],
+        *,
+        run_id: UUID,
+        parent_run_id: UUID | None = None,
+        **kwargs: Any,
+    ) -> Any:
         """Called when a chain finishes running."""
-        run_id = str(kwargs.get("run_id", "unknown"))
-        start_time = self._chain_starts.pop(run_id, time.time())
+        run_id_str = str(run_id)
+        start_time = self._chain_starts.pop(run_id_str, time.time())
         duration = time.time() - start_time
 
         self.logger.debug("Chain completed in %.3fs - %s", duration, run_id)

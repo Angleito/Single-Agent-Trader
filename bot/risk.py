@@ -80,11 +80,9 @@ class TradingCircuitBreaker:
             True if trading is allowed, False if circuit is open
         """
         if self.state == "OPEN":
-            if (
-                self.last_failure_time
-                and datetime.now(UTC) - self.last_failure_time
-                > timedelta(seconds=self.timeout)
-            ):
+            if self.last_failure_time and datetime.now(
+                UTC
+            ) - self.last_failure_time > timedelta(seconds=self.timeout):
                 self.state = "HALF_OPEN"
                 self.failure_count = 0
                 logger.info("🔄 Circuit breaker moving to HALF_OPEN state")

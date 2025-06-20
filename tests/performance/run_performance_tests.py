@@ -246,9 +246,7 @@ def generate_html_report(results: dict[str, Any], output_file: Path):
             status_class = (
                 "good"
                 if error_rate < 1
-                else "warning"
-                if error_rate < 5
-                else "critical"
+                else "warning" if error_rate < 5 else "critical"
             )
 
             content_sections.append(

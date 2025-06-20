@@ -429,9 +429,7 @@ class GracefulDegradation:
             else:
                 return fallback_strategy(*args, **kwargs)
         except Exception:
-            logger.exception(
-                "Fallback strategy failed for %s", service_name
-            )
+            logger.exception("Fallback strategy failed for %s", service_name)
             raise
 
     async def _handle_service_failure(

@@ -621,7 +621,8 @@ class WebSearchFormatter:
         for item in items:
             # Create content hash for deduplication
             content_hash = hashlib.sha256(
-                (item.summary + " ".join(item.key_insights)).encode(), usedforsecurity=False
+                (item.summary + " ".join(item.key_insights)).encode(),
+                usedforsecurity=False,
             ).hexdigest()
 
             if (

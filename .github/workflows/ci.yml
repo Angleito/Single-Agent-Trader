@@ -109,6 +109,11 @@ jobs:
         poetry run python -m mypy bot/
       continue-on-error: true  # Allow to continue even if type checking fails
 
+    - name: Run Vulture dead code detection
+      run: |
+        poetry run vulture bot/ --min-confidence 95
+      continue-on-error: true  # Allow to continue even if dead code is found
+
     - name: Check Poetry lock file
       run: |
         poetry check

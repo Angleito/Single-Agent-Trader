@@ -538,7 +538,7 @@ class MarketContextAnalyzer:
                 sentiment_divergence=sentiment_divergence,
             )
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error assessing risk sentiment")
             return RiskSentiment(
                 fear_greed_index=50.0,  # Neutral
@@ -727,7 +727,7 @@ class MarketContextAnalyzer:
 
             return "\n".join(summary_lines)
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error generating context summary")
             return "Error: Could not generate market context summary"
 

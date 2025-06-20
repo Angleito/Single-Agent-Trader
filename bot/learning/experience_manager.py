@@ -142,7 +142,7 @@ class ExperienceManager:
         experience_id = await self.memory_server.store_experience(
             market_state,
             trade_action,
-            additional_context={
+            _additional_context={
                 "decision_time": datetime.now(UTC).isoformat(),
                 "position_before": {
                     "side": market_state.current_position.side,
@@ -556,7 +556,7 @@ class ExperienceManager:
 
     def get_active_trades_summary(self) -> dict[str, Any]:
         """Get summary of all active trades."""
-        summary = {
+        summary: dict[str, Any] = {
             "active_count": len(self.active_trades),
             "total_unrealized_pnl": Decimal("0"),
             "trades": [],

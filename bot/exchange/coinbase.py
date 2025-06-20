@@ -1043,10 +1043,10 @@ class CoinbaseClient(BaseExchange):
 
         try:
             # Only perform health check if enough time has passed
-            if (
-                self._last_health_check
-                and datetime.now(UTC) - self._last_health_check
-                < timedelta(seconds=settings.exchange.health_check_interval)
+            if self._last_health_check and datetime.now(
+                UTC
+            ) - self._last_health_check < timedelta(
+                seconds=settings.exchange.health_check_interval
             ):
                 return True
 

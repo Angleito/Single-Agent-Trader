@@ -228,7 +228,7 @@ class MonitoringExporter:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Generate filename with timestamp
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         snapshot_file = output_dir / f"monitoring_snapshot_{timestamp}.json"
 
         # Collect all monitoring data
