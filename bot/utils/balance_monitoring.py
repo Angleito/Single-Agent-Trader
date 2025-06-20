@@ -151,7 +151,20 @@ class BalanceOperationMonitor:
             self.events.append(event)
             self.active_operations[correlation_id] = event
 
-            logger.debug("Balance operation started: %s.%s", component, operation, extra=get_balance_operation_context(correlation_id, operation, {"component": component, "event_type": "operation_start", "metadata": metadata}))
+            logger.debug(
+                "Balance operation started: %s.%s",
+                component,
+                operation,
+                extra=get_balance_operation_context(
+                    correlation_id,
+                    operation,
+                    {
+                        "component": component,
+                        "event_type": "operation_start",
+                        "metadata": metadata,
+                    },
+                ),
+            )
 
         return start_time or time.perf_counter()
 
@@ -206,7 +219,11 @@ class BalanceOperationMonitor:
         async with self._lock:
             start_event = self.active_operations.pop(correlation_id, None)
             if not start_event:
-                logger.warning("No start event found for correlation_id: %s", correlation_id, extra={"correlation_id": correlation_id, "status": status})
+                logger.warning(
+                    "No start event found for correlation_id: %s",
+                    correlation_id,
+                    extra={"correlation_id": correlation_id, "status": status},
+                )
                 return
 
             # Calculate duration
@@ -263,7 +280,25 @@ class BalanceOperationMonitor:
                 await self._track_error_pattern(completion_event)
 
             # Log completion
-            logger.info("Balance operation completed: %s.%s", start_event.component, start_event.operation, extra=get_balance_operation_context(correlation_id, start_event.operation, {"balance_amount": balance_amount, "duration_ms": duration_ms, "success": (status == "success"), "error_category": error_category, "component": start_event.component, "event_type": "operation_complete", "final_status": status, "metadata": completion_event.metadata}))
+            logger.info(
+                "Balance operation completed: %s.%s",
+                start_event.component,
+                start_event.operation,
+                extra=get_balance_operation_context(
+                    correlation_id,
+                    start_event.operation,
+                    {
+                        "balance_amount": balance_amount,
+                        "duration_ms": duration_ms,
+                        "success": (status == "success"),
+                        "error_category": error_category,
+                        "component": start_event.component,
+                        "event_type": "operation_complete",
+                        "final_status": status,
+                        "metadata": completion_event.metadata,
+                    },
+                ),
+            )
 
     async def _update_performance_metrics(self, event: BalanceOperationEvent) -> None:
         """Update performance metrics for the completed operation."""

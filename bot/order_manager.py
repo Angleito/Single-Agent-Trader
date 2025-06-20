@@ -70,7 +70,9 @@ class OrderManager:
         # Load persisted state
         self._load_state()
 
-        logger.info("Initialized OrderManager with %s active orders", len(self._active_orders))
+        logger.info(
+            "Initialized OrderManager with %s active orders", len(self._active_orders)
+        )
 
     async def start(self) -> None:
         """Start the order manager background tasks."""
@@ -151,7 +153,14 @@ class OrderManager:
             # Persist state
             self._save_state()
 
-            logger.info("Created order %s: %s %s %s (%s)", order_id, side, quantity, symbol, order_type)
+            logger.info(
+                "Created order %s: %s %s %s (%s)",
+                order_id,
+                side,
+                quantity,
+                symbol,
+                order_type,
+            )
             return order.copy()
 
     def add_order(self, order: Order) -> None:
@@ -175,7 +184,9 @@ class OrderManager:
                 self._order_history.append(order)
             # Persist state
             self._save_state()
-            logger.info("Added existing order %s with status %s", order.id, order.status)
+            logger.info(
+                "Added existing order %s with status %s", order.id, order.status
+            )
 
     def update_order_status(
         self,
@@ -345,7 +356,9 @@ class OrderManager:
         """
         with self._lock:
             if order_id not in self._active_orders:
-                logger.warning("Cannot cancel order %s: not found in active orders", order_id)
+                logger.warning(
+                    "Cannot cancel order %s: not found in active orders", order_id
+                )
                 return False
 
             order = self._active_orders[order_id]
@@ -356,7 +369,11 @@ class OrderManager:
                 OrderStatus.REJECTED,
                 OrderStatus.FAILED,
             ]:
-                logger.warning("Cannot cancel order %s: already completed with status %s", order_id, order.status)
+                logger.warning(
+                    "Cannot cancel order %s: already completed with status %s",
+                    order_id,
+                    order.status,
+                )
                 return False
 
             # Update status to cancelled
@@ -396,7 +413,11 @@ class OrderManager:
                 if self.cancel_order(order_id):
                     cancelled_count += 1
 
-            logger.info("Cancelled %s orders" + (" for %s" if symbol else ""), cancelled_count, symbol)
+            logger.info(
+                "Cancelled %s orders" + (" for %s" if symbol else ""),
+                cancelled_count,
+                symbol,
+            )
             return cancelled_count
 
     def register_callback(
@@ -509,7 +530,11 @@ class OrderManager:
                     if order_id in self._active_orders:
                         order = self._active_orders[order_id]
                         if order.status in [OrderStatus.PENDING, OrderStatus.OPEN]:
-                            logger.warning("Order %s timed out after %ss", order_id, timeout_seconds)
+                            logger.warning(
+                                "Order %s timed out after %ss",
+                                order_id,
+                                timeout_seconds,
+                            )
                             self.update_order_status(order_id, OrderStatus.CANCELLED)
                             self._trigger_callbacks(order_id, OrderEvent.EXPIRED)
 

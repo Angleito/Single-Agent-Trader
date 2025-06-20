@@ -685,7 +685,7 @@ class ConfigManager:
         # This method is kept for backward compatibility
         # The actual template is now in .env.example
         template_path = Path(".env.template")
-        logger.info("Use .env.example as the template file. " "Legacy template: %s" ), template_path)
+        logger.info("Use .env.example as the template file. Legacy template: %s", template_path)
         return template_path
 
 
@@ -811,7 +811,7 @@ class HealthMonitor:
             name: comp["status"] for name, comp in health_status["components"].items()
         }
 
-        logger.info("Health check completed. Overall status: " "%s" ), health_status['overall_status'])
+        logger.info("Health check completed. Overall status: %s", health_status['overall_status'])
         return health_status
 
     def get_status_summary(self) -> dict[str, Any]:
