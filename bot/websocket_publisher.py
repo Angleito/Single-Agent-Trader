@@ -493,75 +493,98 @@ class WebSocketPublisher:
         """Background worker to process message queue with priority handling."""
         while self._publish_enabled:
             try:
-                message = None
-
-                # Check priority queue first
-                try:
-                    message = self._priority_queue.get_nowait()
-                    logger.debug("Processing priority message")
-                except asyncio.QueueEmpty:
-                    # No priority messages, check regular queue
-                    try:
-                        message = await asyncio.wait_for(
-                            self._message_queue.get(), timeout=5.0
-                        )
-                    except TimeoutError:
-                        # No messages to process, continue
-                        continue
-
-                if not self._connected or not self._ws:
-                    # Drop message if not connected, but log it for priority messages
-                    if message and message.get("type") in self._priority_message_types:
-                        logger.debug(
-                            "Dropping priority message %s due to disconnection",
-                            message.get("type"),
-                        )
+                # Get next message from appropriate queue
+                message = await self._get_next_message()
+                if not message:
                     continue
 
-                if message:
-                    try:
-                        # Use custom encoder for JSON serialization
-                        json_data = json.dumps(message, cls=TradingJSONEncoder)
-                        await self._ws.send(json_data)
+                # Check connection and handle disconnection
+                if not self._is_ready_to_send():
+                    self._handle_message_when_disconnected(message)
+                    continue
 
-                        # Update statistics
-                        self._queue_stats["messages_sent"] += 1
-
-                        message_type = message.get("type", "unknown")
-                        logger.debug("Sent WebSocket message: %s", message_type)
-
-                        # Log queue health every 100 messages
-                        if self._queue_stats["messages_sent"] % 100 == 0:
-                            self._log_queue_health()
-
-                    except (ConnectionClosed, WebSocketException) as e:
-                        logger.warning("WebSocket connection lost during send: %s", e)
-                        self._connected = False
-
-                        # Re-queue priority messages, drop others to prevent queue buildup
-                        if message.get("type") in self._priority_message_types:
-                            try:
-                                self._priority_queue.put_nowait(message)
-                                logger.debug(
-                                    "Re-queued priority message after connection loss"
-                                )
-                            except asyncio.QueueFull:
-                                logger.warning(
-                                    "Priority queue full, dropping priority message "
-                                    "after connection loss"
-                                )
-                        else:
-                            logger.debug(
-                                "Dropping non-priority message %s after connection loss",
-                                message.get("type"),
-                            )
-
-                    except Exception:
-                        logger.exception("Error sending WebSocket message")
+                # Send the message
+                await self._send_message_with_error_handling(message)
 
             except Exception:
                 logger.exception("Error in queue worker")
                 await asyncio.sleep(1)
+
+    async def _get_next_message(self):
+        """Get the next message from priority or regular queue."""
+        # Check priority queue first
+        try:
+            message = self._priority_queue.get_nowait()
+            logger.debug("Processing priority message")
+            return message
+        except asyncio.QueueEmpty:
+            pass
+
+        # No priority messages, check regular queue
+        try:
+            message = await asyncio.wait_for(self._message_queue.get(), timeout=5.0)
+            return message
+        except TimeoutError:
+            return None
+
+    def _is_ready_to_send(self) -> bool:
+        """Check if WebSocket is ready to send messages."""
+        return self._connected and self._ws
+
+    def _handle_message_when_disconnected(self, message):
+        """Handle message when WebSocket is disconnected."""
+        if message and message.get("type") in self._priority_message_types:
+            logger.debug(
+                "Dropping priority message %s due to disconnection",
+                message.get("type"),
+            )
+
+    async def _send_message_with_error_handling(self, message):
+        """Send message with comprehensive error handling."""
+        if not message:
+            return
+
+        try:
+            # Send the message
+            json_data = json.dumps(message, cls=TradingJSONEncoder)
+            await self._ws.send(json_data)
+
+            # Update statistics and logging
+            self._update_send_statistics(message)
+
+        except (ConnectionClosed, WebSocketException) as e:
+            logger.warning("WebSocket connection lost during send: %s", e)
+            self._connected = False
+            await self._handle_connection_lost(message)
+
+        except Exception:
+            logger.exception("Error sending WebSocket message")
+
+    def _update_send_statistics(self, message):
+        """Update sending statistics and log health if needed."""
+        self._queue_stats["messages_sent"] += 1
+        message_type = message.get("type", "unknown")
+        logger.debug("Sent WebSocket message: %s", message_type)
+
+        # Log queue health every 100 messages
+        if self._queue_stats["messages_sent"] % 100 == 0:
+            self._log_queue_health()
+
+    async def _handle_connection_lost(self, message):
+        """Handle connection loss by re-queuing priority messages."""
+        if message.get("type") in self._priority_message_types:
+            try:
+                self._priority_queue.put_nowait(message)
+                logger.debug("Re-queued priority message after connection loss")
+            except asyncio.QueueFull:
+                logger.warning(
+                    "Priority queue full, dropping priority message after connection loss"
+                )
+        else:
+            logger.debug(
+                "Dropping non-priority message %s after connection loss",
+                message.get("type"),
+            )
 
     def _log_queue_health(self) -> None:
         """Log queue health statistics."""

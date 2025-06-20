@@ -96,8 +96,6 @@ class WebSocketConnectivityTester:
                         True,
                         f"Round-trip latency: {latency:.3f}s",
                     )
-                    return True
-
                 except TimeoutError:
                     # No response expected from dashboard, this is OK
                     self.add_result(
@@ -105,6 +103,8 @@ class WebSocketConnectivityTester:
                         True,
                         "Message sent successfully (no response expected)",
                     )
+                    return True
+                else:
                     return True
 
         except Exception as e:
@@ -127,13 +127,13 @@ class WebSocketConnectivityTester:
                     self.add_result(
                         f"Ping/Pong ({url})", True, f"Ping latency: {latency:.3f}s"
                     )
-                    return True
-
                 except TimeoutError:
                     self.add_result(
                         f"Ping/Pong ({url})", False, "Ping timeout (no pong received)"
                     )
                     return False
+                else:
+                    return True
 
         except Exception as e:
             self.add_result(f"Ping/Pong ({url})", False, str(e))
@@ -211,14 +211,14 @@ class WebSocketConnectivityTester:
 
             await websocket.close()
 
+        except Exception as e:
+            self.add_result(f"Reconnection ({url})", False, str(e))
+            return False
+        else:
             self.add_result(
                 f"Reconnection ({url})", True, f"Reconnected in {reconnect_time:.3f}s"
             )
             return True
-
-        except Exception as e:
-            self.add_result(f"Reconnection ({url})", False, str(e))
-            return False
 
     async def test_concurrent_connections(self, url: str, count: int = 5) -> bool:
         """Test multiple concurrent connections."""
@@ -249,16 +249,16 @@ class WebSocketConnectivityTester:
             for ws in websockets_list:
                 await ws.close()
 
+        except Exception as e:
+            self.add_result(f"Concurrent Connections ({url})", False, str(e))
+            return False
+        else:
             self.add_result(
                 f"Concurrent Connections ({url})",
                 True,
                 f"Established {count} connections in {connection_time:.3f}s",
             )
             return True
-
-        except Exception as e:
-            self.add_result(f"Concurrent Connections ({url})", False, str(e))
-            return False
 
     async def run_all_tests(self):
         """Run all connectivity tests."""

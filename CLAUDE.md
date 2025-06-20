@@ -236,10 +236,19 @@ Required environment variables:
 - `EXCHANGE__BLUEFIN_PRIVATE_KEY` - Sui wallet private key (hex format)
 - `EXCHANGE__BLUEFIN_NETWORK` - Network: "mainnet" or "testnet" (default: "mainnet")
 
+### Exchange Advanced Configuration
+- `EXCHANGE__USE_TRADE_AGGREGATION` - Enable trade aggregation for sub-minute intervals (default: "true")
+  - Required for trading intervals: 1s, 5s, 15s, 30s
+  - When enabled, individual trades are aggregated into candles at the specified interval
+  - Can be disabled for standard intervals (1m+) to reduce processing overhead
+
 ### Trading Configuration
 - `LLM__OPENAI_API_KEY` - OpenAI API key
 - `SYSTEM__DRY_RUN` - Set to "false" for live trading, "true" for paper trading (default: "true")
 - `TRADING__SYMBOL` - Trading pair (default: "BTC-USD")
+- `TRADING__INTERVAL` - Candle interval for analysis (default: "1m")
+  - Standard intervals: 1m, 3m, 5m, 15m, 30m, 1h, 4h, 1d
+  - Sub-minute intervals: 1s, 5s, 15s, 30s (require `EXCHANGE__USE_TRADE_AGGREGATION=true`)
 - `TRADING__LEVERAGE` - Futures leverage (default: 5)
 
 ### Real Market Data

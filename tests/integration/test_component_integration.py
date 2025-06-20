@@ -5,6 +5,7 @@ Tests integration between major components to ensure they work together
 correctly and data flows properly between them.
 """
 
+import logging
 from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import AsyncMock, Mock
@@ -31,6 +32,8 @@ from bot.trading_types import (
 )
 from bot.validator import TradeValidator
 
+logger = logging.getLogger(__name__)
+
 
 class TestComponentIntegration:
     """Test integration between major bot components."""
@@ -39,11 +42,11 @@ class TestComponentIntegration:
     def sample_ohlcv_data(self):
         """Create sample OHLCV data for testing."""
         dates = pd.date_range("2024-01-01", periods=200, freq="1min")
-        np.random.seed(42)  # For reproducible results
+        rng = np.random.default_rng(42)  # For reproducible results
 
         # Generate realistic price series
         base_price = 50000
-        returns = np.random.normal(0, 0.001, 200)  # 0.1% volatility
+        returns = rng.normal(0, 0.001, 200)  # 0.1% volatility
         prices = [base_price]
 
         for ret in returns[1:]:
@@ -51,10 +54,10 @@ class TestComponentIntegration:
 
         data = []
         for _i, (timestamp, close) in enumerate(zip(dates, prices, strict=False)):
-            open_price = close * (1 + np.random.normal(0, 0.0005))
-            high_price = max(open_price, close) * (1 + abs(np.random.normal(0, 0.0003)))
-            low_price = min(open_price, close) * (1 - abs(np.random.normal(0, 0.0003)))
-            volume = np.random.uniform(10, 100)
+            open_price = close * (1 + rng.normal(0, 0.0005))
+            high_price = max(open_price, close) * (1 + abs(rng.normal(0, 0.0003)))
+            low_price = min(open_price, close) * (1 - abs(rng.normal(0, 0.0003)))
+            volume = rng.uniform(10, 100)
 
             data.append(
                 {
@@ -98,15 +101,16 @@ class TestComponentIntegration:
         indicator_calc = VuManChuIndicators()
 
         # Test data flow
-        df = market_provider.to_dataframe(limit=200)
-        assert not df.empty
-        assert len(df) == 200
+        market_data = market_provider.to_dataframe(limit=200)
+        assert not market_data.empty
+        assert len(market_data) == 200
         assert all(
-            col in df.columns for col in ["open", "high", "low", "close", "volume"]
+            col in market_data.columns
+            for col in ["open", "high", "low", "close", "volume"]
         )
 
         # Calculate indicators
-        df_with_indicators = indicator_calc.calculate_all(df)
+        df_with_indicators = indicator_calc.calculate_all(market_data)
 
         # Verify indicators were calculated
         expected_indicators = [
@@ -205,7 +209,7 @@ class TestComponentIntegration:
         Position(
             symbol="BTC-USD",
             side="FLAT",
-            size=Decimal("0"),
+            size=Decimal(0),
             timestamp=datetime.now(UTC),
         )
 
@@ -216,7 +220,7 @@ class TestComponentIntegration:
             side="BUY",
             type="MARKET",
             quantity=Decimal("0.1"),
-            price=Decimal("50000"),
+            price=Decimal(50000),
             status=OrderStatus.FILLED,
             timestamp=datetime.now(UTC),
             filled_quantity=Decimal("0.1"),
@@ -247,7 +251,7 @@ class TestComponentIntegration:
             side="SELL",
             type="MARKET",
             quantity=Decimal("0.1"),
-            price=Decimal("51000"),
+            price=Decimal(51000),
             status=OrderStatus.FILLED,
             timestamp=datetime.now(UTC),
             filled_quantity=Decimal("0.1"),
@@ -263,14 +267,14 @@ class TestComponentIntegration:
         # Verify position closed with P&L
         final_position = position_manager.get_position("BTC-USD")
         assert final_position.side == "FLAT"
-        assert final_position.size == Decimal("0")
-        assert final_position.realized_pnl == Decimal("100")  # (51000 - 50000) * 0.1
+        assert final_position.size == Decimal(0)
+        assert final_position.realized_pnl == Decimal(100)  # (51000 - 50000) * 0.1
 
     def test_risk_manager_with_real_position_data(self):
         """Test RiskManager with realistic position and market data."""
         # Initialize with mock position manager
         mock_position_manager = Mock()
-        mock_position_manager.get_total_position_value.return_value = Decimal("5000")
+        mock_position_manager.get_total_position_value.return_value = Decimal(5000)
         mock_position_manager.get_current_positions.return_value = []
 
         risk_manager = RiskManager(position_manager=mock_position_manager)
@@ -289,10 +293,10 @@ class TestComponentIntegration:
                 "position": Position(
                     symbol="BTC-USD",
                     side="FLAT",
-                    size=Decimal("0"),
+                    size=Decimal(0),
                     timestamp=datetime.now(UTC),
                 ),
-                "price": Decimal("50000"),
+                "price": Decimal(50000),
                 "should_approve": True,
             },
             {
@@ -307,10 +311,10 @@ class TestComponentIntegration:
                 "position": Position(
                     symbol="BTC-USD",
                     side="FLAT",
-                    size=Decimal("0"),
+                    size=Decimal(0),
                     timestamp=datetime.now(UTC),
                 ),
-                "price": Decimal("50000"),
+                "price": Decimal(50000),
                 "should_approve": False,  # Should be modified or rejected
             },
             {
@@ -325,10 +329,10 @@ class TestComponentIntegration:
                 "position": Position(
                     symbol="BTC-USD",
                     side="FLAT",
-                    size=Decimal("0"),
+                    size=Decimal(0),
                     timestamp=datetime.now(UTC),
                 ),
-                "price": Decimal("50000"),
+                "price": Decimal(50000),
                 "should_approve": False,  # Should be rejected due to poor R:R
             },
             {
@@ -344,10 +348,10 @@ class TestComponentIntegration:
                     symbol="BTC-USD",
                     side="LONG",
                     size=Decimal("0.1"),
-                    entry_price=Decimal("49000"),
+                    entry_price=Decimal(49000),
                     timestamp=datetime.now(UTC),
                 ),
-                "price": Decimal("50000"),
+                "price": Decimal(50000),
                 "should_approve": False,  # Should reject adding to position
             },
         ]
@@ -392,7 +396,7 @@ class TestComponentIntegration:
             side="BUY",
             type="MARKET",
             quantity=Decimal("0.1"),
-            price=Decimal("50000"),
+            price=Decimal(50000),
             status=OrderStatus.FILLED,
             timestamp=datetime.now(UTC),
             filled_quantity=Decimal("0.1"),
@@ -407,7 +411,7 @@ class TestComponentIntegration:
 
         # Execute trade
         result = await exchange_client.execute_trade_action(
-            trade_action, "BTC-USD", Decimal("50000")
+            trade_action, "BTC-USD", Decimal(50000)
         )
 
         # Verify integration
@@ -419,7 +423,7 @@ class TestComponentIntegration:
         # Test order failure handling
         exchange_client.execute_trade_action = AsyncMock(return_value=None)
         result = await exchange_client.execute_trade_action(
-            trade_action, "BTC-USD", Decimal("50000")
+            trade_action, "BTC-USD", Decimal(50000)
         )
         assert result is None
 
@@ -435,7 +439,7 @@ class TestComponentIntegration:
         current_position = Position(
             symbol="BTC-USD",
             side="FLAT",
-            size=Decimal("0"),
+            size=Decimal(0),
             timestamp=datetime.now(UTC),
         )
 
@@ -513,10 +517,10 @@ class TestComponentIntegration:
                 }
             )
 
-        df = pd.DataFrame(df_data).set_index("timestamp")
+        performance_data = pd.DataFrame(df_data).set_index("timestamp")
 
         # Process through components
-        df_with_indicators = indicator_calc.calculate_all(df)
+        df_with_indicators = indicator_calc.calculate_all(performance_data)
         latest_state = indicator_calc.get_latest_state(df_with_indicators)
 
         # Create position
@@ -590,7 +594,8 @@ class TestComponentIntegration:
             assert isinstance(result, pd.DataFrame)
         except Exception as e:
             # If it raises an exception, it should be a known, handled exception
-            assert "data" in str(e).lower() or "invalid" in str(e).lower()
+            error_msg = str(e).lower()
+            assert "data" in error_msg or "invalid" in error_msg
 
         # Test validator with None input
         validator = TradeValidator()
@@ -617,17 +622,19 @@ class TestComponentIntegration:
         test_position = Position(
             symbol="BTC-USD",
             side="FLAT",
-            size=Decimal("0"),
+            size=Decimal(0),
             timestamp=datetime.now(UTC),
         )
 
         # Should handle position manager error gracefully
         try:
             approved, final_action, reason = risk_manager.evaluate_risk(
-                test_action, test_position, Decimal("50000")
+                test_action, test_position, Decimal(50000)
             )
             # Should fallback to safe defaults
             assert not approved or final_action.size_pct <= test_action.size_pct
-        except Exception:
+        except Exception as e:
             # If it raises, should be a handled exception
-            pass
+            logger.debug(
+                "Exception during risk management stress test (expected): %s", str(e)
+            )

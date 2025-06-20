@@ -1089,8 +1089,24 @@ def setup_configuration(
     config_file: str | None = None,
 ) -> Settings:
     """Setup configuration with environment and profile detection."""
+    # Load environment file first
+    _load_environment_file()
 
-    # Ensure .env file is loaded first
+    # Detect parameters
+    environment = _detect_environment(environment)
+    profile = _detect_profile(profile)
+
+    # Load or create settings
+    settings = _load_or_create_settings(config_file, profile)
+
+    # Validate and log configuration
+    _validate_and_log_configuration(settings)
+
+    return settings
+
+
+def _load_environment_file() -> None:
+    """Load .env file if available."""
     try:
         from dotenv import load_dotenv
 
@@ -1100,42 +1116,55 @@ def setup_configuration(
     except ImportError:
         logger.debug("python-dotenv not available, relying on pydantic-settings")
 
-    # Detect environment from various sources
-    if not environment:
-        env_var = os.getenv("ENVIRONMENT", os.getenv("ENV", "development")).lower()
-        try:
-            environment = Environment(env_var)
-        except ValueError:
-            logger.warning(
-                "Unknown environment '%s', defaulting to development", env_var
-            )
-            environment = Environment.DEVELOPMENT
 
-    # Detect profile from environment variable
-    if not profile:
-        profile_var = os.getenv("TRADING_PROFILE", "moderate").lower()
-        try:
-            profile = TradingProfile(profile_var)
-        except ValueError:
-            logger.warning(
-                "Unknown trading profile '%s', defaulting to moderate", profile_var
-            )
-            profile = TradingProfile.MODERATE
+def _detect_environment(environment: Environment | None) -> Environment:
+    """Detect environment from various sources."""
+    if environment:
+        return environment
 
-    # Load from config file if provided
+    env_var = os.getenv("ENVIRONMENT", os.getenv("ENV", "development")).lower()
+    try:
+        return Environment(env_var)
+    except ValueError:
+        logger.warning("Unknown environment '%s', defaulting to development", env_var)
+        return Environment.DEVELOPMENT
+
+
+def _detect_profile(profile: TradingProfile | None) -> TradingProfile:
+    """Detect profile from environment variable."""
+    if profile:
+        return profile
+
+    profile_var = os.getenv("TRADING_PROFILE", "moderate").lower()
+    try:
+        return TradingProfile(profile_var)
+    except ValueError:
+        logger.warning(
+            "Unknown trading profile '%s', defaulting to moderate", profile_var
+        )
+        return TradingProfile.MODERATE
+
+
+def _load_or_create_settings(
+    config_file: str | None, profile: TradingProfile
+) -> Settings:
+    """Load from config file or create new settings."""
     if config_file and Path(config_file).exists():
         logger.info("Loading configuration from %s", config_file)
         settings = Settings.load_from_file(config_file)
         # Apply profile if different
         if settings.profile != profile:
             settings = settings.apply_profile(profile)
-    else:
-        # Create settings with detected parameters
-        settings = create_settings()
-        if profile:
-            settings = settings.apply_profile(profile)
+        return settings
+    # Create settings with detected parameters
+    settings = create_settings()
+    if profile:
+        settings = settings.apply_profile(profile)
+    return settings
 
-    # Validate configuration with comprehensive startup validation
+
+def _validate_and_log_configuration(settings: Settings) -> None:
+    """Validate configuration and log results."""
     validation_results = validate_configuration(settings)
 
     if not validation_results["valid"]:
@@ -1152,5 +1181,3 @@ def setup_configuration(
     logger.info("  Dry Run: %s", settings.system.dry_run)
     logger.info("  Symbol: %s", settings.trading.symbol)
     logger.info("  Leverage: %sx", settings.trading.leverage)
-
-    return settings

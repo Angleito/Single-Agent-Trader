@@ -29,7 +29,7 @@ CONTAINER_NAME = "mcp-memory-server"
 
 
 @pytest.fixture(scope="module")
-def ensure_mcp_running():
+def __ensure_mcp_running():
     """Ensure MCP server is running before tests."""
     # Check if container is already running
     result = subprocess.run(
@@ -52,11 +52,10 @@ def ensure_mcp_running():
         time.sleep(5)  # Wait for startup
 
     # Optionally stop container after tests (comment out to keep running)
-    # subprocess.run(["docker-compose", "stop", "mcp-memory"])
 
 
 @pytest.mark.asyncio()
-async def test_mcp_health_check(ensure_mcp_running):
+async def test_mcp_health_check(__ensure_mcp_running):
     """Test MCP server health check endpoint."""
     async with httpx.AsyncClient() as client:
         response = await client.get(f"{MCP_SERVER_URL}/health", timeout=5.0)
@@ -69,7 +68,7 @@ async def test_mcp_health_check(ensure_mcp_running):
 
 
 @pytest.mark.asyncio()
-async def test_mcp_connection(ensure_mcp_running):
+async def test_mcp_connection(_ensure_mcp_running):
     """Test connecting to MCP memory server."""
     server = MCPMemoryServer(server_url=MCP_SERVER_URL)
     await server.connect()
@@ -80,7 +79,7 @@ async def test_mcp_connection(ensure_mcp_running):
 
 
 @pytest.mark.asyncio()
-async def test_store_and_retrieve_experience(ensure_mcp_running):
+async def test_store_and_retrieve_experience(_ensure_mcp_running):
     """Test storing and retrieving trading experiences."""
     server = MCPMemoryServer(server_url=MCP_SERVER_URL)
     await server.connect()
@@ -91,16 +90,16 @@ async def test_store_and_retrieve_experience(ensure_mcp_running):
         symbol="BTC-USD",
         interval="3m",
         timestamp=now,
-        current_price=Decimal("50000"),
+        current_price=Decimal(50000),
         ohlcv_data=[
             MarketData(
                 symbol="BTC-USD",
                 timestamp=now,
-                open=Decimal("49800"),
-                high=Decimal("50100"),
-                low=Decimal("49700"),
-                close=Decimal("50000"),
-                volume=Decimal("100"),
+                open=Decimal(49800),
+                high=Decimal(50100),
+                low=Decimal(49700),
+                close=Decimal(50000),
+                volume=Decimal(100),
             )
         ],
         indicators=IndicatorData(
@@ -115,10 +114,10 @@ async def test_store_and_retrieve_experience(ensure_mcp_running):
         ),
         dominance_data=DominanceData(
             timestamp=now,
-            usdt_market_cap=Decimal("95000000000"),
-            usdc_market_cap=Decimal("45000000000"),
-            total_stablecoin_cap=Decimal("140000000000"),
-            crypto_total_market_cap=Decimal("1650000000000"),
+            usdt_market_cap=Decimal(95000000000),
+            usdc_market_cap=Decimal(45000000000),
+            total_stablecoin_cap=Decimal(140000000000),
+            crypto_total_market_cap=Decimal(1650000000000),
             usdt_dominance=5.76,
             usdc_dominance=2.73,
             stablecoin_dominance=8.5,
@@ -127,7 +126,7 @@ async def test_store_and_retrieve_experience(ensure_mcp_running):
             dominance_rsi=40.0,
         ),
         current_position=Position(
-            symbol="BTC-USD", side="FLAT", size=Decimal("0"), timestamp=now
+            symbol="BTC-USD", side="FLAT", size=Decimal(0), timestamp=now
         ),
     )
 
@@ -150,7 +149,7 @@ async def test_store_and_retrieve_experience(ensure_mcp_running):
 
     # Retrieve similar experiences
     similar_experiences = await server.retrieve_similar_experiences(
-        current_price=Decimal("50000"),
+        current_price=Decimal(50000),
         indicators={
             "rsi": 45.0,
             "cipher_a_dot": 5.0,
@@ -167,7 +166,7 @@ async def test_store_and_retrieve_experience(ensure_mcp_running):
 
 
 @pytest.mark.asyncio()
-async def test_memory_persistence_across_connections(ensure_mcp_running):
+async def test_memory_persistence_across_connections(_ensure_mcp_running):
     """Test that memories persist across different connections."""
     # First connection - store data
     server1 = MCPMemoryServer(server_url=MCP_SERVER_URL)
@@ -178,7 +177,7 @@ async def test_memory_persistence_across_connections(ensure_mcp_running):
         symbol="ETH-USD",
         interval="3m",
         timestamp=now,
-        current_price=Decimal("3000"),
+        current_price=Decimal(3000),
         ohlcv_data=[],
         indicators=IndicatorData(
             timestamp=now,
@@ -192,7 +191,7 @@ async def test_memory_persistence_across_connections(ensure_mcp_running):
         ),
         dominance_data=None,
         current_position=Position(
-            symbol="ETH-USD", side="FLAT", size=Decimal("0"), timestamp=now
+            symbol="ETH-USD", side="FLAT", size=Decimal(0), timestamp=now
         ),
     )
 
@@ -219,7 +218,7 @@ async def test_memory_persistence_across_connections(ensure_mcp_running):
     await server2.connect()
 
     experiences = await server2.retrieve_similar_experiences(
-        current_price=Decimal("3000"),
+        current_price=Decimal(3000),
         indicators={"rsi": 60.0},
         max_results=10,
     )
@@ -231,7 +230,7 @@ async def test_memory_persistence_across_connections(ensure_mcp_running):
 
 
 @pytest.mark.asyncio()
-async def test_pattern_indexing(ensure_mcp_running):
+async def test_pattern_indexing(_ensure_mcp_running):
     """Test pattern-based retrieval."""
     server = MCPMemoryServer(server_url=MCP_SERVER_URL)
     await server.connect()
@@ -242,7 +241,7 @@ async def test_pattern_indexing(ensure_mcp_running):
         symbol="BTC-USD",
         interval="3m",
         timestamp=now,
-        current_price=Decimal("45000"),
+        current_price=Decimal(45000),
         ohlcv_data=[],
         indicators=IndicatorData(
             timestamp=now,
@@ -256,7 +255,7 @@ async def test_pattern_indexing(ensure_mcp_running):
         ),
         dominance_data=None,
         current_position=Position(
-            symbol="BTC-USD", side="FLAT", size=Decimal("0"), timestamp=now
+            symbol="BTC-USD", side="FLAT", size=Decimal(0), timestamp=now
         ),
     )
 
@@ -290,10 +289,11 @@ async def test_pattern_indexing(ensure_mcp_running):
 
 
 @pytest.mark.asyncio()
-async def test_container_resource_usage(ensure_mcp_running):
+async def test_container_resource_usage(_ensure_mcp_running):
     """Test container resource usage is within limits."""
     # Get container stats
-    result = subprocess.run(
+    result = await asyncio.to_thread(
+        subprocess.run,
         [
             "docker",
             "stats",

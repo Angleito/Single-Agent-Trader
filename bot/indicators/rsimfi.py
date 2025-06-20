@@ -380,8 +380,6 @@ class RSIMFIIndicator:
                 },
             )
 
-            return conditions
-
         except Exception as e:
             logger.exception(
                 "Failed to calculate RSI+MFI color conditions",
@@ -392,6 +390,8 @@ class RSIMFIIndicator:
                 },
             )
             return pd.DataFrame(index=rsimfi_values.index)
+        else:
+            return conditions
 
     def get_area_conditions(
         self,
@@ -524,8 +524,6 @@ class RSIMFIIndicator:
                 },
             )
 
-            return result
-
         except Exception as e:
             logger.exception(
                 "RSI+MFI comprehensive analysis failed",
@@ -537,6 +535,8 @@ class RSIMFIIndicator:
                 },
             )
             return df.copy()
+        else:
+            return result
 
     def get_latest_values(
         self, df: pd.DataFrame

@@ -166,6 +166,7 @@ class PaperTradingAccount:
                     self.data_dir,
                 )
             else:
+                logging.exception("Failed to create paper trading directory")
                 raise
 
         # Account state with normalized precision
@@ -400,6 +401,10 @@ class PaperTradingAccount:
         Raises:
             ValueError: If the balance update would result in invalid state
         """
+
+        def _raise_balance_rejection_error(balance: Decimal) -> None:
+            raise ValueError(f"Balance update rejected: would result in ${balance}")
+
         try:
             # Normalize to check for validation issues
             normalized_balance = self._normalize_balance(new_balance)
@@ -411,9 +416,7 @@ class PaperTradingAccount:
                     normalized_balance,
                     operation,
                 )
-                raise ValueError(
-                    f"Balance update rejected: would result in ${normalized_balance}"
-                )
+                _raise_balance_rejection_error(normalized_balance)
 
             # Check for suspicious large changes
             if self.current_balance > Decimal(0):
@@ -760,7 +763,7 @@ class PaperTradingAccount:
 
                 return order
 
-            except Exception:
+            except Exception as e:
                 logger.exception("❌ Error simulating paper trade")
 
                 # Record failed trade execution in monitoring

@@ -1,6 +1,7 @@
 """Market data ingestion and real-time data handling."""
 
 import asyncio
+import contextlib
 import json
 import logging
 from collections.abc import Callable
@@ -12,13 +13,21 @@ import aiohttp
 import pandas as pd
 import websockets
 
+from bot.config import settings
+from bot.trading_types import MarketData
+
+
+class MarketDataAPIError(Exception):
+    """Raised when market data API requests fail."""
+
+
 # Import Coinbase client handling both legacy and CDP authentication
 try:
     from coinbase import jwt_generator
     from coinbase.rest import RESTClient as _BaseClient
     from coinbase.rest.rest_base import HTTPError as _CBApiEx
 
-    CoinbaseAPIException = _CBApiEx
+    CoinbaseAPIError = _CBApiEx
 
     class CoinbaseAdvancedTrader(_BaseClient):
         """Adapter class exposing legacy method names used in this codebase."""
@@ -31,11 +40,11 @@ except ImportError:
         def __init__(self, **kwargs):
             pass
 
-    class MockCoinbaseAPIException(Exception):
+    class MockCoinbaseAPIError(Exception):
         pass
 
     CoinbaseAdvancedTrader = MockCoinbaseAdvancedTrader  # type: ignore[misc,assignment]
-    CoinbaseAPIException = MockCoinbaseAPIException  # type: ignore[misc,assignment]
+    CoinbaseAPIError = MockCoinbaseAPIError  # type: ignore[misc,assignment]
 
     # Mock jwt_generator module for when SDK is not available
     class MockJwtGenerator:
@@ -46,11 +55,6 @@ except ImportError:
     jwt_generator = MockJwtGenerator()
 
     COINBASE_AVAILABLE = False
-
-import contextlib
-
-from bot.config import settings
-from bot.trading_types import MarketData
 
 logger = logging.getLogger(__name__)
 
@@ -455,6 +459,9 @@ class MarketDataProvider:
         # Subscribers for real-time updates
         self._subscribers: list[Callable] = []
 
+        # Background tasks tracking
+        self._background_tasks: set[asyncio.Task] = set()
+
         # Data validation settings
         self._max_price_deviation = 0.1  # 10% max price deviation
         self._min_volume = Decimal(0)
@@ -817,7 +824,7 @@ class MarketDataProvider:
             raise RuntimeError("HTTP session not initialized")
 
         def _raise_api_error(status: int, text: str) -> None:
-            raise Exception(f"API request failed with status {status}: {text}")
+            raise MarketDataAPIError(f"API request failed with status {status}: {text}")
 
         try:
             url = f"{self.COINBASE_REST_URL}/api/v3/brokerage/market/products/{self._data_symbol}/candles"
@@ -852,7 +859,7 @@ class MarketDataProvider:
 
         except Exception:
             logger.exception(
-                "Failed to fetch batch from %s to %s: %s", start_time, end_time
+                "Failed to fetch batch from %s to %s", start_time, end_time
             )
             return []
 
@@ -956,6 +963,12 @@ class MarketDataProvider:
                 min_required_for_indicators,
             )
 
+        def _raise_session_error() -> None:
+            raise RuntimeError("HTTP session not initialized")
+
+        def _raise_api_error(status: int, text: str) -> None:
+            raise MarketDataAPIError(f"API request failed with status {status}: {text}")
+
         try:
             # Use public API endpoint for historical candles with data symbol
             url = f"{self.COINBASE_REST_URL}/api/v3/brokerage/market/products/{self._data_symbol}/candles"
@@ -967,12 +980,10 @@ class MarketDataProvider:
             }
 
             if self._session is None:
-                raise RuntimeError("HTTP session not initialized")
+                _raise_session_error()
             async with self._session.get(url, params=params) as response:
                 if response.status != 200:
-                    raise Exception(
-                        f"API request failed with status {response.status}: {await response.text()}"
-                    )
+                    _raise_api_error(response.status, await response.text())
 
                 data = await response.json()
                 candles = data.get("candles", [])
@@ -1018,6 +1029,10 @@ class MarketDataProvider:
         Returns:
             Latest price as Decimal or None if unavailable
         """
+
+        def _raise_session_error() -> None:
+            raise RuntimeError("HTTP session not initialized")
+
         # Check cache first
         if self._is_cache_valid("price"):
             return self._price_cache.get("price")
@@ -1026,7 +1041,7 @@ class MarketDataProvider:
             url = f"{self.COINBASE_REST_URL}/api/v3/brokerage/market/products/{self._data_symbol}"
 
             if self._session is None:
-                raise RuntimeError("HTTP session not initialized")
+                _raise_session_error()
             async with self._session.get(url) as response:
                 if response.status != 200:
                     logger.warning("Failed to fetch latest price: %s", response.status)
@@ -1063,6 +1078,9 @@ class MarketDataProvider:
         if self._is_cache_valid(cache_key):
             return self._orderbook_cache.get(cache_key)
 
+        def _raise_session_error() -> None:
+            raise RuntimeError("HTTP session not initialized")
+
         try:
             url = f"{self.COINBASE_REST_URL}/api/v3/brokerage/market/products/{self.symbol}/book"
             params: dict[str, int] = {
@@ -1070,7 +1088,7 @@ class MarketDataProvider:
             }  # Reasonable limit based on level
 
             if self._session is None:
-                raise RuntimeError("HTTP session not initialized")
+                _raise_session_error()
             async with self._session.get(url, params=params) as response:
                 if response.status != 200:
                     logger.warning("Failed to fetch orderbook: %s", response.status)
@@ -1257,7 +1275,12 @@ class MarketDataProvider:
                 message = await asyncio.wait_for(self._message_queue.get(), timeout=0.1)
 
                 # Process message in background task to avoid blocking
-                asyncio.create_task(self._handle_websocket_message_async(message))
+                task = asyncio.create_task(
+                    self._handle_websocket_message_async(message)
+                )
+                # Store reference to prevent garbage collection
+                self._background_tasks.add(task)
+                task.add_done_callback(self._background_tasks.discard)
 
             except TimeoutError:
                 # No message available, continue loop
@@ -1604,7 +1627,7 @@ class MarketDataProvider:
                     tasks.append(task)
             except Exception:
                 logger.exception(
-                    "Error creating subscriber task for %s: %s", callback.__name__
+                    "Error creating subscriber task for %s", callback.__name__
                 )
 
         # Don't wait for all tasks to complete - fire and forget for non-blocking behavior
@@ -1615,9 +1638,7 @@ class MarketDataProvider:
         try:
             await callback(data)
         except Exception:
-            logger.exception(
-                "Error in async subscriber callback %s: %s", callback.__name__
-            )
+            logger.exception("Error in async subscriber callback %s", callback.__name__)
 
     async def _safe_callback_sync(self, callback: Callable, data: MarketData) -> None:
         """Safely execute sync callback in thread pool."""
@@ -1631,9 +1652,7 @@ class MarketDataProvider:
                 return
             await loop.run_in_executor(None, callback, data)
         except Exception:
-            logger.exception(
-                "Error in sync subscriber callback %s: %s", callback.__name__
-            )
+            logger.exception("Error in sync subscriber callback %s", callback.__name__)
 
     def is_connected(self) -> bool:
         """

@@ -3,6 +3,7 @@
 import json
 import logging
 import sys
+import tempfile
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -16,12 +17,13 @@ from bot.trading_types import Order, OrderStatus, TradeAction
 from bot.validator import TradeValidator
 
 # Configure logging
+temp_log_file = Path(tempfile.gettempdir()) / "single_position_test.log"
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler("/tmp/single_position_test.log"),
+        logging.FileHandler(temp_log_file),
     ],
 )
 
@@ -33,7 +35,7 @@ class SinglePositionFIFOTest:
 
     def __init__(self):
         """Initialize test environment."""
-        self.test_dir = Path("/tmp/single_position_test")
+        self.test_dir = Path(tempfile.gettempdir()) / "single_position_test"
         self.test_dir.mkdir(exist_ok=True)
 
         # Initialize components
@@ -332,8 +334,8 @@ class SinglePositionFIFOTest:
 
             return True
 
-        except Exception as e:
-            logger.exception("\n❌ TEST FAILED: %s", e)
+        except Exception:
+            logger.exception("\n❌ TEST FAILED")
             return False
 
 

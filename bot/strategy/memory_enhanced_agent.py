@@ -356,7 +356,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             # Format basic trade info
             action = exp.decision.get("action", "UNKNOWN")
 
-            context_lines.append("\n%s. Past %s trade:" % (i + 1, action))
+            context_lines.append(f"\n{i + 1}. Past {action} trade:")
             context_lines.append("   Market conditions: $%s" % float(exp.price))
 
             # Add indicator snapshot
@@ -375,8 +375,8 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                 duration = exp.trade_duration_minutes or 0
 
                 context_lines.append(
-                    "   Outcome: %s (PnL=$%.2f, "
-                    "Duration=%.0fmin)" % (success, pnl, duration)
+                    f"   Outcome: {success} (PnL=${pnl:.2f}, "
+                    f"Duration={duration:.0f}min)"
                 )
 
                 # Add learned insights
@@ -418,16 +418,10 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             for pattern, stats in sorted_patterns[:3]:
                 if stats["count"] >= settings.mcp.min_samples_for_pattern:
                     insights.append(
-                        "• Pattern '%s': "
-                        "%.1f%% win rate "
-                        "(%s trades, "
-                        "avg PnL=$%.2f)"
-                        % (
-                            pattern,
-                            stats["success_rate"] * 100,
-                            stats["count"],
-                            stats["avg_pnl"],
-                        )
+                        f"• Pattern '{pattern}': "
+                        f"{stats['success_rate'] * 100:.1f}% win rate "
+                        f"({stats['count']} trades, "
+                        f"avg PnL=${stats['avg_pnl']:.2f})"
                     )
 
             return (
@@ -490,16 +484,11 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             # This is a workaround - ideally we'd have a dedicated field
             memory_section = (
                 "\n\n=== MEMORY CONTEXT ===\n"
-                "%s\n\n"
+                f"{self._temp_memory_context['memory_context']}\n\n"
                 "=== PATTERN INSIGHTS ===\n"
-                "%s\n\n"
+                f"{self._temp_memory_context['pattern_insights']}\n\n"
                 "=== SENTIMENT-ENHANCED CONTEXT ===\n"
-                "%s"
-                % (
-                    self._temp_memory_context["memory_context"],
-                    self._temp_memory_context["pattern_insights"],
-                    self._temp_memory_context["sentiment_enhanced_context"],
-                )
+                f"{self._temp_memory_context['sentiment_enhanced_context']}"
             )
 
             llm_input["ohlcv_tail"] += memory_section
@@ -687,11 +676,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                     "=== %s Financial Sentiment Context ===" % base_symbol
                 )
                 context_lines.append(
-                    "Current Sentiment: %s (%+.2f)"
-                    % (
-                        crypto_sentiment.overall_sentiment.upper(),
-                        crypto_sentiment.sentiment_score,
-                    )
+                    f"Current Sentiment: {crypto_sentiment.overall_sentiment.upper()} ({crypto_sentiment.sentiment_score:+.2f})"
                 )
                 context_lines.append(
                     "Confidence: %.1f%%" % (crypto_sentiment.confidence * 100)
@@ -710,12 +695,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             # Process correlation results
             if correlation and not isinstance(correlation, Exception):
                 context_lines.append(
-                    "Market Correlation: %s %s (%+.3f)"
-                    % (
-                        correlation.direction.upper(),
-                        correlation.strength.upper(),
-                        correlation.correlation_coefficient,
-                    )
+                    f"Market Correlation: {correlation.direction.upper()} {correlation.strength.upper()} ({correlation.correlation_coefficient:+.3f})"
                 )
 
                 if abs(correlation.correlation_coefficient) > 0.5:
@@ -800,13 +780,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                 if data["total"] >= 3:  # Only show if we have enough samples
                     success_rate = data["successful"] / data["total"] * 100
                     correlation_lines.append(
-                        "%s sentiment: %.1f%% success rate (%s/%s trades)"
-                        % (
-                            sentiment.upper(),
-                            success_rate,
-                            data["successful"],
-                            data["total"],
-                        )
+                        f"{sentiment.upper()} sentiment: {success_rate:.1f}% success rate ({data['successful']}/{data['total']} trades)"
                     )
 
             # Find best performing sentiment conditions

@@ -76,7 +76,7 @@ def _resolve_directory_with_fallback(
     """
     # Try primary path first
     if _is_directory_writable(primary_path):
-        logger.debug(f"Using primary {directory_name} directory: {primary_path}")
+        logger.debug("Using primary %s directory: %s", directory_name, primary_path)
         return primary_path
 
     # Check for fallback environment variable
@@ -84,10 +84,12 @@ def _resolve_directory_with_fallback(
     if fallback_dir:
         fallback_path = Path(fallback_dir)
         if _is_directory_writable(fallback_path):
-            logger.debug(f"Using fallback {directory_name} directory: {fallback_path}")
+            logger.debug(
+                "Using fallback %s directory: %s", directory_name, fallback_path
+            )
             return fallback_path
         logger.warning(
-            f"Fallback {directory_name} directory is not writable: {fallback_path}"
+            "Fallback %s directory is not writable: %s", directory_name, fallback_path
         )
 
     # Try system temp directory as last resort
@@ -97,11 +99,11 @@ def _resolve_directory_with_fallback(
         )
         if _is_directory_writable(temp_dir):
             logger.warning(
-                f"Using system temp directory for {directory_name}: {temp_dir}"
+                "Using system temp directory for %s: %s", directory_name, temp_dir
             )
             return temp_dir
-    except Exception as e:
-        logger.error(f"Failed to create temp directory for {directory_name}: {e}")
+    except Exception:
+        logger.exception("Failed to create temp directory for %s", directory_name)
 
     # If everything fails, raise an error
     raise OSError(

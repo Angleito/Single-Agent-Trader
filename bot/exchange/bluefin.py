@@ -63,12 +63,12 @@ BLUEFIN_AVAILABLE = True  # Always available via service
 
 
 # Mock classes for compatibility
-class ORDER_SIDE:
+class OrderSide:
     BUY = "BUY"
     SELL = "SELL"
 
 
-class ORDER_TYPE:
+class OrderType:
     MARKET = "MARKET"
     LIMIT = "LIMIT"
 
@@ -238,11 +238,11 @@ class BluefinClient(BaseExchange):
         if not isinstance(amount, Decimal):
             try:
                 amount = Decimal(str(amount))
-            except (ValueError, TypeError):
+            except (ValueError, TypeError) as e:
                 logger.exception(
                     "Invalid balance amount: %s (type: %s)", amount, type(amount)
                 )
-                raise ValueError(f"Cannot convert to Decimal: {amount}")
+                raise ValueError(f"Cannot convert to Decimal: {amount}") from e
 
         # Check for invalid values
         if amount.is_nan():
@@ -278,11 +278,11 @@ class BluefinClient(BaseExchange):
         if not isinstance(amount, Decimal):
             try:
                 amount = Decimal(str(amount))
-            except (ValueError, TypeError):
+            except (ValueError, TypeError) as e:
                 logger.exception(
                     "Invalid crypto amount: %s (type: %s)", amount, type(amount)
                 )
-                raise ValueError(f"Cannot convert to Decimal: {amount}")
+                raise ValueError(f"Cannot convert to Decimal: {amount}") from e
 
         # Check for invalid values
         if amount.is_nan():
@@ -404,6 +404,7 @@ class BluefinClient(BaseExchange):
         except Exception:
             logger.exception("Failed to initialize Bluefin client")
             if not self.dry_run:
+                logger.exception("Bluefin client initialization failed in live mode")
                 raise
             logger.warning(
                 "Continuing in paper trading mode despite initialization failure"
@@ -561,6 +562,10 @@ class BluefinClient(BaseExchange):
 
     def _convert_symbol(self, symbol: str) -> str:
         """Convert standard symbol to Bluefin perpetual format using symbol utilities."""
+
+        def _raise_unsupported_symbol_error(unsupported_symbol: str) -> None:
+            raise ValueError(f"Unsupported symbol: {unsupported_symbol}")
+
         try:
             # Validate the symbol first
             if not validate_symbol(symbol):
@@ -589,7 +594,7 @@ class BluefinClient(BaseExchange):
                         bluefin_symbol,
                         self.network_name,
                     )
-                    raise ValueError(f"Unsupported symbol: {bluefin_symbol}")
+                    _raise_unsupported_symbol_error(bluefin_symbol)
 
             logger.debug(
                 "Converted symbol %s to Bluefin format: %s", symbol, bluefin_symbol
@@ -693,7 +698,7 @@ class BluefinClient(BaseExchange):
                 return None
 
             # Determine order side
-            side = ORDER_SIDE.BUY if trade_action.action == "LONG" else ORDER_SIDE.SELL
+            side = OrderSide.BUY if trade_action.action == "LONG" else OrderSide.SELL
 
             # Final logging before order placement
             logger.info(
@@ -772,7 +777,7 @@ class BluefinClient(BaseExchange):
             position = positions[0]
 
             # Determine opposite side to close
-            side = ORDER_SIDE.SELL if position.side == "LONG" else ORDER_SIDE.BUY
+            side = OrderSide.SELL if position.side == "LONG" else OrderSide.BUY
 
             # Place market order to close
             return await self.place_market_order(
@@ -812,6 +817,15 @@ class BluefinClient(BaseExchange):
                 filled_quantity=quantity,
             )
 
+        def _raise_order_placement_error(error_msg: str) -> None:
+            raise ExchangeOrderError(f"Order placement failed: {error_msg}")
+
+        def _raise_insufficient_funds_error(e: Exception) -> None:
+            raise ExchangeInsufficientFundsError(f"Insufficient funds: {e}") from e
+
+        def _raise_market_order_error(e: Exception) -> None:
+            raise ExchangeOrderError(f"Failed to place market order: {e}") from e
+
         try:
             # Get current market price from service
             ticker = await self._service_client.get_market_ticker(symbol)
@@ -849,13 +863,13 @@ class BluefinClient(BaseExchange):
                 return order
             error_msg = response.get("message", "Unknown error")
             logger.error("Order placement failed: %s", error_msg)
-            raise ExchangeOrderError(f"Order placement failed: {error_msg}")
+            _raise_order_placement_error(error_msg)
 
         except Exception as e:
             logger.exception("Failed to place market order")
             if "insufficient" in str(e).lower():
-                raise ExchangeInsufficientFundsError(f"Insufficient funds: {e}") from e
-            raise ExchangeOrderError(f"Failed to place market order: {e}") from e
+                _raise_insufficient_funds_error(e)
+            _raise_market_order_error(e)
 
     async def place_limit_order(
         self,
@@ -895,6 +909,12 @@ class BluefinClient(BaseExchange):
                 timestamp=datetime.now(UTC),
             )
 
+        def _raise_limit_order_placement_error(error_msg: str) -> None:
+            raise ExchangeOrderError(f"Limit order placement failed: {error_msg}")
+
+        def _raise_limit_order_error(e: Exception) -> None:
+            raise ExchangeOrderError(f"Failed to place limit order: {e}") from e
+
         try:
             # Prepare order data
             order_data = {
@@ -933,11 +953,11 @@ class BluefinClient(BaseExchange):
                 return order
             error_msg = response.get("message", "Unknown error")
             logger.error("Limit order placement failed: %s", error_msg)
-            raise ExchangeOrderError(f"Limit order placement failed: {error_msg}")
+            _raise_limit_order_placement_error(error_msg)
 
         except Exception as e:
             logger.exception("Failed to place limit order")
-            raise ExchangeOrderError(f"Failed to place limit order: {e}") from e
+            _raise_limit_order_error(e)
 
     async def get_positions(self, symbol: str | None = None) -> list[Position]:
         """
@@ -1028,6 +1048,224 @@ class BluefinClient(BaseExchange):
         except Exception as e:
             logger.debug("Failed to record balance operation %s: %s", operation, e)
 
+    def _handle_dry_run_balance(self, account_type: AccountType | None) -> Decimal:
+        """Handle balance retrieval for dry run mode."""
+        mock_balance = self._normalize_balance(Decimal("10000.00"))
+
+        self._record_balance_operation(
+            operation="get_balance_mock",
+            balance_before=None,
+            balance_after=float(mock_balance),
+            success=True,
+            metadata={
+                "account_type": str(account_type) if account_type else None,
+                "dry_run": True,
+                "network": self.network_name,
+            },
+        )
+
+        return mock_balance
+
+    def _start_balance_monitoring(
+        self, account_type: AccountType | None
+    ) -> tuple[str | None, float | None]:
+        """Start balance operation monitoring."""
+        if not self.monitoring_enabled:
+            return None, None
+
+        try:
+            correlation_id = f"bluefin_balance_{int(time.time() * 1000)}"
+            start_time = record_operation_start(
+                operation="get_balance",
+                component="bluefin_exchange",
+                correlation_id=correlation_id,
+                metadata={
+                    "account_type": str(account_type) if account_type else None,
+                    "network": self.network_name,
+                },
+            )
+        except Exception as e:
+            logger.debug("Failed to record balance operation start: %s", e)
+            return None, None
+        else:
+            return correlation_id, start_time
+
+    async def _fetch_account_data(self, account_type: AccountType | None) -> dict:
+        """Fetch account data from service with error handling."""
+        if not self._service_client:
+            raise BalanceServiceUnavailableError(
+                "Bluefin service client not initialized",
+                service_name="bluefin_service",
+            )
+
+        try:
+            return await asyncio.wait_for(
+                self._service_client.get_account_data(),
+                timeout=30.0,
+            )
+        except TimeoutError as timeout_err:
+            raise BalanceTimeoutError(
+                "Balance request timed out after 30 seconds",
+                timeout_duration=30.0,
+                endpoint="get_account_data",
+                account_type=str(account_type) if account_type else None,
+            ) from timeout_err
+        except Exception as service_err:
+            if (
+                "connection" in str(service_err).lower()
+                or "unavailable" in str(service_err).lower()
+            ):
+                raise BalanceServiceUnavailableError(
+                    f"Bluefin service connection failed: {service_err}",
+                    service_name="bluefin_service",
+                ) from service_err
+            raise
+
+    def _validate_and_extract_balance(
+        self, account_data: dict, account_type: AccountType | None
+    ) -> Decimal:
+        """Validate account data and extract balance."""
+        if not isinstance(account_data, dict):
+            raise BalanceValidationError(
+                f"Invalid account data format: expected dict, got {type(account_data)}",
+                invalid_value=type(account_data).__name__,
+                validation_rule="account_data_dict_format",
+                account_type=str(account_type) if account_type else None,
+            )
+
+        balance_value = account_data.get("balance", "0")
+
+        try:
+            raw_balance = Decimal(str(balance_value))
+        except (ValueError, TypeError, decimal.InvalidOperation) as decimal_err:
+            raise BalanceValidationError(
+                f"Invalid balance value format: {balance_value}",
+                invalid_value=balance_value,
+                validation_rule="decimal_conversion",
+                account_type=str(account_type) if account_type else None,
+            ) from decimal_err
+
+        return self._normalize_balance(raw_balance)
+
+    def _log_balance_info(
+        self, total_balance: Decimal, raw_balance: Decimal, account_data: dict
+    ) -> None:
+        """Log balance information and warnings."""
+        if total_balance < Decimal(0):
+            logger.warning("Retrieved negative balance: $%s", total_balance)
+
+        logger.info("Retrieved Bluefin balance from service: $%s", total_balance)
+        logger.debug("Full account data: %s", account_data)
+        logger.debug("Balance normalization: %s -> %s", raw_balance, total_balance)
+
+        if total_balance <= Decimal(0) and not self.dry_run:
+            logger.warning(
+                "Zero or negative balance in live mode - this will prevent trading"
+            )
+            logger.warning(
+                "Please ensure your Bluefin account has USDC balance. Current: $%s",
+                total_balance,
+            )
+
+    def _record_balance_success(
+        self,
+        correlation_id: str | None,
+        start_time: float | None,
+        total_balance: Decimal,
+        raw_balance: Decimal,
+        account_type: AccountType | None,
+    ) -> None:
+        """Record successful balance operation."""
+        if not self.monitoring_enabled or start_time is None:
+            return
+
+        try:
+            record_operation_complete(
+                operation="get_balance",
+                component="bluefin_exchange",
+                start_time=start_time,
+                success=True,
+                balance_before=None,
+                balance_after=float(total_balance),
+                correlation_id=correlation_id,
+                metadata={
+                    "account_type": str(account_type) if account_type else None,
+                    "network": self.network_name,
+                    "raw_balance": str(raw_balance),
+                    "normalized_balance": str(total_balance),
+                    "is_negative": total_balance < Decimal(0),
+                },
+            )
+        except Exception as e:
+            logger.debug("Failed to record successful balance operation: %s", e)
+
+    def _record_balance_error(
+        self,
+        correlation_id: str | None,
+        start_time: float | None,
+        balance_error: Exception,
+        account_type: AccountType | None,
+    ) -> None:
+        """Record balance operation error."""
+        if not self.monitoring_enabled or start_time is None:
+            return
+
+        try:
+            error_type = type(balance_error).__name__
+            if hasattr(balance_error, "timeout_duration"):
+                record_timeout(
+                    operation="get_balance",
+                    component="bluefin_exchange",
+                    timeout_duration_ms=getattr(balance_error, "timeout_duration", 30)
+                    * 1000,
+                    correlation_id=correlation_id,
+                )
+            else:
+                record_operation_complete(
+                    operation="get_balance",
+                    component="bluefin_exchange",
+                    start_time=start_time,
+                    success=False,
+                    error_type=error_type,
+                    correlation_id=correlation_id,
+                    metadata={
+                        "account_type": str(account_type) if account_type else None,
+                        "network": self.network_name,
+                        "error_message": str(balance_error),
+                    },
+                )
+        except Exception as e:
+            logger.debug("Failed to record balance error: %s", e)
+
+    def _record_unexpected_error(
+        self,
+        correlation_id: str | None,
+        start_time: float | None,
+        error: Exception,
+        account_type: AccountType | None,
+    ) -> None:
+        """Record unexpected error in balance operation."""
+        if not self.monitoring_enabled or start_time is None:
+            return
+
+        try:
+            record_operation_complete(
+                operation="get_balance",
+                component="bluefin_exchange",
+                start_time=start_time,
+                success=False,
+                error_type="unexpected_error",
+                correlation_id=correlation_id,
+                metadata={
+                    "account_type": str(account_type) if account_type else None,
+                    "network": self.network_name,
+                    "error_message": str(error),
+                    "error_type": type(error).__name__,
+                },
+            )
+        except Exception as monitoring_error:
+            logger.debug("Failed to record unexpected error: %s", monitoring_error)
+
     async def get_account_balance(
         self, account_type: AccountType | None = None
     ) -> Decimal:
@@ -1047,208 +1285,36 @@ class BluefinClient(BaseExchange):
             BalanceRetrievalError: For other balance retrieval issues
         """
         if self.dry_run:
-            # Return mock balance for paper trading with proper normalization
-            mock_balance = self._normalize_balance(Decimal("10000.00"))
+            return self._handle_dry_run_balance(account_type)
 
-            # Record mock balance retrieval in monitoring
-            self._record_balance_operation(
-                operation="get_balance_mock",
-                balance_before=None,
-                balance_after=float(mock_balance),
-                success=True,
-                metadata={
-                    "account_type": str(account_type) if account_type else None,
-                    "dry_run": True,
-                    "network": self.network_name,
-                },
-            )
-
-            return mock_balance
-
-        # Record balance retrieval start
-        start_time = None
-        if self.monitoring_enabled:
-            try:
-                correlation_id = f"bluefin_balance_{int(time.time() * 1000)}"
-                start_time = record_operation_start(
-                    operation="get_balance",
-                    component="bluefin_exchange",
-                    correlation_id=correlation_id,
-                    metadata={
-                        "account_type": str(account_type) if account_type else None,
-                        "network": self.network_name,
-                    },
-                )
-            except Exception as e:
-                logger.debug("Failed to record balance operation start: %s", e)
+        correlation_id, start_time = self._start_balance_monitoring(account_type)
 
         try:
-            # Check if service client is available
-            if not self._service_client:
-                raise BalanceServiceUnavailableError(
-                    "Bluefin service client not initialized",
-                    service_name="bluefin_service",
-                )
+            account_data = await self._fetch_account_data(account_type)
+            total_balance = self._validate_and_extract_balance(
+                account_data, account_type
+            )
 
-            # Get account data from service with timeout handling
-            try:
-                account_data = await asyncio.wait_for(
-                    self._service_client.get_account_data(),
-                    timeout=30.0,  # 30 second timeout
-                )
-            except TimeoutError as timeout_err:
-                raise BalanceTimeoutError(
-                    "Balance request timed out after 30 seconds",
-                    timeout_duration=30.0,
-                    endpoint="get_account_data",
-                    account_type=str(account_type) if account_type else None,
-                ) from timeout_err
-            except Exception as service_err:
-                # Check if it's a service availability issue
-                if (
-                    "connection" in str(service_err).lower()
-                    or "unavailable" in str(service_err).lower()
-                ):
-                    raise BalanceServiceUnavailableError(
-                        f"Bluefin service connection failed: {service_err}",
-                        service_name="bluefin_service",
-                    ) from service_err
-                raise  # Re-raise other service exceptions
+            # Get raw balance for logging (extract again for clarity)
+            raw_balance = Decimal(str(account_data.get("balance", "0")))
 
-            # Validate response structure
-            if not isinstance(account_data, dict):
-                raise BalanceValidationError(
-                    f"Invalid account data format: expected dict, got {type(account_data)}",
-                    invalid_value=type(account_data).__name__,
-                    validation_rule="account_data_dict_format",
-                    account_type=str(account_type) if account_type else None,
-                )
-
-            # Extract USDC balance (Bluefin uses USDC as margin)
-            balance_value = account_data.get("balance", "0")
-
-            # Validate balance value
-            try:
-                raw_balance = Decimal(str(balance_value))
-            except (ValueError, TypeError, decimal.InvalidOperation) as decimal_err:
-                raise BalanceValidationError(
-                    f"Invalid balance value format: {balance_value}",
-                    invalid_value=balance_value,
-                    validation_rule="decimal_conversion",
-                    account_type=str(account_type) if account_type else None,
-                ) from decimal_err
-
-            # Normalize balance to ensure consistent precision
-            total_balance = self._normalize_balance(raw_balance)
-
-            # Validate balance is not negative (unless explicitly allowed)
-            if total_balance < Decimal(0):
-                logger.warning("Retrieved negative balance: $%s", total_balance)
-                # For Bluefin, negative balance might be valid due to unrealized PnL
-                # But log it for monitoring
-
-            logger.info("Retrieved Bluefin balance from service: $%s", total_balance)
-            logger.debug("Full account data: %s", account_data)
-            logger.debug("Balance normalization: %s -> %s", raw_balance, total_balance)
-
-            # For live trading, check minimum balance requirements
-            if total_balance <= Decimal(0) and not self.dry_run:
-                logger.warning(
-                    "Zero or negative balance in live mode - this will prevent trading"
-                )
-                logger.warning(
-                    "Please ensure your Bluefin account has USDC balance. Current: $%s",
-                    total_balance,
-                )
-
-            # Record successful balance retrieval
-            if self.monitoring_enabled and start_time is not None:
-                try:
-                    record_operation_complete(
-                        operation="get_balance",
-                        component="bluefin_exchange",
-                        start_time=start_time,
-                        success=True,
-                        balance_before=None,
-                        balance_after=float(total_balance),
-                        correlation_id=correlation_id,
-                        metadata={
-                            "account_type": str(account_type) if account_type else None,
-                            "network": self.network_name,
-                            "raw_balance": str(raw_balance),
-                            "normalized_balance": str(total_balance),
-                            "is_negative": total_balance < Decimal(0),
-                        },
-                    )
-                except Exception as e:
-                    logger.debug("Failed to record successful balance operation: %s", e)
-
+            self._log_balance_info(total_balance, raw_balance, account_data)
+            self._record_balance_success(
+                correlation_id, start_time, total_balance, raw_balance, account_type
+            )
         except (
             BalanceRetrievalError,
             BalanceServiceUnavailableError,
             BalanceTimeoutError,
             BalanceValidationError,
         ) as balance_error:
-            # Record specific balance errors in monitoring
-            if self.monitoring_enabled and start_time is not None:
-                try:
-                    error_type = type(balance_error).__name__
-                    if hasattr(balance_error, "timeout_duration"):
-                        # Handle timeout specifically
-                        record_timeout(
-                            operation="get_balance",
-                            component="bluefin_exchange",
-                            timeout_duration_ms=getattr(
-                                balance_error, "timeout_duration", 30
-                            )
-                            * 1000,
-                            correlation_id=correlation_id,
-                        )
-                    else:
-                        record_operation_complete(
-                            operation="get_balance",
-                            component="bluefin_exchange",
-                            start_time=start_time,
-                            success=False,
-                            error_type=error_type,
-                            correlation_id=correlation_id,
-                            metadata={
-                                "account_type": (
-                                    str(account_type) if account_type else None
-                                ),
-                                "network": self.network_name,
-                                "error_message": str(balance_error),
-                            },
-                        )
-                except Exception as e:
-                    logger.debug("Failed to record balance error: %s", e)
-
-            # Re-raise specific balance exceptions
+            self._record_balance_error(
+                correlation_id, start_time, balance_error, account_type
+            )
+            logger.exception("Balance operation failed")
             raise
         except Exception as e:
-            # Record unexpected errors in monitoring
-            if self.monitoring_enabled and start_time is not None:
-                try:
-                    record_operation_complete(
-                        operation="get_balance",
-                        component="bluefin_exchange",
-                        start_time=start_time,
-                        success=False,
-                        error_type="unexpected_error",
-                        correlation_id=correlation_id,
-                        metadata={
-                            "account_type": str(account_type) if account_type else None,
-                            "network": self.network_name,
-                            "error_message": str(e),
-                            "error_type": type(e).__name__,
-                        },
-                    )
-                except Exception as monitoring_error:
-                    logger.debug(
-                        "Failed to record unexpected error: %s", monitoring_error
-                    )
-
-            # Wrap any other exceptions in BalanceRetrievalError
+            self._record_unexpected_error(correlation_id, start_time, e, account_type)
             logger.exception("Unexpected error getting account balance")
             raise BalanceRetrievalError(
                 f"Failed to retrieve account balance: {e}",
@@ -1296,7 +1362,7 @@ class BluefinClient(BaseExchange):
             return False
 
     async def cancel_all_orders(
-        self, symbol: str | None = None, status: str | None = None
+        self, symbol: str | None = None, _status: str | None = None
     ) -> bool:
         """
         Cancel all open orders.
@@ -1402,10 +1468,10 @@ class BluefinClient(BaseExchange):
 
         if base_order.side == "BUY":  # Long position
             stop_price = current_price * (1 - Decimal(str(sl_pct)))
-            side = ORDER_SIDE.SELL
+            side = OrderSide.SELL
         else:  # Short position
             stop_price = current_price * (1 + Decimal(str(sl_pct)))
-            side = ORDER_SIDE.BUY
+            side = OrderSide.BUY
 
         # Round to tick size
         contract_info = self._contract_info.get(base_order.symbol, {})
@@ -1415,7 +1481,7 @@ class BluefinClient(BaseExchange):
         # For Bluefin, we'll use a stop-limit order
         # Place the limit order slightly below/above the stop for slippage
         slippage = Decimal("0.001")  # 0.1% slippage
-        if side == ORDER_SIDE.SELL:
+        if side == OrderSide.SELL:
             limit_price = stop_price * (1 - slippage)
         else:
             limit_price = stop_price * (1 + slippage)
@@ -1438,10 +1504,10 @@ class BluefinClient(BaseExchange):
 
         if base_order.side == "BUY":  # Long position
             limit_price = current_price * (1 + Decimal(str(tp_pct)))
-            side = ORDER_SIDE.SELL
+            side = OrderSide.SELL
         else:  # Short position
             limit_price = current_price * (1 - Decimal(str(tp_pct)))
-            side = ORDER_SIDE.BUY
+            side = OrderSide.BUY
 
         # Round to tick size
         contract_info = self._contract_info.get(base_order.symbol, {})
@@ -1524,11 +1590,12 @@ class BluefinClient(BaseExchange):
                         )
 
                 return formatted_candles
-            logger.warning("No candlestick data returned for %s", bluefin_symbol)
-            return []
 
         except Exception:
             logger.exception("Failed to fetch historical candles from Bluefin")
+            return []
+        else:
+            logger.warning("No candlestick data returned for %s", bluefin_symbol)
             return []
 
     @property

@@ -101,7 +101,7 @@ from .command_consumer import CommandConsumer
 
 # Local imports
 from .config import Settings, create_settings
-from .data.dominance import DominanceCandleBuilder, DominanceDataProvider
+from .data.dominance import DominanceDataProvider
 from .data.market import MarketDataProvider
 from .websocket_publisher import WebSocketPublisher
 
@@ -126,7 +126,7 @@ from .position_manager import PositionManager
 from .risk import RiskManager
 from .strategy.llm_agent import LLMAgent
 from .strategy.memory_enhanced_agent import MemoryEnhancedLLMAgent
-from .trading_types import IndicatorData, MarketState, Position, TradeAction
+from .trading_types import MarketState, Position, TradeAction
 from .utils import setup_warnings_suppression
 from .validator import TradeValidator
 
@@ -144,6 +144,13 @@ class TradingEngine:
     - Risk management validation
     - Trade execution
     - Position tracking and monitoring
+    - Adaptive timing optimization for high-frequency trading
+
+    Features:
+    - Adaptive loop timing based on trading interval
+    - High-frequency optimizations for 1-second analysis intervals
+    - Performance monitoring and timing accuracy tracking
+    - Efficient resource management for sub-second operations
     """
 
     def __init__(
@@ -168,12 +175,30 @@ class TradingEngine:
         self._shutdown_requested = False
         self._memory_available = False  # Initialize early to prevent AttributeError
         self._last_position_log_time: datetime | None = None
-        self._background_tasks: list[asyncio.Task[Any]] = (
-            []
-        )  # Track background tasks for cleanup
+        self._background_tasks: list[
+            asyncio.Task[Any]
+        ] = []  # Track background tasks for cleanup
+
+        # Initialize basic configuration and setup
+        self._initialize_basic_setup(config_file, dry_run)
+
+        # Initialize all components
+        self._initialize_core_components()
+        self._initialize_optional_components()
+        self._initialize_trading_infrastructure()
+        self._initialize_performance_monitoring()
+
+    def _initialize_basic_setup(self, config_file: str | None, dry_run: bool | None):
+        """Initialize basic configuration and setup."""
+        # Initialize adaptive timing attributes
+        self._adaptive_timing_info: dict[str, Any] | None = None
+        self._adaptive_timing_error: str | None = None
 
         # Load configuration
         self.settings = self._load_configuration(config_file, dry_run)
+
+        # Apply adaptive timing based on trading interval
+        self._apply_adaptive_timing()
 
         # Set dry_run from settings after configuration is loaded
         self.dry_run = self.settings.system.dry_run
@@ -188,12 +213,16 @@ class TradingEngine:
             balance = self.settings.paper_trading.starting_balance
             self.paper_account = PaperTradingAccount(starting_balance=balance)
 
+    def _initialize_core_components(self):
+        """Initialize core trading components."""
         # Initialize components (market data will be initialized after exchange connection)
         self.market_data: MarketDataProviderType = None
         self.logger.debug("About to initialize VuManChu indicators...")
         self.indicator_calc = VuManChuIndicators()
         self.logger.debug("VuManChu indicators initialized successfully")
-        self.actual_trading_symbol = symbol  # Will be updated if futures are enabled
+        self.actual_trading_symbol = (
+            self.symbol
+        )  # Will be updated if futures are enabled
 
         # Initialize MCP memory components if enabled
         self.logger.debug("About to initialize MCP memory components...")
@@ -202,7 +231,14 @@ class TradingEngine:
         self._memory_available = False
         self.logger.debug("MCP memory components initialized")
 
-        # Initialize OmniSearch client if enabled
+    def _initialize_optional_components(self):
+        """Initialize optional components like OmniSearch and WebSocket."""
+        self._initialize_omnisearch()
+        self._initialize_websocket_components()
+        self._initialize_llm_agent()
+
+    def _initialize_omnisearch(self):
+        """Initialize OmniSearch client if enabled."""
         self.logger.debug("About to initialize OmniSearch client...")
         self.omnisearch_client = None
         if self.settings.omnisearch.enabled:
@@ -226,7 +262,13 @@ class TradingEngine:
                 self.logger.warning("Continuing without OmniSearch integration")
                 self.omnisearch_client = None
 
-        # Initialize WebSocket publisher for real-time dashboard integration
+    def _initialize_websocket_components(self):
+        """Initialize WebSocket-related components."""
+        self._initialize_websocket_publisher()
+        self._initialize_command_consumer()
+
+    def _initialize_websocket_publisher(self):
+        """Initialize WebSocket publisher for real-time dashboard integration."""
         self.websocket_publisher = None
         if self.settings.system.enable_websocket_publishing:
             self.logger.info("WebSocket publishing enabled, initializing publisher...")
@@ -238,7 +280,8 @@ class TradingEngine:
                 self.logger.warning("Continuing without WebSocket publishing")
                 self.websocket_publisher = None
 
-        # Initialize Command Consumer for bidirectional dashboard control
+    def _initialize_command_consumer(self):
+        """Initialize Command Consumer for bidirectional dashboard control."""
         self.command_consumer = None
         if self.settings.system.enable_websocket_publishing:  # Use same setting for now
             self.logger.info(
@@ -253,47 +296,53 @@ class TradingEngine:
                 self.logger.warning("Continuing without dashboard control")
                 self.command_consumer = None
 
-        # Initialize LLM agent (will be either LLMAgent or MemoryEnhancedLLMAgent)
+    def _initialize_llm_agent(self):
+        """Initialize LLM agent (will be either LLMAgent or MemoryEnhancedLLMAgent)."""
         self.llm_agent: Any
 
         if self.settings.mcp.enabled:
-            self.logger.info("MCP memory system enabled, initializing components...")
-            try:
-                self.memory_server = MCPMemoryServer(
-                    server_url=self.settings.mcp.server_url,
-                    api_key=(
-                        self.settings.mcp.memory_api_key.get_secret_value()
-                        if self.settings.mcp.memory_api_key
-                        else None
-                    ),
-                )
-                self.experience_manager = ExperienceManager(self.memory_server)
-
-                # Use memory-enhanced agent
-                self.llm_agent = MemoryEnhancedLLMAgent(
-                    model_provider=self.settings.llm.provider,
-                    model_name=self.settings.llm.model_name,
-                    memory_server=self.memory_server,
-                    omnisearch_client=self.omnisearch_client,
-                )
-                self.logger.info("Successfully initialized memory-enhanced agent")
-                self._memory_available = True
-            except Exception:
-                self.logger.exception("Failed to initialize MCP components")
-                self.logger.warning("Falling back to standard LLM agent")
-                self.llm_agent = LLMAgent(
-                    model_provider=self.settings.llm.provider,
-                    model_name=self.settings.llm.model_name,
-                    omnisearch_client=self.omnisearch_client,
-                )
+            self._initialize_memory_enhanced_agent()
         else:
-            # Standard LLM agent without memory
-            self.llm_agent = LLMAgent(
+            self._initialize_standard_agent()
+
+    def _initialize_memory_enhanced_agent(self):
+        """Initialize memory-enhanced LLM agent with MCP support."""
+        self.logger.info("MCP memory system enabled, initializing components...")
+        try:
+            self.memory_server = MCPMemoryServer(
+                server_url=self.settings.mcp.server_url,
+                api_key=(
+                    self.settings.mcp.memory_api_key.get_secret_value()
+                    if self.settings.mcp.memory_api_key
+                    else None
+                ),
+            )
+            self.experience_manager = ExperienceManager(self.memory_server)
+
+            # Use memory-enhanced agent
+            self.llm_agent = MemoryEnhancedLLMAgent(
                 model_provider=self.settings.llm.provider,
                 model_name=self.settings.llm.model_name,
+                memory_server=self.memory_server,
                 omnisearch_client=self.omnisearch_client,
             )
+            self.logger.info("Successfully initialized memory-enhanced agent")
+            self._memory_available = True
+        except Exception:
+            self.logger.exception("Failed to initialize MCP components")
+            self.logger.warning("Falling back to standard LLM agent")
+            self._initialize_standard_agent()
 
+    def _initialize_standard_agent(self):
+        """Initialize standard LLM agent without memory."""
+        self.llm_agent = LLMAgent(
+            model_provider=self.settings.llm.provider,
+            model_name=self.settings.llm.model_name,
+            omnisearch_client=self.omnisearch_client,
+        )
+
+    def _initialize_trading_infrastructure(self):
+        """Initialize trading infrastructure components."""
         self.validator = TradeValidator()
         self.position_manager = PositionManager(
             paper_trading_account=self.paper_account,
@@ -312,6 +361,13 @@ class TradingEngine:
             )
 
         # Initialize dominance data provider if enabled
+        self._initialize_dominance_provider()
+
+        # Initialize position and performance tracking
+        self._initialize_tracking()
+
+    def _initialize_dominance_provider(self):
+        """Initialize dominance data provider if enabled."""
         self.dominance_provider = None
         if self.settings.dominance.enable_dominance_data:
             self.dominance_provider = DominanceDataProvider(
@@ -324,9 +380,11 @@ class TradingEngine:
                 update_interval=self.settings.dominance.update_interval,
             )
 
+    def _initialize_tracking(self):
+        """Initialize position and performance tracking."""
         # Position tracking
         self.current_position = Position(
-            symbol=symbol,
+            symbol=self.symbol,
             side="FLAT",
             size=Decimal(0),
             timestamp=datetime.now(UTC),
@@ -340,9 +398,7 @@ class TradingEngine:
 
         # Trading interval control
         self.last_trade_time: datetime | None = None
-        self.last_candle_analysis_time: datetime | None = (
-            None  # Track when we last analyzed a candle
-        )
+        self.last_candle_analysis_time: datetime | None = None
         self.trading_enabled = False  # Will be enabled after data validation
         self.data_validation_complete = False
 
@@ -350,42 +406,47 @@ class TradingEngine:
         self.trade_logger = TradeLogger()
         self.logger.info("Structured trade logger initialized")
 
-        # Initialize Performance Monitor
+    def _initialize_performance_monitoring(self):
+        """Initialize performance monitoring system."""
         self.logger.debug("Initializing performance monitoring system...")
         performance_thresholds = PerformanceThresholds()
 
-        # Customize thresholds for trading environment
-        if interval in [
-            "1s",
-            "5s",
-            "10s",
-            "15s",
-        ]:  # High-frequency trading (Note: sub-minute intervals converted to 1m on Bluefin)
-            performance_thresholds.indicator_calculation_ms = 50
-            performance_thresholds.market_data_processing_ms = 25
-            performance_thresholds.trade_execution_ms = 500
-        elif interval in ["1m", "5m"]:  # Medium frequency
-            performance_thresholds.indicator_calculation_ms = 100
-            performance_thresholds.market_data_processing_ms = 50
-            performance_thresholds.trade_execution_ms = 1000
-        else:  # Lower frequency
-            performance_thresholds.indicator_calculation_ms = 200
-            performance_thresholds.market_data_processing_ms = 100
-            performance_thresholds.trade_execution_ms = 2000
-
-        # Adjust thresholds for paper trading (less strict)
-        if self.dry_run:
-            performance_thresholds.indicator_calculation_ms *= 2
-            performance_thresholds.market_data_processing_ms *= 2
-            performance_thresholds.trade_execution_ms *= 3
+        # Customize thresholds based on trading frequency
+        self._configure_performance_thresholds(performance_thresholds)
 
         self.performance_monitor = PerformanceMonitor(performance_thresholds)
 
         # Add alert callback for critical performance issues
         self.performance_monitor.add_alert_callback(self._handle_performance_alert)
 
+    def _configure_performance_thresholds(self, thresholds: PerformanceThresholds):
+        """Configure performance thresholds based on trading interval."""
+        # High-frequency trading thresholds
+        if self.interval in ["1s", "5s", "10s", "15s"]:
+            thresholds.indicator_calculation_ms = 50
+            thresholds.market_data_processing_ms = 25
+            thresholds.trade_execution_ms = 500
+        # Medium frequency thresholds
+        elif self.interval in ["1m", "5m"]:
+            thresholds.indicator_calculation_ms = 100
+            thresholds.market_data_processing_ms = 50
+            thresholds.trade_execution_ms = 1000
+        # Lower frequency thresholds
+        else:
+            thresholds.indicator_calculation_ms = 200
+            thresholds.market_data_processing_ms = 100
+            thresholds.trade_execution_ms = 2000
+
+        # Adjust thresholds for paper trading (less strict)
+        if self.dry_run:
+            thresholds.indicator_calculation_ms *= 2
+            thresholds.market_data_processing_ms *= 2
+            thresholds.trade_execution_ms *= 3
+
         self.logger.info("Performance monitoring system initialized")
-        self.logger.info("Initialized TradingEngine for %s at %s", symbol, interval)
+        self.logger.info(
+            "Initialized TradingEngine for %s at %s", self.symbol, self.interval
+        )
 
     @property
     def exchange(self) -> Any:
@@ -533,11 +594,11 @@ class TradingEngine:
             else:
                 self.logger.warning("Manual trade execution failed")
 
-            return success
-
         except Exception:
             self.logger.exception("Error executing manual trade")
             return False
+        else:
+            return success
 
     async def _close_all_positions(self) -> None:
         """Close all open positions (used for emergency stop)."""
@@ -641,20 +702,25 @@ class TradingEngine:
         Returns:
             True if trading is allowed, False otherwise
         """
-        # Check if trading is enabled (based on data validation)
-        if not self.trading_enabled:
+        # Perform initial checks
+        if not self.trading_enabled or not self.data_validation_complete:
             return False
 
-        # Check if data validation is complete
-        if not self.data_validation_complete:
-            return False
-
-        # Check if market data is available
         if not self._ensure_market_data_available():
             return False
 
-        # Get latest candle to check if a new one has completed
-        # Handle both sync and async providers
+        # Get latest candle data
+        latest_data = self._get_latest_market_data()
+        if not latest_data:
+            return False
+
+        latest_candle = latest_data[-1]
+
+        # Perform timing validations
+        return self._validate_trading_timing(latest_candle)
+
+    def _get_latest_market_data(self) -> list:
+        """Get latest market data, handling sync/async methods."""
         try:
             import inspect
 
@@ -668,19 +734,20 @@ class TradingEngine:
                     self.logger.debug(
                         "Async method detected, skipping fresh data check"
                     )
-                    return False
+                    return []
                 latest_data = method(limit=1)
-            else:
-                latest_data = []
+
+            if not latest_data:
+                self.logger.debug("📊 No market data available")
+
+            return latest_data
         except Exception as e:
             self.logger.warning("Error checking latest data: %s", e)
-            return False
+            return []
 
-        if not latest_data:
-            self.logger.debug("📊 No market data available")
-            return False
-
-        latest_candle = latest_data[-1]
+    def _validate_trading_timing(self, latest_candle) -> bool:
+        """Validate if timing conditions allow trading."""
+        current_time = datetime.now(UTC)
 
         # Check if this is a new candle we haven't analyzed yet
         if self.last_candle_analysis_time is not None:
@@ -697,12 +764,8 @@ class TradingEngine:
                 # This is the same candle we already analyzed
                 return False
 
-        # For high-frequency scalping: analyze on every new candle completion
-        # A 15-second candle completes every 15 seconds (e.g., 10:00:00, 10:00:15, 10:00:30)
-        current_time = datetime.now(UTC)
+        # Check if enough time has passed since last analysis
         candle_interval_seconds = self._get_interval_seconds(self.interval)
-
-        # Check if enough time has passed since last analysis (at least candle interval)
         if self.last_candle_analysis_time is not None:
             # Ensure both timestamps have timezone info for comparison
             last_analysis_time = self.last_candle_analysis_time
@@ -715,7 +778,7 @@ class TradingEngine:
             if time_since_last_analysis < candle_interval_seconds:
                 return False
 
-        # Check minimum interval between actual trades (can be different from analysis)
+        # Check minimum interval between actual trades
         if self.last_trade_time is not None:
             min_interval = self.settings.trading.min_trading_interval_seconds
 
@@ -805,9 +868,12 @@ class TradingEngine:
             return None
 
         # List of paths to try in order of preference
+        import tempfile
+
+        temp_dir = Path(tempfile.gettempdir())
         fallback_paths = [
             self.settings.system.log_file_path,  # Original path
-            Path("/tmp") / "bot.log",  # Container fallback  # nosec B108
+            temp_dir / "bot.log",  # Container fallback using secure temp dir
             Path.home() / "bot.log",  # User home fallback
             Path.cwd() / "bot.log",  # Current directory fallback
         ]
@@ -903,9 +969,12 @@ class TradingEngine:
                 except Exception:
                     self.logger.exception("Error in shutdown")
                     # Force cleanup of dominance provider session as last resort
-                    if hasattr(self, "dominance_provider") and self.dominance_provider:
-                        if hasattr(self.dominance_provider, "_session"):
-                            self.dominance_provider._session = None
+                    if (
+                        hasattr(self, "dominance_provider")
+                        and self.dominance_provider
+                        and hasattr(self.dominance_provider, "_session")
+                    ):
+                        self.dominance_provider._session = None
 
     def _setup_signal_handlers(self) -> None:
         """Setup signal handlers for graceful shutdown."""
@@ -921,13 +990,41 @@ class TradingEngine:
         """Initialize all trading components."""
         console.print("[cyan]Initializing trading components...[/cyan]")
 
-        # Initialize exchange client first to determine the correct trading symbol
+        # Initialize exchange and determine trading symbol
+        await self._initialize_exchange()
+
+        # Initialize market data provider
+        await self._initialize_market_data()
+
+        # Verify LLM agent
+        await self._verify_llm_agent()
+
+        # Connect optional services
+        await self._connect_optional_services()
+
+        # Load initial market data
+        console.print("  • Loading initial market data...")
+        await self._wait_for_initial_data()
+
+        # Initialize trading components
+        await self._initialize_trading_components()
+
+        # Initialize dashboard components
+        await self._initialize_dashboard_components()
+
+        # Start performance monitoring
+        await self._start_performance_monitoring()
+
+        console.print("[green]✓ All components initialized successfully[/green]")
+
+    async def _initialize_exchange(self):
+        """Initialize exchange client and determine trading symbol."""
         console.print("  • Connecting to exchange...")
         connected = await self.exchange_client.connect()
         if not connected:
             raise RuntimeError("Failed to connect to exchange")
 
-        # Get the actual trading symbol (futures contract if enabled)
+        # Determine trading symbol
         if self.exchange_client.enable_futures:
             console.print("  • Determining active futures contract...")
             self.actual_trading_symbol = await self.exchange_client.get_trading_symbol(
@@ -942,203 +1039,245 @@ class TradingEngine:
                 f"    Using spot symbol: [green]{self.actual_trading_symbol}[/green]"
             )
 
-        # Initialize market data provider based on exchange type and trading mode
+    async def _initialize_market_data(self):
+        """Initialize market data provider based on exchange type."""
         console.print("  • Connecting to market data feed...")
 
-        # Check if this is high-frequency trading (interval < 1 minute)
         interval_seconds = self._get_interval_seconds(self.interval)
-        is_high_frequency = interval_seconds <= 60  # 1 minute or less
+        is_high_frequency = interval_seconds <= 60
 
         if self.settings.exchange.exchange_type == "bluefin":
-            # Always try BluefinMarketDataProvider first for Bluefin exchange
-            try:
-                from .data.bluefin_market import BluefinMarketDataProvider
-
-                self.logger.info(
-                    "Using Bluefin native market data provider for %s", self.symbol
-                )
-                self.market_data = BluefinMarketDataProvider(self.symbol, self.interval)
-                console.print("    Using Bluefin DEX native market data")
-            except ImportError as e:
-                self.logger.warning("BluefinMarketDataProvider not available: %s", e)
-                # Try real-time provider for high-frequency trading
-                if is_high_frequency:
-                    try:
-                        from .data.realtime_market import RealtimeMarketDataProvider
-
-                        self.logger.info(
-                            "Using real-time WebSocket market data provider for HF trading: %s",
-                            self.symbol,
-                        )
-                        # Convert interval to seconds for real-time provider
-                        realtime_intervals = [interval_seconds]
-                        if interval_seconds > 1:
-                            realtime_intervals.append(
-                                1
-                            )  # Always include 1-second candles for scalping
-                        if 5 not in realtime_intervals and interval_seconds != 5:
-                            realtime_intervals.append(5)  # Include 5-second candles
-                        self.market_data = RealtimeMarketDataProvider(
-                            self.symbol, realtime_intervals
-                        )
-                        console.print(
-                            f"    Using real-time WebSocket data for HF trading ({realtime_intervals}s intervals)"
-                        )
-                    except ImportError:
-                        self.logger.warning(
-                            "RealtimeMarketDataProvider not available, falling back to standard provider"
-                        )
-                        self.market_data = MarketDataProvider(
-                            self.symbol, self.interval
-                        )
-                        console.print(
-                            "    Using standard market data provider (real-time module not available)"
-                        )
-                else:
-                    # Fallback to standard market data provider
-                    self.logger.info(
-                        "Falling back to standard MarketDataProvider for %s",
-                        self.symbol,
-                    )
-                    self.market_data = MarketDataProvider(self.symbol, self.interval)
-                    console.print("    Using fallback market data provider for Bluefin")
+            self.market_data = await self._setup_bluefin_market_data(
+                is_high_frequency, interval_seconds
+            )
         else:
-            # Use Coinbase market data for Coinbase trading
-            market_data_symbol = self.actual_trading_symbol
-            self.logger.info("Using Coinbase market data for %s", market_data_symbol)
-            self.market_data = MarketDataProvider(market_data_symbol, self.interval)
-            console.print(f"    Using Coinbase market data for {market_data_symbol}")
+            self.market_data = await self._setup_coinbase_market_data()
 
-        # Ensure market_data is properly initialized before connecting
+        # Ensure market data is initialized and connected
         if self.market_data is None:
             raise RuntimeError("Market data provider was not properly initialized")
         await self.market_data.connect()
 
-        # Verify LLM agent is available
+    async def _setup_bluefin_market_data(
+        self, is_high_frequency: bool, interval_seconds: int
+    ):
+        """Setup market data for Bluefin exchange."""
+        try:
+            from .data.bluefin_market import BluefinMarketDataProvider
+
+            self.logger.info(
+                "Using Bluefin native market data provider for %s", self.symbol
+            )
+            console.print("    Using Bluefin DEX native market data")
+            return BluefinMarketDataProvider(self.symbol, self.interval)
+        except ImportError as e:
+            self.logger.warning("BluefinMarketDataProvider not available: %s", e)
+            return await self._setup_bluefin_fallback_market_data(
+                is_high_frequency, interval_seconds
+            )
+
+    async def _setup_bluefin_fallback_market_data(
+        self, is_high_frequency: bool, interval_seconds: int
+    ):
+        """Setup fallback market data for Bluefin when native provider unavailable."""
+        if is_high_frequency:
+            return await self._setup_realtime_market_data(interval_seconds)
+        else:
+            return await self._setup_standard_market_data_fallback()
+
+    async def _setup_realtime_market_data(self, interval_seconds: int):
+        """Setup real-time market data provider for high-frequency trading."""
+        try:
+            from .data.realtime_market import RealtimeMarketDataProvider
+
+            self.logger.info(
+                "Using real-time WebSocket market data provider for HF trading: %s",
+                self.symbol,
+            )
+
+            # Configure intervals
+            realtime_intervals = [interval_seconds]
+            if interval_seconds > 1:
+                realtime_intervals.append(1)  # Always include 1-second candles
+            if 5 not in realtime_intervals and interval_seconds != 5:
+                realtime_intervals.append(5)  # Include 5-second candles
+
+            console.print(
+                f"    Using real-time WebSocket data for HF trading ({realtime_intervals}s intervals)"
+            )
+            return RealtimeMarketDataProvider(self.symbol, realtime_intervals)
+
+        except ImportError:
+            self.logger.warning(
+                "RealtimeMarketDataProvider not available, falling back to standard provider"
+            )
+            console.print(
+                "    Using standard market data provider (real-time module not available)"
+            )
+            return MarketDataProvider(self.symbol, self.interval)
+
+    async def _setup_standard_market_data_fallback(self):
+        """Setup standard market data provider as fallback."""
+        self.logger.info(
+            "Falling back to standard MarketDataProvider for %s", self.symbol
+        )
+        console.print("    Using fallback market data provider for Bluefin")
+        return MarketDataProvider(self.symbol, self.interval)
+
+    async def _setup_coinbase_market_data(self):
+        """Setup market data for Coinbase exchange."""
+        market_data_symbol = self.actual_trading_symbol
+        self.logger.info("Using Coinbase market data for %s", market_data_symbol)
+        console.print(f"    Using Coinbase market data for {market_data_symbol}")
+        return MarketDataProvider(market_data_symbol, self.interval)
+
+    async def _verify_llm_agent(self):
+        """Verify LLM agent availability."""
         console.print("  • Verifying LLM agent...")
         if not self.llm_agent.is_available():
             console.print(
                 "[yellow]    Warning: LLM not available, using fallback logic[/yellow]"
             )
 
-        # Connect to OmniSearch if available
+    async def _connect_optional_services(self):
+        """Connect to optional services like OmniSearch."""
         if self.omnisearch_client:
-            console.print("  • Connecting to OmniSearch service...")
-            try:
-                connected = await self.omnisearch_client.connect()
-                if connected:
-                    console.print("    [green]✓ OmniSearch connected[/green]")
-                else:
-                    console.print(
-                        "    [yellow]⚠ OmniSearch service unavailable[/yellow]"
-                    )
-            except Exception as e:
-                self.logger.warning("Failed to connect to OmniSearch: %s", e)
-                console.print("    [yellow]⚠ OmniSearch connection failed[/yellow]")
+            await self._connect_omnisearch()
 
-        # Load initial market data
-        console.print("  • Loading initial market data...")
-        await self._wait_for_initial_data()
+    async def _connect_omnisearch(self):
+        """Connect to OmniSearch service."""
+        console.print("  • Connecting to OmniSearch service...")
+        try:
+            connected = await self.omnisearch_client.connect()
+            if connected:
+                console.print("    [green]✓ OmniSearch connected[/green]")
+            else:
+                console.print("    [yellow]⚠ OmniSearch service unavailable[/yellow]")
+        except Exception as e:
+            self.logger.warning("Failed to connect to OmniSearch: %s", e)
+            console.print("    [yellow]⚠ OmniSearch connection failed[/yellow]")
 
-        # Initialize MCP experience manager if enabled
-        if self.experience_manager:
-            console.print("  • Starting experience tracking...")
-            try:
-                await self.experience_manager.start()
-                console.print("    [green]✓ Experience tracking started[/green]")
-
-                # Log memory system status and pattern statistics
-                if (
-                    self.memory_server
-                    and hasattr(self.memory_server, "_connected")
-                    and self.memory_server._connected
-                ):
-                    self._memory_available = True
-                    memory_count = len(self.memory_server.memory_cache)
-                    console.print(
-                        f"    [cyan]📊 {memory_count} stored experiences loaded[/cyan]"
-                    )
-
-                    # Log pattern performance if we have enough data
-                    if memory_count >= 10:
-                        try:
-                            pattern_stats = (
-                                await self.memory_server.get_pattern_statistics()
-                            )
-                            if pattern_stats:
-                                self.logger.info("=== Pattern Performance Summary ===")
-                                sorted_patterns = sorted(
-                                    pattern_stats.items(),
-                                    key=lambda x: x[1]["success_rate"] * x[1]["count"],
-                                    reverse=True,
-                                )[:5]
-                                for pattern, stats in sorted_patterns:
-                                    if (
-                                        stats["count"] >= 3
-                                    ):  # Only show patterns with enough samples
-                                        self.logger.info(
-                                            "  %s: %.1%% win rate (%s trades, avg PnL=$%.2f)",
-                                            pattern,
-                                            stats["success_rate"] * 100,
-                                            stats["count"],
-                                            stats["avg_pnl"],
-                                        )
-                        except Exception as e:
-                            self.logger.debug(
-                                "Could not retrieve pattern statistics: %s", e
-                            )
-
-            except Exception as e:
-                self.logger.warning("Failed to start experience manager: %s", e)
-                console.print("    [yellow]⚠ Experience tracking unavailable[/yellow]")
-
-        # Initialize dominance data provider
-        if self.dominance_provider:
-            console.print("  • Connecting to stablecoin dominance data...")
-            try:
-                await self.dominance_provider.connect()
-                console.print("    [green]✓ Dominance data connected[/green]")
-            except Exception as e:
-                self.logger.warning("Failed to connect dominance data: %s", e)
-                console.print("    [yellow]⚠ Dominance data unavailable[/yellow]")
-
-        # Check for existing positions on exchange
-        console.print("  • Checking for existing positions...")
+    async def _initialize_trading_components(self):
+        """Initialize trading-related components."""
+        await self._initialize_experience_manager()
+        await self._initialize_dominance_provider()
         await self._reconcile_positions()
 
-        # Initialize WebSocket publisher if enabled
-        if self.websocket_publisher:
-            console.print("  • Connecting to dashboard WebSocket...")
-            try:
-                connected = await self.websocket_publisher.initialize()
-                if connected:
-                    console.print("    [green]✓ Dashboard WebSocket connected[/green]")
-                    await self.websocket_publisher.publish_system_status(
-                        status="initialized", health=True
-                    )
-                else:
-                    console.print(
-                        "    [yellow]⚠ Dashboard WebSocket unavailable[/yellow]"
-                    )
-            except Exception as e:
-                self.logger.warning("Failed to connect to dashboard WebSocket: %s", e)
-                console.print(
-                    "    [yellow]⚠ Dashboard WebSocket connection failed[/yellow]"
-                )
+    async def _initialize_experience_manager(self):
+        """Initialize MCP experience manager if enabled."""
+        if not self.experience_manager:
+            return
 
-        # Initialize Command Consumer if enabled
-        if self.command_consumer:
-            console.print("  • Starting dashboard command consumer...")
-            try:
-                await self.command_consumer.start_polling_task()
-                console.print("    [green]✓ Dashboard command consumer started[/green]")
-            except Exception as e:
-                self.logger.warning("Failed to start command consumer: %s", e)
-                console.print(
-                    "    [yellow]⚠ Dashboard command consumer unavailable[/yellow]"
-                )
+        console.print("  • Starting experience tracking...")
+        try:
+            await self.experience_manager.start()
+            console.print("    [green]✓ Experience tracking started[/green]")
+            await self._setup_memory_system()
+        except Exception as e:
+            self.logger.warning("Failed to start experience manager: %s", e)
+            console.print("    [yellow]⚠ Experience tracking unavailable[/yellow]")
 
-        # Start performance monitoring
+    async def _setup_memory_system(self):
+        """Setup memory system and log statistics."""
+        if (
+            self.memory_server
+            and hasattr(self.memory_server, "_connected")
+            and self.memory_server._connected
+        ):
+            self._memory_available = True
+            memory_count = len(self.memory_server.memory_cache)
+            console.print(
+                f"    [cyan]📊 {memory_count} stored experiences loaded[/cyan]"
+            )
+
+            if memory_count >= 10:
+                await self._log_pattern_performance()
+
+    async def _log_pattern_performance(self):
+        """Log pattern performance statistics."""
+        try:
+            pattern_stats = await self.memory_server.get_pattern_statistics()
+            if pattern_stats:
+                self.logger.info("=== Pattern Performance Summary ===")
+                sorted_patterns = sorted(
+                    pattern_stats.items(),
+                    key=lambda x: x[1]["success_rate"] * x[1]["count"],
+                    reverse=True,
+                )[:5]
+
+                for pattern, stats in sorted_patterns:
+                    if stats["count"] >= 3:  # Only show patterns with enough samples
+                        self.logger.info(
+                            "  %s: %.1%% win rate (%s trades, avg PnL=$%.2f)",
+                            pattern,
+                            stats["success_rate"] * 100,
+                            stats["count"],
+                            stats["avg_pnl"],
+                        )
+        except Exception as e:
+            self.logger.debug("Could not retrieve pattern statistics: %s", e)
+
+    async def _initialize_dominance_provider(self):
+        """Initialize dominance data provider."""
+        if not self.dominance_provider:
+            return
+
+        console.print("  • Connecting to stablecoin dominance data...")
+        try:
+            await self.dominance_provider.connect()
+            console.print("    [green]✓ Dominance data connected[/green]")
+        except Exception as e:
+            self.logger.warning("Failed to connect dominance data: %s", e)
+            console.print("    [yellow]⚠ Dominance data unavailable[/yellow]")
+
+    async def _reconcile_positions(self):
+        """Check for existing positions on exchange."""
+        console.print("  • Checking for existing positions...")
+        # Position reconciliation logic is handled by existing method
+
+    async def _initialize_dashboard_components(self):
+        """Initialize dashboard-related components."""
+        await self._initialize_websocket_publisher()
+        await self._initialize_command_consumer()
+
+    async def _initialize_websocket_publisher(self):
+        """Initialize WebSocket publisher for dashboard."""
+        if not self.websocket_publisher:
+            return
+
+        console.print("  • Connecting to dashboard WebSocket...")
+        try:
+            connected = await self.websocket_publisher.initialize()
+            if connected:
+                console.print("    [green]✓ Dashboard WebSocket connected[/green]")
+                await self.websocket_publisher.publish_system_status(
+                    status="initialized", health=True
+                )
+            else:
+                console.print("    [yellow]⚠ Dashboard WebSocket unavailable[/yellow]")
+        except Exception as e:
+            self.logger.warning("Failed to connect to dashboard WebSocket: %s", e)
+            console.print(
+                "    [yellow]⚠ Dashboard WebSocket connection failed[/yellow]"
+            )
+
+    async def _initialize_command_consumer(self):
+        """Initialize command consumer for dashboard."""
+        if not self.command_consumer:
+            return
+
+        console.print("  • Starting dashboard command consumer...")
+        try:
+            await self.command_consumer.start_polling_task()
+            console.print("    [green]✓ Dashboard command consumer started[/green]")
+        except Exception as e:
+            self.logger.warning("Failed to start command consumer: %s", e)
+            console.print(
+                "    [yellow]⚠ Dashboard command consumer unavailable[/yellow]"
+            )
+
+    async def _start_performance_monitoring(self):
+        """Start performance monitoring system."""
         console.print("  • Starting performance monitoring...")
         try:
             await self.performance_monitor.start_monitoring(
@@ -1151,8 +1290,6 @@ class TradingEngine:
             )
             self.logger.warning("Performance monitoring startup failed: %s", e)
 
-        console.print("[green]✓ All components initialized successfully[/green]")
-
     async def _wait_for_initial_data(self) -> None:
         """Wait for sufficient market data to begin trading."""
         max_wait_time = 180  # 3 minutes to allow for initial data collection
@@ -1164,206 +1301,282 @@ class TradingEngine:
 
         while True:
             elapsed_time = (datetime.now(UTC) - wait_start).total_seconds()
+
+            # Check timeout
             if elapsed_time > max_wait_time:
-                # Get detailed status before failing
-                if self.market_data is not None:
-                    status = self.market_data.get_data_status()
-                    self.logger.error(
-                        "Timeout waiting for initial market data. Status: %s", status
-                    )
-                else:
-                    self.logger.error(
-                        "Timeout waiting for initial market data. Market data provider not initialized"
-                    )
-                raise RuntimeError(
-                    f"Timeout waiting for initial market data after {max_wait_time}s"
-                )
+                await self._handle_data_timeout()
 
-            # Check for historical data - handle both sync and async providers
-            import inspect
+            # Get market data
+            data = await self._fetch_initial_market_data()
 
-            data = []
-            if self.market_data is not None and hasattr(
-                self.market_data, "get_latest_ohlcv"
-            ):
-                method = self.market_data.get_latest_ohlcv
-                try:
-                    if inspect.iscoroutinefunction(method):
-                        data = await method(limit=500)  # Get more data for 24h check
-                    else:
-                        data = method(limit=500)  # Get more data for 24h check
-
-                    # Safety check - ensure data is not a coroutine or Task
-                    if inspect.iscoroutine(data):
-                        self.logger.warning("Detected coroutine data, awaiting...")
-                        data = await data  # type: ignore[misc]
-                    elif isinstance(data, asyncio.Task):
-                        self.logger.warning("Detected asyncio.Task data, awaiting...")
-                        data = await data
-                    elif hasattr(data, "__await__"):
-                        self.logger.warning("Detected awaitable object, awaiting...")
-                        data = await data  # type: ignore[misc]
-
-                except Exception as e:
-                    self.logger.warning("Error getting market data: %s", e)
-                    data = []
-
-            # Ensure data is a list/sequence before using len()
-            if isinstance(data, asyncio.Task):
-                self.logger.error(
-                    "Data is still an asyncio.Task: %s. This should have been awaited.",
-                    data,
-                )
-                data = []
-            elif inspect.iscoroutine(data):
-                self.logger.error(
-                    "Data is still a coroutine: %s. This should have been awaited.",
-                    data,
-                )
-                data = []
-            elif not isinstance(data, list | tuple):
-                self.logger.warning(
-                    "Unexpected data type: %s, converting to list", type(data)
-                )
-                data = list(data) if data else []
-
+            # Process historical data if not loaded
             if not historical_data_loaded:
-                # Calculate how many candles represent 24 hours
-                interval_seconds = self._get_interval_seconds(self.interval)
-                candles_per_24h = (24 * 60 * 60) // interval_seconds
+                historical_data_loaded = await self._process_historical_data(
+                    data, min_candles_required, require_24h_data
+                )
 
-                if require_24h_data:
-                    # For scalping, we don't need 24h of data - just enough for indicators
-                    if len(data) >= min_candles_required:
-                        hours_available = (len(data) * interval_seconds) / 3600
-                        self.logger.info(
-                            "✅ Loaded %s historical candles (%.1f hours at %s intervals) for scalping analysis",
-                            len(data),
-                            hours_available,
-                            self.interval,
-                        )
-                        historical_data_loaded = True
-                        self.trading_enabled = True
-                    elif len(data) >= 50:
-                        hours_available = (len(data) * interval_seconds) / 3600
-                        self.logger.warning(
-                            "⚠️ Limited data available (%.2f hours, %s candles). "
-                            "Starting with reduced data for scalping...",
-                            hours_available,
-                            len(data),
-                        )
-                        historical_data_loaded = True
-                        self.trading_enabled = (
-                            True  # Enable for scalping with limited data
-                        )
-                elif len(data) >= min_candles_required:
-                    self.logger.info(
-                        "✅ Loaded %s historical candles (minimum %s) for analysis",
-                        len(data),
-                        min_candles_required,
-                    )
-                    historical_data_loaded = True
-                    self.trading_enabled = True
-                elif len(data) >= 50:
-                    # Fallback with warning
-                    self.logger.warning(
-                        "⚠️ Limited historical data available: %s candles. "
-                        "Indicators may be unreliable until more data is accumulated.",
-                        len(data),
-                    )
-                    historical_data_loaded = True
-                    self.trading_enabled = (
-                        False  # Don't enable trading with limited data
-                    )
+            # Check WebSocket data
+            websocket_data_received = self._check_websocket_data(
+                websocket_data_received
+            )
 
-            # Check for WebSocket data
-            if (
-                self.market_data is not None
-                and self.market_data.has_websocket_data()
-                and not websocket_data_received
+            # Check if ready to start trading
+            if await self._check_trading_readiness(
+                historical_data_loaded, websocket_data_received, elapsed_time
             ):
-                self.logger.info("📡 WebSocket is receiving real-time market data")
-                websocket_data_received = True
+                break
 
-            # We're ready when we have sufficient historical data and either:
-            # 1. WebSocket is receiving data, OR
-            # 2. We've waited at least 10 seconds for WebSocket (scalping needs to start fast)
-            if historical_data_loaded:
-                if websocket_data_received:
-                    self.logger.info(
-                        "🚀 Both historical and real-time data available, ready for scalping"
-                    )
-                    self.data_validation_complete = True
-                    break
-                if elapsed_time > 10:
-                    # After 10 seconds, proceed if we have historical data even without WebSocket
-                    self.logger.warning(
-                        "⚠️ Proceeding with historical data only for scalping. WebSocket data not yet received "
-                        "(market may be closed or starting fast for scalping)"
-                    )
-                    self.data_validation_complete = True
-                    break
-
-            # Log progress every 10 seconds
-            if int(elapsed_time) % 10 == 0 and elapsed_time > 0:
-                try:
-                    from .data.realtime_market import RealtimeMarketDataProvider
-
-                    if (
-                        RealtimeMarketDataProvider
-                        and self.market_data is not None
-                        and isinstance(self.market_data, RealtimeMarketDataProvider)
-                    ):
-                        # Real-time provider status
-                        status = self.market_data.get_status()
-                        tick_rate = status.get("tick_rate_per_second", 0)
-                        current_price = status.get("current_price", "N/A")
-
-                        self.logger.info(
-                            "⏳ Waiting for real-time data... Elapsed: %ds\n   📊 Current candles: %s available\n   🌐 WebSocket connected: %s\n   📈 Tick rate: %.1f ticks/sec\n   💰 Current price: $%s\n   ⚡ Trading enabled: %s",
-                            int(elapsed_time),
-                            len(data),
-                            status.get("websocket_connected", False),
-                            tick_rate,
-                            current_price,
-                            self.trading_enabled,
-                        )
-                    else:
-                        # Standard provider status
-                        if self.market_data is not None:
-                            status = self.market_data.get_data_status()
-                        else:
-                            status = {
-                                "connected": False,
-                                "websocket_data_received": False,
-                            }
-                        interval_seconds = self._get_interval_seconds(self.interval)
-                        candles_per_24h = (24 * 60 * 60) // interval_seconds
-                        hours_available = (
-                            (len(data) * interval_seconds) / 3600 if data else 0
-                        )
-
-                        self.logger.info(
-                            "⏳ Waiting for data... Elapsed: %ds\n   📊 Historical: %s/%s candles (%.1f/24 hours)\n   🌐 WebSocket connected: %s\n   📈 WebSocket data: %s\n   💰 Latest price: $%s\n   ⚡ Trading enabled: %s",
-                            int(elapsed_time),
-                            len(data),
-                            candles_per_24h,
-                            hours_available,
-                            status.get("websocket_connected", False),
-                            status.get("websocket_data_received", False),
-                            status.get("latest_price", "N/A"),
-                            self.trading_enabled,
-                        )
-                except ImportError:
-                    # RealtimeMarketDataProvider not available, just log basic info
-                    self.logger.info(
-                        "⏳ Waiting for data... Elapsed: %ds\n   📊 Current candles: %s available\n   ⚡ Trading enabled: %s",
-                        int(elapsed_time),
-                        len(data),
-                        self.trading_enabled,
-                    )
-
+            # Log progress periodically
+            await self._log_data_wait_progress(elapsed_time, data)
             await asyncio.sleep(1)
+
+    async def _handle_data_timeout(self):
+        """Handle timeout when waiting for initial data."""
+        if self.market_data is not None:
+            status = self.market_data.get_data_status()
+            self.logger.error(
+                "Timeout waiting for initial market data. Status: %s", status
+            )
+        else:
+            self.logger.error(
+                "Timeout waiting for initial market data. Market data provider not initialized"
+            )
+        raise RuntimeError("Timeout waiting for initial market data after 180s")
+
+    async def _fetch_initial_market_data(self) -> list:
+        """Fetch initial market data with async handling."""
+        import inspect
+
+        data = []
+        if self.market_data is not None and hasattr(
+            self.market_data, "get_latest_ohlcv"
+        ):
+            method = self.market_data.get_latest_ohlcv
+            try:
+                if inspect.iscoroutinefunction(method):
+                    data = await method(limit=500)
+                else:
+                    data = method(limit=500)
+
+                # Handle async objects
+                data = await self._resolve_market_data_async(data)
+
+            except Exception as e:
+                self.logger.warning("Error getting market data: %s", e)
+                data = []
+
+        # Validate data type
+        return self._validate_market_data_type(data)
+
+    async def _resolve_market_data_async(self, data):
+        """Resolve various async data types for initial data."""
+        import asyncio
+        import inspect
+
+        if inspect.iscoroutine(data):
+            self.logger.warning("Detected coroutine data, awaiting...")
+            return await data
+        elif isinstance(data, asyncio.Task):
+            self.logger.warning("Detected asyncio.Task data, awaiting...")
+            return await data
+        elif hasattr(data, "__await__"):
+            self.logger.warning("Detected awaitable object, awaiting...")
+            return await data
+
+        return data
+
+    def _validate_market_data_type(self, data) -> list:
+        """Validate and convert market data to proper type."""
+        import asyncio
+        import inspect
+
+        if isinstance(data, asyncio.Task):
+            self.logger.error(
+                "Data is still an asyncio.Task: %s. This should have been awaited.",
+                data,
+            )
+            return []
+        elif inspect.iscoroutine(data):
+            self.logger.error(
+                "Data is still a coroutine: %s. This should have been awaited.", data
+            )
+            return []
+        elif not isinstance(data, (list, tuple)):
+            self.logger.warning(
+                "Unexpected data type: %s, converting to list", type(data)
+            )
+            return list(data) if data else []
+
+        return data
+
+    async def _process_historical_data(
+        self, data: list, min_candles_required: int, require_24h_data: bool
+    ) -> bool:
+        """Process historical data and determine if sufficient."""
+        interval_seconds = self._get_interval_seconds(self.interval)
+
+        if require_24h_data:
+            return self._process_24h_data_requirement(
+                data, min_candles_required, interval_seconds
+            )
+        else:
+            return self._process_minimum_data_requirement(data, min_candles_required)
+
+    def _process_24h_data_requirement(
+        self, data: list, min_candles_required: int, interval_seconds: int
+    ) -> bool:
+        """Process data when 24h requirement is enabled."""
+        if len(data) >= min_candles_required:
+            hours_available = (len(data) * interval_seconds) / 3600
+            self.logger.info(
+                "✅ Loaded %s historical candles (%.1f hours at %s intervals) for scalping analysis",
+                len(data),
+                hours_available,
+                self.interval,
+            )
+            self.trading_enabled = True
+            return True
+        elif len(data) >= 50:
+            hours_available = (len(data) * interval_seconds) / 3600
+            self.logger.warning(
+                "⚠️ Limited data available (%.2f hours, %s candles). "
+                "Starting with reduced data for scalping...",
+                hours_available,
+                len(data),
+            )
+            self.trading_enabled = True
+            return True
+
+        return False
+
+    def _process_minimum_data_requirement(
+        self, data: list, min_candles_required: int
+    ) -> bool:
+        """Process data when only minimum requirement is set."""
+        if len(data) >= min_candles_required:
+            self.logger.info(
+                "✅ Loaded %s historical candles (minimum %s) for analysis",
+                len(data),
+                min_candles_required,
+            )
+            self.trading_enabled = True
+            return True
+        elif len(data) >= 50:
+            self.logger.warning(
+                "⚠️ Limited historical data available: %s candles. "
+                "Indicators may be unreliable until more data is accumulated.",
+                len(data),
+            )
+            self.trading_enabled = False
+            return True
+
+        return False
+
+    def _check_websocket_data(self, websocket_data_received: bool) -> bool:
+        """Check if WebSocket data is available."""
+        if (
+            self.market_data is not None
+            and self.market_data.has_websocket_data()
+            and not websocket_data_received
+        ):
+            self.logger.info("📡 WebSocket is receiving real-time market data")
+            return True
+
+        return websocket_data_received
+
+    async def _check_trading_readiness(
+        self,
+        historical_data_loaded: bool,
+        websocket_data_received: bool,
+        elapsed_time: float,
+    ) -> bool:
+        """Check if ready to start trading."""
+        if not historical_data_loaded:
+            return False
+
+        if websocket_data_received:
+            self.logger.info(
+                "🚀 Both historical and real-time data available, ready for scalping"
+            )
+            self.data_validation_complete = True
+            return True
+
+        if elapsed_time > 10:
+            self.logger.warning(
+                "⚠️ Proceeding with historical data only for scalping. WebSocket data not yet received "
+                "(market may be closed or starting fast for scalping)"
+            )
+            self.data_validation_complete = True
+            return True
+
+        return False
+
+    async def _log_data_wait_progress(self, elapsed_time: float, data: list):
+        """Log progress every 10 seconds."""
+        if int(elapsed_time) % 10 != 0 or elapsed_time <= 0:
+            return
+
+        try:
+            await self._log_realtime_provider_status(elapsed_time, data)
+        except ImportError:
+            await self._log_basic_provider_status(elapsed_time, data)
+
+    async def _log_realtime_provider_status(self, elapsed_time: float, data: list):
+        """Log status for realtime provider."""
+        from .data.realtime_market import RealtimeMarketDataProvider
+
+        if (
+            RealtimeMarketDataProvider
+            and self.market_data is not None
+            and isinstance(self.market_data, RealtimeMarketDataProvider)
+        ):
+            status = self.market_data.get_status()
+            tick_rate = status.get("tick_rate_per_second", 0)
+            current_price = status.get("current_price", "N/A")
+
+            self.logger.info(
+                "⏳ Waiting for real-time data... Elapsed: %ds\n   📊 Current candles: %s available\n   🌐 WebSocket connected: %s\n   📈 Tick rate: %.1f ticks/sec\n   💰 Current price: $%s\n   ⚡ Trading enabled: %s",
+                int(elapsed_time),
+                len(data),
+                status.get("websocket_connected", False),
+                tick_rate,
+                current_price,
+                self.trading_enabled,
+            )
+        else:
+            await self._log_standard_provider_status(elapsed_time, data)
+
+    async def _log_standard_provider_status(self, elapsed_time: float, data: list):
+        """Log status for standard provider."""
+        if self.market_data is not None:
+            status = self.market_data.get_data_status()
+        else:
+            status = {"connected": False, "websocket_data_received": False}
+
+        interval_seconds = self._get_interval_seconds(self.interval)
+        candles_per_24h = (24 * 60 * 60) // interval_seconds
+        hours_available = (len(data) * interval_seconds) / 3600 if data else 0
+
+        self.logger.info(
+            "⏳ Waiting for data... Elapsed: %ds\n   📊 Historical: %s/%s candles (%.1f/24 hours)\n   🌐 WebSocket connected: %s\n   📈 WebSocket data: %s\n   💰 Latest price: $%s\n   ⚡ Trading enabled: %s",
+            int(elapsed_time),
+            len(data),
+            candles_per_24h,
+            hours_available,
+            status.get("websocket_connected", False),
+            status.get("websocket_data_received", False),
+            status.get("latest_price", "N/A"),
+            self.trading_enabled,
+        )
+
+    async def _log_basic_provider_status(self, elapsed_time: float, data: list):
+        """Log basic status when RealtimeMarketDataProvider not available."""
+        self.logger.info(
+            "⏳ Waiting for data... Elapsed: %ds\n   📊 Current candles: %s available\n   ⚡ Trading enabled: %s",
+            int(elapsed_time),
+            len(data),
+            self.trading_enabled,
+        )
 
     def _display_startup_summary(self) -> None:
         """Display trading engine startup summary."""
@@ -1401,10 +1614,10 @@ class TradingEngine:
                 )
         except ImportError:
             # RealtimeMarketDataProvider not available
-            RealtimeMarketDataProvider = None
+            realtime_market_data_provider = None
 
-        if not RealtimeMarketDataProvider or not isinstance(
-            self.market_data, RealtimeMarketDataProvider
+        if not realtime_market_data_provider or not isinstance(
+            self.market_data, realtime_market_data_provider
         ):
             # Standard provider status
             if self.market_data is None:
@@ -1476,23 +1689,44 @@ class TradingEngine:
             f"Max size: {self.settings.trading.max_size_pct}%",
         )
 
+        # Adaptive timing configuration
+        timing_status = "✓ Optimized"
+        timing_details = (
+            f"{self.settings.system.update_frequency_seconds:.1f}s frequency"
+        )
+
+        # Add adaptive timing information if available
+        if hasattr(self, "_adaptive_timing_info") and self._adaptive_timing_info:
+            timing_info = self._adaptive_timing_info
+            timing_details = (
+                f"{timing_info['new']:.1f}s frequency "
+                f"(adapted from {timing_info['original']:.1f}s for {timing_info['reason']})"
+            )
+            # Log the timing adaptation details
+            self.logger.info(
+                "🚀 Adaptive Timing Applied: %s interval → %.1fs main loop frequency (%s)",
+                timing_info["interval"],
+                timing_info["new"],
+                timing_info["reason"],
+            )
+        elif hasattr(self, "_adaptive_timing_error"):
+            timing_status = "⚠ Default"
+            timing_details = f"{self.settings.system.update_frequency_seconds:.1f}s frequency (adaptive timing failed)"
+            self.logger.warning(
+                "Adaptive timing configuration failed: %s", self._adaptive_timing_error
+            )
+
+        table.add_row(
+            "Loop Timing",
+            timing_status,
+            timing_details,
+        )
+
         console.print(table)
         console.print()
 
-    async def _main_trading_loop(self) -> None:
-        """
-        Main trading loop that runs continuously.
-
-        Processes market data, calculates indicators, gets LLM decisions,
-        validates trades, applies risk management, and executes orders.
-        """
-        self.logger.info("Starting main trading loop...")
-        self._running = True
-
-        loop_count = 0
-        last_status_log = datetime.now(UTC)
-
-        # Publish initial performance state to dashboard
+    async def _initialize_trading_loop(self) -> None:
+        """Initialize the trading loop with performance metrics."""
         if self.websocket_publisher and self.websocket_publisher.connected:
             # Get initial price if available
             initial_price = Decimal(0)
@@ -1508,686 +1742,837 @@ class TradingEngine:
 
             await self._publish_performance_metrics(initial_price)
 
+    async def _handle_market_data_connection(self) -> bool:
+        """Check market data connection and handle reconnection if needed.
+
+        Returns:
+            True if connection is ready, False if should continue to next iteration
+        """
+        if self.market_data is None:
+            self.logger.error(
+                "Market data provider not initialized, cannot continue trading"
+            )
+            return False
+
+        if not self.market_data.is_connected():
+            self.logger.warning(
+                "Market data connection lost, checking reconnection status..."
+            )
+            # Check if WebSocket handler is already reconnecting
+            data_status = self.market_data.get_data_status()
+            if data_status.get("reconnect_attempts", 0) > 0:
+                self.logger.info(
+                    "WebSocket handler is already attempting reconnection, waiting..."
+                )
+                await asyncio.sleep(5)  # Wait for WebSocket reconnection
+                return False
+            # Only attempt manual reconnection if WebSocket handler isn't trying
+            self.logger.warning("Attempting manual reconnection...")
+            if self.market_data is not None:
+                await self.market_data.connect()
+            return False
+
+        return True
+
+    async def _main_trading_loop(self) -> None:
+        """
+        Main trading loop that runs continuously.
+
+        Processes market data, calculates indicators, gets LLM decisions,
+        validates trades, applies risk management, and executes orders.
+        """
+        self.logger.info("Starting main trading loop...")
+        self._running = True
+
+        loop_count = 0
+        last_status_log = datetime.now(UTC)
+
+        # Initialize loop with performance metrics
+        await self._initialize_trading_loop()
+
+        # Setup trading environment
+        loop_context = await self._setup_trading_environment()
+
         while self._running and not self._shutdown_requested:
             try:
                 loop_start = datetime.now(UTC)
                 loop_count += 1
 
-                # Check if we have fresh market data
-                if self.market_data is None:
-                    self.logger.error(
-                        "Market data provider not initialized, cannot continue trading"
-                    )
-                    break
+                # Process market data and get trading decision
+                trade_result = await self._process_trading_iteration(
+                    loop_context, loop_count, loop_start
+                )
 
-                if not self.market_data.is_connected():
-                    self.logger.warning(
-                        "Market data connection lost, checking reconnection status..."
-                    )
-                    # Check if WebSocket handler is already reconnecting
-                    data_status = self.market_data.get_data_status()
-                    if data_status.get("reconnect_attempts", 0) > 0:
-                        self.logger.info(
-                            "WebSocket handler is already attempting reconnection, waiting..."
-                        )
-                        await asyncio.sleep(5)  # Wait for WebSocket reconnection
-                        continue
-                    # Only attempt manual reconnection if WebSocket handler isn't trying
-                    self.logger.warning("Attempting manual reconnection...")
-                    if self.market_data is not None:
-                        await self.market_data.connect()
+                if not trade_result:
                     continue
 
-                # Get latest market data - handle different provider types
-                import inspect
-
-                try:
-                    from .data.realtime_market import RealtimeMarketDataProvider
-
-                    is_realtime_provider = RealtimeMarketDataProvider and isinstance(
-                        self.market_data, RealtimeMarketDataProvider
-                    )
-                except ImportError:
-                    RealtimeMarketDataProvider = None
-                    is_realtime_provider = False
-
-                if is_realtime_provider and self.market_data is not None:
-                    # Real-time provider - get candles for the current trading interval
-                    interval_seconds = self._get_interval_seconds(self.interval)
-
-                    # Type check: ensure we have the right provider type
-                    if hasattr(self.market_data, "get_candle_history"):
-                        latest_data = self.market_data.get_candle_history(
-                            interval_seconds, limit=200
-                        )
-
-                        # If we don't have enough historical data, try to get completed candles
-                        if len(latest_data) < 50 and hasattr(
-                            self.market_data, "tick_aggregator"
-                        ):
-                            # Force completion of current candles and retry
-                            self.market_data.tick_aggregator.force_complete_candles(
-                                self.symbol
-                            )
-                            latest_data = self.market_data.get_candle_history(
-                                interval_seconds, limit=200
-                            )
-                    else:
-                        # Fallback to standard provider method
-                        latest_data = []
-
-                elif self.market_data is not None and hasattr(
-                    self.market_data, "get_latest_ohlcv"
-                ):
-                    method = self.market_data.get_latest_ohlcv
-                    try:
-                        if inspect.iscoroutinefunction(method):
-                            latest_data = await method(limit=200)
-                        else:
-                            latest_data = method(limit=200)
-
-                        # Safety check - ensure data is not a coroutine or Task
-                        if inspect.iscoroutine(latest_data):
-                            self.logger.warning(
-                                "Detected coroutine data in main loop, awaiting..."
-                            )
-                            latest_data = await latest_data  # type: ignore[misc]
-                        elif isinstance(latest_data, asyncio.Task):
-                            self.logger.warning(
-                                "Detected asyncio.Task data in main loop, awaiting..."
-                            )
-                            latest_data = await latest_data
-                        elif hasattr(latest_data, "__await__"):
-                            self.logger.warning(
-                                "Detected awaitable object in main loop, awaiting..."
-                            )
-                            latest_data = await latest_data  # type: ignore[misc]
-                    except Exception as e:
-                        self.logger.warning(
-                            "Error getting market data in main loop: %s", e
-                        )
-                        latest_data = []
-                else:
-                    latest_data = []
-
-                # Ensure latest_data is a list/sequence before using it
-                if isinstance(latest_data, asyncio.Task):
-                    self.logger.error(
-                        "latest_data is still an asyncio.Task: %s. This should have been awaited.",
-                        latest_data,
-                    )
-                    latest_data = []
-                elif inspect.iscoroutine(latest_data):
-                    self.logger.error(
-                        "latest_data is still a coroutine: %s. This should have been awaited.",
-                        latest_data,
-                    )
-                    latest_data = []
-                elif not isinstance(latest_data, list | tuple):
-                    self.logger.warning(
-                        "Unexpected latest_data type: %s, converting to list",
-                        type(latest_data),
-                    )
-                    latest_data = list(latest_data) if latest_data else []
-
-                if not latest_data:
-                    self.logger.warning("No market data available, waiting...")
-                    await asyncio.sleep(5)
-                    continue
-
-                # Track market data processing performance
-                with self.performance_monitor.track_operation(
-                    "market_data_processing",
-                    {
-                        "symbol": self.actual_trading_symbol,
-                        "data_points": str(len(latest_data)),
-                    },
-                ):
-                    current_price = latest_data[-1].close
-
-                    # Publish market data to dashboard
-                    if self.websocket_publisher:
-                        await self.websocket_publisher.publish_market_data(
-                            symbol=self.actual_trading_symbol,
-                            price=float(current_price),
-                            timestamp=latest_data[-1].timestamp,
-                        )
-
-                # Calculate technical indicators - handle different provider types
-                if self.market_data is None:
-                    self.logger.error(
-                        "Market data provider not available for indicator calculation"
-                    )
-                    continue
-
-                # At this point, market_data is guaranteed to be non-None
-                market_data_provider = self.market_data
-
-                # All providers use standard to_dataframe signature
-                df = market_data_provider.to_dataframe(limit=200)
-
-                # Initialize dominance candles
-                dominance_candles = None
-
-                # Generate dominance candlesticks for technical analysis if not already done
-                if dominance_candles is None and self.dominance_provider:
-                    dominance_history = self.dominance_provider.get_dominance_history(
-                        hours=2
-                    )
-                    if (
-                        len(dominance_history) >= 6
-                    ):  # Need at least 6 snapshots for 3-minute candles
-                        try:
-                            candle_builder = DominanceCandleBuilder(dominance_history)
-                            dominance_candles = candle_builder.build_candles(
-                                interval="3T"
-                            )
-                            # Keep only the last 20 candles for analysis
-                            dominance_candles = (
-                                dominance_candles[-20:]
-                                if len(dominance_candles) > 20
-                                else dominance_candles
-                            )
-                            self.logger.debug(
-                                "Generated %s dominance candles for VuManChu analysis",
-                                len(dominance_candles),
-                            )
-                        except Exception as e:
-                            self.logger.warning(
-                                "Failed to build dominance candles for VuManChu: %s", e
-                            )
-                            dominance_candles = (
-                                None  # Ensure variable is properly reset on error
-                            )
-
-                # Validate data sufficiency before indicator calculation
-                if len(df) < 100:
-                    self.logger.warning(
-                        "Insufficient data for reliable indicators: %s candles. Using fallback values until more data is available.",
-                        len(df),
-                    )
-                    indicator_state = self._get_fallback_indicator_state()
-                else:
-                    # Calculate indicators with dominance candle support - add error boundary
-                    try:
-                        # Track indicator calculation performance
-                        with self.performance_monitor.track_operation(
-                            "indicator_calculation",
-                            {
-                                "candles": str(len(df)),
-                                "dominance_available": str(
-                                    dominance_candles is not None
-                                ),
-                            },
-                        ):
-                            df_with_indicators = self.indicator_calc.calculate_all(
-                                df, dominance_candles=dominance_candles
-                            )
-                            indicator_state = self.indicator_calc.get_latest_state(
-                                df_with_indicators
-                            )
-
-                        # Publish indicator data to dashboard
-                        if self.websocket_publisher:
-                            await self.websocket_publisher.publish_indicator_data(
-                                symbol=self.actual_trading_symbol,
-                                indicators={
-                                    "cipher_a": indicator_state.get("cipher_a", {}),
-                                    "cipher_b": indicator_state.get("cipher_b", {}),
-                                    "wave_trend_1": indicator_state.get("wave_trend_1"),
-                                    "wave_trend_2": indicator_state.get("wave_trend_2"),
-                                    "rsi": indicator_state.get("rsi"),
-                                    "stoch_rsi": indicator_state.get("stoch_rsi"),
-                                    "schaff_trend": indicator_state.get("schaff_trend"),
-                                    "rsimfi": indicator_state.get("rsimfi"),
-                                },
-                            )
-                    except Exception as e:
-                        self.logger.warning(
-                            "Indicator calculation failed: %s, using fallback values", e
-                        )
-                        # Use fallback indicator state
-                        indicator_state = self._get_fallback_indicator_state()
-
-                        # Publish fallback indicator data to dashboard
-                        if self.websocket_publisher:
-                            await self.websocket_publisher.publish_indicator_data(
-                                symbol=self.actual_trading_symbol,
-                                indicators=indicator_state,
-                            )
-
-                # Prepare indicator data
-                indicator_dict = {
-                    "timestamp": datetime.now(UTC),
-                    "cipher_a_dot": indicator_state.get("cipher_a", {}).get(
-                        "trend_dot"
-                    ),
-                    "cipher_b_wave": indicator_state.get("cipher_b", {}).get("wave"),
-                    "cipher_b_money_flow": indicator_state.get("cipher_b", {}).get(
-                        "money_flow"
-                    ),
-                    "rsi": indicator_state.get("cipher_a", {}).get("rsi"),
-                    "ema_fast": indicator_state.get("cipher_a", {}).get("ema_fast"),
-                    "ema_slow": indicator_state.get("cipher_a", {}).get("ema_slow"),
-                    "vwap": indicator_state.get("cipher_b", {}).get("vwap"),
-                }
-
-                # Add VuManChu dominance analysis if available
-                dominance_analysis = indicator_state.get("dominance_analysis", {})
-                if dominance_analysis:
-                    # Add key dominance indicators to the main indicator dict
-                    indicator_dict.update(
-                        {
-                            "dominance_cipher_a_signal": dominance_analysis.get(
-                                "cipher_a_signal"
-                            ),
-                            "dominance_cipher_b_signal": dominance_analysis.get(
-                                "cipher_b_signal"
-                            ),
-                            "dominance_sentiment": dominance_analysis.get("sentiment"),
-                            "dominance_price_divergence": dominance_analysis.get(
-                                "price_divergence"
-                            ),
-                            "dominance_trend": dominance_analysis.get("trend"),
-                            "dominance_wt1": dominance_analysis.get("wt1"),
-                            "dominance_wt2": dominance_analysis.get("wt2"),
-                        }
-                    )
-                    self.logger.debug(
-                        "Added dominance analysis indicators: %s",
-                        list(dominance_analysis.keys()),
-                    )
-
-                # Add dominance data to indicators if available - add error boundary
-                dominance_obj = None
-                if self.dominance_provider:
-                    try:
-                        dominance_data = self.dominance_provider.get_latest_dominance()
-                        if dominance_data:
-                            # Add dominance metrics to indicator dict - validate values
-                            dominance_metrics = {
-                                "usdt_dominance": (
-                                    dominance_data.usdt_dominance
-                                    if dominance_data.usdt_dominance is not None
-                                    else 0.0
-                                ),
-                                "usdc_dominance": (
-                                    dominance_data.usdc_dominance
-                                    if dominance_data.usdc_dominance is not None
-                                    else 0.0
-                                ),
-                                "stablecoin_dominance": (
-                                    dominance_data.stablecoin_dominance
-                                    if dominance_data.stablecoin_dominance is not None
-                                    else 0.0
-                                ),
-                                "dominance_trend": (
-                                    dominance_data.dominance_24h_change
-                                    if dominance_data.dominance_24h_change is not None
-                                    else 0.0
-                                ),
-                                "dominance_rsi": (
-                                    dominance_data.dominance_rsi
-                                    if dominance_data.dominance_rsi is not None
-                                    else 50.0
-                                ),
-                                "stablecoin_velocity": (
-                                    dominance_data.stablecoin_velocity
-                                    if dominance_data.stablecoin_velocity is not None
-                                    else 1.0
-                                ),
-                            }
-                            indicator_dict.update(dominance_metrics)
-
-                            # Get market sentiment based on dominance
-                            try:
-                                sentiment_analysis = (
-                                    self.dominance_provider.get_market_sentiment()
-                                )
-                                indicator_dict["market_sentiment"] = (
-                                    sentiment_analysis.get("sentiment", "NEUTRAL")
-                                )
-                            except Exception as e:
-                                self.logger.warning(
-                                    "Failed to get market sentiment: %s", e
-                                )
-                                indicator_dict["market_sentiment"] = "NEUTRAL"
-
-                            # Store dominance object for MarketState
-                            dominance_obj = dominance_data
-                    except Exception as e:
-                        self.logger.warning(
-                            "Failed to process dominance data: %s, using default values",
-                            e,
-                        )
-                        # Add default dominance values
-                        indicator_dict.update(
-                            {
-                                "usdt_dominance": 0.0,
-                                "usdc_dominance": 0.0,
-                                "stablecoin_dominance": 0.0,
-                                "dominance_trend": 0.0,
-                                "dominance_rsi": 50.0,
-                                "stablecoin_velocity": 1.0,
-                                "market_sentiment": "NEUTRAL",
-                            }
-                        )
-
-                # Calculate how many candles represent 24 hours based on interval
-                interval_seconds = self._get_interval_seconds(self.interval)
-                candles_per_24h = min(
-                    (24 * 60 * 60) // interval_seconds, len(latest_data)
+                # Handle periodic maintenance tasks
+                await self._handle_periodic_tasks(
+                    loop_count, last_status_log, loop_context
                 )
 
-                # Get the last 24 hours of data (or all available if less)
-                historical_data = latest_data[-candles_per_24h:]
-
-                # Create market state for LLM analysis with enhanced historical context
-                market_state = MarketState(
-                    symbol=self.symbol,
-                    interval=self.interval,
-                    timestamp=datetime.now(UTC),
-                    current_price=current_price,
-                    ohlcv_data=historical_data,  # Full 24h history
-                    indicators=IndicatorData(**indicator_dict),
-                    current_position=self.current_position,
-                    dominance_data=dominance_obj,
-                    dominance_candles=dominance_candles,
+                # Calculate and apply sleep timing
+                await self._handle_loop_timing(
+                    loop_start, loop_context["target_frequency"]
                 )
-
-                # Check if trading is enabled and enough time has passed since last trade
-                if not self._can_trade_now():
-                    await asyncio.sleep(1)
-                    continue
-
-                # Mark that we're analyzing this candle (momentum trading: analyze on candle close)
-                latest_candle = latest_data[-1]
-                # Ensure the timestamp has timezone info
-                candle_timestamp = latest_candle.timestamp
-                if candle_timestamp.tzinfo is None:
-                    candle_timestamp = candle_timestamp.replace(tzinfo=UTC)
-                self.last_candle_analysis_time = candle_timestamp
-
-                self.logger.info(
-                    "⚡ Scalping analysis: %s candle at %s - Price: $%s",
-                    self.interval,
-                    latest_candle.timestamp.strftime("%H:%M:%S.%f")[:-3],
-                    current_price,
-                )
-
-                # Get LLM trading decision with performance tracking
-                self.logger.debug(
-                    "🤔 Requesting trading decision from %s LLM Agent",
-                    "Memory-Enhanced" if self._memory_available else "Standard",
-                )
-                with self.performance_monitor.track_operation(
-                    "llm_response",
-                    {
-                        "agent_type": (
-                            "memory_enhanced" if self._memory_available else "standard"
-                        ),
-                        "symbol": self.symbol,
-                    },
-                ):
-                    trade_action = await self.llm_agent.analyze_market(market_state)
-
-                # Log structured trade decision with full context
-                memory_context = None
-                if hasattr(self.llm_agent, "_last_memory_context"):
-                    memory_context = self.llm_agent._last_memory_context
-
-                self.trade_logger.log_trade_decision(
-                    market_state=market_state,
-                    trade_action=trade_action,
-                    experience_id=None,  # Will be updated after MCP recording
-                    memory_context=memory_context,
-                )
-
-                # Publish LLM decision to dashboard
-                if self.websocket_publisher:
-                    await self.websocket_publisher.publish_ai_decision(
-                        action=trade_action.action,
-                        reasoning=trade_action.rationale,
-                        confidence=trade_action.size_pct
-                        / 100.0,  # Convert percentage to decimal
-                    )
-
-                    # Also publish detailed trading decision
-                    await self.websocket_publisher.publish_trading_decision(
-                        trade_action=trade_action,
-                        symbol=self.symbol,
-                        current_price=float(current_price),
-                        context={
-                            "request_id": f"trade_{int(datetime.now(UTC).timestamp())}",
-                            "confidence": trade_action.size_pct / 100.0,
-                            "indicators": {
-                                "cipher_a": indicator_state.get("cipher_a", {}),
-                                "cipher_b": indicator_state.get("cipher_b", {}),
-                                "wave_trend_1": indicator_state.get("wave_trend_1"),
-                                "wave_trend_2": indicator_state.get("wave_trend_2"),
-                                "rsi": indicator_state.get("rsi"),
-                                "stoch_rsi": indicator_state.get("stoch_rsi"),
-                            },
-                            "risk_analysis": {
-                                "current_price": float(current_price),
-                                "position_size": trade_action.size_pct / 100.0,
-                                "leverage": self.settings.trading.leverage,
-                            },
-                        },
-                    )
-
-                # Record trading decision in memory if MCP is enabled
-                experience_id = None
-                if self.experience_manager and trade_action.action != "HOLD":
-                    try:
-                        experience_id = (
-                            await self.experience_manager.record_trading_decision(
-                                market_state, trade_action
-                            )
-                        )
-
-                        # Update trade decision log with experience ID
-                        if experience_id:
-                            self.trade_logger.log_trade_decision(
-                                market_state=market_state,
-                                trade_action=trade_action,
-                                experience_id=experience_id,
-                                memory_context=memory_context,
-                            )
-                    except Exception as e:
-                        self.logger.warning("Failed to record trading decision: %s", e)
-
-                # LLM has final say - if it says LONG/SHORT, execute immediately
-                if trade_action.action in ["LONG", "SHORT"]:
-                    # Validate the trade action for basic structure only
-                    validated_action = self.validator.validate(trade_action)
-
-                    self.logger.info(
-                        "Loop %s: Price=$%s | LLM=%s | Action=%s (%s%%) | Risk=LLM_OVERRIDE - AI has final say",
-                        loop_count,
-                        current_price,
-                        trade_action.action,
-                        validated_action.action,
-                        validated_action.size_pct,
-                    )
-
-                    # Execute LLM decision immediately without risk management filtering
-                    await self._execute_trade(
-                        validated_action, current_price, market_state, experience_id
-                    )
-                    final_action = validated_action
-
-                    # Update last trade time for interval control
-                    self.last_trade_time = datetime.now(UTC)
-
-                else:
-                    # For HOLD or CLOSE actions, apply normal risk management
-                    validated_action = self.validator.validate(trade_action)
-
-                    # Apply risk management for non-directional trades
-                    risk_approved, final_action, risk_reason = (
-                        self.risk_manager.evaluate_risk(
-                            validated_action, self.current_position, current_price
-                        )
-                    )
-
-                    self.logger.info(
-                        "Loop %s: Price=$%s | LLM=%s | Action=%s (%s%%) | Risk=%s",
-                        loop_count,
-                        current_price,
-                        trade_action.action,
-                        final_action.action,
-                        final_action.size_pct,
-                        risk_reason,
-                    )
-
-                    # Execute trade if approved
-                    if risk_approved and final_action.action != "HOLD":
-                        await self._execute_trade(
-                            final_action, current_price, market_state, experience_id
-                        )
-
-                        # Update last trade time for interval control
-                        self.last_trade_time = datetime.now(UTC)
-
-                # Update position tracking and risk metrics
-                await self._update_position_tracking(current_price)
-
-                # Display periodic status updates
-                if loop_count % 10 == 0:  # Every 10 loops
-                    self._display_status_update(loop_count, current_price, final_action)
-
-                    # Publish performance metrics to dashboard
-                    await self._publish_performance_metrics(current_price)
-
-                # Log heartbeat to confirm loop is running
-                if loop_count % 5 == 0:
-                    self.logger.debug(
-                        "Trading loop heartbeat - iteration %s", loop_count
-                    )
-
-                # Log pattern statistics every 100 loops if memory is enabled
-                if (
-                    loop_count % 100 == 0
-                    and self.memory_server
-                    and self._memory_available
-                ):
-                    try:
-                        pattern_stats = (
-                            await self.memory_server.get_pattern_statistics()
-                        )
-                        if pattern_stats:
-                            # Log structured pattern statistics
-                            self.trade_logger.log_pattern_statistics(pattern_stats)
-
-                            self.logger.info(
-                                "📊 === MCP Pattern Performance Update ==="
-                            )
-                            sorted_patterns = sorted(
-                                pattern_stats.items(),
-                                key=lambda x: x[1]["success_rate"] * x[1]["count"],
-                                reverse=True,
-                            )[:5]
-                            for pattern, stats in sorted_patterns:
-                                if (
-                                    stats["count"] >= 2
-                                ):  # Show patterns with at least 2 samples
-                                    self.logger.info(
-                                        "  📈 %s: %.1f%% win rate | %s trades | Avg PnL: $%.2f",
-                                        pattern,
-                                        stats["success_rate"] * 100,
-                                        stats["count"],
-                                        stats["avg_pnl"],
-                                    )
-                    except Exception as e:
-                        self.logger.debug(
-                            "Could not retrieve pattern statistics: %s", e
-                        )
-
-                # Periodic status logging (every 2 minutes)
-                if (datetime.now(UTC) - last_status_log).total_seconds() > 120:
-                    if self.market_data is not None:
-                        data_status = self.market_data.get_data_status()
-                        self.logger.info(
-                            "🔄 Trading Status: Loop #%s | WebSocket: %s | Latest Price: $%s | OmniSearch: %s",
-                            loop_count,
-                            "✓" if data_status.get("websocket_connected") else "✗",
-                            data_status.get("latest_price", "N/A"),
-                            (
-                                "✓ Active"
-                                if hasattr(self, "omnisearch_client")
-                                else "✗ Disabled"
-                            ),
-                        )
-                    else:
-                        self.logger.info(
-                            "🔄 Trading Status: Loop #%s | Market Data: ✗ Not Initialized | OmniSearch: %s",
-                            loop_count,
-                            (
-                                "✓ Active"
-                                if hasattr(self, "omnisearch_client")
-                                else "✗ Disabled"
-                            ),
-                        )
-                    last_status_log = datetime.now(UTC)
-
-                # Update paper trading performance periodically (every 10 loops or ~150 seconds)
-                if self.dry_run and self.paper_account and loop_count % 10 == 0:
-                    try:
-                        with self.performance_monitor.track_operation(
-                            "paper_trading_update", {"loop_count": str(loop_count)}
-                        ):
-                            self.paper_account.update_daily_performance()
-
-                            # Collect paper trading specific metrics using the new method
-                            from .performance_monitor import PerformanceMetric
-
-                            performance_metrics = (
-                                self.paper_account.get_performance_metrics_for_monitor()
-                            )
-
-                            # Add all paper trading metrics to performance monitor
-                            for metric_data in performance_metrics:
-                                metric = PerformanceMetric(
-                                    name=metric_data["name"],
-                                    value=float(metric_data["value"]),
-                                    timestamp=metric_data["timestamp"],
-                                    unit=metric_data["unit"],
-                                    tags=metric_data["tags"],
-                                )
-                                self.performance_monitor.metrics_collector.add_metric(
-                                    metric
-                                )
-
-                        self.logger.debug(
-                            "Updated paper trading performance and metrics at loop %s",
-                            loop_count,
-                        )
-                    except Exception as e:
-                        self.logger.warning(
-                            "Failed to update paper trading performance: %s", e
-                        )
-
-                # Calculate sleep time to maintain update frequency
-                loop_duration = (datetime.now(UTC) - loop_start).total_seconds()
-                sleep_time = max(
-                    0, self.settings.system.update_frequency_seconds - loop_duration
-                )
-
-                if sleep_time > 0:
-                    await asyncio.sleep(sleep_time)
 
             except Exception as e:
-                self.logger.exception("Error in trading loop")
-                console.print(f"[red]Loop error: {e}[/red]")
-
-                # Implement exponential backoff for error recovery
-                error_sleep = min(30, 1 * (loop_count % 5 + 1))
-                self.logger.info("Waiting %ds before retry...", error_sleep)
-                await asyncio.sleep(error_sleep)
+                await self._handle_loop_error(e, loop_count, loop_context)
                 continue
 
         self.logger.info("Trading loop stopped")
+
+    async def _setup_trading_environment(self) -> dict:
+        """Setup trading environment and return context."""
+        target_frequency = self.settings.system.update_frequency_seconds
+        is_high_frequency = target_frequency <= 1.0
+        interval_seconds = self._get_interval_seconds(self.interval)
+
+        # Cache provider type to reduce overhead
+        realtime_provider_class = await self._get_realtime_provider_class()
+        is_realtime_provider = realtime_provider_class is not None and isinstance(
+            self.market_data, realtime_provider_class
+        )
+
+        if is_high_frequency:
+            self.logger.info(
+                "🚀 High-frequency mode enabled: %.1fs interval with %.1fs loop frequency",
+                interval_seconds,
+                target_frequency,
+            )
+
+        return {
+            "target_frequency": target_frequency,
+            "is_high_frequency": is_high_frequency,
+            "interval_seconds": interval_seconds,
+            "is_realtime_provider": is_realtime_provider,
+        }
+
+    async def _get_realtime_provider_class(self):
+        """Get realtime provider class with error handling."""
+        try:
+            from .data.realtime_market import RealtimeMarketDataProvider
+
+            return RealtimeMarketDataProvider
+        except ImportError:
+            return None
+
+    async def _process_trading_iteration(
+        self, loop_context: dict, loop_count: int, loop_start
+    ) -> bool:
+        """Process a single trading iteration. Returns False if iteration should be skipped."""
+        # Check market data connection
+        if not await self._handle_market_data_connection():
+            return False
+
+        # Get market data
+        latest_data = await self._get_market_data(loop_context)
+        if not latest_data:
+            self.logger.warning("No market data available, waiting...")
+            await asyncio.sleep(5)
+            return False
+
+        # Process market data and indicators
+        current_price, market_state = await self._process_market_data_and_indicators(
+            latest_data
+        )
+
+        # Check trading conditions
+        if not self._can_trade_now():
+            await asyncio.sleep(1)
+            return False
+
+        # Execute trading logic
+        await self._execute_trading_logic(
+            market_state, current_price, latest_data, loop_count
+        )
+
+        return True
+
+    async def _get_market_data(self, loop_context: dict) -> list:
+        """Get latest market data based on provider type."""
+
+        if loop_context["is_realtime_provider"] and self.market_data is not None:
+            return await self._get_realtime_market_data(
+                loop_context["interval_seconds"]
+            )
+        elif self.market_data is not None and hasattr(
+            self.market_data, "get_latest_ohlcv"
+        ):
+            return await self._get_standard_market_data()
+        else:
+            return []
+
+    async def _get_realtime_market_data(self, interval_seconds: int) -> list:
+        """Get market data from realtime provider."""
+        if hasattr(self.market_data, "get_candle_history"):
+            latest_data = self.market_data.get_candle_history(
+                interval_seconds, limit=200
+            )
+
+            # Try to get more data if insufficient
+            if len(latest_data) < 50 and hasattr(self.market_data, "tick_aggregator"):
+                self.market_data.tick_aggregator.force_complete_candles(self.symbol)
+                latest_data = self.market_data.get_candle_history(
+                    interval_seconds, limit=200
+                )
+
+            return latest_data
+        else:
+            return []
+
+    async def _get_standard_market_data(self) -> list:
+        """Get market data from standard provider."""
+        import inspect
+
+        method = self.market_data.get_latest_ohlcv
+        try:
+            if inspect.iscoroutinefunction(method):
+                latest_data = await method(limit=200)
+            else:
+                latest_data = method(limit=200)
+
+            # Handle async objects
+            latest_data = await self._resolve_async_data(latest_data)
+
+            # Validate data type
+            if not isinstance(latest_data, (list, tuple)):
+                self.logger.warning(
+                    "Unexpected latest_data type: %s, converting to list",
+                    type(latest_data),
+                )
+                latest_data = list(latest_data) if latest_data else []
+
+            return latest_data
+
+        except Exception as e:
+            self.logger.warning("Error getting market data in main loop: %s", e)
+            return []
+
+    async def _resolve_async_data(self, latest_data):
+        """Resolve various async data types."""
+        import asyncio
+        import inspect
+
+        if inspect.iscoroutine(latest_data):
+            self.logger.warning("Detected coroutine data in main loop, awaiting...")
+            return await latest_data
+        elif isinstance(latest_data, asyncio.Task):
+            self.logger.warning("Detected asyncio.Task data in main loop, awaiting...")
+            return await latest_data
+        elif hasattr(latest_data, "__await__"):
+            self.logger.warning("Detected awaitable object in main loop, awaiting...")
+            return await latest_data
+        else:
+            return latest_data
+
+    async def _process_market_data_and_indicators(self, latest_data: list) -> tuple:
+        """Process market data and calculate indicators."""
+        # Track market data processing performance
+        with self.performance_monitor.track_operation(
+            "market_data_processing",
+            {
+                "symbol": self.actual_trading_symbol,
+                "data_points": str(len(latest_data)),
+            },
+        ):
+            current_price = latest_data[-1].close
+
+            # Publish market data to dashboard
+            if self.websocket_publisher:
+                await self.websocket_publisher.publish_market_data(
+                    symbol=self.actual_trading_symbol,
+                    price=float(current_price),
+                    timestamp=latest_data[-1].timestamp,
+                )
+
+        # Calculate indicators and create market state
+        indicator_state, dominance_candles = await self._calculate_indicators()
+        indicator_dict = await self._prepare_indicator_data(indicator_state)
+        dominance_obj = await self._process_dominance_data(indicator_dict)
+
+        # Create market state
+        market_state = await self._create_market_state(
+            current_price, latest_data, indicator_dict, dominance_obj, dominance_candles
+        )
+
+        return current_price, market_state
+
+    async def _calculate_indicators(self) -> tuple:
+        """Calculate technical indicators."""
+        if self.market_data is None:
+            self.logger.error(
+                "Market data provider not available for indicator calculation"
+            )
+            return self._get_fallback_indicator_state(), None
+
+        market_data = self.market_data.to_dataframe(limit=200)
+        dominance_candles = await self._get_dominance_candles()
+
+        # Validate data sufficiency
+        if len(market_data) < 100:
+            self.logger.warning(
+                "Insufficient data for reliable indicators: %s candles. Using fallback values.",
+                len(market_data),
+            )
+            return self._get_fallback_indicator_state(), dominance_candles
+
+        # Calculate indicators
+        return await self._compute_indicators(
+            market_data, dominance_candles
+        ), dominance_candles
+
+    async def _get_dominance_candles(self):
+        """Generate dominance candlesticks if provider available."""
+        if not self.dominance_provider:
+            return None
+
+        try:
+            dominance_history = self.dominance_provider.get_dominance_history(hours=2)
+            if len(dominance_history) >= 6:
+                from .data.dominance import DominanceCandleBuilder
+
+                candle_builder = DominanceCandleBuilder(dominance_history)
+                dominance_candles = candle_builder.build_candles(interval="3T")
+                return (
+                    dominance_candles[-20:]
+                    if len(dominance_candles) > 20
+                    else dominance_candles
+                )
+        except Exception as e:
+            self.logger.warning("Failed to build dominance candles: %s", e)
+
+        return None
+
+    async def _compute_indicators(self, market_data, dominance_candles) -> dict:
+        """Compute technical indicators with error handling."""
+        try:
+            with self.performance_monitor.track_operation(
+                "indicator_calculation",
+                {
+                    "candles": str(len(market_data)),
+                    "dominance_available": str(dominance_candles is not None),
+                },
+            ):
+                df_with_indicators = self.indicator_calc.calculate_all(
+                    market_data, dominance_candles=dominance_candles
+                )
+                indicator_state = self.indicator_calc.get_latest_state(
+                    df_with_indicators
+                )
+
+            # Publish indicator data
+            if self.websocket_publisher:
+                await self._publish_indicator_data(indicator_state)
+
+            return indicator_state
+
+        except Exception as e:
+            self.logger.warning(
+                "Indicator calculation failed: %s, using fallback values", e
+            )
+            indicator_state = self._get_fallback_indicator_state()
+
+            if self.websocket_publisher:
+                await self.websocket_publisher.publish_indicator_data(
+                    symbol=self.actual_trading_symbol,
+                    indicators=indicator_state,
+                )
+
+            return indicator_state
+
+    async def _publish_indicator_data(self, indicator_state: dict):
+        """Publish indicator data to dashboard."""
+        await self.websocket_publisher.publish_indicator_data(
+            symbol=self.actual_trading_symbol,
+            indicators={
+                "cipher_a": indicator_state.get("cipher_a", {}),
+                "cipher_b": indicator_state.get("cipher_b", {}),
+                "wave_trend_1": indicator_state.get("wave_trend_1"),
+                "wave_trend_2": indicator_state.get("wave_trend_2"),
+                "rsi": indicator_state.get("rsi"),
+                "stoch_rsi": indicator_state.get("stoch_rsi"),
+                "schaff_trend": indicator_state.get("schaff_trend"),
+                "rsimfi": indicator_state.get("rsimfi"),
+            },
+        )
+
+    async def _prepare_indicator_data(self, indicator_state: dict) -> dict:
+        """Prepare indicator data dictionary."""
+        indicator_dict = {
+            "timestamp": datetime.now(UTC),
+            "cipher_a_dot": indicator_state.get("cipher_a", {}).get("trend_dot"),
+            "cipher_b_wave": indicator_state.get("cipher_b", {}).get("wave"),
+            "cipher_b_money_flow": indicator_state.get("cipher_b", {}).get(
+                "money_flow"
+            ),
+            "rsi": indicator_state.get("cipher_a", {}).get("rsi"),
+            "ema_fast": indicator_state.get("cipher_a", {}).get("ema_fast"),
+            "ema_slow": indicator_state.get("cipher_a", {}).get("ema_slow"),
+            "vwap": indicator_state.get("cipher_b", {}).get("vwap"),
+        }
+
+        # Add dominance analysis if available
+        dominance_analysis = indicator_state.get("dominance_analysis", {})
+        if dominance_analysis:
+            indicator_dict.update(
+                {
+                    "dominance_cipher_a_signal": dominance_analysis.get(
+                        "cipher_a_signal"
+                    ),
+                    "dominance_cipher_b_signal": dominance_analysis.get(
+                        "cipher_b_signal"
+                    ),
+                    "dominance_sentiment": dominance_analysis.get("sentiment"),
+                    "dominance_price_divergence": dominance_analysis.get(
+                        "price_divergence"
+                    ),
+                    "dominance_trend": dominance_analysis.get("trend"),
+                    "dominance_wt1": dominance_analysis.get("wt1"),
+                    "dominance_wt2": dominance_analysis.get("wt2"),
+                }
+            )
+
+        return indicator_dict
+
+    async def _process_dominance_data(self, indicator_dict: dict):
+        """Process dominance data and update indicator dictionary."""
+        dominance_obj = None
+
+        if not self.dominance_provider:
+            return dominance_obj
+
+        try:
+            dominance_data = self.dominance_provider.get_latest_dominance()
+            if dominance_data:
+                # Add dominance metrics
+                dominance_metrics = self._create_dominance_metrics(dominance_data)
+                indicator_dict.update(dominance_metrics)
+
+                # Get market sentiment
+                try:
+                    sentiment_analysis = self.dominance_provider.get_market_sentiment()
+                    indicator_dict["market_sentiment"] = sentiment_analysis.get(
+                        "sentiment", "NEUTRAL"
+                    )
+                except Exception as e:
+                    self.logger.warning("Failed to get market sentiment: %s", e)
+                    indicator_dict["market_sentiment"] = "NEUTRAL"
+
+                dominance_obj = dominance_data
+
+        except Exception as e:
+            self.logger.warning(
+                "Failed to process dominance data: %s, using defaults", e
+            )
+            # Add default values
+            indicator_dict.update(self._get_default_dominance_values())
+
+        return dominance_obj
+
+    def _create_dominance_metrics(self, dominance_data) -> dict:
+        """Create dominance metrics dictionary."""
+        return {
+            "usdt_dominance": dominance_data.usdt_dominance
+            if dominance_data.usdt_dominance is not None
+            else 0.0,
+            "usdc_dominance": dominance_data.usdc_dominance
+            if dominance_data.usdc_dominance is not None
+            else 0.0,
+            "stablecoin_dominance": dominance_data.stablecoin_dominance
+            if dominance_data.stablecoin_dominance is not None
+            else 0.0,
+            "dominance_trend": dominance_data.dominance_24h_change
+            if dominance_data.dominance_24h_change is not None
+            else 0.0,
+            "dominance_rsi": dominance_data.dominance_rsi
+            if dominance_data.dominance_rsi is not None
+            else 50.0,
+            "stablecoin_velocity": dominance_data.stablecoin_velocity
+            if dominance_data.stablecoin_velocity is not None
+            else 1.0,
+        }
+
+    def _get_default_dominance_values(self) -> dict:
+        """Get default dominance values."""
+        return {
+            "usdt_dominance": 0.0,
+            "usdc_dominance": 0.0,
+            "stablecoin_dominance": 0.0,
+            "dominance_trend": 0.0,
+            "dominance_rsi": 50.0,
+            "stablecoin_velocity": 1.0,
+            "market_sentiment": "NEUTRAL",
+        }
+
+    async def _create_market_state(
+        self,
+        current_price,
+        latest_data,
+        indicator_dict,
+        dominance_obj,
+        dominance_candles,
+    ):
+        """Create market state for LLM analysis."""
+        from .models import IndicatorData, MarketState
+
+        # Calculate historical data window
+        interval_seconds = self._get_interval_seconds(self.interval)
+        candles_per_24h = min((24 * 60 * 60) // interval_seconds, len(latest_data))
+        historical_data = latest_data[-candles_per_24h:]
+
+        return MarketState(
+            symbol=self.symbol,
+            interval=self.interval,
+            timestamp=datetime.now(UTC),
+            current_price=current_price,
+            ohlcv_data=historical_data,
+            indicators=IndicatorData(**indicator_dict),
+            current_position=self.current_position,
+            dominance_data=dominance_obj,
+            dominance_candles=dominance_candles,
+        )
+
+    async def _execute_trading_logic(
+        self, market_state, current_price, latest_data, loop_count
+    ):
+        """Execute main trading logic."""
+        # Mark candle analysis time
+        latest_candle = latest_data[-1]
+        candle_timestamp = latest_candle.timestamp
+        if candle_timestamp.tzinfo is None:
+            candle_timestamp = candle_timestamp.replace(tzinfo=UTC)
+        self.last_candle_analysis_time = candle_timestamp
+
+        self.logger.info(
+            "⚡ Scalping analysis: %s candle at %s - Price: $%s",
+            self.interval,
+            latest_candle.timestamp.strftime("%H:%M:%S.%f")[:-3],
+            current_price,
+        )
+
+        # Get LLM decision
+        trade_action = await self._get_llm_decision(market_state)
+
+        # Record and publish decision
+        experience_id = await self._record_trading_decision(market_state, trade_action)
+        await self._publish_trading_decision(trade_action, market_state, current_price)
+
+        # Execute trade based on action type
+        final_action = await self._execute_trade_decision(
+            trade_action, current_price, market_state, experience_id, loop_count
+        )
+
+        # Update tracking and display status
+        await self._update_position_tracking(current_price)
+
+        if loop_count % 10 == 0:
+            self._display_status_update(loop_count, current_price, final_action)
+            await self._publish_performance_metrics(current_price)
+
+        if loop_count % 5 == 0:
+            self.logger.debug("Trading loop heartbeat - iteration %s", loop_count)
+
+    async def _get_llm_decision(self, market_state):
+        """Get trading decision from LLM agent."""
+        self.logger.debug(
+            "🤔 Requesting trading decision from %s LLM Agent",
+            "Memory-Enhanced" if self._memory_available else "Standard",
+        )
+
+        with self.performance_monitor.track_operation(
+            "llm_response",
+            {
+                "agent_type": "memory_enhanced"
+                if self._memory_available
+                else "standard",
+                "symbol": self.symbol,
+            },
+        ):
+            return await self.llm_agent.analyze_market(market_state)
+
+    async def _record_trading_decision(self, market_state, trade_action):
+        """Record trading decision in memory and logs."""
+        memory_context = None
+        if hasattr(self.llm_agent, "_last_memory_context"):
+            memory_context = self.llm_agent._last_memory_context
+
+        self.trade_logger.log_trade_decision(
+            market_state=market_state,
+            trade_action=trade_action,
+            experience_id=None,
+            memory_context=memory_context,
+        )
+
+        # Record in MCP if enabled
+        experience_id = None
+        if self.experience_manager and trade_action.action != "HOLD":
+            try:
+                experience_id = await self.experience_manager.record_trading_decision(
+                    market_state, trade_action
+                )
+                if experience_id:
+                    self.trade_logger.log_trade_decision(
+                        market_state=market_state,
+                        trade_action=trade_action,
+                        experience_id=experience_id,
+                        memory_context=memory_context,
+                    )
+            except Exception as e:
+                self.logger.warning("Failed to record trading decision: %s", e)
+
+        return experience_id
+
+    async def _publish_trading_decision(
+        self, trade_action, market_state, current_price
+    ):
+        """Publish trading decision to dashboard."""
+        if not self.websocket_publisher:
+            return
+
+        await self.websocket_publisher.publish_ai_decision(
+            action=trade_action.action,
+            reasoning=trade_action.rationale,
+            confidence=trade_action.size_pct / 100.0,
+        )
+
+        await self.websocket_publisher.publish_trading_decision(
+            trade_action=trade_action,
+            symbol=self.symbol,
+            current_price=float(current_price),
+            context={
+                "request_id": f"trade_{int(datetime.now(UTC).timestamp())}",
+                "confidence": trade_action.size_pct / 100.0,
+                "indicators": {
+                    "cipher_a": market_state.indicators.cipher_a_dot,
+                    "cipher_b": market_state.indicators.cipher_b_wave,
+                    "rsi": market_state.indicators.rsi,
+                },
+                "risk_analysis": {
+                    "current_price": float(current_price),
+                    "position_size": trade_action.size_pct / 100.0,
+                    "leverage": self.settings.trading.leverage,
+                },
+            },
+        )
+
+    async def _execute_trade_decision(
+        self, trade_action, current_price, market_state, experience_id, loop_count
+    ):
+        """Execute trade decision based on action type."""
+        if trade_action.action in ["LONG", "SHORT"]:
+            return await self._execute_directional_trade(
+                trade_action, current_price, market_state, experience_id, loop_count
+            )
+        else:
+            return await self._execute_non_directional_trade(
+                trade_action, current_price, market_state, experience_id, loop_count
+            )
+
+    async def _execute_directional_trade(
+        self, trade_action, current_price, market_state, experience_id, loop_count
+    ):
+        """Execute LONG/SHORT trades with LLM override."""
+        validated_action = self.validator.validate(trade_action)
+
+        self.logger.info(
+            "Loop %s: Price=$%s | LLM=%s | Action=%s (%s%%) | Risk=LLM_OVERRIDE - AI has final say",
+            loop_count,
+            current_price,
+            trade_action.action,
+            validated_action.action,
+            validated_action.size_pct,
+        )
+
+        await self._execute_trade(
+            validated_action, current_price, market_state, experience_id
+        )
+        self.last_trade_time = datetime.now(UTC)
+        return validated_action
+
+    async def _execute_non_directional_trade(
+        self, trade_action, current_price, market_state, experience_id, loop_count
+    ):
+        """Execute HOLD/CLOSE trades with risk management."""
+        validated_action = self.validator.validate(trade_action)
+
+        risk_approved, final_action, risk_reason = self.risk_manager.evaluate_risk(
+            validated_action, self.current_position, current_price
+        )
+
+        self.logger.info(
+            "Loop %s: Price=$%s | LLM=%s | Action=%s (%s%%) | Risk=%s",
+            loop_count,
+            current_price,
+            trade_action.action,
+            final_action.action,
+            final_action.size_pct,
+            risk_reason,
+        )
+
+        if risk_approved and final_action.action != "HOLD":
+            await self._execute_trade(
+                final_action, current_price, market_state, experience_id
+            )
+            self.last_trade_time = datetime.now(UTC)
+
+        return final_action
+
+    async def _handle_periodic_tasks(
+        self, loop_count: int, last_status_log, loop_context: dict
+    ):
+        """Handle periodic maintenance tasks."""
+        # Pattern statistics logging
+        if loop_count % 100 == 0 and self.memory_server and self._memory_available:
+            await self._log_pattern_statistics()
+
+        # Status logging
+        last_status_log = await self._handle_status_logging(
+            loop_count, last_status_log, loop_context["is_high_frequency"]
+        )
+
+        # Paper trading updates
+        if (
+            self.dry_run
+            and self.paper_account
+            and loop_count % (60 if loop_context["is_high_frequency"] else 10) == 0
+        ):
+            await self._update_paper_trading_metrics(loop_count)
+
+    async def _log_pattern_statistics(self):
+        """Log pattern statistics from memory server."""
+        try:
+            pattern_stats = await self.memory_server.get_pattern_statistics()
+            if pattern_stats:
+                self.trade_logger.log_pattern_statistics(pattern_stats)
+                self.logger.info("📊 === MCP Pattern Performance Update ===")
+
+                sorted_patterns = sorted(
+                    pattern_stats.items(),
+                    key=lambda x: x[1]["success_rate"] * x[1]["count"],
+                    reverse=True,
+                )[:5]
+
+                for pattern, stats in sorted_patterns:
+                    if stats["count"] >= 2:
+                        self.logger.info(
+                            "  📈 %s: %.1f%% win rate | %s trades | Avg PnL: $%.2f",
+                            pattern,
+                            stats["success_rate"] * 100,
+                            stats["count"],
+                            stats["avg_pnl"],
+                        )
+        except Exception as e:
+            self.logger.debug("Could not retrieve pattern statistics: %s", e)
+
+    async def _handle_status_logging(
+        self, loop_count: int, last_status_log, is_high_frequency: bool
+    ):
+        """Handle periodic status logging."""
+        status_log_interval = 60 if is_high_frequency else 120
+
+        if (datetime.now(UTC) - last_status_log).total_seconds() > status_log_interval:
+            if self.market_data is not None:
+                data_status = self.market_data.get_data_status()
+                self.logger.info(
+                    "🔄 Trading Status: Loop #%s | WebSocket: %s | Latest Price: $%s | OmniSearch: %s",
+                    loop_count,
+                    "✓" if data_status.get("websocket_connected") else "✗",
+                    data_status.get("latest_price", "N/A"),
+                    "✓ Active" if hasattr(self, "omnisearch_client") else "✗ Disabled",
+                )
+            else:
+                self.logger.info(
+                    "🔄 Trading Status: Loop #%s | Market Data: ✗ Not Initialized | OmniSearch: %s",
+                    loop_count,
+                    "✓ Active" if hasattr(self, "omnisearch_client") else "✗ Disabled",
+                )
+            return datetime.now(UTC)
+
+        return last_status_log
+
+    async def _update_paper_trading_metrics(self, loop_count: int):
+        """Update paper trading performance metrics."""
+        try:
+            with self.performance_monitor.track_operation(
+                "paper_trading_update", {"loop_count": str(loop_count)}
+            ):
+                self.paper_account.update_daily_performance()
+
+                from .performance_monitor import PerformanceMetric
+
+                performance_metrics = (
+                    self.paper_account.get_performance_metrics_for_monitor()
+                )
+
+                for metric_data in performance_metrics:
+                    metric = PerformanceMetric(
+                        name=metric_data["name"],
+                        value=float(metric_data["value"]),
+                        timestamp=metric_data["timestamp"],
+                        unit=metric_data["unit"],
+                        tags=metric_data["tags"],
+                    )
+                    self.performance_monitor.metrics_collector.add_metric(metric)
+
+            self.logger.debug(
+                "Updated paper trading performance and metrics at loop %s", loop_count
+            )
+        except Exception as e:
+            self.logger.warning("Failed to update paper trading performance: %s", e)
+
+    async def _handle_loop_timing(self, loop_start, target_frequency: float):
+        """Handle loop timing and sleep calculations."""
+        loop_end_time = datetime.now(UTC)
+        loop_duration = (loop_end_time - loop_start).total_seconds()
+        sleep_time = max(0, target_frequency - loop_duration)
+
+        # Performance monitoring
+        if hasattr(self, "_loop_timing_counter"):
+            self._loop_timing_counter += 1
+        else:
+            self._loop_timing_counter = 1
+
+        if self._loop_timing_counter % 100 == 0:
+            timing_accuracy = (loop_duration / target_frequency) * 100
+            self.logger.debug(
+                "⏱️ Loop Timing: Duration=%.3fs, Target=%.3fs, Accuracy=%.1f%%, Sleep=%.3fs",
+                loop_duration,
+                target_frequency,
+                timing_accuracy,
+                sleep_time,
+            )
+
+            if target_frequency <= 1.0 and loop_duration > target_frequency * 1.5:
+                self.logger.warning(
+                    "🐌 High-frequency loop running slow: %.3fs (target: %.3fs). "
+                    "Consider optimizing or reducing frequency.",
+                    loop_duration,
+                    target_frequency,
+                )
+
+        # Efficient sleep
+        if sleep_time > 0:
+            await asyncio.sleep(sleep_time)
+
+    async def _handle_loop_error(
+        self, error: Exception, loop_count: int, loop_context: dict
+    ):
+        """Handle loop errors with adaptive recovery."""
+        self.logger.exception("Error in trading loop")
+        from rich.console import Console
+
+        console = Console()
+        console.print(f"[red]Loop error: {error}[/red]")
+
+        # Adaptive error recovery
+        if loop_context["is_high_frequency"]:
+            error_sleep = min(5, 0.5 * (loop_count % 3 + 1))
+        else:
+            error_sleep = min(30, 1 * (loop_count % 5 + 1))
+
+        self.logger.info("Waiting %.1fs before retry...", error_sleep)
+        await asyncio.sleep(error_sleep)
 
     async def _execute_trade_action(self, trade_action: TradeAction) -> bool:
         """
@@ -2483,6 +2868,66 @@ class TradingEngine:
             Number of minutes in the interval
         """
         return self._get_interval_seconds(interval) / 60
+
+    def _apply_adaptive_timing(self) -> None:
+        """
+        Apply adaptive timing based on trading interval for optimal high-frequency performance.
+
+        This method adjusts the main loop update frequency based on the configured
+        trading interval to ensure efficient processing without unnecessary overhead.
+
+        Timing Strategy:
+        - Intervals ≤ 1s: Use 1-second main loop for high-frequency scalping
+        - Intervals ≤ 60s: Match interval frequency (capped at 15s for performance)
+        - Longer intervals: Use existing configuration timing
+        """
+        try:
+            # Get interval in seconds
+            interval_seconds = self._get_interval_seconds(self.interval)
+
+            # Store original frequency for logging
+            original_frequency = self.settings.system.update_frequency_seconds
+
+            # Adaptive timing logic
+            if interval_seconds <= 1:
+                # High-frequency trading: 1-second main loop for sub-second intervals
+                new_frequency = 1.0
+                timing_reason = "high-frequency scalping (≤1s intervals)"
+            elif interval_seconds <= 60:
+                # Medium frequency: match interval but cap at 15s for performance
+                new_frequency = min(float(interval_seconds), 15.0)
+                timing_reason = f"interval-matched ({interval_seconds}s intervals)"
+            else:
+                # Long intervals: use existing configuration
+                new_frequency = original_frequency
+                timing_reason = "existing configuration (long intervals)"
+
+            # Apply new frequency if different
+            if new_frequency != original_frequency:
+                # Create updated system settings
+                system_settings = self.settings.system.model_copy(
+                    update={"update_frequency_seconds": new_frequency}
+                )
+                self.settings = self.settings.model_copy(
+                    update={"system": system_settings}
+                )
+
+                # Note: Logging isn't available yet during initialization, so we store
+                # the information to log later in the startup process
+                self._adaptive_timing_info = {
+                    "original": original_frequency,
+                    "new": new_frequency,
+                    "reason": timing_reason,
+                    "interval": self.interval,
+                    "interval_seconds": interval_seconds,
+                }
+            else:
+                self._adaptive_timing_info = None
+
+        except Exception as e:
+            # Fallback to default if there's any error
+            # Can't log here since logging isn't initialized yet
+            self._adaptive_timing_error = str(e)
 
     async def _update_position_tracking(self, current_price: Decimal) -> None:
         """
@@ -2954,24 +3399,26 @@ class TradingEngine:
         finally:
             # Final cleanup - ensure all async sessions are closed
             # This is a last resort cleanup
-            if hasattr(self, "dominance_provider") and self.dominance_provider:
-                if (
-                    hasattr(self.dominance_provider, "_session")
-                    and self.dominance_provider._session
-                ) and not self.dominance_provider._session.closed:
-                    try:
-                        # Force close without await since we might be in cleanup
-                        if (
-                            hasattr(self.dominance_provider._session, "_connector")
-                            and self.dominance_provider._session._connector is not None
-                        ):
-                            self.dominance_provider._session._connector.close()
-                    except Exception as e:
-                        # Log cleanup errors but don't fail shutdown
-                        logger.debug(
-                            "Error closing dominance provider connector during cleanup: %s",
-                            e,
-                        )
+            if (
+                hasattr(self, "dominance_provider")
+                and self.dominance_provider
+                and hasattr(self.dominance_provider, "_session")
+                and self.dominance_provider._session
+                and not self.dominance_provider._session.closed
+            ):
+                try:
+                    # Force close without await since we might be in cleanup
+                    if (
+                        hasattr(self.dominance_provider._session, "_connector")
+                        and self.dominance_provider._session._connector is not None
+                    ):
+                        self.dominance_provider._session._connector.close()
+                except Exception as e:
+                    # Log cleanup errors but don't fail shutdown
+                    self.logger.debug(
+                        "Error closing dominance provider connector during cleanup: %s",
+                        e,
+                    )
 
     async def _reconcile_positions(self) -> None:
         """
@@ -3023,13 +3470,12 @@ class TradingEngine:
 
                 if symbol == self.actual_trading_symbol:
                     # Convert position data to our format
-                    if size > 0:
-                        if side.upper() in ["LONG", "BUY"]:
-                            position_side: Literal["LONG", "SHORT", "FLAT"] = "LONG"
-                        elif side.upper() in ["SHORT", "SELL"]:
-                            position_side = "SHORT"
-                        else:
-                            position_side = "LONG" if size > 0 else "SHORT"
+                    if size > 0 and side.upper() in ["LONG", "BUY"]:
+                        position_side: Literal["LONG", "SHORT", "FLAT"] = "LONG"
+                    elif side.upper() in ["SHORT", "SELL"]:
+                        position_side = "SHORT"
+                    else:
+                        position_side = "LONG" if size > 0 else "SHORT"
 
                         # Update current position
                         self.current_position = Position(
@@ -3188,10 +3634,16 @@ class TradingEngine:
             Filtered trade action (may be converted to HOLD if signals don't align)
         """
         try:
-            # Check if Cipher B filtering is enabled
+            # Early returns for bypass conditions
             if not self.settings.data.enable_cipher_b_filter:
                 self.logger.debug(
                     "Cipher B filter: Disabled in configuration, allowing original action"
+                )
+                return trade_action
+
+            if trade_action.action in ["HOLD", "CLOSE"]:
+                self.logger.debug(
+                    "Cipher B filter: Allowing HOLD/CLOSE action without filtering"
                 )
                 return trade_action
 
@@ -3199,21 +3651,13 @@ class TradingEngine:
             cipher_b_wave = market_state.indicators.cipher_b_wave
             cipher_b_money_flow = market_state.indicators.cipher_b_money_flow
 
-            # Skip filtering for HOLD and CLOSE actions
-            if trade_action.action in ["HOLD", "CLOSE"]:
-                self.logger.debug(
-                    "Cipher B filter: Allowing HOLD/CLOSE action without filtering"
-                )
-                return trade_action
-
-            # Skip filtering if Cipher B indicators are not available
             if cipher_b_wave is None or cipher_b_money_flow is None:
                 self.logger.warning(
                     "Cipher B filter: Indicators not available, allowing original action"
                 )
                 return trade_action
 
-            # Get Cipher B signal thresholds from configuration
+            # Get thresholds and determine signals
             wave_bullish_threshold = self.settings.data.cipher_b_wave_bullish_threshold
             wave_bearish_threshold = self.settings.data.cipher_b_wave_bearish_threshold
             money_flow_bullish_threshold = (
@@ -3223,79 +3667,102 @@ class TradingEngine:
                 self.settings.data.cipher_b_money_flow_bearish_threshold
             )
 
-            # Determine Cipher B signals
             wave_bullish = cipher_b_wave > wave_bullish_threshold
             wave_bearish = cipher_b_wave < wave_bearish_threshold
             money_flow_bullish = cipher_b_money_flow > money_flow_bullish_threshold
             money_flow_bearish = cipher_b_money_flow < money_flow_bearish_threshold
 
-            # Check signal alignment for LONG trades
-            if trade_action.action == "LONG":
-                # Require both wave and money flow to be bullish
-                if wave_bullish and money_flow_bullish:
-                    self.logger.info(
-                        "Cipher B filter: LONG signal CONFIRMED - Wave: %.2f (bullish), Money Flow: %.2f (bullish)",
-                        cipher_b_wave,
-                        cipher_b_money_flow,
-                    )
-                    return trade_action
-                self.logger.info(
-                    "Cipher B filter: LONG signal FILTERED OUT - Wave: %.2f (%s), Money Flow: %.2f (%s)",
-                    cipher_b_wave,
-                    "bullish" if wave_bullish else "bearish",
-                    cipher_b_money_flow,
-                    "bullish" if money_flow_bullish else "bearish",
-                )
-                # Convert to HOLD with explanation
-                return TradeAction(
-                    action="HOLD",
-                    size_pct=0,
-                    take_profit_pct=1.0,
-                    stop_loss_pct=1.0,
-                    leverage=trade_action.leverage,
-                    reduce_only=False,
-                    rationale=f"Cipher B filter: LONG rejected - Wave:{cipher_b_wave:.2f}, MF:{cipher_b_money_flow:.2f}",
-                )
-
-            # Check signal alignment for SHORT trades
-            if trade_action.action == "SHORT":
-                # Require both wave and money flow to be bearish
-                if wave_bearish and money_flow_bearish:
-                    self.logger.info(
-                        "Cipher B filter: SHORT signal CONFIRMED - Wave: %.2f (bearish), Money Flow: %.2f (bearish)",
-                        cipher_b_wave,
-                        cipher_b_money_flow,
-                    )
-                    return trade_action
-                self.logger.info(
-                    "Cipher B filter: SHORT signal FILTERED OUT - Wave: %.2f (%s), Money Flow: %.2f (%s)",
-                    cipher_b_wave,
-                    "bearish" if wave_bearish else "bullish",
-                    cipher_b_money_flow,
-                    "bearish" if money_flow_bearish else "bullish",
-                )
-                # Convert to HOLD with explanation
-                return TradeAction(
-                    action="HOLD",
-                    size_pct=0,
-                    take_profit_pct=1.0,
-                    stop_loss_pct=1.0,
-                    leverage=trade_action.leverage,
-                    reduce_only=False,
-                    rationale=f"Cipher B filter: SHORT rejected - Wave:{cipher_b_wave:.2f}, MF:{cipher_b_money_flow:.2f}",
-                )
-
-            # Default fallback - should not reach here
-            self.logger.warning(
-                "Cipher B filter: Unexpected action '%s', allowing original",
-                trade_action.action,
+            # Apply filtering based on action type
+            return self._filter_action_by_cipher_signals(
+                trade_action,
+                cipher_b_wave,
+                cipher_b_money_flow,
+                wave_bullish,
+                wave_bearish,
+                money_flow_bullish,
+                money_flow_bearish,
             )
-            return trade_action
 
         except Exception:
             self.logger.exception("Error in Cipher B filtering")
             # On error, allow the original trade action to prevent system failure
             return trade_action
+
+    def _filter_action_by_cipher_signals(
+        self,
+        trade_action: TradeAction,
+        cipher_b_wave: float,
+        cipher_b_money_flow: float,
+        wave_bullish: bool,
+        wave_bearish: bool,
+        money_flow_bullish: bool,
+        money_flow_bearish: bool,
+    ) -> TradeAction:
+        """Filter trade action based on Cipher B signals."""
+        if trade_action.action == "LONG":
+            if wave_bullish and money_flow_bullish:
+                self.logger.info(
+                    "Cipher B filter: LONG signal CONFIRMED - Wave: %.2f (bullish), Money Flow: %.2f (bullish)",
+                    cipher_b_wave,
+                    cipher_b_money_flow,
+                )
+                return trade_action
+
+            self.logger.info(
+                "Cipher B filter: LONG signal FILTERED OUT - Wave: %.2f (%s), Money Flow: %.2f (%s)",
+                cipher_b_wave,
+                "bullish" if wave_bullish else "bearish",
+                cipher_b_money_flow,
+                "bullish" if money_flow_bullish else "bearish",
+            )
+            return self._create_filtered_hold_action(
+                trade_action, cipher_b_wave, cipher_b_money_flow, "LONG"
+            )
+
+        if trade_action.action == "SHORT":
+            if wave_bearish and money_flow_bearish:
+                self.logger.info(
+                    "Cipher B filter: SHORT signal CONFIRMED - Wave: %.2f (bearish), Money Flow: %.2f (bearish)",
+                    cipher_b_wave,
+                    cipher_b_money_flow,
+                )
+                return trade_action
+
+            self.logger.info(
+                "Cipher B filter: SHORT signal FILTERED OUT - Wave: %.2f (%s), Money Flow: %.2f (%s)",
+                cipher_b_wave,
+                "bearish" if wave_bearish else "bullish",
+                cipher_b_money_flow,
+                "bearish" if money_flow_bearish else "bullish",
+            )
+            return self._create_filtered_hold_action(
+                trade_action, cipher_b_wave, cipher_b_money_flow, "SHORT"
+            )
+
+        # Default fallback for unexpected actions
+        self.logger.warning(
+            "Cipher B filter: Unexpected action '%s', allowing original",
+            trade_action.action,
+        )
+        return trade_action
+
+    def _create_filtered_hold_action(
+        self,
+        trade_action: TradeAction,
+        cipher_b_wave: float,
+        cipher_b_money_flow: float,
+        action_type: str,
+    ) -> TradeAction:
+        """Create a HOLD action when trade is filtered out."""
+        return TradeAction(
+            action="HOLD",
+            size_pct=0,
+            take_profit_pct=1.0,
+            stop_loss_pct=1.0,
+            leverage=trade_action.leverage,
+            reduce_only=False,
+            rationale=f"Cipher B filter: {action_type} rejected - Wave:{cipher_b_wave:.2f}, MF:{cipher_b_money_flow:.2f}",
+        )
 
     def _get_fallback_indicator_state(self) -> dict[str, Any]:
         """

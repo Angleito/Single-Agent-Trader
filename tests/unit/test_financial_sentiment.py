@@ -3,6 +3,7 @@
 from datetime import datetime
 
 import pytest
+from pydantic import ValidationError
 
 from bot.services.financial_sentiment import (
     CryptoIndicators,
@@ -46,11 +47,15 @@ class TestSentimentResult:
 
     def test_sentiment_result_validation(self):
         """Test SentimentResult field validation."""
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValidationError, match="Input should be less than or equal to 1"
+        ):
             # Sentiment score out of range
             SentimentResult(sentiment_score=1.5, confidence=0.8)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValidationError, match="Input should be less than or equal to 1"
+        ):
             # Confidence out of range
             SentimentResult(sentiment_score=0.5, confidence=1.2)
 
@@ -98,7 +103,7 @@ class TestCryptoIndicators:
         """Test that CryptoIndicators is immutable."""
         indicators = CryptoIndicators()
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValidationError, match="Instance is frozen"):
             # Should not be able to modify frozen model
             indicators.trend_direction = "BEARISH"
 
@@ -139,7 +144,7 @@ class TestNasdaqIndicators:
         """Test that NasdaqIndicators is immutable."""
         indicators = NasdaqIndicators()
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValidationError, match="Instance is frozen"):
             # Should not be able to modify frozen model
             indicators.nasdaq_trend = "BEARISH"
 

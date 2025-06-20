@@ -442,12 +442,10 @@ class CipherBSignals:
         last_rsi = pd.Series(np.nan, index=wt2.index)
 
         for i in range(2, len(wt_fractal_bot)):
-            if wt_fractal_bot.iloc[i]:
-                # Find the RSI value when fractal bottom occurred (offset by 2)
-                if i >= 2 and i - 2 < len(rsi_data):
-                    rsi_value = rsi_data.iloc[i - 2]
-                    # Propagate this value forward until next fractal
-                    last_rsi.iloc[i:] = rsi_value
+            if wt_fractal_bot.iloc[i] and i >= 2 and i - 2 < len(rsi_data):
+                rsi_value = rsi_data.iloc[i - 2]
+                # Propagate this value forward until next fractal
+                last_rsi.iloc[i:] = rsi_value
 
         # Fill forward the last known RSI value
         last_rsi = last_rsi.ffill()
@@ -512,6 +510,131 @@ class CipherBSignals:
             "wt_cross_any": wt_cross,
         }
 
+    def _calculate_wt_divergences(
+        self, wt2: pd.Series, close: pd.Series
+    ) -> dict[str, list]:
+        """Calculate WaveTrend divergences."""
+        wt_regular_divs = self.divergence_detector.detect_regular_divergences(
+            wt2, close, self.wt_div_ob_level, self.wt_div_os_level
+        )
+        wt_hidden_divs = self.divergence_detector.detect_hidden_divergences(wt2, close)
+
+        return {
+            "regular_bullish": [
+                d for d in wt_regular_divs if d.type == DivergenceType.REGULAR_BULLISH
+            ],
+            "regular_bearish": [
+                d for d in wt_regular_divs if d.type == DivergenceType.REGULAR_BEARISH
+            ],
+            "hidden_bullish": [
+                d for d in wt_hidden_divs if d.type == DivergenceType.HIDDEN_BULLISH
+            ],
+            "hidden_bearish": [
+                d for d in wt_hidden_divs if d.type == DivergenceType.HIDDEN_BEARISH
+            ],
+        }
+
+    def _calculate_rsi_divergences(
+        self, rsi: pd.Series, close: pd.Series
+    ) -> dict[str, list]:
+        """Calculate RSI divergences."""
+        rsi_regular_divs = self.divergence_detector.detect_regular_divergences(
+            rsi, close, self.rsi_div_ob_level, self.rsi_div_os_level
+        )
+        rsi_hidden_divs = self.divergence_detector.detect_hidden_divergences(rsi, close)
+
+        return {
+            "regular_bullish": [
+                d for d in rsi_regular_divs if d.type == DivergenceType.REGULAR_BULLISH
+            ],
+            "regular_bearish": [
+                d for d in rsi_regular_divs if d.type == DivergenceType.REGULAR_BEARISH
+            ],
+            "hidden_bullish": [
+                d for d in rsi_hidden_divs if d.type == DivergenceType.HIDDEN_BULLISH
+            ],
+            "hidden_bearish": [
+                d for d in rsi_hidden_divs if d.type == DivergenceType.HIDDEN_BEARISH
+            ],
+        }
+
+    def _calculate_stoch_divergences(
+        self, stoch_k: pd.Series, close: pd.Series
+    ) -> dict[str, list]:
+        """Calculate Stochastic RSI divergences."""
+        stoch_regular_divs = self.divergence_detector.detect_regular_divergences(
+            stoch_k,
+            close,
+            80,
+            20,  # Standard stoch levels
+        )
+        stoch_hidden_divs = self.divergence_detector.detect_hidden_divergences(
+            stoch_k, close
+        )
+
+        return {
+            "regular_bullish": [
+                d
+                for d in stoch_regular_divs
+                if d.type == DivergenceType.REGULAR_BULLISH
+            ],
+            "regular_bearish": [
+                d
+                for d in stoch_regular_divs
+                if d.type == DivergenceType.REGULAR_BEARISH
+            ],
+            "hidden_bullish": [
+                d for d in stoch_hidden_divs if d.type == DivergenceType.HIDDEN_BULLISH
+            ],
+            "hidden_bearish": [
+                d for d in stoch_hidden_divs if d.type == DivergenceType.HIDDEN_BEARISH
+            ],
+        }
+
+    def _prepare_fractal_data(
+        self, wt2: pd.Series, df_length: int
+    ) -> dict[str, pd.Series]:
+        """Prepare fractal data for gold signals calculation."""
+        wt_fractals = self.divergence_detector.find_fractals(wt2)
+
+        fractal_indices = []
+        fractal_values = []
+        bottom_indices = []
+        bottom_values = []
+
+        for f in wt_fractals:
+            if isinstance(f.index, int) and f.index < df_length:
+                fractal_indices.append(f.index)
+                fractal_values.append(f.fractal_type.value == -1)
+
+                if f.fractal_type.value == -1:  # Bottom fractal
+                    bottom_indices.append(f.index)
+                    bottom_values.append(f.value)
+
+        # Create series with integer indices that match DataFrame positions
+        fractal_bot_series = pd.Series(False, index=range(df_length))
+        wt_low_prev_series = pd.Series(np.nan, index=range(df_length))
+
+        # Set fractal bottom positions
+        for idx in fractal_indices:
+            if idx < len(fractal_bot_series):
+                fractal_bot_series.iloc[idx] = fractal_values[
+                    fractal_indices.index(idx)
+                ]
+
+        # Set bottom fractal values
+        for i, idx in enumerate(bottom_indices):
+            if idx < len(wt_low_prev_series):
+                wt_low_prev_series.iloc[idx] = bottom_values[i]
+
+        # Forward fill the low previous values
+        wt_low_prev_series = wt_low_prev_series.ffill()
+
+        return {
+            "wt_fractal_bot": fractal_bot_series,
+            "wt_low_prev": wt_low_prev_series,
+        }
+
     def get_all_cipher_b_signals(
         self,
         df: pd.DataFrame,
@@ -566,109 +689,20 @@ class CipherBSignals:
             # Calculate basic signals
             basic_signals = self.calculate_basic_signals(wt1, wt2, wt_conditions)
 
-            # Detect divergences
-            wt_divs = {}
-            rsi_divs = {}
-            stoch_divs = {}
-
-            if show_wt_div:
-                wt_regular_divs = self.divergence_detector.detect_regular_divergences(
-                    wt2, df["close"], self.wt_div_ob_level, self.wt_div_os_level
-                )
-                wt_hidden_divs = self.divergence_detector.detect_hidden_divergences(
-                    wt2, df["close"]
-                )
-
-                wt_divs = {
-                    "regular_bullish": [
-                        d
-                        for d in wt_regular_divs
-                        if d.type == DivergenceType.REGULAR_BULLISH
-                    ],
-                    "regular_bearish": [
-                        d
-                        for d in wt_regular_divs
-                        if d.type == DivergenceType.REGULAR_BEARISH
-                    ],
-                    "hidden_bullish": [
-                        d
-                        for d in wt_hidden_divs
-                        if d.type == DivergenceType.HIDDEN_BULLISH
-                    ],
-                    "hidden_bearish": [
-                        d
-                        for d in wt_hidden_divs
-                        if d.type == DivergenceType.HIDDEN_BEARISH
-                    ],
-                }
-
-            if show_rsi_div and rsi is not None:
-                rsi_regular_divs = self.divergence_detector.detect_regular_divergences(
-                    rsi, df["close"], self.rsi_div_ob_level, self.rsi_div_os_level
-                )
-                rsi_hidden_divs = self.divergence_detector.detect_hidden_divergences(
-                    rsi, df["close"]
-                )
-
-                rsi_divs = {
-                    "regular_bullish": [
-                        d
-                        for d in rsi_regular_divs
-                        if d.type == DivergenceType.REGULAR_BULLISH
-                    ],
-                    "regular_bearish": [
-                        d
-                        for d in rsi_regular_divs
-                        if d.type == DivergenceType.REGULAR_BEARISH
-                    ],
-                    "hidden_bullish": [
-                        d
-                        for d in rsi_hidden_divs
-                        if d.type == DivergenceType.HIDDEN_BULLISH
-                    ],
-                    "hidden_bearish": [
-                        d
-                        for d in rsi_hidden_divs
-                        if d.type == DivergenceType.HIDDEN_BEARISH
-                    ],
-                }
-
-            if show_stoch_div:
-                stoch_k = df_stoch["stoch_rsi_k"]
-                stoch_regular_divs = (
-                    self.divergence_detector.detect_regular_divergences(
-                        stoch_k,
-                        df["close"],
-                        80,
-                        20,  # Standard stoch levels
-                    )
-                )
-                stoch_hidden_divs = self.divergence_detector.detect_hidden_divergences(
-                    stoch_k, df["close"]
-                )
-
-                stoch_divs = {
-                    "regular_bullish": [
-                        d
-                        for d in stoch_regular_divs
-                        if d.type == DivergenceType.REGULAR_BULLISH
-                    ],
-                    "regular_bearish": [
-                        d
-                        for d in stoch_regular_divs
-                        if d.type == DivergenceType.REGULAR_BEARISH
-                    ],
-                    "hidden_bullish": [
-                        d
-                        for d in stoch_hidden_divs
-                        if d.type == DivergenceType.HIDDEN_BULLISH
-                    ],
-                    "hidden_bearish": [
-                        d
-                        for d in stoch_hidden_divs
-                        if d.type == DivergenceType.HIDDEN_BEARISH
-                    ],
-                }
+            # Detect divergences using helper methods
+            wt_divs = (
+                self._calculate_wt_divergences(wt2, df["close"]) if show_wt_div else {}
+            )
+            rsi_divs = (
+                self._calculate_rsi_divergences(rsi, df["close"])
+                if show_rsi_div and rsi is not None
+                else {}
+            )
+            stoch_divs = (
+                self._calculate_stoch_divergences(df_stoch["stoch_rsi_k"], df["close"])
+                if show_stoch_div
+                else {}
+            )
 
             # Calculate divergence signals
             divergence_signals = self.calculate_divergence_signals(
@@ -676,47 +710,7 @@ class CipherBSignals:
             )
 
             # Calculate fractal data for gold signals
-            wt_fractals = self.divergence_detector.find_fractals(wt2)
-
-            # Create fractal data with proper indexing
-            fractal_indices = []
-            fractal_values = []
-            bottom_indices = []
-            bottom_values = []
-
-            for f in wt_fractals:
-                # Use integer index for array-like operations
-                if isinstance(f.index, int) and f.index < len(df):
-                    fractal_indices.append(f.index)
-                    fractal_values.append(f.fractal_type.value == -1)
-
-                    if f.fractal_type.value == -1:  # Bottom fractal
-                        bottom_indices.append(f.index)
-                        bottom_values.append(f.value)
-
-            # Create series with integer indices that match DataFrame positions
-            fractal_bot_series = pd.Series(False, index=range(len(df)))
-            wt_low_prev_series = pd.Series(np.nan, index=range(len(df)))
-
-            # Set fractal bottom positions
-            for idx in fractal_indices:
-                if idx < len(fractal_bot_series):
-                    fractal_bot_series.iloc[idx] = fractal_values[
-                        fractal_indices.index(idx)
-                    ]
-
-            # Set bottom fractal values
-            for i, idx in enumerate(bottom_indices):
-                if idx < len(wt_low_prev_series):
-                    wt_low_prev_series.iloc[idx] = bottom_values[i]
-
-            # Forward fill the low previous values
-            wt_low_prev_series = wt_low_prev_series.ffill()
-
-            fractal_data = {
-                "wt_fractal_bot": fractal_bot_series,
-                "wt_low_prev": wt_low_prev_series,
-            }
+            fractal_data = self._prepare_fractal_data(wt2, len(df))
 
             # Calculate gold signals
             wt_data = {"wt1": wt1, "wt2": wt2}
@@ -1025,8 +1019,8 @@ class CipherBSignals:
                 }
             )
 
-        except Exception as e:
-            logger.exception("Error in Cipher B signals calculation: %s", e)
+        except Exception:
+            logger.exception("Error in Cipher B signals calculation: %s")
 
         return result
 

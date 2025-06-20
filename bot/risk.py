@@ -482,195 +482,22 @@ class RiskManager:
             Tuple of (approved, modified_action, reason)
         """
         try:
-            # 🚨 EMERGENCY STOP CHECK - Highest priority
-            if self.emergency_stop.is_stopped:
-                self.circuit_breaker.record_failure(
-                    "emergency_stop",
-                    f"Emergency stop active: {self.emergency_stop.stop_reason}",
-                    "critical",
-                )
-                return (
-                    False,
-                    self._get_hold_action(
-                        f"EMERGENCY STOP: {self.emergency_stop.stop_reason}"
-                    ),
-                    "Emergency stop active",
-                )
-
-            # 🔄 CIRCUIT BREAKER CHECK - Second priority
-            if not self.circuit_breaker.can_execute_trade():
-                return (
-                    False,
-                    self._get_hold_action(
-                        f"Circuit breaker OPEN - trading halted for "
-                        f"{self.circuit_breaker.get_status()['timeout_remaining']:.0f}s"
-                    ),
-                    "Circuit breaker",
-                )
-
-            # 📊 MONITOR RISK METRICS for emergency conditions
-            current_metrics = self._monitor_risk_metrics()
-            if self.emergency_stop.check_emergency_conditions(current_metrics):
-                return (
-                    False,
-                    self._get_hold_action("Emergency conditions detected"),
-                    "Emergency triggered",
-                )
-
-            # ✅ ENHANCED POSITION VALIDATION
-            position_validation_result = self._validate_position_consistency(
+            # Perform critical safety checks first
+            safety_result = self._evaluate_critical_safety_checks(
                 current_position, current_price
             )
-            if not position_validation_result["valid"]:
-                self._position_errors_count += 1
-                self.circuit_breaker.record_failure(
-                    "position_validation",
-                    position_validation_result["reason"],
-                    "medium",
-                )
-                return (
-                    False,
-                    self._get_hold_action(
-                        f"Position validation failed: {position_validation_result['reason']}"
-                    ),
-                    "Position validation",
-                )
+            if safety_result is not None:
+                return safety_result
 
-            # 🛡️ MANDATORY: Validate stop loss for LONG/SHORT actions
-            if not self._validate_mandatory_stop_loss(trade_action):
-                self.circuit_breaker.record_failure(
-                    "missing_stop_loss", "Stop loss validation failed", "high"
-                )
-                return (
-                    False,
-                    self._get_hold_action("Stop loss is mandatory for all trades"),
-                    "Missing stop loss",
-                )
-
-            # 📉 Check daily loss limit
-            if self._is_daily_loss_limit_reached():
-                return (
-                    False,
-                    self._get_hold_action("Daily loss limit reached"),
-                    "Daily loss limit",
-                )
-
-            # 🔢 Check maximum concurrent positions
-            if not self._can_open_new_position(trade_action, current_position):
-                return (
-                    False,
-                    self._get_hold_action("Max concurrent positions reached"),
-                    "Position limit",
-                )
-
-            # 📏 Validate and adjust position size
-            modified_action = self._validate_position_size(trade_action)
-
-            # 💰 Adjust position size for trading fees
-            try:
-                modified_action, trade_fees = (
-                    fee_calculator.adjust_position_size_for_fees(
-                        modified_action, self._account_balance, current_price
-                    )
-                )
-            except Exception as e:
-                self.circuit_breaker.record_failure(
-                    "fee_calculation", f"Fee calculation failed: {e}", "medium"
-                )
-                return (
-                    False,
-                    self._get_hold_action("Fee calculation error"),
-                    "Fee calculation error",
-                )
-
-            # 🏦 BALANCE VALIDATION - Comprehensive balance checks
-            balance_valid, balance_reason = self.validate_balance_for_trade(
-                modified_action,
-                current_price,
-                trade_fees.total_fee if trade_fees else Decimal(0),
+            # Perform risk validations
+            risk_result = self._evaluate_risk_validations(
+                trade_action, current_position, current_price
             )
+            if risk_result is not None:
+                return risk_result
 
-            if not balance_valid:
-                self.circuit_breaker.record_failure(
-                    "balance_validation",
-                    f"Balance validation failed: {balance_reason}",
-                    "medium",
-                )
-                return (
-                    False,
-                    self._get_hold_action(
-                        f"Balance validation failed: {balance_reason}"
-                    ),
-                    "Balance validation",
-                )
-
-            if modified_action.size_pct == 0 and trade_action.action in [
-                "LONG",
-                "SHORT",
-            ]:
-                return (
-                    False,
-                    self._get_hold_action("Position too small after fee adjustment"),
-                    "Insufficient funds for fees",
-                )
-
-            # 💹 Validate trade profitability after fees (skip for HOLD/CLOSE actions)
-            if modified_action.action not in ["HOLD", "CLOSE"]:
-                position_value = self._account_balance * Decimal(
-                    str(modified_action.size_pct / 100)
-                )
-                is_profitable, profit_reason = (
-                    fee_calculator.validate_trade_profitability(
-                        modified_action, position_value, current_price
-                    )
-                )
-
-                if not is_profitable:
-                    return (
-                        False,
-                        self._get_hold_action(f"Trade not profitable: {profit_reason}"),
-                        "Fee profitability",
-                    )
-
-            # 📊 Calculate comprehensive risk metrics
-            risk_metrics = self._calculate_position_risk(
-                modified_action, current_price, trade_fees
-            )
-
-            # 🎯 Check if risk is acceptable
-            if risk_metrics["max_loss_usd"] > self._get_max_acceptable_loss():
-                modified_action = self._reduce_position_size(
-                    modified_action, risk_metrics
-                )
-                logger.warning("Position size reduced due to excessive risk")
-
-            # 🔍 Final validation
-            if modified_action.size_pct == 0 and trade_action.action in [
-                "LONG",
-                "SHORT",
-            ]:
-                return (
-                    False,
-                    self._get_hold_action("Risk too high for any position"),
-                    "Risk too high",
-                )
-
-            # ✅ Success - record for circuit breaker
-            self.circuit_breaker.record_success()
-
-            # 📝 Log comprehensive information
-            if trade_fees.total_fee > 0:
-                logger.info(
-                    "✅ Risk approved - Position: %s%% -> %s%%\n   • Fees: $%.2f\n   • Max Loss: $%.2f\n   • R/R Ratio: %.2f\n   • Circuit Breaker: %s",
-                    trade_action.size_pct,
-                    modified_action.size_pct,
-                    trade_fees.total_fee,
-                    risk_metrics["max_loss_usd"],
-                    risk_metrics["risk_reward_ratio"],
-                    self.circuit_breaker.state,
-                )
-
-            return True, modified_action, "Advanced risk checks passed"
+            # All checks passed - approve the trade
+            return self._approve_trade_action(trade_action, current_price)
 
         except Exception:
             logger.exception("Risk evaluation error")
@@ -678,6 +505,201 @@ class RiskManager:
                 "risk_evaluation_error", "exception_occurred", "high"
             )
             return False, self._get_hold_action("Risk evaluation error"), "Error"
+
+    def _evaluate_critical_safety_checks(
+        self, current_position: Position, current_price: Decimal
+    ) -> tuple[bool, TradeAction, str] | None:
+        """Evaluate critical safety checks (emergency stop, circuit breaker, etc.)."""
+        # 🚨 EMERGENCY STOP CHECK - Highest priority
+        if self.emergency_stop.is_stopped:
+            self.circuit_breaker.record_failure(
+                "emergency_stop",
+                f"Emergency stop active: {self.emergency_stop.stop_reason}",
+                "critical",
+            )
+            return (
+                False,
+                self._get_hold_action(
+                    f"EMERGENCY STOP: {self.emergency_stop.stop_reason}"
+                ),
+                "Emergency stop active",
+            )
+
+        # 🔄 CIRCUIT BREAKER CHECK - Second priority
+        if not self.circuit_breaker.can_execute_trade():
+            return (
+                False,
+                self._get_hold_action(
+                    f"Circuit breaker OPEN - trading halted for "
+                    f"{self.circuit_breaker.get_status()['timeout_remaining']:.0f}s"
+                ),
+                "Circuit breaker",
+            )
+
+        # 📊 MONITOR RISK METRICS for emergency conditions
+        current_metrics = self._monitor_risk_metrics()
+        if self.emergency_stop.check_emergency_conditions(current_metrics):
+            return (
+                False,
+                self._get_hold_action("Emergency conditions detected"),
+                "Emergency triggered",
+            )
+
+        # ✅ ENHANCED POSITION VALIDATION
+        position_validation_result = self._validate_position_consistency(
+            current_position, current_price
+        )
+        if not position_validation_result["valid"]:
+            self._position_errors_count += 1
+            self.circuit_breaker.record_failure(
+                "position_validation",
+                position_validation_result["reason"],
+                "medium",
+            )
+            return (
+                False,
+                self._get_hold_action(
+                    f"Position validation failed: {position_validation_result['reason']}"
+                ),
+                "Position validation",
+            )
+
+        return None
+
+    def _evaluate_risk_validations(
+        self,
+        trade_action: TradeAction,
+        current_position: Position,
+        _current_price: Decimal,
+    ) -> tuple[bool, TradeAction, str] | None:
+        """Evaluate risk validations (stop loss, limits, etc.)."""
+        # 🛡️ MANDATORY: Validate stop loss for LONG/SHORT actions
+        if not self._validate_mandatory_stop_loss(trade_action):
+            self.circuit_breaker.record_failure(
+                "missing_stop_loss", "Stop loss validation failed", "high"
+            )
+            return (
+                False,
+                self._get_hold_action("Stop loss is mandatory for all trades"),
+                "Missing stop loss",
+            )
+
+        # 📉 Check daily loss limit
+        if self._is_daily_loss_limit_reached():
+            return (
+                False,
+                self._get_hold_action("Daily loss limit reached"),
+                "Daily loss limit",
+            )
+
+        # 🔢 Check maximum concurrent positions
+        if not self._can_open_new_position(trade_action, current_position):
+            return (
+                False,
+                self._get_hold_action("Max concurrent positions reached"),
+                "Position limit",
+            )
+
+        return None
+
+    def _approve_trade_action(
+        self, trade_action: TradeAction, current_price: Decimal
+    ) -> tuple[bool, TradeAction, str]:
+        """Approve trade action after all validations pass."""
+        # 📏 Validate and adjust position size
+        modified_action = self._validate_position_size(trade_action)
+
+        # 💰 Adjust position size for trading fees
+        try:
+            modified_action, trade_fees = fee_calculator.adjust_position_size_for_fees(
+                modified_action, self._account_balance, current_price
+            )
+        except Exception as e:
+            self.circuit_breaker.record_failure(
+                "fee_calculation", f"Fee calculation failed: {e}", "medium"
+            )
+            return (
+                False,
+                self._get_hold_action("Fee calculation error"),
+                "Fee calculation error",
+            )
+
+        # 🏦 BALANCE VALIDATION - Comprehensive balance checks
+        balance_valid, balance_reason = self.validate_balance_for_trade(
+            modified_action,
+            current_price,
+            trade_fees.total_fee if trade_fees else Decimal(0),
+        )
+
+        if not balance_valid:
+            self.circuit_breaker.record_failure(
+                "balance_validation",
+                f"Balance validation failed: {balance_reason}",
+                "medium",
+            )
+            return (
+                False,
+                self._get_hold_action(f"Balance validation failed: {balance_reason}"),
+                "Balance validation",
+            )
+
+        if modified_action.size_pct == 0 and trade_action.action in ["LONG", "SHORT"]:
+            return (
+                False,
+                self._get_hold_action("Position too small after fee adjustment"),
+                "Insufficient funds for fees",
+            )
+
+        # 💹 Validate trade profitability after fees (skip for HOLD/CLOSE actions)
+        if modified_action.action not in ["HOLD", "CLOSE"]:
+            position_value = self._account_balance * Decimal(
+                str(modified_action.size_pct / 100)
+            )
+            is_profitable, profit_reason = fee_calculator.validate_trade_profitability(
+                modified_action, position_value, current_price
+            )
+
+            if not is_profitable:
+                return (
+                    False,
+                    self._get_hold_action(f"Trade not profitable: {profit_reason}"),
+                    "Fee profitability",
+                )
+
+        # 📊 Calculate comprehensive risk metrics
+        risk_metrics = self._calculate_position_risk(
+            modified_action, current_price, trade_fees
+        )
+
+        # 🎯 Check if risk is acceptable
+        if risk_metrics["max_loss_usd"] > self._get_max_acceptable_loss():
+            modified_action = self._reduce_position_size(modified_action, risk_metrics)
+            logger.warning("Position size reduced due to excessive risk")
+
+        # 🔍 Final validation
+        if modified_action.size_pct == 0 and trade_action.action in ["LONG", "SHORT"]:
+            return (
+                False,
+                self._get_hold_action("Risk too high for any position"),
+                "Risk too high",
+            )
+
+        # ✅ Success - record for circuit breaker
+        self.circuit_breaker.record_success()
+
+        # 📝 Log comprehensive information
+        if trade_fees.total_fee > 0:
+            logger.info(
+                "✅ Risk approved - Position: %s%% -> %s%%\n   • Fees: $%.2f\n   • Max Loss: $%.2f\n   • R/R Ratio: %.2f\n   • Circuit Breaker: %s",
+                trade_action.size_pct,
+                modified_action.size_pct,
+                trade_fees.total_fee,
+                risk_metrics["max_loss_usd"],
+                risk_metrics["risk_reward_ratio"],
+                self.circuit_breaker.state,
+            )
+
+        return True, modified_action, "Advanced risk checks passed"
 
     def validate_balance_for_trade(
         self,
@@ -697,78 +719,107 @@ class RiskManager:
             Tuple of (is_valid, reason)
         """
         try:
+            # Early return for actions that don't need validation
             if trade_action.action in ["HOLD", "CLOSE"]:
                 return True, "No balance validation required for HOLD/CLOSE"
 
-            # Calculate required balance for the trade
-            position_value = self._account_balance * (
-                Decimal(str(trade_action.size_pct)) / 100
-            )
-            leveraged_value = position_value * Decimal(str(self.leverage))
-            required_margin = leveraged_value / Decimal(str(self.leverage))
-            _total_required = required_margin + estimated_fees
+            # Perform balance validation checks
+            return self._perform_balance_validation_checks(trade_action, estimated_fees)
 
-            # Validate current balance can support this trade
-            validation_result = self.balance_validator.validate_balance_range(
-                self._account_balance, f"trade_preparation_{trade_action.action}"
-            )
-
-            if not validation_result["valid"]:
-                return (
-                    False,
-                    f"Current balance validation failed: {validation_result.get('message', 'Unknown error')}",
-                )
-
-            # Check if balance after trade would be valid
-            post_trade_balance = self._account_balance - estimated_fees
-            if post_trade_balance < Decimal(0):
-                return (
-                    False,
-                    f"Trade would result in negative balance: ${post_trade_balance}",
-                )
-
-            try:
-                post_trade_validation = self.balance_validator.validate_balance_range(
-                    post_trade_balance, f"post_trade_{trade_action.action}"
-                )
-
-                if not post_trade_validation["valid"]:
-                    return (
-                        False,
-                        f"Post-trade balance would be invalid: {post_trade_validation.get('message', 'Unknown error')}",
-                    )
-
-            except BalanceValidationError as e:
-                return False, f"Post-trade balance validation failed: {e}"
-
-            # Validate margin requirements
-            try:
-                current_margin_used = self._calculate_current_margin_usage()
-                new_margin_used = current_margin_used + required_margin
-
-                margin_validation = self.balance_validator.validate_margin_calculation(
-                    balance=self._account_balance,
-                    used_margin=new_margin_used,
-                    position_value=leveraged_value,
-                    leverage=self.leverage,
-                )
-
-                if not margin_validation["valid"]:
-                    return (
-                        False,
-                        f"Margin validation failed: {margin_validation.get('message', 'Unknown error')}",
-                    )
-
-            except BalanceValidationError as e:
-                return False, f"Margin validation error: {e}"
-
-            logger.debug(
-                "✅ Balance validation passed for %s trade", trade_action.action
-            )
-            return True, "Balance validation successful"
         except Exception:
             logger.exception("Error in balance validation for trade")
             return False, "Balance validation error occurred"
+
+    def _perform_balance_validation_checks(
+        self, trade_action: TradeAction, estimated_fees: Decimal
+    ) -> tuple[bool, str]:
+        """Perform the balance validation checks."""
+        # Calculate required balance for the trade
+        position_value = self._account_balance * (
+            Decimal(str(trade_action.size_pct)) / 100
+        )
+        leveraged_value = position_value * Decimal(str(self.leverage))
+        required_margin = leveraged_value / Decimal(str(self.leverage))
+
+        # Validate current balance
+        validation_result = self.balance_validator.validate_balance_range(
+            self._account_balance, f"trade_preparation_{trade_action.action}"
+        )
+
+        if not validation_result["valid"]:
+            return (
+                False,
+                f"Current balance validation failed: {validation_result.get('message', 'Unknown error')}",
+            )
+
+        # Check post-trade balance
+        post_trade_balance = self._account_balance - estimated_fees
+        if post_trade_balance < Decimal(0):
+            return (
+                False,
+                f"Trade would result in negative balance: ${post_trade_balance}",
+            )
+
+        # Validate post-trade balance
+        post_trade_result = self._validate_post_trade_balance(
+            trade_action, post_trade_balance
+        )
+        if post_trade_result is not None:
+            return post_trade_result
+
+        # Validate margin requirements
+        margin_result = self._validate_margin_requirements(
+            required_margin, leveraged_value
+        )
+        if margin_result is not None:
+            return margin_result
+
+        logger.debug("✅ Balance validation passed for %s trade", trade_action.action)
+        return True, "Balance validation successful"
+
+    def _validate_post_trade_balance(
+        self, trade_action: TradeAction, post_trade_balance: Decimal
+    ) -> tuple[bool, str] | None:
+        """Validate post-trade balance."""
+        try:
+            post_trade_validation = self.balance_validator.validate_balance_range(
+                post_trade_balance, f"post_trade_{trade_action.action}"
+            )
+
+            if not post_trade_validation["valid"]:
+                return (
+                    False,
+                    f"Post-trade balance would be invalid: {post_trade_validation.get('message', 'Unknown error')}",
+                )
+        except BalanceValidationError as e:
+            return False, f"Post-trade balance validation failed: {e}"
+
+        return None
+
+    def _validate_margin_requirements(
+        self, required_margin: Decimal, leveraged_value: Decimal
+    ) -> tuple[bool, str] | None:
+        """Validate margin requirements."""
+        try:
+            current_margin_used = self._calculate_current_margin_usage()
+            new_margin_used = current_margin_used + required_margin
+
+            margin_validation = self.balance_validator.validate_margin_calculation(
+                balance=self._account_balance,
+                used_margin=new_margin_used,
+                position_value=leveraged_value,
+                leverage=self.leverage,
+            )
+
+            if not margin_validation["valid"]:
+                return (
+                    False,
+                    f"Margin validation failed: {margin_validation.get('message', 'Unknown error')}",
+                )
+        except BalanceValidationError as e:
+            return False, f"Margin validation error: {e}"
+
+        return None
 
     def _calculate_current_margin_usage(self) -> Decimal:
         """Calculate current margin usage across all positions."""

@@ -331,9 +331,7 @@ class BluefinServiceClient:
                 times = self.balance_performance_metrics["balance_response_times"]
                 self.balance_performance_metrics["average_balance_response_time"] = sum(  # type: ignore[index]
                     times
-                ) / len(
-                    times
-                )  # type: ignore[arg-type]
+                ) / len(times)  # type: ignore[arg-type]
         else:
             self.balance_performance_metrics["failed_balance_requests"] += 1
 
@@ -676,7 +674,6 @@ class BluefinServiceClient:
             try:
                 result = await func(*args, **kwargs)
                 self._record_success()
-                return result
             except (TimeoutError, ClientError, aiohttp.ServerConnectionError) as e:
                 last_exception = e
                 self._record_failure()
@@ -724,6 +721,8 @@ class BluefinServiceClient:
                 )
                 last_exception = e
                 break
+            else:
+                return result
 
         if last_exception:
             raise last_exception
@@ -944,10 +943,6 @@ class BluefinServiceClient:
             if self._session and not self._session.closed:
                 try:
                     await self._session.close()
-                    logger.debug(
-                        "Closed existing session for recreation",
-                        extra={"client_id": self.client_id},
-                    )
                 except Exception as e:
                     exception_handler.log_exception_with_context(
                         e,
@@ -957,6 +952,11 @@ class BluefinServiceClient:
                         },
                         component="BluefinServiceClient",
                         operation="_ensure_session",
+                    )
+                else:
+                    logger.debug(
+                        "Closed existing session for recreation",
+                        extra={"client_id": self.client_id},
                     )
 
             # Create new session
@@ -1103,8 +1103,6 @@ class BluefinServiceClient:
                 "Session refresh completed successfully",
                 extra={"client_id": self.client_id},
             )
-            return True
-
         except Exception as e:
             exception_handler.log_exception_with_context(
                 e,
@@ -1116,6 +1114,8 @@ class BluefinServiceClient:
                 operation="force_session_refresh",
             )
             return False
+        else:
+            return True
 
     async def get_session_stats(self) -> dict[str, Any]:
         """
@@ -1165,13 +1165,6 @@ class BluefinServiceClient:
                 # Wait for session cleanup to complete
                 await asyncio.sleep(0.1)
 
-                logger.debug(
-                    "HTTP session closed successfully",
-                    extra={
-                        "client_id": self.client_id,
-                        "final_request_count": self._session_request_count,
-                    },
-                )
             except Exception as e:
                 exception_handler.log_exception_with_context(
                     e,
@@ -1181,6 +1174,14 @@ class BluefinServiceClient:
                     },
                     component="BluefinServiceClient",
                     operation="disconnect",
+                )
+            else:
+                logger.debug(
+                    "HTTP session closed successfully",
+                    extra={
+                        "client_id": self.client_id,
+                        "final_request_count": self._session_request_count,
+                    },
                 )
             finally:
                 self._session = None
@@ -1304,21 +1305,6 @@ class BluefinServiceClient:
                 },
             )
 
-            logger.info(
-                "Successfully retrieved account data",
-                extra={
-                    "client_id": self.client_id,
-                    "correlation_id": correlation_id,
-                    "operation": "get_account_data",
-                    "duration_ms": round(total_duration * 1000, 2),
-                    "has_balance": bool(balance_amount and balance_amount != "0"),
-                    "timestamp": datetime.now(UTC).isoformat(),
-                    "success": True,
-                },
-            )
-
-            return result
-
         except Exception as e:
             total_duration = time.time() - operation_start
 
@@ -1351,6 +1337,21 @@ class BluefinServiceClient:
             )
 
             return {"error": f"Account data request failed: {e!s}"}
+        else:
+            logger.info(
+                "Successfully retrieved account data",
+                extra={
+                    "client_id": self.client_id,
+                    "correlation_id": correlation_id,
+                    "operation": "get_account_data",
+                    "duration_ms": round(total_duration * 1000, 2),
+                    "has_balance": bool(balance_amount and balance_amount != "0"),
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "success": True,
+                },
+            )
+
+            return result
 
     async def get_user_positions(self) -> list[dict[str, Any]]:
         """
@@ -1423,6 +1424,8 @@ class BluefinServiceClient:
                 operation="get_user_positions",
             )
             return []
+        else:
+            return positions
 
     async def place_order(self, order_data: dict[str, Any]) -> dict[str, Any]:
         """
@@ -1441,7 +1444,6 @@ class BluefinServiceClient:
                 operation="place_order",
                 json_data=order_data,
             )
-            return {"status": "success", "order": result}
 
         except BluefinServiceAuthError:
             logger.exception(
@@ -1481,6 +1483,8 @@ class BluefinServiceClient:
                 operation="place_order",
             )
             return {"status": "error", "message": str(e)}
+        else:
+            return {"status": "success", "order": result}
 
     async def cancel_order(self, order_id: str) -> bool:
         """
@@ -1530,6 +1534,8 @@ class BluefinServiceClient:
                 operation="cancel_order",
             )
             return False
+        else:
+            return True
 
     async def get_market_ticker(self, symbol: str) -> dict[str, Any]:
         """
@@ -1632,6 +1638,8 @@ class BluefinServiceClient:
                 operation="set_leverage",
             )
             return False
+        else:
+            return True
 
     async def get_candlestick_data(self, params: dict[str, Any]) -> list[list[Any]]:
         """
@@ -1671,15 +1679,16 @@ class BluefinServiceClient:
                     },
                 )
                 return candles
-            logger.warning(
-                "⚠️ Received invalid candle data from service",
-                extra={
-                    "client_id": self.client_id,
-                    "operation": "get_candlestick_data",
-                    "raw_candle_count": len(candles),
-                },
-            )
-            return []
+            else:
+                logger.warning(
+                    "⚠️ Received invalid candle data from service",
+                    extra={
+                        "client_id": self.client_id,
+                        "operation": "get_candlestick_data",
+                        "raw_candle_count": len(candles),
+                    },
+                )
+                return []
 
         except (BluefinServiceAuthError, BluefinServiceRateLimitError) as e:
             logger.exception(
@@ -1909,7 +1918,8 @@ class BluefinServiceClient:
                 BluefinServiceRateLimitError,
                 BluefinServiceConnectionError,
             ):
-                # Re-raise our custom exceptions without retry
+                # Re-raise our custom exceptions without retry, with context
+                logger.exception("Bluefin service error during %s", operation)
                 raise
             except aiohttp.ClientError as e:
                 self._record_failure()
@@ -1989,110 +1999,202 @@ class BluefinServiceClient:
         total_candles = len(candles)
 
         for i, candle in enumerate(candles):
-            if not isinstance(candle, list) or len(candle) < 6:
-                logger.debug("⚠️ Invalid candle format at index %s: %s", i, candle)
-                continue
-
-            try:
-                timestamp, open_p, high_p, low_p, close_p, volume = candle[0:6]
-
-                # Convert and validate data types more robustly
-                try:
-                    # Handle timestamps as strings, ints, or floats
-                    if isinstance(timestamp, str):
-                        timestamp = float(timestamp)
-                    timestamp = float(timestamp)
-
-                    # Convert price values to float, handling strings
-                    open_p = float(open_p) if open_p is not None else 0.0
-                    high_p = float(high_p) if high_p is not None else 0.0
-                    low_p = float(low_p) if low_p is not None else 0.0
-                    close_p = float(close_p) if close_p is not None else 0.0
-                    volume = float(volume) if volume is not None else 0.0
-
-                except (ValueError, TypeError) as e:
-                    logger.debug("⚠️ Type conversion failed for candle %s: %s", i, e)
-                    continue
-
-                # Basic sanity checks
-                if timestamp <= 0:
-                    logger.debug("⚠️ Invalid timestamp in candle %s: %s", i, timestamp)
-                    continue
-
-                # Validate price values are positive (but allow 0 volume)
-                if not all(x > 0 for x in [open_p, high_p, low_p, close_p]):
-                    logger.debug(
-                        "⚠️ Non-positive prices in candle %s: O=%s, H=%s, L=%s, C=%s",
-                        i,
-                        open_p,
-                        high_p,
-                        low_p,
-                        close_p,
-                    )
-                    continue
-
-                # Volume can be 0 but not negative
-                if volume < 0:
-                    logger.debug("⚠️ Negative volume in candle %s: %s", i, volume)
-                    continue
-
-                # Check for reasonable price ranges (avoid extreme outliers)
-                prices = [open_p, high_p, low_p, close_p]
-                max_price = max(prices)
-                min_price = min(prices)
-                avg_price = sum(prices) / 4
-
-                # Try to fix obvious OHLC relationship errors from data source
-                max_oc = max(open_p, close_p)
-                min_oc = min(open_p, close_p)
-
-                # Fix high if it's too low
-                if high_p < max_oc:
-                    logger.debug(
-                        "🔧 Fixing high price: %s -> %s (candle %s)", high_p, max_oc, i
-                    )
-                    high_p = max_oc
-
-                # Fix low if it's too high
-                if low_p > min_oc:
-                    logger.debug(
-                        "🔧 Fixing low price: %s -> %s (candle %s)", low_p, min_oc, i
-                    )
-                    low_p = min_oc
-
-                # Validate OHLC relationships with tolerance for floating point precision
-                tolerance = max(
-                    avg_price * 1e-6, 1e-8
-                )  # 0.0001% of price or 1e-8, whichever is larger
-                if not (
-                    high_p >= max(open_p, close_p) - tolerance
-                    and low_p <= min(open_p, close_p) + tolerance
-                ):
-                    logger.debug(
-                        "⚠️ Invalid OHLC relationship in candle %s: O=%s, H=%s, L=%s, C=%s, tolerance=%s",
-                        i,
-                        open_p,
-                        high_p,
-                        low_p,
-                        close_p,
-                        tolerance,
-                    )
-                    continue
-                if max_price - min_price > avg_price * 0.5:
-                    logger.debug(
-                        "⚠️ Suspicious price spread in candle %s: range=%.6f, avg=%.6f",
-                        i,
-                        max_price - min_price,
-                        avg_price,
-                    )
-                    continue
-
+            if self._is_valid_candle(candle, i):
                 valid_count += 1
 
-            except (ValueError, IndexError, TypeError) as e:
-                logger.debug("⚠️ Error validating candle %s: %s", i, e)
-                continue
+        return self._evaluate_validation_results(valid_count, total_candles, candles)
 
+    def _is_valid_candle(self, candle: Any, index: int) -> bool:
+        """Check if a single candle is valid.
+
+        Args:
+            candle: Single candle data
+            index: Candle index for logging
+
+        Returns:
+            True if candle is valid
+        """
+        if not isinstance(candle, list) or len(candle) < 6:
+            logger.debug("⚠️ Invalid candle format at index %s: %s", index, candle)
+            return False
+
+        try:
+            timestamp, open_p, high_p, low_p, close_p, volume = candle[0:6]
+
+            # Convert and validate data types
+            converted_values = self._convert_candle_values(
+                timestamp, open_p, high_p, low_p, close_p, volume
+            )
+            if not converted_values:
+                logger.debug("⚠️ Type conversion failed for candle %s", index)
+                return False
+
+            timestamp, open_p, high_p, low_p, close_p, volume = converted_values
+
+            # Run validation checks
+            return self._validate_candle_values(
+                timestamp, open_p, high_p, low_p, close_p, volume, index
+            )
+
+        except (ValueError, IndexError, TypeError) as e:
+            logger.debug("⚠️ Error validating candle %s: %s", index, e)
+            return False
+
+    def _convert_candle_values(
+        self,
+        timestamp: Any,
+        open_p: Any,
+        high_p: Any,
+        low_p: Any,
+        close_p: Any,
+        volume: Any,
+    ) -> tuple[float, float, float, float, float, float] | None:
+        """Convert candle values to proper types.
+
+        Returns:
+            Tuple of converted values or None if conversion fails
+        """
+        try:
+            # Handle timestamps as strings, ints, or floats
+            if isinstance(timestamp, str):
+                timestamp = float(timestamp)
+            timestamp = float(timestamp)
+
+            # Convert price values to float, handling strings
+            open_p = float(open_p) if open_p is not None else 0.0
+            high_p = float(high_p) if high_p is not None else 0.0
+            low_p = float(low_p) if low_p is not None else 0.0
+            close_p = float(close_p) if close_p is not None else 0.0
+            volume = float(volume) if volume is not None else 0.0
+
+        except (ValueError, TypeError):
+            return None
+        else:
+            return timestamp, open_p, high_p, low_p, close_p, volume
+
+    def _validate_candle_values(
+        self,
+        timestamp: float,
+        open_p: float,
+        high_p: float,
+        low_p: float,
+        close_p: float,
+        volume: float,
+        index: int,
+    ) -> bool:
+        """Validate converted candle values.
+
+        Args:
+            timestamp, open_p, high_p, low_p, close_p, volume: Converted candle values
+            index: Candle index for logging
+
+        Returns:
+            True if all values are valid
+        """
+        # Basic sanity checks
+        if timestamp <= 0:
+            logger.debug("⚠️ Invalid timestamp in candle %s: %s", index, timestamp)
+            return False
+
+        # Validate price values are positive (but allow 0 volume)
+        if not all(x > 0 for x in [open_p, high_p, low_p, close_p]):
+            logger.debug(
+                "⚠️ Non-positive prices in candle %s: O=%s, H=%s, L=%s, C=%s",
+                index,
+                open_p,
+                high_p,
+                low_p,
+                close_p,
+            )
+            return False
+
+        # Volume can be 0 but not negative
+        if volume < 0:
+            logger.debug("⚠️ Negative volume in candle %s: %s", index, volume)
+            return False
+
+        # Apply OHLC fixes and validate relationships
+        return self._validate_ohlc_relationships(open_p, high_p, low_p, close_p, index)
+
+    def _validate_ohlc_relationships(
+        self, open_p: float, high_p: float, low_p: float, close_p: float, index: int
+    ) -> bool:
+        """Validate and fix OHLC relationships.
+
+        Args:
+            open_p, high_p, low_p, close_p: Price values
+            index: Candle index for logging
+
+        Returns:
+            True if relationships are valid after fixes
+        """
+        # Check for reasonable price ranges (avoid extreme outliers)
+        prices = [open_p, high_p, low_p, close_p]
+        max_price = max(prices)
+        min_price = min(prices)
+        avg_price = sum(prices) / 4
+
+        # Try to fix obvious OHLC relationship errors from data source
+        max_oc = max(open_p, close_p)
+        min_oc = min(open_p, close_p)
+
+        # Fix high if it's too low
+        if high_p < max_oc:
+            logger.debug(
+                "🔧 Fixing high price: %s -> %s (candle %s)", high_p, max_oc, index
+            )
+            high_p = max_oc
+
+        # Fix low if it's too high
+        if low_p > min_oc:
+            logger.debug(
+                "🔧 Fixing low price: %s -> %s (candle %s)", low_p, min_oc, index
+            )
+            low_p = min_oc
+
+        # Validate OHLC relationships with tolerance for floating point precision
+        tolerance = max(
+            avg_price * 1e-6, 1e-8
+        )  # 0.0001% of price or 1e-8, whichever is larger
+        if not (
+            high_p >= max(open_p, close_p) - tolerance
+            and low_p <= min(open_p, close_p) + tolerance
+        ):
+            logger.debug(
+                "⚠️ Invalid OHLC relationship in candle %s: O=%s, H=%s, L=%s, C=%s, tolerance=%s",
+                index,
+                open_p,
+                high_p,
+                low_p,
+                close_p,
+                tolerance,
+            )
+            return False
+
+        if max_price - min_price > avg_price * 0.5:
+            logger.debug(
+                "⚠️ Suspicious price spread in candle %s: range=%.6f, avg=%.6f",
+                index,
+                max_price - min_price,
+                avg_price,
+            )
+            return False
+
+        return True
+
+    def _evaluate_validation_results(
+        self, valid_count: int, total_candles: int, candles: list[Any]
+    ) -> bool:
+        """Evaluate validation results and decide if data is acceptable.
+
+        Args:
+            valid_count: Number of valid candles
+            total_candles: Total number of candles
+            candles: Original candle data for failure analysis
+
+        Returns:
+            True if validation rate is acceptable
+        """
         validation_rate = valid_count / total_candles if total_candles else 0
 
         # Lower the threshold to 40% since we've identified data quality issues from the source
@@ -2104,137 +2206,8 @@ class BluefinServiceClient:
                 total_candles,
             )
 
-            # Analyze validation failure patterns
-            failure_reasons = {
-                "format": 0,
-                "type_conversion": 0,
-                "timestamp": 0,
-                "negative_prices": 0,
-                "negative_volume": 0,
-                "ohlc_relationship": 0,
-                "price_spread": 0,
-            }
-
-            for _, candle in enumerate(
-                candles[:20]
-            ):  # Check first 20 for pattern analysis
-                if not isinstance(candle, list) or len(candle) < 6:
-                    failure_reasons["format"] += 1
-                    continue
-
-                try:
-                    timestamp, open_p, high_p, low_p, close_p, volume = candle[0:6]
-
-                    # Check type conversion
-                    try:
-                        if isinstance(timestamp, str):
-                            timestamp = float(timestamp)
-                        timestamp = float(timestamp)
-                        open_p = float(open_p) if open_p is not None else 0.0
-                        high_p = float(high_p) if high_p is not None else 0.0
-                        low_p = float(low_p) if low_p is not None else 0.0
-                        close_p = float(close_p) if close_p is not None else 0.0
-                        volume = float(volume) if volume is not None else 0.0
-                    except (ValueError, TypeError):
-                        failure_reasons["type_conversion"] += 1
-                        continue
-
-                    # Check timestamp
-                    if timestamp <= 0:
-                        failure_reasons["timestamp"] += 1
-                        continue
-
-                    # Check negative prices
-                    if not all(x > 0 for x in [open_p, high_p, low_p, close_p]):
-                        failure_reasons["negative_prices"] += 1
-                        continue
-
-                    # Check volume
-                    if volume < 0:
-                        failure_reasons["negative_volume"] += 1
-                        continue
-
-                    # Check OHLC relationships
-                    prices_temp = [open_p, high_p, low_p, close_p]
-                    avg_price_temp = sum(prices_temp) / 4
-                    tolerance = max(avg_price_temp * 1e-6, 1e-8)
-                    if not (
-                        high_p >= max(open_p, close_p) - tolerance
-                        and low_p <= min(open_p, close_p) + tolerance
-                    ):
-                        failure_reasons["ohlc_relationship"] += 1
-                        continue
-
-                    # Check price spread
-                    prices = [open_p, high_p, low_p, close_p]
-                    max_price = max(prices)
-                    min_price = min(prices)
-                    avg_price = sum(prices) / 4
-                    if max_price - min_price > avg_price * 0.5:
-                        failure_reasons["price_spread"] += 1
-                        continue
-
-                except Exception:
-                    failure_reasons["format"] += 1
-
-            logger.warning("📊 Validation failure analysis: %s", failure_reasons)
-
-            # Log a few sample candles with OHLC relationship validation details
-            sample_count = 0
-            for i, candle in enumerate(candles[:10]):
-                if sample_count >= 5:
-                    break
-                try:
-                    if isinstance(candle, list) and len(candle) >= 6:
-                        timestamp, open_p, high_p, low_p, close_p, volume = candle[0:6]
-                        # Convert values
-                        open_p = float(open_p) if open_p is not None else 0.0
-                        high_p = float(high_p) if high_p is not None else 0.0
-                        low_p = float(low_p) if low_p is not None else 0.0
-                        close_p = float(close_p) if close_p is not None else 0.0
-                        volume = float(volume) if volume is not None else 0.0
-
-                        # Check OHLC relationship
-                        max_oc = max(open_p, close_p)
-                        min_oc = min(open_p, close_p)
-                        high_ok = high_p >= max_oc
-                        low_ok = low_p <= min_oc
-
-                        logger.warning(
-                            "Sample candle %s: O=%.8f, H=%.8f, L=%.8f, C=%.8f, V=%.4f",
-                            i,
-                            open_p,
-                            high_p,
-                            low_p,
-                            close_p,
-                            volume,
-                        )
-                        logger.warning(
-                            "  OHLC check: H>=%.8f? %s (%.8f >= %.8f), L<=%.8f? %s (%.8f <= %.8f)",
-                            max_oc,
-                            high_ok,
-                            high_p,
-                            max_oc,
-                            min_oc,
-                            low_ok,
-                            low_p,
-                            min_oc,
-                        )
-                        sample_count += 1
-                except Exception as e:
-                    exception_handler.log_exception_with_context(
-                        e,
-                        {
-                            "client_id": self.client_id,
-                            "candle_index": i,
-                            "candle_validation_error": True,
-                            "operation": "validate_sample_candle",
-                        },
-                        component="BluefinServiceClient",
-                        operation="_validate_candle_data",
-                    )
-                    sample_count += 1
-
+            # Analyze and log failure patterns
+            self._analyze_validation_failures(candles)
             return False
 
         logger.info(
@@ -2244,6 +2217,153 @@ class BluefinServiceClient:
             total_candles,
         )
         return True
+
+    def _analyze_validation_failures(self, candles: list[Any]) -> None:
+        """Analyze and log validation failure patterns.
+
+        Args:
+            candles: List of candle data to analyze
+        """
+        failure_reasons = {
+            "format": 0,
+            "type_conversion": 0,
+            "timestamp": 0,
+            "negative_prices": 0,
+            "negative_volume": 0,
+            "ohlc_relationship": 0,
+            "price_spread": 0,
+        }
+
+        # Analyze first 20 candles for pattern analysis
+        for _, candle in enumerate(candles[:20]):
+            failure_type = self._classify_candle_failure(candle)
+            if failure_type:
+                failure_reasons[failure_type] += 1
+
+        logger.warning("📊 Validation failure analysis: %s", failure_reasons)
+        self._log_sample_candles(candles[:10])
+
+    def _classify_candle_failure(self, candle: Any) -> str | None:
+        """Classify the type of failure for a candle.
+
+        Args:
+            candle: Candle data to classify
+
+        Returns:
+            Failure type string or None if no failure
+        """
+        # Early format validation
+        if not isinstance(candle, list) or len(candle) < 6:
+            return "format"
+
+        try:
+            timestamp, open_p, high_p, low_p, close_p, volume = candle[0:6]
+
+            # Check type conversion
+            converted_values = self._convert_candle_values(
+                timestamp, open_p, high_p, low_p, close_p, volume
+            )
+            if not converted_values:
+                return "type_conversion"
+
+            timestamp, open_p, high_p, low_p, close_p, volume = converted_values
+
+            # Perform all validations and collect failure type
+            failure_type = None
+
+            # Check timestamp
+            if timestamp <= 0:
+                failure_type = "timestamp"
+            # Check negative prices
+            elif not all(x > 0 for x in [open_p, high_p, low_p, close_p]):
+                failure_type = "negative_prices"
+            # Check volume
+            elif volume < 0:
+                failure_type = "negative_volume"
+            else:
+                # Check OHLC relationships
+                prices_temp = [open_p, high_p, low_p, close_p]
+                avg_price_temp = sum(prices_temp) / 4
+                tolerance = max(avg_price_temp * 1e-6, 1e-8)
+                if not (
+                    high_p >= max(open_p, close_p) - tolerance
+                    and low_p <= min(open_p, close_p) + tolerance
+                ):
+                    failure_type = "ohlc_relationship"
+                else:
+                    # Check price spread
+                    max_price = max(prices_temp)
+                    min_price = min(prices_temp)
+                    if max_price - min_price > avg_price_temp * 0.5:
+                        failure_type = "price_spread"
+
+        except Exception:
+            return "format"
+        else:
+            return failure_type
+
+    def _log_sample_candles(self, sample_candles: list[Any]) -> None:
+        """Log sample candles with OHLC validation details.
+
+        Args:
+            sample_candles: List of sample candles to log
+        """
+        sample_count = 0
+        for i, candle in enumerate(sample_candles):
+            if sample_count >= 5:
+                break
+            try:
+                if isinstance(candle, list) and len(candle) >= 6:
+                    timestamp, open_p, high_p, low_p, close_p, volume = candle[0:6]
+                    # Convert values
+                    converted_values = self._convert_candle_values(
+                        timestamp, open_p, high_p, low_p, close_p, volume
+                    )
+                    if not converted_values:
+                        continue
+
+                    _, open_p, high_p, low_p, close_p, volume = converted_values
+
+                    # Check OHLC relationship
+                    max_oc = max(open_p, close_p)
+                    min_oc = min(open_p, close_p)
+                    high_ok = high_p >= max_oc
+                    low_ok = low_p <= min_oc
+
+                    logger.warning(
+                        "Sample candle %s: O=%.8f, H=%.8f, L=%.8f, C=%.8f, V=%.4f",
+                        i,
+                        open_p,
+                        high_p,
+                        low_p,
+                        close_p,
+                        volume,
+                    )
+                    logger.warning(
+                        "  OHLC check: H>=%.8f? %s (%.8f >= %.8f), L<=%.8f? %s (%.8f <= %.8f)",
+                        max_oc,
+                        high_ok,
+                        high_p,
+                        max_oc,
+                        min_oc,
+                        low_ok,
+                        low_p,
+                        min_oc,
+                    )
+                    sample_count += 1
+            except Exception as e:
+                exception_handler.log_exception_with_context(
+                    e,
+                    {
+                        "client_id": self.client_id,
+                        "candle_index": i,
+                        "candle_validation_error": True,
+                        "operation": "validate_sample_candle",
+                    },
+                    component="BluefinServiceClient",
+                    operation="_validate_candle_data",
+                )
+                sample_count += 1
 
     # Comprehensive Connectivity Monitoring Methods
 
@@ -2400,145 +2520,144 @@ class BluefinServiceClient:
 
         return status
 
-    async def run_comprehensive_connectivity_test(self) -> dict[str, Any]:
-        """Run a comprehensive connectivity test with detailed results."""
+    async def _run_basic_connectivity_test(
+        self, _test_start_time: float
+    ) -> dict[str, Any]:
+        """Run basic connectivity test."""
         import time
-        from datetime import UTC, datetime
 
-        test_start = time.time()
-        test_results = {
-            "test_id": f"conn_test_{int(test_start)}",
-            "timestamp": datetime.now(UTC).isoformat(),
-            "service_url": self.service_url,
-            "tests": {},
-            "overall_status": "unknown",
-            "recommendations": [],
-        }
-
-        # Test 1: Basic connectivity
-        basic_test_start = time.time()
+        start_time = time.time()
         try:
-            # Ensure we have a session for testing
             await self._ensure_session()
 
             if self._session and not self._session.closed:
                 async with self._session.get(
                     f"{self.service_url}/health", timeout=self.quick_timeout
                 ) as resp:
-                    response_time = time.time() - basic_test_start
-
-                    test_results["tests"]["basic_connectivity"] = {
+                    response_time = time.time() - start_time
+                    return {
                         "status": "pass" if resp.status == 200 else "fail",
                         "response_time_ms": response_time * 1000,
                         "status_code": resp.status,
                         "details": "Basic HTTP connectivity test",
                     }
             else:
-                test_results["tests"]["basic_connectivity"] = {
+                return {
                     "status": "fail",
-                    "response_time_ms": (time.time() - basic_test_start) * 1000,
+                    "response_time_ms": (time.time() - start_time) * 1000,
                     "error": "No session available",
                     "details": "Could not establish session",
                 }
 
         except Exception as e:
-            test_results["tests"]["basic_connectivity"] = {
+            return {
                 "status": "fail",
-                "response_time_ms": (time.time() - basic_test_start) * 1000,
+                "response_time_ms": (time.time() - start_time) * 1000,
                 "error": str(e),
                 "details": "Exception during basic connectivity test",
             }
 
-        # Test 2: Detailed health check
-        detailed_test_start = time.time()
+    async def _run_detailed_health_test(self) -> dict[str, Any]:
+        """Run detailed health endpoint test."""
+        import time
+
+        start_time = time.time()
         try:
             if self._session and not self._session.closed:
                 async with self._session.get(
                     f"{self.service_url}/health/detailed", timeout=self.normal_timeout
                 ) as resp:
-                    response_time = time.time() - detailed_test_start
+                    response_time = time.time() - start_time
 
                     if resp.status == 200:
                         health_data = await resp.json()
-                        test_results["tests"]["detailed_health"] = {
+                        return {
                             "status": "pass",
                             "response_time_ms": response_time * 1000,
                             "status_code": resp.status,
                             "health_data": health_data,
                             "details": "Detailed health endpoint test",
                         }
-                    else:
-                        test_results["tests"]["detailed_health"] = {
-                            "status": "degraded",
-                            "response_time_ms": response_time * 1000,
-                            "status_code": resp.status,
-                            "details": "Detailed health endpoint returned non-200 status",
-                        }
+                    return {
+                        "status": "degraded",
+                        "response_time_ms": response_time * 1000,
+                        "status_code": resp.status,
+                        "details": "Detailed health endpoint returned non-200 status",
+                    }
             else:
-                test_results["tests"]["detailed_health"] = {
+                return {
                     "status": "fail",
                     "error": "No session available",
                     "details": "Could not test detailed health endpoint",
                 }
 
         except Exception as e:
-            test_results["tests"]["detailed_health"] = {
+            return {
                 "status": "fail",
-                "response_time_ms": (time.time() - detailed_test_start) * 1000,
+                "response_time_ms": (time.time() - start_time) * 1000,
                 "error": str(e),
                 "details": "Exception during detailed health test",
             }
 
-        # Test 3: Authentication test
-        auth_test_start = time.time()
+    async def _run_authentication_test(self) -> tuple[dict[str, Any], list[str]]:
+        """Run authentication test. Returns (test_result, recommendations)."""
+        import time
+
+        start_time = time.time()
+        recommendations = []
+
         try:
             if self._session and not self._session.closed:
                 async with self._session.get(
                     f"{self.service_url}/account", timeout=self.normal_timeout
                 ) as resp:
-                    response_time = time.time() - auth_test_start
+                    response_time = time.time() - start_time
 
                     if resp.status == 200:
-                        test_results["tests"]["authentication"] = {
+                        return {
                             "status": "pass",
                             "response_time_ms": response_time * 1000,
                             "status_code": resp.status,
                             "details": "Authentication working correctly",
-                        }
-                    elif resp.status == 401:
-                        test_results["tests"]["authentication"] = {
+                        }, recommendations
+                    if resp.status == 401:
+                        recommendations.append(
+                            "Check BLUEFIN_SERVICE_API_KEY environment variable"
+                        )
+                        return {
                             "status": "fail",
                             "response_time_ms": response_time * 1000,
                             "status_code": resp.status,
                             "details": "Authentication failed - check API key",
-                        }
-                        test_results["recommendations"].append(
-                            "Check BLUEFIN_SERVICE_API_KEY environment variable"
-                        )
-                    else:
-                        test_results["tests"]["authentication"] = {
-                            "status": "degraded",
-                            "response_time_ms": response_time * 1000,
-                            "status_code": resp.status,
-                            "details": f"Unexpected status code: {resp.status}",
-                        }
+                        }, recommendations
+                    return {
+                        "status": "degraded",
+                        "response_time_ms": response_time * 1000,
+                        "status_code": resp.status,
+                        "details": f"Unexpected status code: {resp.status}",
+                    }, recommendations
             else:
-                test_results["tests"]["authentication"] = {
+                return {
                     "status": "fail",
                     "error": "No session available",
                     "details": "Could not test authentication",
-                }
+                }, recommendations
 
         except Exception as e:
-            test_results["tests"]["authentication"] = {
+            return {
                 "status": "fail",
-                "response_time_ms": (time.time() - auth_test_start) * 1000,
+                "response_time_ms": (time.time() - start_time) * 1000,
                 "error": str(e),
                 "details": "Exception during authentication test",
-            }
+            }, recommendations
 
-        # Test 4: Performance test (multiple quick requests)
-        perf_test_start = time.time()
+    async def _run_performance_test(self) -> tuple[dict[str, Any], list[str]]:
+        """Run performance test with multiple requests. Returns (test_result, recommendations)."""
+        import time
+
+        start_time = time.time()
+        recommendations = []
+
         try:
             if self._session and not self._session.closed:
                 response_times = []
@@ -2562,55 +2681,57 @@ class BluefinServiceClient:
                 )
                 success_rate = success_count / 5 * 100
 
-                test_results["tests"]["performance"] = {
-                    "status": (
-                        "pass"
-                        if success_rate >= 80
-                        else "degraded" if success_rate >= 60 else "fail"
-                    ),
+                # Determine status based on success rate
+                if success_rate >= 80:
+                    status = "pass"
+                elif success_rate >= 60:
+                    status = "degraded"
+                else:
+                    status = "fail"
+
+                # Add recommendations based on performance
+                if avg_response_time > 2.0:
+                    recommendations.append(
+                        "High response times detected - check service performance"
+                    )
+                if success_rate < 100:
+                    recommendations.append(
+                        "Some requests failed - check service stability"
+                    )
+
+                return {
+                    "status": status,
                     "response_time_ms": avg_response_time * 1000,
                     "success_rate": success_rate,
                     "total_requests": 5,
                     "successful_requests": success_count,
                     "details": f"Performance test: {success_rate:.1f}% success rate",
-                }
-
-                if avg_response_time > 2.0:
-                    test_results["recommendations"].append(
-                        "High response times detected - check service performance"
-                    )
-                if success_rate < 100:
-                    test_results["recommendations"].append(
-                        "Some requests failed - check service stability"
-                    )
+                }, recommendations
             else:
-                test_results["tests"]["performance"] = {
+                return {
                     "status": "fail",
                     "error": "No session available",
                     "details": "Could not run performance test",
-                }
+                }, recommendations
 
         except Exception as e:
-            test_results["tests"]["performance"] = {
+            return {
                 "status": "fail",
-                "response_time_ms": (time.time() - perf_test_start) * 1000,
+                "response_time_ms": (time.time() - start_time) * 1000,
                 "error": str(e),
                 "details": "Exception during performance test",
-            }
+            }, recommendations
 
-        # Determine overall status
-        test_statuses = [
-            test.get("status", "fail") for test in test_results["tests"].values()
-        ]
-
+    def _determine_overall_status(self, test_statuses: list[str]) -> str:
+        """Determine overall status based on individual test results."""
         if all(status == "pass" for status in test_statuses):
-            test_results["overall_status"] = "healthy"
-        elif any(status == "pass" for status in test_statuses):
-            test_results["overall_status"] = "degraded"
-        else:
-            test_results["overall_status"] = "unhealthy"
+            return "healthy"
+        if any(status == "pass" for status in test_statuses):
+            return "degraded"
+        return "unhealthy"
 
-        # Add general recommendations
+    def _add_general_recommendations(self, test_results: dict[str, Any]) -> None:
+        """Add general recommendations if none exist."""
         if not test_results["recommendations"]:
             if test_results["overall_status"] == "healthy":
                 test_results["recommendations"] = [
@@ -2620,6 +2741,46 @@ class BluefinServiceClient:
                 test_results["recommendations"].append(
                     "Review failed tests and check service configuration"
                 )
+
+    async def run_comprehensive_connectivity_test(self) -> dict[str, Any]:
+        """Run a comprehensive connectivity test with detailed results."""
+        import time
+        from datetime import UTC, datetime
+
+        test_start = time.time()
+        test_results = {
+            "test_id": f"conn_test_{int(test_start)}",
+            "timestamp": datetime.now(UTC).isoformat(),
+            "service_url": self.service_url,
+            "tests": {},
+            "overall_status": "unknown",
+            "recommendations": [],
+        }
+
+        # Run all connectivity tests
+        test_results["tests"][
+            "basic_connectivity"
+        ] = await self._run_basic_connectivity_test(test_start)
+        test_results["tests"][
+            "detailed_health"
+        ] = await self._run_detailed_health_test()
+
+        auth_result, auth_recommendations = await self._run_authentication_test()
+        test_results["tests"]["authentication"] = auth_result
+        test_results["recommendations"].extend(auth_recommendations)
+
+        perf_result, perf_recommendations = await self._run_performance_test()
+        test_results["tests"]["performance"] = perf_result
+        test_results["recommendations"].extend(perf_recommendations)
+
+        # Determine overall status
+        test_statuses = [
+            test.get("status", "fail") for test in test_results["tests"].values()
+        ]
+        test_results["overall_status"] = self._determine_overall_status(test_statuses)
+
+        # Add general recommendations
+        self._add_general_recommendations(test_results)
 
         test_results["total_test_time_ms"] = (time.time() - test_start) * 1000
 

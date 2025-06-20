@@ -11,7 +11,7 @@ import asyncio
 import json
 import logging
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -246,7 +246,9 @@ def generate_html_report(results: dict[str, Any], output_file: Path):
             status_class = (
                 "good"
                 if error_rate < 1
-                else "warning" if error_rate < 5 else "critical"
+                else "warning"
+                if error_rate < 5
+                else "critical"
             )
 
             content_sections.append(
@@ -269,7 +271,7 @@ def generate_html_report(results: dict[str, Any], output_file: Path):
     # Generate final HTML
     content = "".join(content_sections)
     html_content = html_template.format(
-        timestamp=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+        timestamp=datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
         content=content,
     )
 

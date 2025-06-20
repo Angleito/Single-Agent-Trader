@@ -145,8 +145,8 @@ class DominanceDataProvider:
                 try:
                     # Force close the connector
                     instance._session._connector.close()
-                except Exception as e:
-                    logger.exception("Error during emergency cleanup: %s", e)
+                except Exception:
+                    logger.exception("Error during emergency cleanup: %s")
 
     async def connect(self) -> None:
         """Initialize connection and start data updates."""
@@ -204,13 +204,13 @@ class DominanceDataProvider:
                 return await self._fetch_coingecko_dominance()
             if self.data_source == "coinmarketcap":
                 return await self._fetch_coinmarketcap_dominance()
-        except Exception as e:
-            logger.exception("Error fetching dominance data: %s", e)
+        except Exception:
+            logger.exception("Error fetching dominance data: %s")
             return None
         else:
             logger.error("Unsupported data source: %s", self.data_source)
             return None
-            logger.exception("Error fetching dominance data: %s", e)
+            logger.exception("Error fetching dominance data: %s")
             return None
 
     async def _fetch_coingecko_dominance(self) -> DominanceData | None:
@@ -307,8 +307,8 @@ class DominanceDataProvider:
                 stablecoin_velocity=velocity,
             )
 
-        except Exception as e:
-            logger.exception("Error in CoinGecko dominance fetch: %s", e)
+        except Exception:
+            logger.exception("Error in CoinGecko dominance fetch: %s")
             return None
         else:
             # Update cache
@@ -426,8 +426,8 @@ class DominanceDataProvider:
 
                 return dominance_data
 
-        except Exception as e:
-            logger.exception("Error in CoinMarketCap dominance fetch: %s", e)
+        except Exception:
+            logger.exception("Error in CoinMarketCap dominance fetch: %s")
             return None
 
     def _calculate_trend_indicators(self) -> None:
@@ -505,8 +505,8 @@ class DominanceDataProvider:
                     else None
                 )
 
-        except Exception as e:
-            logger.exception("Error calculating dominance trend indicators: %s", e)
+        except Exception:
+            logger.exception("Error calculating dominance trend indicators: %s")
             # Don't let trend calculation failures break the system
             return
 
@@ -519,8 +519,8 @@ class DominanceDataProvider:
                 logger.debug("Updated dominance data")
             except asyncio.CancelledError:
                 break
-            except Exception as e:
-                logger.exception("Error in update loop: %s", e)
+            except Exception:
+                logger.exception("Error in update loop: %s")
                 await asyncio.sleep(60)  # Wait a minute before retry
 
     def get_latest_dominance(self) -> DominanceData | None:
@@ -564,55 +564,22 @@ class DominanceDataProvider:
         sentiment_score = 0.0
         factors = []
 
-        # High stablecoin dominance = bearish/risk-off
-        if latest.stablecoin_dominance > 10:
-            sentiment_score -= 2
-            factors.append("High stablecoin dominance (>10%)")
-        elif latest.stablecoin_dominance > 7:
-            sentiment_score -= 1
-            factors.append("Elevated stablecoin dominance (7-10%)")
-        elif latest.stablecoin_dominance < 5:
-            sentiment_score += 1
-            factors.append("Low stablecoin dominance (<5%)")
-
-        # Dominance trend
-        if latest.dominance_24h_change > 0.5:
-            sentiment_score -= 1.5
-            factors.append("Increasing dominance (risk-off)")
-        elif latest.dominance_24h_change < -0.5:
-            sentiment_score += 1.5
-            factors.append("Decreasing dominance (risk-on)")
-
-        # RSI analysis
-        if latest.dominance_rsi:
-            if latest.dominance_rsi > 70:
-                sentiment_score += 0.5  # Overbought dominance might reverse
-                factors.append("Dominance RSI overbought")
-            elif latest.dominance_rsi < 30:
-                sentiment_score -= 0.5  # Oversold dominance might reverse
-                factors.append("Dominance RSI oversold")
-
-        # Velocity analysis
-        if latest.stablecoin_velocity:
-            if latest.stablecoin_velocity > 2.0:
-                sentiment_score -= 0.5
-                factors.append("High stablecoin velocity (active trading)")
-            elif latest.stablecoin_velocity < 0.5:
-                sentiment_score += 0.5
-                factors.append("Low stablecoin velocity (hodling)")
+        # Analyze different factors
+        sentiment_score, factors = self._analyze_stablecoin_dominance(
+            latest, sentiment_score, factors
+        )
+        sentiment_score, factors = self._analyze_dominance_trend(
+            latest, sentiment_score, factors
+        )
+        sentiment_score, factors = self._analyze_rsi_signals(
+            latest, sentiment_score, factors
+        )
+        sentiment_score, factors = self._analyze_velocity_signals(
+            latest, sentiment_score, factors
+        )
 
         # Determine overall sentiment
-        if sentiment_score >= 2:
-            sentiment = "STRONG_BULLISH"
-        elif sentiment_score >= 1:
-            sentiment = "BULLISH"
-        elif sentiment_score <= -2:
-            sentiment = "STRONG_BEARISH"
-        elif sentiment_score <= -1:
-            sentiment = "BEARISH"
-        else:
-            sentiment = "NEUTRAL"
-
+        sentiment = self._calculate_sentiment_category(sentiment_score)
         confidence = min(100, abs(sentiment_score) * 25)
 
         return {
@@ -624,6 +591,75 @@ class DominanceDataProvider:
             "dominance_change_24h": latest.dominance_24h_change,
             "timestamp": latest.timestamp,
         }
+
+    def _analyze_stablecoin_dominance(
+        self, latest: DominanceData, sentiment_score: float, factors: list[str]
+    ) -> tuple[float, list[str]]:
+        """Analyze stablecoin dominance levels."""
+        if latest.stablecoin_dominance > 10:
+            sentiment_score -= 2
+            factors.append("High stablecoin dominance (>10%)")
+        elif latest.stablecoin_dominance > 7:
+            sentiment_score -= 1
+            factors.append("Elevated stablecoin dominance (7-10%)")
+        elif latest.stablecoin_dominance < 5:
+            sentiment_score += 1
+            factors.append("Low stablecoin dominance (<5%)")
+
+        return sentiment_score, factors
+
+    def _analyze_dominance_trend(
+        self, latest: DominanceData, sentiment_score: float, factors: list[str]
+    ) -> tuple[float, list[str]]:
+        """Analyze dominance trend changes."""
+        if latest.dominance_24h_change > 0.5:
+            sentiment_score -= 1.5
+            factors.append("Increasing dominance (risk-off)")
+        elif latest.dominance_24h_change < -0.5:
+            sentiment_score += 1.5
+            factors.append("Decreasing dominance (risk-on)")
+
+        return sentiment_score, factors
+
+    def _analyze_rsi_signals(
+        self, latest: DominanceData, sentiment_score: float, factors: list[str]
+    ) -> tuple[float, list[str]]:
+        """Analyze RSI signals."""
+        if latest.dominance_rsi:
+            if latest.dominance_rsi > 70:
+                sentiment_score += 0.5  # Overbought dominance might reverse
+                factors.append("Dominance RSI overbought")
+            elif latest.dominance_rsi < 30:
+                sentiment_score -= 0.5  # Oversold dominance might reverse
+                factors.append("Dominance RSI oversold")
+
+        return sentiment_score, factors
+
+    def _analyze_velocity_signals(
+        self, latest: DominanceData, sentiment_score: float, factors: list[str]
+    ) -> tuple[float, list[str]]:
+        """Analyze velocity signals."""
+        if latest.stablecoin_velocity:
+            if latest.stablecoin_velocity > 2.0:
+                sentiment_score -= 0.5
+                factors.append("High stablecoin velocity (active trading)")
+            elif latest.stablecoin_velocity < 0.5:
+                sentiment_score += 0.5
+                factors.append("Low stablecoin velocity (hodling)")
+
+        return sentiment_score, factors
+
+    def _calculate_sentiment_category(self, sentiment_score: float) -> str:
+        """Calculate sentiment category from score."""
+        if sentiment_score >= 2:
+            return "STRONG_BULLISH"
+        if sentiment_score >= 1:
+            return "BULLISH"
+        if sentiment_score <= -2:
+            return "STRONG_BEARISH"
+        if sentiment_score <= -1:
+            return "BEARISH"
+        return "NEUTRAL"
 
     def to_dataframe(self, hours: int = 24) -> pd.DataFrame:
         """
@@ -654,8 +690,8 @@ class DominanceDataProvider:
                 }
             )
 
-        df = pd.DataFrame(data)
-        return df.set_index("timestamp")
+        dominance_data = pd.DataFrame(data)
+        return dominance_data.set_index("timestamp")
 
 
 class DominanceCandleData(BaseModel):
@@ -762,12 +798,12 @@ class DominanceCandleBuilder:
                     }
                 )
 
-            df = pd.DataFrame(df_data)
-            df = df.set_index("timestamp")
-            df = df.sort_index()
+            candle_data = pd.DataFrame(df_data)
+            candle_data = candle_data.set_index("timestamp")
+            candle_data = candle_data.sort_index()
 
             # Resample data using pandas
-            resampled = df.resample(interval).agg(
+            resampled = candle_data.resample(interval).agg(
                 {
                     "dominance": ["first", "max", "min", "last", "mean", "std"],
                     "market_cap": ["first", "last"],
@@ -820,12 +856,12 @@ class DominanceCandleBuilder:
                 )
                 candles.append(candle)
 
+        except Exception as e:
+            logger.exception("Error building candles: %s")
+            raise ValueError(f"Failed to build candles: {e}") from e
+        else:
             logger.info("Built %s candles with %s interval", len(candles), interval)
             return candles
-
-        except Exception as e:
-            logger.exception("Error building candles: %s", e)
-            raise ValueError(f"Failed to build candles: {e}") from e
 
     def _calculate_volume(self, group_snapshots: list[DominanceData]) -> Decimal:
         """
@@ -962,6 +998,10 @@ class DominanceCandleBuilder:
                 ),
             }
 
+        except Exception as e:
+            logger.exception("Error calculating technical indicators: %s")
+            raise ValueError(f"Failed to calculate technical indicators: {e}") from e
+        else:
             logger.info(
                 "Calculated technical indicators for %s candles", len(updated_candles)
             )
@@ -971,10 +1011,6 @@ class DominanceCandleBuilder:
                 "summary": summary,
                 "latest_signals": latest_signals,
             }
-
-        except Exception as e:
-            logger.exception("Error calculating technical indicators: %s", e)
-            raise ValueError(f"Failed to calculate technical indicators: {e}") from e
 
     def _calculate_rsi(
         self, values: list[float], period: int = 14
@@ -1000,46 +1036,50 @@ class DominanceCandleBuilder:
             return [None] * len(values)
 
         try:
-            df = pd.DataFrame({"close": values})
-            df["change"] = df["close"].diff()
-            df["gain"] = df["change"].where(df["change"] > 0, 0)
-            df["loss"] = -df["change"].where(df["change"] < 0, 0)
+            price_data = pd.DataFrame({"close": values})
+            price_data["change"] = price_data["close"].diff()
+            price_data["gain"] = price_data["change"].where(price_data["change"] > 0, 0)
+            price_data["loss"] = -price_data["change"].where(
+                price_data["change"] < 0, 0
+            )
 
             # Calculate initial average gain and loss
-            df["avg_gain"] = (
-                df["gain"].rolling(window=period, min_periods=period).mean()
+            price_data["avg_gain"] = (
+                price_data["gain"].rolling(window=period, min_periods=period).mean()
             )
-            df["avg_loss"] = (
-                df["loss"].rolling(window=period, min_periods=period).mean()
+            price_data["avg_loss"] = (
+                price_data["loss"].rolling(window=period, min_periods=period).mean()
             )
 
             # Use exponential smoothing for subsequent values (Wilder's smoothing)
-            for i in range(period, len(df)):
-                if pd.notna(df.iloc[i - 1]["avg_gain"]):
-                    df.iloc[i, df.columns.get_loc("avg_gain")] = (
-                        df.iloc[i - 1]["avg_gain"] * (period - 1) + df.iloc[i]["gain"]
+            for i in range(period, len(price_data)):
+                if pd.notna(price_data.iloc[i - 1]["avg_gain"]):
+                    price_data.iloc[i, price_data.columns.get_loc("avg_gain")] = (
+                        price_data.iloc[i - 1]["avg_gain"] * (period - 1)
+                        + price_data.iloc[i]["gain"]
                     ) / period
-                    df.iloc[i, df.columns.get_loc("avg_loss")] = (
-                        df.iloc[i - 1]["avg_loss"] * (period - 1) + df.iloc[i]["loss"]
+                    price_data.iloc[i, price_data.columns.get_loc("avg_loss")] = (
+                        price_data.iloc[i - 1]["avg_loss"] * (period - 1)
+                        + price_data.iloc[i]["loss"]
                     ) / period
 
             # Calculate RSI
-            rs = df["avg_gain"] / df["avg_loss"]
-            df["rsi"] = 100 - (100 / (1 + rs))
+            rs = price_data["avg_gain"] / price_data["avg_loss"]
+            price_data["rsi"] = 100 - (100 / (1 + rs))
 
             # Convert to list, handling NaN values
             rsi_list: list[float | None] = []
-            for value in df["rsi"]:
+            for value in price_data["rsi"]:
                 if pd.isna(value):
                     rsi_list.append(None)
                 else:
                     rsi_list.append(float(value))
 
-            return rsi_list
-
-        except Exception as e:
-            logger.exception("Error calculating RSI: %s", e)
+        except Exception:
+            logger.exception("Error calculating RSI: %s")
             return [None] * len(values)
+        else:
+            return rsi_list
 
     def _calculate_ema(self, values: list[float], period: int) -> list[float | None]:
         """
@@ -1063,22 +1103,24 @@ class DominanceCandleBuilder:
             return [None] * len(values)
 
         try:
-            df = pd.DataFrame({"close": values})
-            df["ema"] = df["close"].ewm(span=period, adjust=False).mean()
+            price_data = pd.DataFrame({"close": values})
+            price_data["ema"] = (
+                price_data["close"].ewm(span=period, adjust=False).mean()
+            )
 
             # Convert to list, handling NaN values
             ema_list: list[float | None] = []
-            for i, value in enumerate(df["ema"]):
+            for i, value in enumerate(price_data["ema"]):
                 if pd.isna(value) or i < period - 1:
                     ema_list.append(None)
                 else:
                     ema_list.append(float(value))
 
-            return ema_list
-
-        except Exception as e:
-            logger.exception("Error calculating EMA: %s", e)
+        except Exception:
+            logger.exception("Error calculating EMA: %s")
             return [None] * len(values)
+        else:
+            return ema_list
 
     def _calculate_momentum(
         self, values: list[float], period: int
@@ -1112,11 +1154,11 @@ class DominanceCandleBuilder:
                 )
                 momentum_list.append(momentum)
 
-            return momentum_list
-
-        except Exception as e:
-            logger.exception("Error calculating momentum: %s", e)
+        except Exception:
+            logger.exception("Error calculating momentum: %s")
             return [None] * len(values)
+        else:
+            return momentum_list
 
     def _determine_trend_signal(
         self,
@@ -1173,10 +1215,10 @@ class DominanceCandleBuilder:
                 return "BULLISH"
             if bearish_signals > bullish_signals:
                 return "BEARISH"
+        except Exception:
+            logger.exception("Error determining trend signal: %s")
             return "NEUTRAL"
-
-        except Exception as e:
-            logger.exception("Error determining trend signal: %s", e)
+        else:
             return "NEUTRAL"
 
     def _calculate_summary_metrics(
@@ -1211,7 +1253,7 @@ class DominanceCandleBuilder:
             }
 
         except Exception as e:
-            logger.exception("Error calculating summary metrics: %s", e)
+            logger.exception("Error calculating summary metrics: %s")
             return {"error": str(e)}
 
     def _detect_ema_crossover(
@@ -1268,10 +1310,10 @@ class DominanceCandleBuilder:
             ):
                 return "BEARISH_CROSSOVER"
 
+        except Exception:
+            logger.exception("Error detecting EMA crossover: %s")
             return None
-
-        except Exception as e:
-            logger.exception("Error detecting EMA crossover: %s", e)
+        else:
             return None
 
     def detect_divergences(
@@ -1369,6 +1411,10 @@ class DominanceCandleBuilder:
                     all_divergences, key=lambda x: x["timestamp_index"]
                 )
 
+        except Exception as e:
+            logger.exception("Error detecting divergences: %s")
+            raise ValueError(f"Failed to detect divergences: {e}") from e
+        else:
             logger.info(
                 "Detected %s bullish and %s bearish divergences",
                 len(bullish_divergences),
@@ -1381,10 +1427,6 @@ class DominanceCandleBuilder:
                 "divergence_strength": divergence_strength,
                 "latest_divergence": latest_divergence,
             }
-
-        except Exception as e:
-            logger.exception("Error detecting divergences: %s", e)
-            raise ValueError(f"Failed to detect divergences: {e}") from e
 
     def _analyze_divergence_pattern(
         self,
@@ -1440,10 +1482,10 @@ class DominanceCandleBuilder:
                         "correlation": correlation,
                     }
 
+        except Exception:
+            logger.exception("Error analyzing divergence pattern: %s")
             return None
-
-        except Exception as e:
-            logger.exception("Error analyzing divergence pattern: %s", e)
+        else:
             return None
 
     def validate_candles(self, candles: list[DominanceCandleData]) -> dict[str, Any]:
@@ -1566,7 +1608,7 @@ class DominanceCandleBuilder:
             }
 
         except Exception as e:
-            logger.exception("Error during candle validation: %s", e)
+            logger.exception("Error during candle validation: %s")
             return {
                 "is_valid": False,
                 "errors": [f"Validation failed with exception: {e!s}"],
@@ -1608,151 +1650,25 @@ class DominanceCandleBuilder:
             }
 
         try:
-            issues = []
-            gaps = []
-            duplicates = []
-            statistics = {
-                "total_snapshots": len(snapshots),
-                "time_span_hours": 0.0,
-                "avg_interval_seconds": 0.0,
-                "missing_values": 0,
-                "out_of_range_dominance": 0,
-                "negative_market_caps": 0,
-            }
-
             logger.info("Checking data integrity for %s snapshots", len(snapshots))
 
-            # Sort snapshots by timestamp for analysis
-            sorted_snapshots = sorted(snapshots, key=lambda x: x.timestamp)
+            # Initialize analysis data
+            analysis_data = self._initialize_integrity_analysis(snapshots)
 
-            # Check timestamp ordering
-            timestamps = [s.timestamp for s in sorted_snapshots]
-            if timestamps != [s.timestamp for s in snapshots]:
-                issues.append("Snapshots are not in chronological order")
+            # Perform various checks
+            self._check_timestamp_ordering(analysis_data)
+            self._calculate_time_statistics(analysis_data)
+            self._check_for_duplicates(analysis_data)
+            self._check_for_data_gaps(analysis_data)
+            self._validate_individual_snapshots(analysis_data)
 
-            # Calculate time span and average interval
-            if len(sorted_snapshots) > 1:
-                time_span = (
-                    sorted_snapshots[-1].timestamp - sorted_snapshots[0].timestamp
-                )
-                statistics["time_span_hours"] = time_span.total_seconds() / 3600
+            # Calculate final integrity score
+            integrity_score = self._calculate_integrity_score(analysis_data)
 
-                total_intervals = sum(
-                    (
-                        sorted_snapshots[i].timestamp
-                        - sorted_snapshots[i - 1].timestamp
-                    ).total_seconds()
-                    for i in range(1, len(sorted_snapshots))
-                )
-                statistics["avg_interval_seconds"] = total_intervals / (
-                    len(sorted_snapshots) - 1
-                )
-
-            # Check for duplicates
-            seen_timestamps = set()
-            for snapshot in sorted_snapshots:
-                if snapshot.timestamp in seen_timestamps:
-                    duplicates.append(
-                        {
-                            "timestamp": snapshot.timestamp,
-                            "indices": [
-                                j
-                                for j, s in enumerate(sorted_snapshots)
-                                if s.timestamp == snapshot.timestamp
-                            ],
-                        }
-                    )
-                seen_timestamps.add(snapshot.timestamp)
-
-            # Check for data gaps
-            if len(sorted_snapshots) > 1:
-                expected_interval = statistics["avg_interval_seconds"]
-                gap_threshold = expected_interval * 2.5  # Allow 2.5x normal interval
-
-                for i in range(1, len(sorted_snapshots)):
-                    interval = (
-                        sorted_snapshots[i].timestamp
-                        - sorted_snapshots[i - 1].timestamp
-                    ).total_seconds()
-                    if interval > gap_threshold:
-                        gaps.append(
-                            {
-                                "start_time": sorted_snapshots[i - 1].timestamp,
-                                "end_time": sorted_snapshots[i].timestamp,
-                                "gap_seconds": interval,
-                                "expected_seconds": expected_interval,
-                            }
-                        )
-
-            # Validate individual snapshots
-            for i, snapshot in enumerate(sorted_snapshots):
-                # Check for missing values
-                missing_fields: list[str] = []
-                if snapshot.stablecoin_dominance is None:
-                    missing_fields.append("stablecoin_dominance")
-                if snapshot.total_stablecoin_cap is None:
-                    missing_fields.append("total_stablecoin_cap")
-                if snapshot.crypto_total_market_cap is None:
-                    missing_fields.append("crypto_total_market_cap")
-
-                if missing_fields:
-                    statistics["missing_values"] += len(missing_fields)
-                    issues.append(
-                        f"Snapshot {i}: Missing values for {', '.join(missing_fields)}"
-                    )
-
-                # Check dominance ranges
-                if snapshot.stablecoin_dominance is not None:
-                    if not (0 <= snapshot.stablecoin_dominance <= 100):
-                        statistics["out_of_range_dominance"] += 1
-                        issues.append(
-                            f"Snapshot {i}: Dominance {snapshot.stablecoin_dominance}% out of range (0-100%)"
-                        )
-
-                # Check market cap values
-                if (
-                    snapshot.total_stablecoin_cap is not None
-                    and snapshot.total_stablecoin_cap < 0
-                ):
-                    statistics["negative_market_caps"] += 1
-                    issues.append(f"Snapshot {i}: Negative total stablecoin market cap")
-
-                if (
-                    snapshot.crypto_total_market_cap is not None
-                    and snapshot.crypto_total_market_cap < 0
-                ):
-                    statistics["negative_market_caps"] += 1
-                    issues.append(f"Snapshot {i}: Negative total crypto market cap")
-
-            # Calculate integrity score
-            base_score = 100
-
-            # Deduct points for issues
-            base_score -= len(issues) * 5  # 5 points per issue
-            base_score -= len(gaps) * 10  # 10 points per gap
-            base_score -= len(duplicates) * 3  # 3 points per duplicate
-
-            # Ensure score is within bounds
-            integrity_score = max(0, min(100, base_score))
-
-            logger.info(
-                "Data integrity check complete. Score: %s%%, Issues: %s, Gaps: %s, Duplicates: %s",
-                integrity_score,
-                len(issues),
-                len(gaps),
-                len(duplicates),
-            )
-
-            return {
-                "integrity_score": integrity_score,
-                "issues": issues,
-                "gaps": gaps,
-                "duplicates": duplicates,
-                "statistics": statistics,
-            }
+            return self._build_integrity_result(analysis_data, integrity_score)
 
         except Exception as e:
-            logger.exception("Error during data integrity check: %s", e)
+            logger.exception("Error during data integrity check: %s")
             return {
                 "integrity_score": 0,
                 "issues": [f"Integrity check failed with exception: {e!s}"],
@@ -1760,6 +1676,209 @@ class DominanceCandleBuilder:
                 "duplicates": [],
                 "statistics": {},
             }
+
+    def _initialize_integrity_analysis(
+        self, snapshots: list[DominanceData]
+    ) -> dict[str, Any]:
+        """Initialize data structures for integrity analysis."""
+        sorted_snapshots = sorted(snapshots, key=lambda x: x.timestamp)
+
+        return {
+            "original_snapshots": snapshots,
+            "sorted_snapshots": sorted_snapshots,
+            "issues": [],
+            "gaps": [],
+            "duplicates": [],
+            "statistics": {
+                "total_snapshots": len(snapshots),
+                "time_span_hours": 0.0,
+                "avg_interval_seconds": 0.0,
+                "missing_values": 0,
+                "out_of_range_dominance": 0,
+                "negative_market_caps": 0,
+            },
+        }
+
+    def _check_timestamp_ordering(self, analysis_data: dict[str, Any]) -> None:
+        """Check if timestamps are in chronological order."""
+        sorted_timestamps = [s.timestamp for s in analysis_data["sorted_snapshots"]]
+        original_timestamps = [s.timestamp for s in analysis_data["original_snapshots"]]
+
+        if sorted_timestamps != original_timestamps:
+            analysis_data["issues"].append("Snapshots are not in chronological order")
+
+    def _calculate_time_statistics(self, analysis_data: dict[str, Any]) -> None:
+        """Calculate time span and average interval statistics."""
+        sorted_snapshots = analysis_data["sorted_snapshots"]
+        statistics = analysis_data["statistics"]
+
+        if len(sorted_snapshots) > 1:
+            time_span = sorted_snapshots[-1].timestamp - sorted_snapshots[0].timestamp
+            statistics["time_span_hours"] = time_span.total_seconds() / 3600
+
+            total_intervals = sum(
+                (
+                    sorted_snapshots[i].timestamp - sorted_snapshots[i - 1].timestamp
+                ).total_seconds()
+                for i in range(1, len(sorted_snapshots))
+            )
+            statistics["avg_interval_seconds"] = total_intervals / (
+                len(sorted_snapshots) - 1
+            )
+
+    def _check_for_duplicates(self, analysis_data: dict[str, Any]) -> None:
+        """Check for duplicate timestamps."""
+        sorted_snapshots = analysis_data["sorted_snapshots"]
+        duplicates = analysis_data["duplicates"]
+
+        seen_timestamps = set()
+        for snapshot in sorted_snapshots:
+            if snapshot.timestamp in seen_timestamps:
+                duplicates.append(
+                    {
+                        "timestamp": snapshot.timestamp,
+                        "indices": [
+                            j
+                            for j, s in enumerate(sorted_snapshots)
+                            if s.timestamp == snapshot.timestamp
+                        ],
+                    }
+                )
+            seen_timestamps.add(snapshot.timestamp)
+
+    def _check_for_data_gaps(self, analysis_data: dict[str, Any]) -> None:
+        """Check for data gaps in the timeline."""
+        sorted_snapshots = analysis_data["sorted_snapshots"]
+        statistics = analysis_data["statistics"]
+        gaps = analysis_data["gaps"]
+
+        if len(sorted_snapshots) > 1:
+            expected_interval = statistics["avg_interval_seconds"]
+            gap_threshold = expected_interval * 2.5  # Allow 2.5x normal interval
+
+            for i in range(1, len(sorted_snapshots)):
+                interval = (
+                    sorted_snapshots[i].timestamp - sorted_snapshots[i - 1].timestamp
+                ).total_seconds()
+                if interval > gap_threshold:
+                    gaps.append(
+                        {
+                            "start_time": sorted_snapshots[i - 1].timestamp,
+                            "end_time": sorted_snapshots[i].timestamp,
+                            "gap_seconds": interval,
+                            "expected_seconds": expected_interval,
+                        }
+                    )
+
+    def _validate_individual_snapshots(self, analysis_data: dict[str, Any]) -> None:
+        """Validate individual snapshot data."""
+        sorted_snapshots = analysis_data["sorted_snapshots"]
+        statistics = analysis_data["statistics"]
+        issues = analysis_data["issues"]
+
+        for i, snapshot in enumerate(sorted_snapshots):
+            self._check_missing_values(snapshot, i, statistics, issues)
+            self._check_dominance_ranges(snapshot, i, statistics, issues)
+            self._check_market_cap_values(snapshot, i, statistics, issues)
+
+    def _check_missing_values(
+        self,
+        snapshot: DominanceData,
+        index: int,
+        statistics: dict[str, Any],
+        issues: list[str],
+    ) -> None:
+        """Check for missing values in snapshot."""
+        missing_fields: list[str] = []
+        if snapshot.stablecoin_dominance is None:
+            missing_fields.append("stablecoin_dominance")
+        if snapshot.total_stablecoin_cap is None:
+            missing_fields.append("total_stablecoin_cap")
+        if snapshot.crypto_total_market_cap is None:
+            missing_fields.append("crypto_total_market_cap")
+
+        if missing_fields:
+            statistics["missing_values"] += len(missing_fields)
+            issues.append(
+                f"Snapshot {index}: Missing values for {', '.join(missing_fields)}"
+            )
+
+    def _check_dominance_ranges(
+        self,
+        snapshot: DominanceData,
+        index: int,
+        statistics: dict[str, Any],
+        issues: list[str],
+    ) -> None:
+        """Check dominance percentage ranges."""
+        if snapshot.stablecoin_dominance is not None and not (
+            0 <= snapshot.stablecoin_dominance <= 100
+        ):
+            statistics["out_of_range_dominance"] += 1
+            issues.append(
+                f"Snapshot {index}: Dominance {snapshot.stablecoin_dominance}% out of range (0-100%)"
+            )
+
+    def _check_market_cap_values(
+        self,
+        snapshot: DominanceData,
+        index: int,
+        statistics: dict[str, Any],
+        issues: list[str],
+    ) -> None:
+        """Check market cap values for validity."""
+        if (
+            snapshot.total_stablecoin_cap is not None
+            and snapshot.total_stablecoin_cap < 0
+        ):
+            statistics["negative_market_caps"] += 1
+            issues.append(f"Snapshot {index}: Negative total stablecoin market cap")
+
+        if (
+            snapshot.crypto_total_market_cap is not None
+            and snapshot.crypto_total_market_cap < 0
+        ):
+            statistics["negative_market_caps"] += 1
+            issues.append(f"Snapshot {index}: Negative total crypto market cap")
+
+    def _calculate_integrity_score(self, analysis_data: dict[str, Any]) -> int:
+        """Calculate overall integrity score."""
+        issues = analysis_data["issues"]
+        gaps = analysis_data["gaps"]
+        duplicates = analysis_data["duplicates"]
+
+        base_score = 100
+        # Deduct points for issues
+        base_score -= len(issues) * 5  # 5 points per issue
+        base_score -= len(gaps) * 10  # 10 points per gap
+        base_score -= len(duplicates) * 3  # 3 points per duplicate
+
+        return max(0, min(100, base_score))
+
+    def _build_integrity_result(
+        self, analysis_data: dict[str, Any], integrity_score: int
+    ) -> dict[str, Any]:
+        """Build final integrity check result."""
+        issues = analysis_data["issues"]
+        gaps = analysis_data["gaps"]
+        duplicates = analysis_data["duplicates"]
+        statistics = analysis_data["statistics"]
+
+        logger.info(
+            "Data integrity check complete. Score: %s%%, Issues: %s, Gaps: %s, Duplicates: %s",
+            integrity_score,
+            len(issues),
+            len(gaps),
+            len(duplicates),
+        )
+
+        return {
+            "integrity_score": integrity_score,
+            "issues": issues,
+            "gaps": gaps,
+            "duplicates": duplicates,
+            "statistics": statistics,
+        }
 
     def export_for_tradingview(self, candles: list[DominanceCandleData]) -> str:
         """
@@ -1822,13 +1941,13 @@ class DominanceCandleBuilder:
                 csv_lines.append(csv_line)
 
             csv_content = "\n".join(csv_lines)
-            logger.info("Successfully exported %s candles to CSV format", len(candles))
-
-            return csv_content
 
         except Exception as e:
-            logger.exception("Error exporting candles for TradingView: %s", e)
+            logger.exception("Error exporting candles for TradingView: %s")
             raise ValueError(f"Failed to export candles: {e}") from e
+        else:
+            logger.info("Successfully exported %s candles to CSV format", len(candles))
+            return csv_content
 
     def get_candle_statistics(
         self, candles: list[DominanceCandleData]
@@ -1954,12 +2073,12 @@ class DominanceCandleBuilder:
                 },
             }
 
+        except Exception as e:
+            logger.exception("Error calculating candle statistics: %s")
+            return {"error": f"Failed to calculate statistics: {e!s}"}
+        else:
             logger.info("Successfully calculated candle statistics")
             return statistics
-
-        except Exception as e:
-            logger.exception("Error calculating candle statistics: %s", e)
-            return {"error": f"Failed to calculate statistics: {e!s}"}
 
     def _validate_ohlc_relationship(
         self, candle: DominanceCandleData, index: int, errors: list, warnings: list
@@ -1988,11 +2107,11 @@ class DominanceCandleBuilder:
                     f"Candle {index}: Zero price range (High = Low = {candle.high})"
                 )
 
-            return valid
-
         except Exception as e:
             errors.append(f"Candle {index}: Error validating OHLC - {e!s}")
             return False
+        else:
+            return valid
 
     def _validate_timestamp(
         self,
@@ -2017,11 +2136,11 @@ class DominanceCandleBuilder:
                     )
                     return False
 
-            return True
-
         except Exception as e:
             errors.append(f"Candle {index}: Error validating timestamp - {e!s}")
             return False
+        else:
+            return True
 
     def _validate_dominance_ranges(
         self, candle: DominanceCandleData, index: int, errors: list, warnings: list
@@ -2050,11 +2169,11 @@ class DominanceCandleBuilder:
                     f"Candle {index}: Very high dominance {candle.high}% (unusual market conditions)"
                 )
 
-            return valid
-
         except Exception as e:
             errors.append(f"Candle {index}: Error validating dominance ranges - {e!s}")
             return False
+        else:
+            return valid
 
     def _validate_technical_indicators(
         self, candle: DominanceCandleData, index: int, errors: list, warnings: list
@@ -2082,16 +2201,16 @@ class DominanceCandleBuilder:
                     f"Candle {index}: Extreme momentum value {candle.momentum}%"
                 )
 
-            return valid
-
         except Exception as e:
             errors.append(
                 f"Candle {index}: Error validating technical indicators - {e!s}"
             )
             return False
+        else:
+            return valid
 
     def _check_nan_infinite_values(
-        self, candle: DominanceCandleData, index: int, errors: list, warnings: list
+        self, candle: DominanceCandleData, index: int, errors: list, _warnings: list
     ) -> tuple[int, int]:
         """Check for NaN and infinite values in candle data."""
         nan_count = 0
@@ -2125,11 +2244,11 @@ class DominanceCandleBuilder:
                         )
                         inf_count += 1
 
-            return nan_count, inf_count
-
         except Exception as e:
             errors.append(f"Candle {index}: Error checking NaN/infinite values - {e!s}")
             return 1, 0  # Count as error
+        else:
+            return nan_count, inf_count
 
     def _validate_volume_consistency(
         self, candle: DominanceCandleData, index: int, warnings: list
@@ -2193,11 +2312,11 @@ class DominanceCandleBuilder:
                     ):
                         crossovers["bearish"] += 1
 
-            return crossovers
-
-        except Exception as e:
-            logger.exception("Error counting EMA crossovers: %s", e)
+        except Exception:
+            logger.exception("Error counting EMA crossovers: %s")
             return {"bullish": 0, "bearish": 0}
+        else:
+            return crossovers
 
     def _determine_overall_trend(self, close_values: list[float]) -> str:
         """Determine overall trend from close values."""
@@ -2213,11 +2332,12 @@ class DominanceCandleBuilder:
                 return "UPTREND"
             if slope < -0.01:  # Threshold for significant downtrend
                 return "DOWNTREND"
-            return "SIDEWAYS"
 
-        except Exception as e:
-            logger.exception("Error determining overall trend: %s", e)
+        except Exception:
+            logger.exception("Error determining overall trend: %s")
             return "UNKNOWN"
+        else:
+            return "SIDEWAYS"
 
 
 # Factory function for easy client creation
@@ -2252,6 +2372,349 @@ def create_dominance_provider(
     )
 
 
+def _create_sample_dominance_snapshots():
+    """Create sample dominance data snapshots for testing."""
+    print("\n1. Creating sample dominance data snapshots...")
+
+    snapshots = []
+    base_time = datetime.now(UTC) - timedelta(hours=2)
+    base_dominance = 8.5  # 8.5% stablecoin dominance
+
+    # Generate 120 snapshots (2 hours at 1-minute intervals)
+    rng = np.random.default_rng(42)  # Use fixed seed for reproducible test data
+    for i in range(120):
+        # Simulate realistic dominance fluctuations
+        dominance_change = rng.normal(0, 0.1)  # Small random changes
+        trend = 0.002 * (i - 60)  # Slight trend over time
+        current_dominance = max(
+            0.1, min(99.9, base_dominance + trend + dominance_change)
+        )
+
+        market_cap_base = Decimal(150000000000)  # $150B base
+        market_cap_change = Decimal(str(rng.normal(0, 1000000000)))  # ±$1B variation
+        current_market_cap = market_cap_base + market_cap_change
+
+        snapshot = DominanceData(
+            timestamp=base_time + timedelta(minutes=i),
+            usdt_market_cap=current_market_cap * Decimal("0.7"),
+            usdc_market_cap=current_market_cap * Decimal("0.3"),
+            total_stablecoin_cap=current_market_cap,
+            crypto_total_market_cap=current_market_cap
+            / Decimal(str(current_dominance / 100)),
+            usdt_dominance=current_dominance * 0.7,
+            usdc_dominance=current_dominance * 0.3,
+            stablecoin_dominance=current_dominance,
+            dominance_24h_change=rng.normal(0, 0.5),
+            dominance_7d_change=rng.normal(0, 1.0),
+            stablecoin_velocity=max(0.1, rng.normal(1.5, 0.3)),
+        )
+        snapshots.append(snapshot)
+
+    print(f"   ✓ Created {len(snapshots)} sample snapshots")
+    print(f"   ✓ Time range: {snapshots[0].timestamp} to {snapshots[-1].timestamp}")
+    print(
+        f"   ✓ Dominance range: {min(s.stablecoin_dominance for s in snapshots):.2f}% to {max(s.stablecoin_dominance for s in snapshots):.2f}%"
+    )
+    return snapshots
+
+
+def _test_data_integrity(builder, snapshots):
+    """Test data integrity check."""
+    print("\n2. Testing data integrity check...")
+
+    integrity_result = builder.check_data_integrity(snapshots)
+
+    print(f"   ✓ Integrity Score: {integrity_result['integrity_score']}%")
+    print(f"   ✓ Issues Found: {len(integrity_result['issues'])}")
+    print(f"   ✓ Data Gaps: {len(integrity_result['gaps'])}")
+    print(f"   ✓ Duplicates: {len(integrity_result['duplicates'])}")
+
+    if integrity_result["issues"]:
+        print(
+            f"   ⚠ Issues: {integrity_result['issues'][:3]}..."
+        )  # Show first 3 issues
+
+    return integrity_result
+
+
+def _test_candle_building(builder):
+    """Test building dominance candles for different intervals."""
+    print("\n3. Testing candle building...")
+
+    candles = None
+    for interval in ["1T", "3T", "5T", "15T"]:
+        try:
+            test_candles = builder.build_candles(interval)
+            print(f"   ✓ {interval} interval: {len(test_candles)} candles created")
+
+            if test_candles:
+                first_candle = test_candles[0]
+                last_candle = test_candles[-1]
+                print(
+                    f"     - First candle: Open={first_candle.open:.3f}%, Close={first_candle.close:.3f}%"
+                )
+                print(
+                    f"     - Last candle: Open={last_candle.open:.3f}%, Close={last_candle.close:.3f}%"
+                )
+
+                # Use 3T candles for remaining tests
+                if interval == "3T":
+                    candles = test_candles
+
+        except Exception as e:
+            print(f"   ✗ {interval} interval failed: {e}")
+
+    if candles:
+        print(f"\n   Using {len(candles)} 3-minute candles for further testing...")
+    return candles
+
+
+def _test_technical_indicators(builder, candles):
+    """Test technical indicators calculation."""
+    print("\n4. Testing technical indicators calculation...")
+
+    indicators_result = builder.calculate_technical_indicators(candles)
+    updated_candles = indicators_result["candles"]
+    summary = indicators_result["summary"]
+    latest_signals = indicators_result["latest_signals"]
+
+    print(f"   ✓ Indicators calculated for {len(updated_candles)} candles")
+    print(f"   ✓ Average RSI: {summary.get('avg_rsi', 'N/A')}")
+    print(f"   ✓ Average Momentum: {summary.get('avg_momentum', 'N/A')}")
+    print(f"   ✓ Trend Distribution: {summary.get('trend_distribution', {})}")
+    print(f"   ✓ Latest Trend Signal: {latest_signals.get('trend_signal', 'N/A')}")
+    print(f"   ✓ Latest RSI: {latest_signals.get('rsi', 'N/A')}")
+    print(f"   ✓ EMA Crossover: {latest_signals.get('ema_crossover', 'None')}")
+
+    return indicators_result
+
+
+def _test_candle_validation(builder, updated_candles):
+    """Test candle validation."""
+    print("\n5. Testing candle validation...")
+
+    validation_result = builder.validate_candles(updated_candles)
+
+    print(f"   ✓ Overall Valid: {validation_result['is_valid']}")
+    print(f"   ✓ Quality Score: {validation_result['quality_score']}%")
+    print(f"   ✓ Errors Found: {len(validation_result['errors'])}")
+    print(f"   ✓ Warnings: {len(validation_result['warnings'])}")
+
+    # Show validation statistics
+    stats = validation_result["statistics"]
+    print(f"   ✓ Valid OHLC: {stats['valid_ohlc']}/{stats['total_candles']}")
+    print(
+        f"   ✓ Valid Timestamps: {stats['valid_timestamps']}/{stats['total_candles']}"
+    )
+    print(
+        f"   ✓ Valid Dominance Ranges: {stats['valid_dominance_ranges']}/{stats['total_candles']}"
+    )
+    print(
+        f"   ✓ Valid Indicators: {stats['valid_indicators']}/{stats['total_candles']}"
+    )
+
+    if validation_result["errors"]:
+        print(f"   ⚠ Sample Errors: {validation_result['errors'][:2]}")
+
+    return validation_result
+
+
+def _test_statistics_generation(builder, updated_candles):
+    """Test candle statistics generation."""
+    print("\n6. Testing candle statistics generation...")
+
+    statistics = builder.get_candle_statistics(updated_candles)
+
+    if "error" not in statistics:
+        basic_stats = statistics["basic_stats"]
+        dominance_stats = statistics["dominance_stats"]
+        volatility_stats = statistics["volatility_stats"]
+        trend_analysis = statistics["trend_analysis"]
+
+        print(f"   ✓ Total Candles: {basic_stats['total_candles']}")
+        print(
+            f"   ✓ Time Duration: {basic_stats['time_range']['duration_hours']:.2f} hours"
+        )
+        print(
+            f"   ✓ Dominance Range: {dominance_stats['range']['min_low']:.3f}% - {dominance_stats['range']['max_high']:.3f}%"
+        )
+        print(f"   ✓ Average Volatility: {volatility_stats['avg']:.4f}")
+        print(
+            f"   ✓ High Volatility Periods: {volatility_stats['high_volatility_periods']}"
+        )
+        print(f"   ✓ Overall Trend: {trend_analysis['overall_trend']}")
+        print(f"   ✓ Bullish Signals: {trend_analysis['bullish_signals']}")
+        print(f"   ✓ Bearish Signals: {trend_analysis['bearish_signals']}")
+    else:
+        print(f"   ✗ Statistics generation failed: {statistics['error']}")
+
+    return statistics
+
+
+def _test_tradingview_export(builder, updated_candles):
+    """Test TradingView export functionality."""
+    print("\n7. Testing TradingView export...")
+
+    csv_content = None
+    try:
+        csv_content = builder.export_for_tradingview(
+            updated_candles[:10]
+        )  # Export first 10 candles
+        lines = csv_content.split("\n")
+
+        print("   ✓ CSV Export successful")
+        print(f"   ✓ Header: {lines[0]}")
+        print(f"   ✓ Sample data line: {lines[1] if len(lines) > 1 else 'No data'}")
+        print(f"   ✓ Total lines: {len(lines)} (header + {len(lines) - 1} data rows)")
+
+        # Validate CSV format
+        if len(lines) > 1:
+            sample_data = lines[1].split(",")
+            expected_columns = 12  # time + OHLCV + indicators
+            if len(sample_data) == expected_columns:
+                print(f"   ✓ CSV format validation passed ({expected_columns} columns)")
+            else:
+                print(
+                    f"   ⚠ CSV format issue: expected {expected_columns} columns, got {len(sample_data)}"
+                )
+
+    except Exception as e:
+        print(f"   ✗ TradingView export failed: {e}")
+
+    return csv_content
+
+
+def _test_edge_cases(builder):
+    """Test edge cases and error handling."""
+    print("\n8. Testing edge cases and error handling...")
+
+    # Test with empty data
+    try:
+        DominanceCandleBuilder([])
+        print("   ✗ Empty data test should have failed")
+    except ValueError:
+        print("   ✓ Empty data validation working")
+
+    # Test validation with empty candles
+    empty_validation = builder.validate_candles([])
+    print(f"   ✓ Empty candles validation: {not empty_validation['is_valid']}")
+
+    # Test integrity check with empty snapshots
+    empty_integrity = builder.check_data_integrity([])
+    print(f"   ✓ Empty snapshots integrity: {empty_integrity['integrity_score'] == 0}")
+
+    # Test TradingView export with empty candles
+    try:
+        builder.export_for_tradingview([])
+        print("   ✗ Empty TradingView export should have failed")
+    except ValueError:
+        print("   ✓ Empty TradingView export validation working")
+
+
+def _test_performance(base_time):
+    """Test performance with larger dataset."""
+    print("\n9. Testing performance with larger dataset...")
+
+    import os
+    import time
+
+    import psutil
+
+    # Create larger dataset (1000 snapshots)
+    large_snapshots = []
+    rng_large = np.random.default_rng(123)  # Different seed for large dataset
+    for i in range(1000):
+        dominance = 8.5 + rng_large.normal(0, 0.5)
+        market_cap = Decimal(150000000000) + Decimal(
+            str(rng_large.normal(0, 5000000000))
+        )
+
+        snapshot = DominanceData(
+            timestamp=base_time + timedelta(minutes=i),
+            usdt_market_cap=market_cap * Decimal("0.7"),
+            usdc_market_cap=market_cap * Decimal("0.3"),
+            total_stablecoin_cap=market_cap,
+            crypto_total_market_cap=market_cap / Decimal(str(dominance / 100)),
+            usdt_dominance=dominance * 0.7,
+            usdc_dominance=dominance * 0.3,
+            stablecoin_dominance=dominance,
+            dominance_24h_change=rng_large.normal(0, 0.5),
+            dominance_7d_change=rng_large.normal(0, 1.0),
+            stablecoin_velocity=max(0.1, rng_large.normal(1.5, 0.3)),
+        )
+        large_snapshots.append(snapshot)
+
+    # Measure performance
+    process = psutil.Process(os.getpid())
+    memory_before = process.memory_info().rss / 1024 / 1024  # MB
+
+    start_time = time.time()
+    large_builder = DominanceCandleBuilder(large_snapshots)
+    large_candles = large_builder.build_candles("5T")
+    indicators_result = large_builder.calculate_technical_indicators(large_candles)
+    validation_result = large_builder.validate_candles(indicators_result["candles"])
+    end_time = time.time()
+
+    memory_after = process.memory_info().rss / 1024 / 1024  # MB
+
+    print(f"   ✓ Large dataset processing time: {end_time - start_time:.2f} seconds")
+    print(f"   ✓ Memory usage: {memory_after - memory_before:.2f} MB increase")
+    print(
+        f"   ✓ Processed {len(large_snapshots)} snapshots → {len(large_candles)} candles"
+    )
+    print(f"   ✓ Large dataset quality score: {validation_result['quality_score']}%")
+
+    return end_time - start_time
+
+
+def _generate_final_summary(
+    snapshots,
+    integrity_result,
+    candles,
+    indicators_result,
+    validation_result,
+    statistics,
+    csv_content,
+    processing_time,
+):
+    """Generate final test summary."""
+    print("\n10. Final validation summary...")
+
+    test_results = {
+        "sample_data_creation": len(snapshots) > 0,
+        "data_integrity_check": integrity_result["integrity_score"] > 0,
+        "candle_building": len(candles) > 0,
+        "technical_indicators": len(indicators_result["candles"]) > 0,
+        "candle_validation": validation_result["quality_score"] > 0,
+        "statistics_generation": "error" not in statistics,
+        "tradingview_export": csv_content is not None,
+        "error_handling": True,  # All edge cases handled
+        "performance_test": processing_time < 30,  # Should complete in 30 seconds
+    }
+
+    passed_tests = sum(test_results.values())
+    total_tests = len(test_results)
+
+    print(f"   ✓ Tests Passed: {passed_tests}/{total_tests}")
+
+    for test_name, passed in test_results.items():
+        status = "✓" if passed else "✗"
+        print(f"   {status} {test_name.replace('_', ' ').title()}")
+
+    print(f"\n{'=' * 80}")
+    if passed_tests == total_tests:
+        print(
+            "🎉 ALL TESTS PASSED! Dominance candlestick functionality is working correctly."
+        )
+    else:
+        print(
+            f"⚠️  {total_tests - passed_tests} test(s) failed. Please review the implementation."
+        )
+    print(f"{'=' * 80}")
+
+    return test_results
+
+
 def test_dominance_candlestick_functionality():
     """
     Comprehensive test function for dominance candlestick functionality.
@@ -2272,312 +2735,50 @@ def test_dominance_candlestick_functionality():
     print("=" * 80)
 
     try:
-        # Test 1: Create sample DominanceData snapshots
-        print("\n1. Creating sample dominance data snapshots...")
+        # Test 1: Create sample data
+        snapshots = _create_sample_dominance_snapshots()
 
-        snapshots = []
-        base_time = datetime.now(UTC) - timedelta(hours=2)
-        base_dominance = 8.5  # 8.5% stablecoin dominance
-
-        # Generate 120 snapshots (2 hours at 1-minute intervals)
-        for i in range(120):
-            # Simulate realistic dominance fluctuations
-            dominance_change = np.random.normal(0, 0.1)  # Small random changes
-            trend = 0.002 * (i - 60)  # Slight trend over time
-            current_dominance = max(
-                0.1, min(99.9, base_dominance + trend + dominance_change)
-            )
-
-            market_cap_base = Decimal(150000000000)  # $150B base
-            market_cap_change = Decimal(
-                str(np.random.normal(0, 1000000000))
-            )  # ±$1B variation
-            current_market_cap = market_cap_base + market_cap_change
-
-            snapshot = DominanceData(
-                timestamp=base_time + timedelta(minutes=i),
-                usdt_market_cap=current_market_cap * Decimal("0.7"),
-                usdc_market_cap=current_market_cap * Decimal("0.3"),
-                total_stablecoin_cap=current_market_cap,
-                crypto_total_market_cap=current_market_cap
-                / Decimal(str(current_dominance / 100)),
-                usdt_dominance=current_dominance * 0.7,
-                usdc_dominance=current_dominance * 0.3,
-                stablecoin_dominance=current_dominance,
-                dominance_24h_change=np.random.normal(0, 0.5),
-                dominance_7d_change=np.random.normal(0, 1.0),
-                stablecoin_velocity=max(0.1, np.random.normal(1.5, 0.3)),
-            )
-            snapshots.append(snapshot)
-
-        print(f"   ✓ Created {len(snapshots)} sample snapshots")
-        print(f"   ✓ Time range: {snapshots[0].timestamp} to {snapshots[-1].timestamp}")
-        print(
-            f"   ✓ Dominance range: {min(s.stablecoin_dominance for s in snapshots):.2f}% to {max(s.stablecoin_dominance for s in snapshots):.2f}%"
-        )
-
-        # Test 2: Data integrity check
-        print("\n2. Testing data integrity check...")
-
+        # Initialize builder
         builder = DominanceCandleBuilder(snapshots)
-        integrity_result = builder.check_data_integrity(snapshots)
 
-        print(f"   ✓ Integrity Score: {integrity_result['integrity_score']}%")
-        print(f"   ✓ Issues Found: {len(integrity_result['issues'])}")
-        print(f"   ✓ Data Gaps: {len(integrity_result['gaps'])}")
-        print(f"   ✓ Duplicates: {len(integrity_result['duplicates'])}")
+        # Test 2: Data integrity
+        integrity_result = _test_data_integrity(builder, snapshots)
 
-        if integrity_result["issues"]:
-            print(
-                f"   ⚠ Issues: {integrity_result['issues'][:3]}..."
-            )  # Show first 3 issues
+        # Test 3: Candle building
+        candles = _test_candle_building(builder)
+        if not candles:
+            return {"error": "Failed to build candles"}
 
-        # Test 3: Build dominance candles
-        print("\n3. Testing candle building...")
-
-        for interval in ["1T", "3T", "5T", "15T"]:
-            try:
-                candles = builder.build_candles(interval)
-                print(f"   ✓ {interval} interval: {len(candles)} candles created")
-
-                if candles:
-                    first_candle = candles[0]
-                    last_candle = candles[-1]
-                    print(
-                        f"     - First candle: Open={first_candle.open:.3f}%, Close={first_candle.close:.3f}%"
-                    )
-                    print(
-                        f"     - Last candle: Open={last_candle.open:.3f}%, Close={last_candle.close:.3f}%"
-                    )
-
-            except Exception as e:
-                print(f"   ✗ {interval} interval failed: {e}")
-
-        # Use 3-minute candles for remaining tests
-        candles = builder.build_candles("3T")
-        print(f"\n   Using {len(candles)} 3-minute candles for further testing...")
-
-        # Test 4: Calculate technical indicators
-        print("\n4. Testing technical indicators calculation...")
-
-        indicators_result = builder.calculate_technical_indicators(candles)
+        # Test 4: Technical indicators
+        indicators_result = _test_technical_indicators(builder, candles)
         updated_candles = indicators_result["candles"]
-        summary = indicators_result["summary"]
-        latest_signals = indicators_result["latest_signals"]
 
-        print(f"   ✓ Indicators calculated for {len(updated_candles)} candles")
-        print(f"   ✓ Average RSI: {summary.get('avg_rsi', 'N/A')}")
-        print(f"   ✓ Average Momentum: {summary.get('avg_momentum', 'N/A')}")
-        print(f"   ✓ Trend Distribution: {summary.get('trend_distribution', {})}")
-        print(f"   ✓ Latest Trend Signal: {latest_signals.get('trend_signal', 'N/A')}")
-        print(f"   ✓ Latest RSI: {latest_signals.get('rsi', 'N/A')}")
-        print(f"   ✓ EMA Crossover: {latest_signals.get('ema_crossover', 'None')}")
+        # Test 5: Candle validation
+        validation_result = _test_candle_validation(builder, updated_candles)
 
-        # Test 5: Validate candles
-        print("\n5. Testing candle validation...")
-
-        validation_result = builder.validate_candles(updated_candles)
-
-        print(f"   ✓ Overall Valid: {validation_result['is_valid']}")
-        print(f"   ✓ Quality Score: {validation_result['quality_score']}%")
-        print(f"   ✓ Errors Found: {len(validation_result['errors'])}")
-        print(f"   ✓ Warnings: {len(validation_result['warnings'])}")
-
-        # Show validation statistics
-        stats = validation_result["statistics"]
-        print(f"   ✓ Valid OHLC: {stats['valid_ohlc']}/{stats['total_candles']}")
-        print(
-            f"   ✓ Valid Timestamps: {stats['valid_timestamps']}/{stats['total_candles']}"
-        )
-        print(
-            f"   ✓ Valid Dominance Ranges: {stats['valid_dominance_ranges']}/{stats['total_candles']}"
-        )
-        print(
-            f"   ✓ Valid Indicators: {stats['valid_indicators']}/{stats['total_candles']}"
-        )
-
-        if validation_result["errors"]:
-            print(f"   ⚠ Sample Errors: {validation_result['errors'][:2]}")
-
-        # Test 6: Generate statistics
-        print("\n6. Testing candle statistics generation...")
-
-        statistics = builder.get_candle_statistics(updated_candles)
-
-        if "error" not in statistics:
-            basic_stats = statistics["basic_stats"]
-            dominance_stats = statistics["dominance_stats"]
-            volatility_stats = statistics["volatility_stats"]
-            trend_analysis = statistics["trend_analysis"]
-
-            print(f"   ✓ Total Candles: {basic_stats['total_candles']}")
-            print(
-                f"   ✓ Time Duration: {basic_stats['time_range']['duration_hours']:.2f} hours"
-            )
-            print(
-                f"   ✓ Dominance Range: {dominance_stats['range']['min_low']:.3f}% - {dominance_stats['range']['max_high']:.3f}%"
-            )
-            print(f"   ✓ Average Volatility: {volatility_stats['avg']:.4f}")
-            print(
-                f"   ✓ High Volatility Periods: {volatility_stats['high_volatility_periods']}"
-            )
-            print(f"   ✓ Overall Trend: {trend_analysis['overall_trend']}")
-            print(f"   ✓ Bullish Signals: {trend_analysis['bullish_signals']}")
-            print(f"   ✓ Bearish Signals: {trend_analysis['bearish_signals']}")
-        else:
-            print(f"   ✗ Statistics generation failed: {statistics['error']}")
+        # Test 6: Statistics generation
+        statistics = _test_statistics_generation(builder, updated_candles)
 
         # Test 7: TradingView export
-        print("\n7. Testing TradingView export...")
+        csv_content = _test_tradingview_export(builder, updated_candles)
 
-        try:
-            csv_content = builder.export_for_tradingview(
-                updated_candles[:10]
-            )  # Export first 10 candles
-            lines = csv_content.split("\n")
+        # Test 8: Edge cases
+        _test_edge_cases(builder)
 
-            print("   ✓ CSV Export successful")
-            print(f"   ✓ Header: {lines[0]}")
-            print(f"   ✓ Sample data line: {lines[1] if len(lines) > 1 else 'No data'}")
-            print(
-                f"   ✓ Total lines: {len(lines)} (header + {len(lines) - 1} data rows)"
-            )
+        # Test 9: Performance testing
+        processing_time = _test_performance(snapshots[0].timestamp - timedelta(hours=2))
 
-            # Validate CSV format
-            if len(lines) > 1:
-                sample_data = lines[1].split(",")
-                expected_columns = 12  # time + OHLCV + indicators
-                if len(sample_data) == expected_columns:
-                    print(
-                        f"   ✓ CSV format validation passed ({expected_columns} columns)"
-                    )
-                else:
-                    print(
-                        f"   ⚠ CSV format issue: expected {expected_columns} columns, got {len(sample_data)}"
-                    )
-
-        except Exception as e:
-            print(f"   ✗ TradingView export failed: {e}")
-
-        # Test 8: Edge cases and error handling
-        print("\n8. Testing edge cases and error handling...")
-
-        # Test with empty data
-        try:
-            DominanceCandleBuilder([])
-            print("   ✗ Empty data test should have failed")
-        except ValueError:
-            print("   ✓ Empty data validation working")
-
-        # Test validation with empty candles
-        empty_validation = builder.validate_candles([])
-        print(f"   ✓ Empty candles validation: {not empty_validation['is_valid']}")
-
-        # Test integrity check with empty snapshots
-        empty_integrity = builder.check_data_integrity([])
-        print(
-            f"   ✓ Empty snapshots integrity: {empty_integrity['integrity_score'] == 0}"
+        # Test 10: Final summary
+        return _generate_final_summary(
+            snapshots,
+            integrity_result,
+            candles,
+            indicators_result,
+            validation_result,
+            statistics,
+            csv_content,
+            processing_time,
         )
-
-        # Test TradingView export with empty candles
-        try:
-            builder.export_for_tradingview([])
-            print("   ✗ Empty TradingView export should have failed")
-        except ValueError:
-            print("   ✓ Empty TradingView export validation working")
-
-        # Test 9: Performance and memory usage
-        print("\n9. Testing performance with larger dataset...")
-
-        import os
-        import time
-
-        import psutil
-
-        # Create larger dataset (1000 snapshots)
-        large_snapshots = []
-        for i in range(1000):
-            dominance = 8.5 + np.random.normal(0, 0.5)
-            market_cap = Decimal(150000000000) + Decimal(
-                str(np.random.normal(0, 5000000000))
-            )
-
-            snapshot = DominanceData(
-                timestamp=base_time + timedelta(minutes=i),
-                usdt_market_cap=market_cap * Decimal("0.7"),
-                usdc_market_cap=market_cap * Decimal("0.3"),
-                total_stablecoin_cap=market_cap,
-                crypto_total_market_cap=market_cap / Decimal(str(dominance / 100)),
-                usdt_dominance=dominance * 0.7,
-                usdc_dominance=dominance * 0.3,
-                stablecoin_dominance=dominance,
-                dominance_24h_change=np.random.normal(0, 0.5),
-                dominance_7d_change=np.random.normal(0, 1.0),
-                stablecoin_velocity=max(0.1, np.random.normal(1.5, 0.3)),
-            )
-            large_snapshots.append(snapshot)
-
-        # Measure performance
-        process = psutil.Process(os.getpid())
-        memory_before = process.memory_info().rss / 1024 / 1024  # MB
-
-        start_time = time.time()
-        large_builder = DominanceCandleBuilder(large_snapshots)
-        large_candles = large_builder.build_candles("5T")
-        indicators_result = large_builder.calculate_technical_indicators(large_candles)
-        validation_result = large_builder.validate_candles(indicators_result["candles"])
-        end_time = time.time()
-
-        memory_after = process.memory_info().rss / 1024 / 1024  # MB
-
-        print(
-            f"   ✓ Large dataset processing time: {end_time - start_time:.2f} seconds"
-        )
-        print(f"   ✓ Memory usage: {memory_after - memory_before:.2f} MB increase")
-        print(
-            f"   ✓ Processed {len(large_snapshots)} snapshots → {len(large_candles)} candles"
-        )
-        print(
-            f"   ✓ Large dataset quality score: {validation_result['quality_score']}%"
-        )
-
-        # Test 10: Summary and final validation
-        print("\n10. Final validation summary...")
-
-        test_results = {
-            "sample_data_creation": len(snapshots) > 0,
-            "data_integrity_check": integrity_result["integrity_score"] > 0,
-            "candle_building": len(candles) > 0,
-            "technical_indicators": len(indicators_result["candles"]) > 0,
-            "candle_validation": validation_result["quality_score"] > 0,
-            "statistics_generation": "error" not in statistics,
-            "tradingview_export": csv_content is not None,
-            "error_handling": True,  # All edge cases handled
-            "performance_test": end_time - start_time
-            < 30,  # Should complete in 30 seconds
-        }
-
-        passed_tests = sum(test_results.values())
-        total_tests = len(test_results)
-
-        print(f"   ✓ Tests Passed: {passed_tests}/{total_tests}")
-
-        for test_name, passed in test_results.items():
-            status = "✓" if passed else "✗"
-            print(f"   {status} {test_name.replace('_', ' ').title()}")
-
-        print(f"\n{'=' * 80}")
-        if passed_tests == total_tests:
-            print(
-                "🎉 ALL TESTS PASSED! Dominance candlestick functionality is working correctly."
-            )
-        else:
-            print(
-                f"⚠️  {total_tests - passed_tests} test(s) failed. Please review the implementation."
-            )
-        print(f"{'=' * 80}")
-
-        return test_results
 
     except Exception as e:
         print(f"\n💥 TEST SUITE FAILED WITH EXCEPTION: {e}")

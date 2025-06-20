@@ -261,12 +261,12 @@ class FinancialSentimentService:
             # Aggregate results
             return self._aggregate_sentiment_results(individual_results, news_items)
 
-        except Exception as e:
-            logger.exception("Error analyzing news sentiment: %s", e)
+        except Exception:
+            logger.exception("Error analyzing news sentiment")
             return SentimentResult(
                 sentiment_score=0.0,
                 confidence=0.0,
-                key_themes=[f"Analysis error: {e!s}"],
+                key_themes=["Analysis error occurred"],
             )
 
     async def _analyze_single_item(self, item: dict) -> dict[str, Any]:
@@ -412,8 +412,8 @@ class FinancialSentimentService:
                 indicator_signals=indicator_signals,
             )
 
-        except Exception as e:
-            logger.exception("Error extracting crypto indicators: %s", e)
+        except Exception:
+            logger.exception("Error extracting crypto indicators")
             return CryptoIndicators()
 
     def extract_nasdaq_indicators(self, text: str) -> NasdaqIndicators:
@@ -468,8 +468,8 @@ class FinancialSentimentService:
                 financial_sector_signals=financial_sector_signals,
             )
 
-        except Exception as e:
-            logger.exception("Error extracting NASDAQ indicators: %s", e)
+        except Exception:
+            logger.exception("Error extracting NASDAQ indicators")
             return NasdaqIndicators()
 
     def calculate_correlation_score(
@@ -519,8 +519,8 @@ class FinancialSentimentService:
             # Calculate weighted average
             if correlation_factors:
                 return sum(correlation_factors) / len(correlation_factors)
-        except Exception as e:
-            logger.exception("Error calculating correlation score: %s", e)
+        except Exception:
+            logger.exception("Error calculating correlation score")
             return 0.0
         else:
             return 0.0
@@ -660,8 +660,8 @@ class FinancialSentimentService:
 
             return "\n".join(output_lines)
 
-        except Exception as e:
-            logger.exception("Error formatting sentiment for LLM: %s", e)
+        except Exception:
+            logger.exception("Error formatting sentiment for LLM")
             return "Error: Could not format sentiment analysis data"
 
     # Helper methods for text analysis
@@ -961,6 +961,6 @@ class FinancialSentimentService:
 
             return " | ".join(implications)
 
-        except Exception as e:
-            logger.exception("Error generating trading implications: %s", e)
+        except Exception:
+            logger.exception("Error generating trading implications")
             return "Error generating trading implications"

@@ -149,14 +149,16 @@ class FuturesContractManager:
 
             return selected_contract["symbol"]
 
-        except Exception as e:
-            logger.exception("Failed to get active futures contract: %s", e)
+        except Exception:
+            logger.exception("Failed to get active futures contract")
             return None
 
     def get_cached_contract(self) -> str | None:
         """Get the cached contract if still valid."""
-        if self._current_contract and self._last_update:
-            # Cache for 1 hour
-            if (datetime.now(UTC) - self._last_update).seconds < 3600:
-                return self._current_contract
+        if (
+            self._current_contract
+            and self._last_update
+            and (datetime.now(UTC) - self._last_update).seconds < 3600
+        ):
+            return self._current_contract
         return None

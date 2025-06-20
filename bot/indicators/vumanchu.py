@@ -471,40 +471,36 @@ class CipherA:
             df: DataFrame with OHLCV data (columns: open, high, low, close, volume)
 
         Returns:
-            DataFrame with comprehensive Cipher A indicators:
-
-            Core WaveTrend:
-            - wt1, wt2: WaveTrend oscillator values
-            - wt_overbought, wt_oversold: OB/OS conditions
-            - wt_cross_up, wt_cross_down: Basic cross signals
-
-            Advanced Signal Patterns:
-            - red_diamond, green_diamond: Diamond patterns
-            - yellow_cross_up, yellow_cross_down: Yellow cross signals
-            - dump_diamond, moon_diamond: Extreme diamonds
-            - bull_candle, bear_candle: Candle patterns
-
-            8-EMA Ribbon:
-            - ema1 through ema8: All ribbon EMAs
-            - ema_ribbon_bullish, ema_ribbon_bearish: Ribbon direction
-            - ema_cross_signals: Various EMA crossover signals
-
-            Additional Indicators:
-            - rsi: Standard RSI
-            - rsimfi: RSI+MFI combined indicator
-            - stoch_rsi_k, stoch_rsi_d: Stochastic RSI
-            - stc: Schaff Trend Cycle
-
-            Signal Analysis:
-            - cipher_a_signal: Overall signal (-1, 0, 1)
-            - cipher_a_bullish_strength: Bullish signal strength
-            - cipher_a_bearish_strength: Bearish signal strength
-            - cipher_a_confidence: Signal confidence (0-100)
-
-            Divergence Detection:
-            - divergence_bullish, divergence_bearish: Divergence signals
+            DataFrame with comprehensive Cipher A indicators
         """
         # Validate input data
+        validation_result = self._validate_input_data(df)
+        if validation_result is not None:
+            return validation_result
+
+        # Prepare data for calculation
+        result = self._prepare_calculation_data(df)
+
+        try:
+            # Calculate all indicator components
+            result = self._calculate_indicator_components(result)
+
+            # Calculate divergence signals
+            result = self._calculate_divergence_signals(result)
+
+            # Generate final signals and add compatibility indicators
+            result = self._finalize_calculation(result)
+
+            logger.debug("Cipher A calculation completed successfully")
+
+        except Exception:
+            logger.exception("Error in Cipher A calculation")
+            result = self._handle_calculation_error(result)
+
+        return result
+
+    def _validate_input_data(self, df: pd.DataFrame):
+        """Validate input data and return fallback if validation fails."""
         if df.empty:
             logger.error("Cannot calculate Cipher A indicators on empty DataFrame")
             return pd.DataFrame()
@@ -519,7 +515,18 @@ class CipherA:
             return df.copy()
 
         # Check for sufficient data
-        min_length = (
+        min_length = self._calculate_minimum_data_length()
+        if len(df) < min_length:
+            return self._create_fallback_dataframe(df, min_length)
+
+        # Validate data quality
+        self._validate_data_quality(df)
+
+        return None  # Validation passed
+
+    def _calculate_minimum_data_length(self) -> int:
+        """Calculate minimum data length required for indicators."""
+        return (
             max(
                 self.wt_channel_length,
                 self.wt_average_length,
@@ -528,48 +535,53 @@ class CipherA:
                 self.rsi_length,
             )
             + 20
-        )  # Buffer for lookbacks
+        )
 
-        if len(df) < min_length:
-            logger.warning(
-                "Insufficient data for Cipher A calculation. Need %s, got %s. Returning DataFrame with fallback indicator values.",
-                min_length,
-                len(df),
-            )
-            # Return DataFrame with safe fallback values instead of empty calculations
-            result = df.copy()
-            # Add basic fallback columns to prevent downstream errors
-            fallback_columns = {
-                "wt1": 0.0,
-                "wt2": 0.0,
-                "rsi": 50.0,
-                "cipher_a_dot": 0.0,
-                "ema_fast": df["close"].iloc[-1] if len(df) > 0 else 0.0,
-                "ema_slow": df["close"].iloc[-1] if len(df) > 0 else 0.0,
-                "ema_ribbon_bullish": False,
-                "ema_ribbon_bearish": False,
-            }
-            for col, default_val in fallback_columns.items():
-                if isinstance(default_val, bool):
-                    result[col] = pd.Series(
-                        [default_val] * len(result), index=result.index
-                    )
-                else:
-                    result[col] = pd.Series(
-                        [default_val] * len(result), index=result.index, dtype="float64"
-                    )
-            return result
+    def _create_fallback_dataframe(
+        self, df: pd.DataFrame, min_length: int
+    ) -> pd.DataFrame:
+        """Create fallback DataFrame with default values when insufficient data."""
+        logger.warning(
+            "Insufficient data for Cipher A calculation. Need %s, got %s. Returning fallback values.",
+            min_length,
+            len(df),
+        )
 
-        # Validate data quality
+        result = df.copy()
+        fallback_columns = {
+            "wt1": 0.0,
+            "wt2": 0.0,
+            "rsi": 50.0,
+            "cipher_a_dot": 0.0,
+            "ema_fast": df["close"].iloc[-1] if len(df) > 0 else 0.0,
+            "ema_slow": df["close"].iloc[-1] if len(df) > 0 else 0.0,
+            "ema_ribbon_bullish": False,
+            "ema_ribbon_bearish": False,
+        }
+
+        for col, default_val in fallback_columns.items():
+            if isinstance(default_val, bool):
+                result[col] = pd.Series([default_val] * len(result), index=result.index)
+            else:
+                result[col] = pd.Series(
+                    [default_val] * len(result), index=result.index, dtype="float64"
+                )
+
+        return result
+
+    def _validate_data_quality(self, df: pd.DataFrame):
+        """Validate data quality and log warnings for issues."""
         close_prices = df["close"]
-        if close_prices.isna().sum() > len(df) * 0.1:  # More than 10% NaN
+
+        # Check for NaN values
+        if close_prices.isna().sum() > len(df) * 0.1:
             logger.warning(
                 "High percentage of NaN values in close prices: %s/%s",
                 close_prices.isna().sum(),
                 len(df),
             )
 
-        # Check for zero or negative prices
+        # Check for invalid prices
         invalid_prices = (close_prices <= 0).sum()
         if invalid_prices > 0:
             logger.warning(
@@ -577,6 +589,8 @@ class CipherA:
                 invalid_prices,
             )
 
+    def _prepare_calculation_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Prepare data for calculation by ensuring proper data types."""
         result = df.copy()
 
         # Ensure all input columns are proper float64 dtype
@@ -586,127 +600,84 @@ class CipherA:
                     "float64"
                 )
 
+        return result
+
+    def _calculate_indicator_components(self, result: pd.DataFrame) -> pd.DataFrame:
+        """Calculate all indicator components."""
+        # Calculate 8-EMA Ribbon system
+        logger.debug("Calculating 8-EMA Ribbon system")
+        result = self._calculate_ema_ribbon(result)
+
+        # Calculate core WaveTrend oscillator
+        logger.debug("Calculating WaveTrend oscillator")
+        result = self.wavetrend.calculate(result)
+
+        # Calculate additional indicators
+        result = self._calculate_additional_indicators(result)
+
+        # Calculate advanced Cipher A signal patterns
+        logger.debug("Calculating advanced Cipher A signal patterns")
+        result = self.cipher_a_signals.get_all_cipher_a_signals(result)
+
+        return result
+
+    def _calculate_ema_ribbon(self, result: pd.DataFrame) -> pd.DataFrame:
+        """Calculate EMA ribbon and map column names."""
+        result = self.ema_ribbon.calculate_ema_ribbon(result)
+        result = self.ema_ribbon.calculate_ribbon_direction(result)
+        result = self.ema_ribbon.calculate_crossover_signals(result)
+
+        # Map ribbon column names to expected names
+        if "ribbon_bullish" in result.columns:
+            result["ema_ribbon_bullish"] = result["ribbon_bullish"]
+        if "ribbon_bearish" in result.columns:
+            result["ema_ribbon_bearish"] = result["ribbon_bearish"]
+
+        return result
+
+    def _calculate_additional_indicators(self, result: pd.DataFrame) -> pd.DataFrame:
+        """Calculate RSI, RSI+MFI, Stochastic RSI, and Schaff Trend Cycle."""
+        # Calculate RSI+MFI combined indicator
+        logger.debug("Calculating RSI+MFI combined indicator")
+        rsimfi_values = self.rsimfi.calculate_rsimfi(
+            result, period=self.rsimfi_period, multiplier=self.rsimfi_multiplier
+        )
+        result["rsimfi"] = rsimfi_values.astype("float64")
+
+        # Calculate standard RSI
+        logger.debug("Calculating standard RSI")
+        rsi_values = ta.rsi(result["close"], length=self.rsi_length)
+        result["rsi"] = (
+            rsi_values.astype("float64")
+            if rsi_values is not None
+            else pd.Series(50.0, index=result.index)
+        )
+
+        # Calculate Stochastic RSI
+        logger.debug("Calculating Stochastic RSI")
+        result = self.stochastic_rsi.calculate(result)
+
+        # Calculate Schaff Trend Cycle
+        logger.debug("Calculating Schaff Trend Cycle")
+        result = self.schaff_trend_cycle.calculate(result)
+
+        return result
+
+    def _calculate_divergence_signals(self, result: pd.DataFrame) -> pd.DataFrame:
+        """Calculate divergence signals for WT and RSI."""
+        logger.debug("Calculating divergence signals")
+
         try:
-            # Step 1: Calculate 8-EMA Ribbon system
-            logger.debug("Calculating 8-EMA Ribbon system")
-            result = self.ema_ribbon.calculate_ema_ribbon(result)
-            result = self.ema_ribbon.calculate_ribbon_direction(result)
-            result = self.ema_ribbon.calculate_crossover_signals(result)
+            # Calculate divergences
+            wt_divs = self._calculate_wt_divergences(result)
+            rsi_divs = self._calculate_rsi_divergences(result)
 
-            # Map ribbon column names to expected names
-            if "ribbon_bullish" in result.columns:
-                result["ema_ribbon_bullish"] = result["ribbon_bullish"]
-            if "ribbon_bearish" in result.columns:
-                result["ema_ribbon_bearish"] = result["ribbon_bearish"]
+            # Initialize divergence series
+            result = self._initialize_divergence_series(result)
 
-            # Step 2: Calculate core WaveTrend oscillator
-            logger.debug("Calculating WaveTrend oscillator")
-            result = self.wavetrend.calculate(result)
-
-            # Step 3: Calculate RSI+MFI combined indicator
-            logger.debug("Calculating RSI+MFI combined indicator")
-            rsimfi_values = self.rsimfi.calculate_rsimfi(
-                result, period=self.rsimfi_period, multiplier=self.rsimfi_multiplier
-            )
-            result["rsimfi"] = rsimfi_values.astype("float64")
-
-            # Step 4: Calculate standard RSI
-            logger.debug("Calculating standard RSI")
-            rsi_values = ta.rsi(result["close"], length=self.rsi_length)
-            result["rsi"] = (
-                rsi_values.astype("float64")
-                if rsi_values is not None
-                else pd.Series(50.0, index=result.index)
-            )
-
-            # Step 5: Calculate Stochastic RSI
-            logger.debug("Calculating Stochastic RSI")
-            result = self.stochastic_rsi.calculate(result)
-
-            # Step 6: Calculate Schaff Trend Cycle
-            logger.debug("Calculating Schaff Trend Cycle")
-            result = self.schaff_trend_cycle.calculate(result)
-
-            # Step 7: Calculate all advanced Cipher A signal patterns
-            logger.debug("Calculating advanced Cipher A signal patterns")
-            result = self.cipher_a_signals.get_all_cipher_a_signals(result)
-
-            # Step 8: Calculate divergence signals
-            logger.debug("Calculating divergence signals")
-            # Use the correct method names for divergence detection
-            try:
-                wt_regular_divs = self.divergence_detector.detect_regular_divergences(
-                    result["wt2"], result["close"], 60.0, -60.0
-                )
-                wt_hidden_divs = self.divergence_detector.detect_hidden_divergences(
-                    result["wt2"], result["close"]
-                )
-
-                rsi_regular_divs = self.divergence_detector.detect_regular_divergences(
-                    result["rsi"], result["close"], 70.0, 30.0
-                )
-                rsi_hidden_divs = self.divergence_detector.detect_hidden_divergences(
-                    result["rsi"], result["close"]
-                )
-
-                # Convert divergence signals to boolean series
-                from .divergence_detector import DivergenceType
-
-                # Initialize divergence series
-                result["wt_divergence_bullish"] = pd.Series(False, index=result.index)
-                result["wt_divergence_bearish"] = pd.Series(False, index=result.index)
-                result["rsi_divergence_bullish"] = pd.Series(False, index=result.index)
-                result["rsi_divergence_bearish"] = pd.Series(False, index=result.index)
-
-                # Process WT divergences
-                for div in wt_regular_divs + wt_hidden_divs:
-                    if div.end_fractal.index < len(result):
-                        if div.type in [
-                            DivergenceType.REGULAR_BULLISH,
-                            DivergenceType.HIDDEN_BULLISH,
-                        ]:
-                            result.iloc[
-                                div.end_fractal.index,
-                                result.columns.get_loc("wt_divergence_bullish"),
-                            ] = True
-                        elif div.type in [
-                            DivergenceType.REGULAR_BEARISH,
-                            DivergenceType.HIDDEN_BEARISH,
-                        ]:
-                            result.iloc[
-                                div.end_fractal.index,
-                                result.columns.get_loc("wt_divergence_bearish"),
-                            ] = True
-
-                # Process RSI divergences
-                for div in rsi_regular_divs + rsi_hidden_divs:
-                    if div.end_fractal.index < len(result):
-                        if div.type in [
-                            DivergenceType.REGULAR_BULLISH,
-                            DivergenceType.HIDDEN_BULLISH,
-                        ]:
-                            result.iloc[
-                                div.end_fractal.index,
-                                result.columns.get_loc("rsi_divergence_bullish"),
-                            ] = True
-                        elif div.type in [
-                            DivergenceType.REGULAR_BEARISH,
-                            DivergenceType.HIDDEN_BEARISH,
-                        ]:
-                            result.iloc[
-                                div.end_fractal.index,
-                                result.columns.get_loc("rsi_divergence_bearish"),
-                            ] = True
-
-            except Exception as div_error:
-                logger.warning(
-                    "Error calculating divergences in Cipher A: %s", div_error
-                )
-                # Set default divergence columns
-                result["wt_divergence_bullish"] = pd.Series(False, index=result.index)
-                result["wt_divergence_bearish"] = pd.Series(False, index=result.index)
-                result["rsi_divergence_bullish"] = pd.Series(False, index=result.index)
-                result["rsi_divergence_bearish"] = pd.Series(False, index=result.index)
+            # Process divergences
+            result = self._process_divergences(result, wt_divs, "wt")
+            result = self._process_divergences(result, rsi_divs, "rsi")
 
             # Combine all divergence signals
             result["divergence_bullish"] = (
@@ -716,22 +687,91 @@ class CipherA:
                 result["wt_divergence_bearish"] | result["rsi_divergence_bearish"]
             )
 
-            # Step 9: Enhanced signal generation with all components
-            result["cipher_a_signal"] = self._generate_enhanced_signals(result)
+        except Exception as div_error:
+            logger.warning("Error calculating divergences in Cipher A: %s", div_error)
+            result = self._set_default_divergence_columns(result)
 
-            # Step 10: Add compatibility indicators for backward compatibility
-            self._add_compatibility_indicators(result)
+        return result
 
-            logger.debug("Cipher A calculation completed successfully")
+    def _calculate_wt_divergences(self, result: pd.DataFrame):
+        """Calculate WaveTrend divergences."""
+        wt_regular = self.divergence_detector.detect_regular_divergences(
+            result["wt2"], result["close"], 60.0, -60.0
+        )
+        wt_hidden = self.divergence_detector.detect_hidden_divergences(
+            result["wt2"], result["close"]
+        )
+        return wt_regular + wt_hidden
 
-        except Exception:
-            logger.exception("Error in Cipher A calculation")
-            # Add error indicators
-            result["cipher_a_error"] = True
-            result["cipher_a_signal"] = 0
-            if "cipher_a_confidence" not in result.columns:
-                result["cipher_a_confidence"] = 0.0
+    def _calculate_rsi_divergences(self, result: pd.DataFrame):
+        """Calculate RSI divergences."""
+        rsi_regular = self.divergence_detector.detect_regular_divergences(
+            result["rsi"], result["close"], 70.0, 30.0
+        )
+        rsi_hidden = self.divergence_detector.detect_hidden_divergences(
+            result["rsi"], result["close"]
+        )
+        return rsi_regular + rsi_hidden
 
+    def _initialize_divergence_series(self, result: pd.DataFrame) -> pd.DataFrame:
+        """Initialize divergence boolean series."""
+        result["wt_divergence_bullish"] = pd.Series(False, index=result.index)
+        result["wt_divergence_bearish"] = pd.Series(False, index=result.index)
+        result["rsi_divergence_bullish"] = pd.Series(False, index=result.index)
+        result["rsi_divergence_bearish"] = pd.Series(False, index=result.index)
+        return result
+
+    def _process_divergences(
+        self, result: pd.DataFrame, divergences: list, indicator_type: str
+    ) -> pd.DataFrame:
+        """Process divergences for a specific indicator type."""
+        from .divergence_detector import DivergenceType
+
+        for div in divergences:
+            if div.end_fractal.index < len(result):
+                if div.type in [
+                    DivergenceType.REGULAR_BULLISH,
+                    DivergenceType.HIDDEN_BULLISH,
+                ]:
+                    col_name = f"{indicator_type}_divergence_bullish"
+                    result.iloc[
+                        div.end_fractal.index, result.columns.get_loc(col_name)
+                    ] = True
+                elif div.type in [
+                    DivergenceType.REGULAR_BEARISH,
+                    DivergenceType.HIDDEN_BEARISH,
+                ]:
+                    col_name = f"{indicator_type}_divergence_bearish"
+                    result.iloc[
+                        div.end_fractal.index, result.columns.get_loc(col_name)
+                    ] = True
+
+        return result
+
+    def _set_default_divergence_columns(self, result: pd.DataFrame) -> pd.DataFrame:
+        """Set default divergence columns when calculation fails."""
+        result["wt_divergence_bullish"] = pd.Series(False, index=result.index)
+        result["wt_divergence_bearish"] = pd.Series(False, index=result.index)
+        result["rsi_divergence_bullish"] = pd.Series(False, index=result.index)
+        result["rsi_divergence_bearish"] = pd.Series(False, index=result.index)
+        return result
+
+    def _finalize_calculation(self, result: pd.DataFrame) -> pd.DataFrame:
+        """Generate final signals and add compatibility indicators."""
+        # Generate enhanced signals
+        result["cipher_a_signal"] = self._generate_enhanced_signals(result)
+
+        # Add compatibility indicators
+        self._add_compatibility_indicators(result)
+
+        return result
+
+    def _handle_calculation_error(self, result: pd.DataFrame) -> pd.DataFrame:
+        """Handle calculation errors by adding error indicators."""
+        result["cipher_a_error"] = True
+        result["cipher_a_signal"] = 0
+        if "cipher_a_confidence" not in result.columns:
+            result["cipher_a_confidence"] = 0.0
         return result
 
     def _generate_enhanced_signals(self, df: pd.DataFrame) -> pd.Series:
@@ -1028,7 +1068,9 @@ class CipherA:
                 "strength": (
                     "STRONG"
                     if confidence >= 50
-                    else "MODERATE" if confidence >= 25 else "WEAK"
+                    else "MODERATE"
+                    if confidence >= 25
+                    else "WEAK"
                 ),
                 "value": signal,
             },
@@ -1955,7 +1997,9 @@ class CipherB:
                 "strength": (
                     "STRONG"
                     if confidence >= 50
-                    else "MODERATE" if confidence >= 25 else "WEAK"
+                    else "MODERATE"
+                    if confidence >= 25
+                    else "WEAK"
                 ),
                 "value": signal,
             },

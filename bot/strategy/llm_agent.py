@@ -624,7 +624,9 @@ FINANCIAL INTELLIGENCE INTEGRATION:
                 direction = (
                     "🟢"
                     if candle.close > candle.open
-                    else "🔴" if candle.close < candle.open else "⚪"
+                    else "🔴"
+                    if candle.close < candle.open
+                    else "⚪"
                 )
                 change_pct = (
                     ((candle.close - candle.open) / candle.open * 100)
@@ -670,7 +672,9 @@ FINANCIAL INTELLIGENCE INTEGRATION:
                 trend_direction = (
                     "RISING"
                     if overall_trend > 0.1
-                    else "FALLING" if overall_trend < -0.1 else "SIDEWAYS"
+                    else "FALLING"
+                    if overall_trend < -0.1
+                    else "SIDEWAYS"
                 )
                 trend_line = f"Overall Trend: {trend_direction} ({overall_trend:+.2f}% over {len(recent_candles)} candles)"
             else:
@@ -1216,7 +1220,8 @@ FINANCIAL INTELLIGENCE INTEGRATION:
                     error_occurred=True,
                 )
 
-            raise
+            # Re-raise the original exception with context preserved
+            raise e
 
     async def _get_cached_llm_decision(self, market_state: MarketState) -> TradeAction:
         """

@@ -49,17 +49,17 @@ def sample_dominance_data():
     """Create sample dominance data."""
     return DominanceData(
         timestamp=datetime.now(UTC),
-        usdt_market_cap=Decimal("100000000000"),
-        usdc_market_cap=Decimal("40000000000"),
-        total_stablecoin_cap=Decimal("140000000000"),
-        crypto_total_market_cap=Decimal("2000000000000"),
+        usdt_market_cap=Decimal(100000000000),
+        usdc_market_cap=Decimal(40000000000),
+        total_stablecoin_cap=Decimal(140000000000),
+        crypto_total_market_cap=Decimal(2000000000000),
         usdt_dominance=5.0,
         usdc_dominance=2.0,
         stablecoin_dominance=7.0,
         dominance_24h_change=-0.5,
         dominance_7d_change=-1.2,
         stablecoin_velocity=0.5,
-        net_flow_24h=Decimal("-1000000000"),
+        net_flow_24h=Decimal(-1000000000),
         dominance_sma_20=7.2,
         dominance_rsi=45.0,
     )
@@ -138,10 +138,10 @@ class TestDominanceDataProvider:
         # Create high dominance data
         high_dominance = DominanceData(
             timestamp=datetime.now(UTC),
-            usdt_market_cap=Decimal("150000000000"),
-            usdc_market_cap=Decimal("60000000000"),
-            total_stablecoin_cap=Decimal("210000000000"),
-            crypto_total_market_cap=Decimal("2000000000000"),
+            usdt_market_cap=Decimal(150000000000),
+            usdc_market_cap=Decimal(60000000000),
+            total_stablecoin_cap=Decimal(210000000000),
+            crypto_total_market_cap=Decimal(2000000000000),
             usdt_dominance=7.5,
             usdc_dominance=3.0,
             stablecoin_dominance=10.5,  # High dominance
@@ -164,10 +164,10 @@ class TestDominanceDataProvider:
         # Create low dominance data
         low_dominance = DominanceData(
             timestamp=datetime.now(UTC),
-            usdt_market_cap=Decimal("50000000000"),
-            usdc_market_cap=Decimal("30000000000"),
-            total_stablecoin_cap=Decimal("80000000000"),
-            crypto_total_market_cap=Decimal("2000000000000"),
+            usdt_market_cap=Decimal(50000000000),
+            usdc_market_cap=Decimal(30000000000),
+            total_stablecoin_cap=Decimal(80000000000),
+            crypto_total_market_cap=Decimal(2000000000000),
             usdt_dominance=2.5,
             usdc_dominance=1.5,
             stablecoin_dominance=4.0,  # Low dominance
@@ -194,10 +194,10 @@ class TestDominanceDataProvider:
         for i in range(10):
             data = DominanceData(
                 timestamp=now - timedelta(hours=i),
-                usdt_market_cap=Decimal("100000000000"),
-                usdc_market_cap=Decimal("40000000000"),
-                total_stablecoin_cap=Decimal("140000000000"),
-                crypto_total_market_cap=Decimal("2000000000000"),
+                usdt_market_cap=Decimal(100000000000),
+                usdc_market_cap=Decimal(40000000000),
+                total_stablecoin_cap=Decimal(140000000000),
+                crypto_total_market_cap=Decimal(2000000000000),
                 usdt_dominance=5.0,
                 usdc_dominance=2.0,
                 stablecoin_dominance=7.0 + (i * 0.1),  # Varying dominance
@@ -224,10 +224,10 @@ class TestDominanceDataProvider:
         for i in range(5):
             data = DominanceData(
                 timestamp=now - timedelta(hours=i),
-                usdt_market_cap=Decimal("100000000000"),
-                usdc_market_cap=Decimal("40000000000"),
-                total_stablecoin_cap=Decimal("140000000000"),
-                crypto_total_market_cap=Decimal("2000000000000"),
+                usdt_market_cap=Decimal(100000000000),
+                usdc_market_cap=Decimal(40000000000),
+                total_stablecoin_cap=Decimal(140000000000),
+                crypto_total_market_cap=Decimal(2000000000000),
                 usdt_dominance=5.0,
                 usdc_dominance=2.0,
                 stablecoin_dominance=7.0,
@@ -241,14 +241,14 @@ class TestDominanceDataProvider:
         dominance_provider._dominance_cache = data_points
 
         # Convert to DataFrame
-        df = dominance_provider.to_dataframe(hours=24)
+        dominance_data = dominance_provider.to_dataframe(hours=24)
 
-        assert not df.empty
-        assert len(df) == 5
-        assert "stablecoin_dominance" in df.columns
-        assert "dominance_24h_change" in df.columns
-        assert "velocity" in df.columns
-        assert "rsi" in df.columns
+        assert not dominance_data.empty
+        assert len(dominance_data) == 5
+        assert "stablecoin_dominance" in dominance_data.columns
+        assert "dominance_24h_change" in dominance_data.columns
+        assert "velocity" in dominance_data.columns
+        assert "rsi" in dominance_data.columns
 
     @pytest.mark.asyncio()
     async def test_update_loop(self, dominance_provider):
@@ -284,10 +284,10 @@ class TestDominanceDataProvider:
             dominance = 7.0 + (i % 5) * 0.2  # Oscillating dominance
             data = DominanceData(
                 timestamp=now - timedelta(hours=29 - i),
-                usdt_market_cap=Decimal("100000000000"),
-                usdc_market_cap=Decimal("40000000000"),
-                total_stablecoin_cap=Decimal("140000000000"),
-                crypto_total_market_cap=Decimal("2000000000000"),
+                usdt_market_cap=Decimal(100000000000),
+                usdc_market_cap=Decimal(40000000000),
+                total_stablecoin_cap=Decimal(140000000000),
+                crypto_total_market_cap=Decimal(2000000000000),
                 usdt_dominance=5.0,
                 usdc_dominance=2.0,
                 stablecoin_dominance=dominance,

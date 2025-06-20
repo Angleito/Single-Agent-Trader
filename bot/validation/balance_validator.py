@@ -152,8 +152,11 @@ class BalanceValidator:
                 self._log_validation_error(error_msg, context, "NEGATIVE")
                 self._raise_negative_balance(error_msg)
 
-        except BalanceValidationError:
+        except BalanceValidationError as validation_error:
             self.error_count += 1
+            logger.debug(
+                "Balance validation error in range check: %s", validation_error
+            )
             raise
         except Exception as e:
             self.error_count += 1
@@ -225,17 +228,32 @@ class BalanceValidator:
             )
 
             # Validate percentage change
+            def _raise_excessive_change_pct_error(error_msg: str) -> None:
+                raise BalanceValidationError(
+                    error_msg,
+                    error_code="EXCESSIVE_CHANGE_PCT",
+                    validation_type="change",
+                )
+
+            def _raise_excessive_change_abs_error(error_msg: str) -> None:
+                raise BalanceValidationError(
+                    error_msg,
+                    error_code="EXCESSIVE_CHANGE_ABS",
+                    validation_type="change",
+                )
+
+            def _raise_impossible_change_error(error_msg: str) -> None:
+                raise BalanceValidationError(
+                    error_msg, error_code="IMPOSSIBLE_CHANGE", validation_type="change"
+                )
+
             if change_pct > self.thresholds.max_balance_change_pct:
                 error_msg = (
                     f"Balance change too large: {change_pct:.2f}% > {self.thresholds.max_balance_change_pct}% "
                     f"(${old_normalized} -> ${new_normalized})"
                 )
                 self._log_validation_error(error_msg, operation_type, "CHANGE_PCT")
-                raise BalanceValidationError(
-                    error_msg,
-                    error_code="EXCESSIVE_CHANGE_PCT",
-                    validation_type="change",
-                )
+                _raise_excessive_change_pct_error(error_msg)
 
             # Validate absolute change
             if abs(change_amount) > self.thresholds.max_absolute_change:
@@ -244,11 +262,7 @@ class BalanceValidator:
                     f"(${old_normalized} -> ${new_normalized})"
                 )
                 self._log_validation_error(error_msg, operation_type, "CHANGE_ABS")
-                raise BalanceValidationError(
-                    error_msg,
-                    error_code="EXCESSIVE_CHANGE_ABS",
-                    validation_type="change",
-                )
+                _raise_excessive_change_abs_error(error_msg)
 
             # Check for impossible changes (e.g., balance going from 0 to very high instantly)
             if old_normalized == Decimal(0) and new_normalized > Decimal(1000):
@@ -257,20 +271,25 @@ class BalanceValidator:
                     f"(zero to significant amount instantly)"
                 )
                 self._log_validation_error(error_msg, operation_type, "IMPOSSIBLE")
-                raise BalanceValidationError(
-                    error_msg, error_code="IMPOSSIBLE_CHANGE", validation_type="change"
-                )
+                _raise_impossible_change_error(error_msg)
 
-        except BalanceValidationError:
+        except BalanceValidationError as validation_error:
             self.error_count += 1
+            logger.debug(
+                "Balance validation error in change validation: %s", validation_error
+            )
             raise
         except Exception as e:
+
+            def _raise_change_validation_error(error_msg: str, e: Exception) -> None:
+                raise BalanceValidationError(
+                    error_msg, error_code="VALIDATION_ERROR", validation_type="change"
+                ) from e
+
             self.error_count += 1
             error_msg = f"Balance change validation error: {e}"
             self._log_validation_error(error_msg, operation_type, "VALIDATION_ERROR")
-            raise BalanceValidationError(
-                error_msg, error_code="VALIDATION_ERROR", validation_type="change"
-            ) from e
+            _raise_change_validation_error(error_msg, e)
         else:
             # Record the change
             self.balance_history.append(change_record)
@@ -339,8 +358,12 @@ class BalanceValidator:
                         validation_type="precision",
                     )
 
-        except BalanceValidationError:
+        except BalanceValidationError as validation_error:
             self.error_count += 1
+            logger.debug(
+                "Balance validation error in decimal precision check: %s",
+                validation_error,
+            )
             raise
         except Exception as e:
             self.error_count += 1
@@ -421,8 +444,12 @@ class BalanceValidator:
                 "validation_time": datetime.now(UTC),
             }
 
-        except BalanceValidationError:
+        except BalanceValidationError as validation_error:
             self.error_count += 1
+            logger.debug(
+                "Balance validation error in historical comparison: %s",
+                validation_error,
+            )
             raise
         except Exception as e:
             self.error_count += 1
@@ -541,8 +568,11 @@ class BalanceValidator:
                 "validation_time": datetime.now(UTC),
             }
 
-        except BalanceValidationError:
+        except BalanceValidationError as validation_error:
             self.error_count += 1
+            logger.debug(
+                "Balance validation error in consistency check: %s", validation_error
+            )
             raise
         except Exception as e:
             self.error_count += 1
@@ -621,8 +651,11 @@ class BalanceValidator:
                 "validation_time": datetime.now(UTC),
             }
 
-        except BalanceValidationError:
+        except BalanceValidationError as validation_error:
             self.error_count += 1
+            logger.debug(
+                "Balance validation error in business rules check: %s", validation_error
+            )
             raise
         except Exception as e:
             self.error_count += 1

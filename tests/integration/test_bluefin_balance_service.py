@@ -10,6 +10,7 @@ This module tests the Bluefin SDK service integration with focus on:
 """
 
 import asyncio
+import logging
 import time
 from decimal import Decimal
 from unittest.mock import Mock, patch
@@ -23,6 +24,8 @@ from services.bluefin_sdk_service import (
     BluefinSDKService,
     BluefinServiceError,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class TestBluefinBalanceServiceIntegration:
@@ -73,16 +76,20 @@ class TestBluefinBalanceServiceIntegration:
         service = BluefinSDKService()
 
         # Mock environment variables
-        with patch.dict(
-            "os.environ",
-            {"BLUEFIN_PRIVATE_KEY": "test_private_key", "BLUEFIN_NETWORK": "testnet"},
-        ):
-            # Mock the client initialization
-            with patch(
+        with (
+            patch.dict(
+                "os.environ",
+                {
+                    "BLUEFIN_PRIVATE_KEY": "test_private_key",
+                    "BLUEFIN_NETWORK": "testnet",
+                },
+            ),
+            patch(
                 "services.bluefin_sdk_service.BluefinClient",
                 return_value=mock_bluefin_client,
-            ):
-                await service.initialize()
+            ),
+        ):
+            await service.initialize()
 
         yield service
 

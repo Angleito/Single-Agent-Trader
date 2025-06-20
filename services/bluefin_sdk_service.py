@@ -585,17 +585,6 @@ class BluefinSDKService:
                     )
                     return True
 
-            self.consecutive_health_failures += 1
-            logger.warning(
-                "Service health check failed",
-                extra={
-                    "service_id": self.service_id,
-                    "consecutive_failures": self.consecutive_health_failures,
-                    "max_failures": self.max_health_failures,
-                },
-            )
-            return False
-
         except Exception as e:
             self.consecutive_health_failures += 1
             logger.warning(
@@ -605,6 +594,17 @@ class BluefinSDKService:
                     "error_type": type(e).__name__,
                     "error_message": str(e),
                     "consecutive_failures": self.consecutive_health_failures,
+                },
+            )
+            return False
+        else:
+            self.consecutive_health_failures += 1
+            logger.warning(
+                "Service health check failed",
+                extra={
+                    "service_id": self.service_id,
+                    "consecutive_failures": self.consecutive_health_failures,
+                    "max_failures": self.max_health_failures,
                 },
             )
             return False
@@ -994,6 +994,7 @@ class BluefinSDKService:
 
         except Exception as e:
             if isinstance(e, BluefinDataError):
+                logger.exception("Bluefin data error in symbol extraction")
                 raise
 
             # If all else fails, provide a safe fallback
@@ -1490,6 +1491,302 @@ class BluefinSDKService:
             raise last_exception
         return None
 
+    def _validate_private_key(self) -> None:
+        """Validate and normalize private key format.
+
+        Raises:
+            BluefinConnectionError: If private key is invalid
+        """
+        if not self.private_key:
+            error_msg = "BLUEFIN_PRIVATE_KEY environment variable not set"
+            logger.error(
+                "Private key validation failed",
+                extra={
+                    "service_id": self.service_id,
+                    "error_type": "missing_private_key",
+                    "required_env_var": "BLUEFIN_PRIVATE_KEY",
+                },
+            )
+            raise BluefinConnectionError(error_msg)
+
+        key_validation_errors = []
+        original_key = self.private_key.strip()
+        words = original_key.split()
+
+        if len(words) in [MIN_MNEMONIC_WORDS, MAX_MNEMONIC_WORDS]:
+            self._validate_mnemonic_key(words, key_validation_errors)
+        else:
+            self._validate_hex_key(original_key, key_validation_errors)
+
+        # Check for invalid patterns in hex keys
+        if len(words) not in [12, 24]:
+            self._check_invalid_hex_patterns(key_validation_errors)
+
+        if key_validation_errors:
+            self._raise_key_validation_error(key_validation_errors)
+
+    def _validate_mnemonic_key(self, words: list[str], errors: list[str]) -> None:
+        """Validate mnemonic private key format."""
+        logger.info(
+            "Detected %s-word mnemonic phrase, keeping original format for BluefinClient",
+            len(words),
+            extra={
+                "service_id": self.service_id,
+                "mnemonic_word_count": len(words),
+                "format_type": "mnemonic_passthrough",
+            },
+        )
+
+        if all(word.isalpha() and len(word) > MIN_WORD_LENGTH for word in words):
+            logger.info(
+                "Mnemonic validation passed, will pass directly to BluefinClient",
+                extra={
+                    "service_id": self.service_id,
+                    "original_format": "mnemonic",
+                    "client_format": "mnemonic",
+                    "word_count": len(words),
+                },
+            )
+            # Keep original mnemonic - BluefinClient handles BIP39 conversion internally
+            self.private_key = " ".join(words)
+        else:
+            errors.append(
+                "Invalid mnemonic format: words must be alphabetic and >2 characters"
+            )
+
+    def _validate_hex_key(self, original_key: str, errors: list[str]) -> None:
+        """Validate hexadecimal private key format."""
+        if len(original_key) < MIN_KEY_LENGTH:
+            errors.append(
+                f"Too short: got {len(original_key)} chars, expected {MIN_KEY_LENGTH}+ for hex or {MIN_MNEMONIC_WORDS}/{MAX_MNEMONIC_WORDS} words for mnemonic"
+            )
+
+        try:
+            clean_key = original_key
+            if clean_key.startswith(("0x", "0X")):
+                clean_key = clean_key[2:]
+
+            bytes.fromhex(clean_key)
+
+            if clean_key != original_key:
+                logger.debug(
+                    "Cleaned private key by removing hex prefix",
+                    extra={
+                        "service_id": self.service_id,
+                        "original_length": len(original_key),
+                        "cleaned_length": len(clean_key),
+                    },
+                )
+                self.private_key = clean_key
+        except ValueError as hex_err:
+            errors.append(f"Invalid hexadecimal format: {hex_err!s}")
+
+    def _check_invalid_hex_patterns(self, errors: list[str]) -> None:
+        """Check for common invalid hex key patterns."""
+        if self.private_key.count("0") == len(self.private_key):
+            errors.append("All zeros - invalid private key")
+        elif self.private_key.count("f") == len(self.private_key.replace("F", "f")):
+            errors.append("All 0xf values - likely invalid private key")
+
+    def _raise_key_validation_error(self, errors: list[str]) -> None:
+        """Raise validation error with detailed information."""
+        error_msg = f"BLUEFIN_PRIVATE_KEY validation failed: {'; '.join(errors)}"
+        logger.error(
+            "Private key format validation failed",
+            extra={
+                "service_id": self.service_id,
+                "error_type": "invalid_private_key_format",
+                "key_length": len(self.private_key),
+                "validation_errors": errors,
+                "expected_format": "64+ hexadecimal characters (32+ bytes)",
+            },
+        )
+        raise BluefinConnectionError(error_msg)
+
+    def _resolve_network_config(self):
+        """Resolve network configuration from string to Networks object.
+
+        Returns:
+            Network configuration object
+
+        Raises:
+            BluefinConnectionError: If network is invalid
+        """
+        try:
+            network = (
+                Networks["SUI_PROD"]
+                if self.network == "mainnet"
+                else Networks["SUI_STAGING"]
+            )
+            logger.debug(
+                "Network configuration resolved",
+                extra={
+                    "service_id": self.service_id,
+                    "network_name": self.network,
+                    "network_config": str(network)[:100],  # Truncate for logging
+                },
+            )
+            return network
+        except KeyError as e:
+            error_msg = f"Invalid network configuration '{self.network}'. Expected 'mainnet' or 'testnet'"
+            logger.exception(
+                "Network configuration failed",
+                extra={
+                    "service_id": self.service_id,
+                    "error_type": "invalid_network",
+                    "network_name": self.network,
+                    "available_networks": list(Networks.keys()),
+                    "original_error": str(e),
+                },
+            )
+            raise BluefinConnectionError(error_msg) from e
+
+    def _should_retry_init_error(self, error: Exception) -> bool:
+        """Determine if initialization error is retryable.
+
+        Args:
+            error: Exception that occurred during initialization
+
+        Returns:
+            True if error should be retried, False otherwise
+        """
+        error_str = str(error).lower()
+
+        # Retryable network/connection errors
+        retryable_keywords = [
+            "network",
+            "connection",
+            "timeout",
+            "temporary",
+            "503",
+            "502",
+            "500",
+        ]
+        if any(keyword in error_str for keyword in retryable_keywords):
+            return True
+
+        # Non-retryable authentication errors
+        if "private key" in error_str or "authentication" in error_str:
+            return False
+
+        # Non-retryable validation errors
+        if "invalid" in error_str and "key" in error_str:
+            return False
+
+        # Default to retry for unknown errors
+        return True
+
+    async def _initialize_client_with_retry(self, network) -> None:
+        """Initialize Bluefin client with retry mechanism.
+
+        Args:
+            network: Network configuration object
+
+        Raises:
+            BluefinAPIError: If all initialization attempts fail
+        """
+        max_init_retries = 3
+        init_retry_delay = 2.0
+
+        for init_attempt in range(max_init_retries):
+            logger.info(
+                "Creating Bluefin client instance (attempt %s/%s)",
+                init_attempt + 1,
+                max_init_retries,
+                extra={
+                    "service_id": self.service_id,
+                    "network": self.network,
+                    "onchain_enabled": True,
+                    "attempt": init_attempt + 1,
+                },
+            )
+
+            try:
+                self.client = BluefinClient(True, network, self.private_key)
+                logger.debug(
+                    "Bluefin client instance created successfully",
+                    extra={
+                        "service_id": self.service_id,
+                        "client_type": type(self.client).__name__,
+                        "attempt": init_attempt + 1,
+                    },
+                )
+
+                logger.info(
+                    "Initializing Bluefin client connection",
+                    extra={
+                        "service_id": self.service_id,
+                        "initialization_step": "client_init",
+                        "attempt": init_attempt + 1,
+                    },
+                )
+
+                await self.client.init(True)
+
+                logger.info(
+                    "Bluefin client initialization completed successfully",
+                    extra={
+                        "service_id": self.service_id,
+                        "initialization_successful": True,
+                        "successful_attempt": init_attempt + 1,
+                        "total_attempts": init_attempt + 1,
+                    },
+                )
+                return  # Success - exit retry loop
+
+            except Exception as e:
+                if init_attempt < max_init_retries - 1:
+                    if self._should_retry_init_error(e):
+                        delay = init_retry_delay * (
+                            2**init_attempt
+                        )  # Exponential backoff
+                        logger.warning(
+                            "Client initialization failed (attempt %s/%s), retrying in %.1fs: %s",
+                            init_attempt + 1,
+                            max_init_retries,
+                            delay,
+                            e,
+                            extra={
+                                "service_id": self.service_id,
+                                "error_type": type(e).__name__,
+                                "error_message": str(e),
+                                "attempt": init_attempt + 1,
+                                "max_retries": max_init_retries,
+                                "retry_delay": delay,
+                            },
+                        )
+                        await asyncio.sleep(delay)
+                        continue
+
+                    # Non-retryable error
+                    logger.exception(
+                        "Non-retryable initialization error",
+                        extra={
+                            "service_id": self.service_id,
+                            "error_type": type(e).__name__,
+                            "error_message": str(e),
+                            "attempt": init_attempt + 1,
+                            "non_retryable": True,
+                        },
+                    )
+                    raise BluefinAPIError(
+                        f"Failed to initialize Bluefin client: {e!s}"
+                    ) from e
+
+                # Final attempt failed
+                error_msg = f"Failed to initialize Bluefin client after {max_init_retries} attempts: {e!s}"
+                logger.exception(
+                    "All initialization attempts failed",
+                    extra={
+                        "service_id": self.service_id,
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                        "total_attempts": max_init_retries,
+                        "traceback": traceback.format_exc(),
+                    },
+                )
+                raise BluefinAPIError(error_msg) from e
+
     async def initialize(self) -> bool:
         """
         Initialize the Bluefin SDK client with comprehensive error handling.
@@ -1511,283 +1808,9 @@ class BluefinSDKService:
         )
 
         try:
-            # Validate private key
-            if not self.private_key:
-                error_msg = "BLUEFIN_PRIVATE_KEY environment variable not set"
-                logger.error(
-                    "Private key validation failed",
-                    extra={
-                        "service_id": self.service_id,
-                        "error_type": "missing_private_key",
-                        "required_env_var": "BLUEFIN_PRIVATE_KEY",
-                    },
-                )
-                raise BluefinConnectionError(error_msg)
-
-            # Enhanced private key format validation with mnemonic support
-            key_validation_errors = []
-            original_key = self.private_key.strip()
-
-            # Check if the key is a mnemonic phrase (12 or 24 words)
-            words = original_key.split()
-            if len(words) in [MIN_MNEMONIC_WORDS, MAX_MNEMONIC_WORDS]:
-                logger.info(
-                    "Detected %s-word mnemonic phrase, keeping original format for BluefinClient",
-                    len(words),
-                    extra={
-                        "service_id": self.service_id,
-                        "mnemonic_word_count": len(words),
-                        "format_type": "mnemonic_passthrough",
-                    },
-                )
-
-                # Basic mnemonic validation
-                if all(
-                    word.isalpha() and len(word) > MIN_WORD_LENGTH for word in words
-                ):
-                    logger.info(
-                        "Mnemonic validation passed, will pass directly to BluefinClient",
-                        extra={
-                            "service_id": self.service_id,
-                            "original_format": "mnemonic",
-                            "client_format": "mnemonic",
-                            "word_count": len(words),
-                        },
-                    )
-                    # Keep the original mnemonic for BluefinClient - it handles BIP39 conversion internally
-                    self.private_key = original_key
-                else:
-                    key_validation_errors.append(
-                        "Invalid mnemonic format: words must be alphabetic and >2 characters"
-                    )
-            else:
-                # Check minimum length for hex keys (64 hex chars = 32 bytes)
-                if len(original_key) < MIN_KEY_LENGTH:
-                    key_validation_errors.append(
-                        f"Too short: got {len(original_key)} chars, expected {MIN_KEY_LENGTH}+ for hex or {MIN_MNEMONIC_WORDS}/{MAX_MNEMONIC_WORDS} words for mnemonic"
-                    )
-
-                # Check if it's valid hexadecimal
-                try:
-                    # Remove common prefixes if present
-                    clean_key = original_key
-                    if clean_key.startswith(("0x", "0X")):
-                        clean_key = clean_key[2:]
-
-                    # Try to decode as hex
-                    bytes.fromhex(clean_key)
-
-                    # Update the private key to clean version if it had prefix
-                    if clean_key != original_key:
-                        logger.debug(
-                            "Cleaned private key by removing hex prefix",
-                            extra={
-                                "service_id": self.service_id,
-                                "original_length": len(original_key),
-                                "cleaned_length": len(clean_key),
-                            },
-                        )
-                        self.private_key = clean_key
-
-                except ValueError as hex_err:
-                    key_validation_errors.append(
-                        f"Invalid hexadecimal format: {hex_err!s}"
-                    )
-
-            # Check for common patterns that indicate invalid keys (only for hex keys)
-            if len(words) not in [
-                12,
-                24,
-            ]:  # Only validate hex patterns if not a mnemonic
-                if self.private_key.count("0") == len(self.private_key):
-                    key_validation_errors.append("All zeros - invalid private key")
-                elif self.private_key.count("f") == len(
-                    self.private_key.replace("F", "f")
-                ):
-                    key_validation_errors.append(
-                        "All 0xf values - likely invalid private key"
-                    )
-
-            # If any validation errors, fail initialization
-            if key_validation_errors:
-                error_msg = f"BLUEFIN_PRIVATE_KEY validation failed: {'; '.join(key_validation_errors)}"
-                logger.error(
-                    "Private key format validation failed",
-                    extra={
-                        "service_id": self.service_id,
-                        "error_type": "invalid_private_key_format",
-                        "key_length": len(self.private_key),
-                        "validation_errors": key_validation_errors,
-                        "expected_format": "64+ hexadecimal characters (32+ bytes)",
-                    },
-                )
-                raise BluefinConnectionError(error_msg)
-
-            # Determine network configuration
-            try:
-                network = (
-                    Networks["SUI_PROD"]
-                    if self.network == "mainnet"
-                    else Networks["SUI_STAGING"]
-                )
-                logger.debug(
-                    "Network configuration resolved",
-                    extra={
-                        "service_id": self.service_id,
-                        "network_name": self.network,
-                        "network_config": str(network)[:100],  # Truncate for logging
-                    },
-                )
-            except KeyError as e:
-                error_msg = f"Invalid network configuration '{self.network}'. Expected 'mainnet' or 'testnet'"
-                logger.exception(
-                    "Network configuration failed",
-                    extra={
-                        "service_id": self.service_id,
-                        "error_type": "invalid_network",
-                        "network_name": self.network,
-                        "available_networks": list(Networks.keys()),
-                        "original_error": str(e),
-                    },
-                )
-                raise BluefinConnectionError(error_msg) from e
-
-            # Initialize Bluefin client with retry mechanism
-            max_init_retries = 3
-            init_retry_delay = 2.0
-
-            for init_attempt in range(max_init_retries):
-                logger.info(
-                    "Creating Bluefin client instance (attempt %s/%s)",
-                    init_attempt + 1,
-                    max_init_retries,
-                    extra={
-                        "service_id": self.service_id,
-                        "network": self.network,
-                        "onchain_enabled": True,
-                        "attempt": init_attempt + 1,
-                    },
-                )
-
-                try:
-                    # Create client instance
-                    self.client = BluefinClient(
-                        True,  # Use on-chain transactions
-                        network,
-                        self.private_key,
-                    )
-                    logger.debug(
-                        "Bluefin client instance created successfully",
-                        extra={
-                            "service_id": self.service_id,
-                            "client_type": type(self.client).__name__,
-                            "attempt": init_attempt + 1,
-                        },
-                    )
-
-                    # Initialize the client connection
-                    logger.info(
-                        "Initializing Bluefin client connection",
-                        extra={
-                            "service_id": self.service_id,
-                            "initialization_step": "client_init",
-                            "attempt": init_attempt + 1,
-                        },
-                    )
-
-                    await self.client.init(True)
-
-                    # If we reach here, initialization was successful
-                    logger.info(
-                        "Bluefin client initialization completed successfully",
-                        extra={
-                            "service_id": self.service_id,
-                            "initialization_successful": True,
-                            "successful_attempt": init_attempt + 1,
-                            "total_attempts": init_attempt + 1,
-                        },
-                    )
-                    break  # Success - exit retry loop
-
-                except Exception as e:
-                    if init_attempt < max_init_retries - 1:
-                        # Classify the error to determine if retry is worthwhile
-                        retry_error = False
-
-                        error_str = str(e).lower()
-                        if any(
-                            keyword in error_str
-                            for keyword in [
-                                "network",
-                                "connection",
-                                "timeout",
-                                "temporary",
-                                "503",
-                                "502",
-                                "500",
-                            ]
-                        ):
-                            retry_error = True
-                        elif (
-                            "private key" in error_str or "authentication" in error_str
-                        ):
-                            # Don't retry auth/key errors
-                            retry_error = False
-                        elif "invalid" in error_str and "key" in error_str:
-                            # Don't retry validation errors
-                            retry_error = False
-                        else:
-                            # Default to retry for unknown errors
-                            retry_error = True
-
-                        if retry_error:
-                            delay = init_retry_delay * (
-                                2**init_attempt
-                            )  # Exponential backoff
-                            logger.warning(
-                                "Client initialization failed (attempt %s/%s), retrying in %.1fs: %s",
-                                init_attempt + 1,
-                                max_init_retries,
-                                delay,
-                                e,
-                                extra={
-                                    "service_id": self.service_id,
-                                    "error_type": type(e).__name__,
-                                    "error_message": str(e),
-                                    "attempt": init_attempt + 1,
-                                    "max_retries": max_init_retries,
-                                    "retry_delay": delay,
-                                },
-                            )
-                            await asyncio.sleep(delay)
-                            continue
-                        # Non-retryable error
-                        logger.exception(
-                            "Non-retryable initialization error",
-                            extra={
-                                "service_id": self.service_id,
-                                "error_type": type(e).__name__,
-                                "error_message": str(e),
-                                "attempt": init_attempt + 1,
-                                "non_retryable": True,
-                            },
-                        )
-                        raise BluefinAPIError(
-                            f"Failed to initialize Bluefin client: {e!s}"
-                        ) from e
-                    # Final attempt failed
-                    error_msg = f"Failed to initialize Bluefin client after {max_init_retries} attempts: {e!s}"
-                    logger.exception(
-                        "All initialization attempts failed",
-                        extra={
-                            "service_id": self.service_id,
-                            "error_type": type(e).__name__,
-                            "error_message": str(e),
-                            "total_attempts": max_init_retries,
-                            "traceback": traceback.format_exc(),
-                        },
-                    )
-                    raise BluefinAPIError(error_msg) from e
+            self._validate_private_key()
+            network = self._resolve_network_config()
+            await self._initialize_client_with_retry(network)
 
             self.initialized = True
             logger.info(
@@ -1802,7 +1825,7 @@ class BluefinSDKService:
             return True
 
         except (BluefinConnectionError, BluefinAPIError):
-            # Re-raise our custom exceptions
+            logger.exception("Bluefin service error during initialization")
             raise
         except Exception as e:
             error_msg = f"Unexpected error during Bluefin SDK initialization: {e!s}"
@@ -2087,6 +2110,7 @@ class BluefinSDKService:
                                     ),
                                 },
                             )
+                            # Re-raise the original exception for retry logic to handle
                             raise
 
                     # Execute with retry logic
@@ -2296,6 +2320,7 @@ class BluefinSDKService:
                                 "operation": "get_margin_bank_balance",
                             },
                         )
+                        # Re-raise the original exception for retry logic to handle
                         raise
 
                 # Execute with retry logic
@@ -2712,6 +2737,7 @@ class BluefinSDKService:
                     logger.exception(
                         "❌ REST API attempt %s failed (final)", attempt + 1
                     )
+                    # Re-raise the last exception after exhausting all retries
                     raise
 
         # Should not reach here, but just in case
@@ -2809,6 +2835,7 @@ class BluefinSDKService:
                     await asyncio.sleep(wait_time)
                 else:
                     logger.exception("❌ SDK attempt %s failed (final)", attempt + 1)
+                    # Re-raise the last exception after exhausting all retries
                     raise
 
         # Should not reach here
@@ -3908,9 +3935,9 @@ async def performance_metrics(_request):
 
         # Performance metrics
         if hasattr(service, "_avg_response_time"):
-            metrics_data["performance"][
-                "avg_response_time_ms"
-            ] = service._avg_response_time
+            metrics_data["performance"]["avg_response_time_ms"] = (
+                service._avg_response_time
+            )
 
         # Resource metrics (if available)
         try:
@@ -3936,9 +3963,9 @@ async def performance_metrics(_request):
                 "available_memory_gb": psutil.virtual_memory().available / (1024**3),
             }
         except ImportError:
-            metrics_data["resources"][
-                "note"
-            ] = "psutil not available for detailed metrics"
+            metrics_data["resources"]["note"] = (
+                "psutil not available for detailed metrics"
+            )
 
         # Rate limiting metrics
         current_time = time.time()
@@ -4161,9 +4188,9 @@ async def service_diagnostics(_request):
                 diagnostics_data["recommendations"].append("High CPU usage detected")
 
         except ImportError:
-            perf_check["details"][
-                "note"
-            ] = "psutil not available for performance metrics"
+            perf_check["details"]["note"] = (
+                "psutil not available for performance metrics"
+            )
 
         diagnostics_data["checks"]["performance"] = perf_check
 

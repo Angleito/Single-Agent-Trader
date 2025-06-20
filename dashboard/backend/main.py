@@ -9,6 +9,7 @@ the AI trading bot running in Docker container.
 import asyncio
 import json
 import logging
+import math
 import os
 import subprocess
 import time
@@ -41,11 +42,19 @@ from rate_limiter import rate_limit_middleware
 # Import TradingView data feed and LLM log parser
 from tradingview_feed import generate_sample_data, tradingview_feed
 
+
+class DockerCommandError(Exception):
+    """Raised when Docker commands are not available or fail."""
+
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+# Background tasks tracking
+background_tasks: set[asyncio.Task] = set()
 
 # Bluefin Service Configuration
 BLUEFIN_SERVICE_URL = os.getenv("BLUEFIN_SERVICE_URL", "http://localhost:8080")
@@ -230,9 +239,7 @@ class ConnectionManager:
         }
 
         # Connection tracking for personalized replay
-        self.connection_metadata = (
-            {}
-        )  # websocket -> {connected_at, last_message_id, categories}
+        self.connection_metadata = {}  # websocket -> {connected_at, last_message_id, categories}
 
         # Performance tracking
         self.stats = {
@@ -247,34 +254,37 @@ class ConnectionManager:
         msg_type = message.get("type", "").lower()
         source = message.get("source", "").lower()
 
-        # Trading-related messages
-        if any(
-            keyword in msg_type
-            for keyword in ["trade", "order", "position", "execution"]
-        ):
-            return "trading"
-        if any(keyword in source for keyword in ["trading", "exchange", "order"]):
-            return "trading"
+        # Define categories and their associated keywords
+        category_keywords = {
+            "trading": {
+                "type": ["trade", "order", "position", "execution"],
+                "source": ["trading", "exchange", "order"],
+            },
+            "ai": {"type": ["ai", "llm", "decision"], "source": ["llm", "agent"]},
+            "indicator": {
+                "type": ["indicator", "signal", "technical"],
+                "source": ["indicator", "signal"],
+            },
+            "system": {
+                "type": ["system", "health", "status", "error"],
+                "source": ["system", "health"],
+            },
+        }
 
-        # AI/LLM messages
-        if any(keyword in msg_type for keyword in ["ai", "llm", "decision"]):
-            return "ai"
-        if "llm" in source or "agent" in source:
-            return "ai"
-
-        # Indicator messages
-        if any(keyword in msg_type for keyword in ["indicator", "signal", "technical"]):
-            return "indicator"
-        if "indicator" in source or "signal" in source:
-            return "indicator"
-
-        # System messages
-        if any(
-            keyword in msg_type for keyword in ["system", "health", "status", "error"]
-        ):
-            return "system"
-        if "system" in source or "health" in source:
-            return "system"
+        # Check each category
+        for category, keywords in category_keywords.items():
+            # Check type keywords
+            if any(keyword in msg_type for keyword in keywords["type"]):
+                return category
+            # Check source keywords (special handling for single keywords)
+            if category == "ai":
+                if "llm" in source or "agent" in source:
+                    return category
+            elif category == "system":
+                if "system" in source or "health" in source:
+                    return category
+            elif any(keyword in source for keyword in keywords["source"]):
+                return category
 
         # Default to log category
         return "log"
@@ -325,9 +335,10 @@ class ConnectionManager:
 
         logger.info(
             "WebSocket connection established from %s (Origin: %s). "
-            f"Total connections: {len(self.active_connections)}",
+            "Total connections: %s",
             self.connection_metadata[websocket]["client_ip"],
             self.connection_metadata[websocket]["origin"],
+            len(self.active_connections),
         )
 
         # Send replay messages by category
@@ -576,10 +587,11 @@ class LogStreamer:
                 check=False,
             )
             if result.returncode != 0:
-                raise Exception("Docker command not available")
+                raise DockerCommandError("Docker command not available")
 
             # Start docker logs process
-            self.process = subprocess.Popen(
+            self.process = await asyncio.to_thread(
+                subprocess.Popen,
                 ["docker", "logs", "-f", "--tail", "100", self.container_name],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
@@ -635,7 +647,10 @@ class LogStreamer:
                 logger.warning("Log file not found: %s", file_path)
                 return
 
-            with Path(file_path).open() as f:
+            # Open file using asyncio.to_thread for the blocking open call
+            f = await asyncio.to_thread(Path(file_path).open)
+
+            try:
                 # Go to end of file
                 f.seek(0, 2)
 
@@ -662,6 +677,8 @@ class LogStreamer:
                     else:
                         # No new data, sleep briefly
                         await asyncio.sleep(0.5)
+            finally:
+                f.close()
 
         except Exception:
             logger.exception("Error watching log file %s", file_path)
@@ -728,15 +745,23 @@ class LogStreamer:
 
 # Global log streamer
 log_streamer = LogStreamer()
-# Track delayed startup task for proper cleanup
-_delayed_startup_task: asyncio.Task | None = None
+
+
+# Track application state
+class AppState:
+    """Container for application state to avoid global variables."""
+
+    def __init__(self):
+        self.delayed_startup_task: asyncio.Task | None = None
+
+
+app_state = AppState()
 
 
 # Application lifecycle management
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI):
     """Manage application startup and shutdown"""
-    global _delayed_startup_task
 
     # Startup
     logger.info("Starting FastAPI dashboard server...")
@@ -755,7 +780,9 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.warning("Failed to start file-based log streaming: %s", e)
 
-        _delayed_startup_task = asyncio.create_task(start_log_streaming_delayed())
+        app_state.delayed_startup_task = asyncio.create_task(
+            start_log_streaming_delayed()
+        )
         logger.info("Log streamer initialization scheduled (file-based)")
     except Exception as e:
         logger.warning(
@@ -820,7 +847,10 @@ async def lifespan(app: FastAPI):
             try:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
-                    asyncio.create_task(manager.broadcast(formatted_event))
+                    task = asyncio.create_task(manager.broadcast(formatted_event))
+                    # Store task reference to prevent garbage collection
+                    background_tasks.add(task)
+                    task.add_done_callback(background_tasks.discard)
                 else:
                     # If no event loop is running, we'll skip this broadcast
                     logger.debug(
@@ -848,10 +878,10 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down FastAPI dashboard server...")
 
     # Cancel delayed startup task
-    if _delayed_startup_task and not _delayed_startup_task.done():
-        _delayed_startup_task.cancel()
+    if app_state.delayed_startup_task and not app_state.delayed_startup_task.done():
+        app_state.delayed_startup_task.cancel()
         with suppress(asyncio.CancelledError):
-            await _delayed_startup_task
+            await app_state.delayed_startup_task
 
     await log_streamer.stop()
 
@@ -955,34 +985,32 @@ async def add_json_headers(request, call_next):
 
         # Enhanced WebSocket CORS handling
         allow_origin = None
-        if origin:
-            # Check if origin is in allowed list
-            if (
-                origin in allowed_origins
-                or any(
-                    origin.startswith(prefix)
-                    for prefix in [
-                        "http://localhost:",
-                        "http://127.0.0.1:",
-                        "ws://localhost:",
-                        "ws://127.0.0.1:",
-                    ]
-                )
-                or any(
-                    origin.startswith(prefix)
-                    for prefix in [
-                        "http://dashboard-frontend",
-                        "https://dashboard-frontend",
-                        "http://dashboard-backend",
-                        "https://dashboard-backend",
-                        "http://cursorprod-dashboard-frontend",
-                        "https://cursorprod-dashboard-frontend",
-                        "http://cursorprod_dashboard_frontend",
-                        "https://cursorprod_dashboard_frontend",
-                    ]
-                )
-            ):
-                allow_origin = origin
+        if origin and (
+            origin in allowed_origins
+            or any(
+                origin.startswith(prefix)
+                for prefix in [
+                    "http://localhost:",
+                    "http://127.0.0.1:",
+                    "ws://localhost:",
+                    "ws://127.0.0.1:",
+                ]
+            )
+            or any(
+                origin.startswith(prefix)
+                for prefix in [
+                    "http://dashboard-frontend",
+                    "https://dashboard-frontend",
+                    "http://dashboard-backend",
+                    "https://dashboard-backend",
+                    "http://cursorprod-dashboard-frontend",
+                    "https://cursorprod-dashboard-frontend",
+                    "http://cursorprod_dashboard_frontend",
+                    "https://cursorprod_dashboard_frontend",
+                ]
+            )
+        ):
+            allow_origin = origin
 
         # Set appropriate CORS headers
         if allow_origin:
@@ -1009,7 +1037,7 @@ async def add_json_headers(request, call_next):
 
 # OPTIONS handler for CORS preflight requests
 @app.options("/{path:path}")
-async def handle_options(path: str, request: Request):
+async def handle_options(_path: str, request: Request):
     """Handle CORS preflight requests"""
     origin = request.headers.get("origin")
 
@@ -2212,20 +2240,20 @@ async def get_llm_cost_analysis():
 
 @app.get("/llm/export")
 async def export_llm_data(
-    format: str = Query("json", description="Export format: json"),
+    export_format: str = Query("json", description="Export format: json"),
 ):
     """Export all LLM data for analysis"""
     try:
-        if format.lower() != "json":
+        if export_format.lower() != "json":
             raise HTTPException(
                 status_code=400, detail="Only JSON format is currently supported"
             )
 
-        exported_data = llm_parser.export_data(format)
+        exported_data = llm_parser.export_data(export_format)
 
         return {
             "timestamp": datetime.now(UTC).isoformat(),
-            "format": format,
+            "format": export_format,
             "data": json.loads(exported_data),
         }
 
@@ -2977,7 +3005,9 @@ async def udf_config():
         if isinstance(obj, bool):
             return bool(obj)
         if isinstance(obj, int | float):
-            return obj if obj == obj else 0  # Handle NaN
+            return (
+                obj if not (isinstance(obj, float) and math.isnan(obj)) else 0
+            )  # Handle NaN
         return obj
 
     return clean_response(config)
@@ -3011,7 +3041,10 @@ async def udf_symbols(symbol: str):
                         cleaned[k] = str(v)
                     elif k in ["minmov", "pricescale", "volume_precision"]:
                         cleaned[k] = (
-                            int(v) if isinstance(v, int | float) and v == v else 1
+                            int(v)
+                            if isinstance(v, int | float)
+                            and not (isinstance(v, float) and math.isnan(v))
+                            else 1
                         )
                     elif k in ["has_intraday", "has_daily", "has_weekly_and_monthly"]:
                         cleaned[k] = bool(v)
@@ -3073,7 +3106,9 @@ async def udf_history(
                                     (
                                         int(item)
                                         if isinstance(item, int | float)
-                                        and item == item
+                                        and not (
+                                            isinstance(item, float) and math.isnan(item)
+                                        )
                                         else 0
                                     )
                                     for item in v
@@ -3083,7 +3118,9 @@ async def udf_history(
                                     (
                                         float(item)
                                         if isinstance(item, int | float)
-                                        and item == item
+                                        and not (
+                                            isinstance(item, float) and math.isnan(item)
+                                        )
                                         else 0.0
                                     )
                                     for item in v
@@ -3124,7 +3161,8 @@ async def udf_marks(
                             elif k in ["time", "minSize"]:
                                 cleaned_mark[k] = (
                                     int(v)
-                                    if isinstance(v, int | float) and v == v
+                                    if isinstance(v, int | float)
+                                    and not (isinstance(v, float) and math.isnan(v))
                                     else 0
                                 )
                             else:
@@ -3417,7 +3455,7 @@ async def place_bluefin_order(order_data: dict):
 
 # Error handlers
 @app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
+async def global_exception_handler(_request, exc):
     """Global exception handler"""
     logger.error("Unhandled exception: %s", exc)
     return JSONResponse(
@@ -3437,8 +3475,14 @@ if __name__ == "__main__":
     is_container = os.getenv("DOCKER_ENV") or os.getenv("CONTAINER")
     enable_reload = not is_container
 
-    logger.info("Starting uvicorn server with reload=%s", enable_reload)
+    # Configure host - use localhost by default, allow override for container deployments
+    host = os.getenv("DASHBOARD_HOST", "127.0.0.1")
+    port = int(os.getenv("DASHBOARD_PORT", "8000"))
+
+    logger.info(
+        "Starting uvicorn server with reload=%s on %s:%d", enable_reload, host, port
+    )
 
     uvicorn.run(
-        "main:app", host="0.0.0.0", port=8000, reload=enable_reload, log_level="info"
+        "main:app", host=host, port=port, reload=enable_reload, log_level="info"
     )

@@ -427,10 +427,10 @@ class DockerLogParser:
             return parsed_logs
 
         except subprocess.TimeoutExpired:
-            logger.error("Docker logs command timed out")
+            logger.exception("Docker logs command timed out")
             return []
         except FileNotFoundError:
-            logger.error(
+            logger.exception(
                 "Docker command not found. Make sure Docker is installed and in PATH"
             )
             return []
@@ -480,7 +480,7 @@ class DockerLogParser:
                     process.wait(timeout=5)
 
             except FileNotFoundError:
-                logger.error(
+                logger.exception(
                     "Docker command not found. Make sure Docker is installed and in PATH"
                 )
             except Exception:

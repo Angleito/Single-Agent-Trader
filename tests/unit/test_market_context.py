@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+from pydantic import ValidationError
 
 from bot.analysis.market_context import (
     CorrelationAnalysis,
@@ -63,7 +64,9 @@ class TestCorrelationAnalysis:
 
     def test_correlation_analysis_validation(self):
         """Test CorrelationAnalysis field validation."""
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValidationError, match="Input should be less than or equal to 1"
+        ):
             # Correlation coefficient out of range
             CorrelationAnalysis(
                 correlation_coefficient=1.5,
@@ -76,7 +79,9 @@ class TestCorrelationAnalysis:
                 reliability_score=0.8,
             )
 
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValidationError, match="Input should be less than or equal to 1"
+        ):
             # Reliability score out of range
             CorrelationAnalysis(
                 correlation_coefficient=0.5,
@@ -134,7 +139,9 @@ class TestMarketRegime:
 
     def test_market_regime_validation(self):
         """Test MarketRegime field validation."""
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValidationError, match="Input should be less than or equal to 1"
+        ):
             # Confidence out of range
             MarketRegime(
                 regime_type=MarketRegimeType.RISK_ON, confidence=1.5, key_drivers=[]
@@ -183,7 +190,9 @@ class TestRiskSentiment:
 
     def test_risk_sentiment_validation(self):
         """Test RiskSentiment field validation."""
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValidationError, match="Input should be less than or equal to 100"
+        ):
             # Fear greed index out of range
             RiskSentiment(
                 fear_greed_index=150.0,
@@ -235,7 +244,9 @@ class TestMomentumAlignment:
 
     def test_momentum_alignment_validation(self):
         """Test MomentumAlignment field validation."""
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValidationError, match="Input should be less than or equal to 1"
+        ):
             # Directional alignment out of range
             MomentumAlignment(
                 directional_alignment=1.5,

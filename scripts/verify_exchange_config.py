@@ -99,8 +99,8 @@ def validate_symbol_format(
     """Validate trading symbol format for the exchange."""
     if exchange_type == ExchangeType.COINBASE:
         # Coinbase uses format like "BTC-USD", "ETH-USD"
-        EXPECTED_SYMBOL_PARTS = 2
-        if "-" in symbol and len(symbol.split("-")) == EXPECTED_SYMBOL_PARTS:
+        expected_symbol_parts = 2
+        if "-" in symbol and len(symbol.split("-")) == expected_symbol_parts:
             base, quote = symbol.split("-")
             if base.isalpha() and quote.isalpha():
                 return True, "Valid Coinbase format (BASE-QUOTE)"

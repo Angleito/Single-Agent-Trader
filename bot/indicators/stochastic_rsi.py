@@ -125,11 +125,7 @@ class StochasticRSI:
             )
 
         # Step 1: Apply log transformation if requested
-        if use_log:
-            # Handle negative/zero values by adding small epsilon
-            src_transformed = np.log(np.maximum(src, 1e-8))
-        else:
-            src_transformed = src.copy()
+        src_transformed = np.log(np.maximum(src, 1e-8)) if use_log else src.copy()
 
         # Step 2: Calculate RSI
         rsi_values = ta.rsi(src_transformed, length=rsi_len)
@@ -162,11 +158,7 @@ class StochasticRSI:
             )
 
         # Step 6: Calculate final K line
-        if use_avg:
-            # avg_1 = avg(kk, d1) = (kk + d1) / 2
-            k = (kk + d1) / 2
-        else:
-            k = kk
+        k = (kk + d1) / 2 if use_avg else kk
 
         return k.astype("float64"), d1.astype("float64")
 

@@ -202,10 +202,8 @@ class SchaffTrendCycle:
                     "length": length,
                 },
             )
-            # alpha = lowest(macdVal, length)
             alpha = macd_val.rolling(window=length, min_periods=1).min()
 
-            # beta = highest(macdVal, length) - alpha
             beta = macd_val.rolling(window=length, min_periods=1).max() - alpha
 
             # Add minimum threshold to prevent zero division
@@ -227,7 +225,6 @@ class SchaffTrendCycle:
                 # Apply minimum threshold to prevent division by zero
                 beta = beta.where(~zero_beta_mask, min_beta_threshold)
 
-            # gamma = (macdVal - alpha) / beta * 100
             # All beta values are now guaranteed to be non-zero
             gamma = (macd_val - alpha) / beta * 100
 
@@ -243,8 +240,6 @@ class SchaffTrendCycle:
                     "factor": factor,
                 },
             )
-            # delta = gamma
-            # delta := na(delta[1]) ? delta : delta[1] + tcfactor * (gamma - delta[1])
             delta = self._apply_recursive_smoothing(gamma, factor)
 
             # Step 5: Second stochastic calculation
@@ -252,10 +247,8 @@ class SchaffTrendCycle:
                 "Second stochastic calculation for STC",
                 extra={"indicator": "schaff_trend_cycle", "step": "second_stochastic"},
             )
-            # epsilon = lowest(delta, length)
             epsilon = delta.rolling(window=length, min_periods=1).min()
 
-            # zeta = highest(delta, length) - epsilon
             zeta = delta.rolling(window=length, min_periods=1).max() - epsilon
 
             # Add minimum threshold to prevent zero division
@@ -277,7 +270,6 @@ class SchaffTrendCycle:
                 # Apply minimum threshold to prevent division by zero
                 zeta = zeta.where(~zero_zeta_mask, min_zeta_threshold)
 
-            # eta = (delta - epsilon) / zeta * 100
             # All zeta values are now guaranteed to be non-zero
             eta = (delta - epsilon) / zeta * 100
 
@@ -289,8 +281,6 @@ class SchaffTrendCycle:
                 "Final smoothing (STC) calculation",
                 extra={"indicator": "schaff_trend_cycle", "step": "final_smoothing"},
             )
-            # stcReturn = eta
-            # stcReturn := na(stcReturn[1]) ? stcReturn : stcReturn[1] + tcfactor * (eta - stcReturn[1])
             stc_return = self._apply_recursive_smoothing(eta, factor)
 
             # Handle flat market conditions
@@ -739,12 +729,11 @@ class SchaffTrendCycle:
         """
         if stc_value > self.overbought:
             return "Overbought - Potential bearish reversal"
-        elif stc_value < self.oversold:
+        if stc_value < self.oversold:
             return "Oversold - Potential bullish reversal"
-        elif stc_value > 50:
+        if stc_value > 50:
             return "Bullish territory"
-        else:
-            return "Bearish territory"
+        return "Bearish territory"
 
     def get_trade_suggestions(self, df: pd.DataFrame) -> list[dict[str, Any]]:
         """

@@ -721,7 +721,7 @@ def comprehensive_test_scenario() -> dict[str, Any]:
 
 # Cleanup fixtures
 @pytest.fixture(autouse=True)
-def cleanup_test_artifacts() -> Generator[None, None, None]:
+def _cleanup_test_artifacts() -> Generator[None, None, None]:
     """Automatically cleanup test artifacts after each test."""
     return
 

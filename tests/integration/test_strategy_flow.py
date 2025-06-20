@@ -21,13 +21,14 @@ class TestStrategyFlow:
     def sample_market_data(self):
         """Create sample market data for testing."""
         dates = pd.date_range("2024-01-01", periods=100, freq="1h")
+        rng = np.random.default_rng(42)  # For reproducible results
         return pd.DataFrame(
             {
-                "open": np.random.uniform(45000, 55000, 100),
-                "high": np.random.uniform(46000, 56000, 100),
-                "low": np.random.uniform(44000, 54000, 100),
-                "close": np.random.uniform(45000, 55000, 100),
-                "volume": np.random.uniform(10, 100, 100),
+                "open": rng.uniform(45000, 55000, 100),
+                "high": rng.uniform(46000, 56000, 100),
+                "low": rng.uniform(44000, 54000, 100),
+                "close": rng.uniform(45000, 55000, 100),
+                "volume": rng.uniform(10, 100, 100),
             },
             index=dates,
         )

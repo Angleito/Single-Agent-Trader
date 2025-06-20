@@ -3,6 +3,7 @@
 import json
 import logging
 import sys
+import tempfile
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -14,12 +15,13 @@ from bot.position_manager import PositionManager
 from bot.trading_types import Order, OrderStatus
 
 # Configure logging
+temp_log_file = Path(tempfile.gettempdir()) / "fifo_test.log"
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler("/tmp/fifo_test.log"),
+        logging.FileHandler(temp_log_file),
     ],
 )
 
@@ -31,7 +33,7 @@ class FIFOTradingTest:
 
     def __init__(self):
         """Initialize test environment."""
-        self.test_dir = Path("/tmp/fifo_test_data")
+        self.test_dir = Path(tempfile.gettempdir()) / "fifo_test_data"
         self.test_dir.mkdir(exist_ok=True)
 
         # Initialize position manager with FIFO enabled
@@ -358,8 +360,8 @@ class FIFOTradingTest:
 
             return True
 
-        except Exception as e:
-            logger.exception("\n❌ TEST FAILED: %s", e)
+        except Exception:
+            logger.exception("\n❌ TEST FAILED")
             return False
 
 

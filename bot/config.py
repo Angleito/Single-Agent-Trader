@@ -768,7 +768,7 @@ class TradingSettings(BaseModel):
     )
     interval: str = Field(
         default="1m",
-        description="Candle interval for analysis (Note: Bluefin only supports 1m minimum. Sub-minute intervals will be converted with granularity loss)",
+        description="Candle interval for analysis. Sub-minute intervals (1s, 5s, 15s, 30s) require trade aggregation to be enabled in exchange settings.",
     )
     leverage: int = Field(
         default=5, ge=1, le=100, description="Trading leverage multiplier"
@@ -906,26 +906,37 @@ class TradingSettings(BaseModel):
     def validate_interval(cls, v: str) -> str:
         """Validate trading interval format.
 
-        Note: For Bluefin exchange, only intervals >= 1m are natively supported.
-        Sub-minute intervals will be converted to 1m with data granularity loss.
+        Note: Sub-minute intervals (1s, 5s, 15s, 30s) require trade aggregation
+        to be enabled in exchange settings to function properly.
         """
-        # All intervals (including unsupported ones for validation purposes)
-        valid_intervals = [
-            "1s",  # Unsupported by Bluefin - will convert to 1m
-            "5s",  # Unsupported by Bluefin - will convert to 1m
-            "15s",  # Unsupported by Bluefin - will convert to 1m
-            "30s",  # Unsupported by Bluefin - will convert to 1m
-            "1m",  # Supported
-            "3m",  # Supported
-            "5m",  # Supported
-            "15m",  # Supported
+        # Standard intervals supported by most exchanges
+        standard_intervals = [
+            "1m",  # Supported by all exchanges
+            "3m",  # Supported by all exchanges
+            "5m",  # Supported by all exchanges
+            "15m",  # Supported by all exchanges
             "30m",
             "1h",
             "4h",
             "1d",
         ]
-        if v not in valid_intervals:
-            raise ValueError(f"Invalid interval. Must be one of: {valid_intervals}")
+
+        # Sub-minute intervals that require trade aggregation
+        sub_minute_intervals = [
+            "1s",  # Requires trade aggregation
+            "5s",  # Requires trade aggregation
+            "15s",  # Requires trade aggregation
+            "30s",  # Requires trade aggregation
+        ]
+
+        all_valid_intervals = standard_intervals + sub_minute_intervals
+
+        if v not in all_valid_intervals:
+            raise ValueError(
+                f"Invalid interval '{v}'. Must be one of: {all_valid_intervals}\n"
+                f"Note: Sub-minute intervals ({sub_minute_intervals}) require "
+                f"trade aggregation to be enabled in exchange settings."
+            )
         return v
 
 
@@ -1364,6 +1375,12 @@ class ExchangeSettings(BaseModel):
     bluefin_service_url: str = Field(
         default="http://bluefin-service:8080",
         description="Bluefin microservice URL for SDK operations",
+    )
+    use_trade_aggregation: bool = Field(
+        default=True,
+        description="Enable trade-to-candle aggregation for sub-minute intervals (1s, 5s, 15s, 30s). "
+        "Required for sub-minute trading intervals to work properly. "
+        "When enabled, individual trades are aggregated into candles at the specified interval.",
     )
 
     @field_validator(
@@ -2382,6 +2399,25 @@ class Settings(BaseSettings):
         if self.risk.max_monthly_loss_pct <= self.risk.max_weekly_loss_pct:
             raise ValueError(
                 "Monthly loss limit must be greater than weekly loss limit"
+            )
+
+        return self
+
+    @model_validator(mode="after")
+    def validate_interval_trade_aggregation(self) -> "Settings":
+        """Validate interval and trade aggregation compatibility."""
+        # Sub-minute intervals that require trade aggregation
+        sub_minute_intervals = ["1s", "5s", "15s", "30s"]
+
+        # Check if using a sub-minute interval without trade aggregation
+        if (
+            self.trading.interval in sub_minute_intervals
+            and not self.exchange.use_trade_aggregation
+        ):
+            raise ValueError(
+                f"Trading interval '{self.trading.interval}' requires trade aggregation to be enabled. "
+                f"Please set EXCHANGE__USE_TRADE_AGGREGATION=true in your environment configuration "
+                f"or switch to a standard interval (1m, 5m, 15m, 30m, 1h, 4h, 1d)."
             )
 
         return self

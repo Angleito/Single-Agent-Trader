@@ -129,14 +129,13 @@ class DivergenceDetector:
             return []
 
         fractals = []
-        data_array = data_series.values
+        data_array = data_series.to_numpy()
 
         # Start from index 2 (middle of 5-point window) to end-2
         for i in range(2, len(data_array) - 2):
             current_value = data_array[i]
 
             # Check for top fractal
-            # src[4] < src[2] and src[3] < src[2] and src[2] > src[1] and src[2] > src[0]
             is_top_fractal = (
                 data_array[i - 2] < current_value  # src[4] < src[2]
                 and data_array[i - 1] < current_value  # src[3] < src[2]
@@ -145,7 +144,6 @@ class DivergenceDetector:
             )
 
             # Check for bottom fractal
-            # src[4] > src[2] and src[3] > src[2] and src[2] < src[1] and src[2] < src[0]
             is_bottom_fractal = (
                 data_array[i - 2] > current_value  # src[4] > src[2]
                 and data_array[i - 1] > current_value  # src[3] > src[2]
@@ -154,13 +152,21 @@ class DivergenceDetector:
             )
 
             # Apply limits if specified
-            if is_top_fractal and self.use_limits and top_limit is not None:
-                if current_value < top_limit:
-                    is_top_fractal = False
+            if (
+                is_top_fractal
+                and self.use_limits
+                and top_limit is not None
+                and current_value < top_limit
+            ):
+                is_top_fractal = False
 
-            if is_bottom_fractal and self.use_limits and bot_limit is not None:
-                if current_value > bot_limit:
-                    is_bottom_fractal = False
+            if (
+                is_bottom_fractal
+                and self.use_limits
+                and bot_limit is not None
+                and current_value > bot_limit
+            ):
+                is_bottom_fractal = False
 
             # Create fractal point
             if is_top_fractal:
@@ -586,7 +592,7 @@ class DivergenceDetector:
         self,
         ind_fractal1: FractalPoint,
         ind_fractal2: FractalPoint,
-        indicator_series: pd.Series,
+        _indicator_series: pd.Series,
         price_series: pd.Series,
     ) -> float:
         """Calculate confidence score for a divergence based on various factors."""
@@ -665,7 +671,7 @@ class DivergenceDetector:
             Dictionary mapping timeframe to divergence signals
         """
         if timeframe_weights is None:
-            timeframe_weights = {tf: 1.0 for tf in data_dict}
+            timeframe_weights = dict.fromkeys(data_dict, 1.0)
 
         results = {}
 

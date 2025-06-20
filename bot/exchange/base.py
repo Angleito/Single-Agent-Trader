@@ -299,24 +299,38 @@ class BaseExchange(ABC):
         Raises:
             BalanceValidationError: If validation fails
         """
+
+        def _raise_null_balance_error() -> None:
+            raise BalanceValidationError(
+                "Balance value cannot be None",
+                invalid_value=None,
+                validation_rule="null_check",
+            )
+
+        def _raise_balance_format_error(balance: Any) -> None:
+            raise BalanceValidationError(
+                f"Invalid balance format: {balance}",
+                invalid_value=balance,
+                validation_rule="decimal_conversion",
+            )
+
+        def _raise_balance_too_large_error(balance: Decimal) -> None:
+            raise BalanceValidationError(
+                f"Balance value too large: ${balance}",
+                invalid_value=float(balance),
+                validation_rule="max_balance_check",
+            )
+
         try:
             # Inline balance validation using our new exception architecture
             if new_balance is None:
-                raise BalanceValidationError(
-                    "Balance value cannot be None",
-                    invalid_value=None,
-                    validation_rule="null_check",
-                )
+                _raise_null_balance_error()
 
             if not isinstance(new_balance, Decimal):
                 try:
                     new_balance = Decimal(str(new_balance))
                 except (ValueError, TypeError, decimal.InvalidOperation) as e:
-                    raise BalanceValidationError(
-                        f"Invalid balance format: {new_balance}",
-                        invalid_value=new_balance,
-                        validation_rule="decimal_conversion",
-                    ) from e
+                    raise ValueError(f"Invalid balance format: {new_balance}") from e
 
             # Check for negative balance in most cases (some DEXs allow negative due to unrealized PnL)
             if new_balance < Decimal(0) and not (
@@ -331,11 +345,7 @@ class BaseExchange(ABC):
             # Check for unrealistic balance values
             max_reasonable_balance = Decimal(1000000000)  # $1B threshold
             if new_balance > max_reasonable_balance:
-                raise BalanceValidationError(
-                    f"Balance value too large: ${new_balance}",
-                    invalid_value=float(new_balance),
-                    validation_rule="max_balance_check",
-                )
+                _raise_balance_too_large_error(new_balance)
 
             # Update last validated balance
             self._last_validated_balance = new_balance
@@ -354,9 +364,7 @@ class BaseExchange(ABC):
             # Re-raise balance validation errors
             raise
         except Exception as e:
-            logger.exception(
-                "Balance validation error in %s: %s", self.exchange_name, e
-            )
+            logger.exception("Balance validation error in %s", self.exchange_name)
             raise BalanceValidationError(
                 f"Balance validation failed for {operation_type}: {e}",
                 invalid_value=str(new_balance) if new_balance is not None else None,
@@ -385,21 +393,28 @@ class BaseExchange(ABC):
         Raises:
             BalanceValidationError: If margin validation fails
         """
+
+        def _raise_negative_balance_error(balance: Decimal) -> None:
+            raise BalanceValidationError(
+                "Account balance cannot be negative for margin calculation",
+                invalid_value=float(balance),
+                validation_rule="negative_balance_check",
+            )
+
+        def _raise_negative_margin_error(used_margin: Decimal) -> None:
+            raise BalanceValidationError(
+                "Used margin cannot be negative",
+                invalid_value=float(used_margin),
+                validation_rule="negative_used_margin_check",
+            )
+
         try:
             # Inline margin validation
             if balance < Decimal(0):
-                raise BalanceValidationError(
-                    "Account balance cannot be negative for margin calculation",
-                    invalid_value=float(balance),
-                    validation_rule="negative_balance_check",
-                )
+                _raise_negative_balance_error(balance)
 
             if used_margin < Decimal(0):
-                raise BalanceValidationError(
-                    "Used margin cannot be negative",
-                    invalid_value=float(used_margin),
-                    validation_rule="negative_used_margin_check",
-                )
+                _raise_negative_margin_error(used_margin)
 
             if used_margin > balance:
                 logger.warning(
@@ -451,14 +466,18 @@ class BaseExchange(ABC):
         Raises:
             BalanceValidationError: If reconciliation fails
         """
+
+        def _raise_null_reconciliation_error() -> None:
+            raise BalanceValidationError(
+                "Balance values cannot be None for reconciliation",
+                invalid_value="null_balance",
+                validation_rule="null_balance_check",
+            )
+
         try:
             # Inline balance reconciliation validation
             if calculated_balance is None or exchange_reported_balance is None:
-                raise BalanceValidationError(
-                    "Balance values cannot be None for reconciliation",
-                    invalid_value="null_balance",
-                    validation_rule="null_balance_check",
-                )
+                _raise_null_reconciliation_error()
 
             # Calculate difference
             difference = abs(calculated_balance - exchange_reported_balance)
@@ -474,7 +493,7 @@ class BaseExchange(ABC):
 
             is_within_tolerance = relative_difference <= tolerance_pct
 
-            result = {
+            {
                 "valid": is_within_tolerance,
                 "calculated_balance": calculated_balance,
                 "exchange_reported_balance": exchange_reported_balance,
@@ -499,9 +518,7 @@ class BaseExchange(ABC):
             # Re-raise balance validation errors
             raise
         except Exception as e:
-            logger.exception(
-                "Balance reconciliation error in %s: %s", self.exchange_name, e
-            )
+            logger.exception("Balance reconciliation error in %s", self.exchange_name)
             raise BalanceValidationError(
                 f"Balance reconciliation failed: {e}",
                 invalid_value=f"calculated:{calculated_balance}, reported:{exchange_reported_balance}",

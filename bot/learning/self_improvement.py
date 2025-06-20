@@ -344,8 +344,7 @@ class SelfImprovementEngine:
                     parameter="max_size_pct",
                     current_value=current_max_size,
                     suggested_value=10,
-                    reason="Small positions showing %.1%% win rate"
-                    % (best_win_rate * 100,),
+                    reason=f"Small positions showing {best_win_rate * 100:.1f}% win rate",
                     confidence=0.7,
                     expected_improvement=0.1,
                 )
@@ -354,8 +353,7 @@ class SelfImprovementEngine:
                     parameter="max_size_pct",
                     current_value=current_max_size,
                     suggested_value=25,
-                    reason="Larger positions showing %.1%% win rate"
-                    % (best_win_rate * 100,),
+                    reason=f"Larger positions showing {best_win_rate * 100:.1f}% win rate",
                     confidence=0.6,
                     expected_improvement=0.15,
                 )
@@ -504,8 +502,7 @@ class SelfImprovementEngine:
                 parameter="suggested_trading_style",
                 current_value="mixed",
                 suggested_value="scalping",
-                reason="Short-term trades showing %.1%% success"
-                % (best_win_rate * 100,),
+                reason=f"Short-term trades showing {best_win_rate * 100:.1f}% success",
                 confidence=0.6,
                 expected_improvement=0.1,
             )
@@ -584,11 +581,9 @@ class SelfImprovementEngine:
                 if win_rate > 0.7:
                     insights.append(
                         LearningInsight(
-                            insight_id="correlation_%s_%s"
-                            % (combo, datetime.now(UTC).timestamp()),
+                            insight_id=f"correlation_{combo}_{datetime.now(UTC).timestamp()}",
                             insight_type="correlation",
-                            description="Pattern combination '%s' shows %.1%% success rate"
-                            % (combo, win_rate * 100),
+                            description=f"Pattern combination '{combo}' shows {win_rate * 100:.1f}% success rate",
                             supporting_evidence=[],  # Would add experience IDs
                             confidence=min(0.5 + stats["count"] * 0.05, 0.9),
                             actionable=True,
@@ -682,11 +677,9 @@ class SelfImprovementEngine:
                 if count / total_losses > 0.4:  # 40% of losses
                     insights.append(
                         LearningInsight(
-                            insight_id="risk_factor_%s_%s"
-                            % (pattern, datetime.now(UTC).timestamp()),
+                            insight_id=f"risk_factor_{pattern}_{datetime.now(UTC).timestamp()}",
                             insight_type="risk",
-                            description="Risk factor '%s' present in %s/%s losing trades"
-                            % (pattern, count, total_losses),
+                            description=f"Risk factor '{pattern}' present in {count}/{total_losses} losing trades",
                             supporting_evidence=[],
                             confidence=0.7,
                             actionable=True,
@@ -777,13 +770,8 @@ class SelfImprovementEngine:
             reasoning_list = recommendations.get("reasoning", [])
             if isinstance(reasoning_list, list):
                 reasoning_list.append(
-                    "Pattern '%s' shows %.1%% "
-                    "success rate over %s trades"
-                    % (
-                        best_pattern.pattern_name,
-                        best_pattern.win_rate * 100,
-                        best_pattern.occurrence_count,
-                    )
+                    f"Pattern '{best_pattern.pattern_name}' shows {best_pattern.win_rate * 100:.1f}% "
+                    f"success rate over {best_pattern.occurrence_count} trades"
                 )
 
             # Adjust size based on confidence

@@ -11,6 +11,10 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
+# Constants for validation
+MAX_LEVERAGE = 20  # Maximum leverage allowed
+MIN_KEY_VALUE_LENGTH = 10  # Minimum length for key values
+
 
 # Color codes for terminal output
 class Colors:
@@ -432,18 +436,16 @@ class EnvValidator:
 
         # 1. Check for mnemonic phrase format (12 or 24 words)
         # Constants
-        MIN_MNEMONIC_WORDS = 12
-        MAX_MNEMONIC_WORDS = 24
-        MIN_WORD_LENGTH = 2
-        MIN_BECH32_LENGTH = 50
-        HEX_KEY_LENGTH = 64
-        BECH32_PREFIX_LENGTH = 10  # Length of "suiprivkey" prefix
-        MAX_LEVERAGE = 20  # Maximum leverage allowed
-        MIN_KEY_VALUE_LENGTH = 10  # Minimum length for key values
+        min_mnemonic_words = 12
+        max_mnemonic_words = 24
+        min_word_length = 2
+        min_bech32_length = 50
+        hex_key_length = 64
+        bech32_prefix_length = 10  # Length of "suiprivkey" prefix
 
         words = private_key.split()
-        if len(words) in [MIN_MNEMONIC_WORDS, MAX_MNEMONIC_WORDS]:
-            if all(word.isalpha() and len(word) > MIN_WORD_LENGTH for word in words):
+        if len(words) in [min_mnemonic_words, max_mnemonic_words]:
+            if all(word.isalpha() and len(word) > min_word_length for word in words):
                 detected_formats.append(f"mnemonic ({len(words)} words)")
 
                 # Additional mnemonic validation
@@ -452,13 +454,13 @@ class EnvValidator:
 
         # 2. Check for Bech32-encoded Sui private key
         elif private_key.startswith("suiprivkey"):
-            if len(private_key) >= MIN_BECH32_LENGTH:  # Reasonable minimum length
+            if len(private_key) >= min_bech32_length:  # Reasonable minimum length
                 detected_formats.append("Sui Bech32")
 
                 # Basic Bech32 character validation
                 bech32_chars = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
                 key_part = private_key[
-                    BECH32_PREFIX_LENGTH:
+                    bech32_prefix_length:
                 ]  # Remove "suiprivkey" prefix
                 if not all(c.lower() in bech32_chars for c in key_part):
                     return None
@@ -467,7 +469,7 @@ class EnvValidator:
         else:
             hex_key = private_key.removeprefix("0x")
 
-            if len(hex_key) == HEX_KEY_LENGTH and all(
+            if len(hex_key) == hex_key_length and all(
                 c in "0123456789abcdefABCDEF" for c in hex_key
             ):
                 detected_formats.append("hex")

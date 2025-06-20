@@ -5,6 +5,7 @@ This module tests the complete trading flow from market data ingestion
 through LLM decision-making to trade execution and position tracking.
 """
 
+import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import AsyncMock, Mock, patch
@@ -22,6 +23,8 @@ from bot.trading_types import (
     OrderStatus,
     TradeAction,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class TestCompleteTradingFlow:
@@ -50,7 +53,7 @@ class TestCompleteTradingFlow:
                 MarketData(
                     symbol="BTC-USD",
                     timestamp=timestamp,
-                    open=Decimal(str(current_price - np.random.uniform(-20, 20))),
+                    open=Decimal(str(current_price - rng.uniform(-20, 20))),
                     high=Decimal(str(high)),
                     low=Decimal(str(low)),
                     close=Decimal(str(current_price)),
@@ -201,8 +204,8 @@ class TestCompleteTradingFlow:
             latest_data = engine.market_data.get_latest_ohlcv(limit=200)
             current_price = latest_data[-1].close
 
-            df = engine.market_data.to_dataframe(limit=200)
-            df_with_indicators = engine.indicator_calc.calculate_all(df)
+            market_data = engine.market_data.to_dataframe(limit=200)
+            df_with_indicators = engine.indicator_calc.calculate_all(market_data)
             indicator_state = engine.indicator_calc.get_latest_state(df_with_indicators)
 
             market_state = MarketState(
@@ -382,8 +385,8 @@ class TestCompleteTradingFlow:
 
             # Test that engine handles LLM failure gracefully
             current_price = mock_market_data[-1].close
-            df = engine.market_data.to_dataframe(limit=200)
-            df_with_indicators = engine.indicator_calc.calculate_all(df)
+            market_data = engine.market_data.to_dataframe(limit=200)
+            df_with_indicators = engine.indicator_calc.calculate_all(market_data)
             indicator_state = engine.indicator_calc.get_latest_state(df_with_indicators)
 
             market_state = MarketState(
@@ -402,9 +405,11 @@ class TestCompleteTradingFlow:
                 # Should not reach here due to exception, but if it does, validate fallback
                 validated_action = engine.validator.validate(trade_action)
                 assert validated_action.action == "HOLD"
-            except Exception:
+            except Exception as e:
                 # Expected behavior - should be caught in main loop
-                pass
+                logger.debug(
+                    "Expected exception during LLM analysis failure test: %s", str(e)
+                )
 
     @pytest.mark.asyncio()
     async def test_market_data_connection_recovery(self, mock_market_data):
@@ -525,8 +530,8 @@ class TestCompleteTradingFlow:
                 }
             )
 
-        df = pd.DataFrame(data)
-        return df.set_index("timestamp")
+        backtest_data = pd.DataFrame(data)
+        return backtest_data.set_index("timestamp")
 
     @pytest.mark.asyncio()
     async def test_multiple_trading_cycles_consistency(
@@ -584,8 +589,8 @@ class TestCompleteTradingFlow:
 
             for i in range(5):
                 # Create market state
-                df = engine.market_data.to_dataframe(limit=200)
-                df_with_indicators = engine.indicator_calc.calculate_all(df)
+                market_data = engine.market_data.to_dataframe(limit=200)
+                df_with_indicators = engine.indicator_calc.calculate_all(market_data)
                 indicator_state = engine.indicator_calc.get_latest_state(
                     df_with_indicators
                 )
@@ -759,8 +764,8 @@ class TestCompleteTradingFlow:
             engine.paper_account.execute_trade_action = Mock(return_value=first_order)
 
             # Get LLM decision and execute
-            df = engine.market_data.to_dataframe(limit=200)
-            df_with_indicators = engine.indicator_calc.calculate_all(df)
+            market_data = engine.market_data.to_dataframe(limit=200)
+            df_with_indicators = engine.indicator_calc.calculate_all(market_data)
             indicator_state = engine.indicator_calc.get_latest_state(df_with_indicators)
 
             market_state = MarketState(

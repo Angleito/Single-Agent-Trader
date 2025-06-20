@@ -6,7 +6,8 @@ handles errors gracefully and maintains stability.
 """
 
 import asyncio
-from datetime import datetime, timedelta
+import logging
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -25,6 +26,8 @@ from bot.trading_types import (
     TradeAction,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class TestErrorHandlingIntegration:
     """Test error handling and failure recovery across the system."""
@@ -35,7 +38,7 @@ class TestErrorHandlingIntegration:
         return [
             MarketData(
                 symbol="BTC-USD",
-                timestamp=datetime.now(timezone.utc) - timedelta(minutes=i),
+                timestamp=datetime.now(UTC) - timedelta(minutes=i),
                 open=Decimal(50000),
                 high=Decimal(50100),
                 low=Decimal(49900),
@@ -133,14 +136,14 @@ class TestErrorHandlingIntegration:
 
             # Test that system falls back gracefully when LLM fails
             current_price = mock_market_data[-1].close
-            df = engine.market_data.to_dataframe(limit=200)
-            df_with_indicators = engine.indicator_calc.calculate_all(df)
+            market_data = engine.market_data.to_dataframe(limit=200)
+            df_with_indicators = engine.indicator_calc.calculate_all(market_data)
             indicator_state = engine.indicator_calc.get_latest_state(df_with_indicators)
 
             market_state = MarketState(
                 symbol=engine.symbol,
                 interval=engine.interval,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 current_price=current_price,
                 ohlcv_data=mock_market_data[-10:],
                 indicators=IndicatorData(**indicator_state),
@@ -152,9 +155,11 @@ class TestErrorHandlingIntegration:
                 trade_action = await engine.llm_agent.analyze_market(market_state)
                 # If it doesn't raise an exception, should be a fallback action
                 assert trade_action.action == "HOLD"
-            except Exception:
+            except Exception as e:
                 # Expected to fail, system should handle this gracefully
-                pass
+                logger.debug(
+                    "Expected LLM failure during error handling test: %s", str(e)
+                )
 
     @pytest.mark.asyncio()
     async def test_invalid_data_handling(self):
@@ -167,7 +172,7 @@ class TestErrorHandlingIntegration:
             [
                 MarketData(
                     symbol="BTC-USD",
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                     open=Decimal("NaN"),
                     high=Decimal(50100),
                     low=Decimal(49900),
@@ -179,7 +184,7 @@ class TestErrorHandlingIntegration:
             [
                 MarketData(
                     symbol="BTC-USD",
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                     open=Decimal(-1000),
                     high=Decimal(50100),
                     low=Decimal(49900),
@@ -191,7 +196,7 @@ class TestErrorHandlingIntegration:
             [
                 MarketData(
                     symbol="BTC-USD",
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                     open=Decimal(50000),
                     high=Decimal(49000),  # High less than low
                     low=Decimal(50000),
@@ -207,22 +212,23 @@ class TestErrorHandlingIntegration:
             try:
                 if not invalid_data:
                     # Empty data scenario
-                    df = pd.DataFrame()
+                    test_data = pd.DataFrame()
                 else:
-                    df = self._create_mock_dataframe(invalid_data)
+                    test_data = self._create_mock_dataframe(invalid_data)
 
                 # Should handle invalid data gracefully
-                result = indicator_calc.calculate_all(df)
+                result = indicator_calc.calculate_all(test_data)
 
                 # Should return a DataFrame (even if empty or with NaN values)
                 assert isinstance(result, pd.DataFrame)
 
             except Exception as e:
                 # If it raises an exception, it should be a known, handled exception
+                error_msg = str(e).lower()
                 assert any(
-                    keyword in str(e).lower()
+                    keyword in error_msg
                     for keyword in ["invalid", "data", "empty", "nan", "calculation"]
-                ), f"Scenario {i}: Unexpected exception: {e}"
+                ), f"Scenario {i}: Unexpected exception: {error_msg}"
 
     @pytest.mark.asyncio()
     async def test_order_execution_failures(self, mock_market_data):
@@ -240,7 +246,7 @@ class TestErrorHandlingIntegration:
                 quantity=Decimal("0.1"),
                 price=Decimal(50000),
                 status=OrderStatus.PENDING,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 filled_quantity=Decimal("0.05"),  # Only half filled
             ),
             # Order failed/rejected
@@ -252,7 +258,7 @@ class TestErrorHandlingIntegration:
                 quantity=Decimal("0.1"),
                 price=Decimal(50000),
                 status=OrderStatus.REJECTED,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 filled_quantity=Decimal(0),
             ),
         ]
@@ -402,19 +408,20 @@ class TestErrorHandlingIntegration:
                 assert any(
                     keyword in error_msg
                     for keyword in ["data", "invalid", "missing", "column", "type"]
-                ), f"Scenario {i}: Unexpected error: {e}"
+                ), f"Scenario {i}: Unexpected error: {error_msg}"
 
     @pytest.mark.asyncio()
     async def test_memory_pressure_handling(self):
         """Test handling of memory pressure scenarios."""
         # Simulate large data processing
+        rng = np.random.default_rng(42)  # For reproducible results
         large_data = pd.DataFrame(
             {
-                "open": np.random.random(10000) * 50000,
-                "high": np.random.random(10000) * 50000 + 100,
-                "low": np.random.random(10000) * 50000 - 100,
-                "close": np.random.random(10000) * 50000,
-                "volume": np.random.random(10000) * 1000,
+                "open": rng.random(10000) * 50000,
+                "high": rng.random(10000) * 50000 + 100,
+                "low": rng.random(10000) * 50000 - 100,
+                "close": rng.random(10000) * 50000,
+                "volume": rng.random(10000) * 1000,
             },
             index=pd.date_range("2024-01-01", periods=10000, freq="1min"),
         )
@@ -438,7 +445,8 @@ class TestErrorHandlingIntegration:
             pytest.skip("Insufficient memory for large data test")
         except Exception as e:
             # Should not crash with other exceptions
-            assert "memory" in str(e).lower() or "size" in str(e).lower()
+            error_msg = str(e).lower()
+            assert "memory" in error_msg or "size" in error_msg
 
     @pytest.mark.asyncio()
     async def test_concurrent_operation_errors(self, mock_market_data):
@@ -539,14 +547,14 @@ class TestErrorHandlingIntegration:
 
             # Should fall back to core strategy when LLM fails
             current_price = mock_market_data[-1].close
-            df = engine.market_data.to_dataframe(limit=200)
-            df_with_indicators = engine.indicator_calc.calculate_all(df)
+            market_data = engine.market_data.to_dataframe(limit=200)
+            df_with_indicators = engine.indicator_calc.calculate_all(market_data)
             indicator_state = engine.indicator_calc.get_latest_state(df_with_indicators)
 
             market_state = MarketState(
                 symbol=engine.symbol,
                 interval=engine.interval,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 current_price=current_price,
                 ohlcv_data=mock_market_data[-10:],
                 indicators=IndicatorData(**indicator_state),
@@ -583,8 +591,8 @@ class TestErrorHandlingIntegration:
                 }
             )
 
-        df = pd.DataFrame(data)
-        return df.set_index("timestamp")
+        mock_data = pd.DataFrame(data)
+        return mock_data.set_index("timestamp")
 
     @pytest.mark.asyncio()
     async def test_shutdown_during_active_operations(self, mock_market_data):

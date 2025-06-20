@@ -9,7 +9,7 @@ import json
 import os
 import tempfile
 from collections.abc import Generator
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -238,7 +238,7 @@ class TestStartupValidation:
                     return_value=[
                         MarketData(
                             symbol="BTC-USD",
-                            timestamp=datetime.now(timezone.utc),
+                            timestamp=datetime.now(UTC),
                             open=Decimal(50000),
                             high=Decimal(50100),
                             low=Decimal(49900),
@@ -338,7 +338,7 @@ class TestStartupValidation:
                 return_value={
                     "overall_status": "healthy",
                     "components": {},
-                    "timestamp": datetime.now(timezone.utc),
+                    "timestamp": datetime.now(UTC),
                 }
             )
 
@@ -431,7 +431,8 @@ class TestStartupValidation:
             assert settings.system.dry_run is True
         except Exception as e:
             # If it fails, should be a clear validation error
-            assert "validation" in str(e).lower() or "field" in str(e).lower()
+            error_msg = str(e).lower()
+            assert "validation" in error_msg or "field" in error_msg
 
     @pytest.mark.asyncio()
     async def test_startup_failure_recovery(self):

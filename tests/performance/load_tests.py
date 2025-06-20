@@ -14,7 +14,7 @@ import time
 import tracemalloc
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -113,7 +113,7 @@ class MarketDataSimulator:
             List of OHLCV data points
         """
         ticks = []
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
 
         for i in range(count):
             # Simulate price movement
@@ -121,13 +121,13 @@ class MarketDataSimulator:
             self.current_price *= 1 + price_change
             self.current_price = max(self.current_price, 1000)  # Price floor
 
-            # Generate OHLC for the tick
-            volatility = random.uniform(0.0001, 0.001)
+            # Generate OHLC for the tick - test data generation
+            volatility = random.uniform(0.0001, 0.001)  # noqa: S311
             high = self.current_price * (1 + volatility)
             low = self.current_price * (1 - volatility)
             open_price = self.current_price
             close_price = self.current_price
-            volume = random.uniform(1000, 10000)
+            volume = random.uniform(1000, 10000)  # noqa: S311
 
             tick_data = MarketData(
                 symbol=self.symbol,
@@ -223,7 +223,7 @@ class LoadTestSuite:
                 results.append(result)
                 logger.info("Completed test: %s", result.test_name)
             except Exception as e:
-                logger.exception("Test failed: %s - %s", test.__name__, e)
+                logger.exception("Test failed: %s", test.__name__)
                 # Create a failure result
                 failure_result = LoadTestResult(
                     test_name=test.__name__,
@@ -281,13 +281,13 @@ class LoadTestSuite:
                     }
                 )
 
-            df = pd.DataFrame(df_data)
-            df = df.set_index("timestamp")
+            batch_data = pd.DataFrame(df_data)
+            batch_data = batch_data.set_index("timestamp")
 
             # Time the indicator calculation
             op_start = time.perf_counter()
             try:
-                self.indicator_calc.calculate_all(df)
+                self.indicator_calc.calculate_all(batch_data)
                 op_end = time.perf_counter()
 
                 response_times.append((op_end - op_start) * 1000)
@@ -345,9 +345,9 @@ class LoadTestSuite:
                     }
                 )
 
-            df = pd.DataFrame(df_data)
-            df = df.set_index("timestamp")
-            test_data.append(df)
+            concurrent_data = pd.DataFrame(df_data)
+            concurrent_data = concurrent_data.set_index("timestamp")
+            test_data.append(concurrent_data)
 
         response_times = []
         successful_ops = 0
@@ -408,23 +408,24 @@ class LoadTestSuite:
                 symbol="BTC-USD",
                 side="FLAT",
                 size=Decimal(0),
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
 
+            # Generate test indicator data - not security sensitive
             test_indicators = IndicatorData(
-                timestamp=datetime.now(timezone.utc),
-                cipher_a_dot=random.uniform(-2, 2),
-                cipher_b_wave=random.uniform(-1, 1),
-                cipher_b_money_flow=random.uniform(30, 70),
-                rsi=random.uniform(20, 80),
-                ema_fast=random.uniform(49000, 51000),
-                ema_slow=random.uniform(48900, 50900),
+                timestamp=datetime.now(UTC),
+                cipher_a_dot=random.uniform(-2, 2),  # noqa: S311
+                cipher_b_wave=random.uniform(-1, 1),  # noqa: S311
+                cipher_b_money_flow=random.uniform(30, 70),  # noqa: S311
+                rsi=random.uniform(20, 80),  # noqa: S311
+                ema_fast=random.uniform(49000, 51000),  # noqa: S311
+                ema_slow=random.uniform(48900, 50900),  # noqa: S311
             )
 
             market_state = MarketState(
                 symbol="BTC-USD",
                 interval="1m",
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 current_price=Decimal(50000),
                 ohlcv_data=[],
                 indicators=test_indicators,
@@ -509,16 +510,16 @@ class LoadTestSuite:
                     }
                 )
 
-            df = pd.DataFrame(df_data)
-            df = df.set_index("timestamp")
+            operation_data = pd.DataFrame(df_data)
+            operation_data = operation_data.set_index("timestamp")
 
             # Perform operation
             op_start = time.perf_counter()
             try:
-                result = self.indicator_calc.calculate_all(df)
+                result = self.indicator_calc.calculate_all(operation_data)
                 # Explicitly delete to test cleanup
                 del result
-                del df
+                del operation_data
 
                 op_end = time.perf_counter()
                 response_times.append((op_end - op_start) * 1000)
@@ -598,11 +599,11 @@ class LoadTestSuite:
                     }
                 )
 
-            df = pd.DataFrame(df_data)
-            df = df.set_index("timestamp")
+            memory_data = pd.DataFrame(df_data)
+            memory_data = memory_data.set_index("timestamp")
 
             op_start = time.perf_counter()
-            self.indicator_calc.calculate_all(df)
+            self.indicator_calc.calculate_all(memory_data)
             op_end = time.perf_counter()
 
             return (op_end - op_start) * 1000
@@ -747,17 +748,17 @@ class LoadTestSuite:
             op_start = time.perf_counter()
 
             try:
-                # Randomly inject errors
-                if random.random() < error_rate:
+                # Randomly inject errors for testing - not security sensitive
+                if random.random() < error_rate:  # noqa: S311
                     # Simulate various error conditions
-                    error_type = random.choice(
+                    error_type = random.choice(  # noqa: S311
                         ["invalid_data", "timeout", "resource_exhaustion"]
                     )
 
                     if error_type == "invalid_data":
                         # Test with invalid data
-                        invalid_df = pd.DataFrame({"invalid": [1, 2, 3]})
-                        self.indicator_calc.calculate_all(invalid_df)
+                        invalid_data = pd.DataFrame({"invalid": [1, 2, 3]})
+                        self.indicator_calc.calculate_all(invalid_data)
                     elif error_type == "timeout":
                         # Simulate timeout
                         await asyncio.sleep(0.1)
@@ -781,9 +782,9 @@ class LoadTestSuite:
                             }
                         )
 
-                    df = pd.DataFrame(df_data)
-                    df = df.set_index("timestamp")
-                    self.indicator_calc.calculate_all(df)
+                    error_test_data = pd.DataFrame(df_data)
+                    error_test_data = error_test_data.set_index("timestamp")
+                    self.indicator_calc.calculate_all(error_test_data)
 
                 op_end = time.perf_counter()
                 response_times.append((op_end - op_start) * 1000)
@@ -943,11 +944,11 @@ class LoadTestSuite:
                 }
             )
 
-        df = pd.DataFrame(df_data)
-        df = df.set_index("timestamp")
+        stress_data = pd.DataFrame(df_data)
+        stress_data = stress_data.set_index("timestamp")
 
         start_time = time.perf_counter()
-        self.indicator_calc.calculate_all(df)
+        self.indicator_calc.calculate_all(stress_data)
         end_time = time.perf_counter()
 
         return (end_time - start_time) * 1000
@@ -968,14 +969,14 @@ class LoadTestSuite:
                 }
             )
 
-        df = pd.DataFrame(df_data)
-        df = df.set_index("timestamp")
+        resource_data = pd.DataFrame(df_data)
+        resource_data = resource_data.set_index("timestamp")
 
         start_time = time.perf_counter()
 
         # Perform multiple operations to increase resource usage
         for _ in range(3):
-            result = self.indicator_calc.calculate_all(df)
+            result = self.indicator_calc.calculate_all(resource_data)
             # Additional processing
             result["additional_calc"] = result["close"].rolling(50).mean()
 

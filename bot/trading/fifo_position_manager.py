@@ -318,8 +318,7 @@ class FIFOPositionManager:
 
             # Create a single synthetic lot representing the entire position
             synthetic_lot = TradeLot(
-                lot_id="exchange_reconcile_%s_%s"
-                % (symbol, datetime.now(UTC).isoformat()),
+                lot_id=f"exchange_reconcile_{symbol}_{datetime.now(UTC).isoformat()}",
                 symbol=symbol,
                 quantity=size,
                 purchase_price=entry_price,

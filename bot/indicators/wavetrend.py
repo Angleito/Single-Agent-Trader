@@ -237,6 +237,7 @@ class WaveTrend:
         start_time = time.perf_counter()
         tracemalloc.start()
 
+        # Perform initial validation
         if src is None or src.empty:
             logger.error(
                 "WaveTrend calculation failed: empty source data",
@@ -266,6 +267,60 @@ class WaveTrend:
             },
         )
 
+        # Validate parameters and data sufficiency
+        empty_result = self._validate_wavetrend_inputs(src, ch_len, avg_len, ma_length)
+        if empty_result is not None:
+            return empty_result
+
+        try:
+            # Perform the main calculation
+            return self._perform_wavetrend_calculation(
+                src, ch_len, avg_len, ma_length, start_time
+            )
+        except Exception as e:
+            return self._handle_calculation_exception(
+                e, src, ch_len, avg_len, ma_length
+            )
+
+    def _handle_calculation_exception(
+        self, e: Exception, src: pd.Series, ch_len: int, avg_len: int, ma_length: int
+    ) -> tuple[pd.Series, pd.Series]:
+        """Handle exceptions during WaveTrend calculation."""
+        logger.exception(
+            "WaveTrend calculation failed with exception",
+            extra={
+                "indicator": "wavetrend",
+                "error_type": "calculation_exception",
+                "error_message": str(e),
+                "error_traceback": str(e.__traceback__),
+                "data_points": len(src),
+                "parameters": {
+                    "channel_length": ch_len,
+                    "average_length": avg_len,
+                    "ma_length": ma_length,
+                },
+            },
+        )
+        # Print the full traceback for debugging
+        import traceback
+
+        logger.exception("Full traceback: %s", traceback.format_exc())
+        return pd.Series(dtype="float64", index=src.index), pd.Series(
+            dtype="float64", index=src.index
+        )
+
+    def _get_empty_wavetrend_result(
+        self, src: pd.Series
+    ) -> tuple[pd.Series, pd.Series]:
+        """Return empty WaveTrend result series."""
+        return pd.Series(dtype="float64", index=src.index), pd.Series(
+            dtype="float64", index=src.index
+        )
+
+    def _validate_wavetrend_inputs(
+        self, src: pd.Series, ch_len: int, avg_len: int, ma_length: int
+    ) -> tuple[pd.Series, pd.Series] | None:
+        """Validate WaveTrend calculation inputs."""
         # Validate parameters
         if ch_len <= 0 or avg_len <= 0 or ma_length <= 0:
             logger.error(
@@ -292,10 +347,90 @@ class WaveTrend:
                     "shortage": min_required - len(src),
                 },
             )
-            return pd.Series(dtype="float64", index=src.index), pd.Series(
-                dtype="float64", index=src.index
+            return self._get_empty_wavetrend_result(src)
+
+        return None
+
+    def _calculate_esa_with_validation(
+        self, src: pd.Series, ch_len: int
+    ) -> tuple[pd.Series, pd.Series] | None:
+        """Calculate ESA with validation, returning ESA and cleaned source data."""
+        # Validate source data before ESA calculation
+        if src.isna().all():
+            logger.error(
+                "All source values are NaN, cannot calculate ESA",
+                extra={
+                    "indicator": "wavetrend",
+                    "error_type": "all_src_nan",
+                    "channel_length": ch_len,
+                },
+            )
+            return None
+
+        # Clean source data for calculation
+        src_clean = src.ffill().bfill()
+        if src_clean.isna().all():
+            # If still all NaN, use the mean value
+            src_clean = src_clean.fillna(src_clean.mean()).fillna(0.0)
+
+        try:
+            esa = ta.ema(src_clean, length=ch_len)
+        except Exception as e:
+            logger.exception(
+                "ESA calculation failed with exception",
+                extra={
+                    "indicator": "wavetrend",
+                    "error_type": "esa_ema_exception",
+                    "error_message": str(e),
+                    "channel_length": ch_len,
+                },
+            )
+            # Use robust fallback method
+            esa = self._calculate_ema_fallback(src_clean, ch_len)
+            logger.warning(
+                "Using EMA fallback for ESA calculation",
+                extra={
+                    "indicator": "wavetrend",
+                    "fallback": "ema_fallback_for_esa",
+                    "length": ch_len,
+                },
             )
 
+        # Check if pandas_ta returned None or too many NaN values
+        nan_threshold = len(src_clean) * 0.8  # If more than 80% NaN, use fallback
+        if esa is None or (hasattr(esa, "isna") and esa.isna().sum() > nan_threshold):
+            logger.warning(
+                "pandas_ta EMA returned None or all NaN, using fallback",
+                extra={
+                    "indicator": "wavetrend",
+                    "issue": "esa_pandas_ta_failed",
+                    "channel_length": ch_len,
+                },
+            )
+            esa = self._calculate_ema_fallback(src_clean, ch_len)
+
+        if esa is None:
+            logger.error(
+                "Failed to calculate ESA with all methods",
+                extra={
+                    "indicator": "wavetrend",
+                    "error_type": "esa_calculation_failed",
+                    "channel_length": ch_len,
+                },
+            )
+            return None
+
+        return esa, src_clean
+
+    def _perform_wavetrend_calculation(
+        self,
+        src: pd.Series,
+        ch_len: int,
+        avg_len: int,
+        ma_length: int,
+        start_time: float,
+    ) -> tuple[pd.Series, pd.Series]:
+        """Perform the main WaveTrend calculation."""
         # Data quality validation
         nan_count = src.isna().sum()
         nan_percentage = (nan_count / len(src)) * 100 if len(src) > 0 else 0
@@ -351,76 +486,11 @@ class WaveTrend:
                 },
             )
 
-            # Validate source data before ESA calculation
-            if src.isna().all():
-                logger.error(
-                    "All source values are NaN, cannot calculate ESA",
-                    extra={
-                        "indicator": "wavetrend",
-                        "error_type": "all_src_nan",
-                        "channel_length": ch_len,
-                    },
-                )
-                return pd.Series(dtype="float64", index=src.index), pd.Series(
-                    dtype="float64", index=src.index
-                )
-
-            # Clean source data for calculation
-            src_clean = src.ffill().bfill()
-            if src_clean.isna().all():
-                # If still all NaN, use the mean value
-                src_clean = src_clean.fillna(src_clean.mean()).fillna(0.0)
-
-            try:
-                esa = ta.ema(src_clean, length=ch_len)
-            except Exception as e:
-                logger.exception(
-                    "ESA calculation failed with exception",
-                    extra={
-                        "indicator": "wavetrend",
-                        "error_type": "esa_ema_exception",
-                        "error_message": str(e),
-                        "channel_length": ch_len,
-                    },
-                )
-                # Use robust fallback method
-                esa = self._calculate_ema_fallback(src_clean, ch_len)
-                logger.warning(
-                    "Using EMA fallback for ESA calculation",
-                    extra={
-                        "indicator": "wavetrend",
-                        "fallback": "ema_fallback_for_esa",
-                        "length": ch_len,
-                    },
-                )
-
-            # Check if pandas_ta returned None or too many NaN values
-            nan_threshold = len(src_clean) * 0.8  # If more than 80% NaN, use fallback
-            if esa is None or (
-                hasattr(esa, "isna") and esa.isna().sum() > nan_threshold
-            ):
-                logger.warning(
-                    "pandas_ta EMA returned None or all NaN, using fallback",
-                    extra={
-                        "indicator": "wavetrend",
-                        "issue": "esa_pandas_ta_failed",
-                        "channel_length": ch_len,
-                    },
-                )
-                esa = self._calculate_ema_fallback(src_clean, ch_len)
-
-            if esa is None:
-                logger.error(
-                    "Failed to calculate ESA with all methods",
-                    extra={
-                        "indicator": "wavetrend",
-                        "error_type": "esa_calculation_failed",
-                        "channel_length": ch_len,
-                    },
-                )
-                return pd.Series(dtype="float64", index=src.index), pd.Series(
-                    dtype="float64", index=src.index
-                )
+            # Calculate ESA with validation
+            esa_result = self._calculate_esa_with_validation(src, ch_len)
+            if esa_result is None:
+                return self._get_empty_wavetrend_result(src)
+            esa, src_clean = esa_result
 
             # Ensure ESA is properly formatted and clean
             esa = pd.Series(esa, index=src.index, dtype="float64")
@@ -440,6 +510,9 @@ class WaveTrend:
             # Calculate deviation with robust handling
             deviation = abs(src_clean - esa)
             deviation = deviation.fillna(0.0)
+
+            # Define NaN threshold for validation
+            nan_threshold = len(src_clean) * 0.8  # If more than 80% NaN, use fallback
 
             try:
                 de = ta.ema(deviation, length=ch_len)
@@ -485,9 +558,7 @@ class WaveTrend:
                         "channel_length": ch_len,
                     },
                 )
-                return pd.Series(dtype="float64", index=src.index), pd.Series(
-                    dtype="float64", index=src.index
-                )
+                return self._get_empty_wavetrend_result(src)
 
             # Ensure DE is properly formatted and clean
             de = pd.Series(de, index=src.index, dtype="float64")
@@ -616,9 +687,7 @@ class WaveTrend:
                         "average_length": avg_len,
                     },
                 )
-                return pd.Series(dtype="float64", index=src.index), pd.Series(
-                    dtype="float64", index=src.index
-                )
+                return self._get_empty_wavetrend_result(src)
 
             # Replace any remaining NaN values in CI with forward/backward fill
             ci_clean = ci.ffill().bfill().fillna(0.0)
@@ -672,9 +741,7 @@ class WaveTrend:
                         "average_length": avg_len,
                     },
                 )
-                return pd.Series(dtype="float64", index=src.index), pd.Series(
-                    dtype="float64", index=src.index
-                )
+                return self._get_empty_wavetrend_result(src)
 
             # Ensure TCI is properly formatted and clean
             tci = pd.Series(tci, index=src.index, dtype="float64")
@@ -708,9 +775,7 @@ class WaveTrend:
                         "ma_length": ma_length,
                     },
                 )
-                return pd.Series(dtype="float64", index=src.index), pd.Series(
-                    dtype="float64", index=src.index
-                )
+                return self._get_empty_wavetrend_result(src)
 
             # Clean WT1 for calculation
             wt1_clean = wt1.ffill().bfill().fillna(0.0)
@@ -764,9 +829,7 @@ class WaveTrend:
                         "ma_length": ma_length,
                     },
                 )
-                return pd.Series(dtype="float64", index=src.index), pd.Series(
-                    dtype="float64", index=src.index
-                )
+                return self._get_empty_wavetrend_result(src)
 
             # Ensure WT2 is properly formatted and clean
             wt2 = pd.Series(wt2, index=src.index, dtype="float64")

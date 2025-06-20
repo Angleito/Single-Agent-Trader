@@ -132,13 +132,13 @@ class TradingViewDataFeed:
 
     def __init__(self):
         self.symbols: dict[str, SymbolInfo] = {}
-        self.price_data: dict[str, dict[str, list[OHLCVBar]]] = (
-            {}
-        )  # symbol -> resolution -> bars
+        self.price_data: dict[
+            str, dict[str, list[OHLCVBar]]
+        ] = {}  # symbol -> resolution -> bars
         self.ai_decisions: dict[str, list[AIDecisionMarker]] = {}  # symbol -> decisions
-        self.indicators: dict[str, dict[str, list[TechnicalIndicator]]] = (
-            {}
-        )  # symbol -> indicator_name -> values
+        self.indicators: dict[
+            str, dict[str, list[TechnicalIndicator]]
+        ] = {}  # symbol -> indicator_name -> values
 
         # Initialize default symbols
         self._init_default_symbols()
@@ -272,7 +272,7 @@ class TradingViewDataFeed:
             return {"s": "error", "errmsg": str(e)}
 
     def get_marks(
-        self, symbol: str, from_timestamp: int, to_timestamp: int, resolution: str
+        self, symbol: str, from_timestamp: int, to_timestamp: int, _resolution: str
     ) -> list[dict[str, Any]]:
         """
         Get AI decision markers for chart annotations
@@ -335,7 +335,7 @@ class TradingViewDataFeed:
             return []
 
     def get_timescale_marks(
-        self, symbol: str, from_timestamp: int, to_timestamp: int, resolution: str
+        self, _symbol: str, _from_timestamp: int, _to_timestamp: int, _resolution: str
     ) -> list[dict[str, Any]]:
         """
         Get timescale marks (important events on time scale)
@@ -555,7 +555,7 @@ tradingview_feed = TradingViewDataFeed()
 
 
 def convert_bot_trade_to_ai_decision(
-    trade_data: dict[str, Any], symbol: str
+    trade_data: dict[str, Any], _symbol: str
 ) -> AIDecisionMarker | None:
     """Convert bot trade data to AI decision marker"""
     try:
@@ -601,7 +601,7 @@ def convert_market_data_to_ohlcv(market_data: list[dict[str, Any]]) -> list[OHLC
 
 
 def convert_indicator_data_to_technical_indicator(
-    indicator_data: dict[str, Any], indicator_name: str, symbol: str
+    indicator_data: dict[str, Any], indicator_name: str, _symbol: str
 ) -> TechnicalIndicator | None:
     """Convert indicator data to technical indicator format"""
     try:
@@ -633,13 +633,13 @@ def generate_sample_data():
     for i in range(100):
         timestamp = now - (100 - i) * 60  # 1-minute bars
 
-        # Simple random walk for demo
-        price_change = random.uniform(-0.02, 0.02)
+        # Simple random walk for demo data generation
+        price_change = random.uniform(-0.02, 0.02)  # noqa: S311
         open_price = base_price * (1 + price_change)
-        high_price = open_price * (1 + random.uniform(0, 0.01))
-        low_price = open_price * (1 - random.uniform(0, 0.01))
-        close_price = open_price * (1 + random.uniform(-0.01, 0.01))
-        volume = random.uniform(10, 100)
+        high_price = open_price * (1 + random.uniform(0, 0.01))  # noqa: S311
+        low_price = open_price * (1 - random.uniform(0, 0.01))  # noqa: S311
+        close_price = open_price * (1 + random.uniform(-0.01, 0.01))  # noqa: S311
+        volume = random.uniform(10, 100)  # noqa: S311
 
         bar = OHLCVBar(
             timestamp=timestamp,
@@ -663,10 +663,10 @@ def generate_sample_data():
         marker = AIDecisionMarker(
             timestamp=decision_timestamp,
             decision=decision_type,
-            price=base_price + random.uniform(-100, 100),
-            confidence=random.uniform(0.6, 0.95),
+            price=base_price + random.uniform(-100, 100),  # noqa: S311
+            confidence=random.uniform(0.6, 0.95),  # noqa: S311
             reasoning=f"AI decision based on market analysis #{i + 1}",
-            indicator_values={"rsi": random.uniform(30, 70), "ema": base_price},
+            indicator_values={"rsi": random.uniform(30, 70), "ema": base_price},  # noqa: S311
         )
 
         feed.add_ai_decision("BTC-USD", marker)
@@ -679,7 +679,7 @@ def generate_sample_data():
         rsi_indicator = TechnicalIndicator(
             timestamp=indicator_timestamp,
             name="RSI",
-            value=random.uniform(20, 80),
+            value=random.uniform(20, 80),  # noqa: S311
             parameters={"period": 14},
         )
         feed.add_technical_indicator("BTC-USD", rsi_indicator)
@@ -688,7 +688,7 @@ def generate_sample_data():
         ema_indicator = TechnicalIndicator(
             timestamp=indicator_timestamp,
             name="EMA",
-            value=base_price + random.uniform(-500, 500),
+            value=base_price + random.uniform(-500, 500),  # noqa: S311
             parameters={"period": 20},
         )
         feed.add_technical_indicator("BTC-USD", ema_indicator)

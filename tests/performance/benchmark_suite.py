@@ -7,13 +7,14 @@ memory usage profiling, and database operations.
 """
 
 import asyncio
+import contextlib
 import logging
 import statistics
 import time
 import tracemalloc
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -133,11 +134,11 @@ class PerformanceBenchmarks:
         Returns:
             DataFrame with OHLCV data
         """
-        np.random.seed(42)  # For reproducible results
+        rng = np.random.default_rng(42)  # For reproducible results
 
         # Generate realistic price movements
         start_price = 50000.0
-        price_changes = np.random.normal(0, 0.01, size)  # 1% std dev
+        price_changes = rng.normal(0, 0.01, size)  # 1% std dev
         prices = [start_price]
 
         for change in price_changes[1:]:
@@ -148,27 +149,21 @@ class PerformanceBenchmarks:
         data = []
         for i, close in enumerate(prices):
             # Generate realistic OHLC from close price
-            volatility = np.random.uniform(
-                0.005, 0.02
-            )  # 0.5% to 2% intraday volatility
-            high = close * (1 + volatility * np.random.uniform(0, 1))
-            low = close * (1 - volatility * np.random.uniform(0, 1))
+            volatility = rng.uniform(0.005, 0.02)  # 0.5% to 2% intraday volatility
+            high = close * (1 + volatility * rng.uniform(0, 1))
+            low = close * (1 - volatility * rng.uniform(0, 1))
 
             # Ensure OHLC relationships are valid
-            if i == 0:
-                open_price = close
-            else:
-                open_price = prices[i - 1] * (1 + np.random.normal(0, 0.002))
+            open_price = close if i == 0 else prices[i - 1] * (1 + rng.normal(0, 0.002))
 
             high = max(high, close, open_price)
             low = min(low, close, open_price)
 
-            volume = np.random.uniform(100000, 1000000)
+            volume = rng.uniform(100000, 1000000)
 
             data.append(
                 {
-                    "timestamp": datetime.now(timezone.utc)
-                    - timedelta(minutes=size - i),
+                    "timestamp": datetime.now(UTC) - timedelta(minutes=size - i),
                     "open": open_price,
                     "high": high,
                     "low": low,
@@ -177,8 +172,8 @@ class PerformanceBenchmarks:
                 }
             )
 
-        df = pd.DataFrame(data)
-        return df.set_index("timestamp")
+        benchmark_data = pd.DataFrame(data)
+        return benchmark_data.set_index("timestamp")
 
     def run_all_benchmarks(self) -> BenchmarkSuite:
         """
@@ -192,7 +187,7 @@ class PerformanceBenchmarks:
             description="Comprehensive performance testing of all trading bot components",
         )
 
-        suite.start_time = datetime.now(timezone.utc)
+        suite.start_time = datetime.now(UTC)
         logger.info("Starting comprehensive performance benchmark suite...")
 
         try:
@@ -220,11 +215,11 @@ class PerformanceBenchmarks:
 
             logger.info("Completed %s benchmarks successfully", len(suite.results))
 
-        except Exception as e:
-            logger.exception("Benchmark suite failed: %s", e)
+        except Exception:
+            logger.exception("Benchmark suite failed")
             raise
         finally:
-            suite.end_time = datetime.now(timezone.utc)
+            suite.end_time = datetime.now(UTC)
 
         return suite
 
@@ -297,7 +292,7 @@ class PerformanceBenchmarks:
             symbol="BTC-USD",
             side="FLAT",
             size=Decimal(0),
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
         test_indicators = IndicatorData(
@@ -312,7 +307,7 @@ class PerformanceBenchmarks:
         test_market_state = MarketState(
             symbol="BTC-USD",
             interval="1m",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             current_price=Decimal(50000),
             ohlcv_data=self.test_data.tail(10).to_dict("records"),
             indicators=test_indicators,
@@ -336,15 +331,17 @@ class PerformanceBenchmarks:
         """Benchmark common DataFrame operations."""
 
         def dataframe_ops():
-            df = self.test_data.copy()
+            ops_data = self.test_data.copy()
 
             # Common operations
-            df["sma_20"] = df["close"].rolling(20).mean()
-            df["volatility"] = df["close"].pct_change().rolling(20).std()
-            df["high_low_pct"] = (df["high"] - df["low"]) / df["close"]
+            ops_data["sma_20"] = ops_data["close"].rolling(20).mean()
+            ops_data["volatility"] = ops_data["close"].pct_change().rolling(20).std()
+            ops_data["high_low_pct"] = (ops_data["high"] - ops_data["low"]) / ops_data[
+                "close"
+            ]
 
             # Resampling
-            resampled = df.resample("5T").agg(
+            resampled = ops_data.resample("5T").agg(
                 {
                     "open": "first",
                     "high": "max",
@@ -367,17 +364,17 @@ class PerformanceBenchmarks:
         """Benchmark data validation performance."""
 
         def validate_data():
-            df = self.test_data.copy()
+            validation_data = self.test_data.copy()
 
             # Validation checks
             checks = [
-                df["high"] >= df["low"],
-                df["high"] >= df["close"],
-                df["high"] >= df["open"],
-                df["low"] <= df["close"],
-                df["low"] <= df["open"],
-                df["volume"] > 0,
-                df["close"] > 0,
+                validation_data["high"] >= validation_data["low"],
+                validation_data["high"] >= validation_data["close"],
+                validation_data["high"] >= validation_data["open"],
+                validation_data["low"] <= validation_data["close"],
+                validation_data["low"] <= validation_data["open"],
+                validation_data["volume"] > 0,
+                validation_data["close"] > 0,
             ]
 
             return all(check.all() for check in checks)
@@ -466,9 +463,9 @@ class PerformanceBenchmarks:
         serialized_data = self.test_data.to_dict("records")
 
         def deserialize_data():
-            df = pd.DataFrame(serialized_data)
-            df = df.set_index("timestamp")
-            return len(df)
+            deserialized_data = pd.DataFrame(serialized_data)
+            deserialized_data = deserialized_data.set_index("timestamp")
+            return len(deserialized_data)
 
         return self._run_benchmark(
             name="Data Deserialization",
@@ -495,10 +492,8 @@ class PerformanceBenchmarks:
         logger.info("Running benchmark: %s", name)
 
         # Warm up
-        try:
+        with contextlib.suppress(Exception):
             func()
-        except Exception:
-            pass  # Ignore warm-up errors
 
         # Collect baseline metrics
         process = psutil.Process()

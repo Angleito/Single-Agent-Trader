@@ -7,7 +7,7 @@ import logging
 import os
 from collections import deque
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -73,6 +73,7 @@ class BluefinWebSocketClient:
         candle_limit: int = 500,
         on_candle_update: Callable[[MarketData], None | Awaitable[None]] | None = None,
         network: str | None = None,
+        use_trade_aggregation: bool = True,
     ):
         """
         Initialize the Bluefin WebSocket client.
@@ -83,11 +84,13 @@ class BluefinWebSocketClient:
             candle_limit: Maximum number of candles to maintain in buffer
             on_candle_update: Callback function for candle updates
             network: Network type ('mainnet' or 'testnet'). If None, uses environment variable
+            use_trade_aggregation: Enable trade-to-candle aggregation for building 1-second candles
         """
         self.symbol = symbol
         self.interval = interval
         self.candle_limit = candle_limit
         self.on_candle_update = on_candle_update
+        self.use_trade_aggregation = use_trade_aggregation
 
         # Determine network and set appropriate URLs using centralized configuration
         network_value = network or os.getenv("EXCHANGE__BLUEFIN_NETWORK", "mainnet")
@@ -116,17 +119,22 @@ class BluefinWebSocketClient:
             maxlen=1000
         )  # Store recent ticks
 
+        # Trade aggregation buffer for building 1-second candles
+        self._trade_buffer: deque[dict[str, Any]] = deque(maxlen=1000)
+        self._last_aggregation_time: datetime = datetime.now(UTC)
+
         # Subscription tracking
         self._subscribed_channels: set[str] = set()
         self._subscription_id = 1
-        self._pending_subscriptions: dict[int, str] = (
-            {}
-        )  # Track pending subscription requests
+        self._pending_subscriptions: dict[
+            int, str
+        ] = {}  # Track pending subscription requests
 
         # Tasks
         self._connection_task: asyncio.Task | None = None
         self._heartbeat_task: asyncio.Task | None = None
         self._candle_aggregation_task: asyncio.Task | None = None
+        self._trade_aggregation_task: asyncio.Task | None = None
 
         # Performance metrics
         self._last_message_time: datetime | None = None
@@ -161,6 +169,10 @@ class BluefinWebSocketClient:
         # Start candle aggregation task
         self._candle_aggregation_task = asyncio.create_task(self._candle_aggregator())
 
+        # Start trade aggregation task if enabled
+        if self.use_trade_aggregation:
+            self._trade_aggregation_task = asyncio.create_task(self._trade_aggregator())
+
         # Wait for initial connection
         await self._wait_for_connection(timeout=30)
 
@@ -175,6 +187,7 @@ class BluefinWebSocketClient:
             self._connection_task,
             self._heartbeat_task,
             self._candle_aggregation_task,
+            self._trade_aggregation_task,
         ]
 
         for task in tasks:
@@ -325,6 +338,18 @@ class BluefinWebSocketClient:
         # Use proper JSON-RPC format for Bluefin WebSocket API
 
         # Subscribe to global updates for this symbol
+        await self._subscribe_to_global_updates()
+
+        # Subscribe to ticker updates for price data
+        await self._subscribe_to_ticker()
+
+        # Subscribe to data streams based on interval and trade aggregation settings
+        await self._subscribe_to_all_streams()
+
+        # Channels will be tracked after subscription confirmation
+
+    async def _subscribe_to_global_updates(self) -> None:
+        """Subscribe to global updates for the symbol."""
         global_id = self._get_next_subscription_id()
         global_subscription = {
             "id": global_id,
@@ -340,7 +365,8 @@ class BluefinWebSocketClient:
             "Subscribing to globalUpdates for %s (ID: %s)", self.symbol, global_id
         )
 
-        # Subscribe to ticker updates for price data
+    async def _subscribe_to_ticker(self) -> None:
+        """Subscribe to ticker updates for price data."""
         ticker_id = self._get_next_subscription_id()
         ticker_subscription = {
             "id": ticker_id,
@@ -354,41 +380,113 @@ class BluefinWebSocketClient:
         await self._send_message(ticker_subscription)
         logger.info("Subscribing to ticker for %s (ID: %s)", self.symbol, ticker_id)
 
-        # Subscribe to kline data for candlestick updates
-        kline_id = self._get_next_subscription_id()
-        kline_subscription = {
-            "id": kline_id,
-            "method": "SUBSCRIBE",
-            "params": {
-                "channel": "kline",
-                "symbol": self.symbol,
-                "interval": self.interval,  # Format: "1m", "5m", etc.
-            },
-        }
-        self._pending_subscriptions[kline_id] = f"kline:{self.symbol}@{self.interval}"
-        await self._send_message(kline_subscription)
-        logger.info(
-            "Subscribing to kline data for %s@%s (ID: %s)",
-            self.symbol,
-            self.interval,
-            kline_id,
-        )
+    async def _subscribe_to_all_streams(self) -> None:
+        """Subscribe to appropriate data streams based on interval and aggregation settings."""
+        try:
+            # Define sub-minute intervals that benefit from trade aggregation
+            sub_minute_intervals = ["1s", "5s", "15s", "30s"]
 
-        # Subscribe to trade data for real-time price updates
-        trade_id = self._get_next_subscription_id()
-        trade_subscription = {
-            "id": trade_id,
-            "method": "SUBSCRIBE",
-            "params": {
-                "channel": "trade",
-                "symbol": self.symbol,
-            },
-        }
-        self._pending_subscriptions[trade_id] = f"trade:{self.symbol}"
-        await self._send_message(trade_subscription)
-        logger.info("Subscribing to trade data for %s (ID: %s)", self.symbol, trade_id)
+            # Conditional subscription logic based on trade aggregation and interval
+            if self.use_trade_aggregation and self.interval in sub_minute_intervals:
+                # For sub-minute intervals with trade aggregation: subscribe to trade stream
+                logger.info(
+                    "Using trade stream for sub-minute interval %s with aggregation enabled",
+                    self.interval,
+                )
+                await self._subscribe_to_trades()
+            else:
+                # For minute+ intervals or when aggregation disabled: use kline subscription
+                logger.info(
+                    "Using kline stream for interval %s (aggregation: %s)",
+                    self.interval,
+                    self.use_trade_aggregation,
+                )
+                await self._subscribe_to_klines()
+                # Still subscribe to trades for enhanced price updates
+                await self._subscribe_to_trades()
 
-        # Channels will be tracked after subscription confirmation
+        except Exception as e:
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "symbol": self.symbol,
+                    "interval": self.interval,
+                    "use_trade_aggregation": self.use_trade_aggregation,
+                    "subscription_error": True,
+                },
+                component="BluefinWebSocketClient",
+                operation="subscribe_to_all_streams",
+            )
+            # Fallback to kline subscription on error
+            logger.warning(
+                "Failed to subscribe to preferred streams, falling back to kline subscription"
+            )
+            await self._subscribe_to_klines()
+
+    async def _subscribe_to_klines(self) -> None:
+        """Subscribe to kline/candlestick data for the configured interval."""
+        try:
+            kline_id = self._get_next_subscription_id()
+            kline_subscription = {
+                "id": kline_id,
+                "method": "SUBSCRIBE",
+                "params": {
+                    "channel": "kline",
+                    "symbol": self.symbol,
+                    "interval": self.interval,  # Format: "1m", "5m", etc.
+                },
+            }
+            self._pending_subscriptions[kline_id] = (
+                f"kline:{self.symbol}@{self.interval}"
+            )
+            await self._send_message(kline_subscription)
+            logger.info(
+                "Subscribing to kline data for %s@%s (ID: %s)",
+                self.symbol,
+                self.interval,
+                kline_id,
+            )
+        except Exception as e:
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "symbol": self.symbol,
+                    "interval": self.interval,
+                    "kline_subscription_error": True,
+                },
+                component="BluefinWebSocketClient",
+                operation="subscribe_to_klines",
+            )
+            raise
+
+    async def _subscribe_to_trades(self) -> None:
+        """Subscribe to trade data for real-time price updates and aggregation."""
+        try:
+            trade_id = self._get_next_subscription_id()
+            trade_subscription = {
+                "id": trade_id,
+                "method": "SUBSCRIBE",
+                "params": {
+                    "channel": "trade",
+                    "symbol": self.symbol,
+                },
+            }
+            self._pending_subscriptions[trade_id] = f"trade:{self.symbol}"
+            await self._send_message(trade_subscription)
+            logger.info(
+                "Subscribing to trade data for %s (ID: %s)", self.symbol, trade_id
+            )
+        except Exception as e:
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "symbol": self.symbol,
+                    "trade_subscription_error": True,
+                },
+                component="BluefinWebSocketClient",
+                operation="subscribe_to_trades",
+            )
+            raise
 
     async def _message_handler(self) -> None:
         """Handle incoming WebSocket messages."""
@@ -459,70 +557,109 @@ class BluefinWebSocketClient:
         Args:
             data: Parsed message data
         """
-        # Handle subscription confirmations and errors
-        if "id" in data:
-            sub_id = data["id"]
-
-            if "result" in data:
-                # Successful subscription
-                if sub_id in self._pending_subscriptions:
-                    channel = self._pending_subscriptions.pop(sub_id)
-                    self._subscribed_channels.add(channel)
-                    logger.info(
-                        "Subscription confirmed: %s (ID: %s, result: %s)",
-                        channel,
-                        sub_id,
-                        data["result"],
-                    )
-                else:
-                    logger.debug(
-                        "Subscription %s confirmed: %s", sub_id, data["result"]
-                    )
-                return
-
-            if "error" in data:
-                # Subscription error
-                if sub_id in self._pending_subscriptions:
-                    channel = self._pending_subscriptions.pop(sub_id)
-                    logger.error(
-                        "Subscription failed: %s (ID: %s, error: %s)",
-                        channel,
-                        sub_id,
-                        data["error"],
-                    )
-                else:
-                    logger.error("Subscription %s failed: %s", sub_id, data["error"])
-                return
+        # Handle subscription responses first
+        if await self._handle_subscription_response(data):
+            return
 
         # Handle error messages
         if "error" in data:
             logger.error("WebSocket error: %s", data["error"])
             return
 
-        # Handle Bluefin-specific event names from WebSocket API
+        # Handle event-based messages
+        await self._handle_event_messages(data)
+
+    async def _handle_subscription_response(self, data: dict[str, Any]) -> bool:
+        """Handle subscription confirmations and errors.
+
+        Returns:
+            True if message was a subscription response, False otherwise
+        """
+        if "id" not in data:
+            return False
+
+        sub_id = data["id"]
+
+        if "result" in data:
+            # Successful subscription
+            if sub_id in self._pending_subscriptions:
+                channel = self._pending_subscriptions.pop(sub_id)
+                self._subscribed_channels.add(channel)
+                logger.info(
+                    "Subscription confirmed: %s (ID: %s, result: %s)",
+                    channel,
+                    sub_id,
+                    data["result"],
+                )
+            else:
+                logger.debug("Subscription %s confirmed: %s", sub_id, data["result"])
+            return True
+
+        if "error" in data:
+            # Subscription error
+            if sub_id in self._pending_subscriptions:
+                channel = self._pending_subscriptions.pop(sub_id)
+                logger.error(
+                    "Subscription failed: %s (ID: %s, error: %s)",
+                    channel,
+                    sub_id,
+                    data["error"],
+                )
+            else:
+                logger.error("Subscription %s failed: %s", sub_id, data["error"])
+            return True
+
+        return False
+
+    async def _handle_event_messages(self, data: dict[str, Any]) -> None:
+        """Handle event-based WebSocket messages."""
         event_name = data.get("eventName")
 
+        # Handle Bluefin-specific events
+        if await self._handle_bluefin_events(data, event_name):
+            return
+
+        # Handle standard channel messages
+        await self._handle_standard_channels(data, event_name)
+
+    async def _handle_bluefin_events(
+        self, data: dict[str, Any], event_name: str | None
+    ) -> bool:
+        """Handle Bluefin-specific event names.
+
+        Returns:
+            True if event was handled, False otherwise
+        """
         if event_name == "TickerUpdate":
             await self._handle_bluefin_ticker_update(data)
-        elif event_name == "MarketDataUpdate":
+            return True
+        if event_name == "MarketDataUpdate":
             await self._handle_bluefin_market_update(data)
-        elif event_name == "RecentTrades":
+            return True
+        if event_name == "RecentTrades":
             await self._handle_bluefin_trades(data)
-        elif f"{self.symbol}@kline@{self.interval}" in str(event_name):
+            return True
+        if event_name and f"{self.symbol}@kline@{self.interval}" in str(event_name):
             # Handle kline/candlestick updates
             await self._handle_bluefin_kline_update(data)
-        else:
-            # Handle standard channels
-            channel = data.get("channel", data.get("ch", ""))
+            return True
 
-            if channel == "trade" or "trade" in str(channel):
-                await self._handle_trade_update(data)
-            elif channel == "ticker" or "ticker" in str(channel):
-                await self._handle_ticker_update(data)
-            elif channel == "orderbook" or "orderbook" in str(channel):
-                await self._handle_orderbook_update(data)
-            elif self._message_count % 100 == 0:
-                logger.debug("Unhandled event/channel: %s", event_name or channel)
+        return False
+
+    async def _handle_standard_channels(
+        self, data: dict[str, Any], event_name: str | None
+    ) -> None:
+        """Handle standard channel messages."""
+        channel = data.get("channel", data.get("ch", ""))
+
+        if channel == "trade" or "trade" in str(channel):
+            await self._handle_trade_update(data)
+        elif channel == "ticker" or "ticker" in str(channel):
+            await self._handle_ticker_update(data)
+        elif channel == "orderbook" or "orderbook" in str(channel):
+            await self._handle_orderbook_update(data)
+        elif self._message_count % 100 == 0:
+            logger.debug("Unhandled event/channel: %s", event_name or channel)
 
     async def _handle_trade_update(self, data: dict[str, Any]) -> None:
         """
@@ -558,8 +695,13 @@ class BluefinWebSocketClient:
                     # Add to tick buffer
                     self._tick_buffer.append(trade_data)
 
-                    # Update current candle
-                    await self._update_candle_with_trade(trade_data)
+                    # Add to trade aggregation buffer if enabled
+                    if self.use_trade_aggregation:
+                        self._trade_buffer.append(trade_data)
+
+                    # Update current candle (only if not using trade aggregation)
+                    if not self.use_trade_aggregation:
+                        await self._update_candle_with_trade(trade_data)
 
                     logger.debug("Trade: %s %s %s @ %s", self.symbol, side, size, price)
 
@@ -698,8 +840,13 @@ class BluefinWebSocketClient:
                         # Add to tick buffer
                         self._tick_buffer.append(trade_data)
 
-                        # Update current candle
-                        await self._update_candle_with_trade(trade_data)
+                        # Add to trade aggregation buffer if enabled
+                        if self.use_trade_aggregation:
+                            self._trade_buffer.append(trade_data)
+
+                        # Update current candle (only if not using trade aggregation)
+                        if not self.use_trade_aggregation:
+                            await self._update_candle_with_trade(trade_data)
 
                         logger.debug(
                             "Ticker update: %s = $%s", self.symbol, current_price
@@ -778,8 +925,13 @@ class BluefinWebSocketClient:
                         # Add to tick buffer
                         self._tick_buffer.append(trade_data)
 
-                        # Update current candle
-                        await self._update_candle_with_trade(trade_data)
+                        # Add to trade aggregation buffer if enabled
+                        if self.use_trade_aggregation:
+                            self._trade_buffer.append(trade_data)
+
+                        # Update current candle (only if not using trade aggregation)
+                        if not self.use_trade_aggregation:
+                            await self._update_candle_with_trade(trade_data)
 
                         logger.debug(
                             "Trade: %s %s %s @ $%s",
@@ -1059,9 +1211,168 @@ class BluefinWebSocketClient:
                     operation="candle_aggregator",
                 )
 
+    async def _trade_aggregator(self) -> None:
+        """
+        Background task to aggregate trades into 1-second candles.
+
+        This runs every second and builds OHLCV candles from individual trades
+        that occurred within the last second window.
+        """
+        while self._connected:
+            try:
+                await asyncio.sleep(1.0)  # Run every second
+
+                if not self._connected:
+                    break
+
+                # Get current time aligned to second boundary
+                now = datetime.now(UTC)
+                current_second = now.replace(microsecond=0)
+
+                # Find trades from the last second
+                one_second_ago = current_second - timedelta(seconds=1)
+
+                # Collect trades from the last second
+                trades_in_window = []
+                for trade in list(self._trade_buffer):
+                    trade_time = trade.get("timestamp", now)
+                    if isinstance(trade_time, datetime):
+                        # Align trade time to second boundary for comparison
+                        trade_second = trade_time.replace(microsecond=0)
+                        if one_second_ago <= trade_second < current_second:
+                            trades_in_window.append(trade)
+
+                # Build candle from trades if any exist
+                if trades_in_window:
+                    candle = await self._build_candle_from_trades(
+                        trades_in_window, one_second_ago
+                    )
+                    if candle:
+                        await self._process_aggregated_candle(candle)
+
+                        logger.debug(
+                            "Aggregated %d trades into 1s candle: %s @ $%s (vol: %s)",
+                            len(trades_in_window),
+                            self.symbol,
+                            candle.close,
+                            candle.volume,
+                        )
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                exception_handler.log_exception_with_context(
+                    e,
+                    {
+                        "symbol": self.symbol,
+                        "trades_in_buffer": len(self._trade_buffer),
+                        "unexpected_trade_aggregator_error": True,
+                    },
+                    component="BluefinWebSocketClient",
+                    operation="trade_aggregator",
+                )
+
+    async def _build_candle_from_trades(
+        self, trades: list[dict[str, Any]], timestamp: datetime
+    ) -> MarketData | None:
+        """
+        Build a OHLCV candle from a list of trades.
+
+        Args:
+            trades: List of trade data dictionaries
+            timestamp: Candle timestamp (aligned to second boundary)
+
+        Returns:
+            MarketData object or None if no valid trades
+        """
+        if not trades:
+            return None
+
+        try:
+            # Sort trades by timestamp to ensure proper OHLC order
+            sorted_trades = sorted(trades, key=lambda t: t.get("timestamp", timestamp))
+
+            # Extract OHLCV data
+            prices = []
+            total_volume = Decimal(0)
+
+            for trade in sorted_trades:
+                price = trade.get("price")
+                size = trade.get("size")
+
+                if price and size:
+                    prices.append(Decimal(str(price)))
+                    total_volume += Decimal(str(size))
+
+            if not prices:
+                return None
+
+            # Build OHLCV
+            open_price = prices[0]
+            close_price = prices[-1]
+            high_price = max(prices)
+            low_price = min(prices)
+
+            return MarketData(
+                symbol=self.symbol,
+                timestamp=timestamp,
+                open=open_price,
+                high=high_price,
+                low=low_price,
+                close=close_price,
+                volume=total_volume,
+            )
+
+        except (ValueError, TypeError, KeyError, ArithmeticError) as e:
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "symbol": self.symbol,
+                    "trades_count": len(trades),
+                    "candle_building_error": True,
+                },
+                component="BluefinWebSocketClient",
+                operation="build_candle_from_trades",
+            )
+            return None
+
+    async def _process_aggregated_candle(self, candle: MarketData) -> None:
+        """
+        Process an aggregated 1-second candle, potentially building it into larger intervals.
+
+        Args:
+            candle: 1-second candle from trade aggregation
+        """
+        try:
+            # For now, treat 1-second candles as tick data for the main candle building
+            # This allows compatibility with existing interval-based candle logic
+
+            # Convert candle back to trade format for candle building
+            trade_data = {
+                "price": candle.close,
+                "size": candle.volume,
+                "side": "unknown",  # We don't need side for candle building
+                "timestamp": candle.timestamp,
+                "trade_id": f"aggregated_{int(candle.timestamp.timestamp())}",
+            }
+
+            # Update current candle with the aggregated data
+            await self._update_candle_with_trade(trade_data)
+
+        except Exception as e:
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "symbol": self.symbol,
+                    "candle_timestamp": candle.timestamp,
+                    "aggregated_candle_processing_error": True,
+                },
+                component="BluefinWebSocketClient",
+                operation="process_aggregated_candle",
+            )
+
     async def _heartbeat_handler(self) -> None:
         """Enhanced heartbeat handler with ping/pong monitoring."""
-        # last_pong_time = asyncio.get_event_loop().time()  # Used for monitoring
         ping_failures = 0
 
         while self._connected and self._ws:
@@ -1076,7 +1387,6 @@ class BluefinWebSocketClient:
                 try:
                     pong_waiter = await self._ws.ping()
                     await asyncio.wait_for(pong_waiter, timeout=10)
-                    # last_pong_time = asyncio.get_event_loop().time()  # Monitor pong timing
                     ping_failures = 0
                     logger.debug("Bluefin WebSocket ping successful")
 
@@ -1322,6 +1632,10 @@ class BluefinWebSocketClient:
             "candles_buffered": len(self._candle_buffer),
             "current_candle": self._current_candle is not None,
             "ticks_buffered": len(self._tick_buffer),
+            "use_trade_aggregation": self.use_trade_aggregation,
+            "trades_buffered": len(self._trade_buffer)
+            if self.use_trade_aggregation
+            else 0,
             "subscribed_channels": list(self._subscribed_channels),
             "pending_subscriptions": list(self._pending_subscriptions.values()),
             "subscription_id": self._subscription_id,
@@ -1379,12 +1693,12 @@ class BluefinWebSocketClient:
         Convert interval string to seconds.
 
         Args:
-            interval: Interval string (e.g., '1m', '5m', '1h')
+            interval: Interval string (e.g., '1s', '5s', '30s', '1m', '5m', '1h')
 
         Returns:
             Interval in seconds
         """
-        multipliers = {"m": 60, "h": 3600, "d": 86400}
+        multipliers = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 
         if interval[-1] in multipliers:
             return int(interval[:-1]) * multipliers[interval[-1]]
@@ -1424,7 +1738,7 @@ class BluefinWebSocketClient:
 
 # Integration with BluefinMarketDataProvider
 async def integrate_websocket_with_provider(
-    provider: Any, symbol: str, interval: str
+    provider: Any, symbol: str, interval: str, use_trade_aggregation: bool = True
 ) -> BluefinWebSocketClient:
     """
     Create and integrate WebSocket client with BluefinMarketDataProvider.
@@ -1433,6 +1747,7 @@ async def integrate_websocket_with_provider(
         provider: BluefinMarketDataProvider instance
         symbol: Trading symbol
         interval: Candle interval
+        use_trade_aggregation: Enable trade-to-candle aggregation
 
     Returns:
         Connected BluefinWebSocketClient instance
@@ -1462,6 +1777,7 @@ async def integrate_websocket_with_provider(
         candle_limit=provider.candle_limit,
         on_candle_update=on_candle_update,
         network=getattr(provider, "network", None),  # Pass network if available
+        use_trade_aggregation=use_trade_aggregation,
     )
 
     await ws_client.connect()

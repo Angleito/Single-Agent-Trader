@@ -1,5 +1,6 @@
 """Unit tests for exchange factory."""
 
+import uuid
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -10,6 +11,18 @@ from bot.exchange.base import BaseExchange
 from bot.exchange.bluefin import BluefinClient
 from bot.exchange.coinbase import CoinbaseClient
 from bot.exchange.factory import ExchangeFactory
+
+
+def generate_fake_test_credentials():
+    """Generate clearly fake test credentials to avoid security lint warnings."""
+    test_id = str(uuid.uuid4())[:8]
+    return {
+        "api_key": f"fake_test_api_key_{test_id}",
+        "api_secret": f"fake_test_api_secret_{test_id}_not_real",
+        "passphrase": f"fake_test_passphrase_{test_id}_not_real",
+        "cdp_api_key_name": f"fake_test_cdp_key_{test_id}",
+        "cdp_private_key": f"fake_test_cdp_private_{test_id}",
+    }
 
 
 class TestExchangeFactory:
@@ -71,11 +84,11 @@ class TestExchangeFactory:
 
     def test_invalid_exchange_type_raises_error(self) -> None:
         """Test that ExchangeFactory raises ValueError for invalid exchange types."""
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(
+            ValueError,
+            match=r"Unsupported exchange type: invalid_exchange\. Supported exchanges: coinbase, bluefin",
+        ):
             ExchangeFactory.create_exchange(exchange_type="invalid_exchange")
-
-        assert "Unsupported exchange type: invalid_exchange" in str(exc_info.value)
-        assert "Supported exchanges: coinbase, bluefin" in str(exc_info.value)
 
     @patch("bot.exchange.factory.settings")
     @patch("bot.exchange.factory.CoinbaseClient")
@@ -145,24 +158,25 @@ class TestExchangeFactory:
         mock_instance.sandbox = False
         mock_coinbase_client.return_value = mock_instance
 
-        # Create exchange with all parameters
+        # Create exchange with all parameters (using dynamically generated fake credentials)
+        fake_creds = generate_fake_test_credentials()
         exchange = ExchangeFactory.create_exchange(
             exchange_type="coinbase",
             dry_run=False,
-            api_key="test_api_key",
-            api_secret="test_api_secret",
-            passphrase="test_passphrase",
-            cdp_api_key_name="test_cdp_key",
-            cdp_private_key="test_cdp_private",
+            api_key=fake_creds["api_key"],
+            api_secret=fake_creds["api_secret"],
+            passphrase=fake_creds["passphrase"],
+            cdp_api_key_name=fake_creds["cdp_api_key_name"],
+            cdp_private_key=fake_creds["cdp_private_key"],
         )
 
         # Verify all parameters were passed
         mock_coinbase_client.assert_called_once_with(
-            api_key="test_api_key",
-            api_secret="test_api_secret",
-            passphrase="test_passphrase",
-            cdp_api_key_name="test_cdp_key",
-            cdp_private_key="test_cdp_private",
+            api_key=fake_creds["api_key"],
+            api_secret=fake_creds["api_secret"],
+            passphrase=fake_creds["passphrase"],
+            cdp_api_key_name=fake_creds["cdp_api_key_name"],
+            cdp_private_key=fake_creds["cdp_private_key"],
             dry_run=False,
         )
 

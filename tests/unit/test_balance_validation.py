@@ -25,7 +25,7 @@ class TestBalanceValidation:
     @pytest.fixture()
     def account(self):
         """Create a paper trading account for validation testing."""
-        return PaperTradingAccount(starting_balance=Decimal("10000"))
+        return PaperTradingAccount(starting_balance=Decimal(10000))
 
     def test_balance_range_validation_positive(self, account):
         """Test validation accepts positive balance values."""
@@ -44,7 +44,7 @@ class TestBalanceValidation:
     def test_balance_range_validation_boundary_cases(self, account):
         """Test validation of boundary case balance values."""
         # Test zero balance
-        zero_balance = account._normalize_balance(Decimal("0"))
+        zero_balance = account._normalize_balance(Decimal(0))
         assert zero_balance == Decimal("0.00")
 
         # Test very small balance
@@ -77,12 +77,11 @@ class TestBalanceValidation:
     def test_balance_precision_validation(self, account):
         """Test balance precision validation and rounding."""
         precision_test_cases = [
-            # (input, expected_output)
             (Decimal("100.123"), Decimal("100.12")),
             (Decimal("100.126"), Decimal("100.13")),
             (Decimal("100.125"), Decimal("100.12")),  # Banker's rounding
             (Decimal("100.135"), Decimal("100.14")),  # Banker's rounding
-            (Decimal("100"), Decimal("100.00")),
+            (Decimal(100), Decimal("100.00")),
             (Decimal("100.1"), Decimal("100.10")),
         ]
 
@@ -132,9 +131,12 @@ class TestBalanceValidation:
                 account._normalize_balance(Decimal(invalid_input))
 
         # These should raise exceptions in normalize_balance due to validation
-        special_cases = ["inf", "nan"]
-        for special_case in special_cases:
-            with pytest.raises(ValueError):
+        special_cases = [
+            ("inf", "Balance amount cannot be infinite"),
+            ("nan", "Balance amount cannot be NaN"),
+        ]
+        for special_case, expected_error in special_cases:
+            with pytest.raises(ValueError, match=expected_error):
                 account._normalize_balance(Decimal(special_case))
 
         # Scientific notation should be normalized properly
@@ -157,25 +159,24 @@ class TestBalanceValidation:
         ) -> bool:
             """Helper function to detect balance anomalies."""
             if previous == 0:
-                return current > Decimal("10000")  # Arbitrary large threshold
+                return current > Decimal(10000)  # Arbitrary large threshold
 
             change_pct = abs((current - previous) / previous * 100)
             return change_pct > threshold_pct
 
         test_cases = [
-            # (previous, current, threshold, expected_anomaly)
-            (Decimal("1000"), Decimal("1050"), 50.0, False),  # 5% change - normal
-            (Decimal("1000"), Decimal("1600"), 50.0, True),  # 60% change - anomaly
-            (Decimal("1000"), Decimal("400"), 50.0, True),  # 60% decrease - anomaly
+            (Decimal(1000), Decimal(1050), 50.0, False),  # 5% change - normal
+            (Decimal(1000), Decimal(1600), 50.0, True),  # 60% change - anomaly
+            (Decimal(1000), Decimal(400), 50.0, True),  # 60% decrease - anomaly
             (
-                Decimal("1000"),
-                Decimal("1500"),
+                Decimal(1000),
+                Decimal(1500),
                 50.0,
                 False,
             ),  # 50% change - at threshold
             (
-                Decimal("1000"),
-                Decimal("2000"),
+                Decimal(1000),
+                Decimal(2000),
                 100.0,
                 False,
             ),  # 100% change at 100% threshold

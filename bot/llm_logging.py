@@ -225,11 +225,9 @@ class ChatCompletionLogger:
                 maxBytes=50 * 1024 * 1024,
                 backupCount=5,  # 50MB
             )
-        except (PermissionError, OSError) as e:
+        except (PermissionError, OSError):
             # If file handler creation fails, log error and use only console
-            logger.error(
-                "Failed to create log file handler for %s: %s", self.log_file, e
-            )
+            logger.exception("Failed to create log file handler for %s", self.log_file)
             logger.warning("Logging will only go to console")
             file_handler = None
 

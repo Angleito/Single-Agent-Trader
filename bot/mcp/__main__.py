@@ -6,8 +6,8 @@ Run the memory server directly with: python -m bot.mcp
 
 import asyncio
 import logging
-import os
 import sys
+from pathlib import Path
 
 
 def main():
@@ -31,12 +31,12 @@ def main():
         logger.info("Bot package not available, trying standalone server")
         try:
             # Import and run standalone version
-            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
             from server_standalone import main as standalone_main
 
             asyncio.run(standalone_main())
-        except ImportError as e:
-            logger.exception("Could not import any MCP server version: %s", e)
+        except ImportError:
+            logger.exception("Could not import any MCP server version")
             sys.exit(1)
 
 

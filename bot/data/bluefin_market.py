@@ -31,16 +31,31 @@ class BluefinDataError(Exception):
 
 class BluefinMarketDataProvider:
     """
-    Market data provider for Bluefin perpetual futures.
+    Market data provider for Bluefin perpetual futures with trade aggregation support.
 
     Handles real-time and historical market data from Bluefin DEX,
     providing OHLCV data for perpetual futures contracts on Sui.
 
     Features:
-    - Mock data generation for paper trading
+    - Real-time market data via WebSocket
     - Historical data fetching via Bluefin service
-    - Real-time price simulation
+    - Trade aggregation for sub-minute intervals (15s, 30s, etc.)
+    - Seamless switching between kline and trade aggregation modes
     - Perpetual futures symbol mapping
+    - Enhanced interval validation and processing
+
+    Trade Aggregation Mode:
+    When use_trade_aggregation=True, the provider:
+    - Receives individual trade/tick data via WebSocket
+    - Aggregates trades into 1-second candles
+    - Builds target interval candles from aggregated data
+    - Provides sub-minute granularity not available via standard kline API
+
+    Kline Mode (default):
+    When use_trade_aggregation=False, the provider:
+    - Receives pre-built kline/candlestick data via WebSocket
+    - Uses standard Bluefin API intervals (1m, 5m, 1h, etc.)
+    - More efficient for standard timeframes
     """
 
     def __init__(self, symbol: str | None = None, interval: str | None = None) -> None:
@@ -49,7 +64,8 @@ class BluefinMarketDataProvider:
 
         Args:
             symbol: Trading symbol (e.g., 'SUI-PERP', 'ETH-PERP')
-            interval: Candle interval (e.g., '1m', '5m', '1h')
+            interval: Candle interval (e.g., '1s', '5s', '15s', '30s', '1m', '5m', '1h').
+                     Sub-minute intervals (1s, 5s, 15s, 30s) use trade aggregation when enabled.
         """
         self.symbol = symbol or self._convert_symbol(settings.trading.symbol)
         self.interval = interval or settings.trading.interval
@@ -59,6 +75,12 @@ class BluefinMarketDataProvider:
         import time
 
         self.provider_id = f"bluefin-market-{int(time.time())}"
+
+        # Read trade aggregation setting from exchange configuration
+        self.use_trade_aggregation = settings.exchange.use_trade_aggregation
+
+        # Validate interval for trade aggregation compatibility
+        self._validate_interval_for_trade_aggregation()
 
         # Data cache
         self._ohlcv_cache: list[MarketData] = []
@@ -147,6 +169,12 @@ class BluefinMarketDataProvider:
                     "wss://notifications.api.sui-prod.bluefin.io"
                 )
 
+        # Read trade aggregation setting from exchange configuration
+        self.use_trade_aggregation = settings.exchange.use_trade_aggregation
+
+        # Validate interval for trade aggregation compatibility
+        self._validate_interval_for_trade_aggregation()
+
         logger.info(
             "Initialized BluefinMarketDataProvider",
             extra={
@@ -158,8 +186,33 @@ class BluefinMarketDataProvider:
                 "data_source": "real_market_data",
                 "api_base_url": self._api_base_url,
                 "ws_url": self._ws_url,
+                "use_trade_aggregation": self.use_trade_aggregation,
+                "trade_aggregation_mode": "kline"
+                if not self.use_trade_aggregation
+                else "trade_aggregation",
             },
         )
+
+        # Log mode selection for debugging
+        if self.use_trade_aggregation:
+            logger.info(
+                "Using trade aggregation mode for enhanced granularity",
+                extra={
+                    "provider_id": self.provider_id,
+                    "data_source": "trade_aggregation",
+                    "aggregation_interval": "1s",
+                    "target_interval": self.interval,
+                },
+            )
+        else:
+            logger.info(
+                "Using kline mode for standard intervals",
+                extra={
+                    "provider_id": self.provider_id,
+                    "data_source": "kline_websocket",
+                    "interval": self.interval,
+                },
+            )
 
         logger.info(
             "Using real Bluefin market data via WebSocket",
@@ -180,6 +233,35 @@ class BluefinMarketDataProvider:
         }
 
         return symbol_map.get(symbol, symbol)
+
+    def _validate_interval_for_trade_aggregation(self) -> None:
+        """Validate interval compatibility with trade aggregation mode."""
+        # Parse interval to check if it's sub-minute
+        is_sub_minute = self._is_sub_minute_interval(self.interval)
+
+        if is_sub_minute and not self.use_trade_aggregation:
+            logger.warning(
+                "⚠️ Sub-minute interval '%s' detected but trade aggregation is disabled. "
+                "Historical data may be limited. Consider enabling use_trade_aggregation.",
+                self.interval,
+            )
+        elif not is_sub_minute and self.use_trade_aggregation:
+            logger.info(
+                "Trade aggregation enabled for standard interval '%s'. "
+                "This provides enhanced granularity for candle building.",
+                self.interval,
+            )
+
+    def _is_sub_minute_interval(self, interval: str) -> bool:
+        """Check if interval is sub-minute (e.g., 15s, 30s)."""
+        if interval.endswith("s"):
+            try:
+                seconds = int(interval[:-1])
+            except ValueError:
+                return False
+            else:
+                return seconds < 60
+        return False
 
     async def connect(self, fetch_historical: bool = True) -> None:
         """
@@ -203,160 +285,176 @@ class BluefinMarketDataProvider:
             },
         )
         try:
-            # Initialize HTTP session with proper management
-            if self._session is None or self._session.closed:
-                timeout_value = settings.exchange.api_timeout
-                logger.debug(
-                    "Creating HTTP session for Bluefin market data provider",
-                    extra={
-                        "provider_id": self.provider_id,
-                        "timeout": timeout_value,
-                        "api_base_url": self._api_base_url,
-                    },
-                )
+            # Initialize HTTP session
+            await self._initialize_http_session()
 
-                try:
-                    self._session = aiohttp.ClientSession(
-                        timeout=aiohttp.ClientTimeout(total=timeout_value)
-                    )
-                    self._session_closed = False
-                    logger.debug(
-                        "HTTP session created successfully",
-                        extra={"provider_id": self.provider_id},
-                    )
-                except Exception as e:
-                    error_msg = f"Failed to initialize HTTP session: {e!s}"
-                    logger.exception(
-                        "HTTP session initialization failed",
-                        extra={
-                            "provider_id": self.provider_id,
-                            "error_type": type(e).__name__,
-                            "error_message": str(e),
-                            "timeout": timeout_value,
-                        },
-                    )
-                    from bot.exchange.bluefin_client import (
-                        BluefinServiceConnectionError,
-                    )
-
-                    raise BluefinServiceConnectionError(error_msg) from e
-
-            # Fetch initial historical data BEFORE starting WebSocket to ensure we have sufficient data
+            # Fetch historical data if requested
             if fetch_historical:
-                try:
-                    logger.info(
-                        "🔄 Fetching historical data BEFORE WebSocket connection to ensure data sufficiency"
-                    )
+                await self._fetch_initial_historical_data()
 
-                    # Try multiple time ranges to ensure we get enough data
-                    historical_data = None
-                    time_ranges = [24, 12, 8, 4]  # Hours to try fetching
+            # Start connections and tasks
+            await self._start_realtime_connections()
 
-                    for hours in time_ranges:
-                        try:
-                            end_time = datetime.now(UTC)
-                            start_time = end_time - timedelta(hours=hours)
-
-                            interval_seconds = self._interval_to_seconds(self.interval)
-                            expected_candles = int((hours * 3600) / interval_seconds)
-
-                            logger.info(
-                                "🔍 Attempting to fetch %s hours of historical data "
-                                "(~%s candles at %s interval)",
-                                hours,
-                                expected_candles,
-                                self.interval,
-                            )
-
-                            historical_data = await self.fetch_historical_data(
-                                start_time=start_time, end_time=end_time
-                            )
-
-                            # Check if we have sufficient data
-                            if historical_data and len(historical_data) >= 100:
-                                logger.info(
-                                    "✅ Successfully fetched %s candles from %s-hour range - sufficient for indicators",
-                                    len(historical_data),
-                                    hours,
-                                )
-                                break
-                            if historical_data:
-                                logger.warning(
-                                    "⚠️ Got %s candles from %s-hour range - trying longer range",
-                                    len(historical_data),
-                                    hours,
-                                )
-                            else:
-                                logger.warning(
-                                    "❌ No data from %s-hour range - trying longer range",
-                                    hours,
-                                )
-
-                        except Exception:
-                            logger.exception("❌ Failed to fetch %s-hour data", hours)
-                            continue
-
-                    # If still insufficient data, generate fallback data
-                    if not historical_data or len(historical_data) < 100:
-                        logger.warning(
-                            "⚠️ Historical data insufficient (%s candles). Generating synthetic data for indicator initialization.",
-                            len(historical_data) if historical_data else 0,
-                        )
-                        historical_data = (
-                            await self._generate_fallback_historical_data()
-                        )
-
-                except Exception:
-                    logger.exception("❌ Critical error in historical data fetching")
-                    # Generate fallback data to ensure bot can start
-                    logger.info("🎭 Generating fallback data to ensure bot startup")
-                    historical_data = await self._generate_fallback_historical_data()
-
-            logger.info("🔗 Starting WebSocket connection for real-time data")
-            self._running = True
-
-            # Start non-blocking message processor
-            self._processing_task = asyncio.create_task(
-                self._process_websocket_messages()
-            )
-
-            # Start WebSocket connection
-            await self._connect_websocket()
-
-            # Start candle builder task
-            self._candle_builder_task = asyncio.create_task(
-                self._build_candles_from_ticks()
-            )
-
-            # Try to get current price
-            try:
-                current_price = await self.fetch_latest_price()
-                if current_price:
-                    logger.info(
-                        "💰 Successfully fetched current price: $%s", current_price
-                    )
-            except Exception as e:
-                logger.warning("⚠️ Could not fetch current price: %s", e)
-
-            self._is_connected = True
-
-            # Final data validation
-            final_candle_count = len(self._ohlcv_cache)
-            logger.info(
-                "✅ Bluefin market data connection complete. Total candles available: %s",
-                final_candle_count,
-            )
-
-            if final_candle_count < 100:
-                logger.error(
-                    "🚨 CRITICAL: Only %s candles available! Indicators may not work properly.",
-                    final_candle_count,
-                )
+            # Validate final setup
+            self._validate_connection_setup()
 
         except Exception:
             logger.exception("💥 Failed to connect to Bluefin market data")
             self._is_connected = False
             raise
+
+    async def _initialize_http_session(self) -> None:
+        """Initialize HTTP session with proper error handling."""
+        if self._session is None or self._session.closed:
+            timeout_value = settings.exchange.api_timeout
+            logger.debug(
+                "Creating HTTP session for Bluefin market data provider",
+                extra={
+                    "provider_id": self.provider_id,
+                    "timeout": timeout_value,
+                    "api_base_url": self._api_base_url,
+                },
+            )
+
+            try:
+                self._session = aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(total=timeout_value)
+                )
+                self._session_closed = False
+                logger.debug(
+                    "HTTP session created successfully",
+                    extra={"provider_id": self.provider_id},
+                )
+            except Exception as e:
+                error_msg = f"Failed to initialize HTTP session: {e!s}"
+                logger.exception(
+                    "HTTP session initialization failed",
+                    extra={
+                        "provider_id": self.provider_id,
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                        "timeout": timeout_value,
+                    },
+                )
+                from bot.exchange.bluefin_client import (
+                    BluefinServiceConnectionError,
+                )
+
+                raise BluefinServiceConnectionError(error_msg) from e
+
+    async def _fetch_initial_historical_data(self) -> None:
+        """Fetch initial historical data with fallback strategies."""
+        try:
+            logger.info(
+                "🔄 Fetching historical data BEFORE WebSocket connection to ensure data sufficiency"
+            )
+
+            historical_data = await self._try_multiple_time_ranges()
+
+            # If still insufficient data, generate fallback data
+            if not historical_data or len(historical_data) < 100:
+                logger.warning(
+                    "⚠️ Historical data insufficient (%s candles). Generating synthetic data for indicator initialization.",
+                    len(historical_data) if historical_data else 0,
+                )
+                historical_data = await self._generate_fallback_historical_data()
+
+        except Exception:
+            logger.exception("❌ Critical error in historical data fetching")
+            # Generate fallback data to ensure bot can start
+            logger.info("🎭 Generating fallback data to ensure bot startup")
+            historical_data = await self._generate_fallback_historical_data()
+
+    async def _try_multiple_time_ranges(self) -> list[MarketData] | None:
+        """Try multiple time ranges to get sufficient historical data."""
+        time_ranges = [24, 12, 8, 4]  # Hours to try fetching
+
+        for hours in time_ranges:
+            try:
+                end_time = datetime.now(UTC)
+                start_time = end_time - timedelta(hours=hours)
+
+                interval_seconds = self._interval_to_seconds(self.interval)
+                expected_candles = int((hours * 3600) / interval_seconds)
+
+                logger.info(
+                    "🔍 Attempting to fetch %s hours of historical data "
+                    "(~%s candles at %s interval)",
+                    hours,
+                    expected_candles,
+                    self.interval,
+                )
+
+                historical_data = await self.fetch_historical_data(
+                    start_time=start_time, end_time=end_time
+                )
+
+                # Check if we have sufficient data
+                if historical_data and len(historical_data) >= 100:
+                    logger.info(
+                        "✅ Successfully fetched %s candles from %s-hour range - sufficient for indicators",
+                        len(historical_data),
+                        hours,
+                    )
+                    return historical_data
+
+                if historical_data:
+                    logger.warning(
+                        "⚠️ Got %s candles from %s-hour range - trying longer range",
+                        len(historical_data),
+                        hours,
+                    )
+                else:
+                    logger.warning(
+                        "❌ No data from %s-hour range - trying longer range",
+                        hours,
+                    )
+
+            except Exception:
+                logger.exception("❌ Failed to fetch %s-hour data", hours)
+                continue
+
+        return None
+
+    async def _start_realtime_connections(self) -> None:
+        """Start WebSocket connections and background tasks."""
+        logger.info("🔗 Starting WebSocket connection for real-time data")
+        self._running = True
+
+        # Start non-blocking message processor
+        self._processing_task = asyncio.create_task(self._process_websocket_messages())
+
+        # Start WebSocket connection
+        await self._connect_websocket()
+
+        # Start candle builder task
+        self._candle_builder_task = asyncio.create_task(
+            self._build_candles_from_ticks()
+        )
+
+        # Try to get current price
+        try:
+            current_price = await self.fetch_latest_price()
+            if current_price:
+                logger.info("💰 Successfully fetched current price: $%s", current_price)
+        except Exception as e:
+            logger.warning("⚠️ Could not fetch current price: %s", e)
+
+        self._is_connected = True
+
+    def _validate_connection_setup(self) -> None:
+        """Validate the final connection setup."""
+        final_candle_count = len(self._ohlcv_cache)
+        logger.info(
+            "✅ Bluefin market data connection complete. Total candles available: %s",
+            final_candle_count,
+        )
+
+        if final_candle_count < 100:
+            logger.error(
+                "🚨 CRITICAL: Only %s candles available! Indicators may not work properly.",
+                final_candle_count,
+            )
 
     async def disconnect(self) -> None:
         """Disconnect from all data feeds and cleanup resources."""
@@ -412,12 +510,17 @@ class BluefinMarketDataProvider:
         granularity: str | None = None,
     ) -> list[MarketData]:
         """
-        Fetch historical OHLCV data from Bluefin.
+        Fetch historical OHLCV data from Bluefin with trade aggregation support.
+
+        For sub-minute intervals with trade aggregation enabled, this method will:
+        1. Fetch available higher timeframe data (e.g., 1m) from the API
+        2. Generate synthetic data if needed to meet minimum requirements
+        3. Real-time trade aggregation will provide the actual sub-minute candles via WebSocket
 
         Args:
             start_time: Start time for data
             end_time: End time for data
-            granularity: Candle granularity
+            granularity: Candle granularity (supports sub-minute when trade aggregation enabled)
 
         Returns:
             List of MarketData objects
@@ -887,6 +990,11 @@ class BluefinMarketDataProvider:
             "latest_price": self.get_latest_price(),
             "subscribers": len(self._subscribers),
             "extended_history_mode": self._extended_history_mode,
+            "use_trade_aggregation": self.use_trade_aggregation,
+            "aggregation_mode": "trade->candle"
+            if self.use_trade_aggregation
+            else "kline",
+            "sub_minute_interval": self._is_sub_minute_interval(self.interval),
             "cache_status": {
                 key: self._is_cache_valid(key) for key in self._cache_timestamps
             },
@@ -899,7 +1007,12 @@ class BluefinMarketDataProvider:
                 "connected": ws_status.get("connected", False),
                 "candles": ws_status.get("candles_buffered", 0),
                 "ticks": ws_status.get("ticks_buffered", 0),
+                "trades": ws_status.get("trades_buffered", 0),
                 "messages": ws_status.get("message_count", 0),
+                "use_trade_aggregation": ws_status.get("use_trade_aggregation", False),
+                "aggregation_active": ws_status.get("trades_buffered", 0) > 0
+                if self.use_trade_aggregation
+                else False,
             }
 
         # Add data sufficiency information
@@ -909,7 +1022,9 @@ class BluefinMarketDataProvider:
         status["data_quality"] = (
             "excellent"
             if total_cached_candles >= 200
-            else "good" if total_cached_candles >= 100 else "insufficient"
+            else "good"
+            if total_cached_candles >= 100
+            else "insufficient"
         )
 
         return status
@@ -943,13 +1058,17 @@ class BluefinMarketDataProvider:
 
     def get_connection_status(self) -> str:
         """
-        Get current connection status.
+        Get current connection status with trade aggregation info.
 
         Returns:
             Connection status string
         """
         if self._is_connected:
-            return "Connected (Live Data)"
+            base_status = "Connected (Live Data)"
+            if self.use_trade_aggregation:
+                aggregation_info = f" - Trade Aggregation {'Active' if self._is_sub_minute_interval(self.interval) else 'Enabled'}"
+                return base_status + aggregation_info
+            return base_status
         return "Disconnected"
 
     async def _on_websocket_candle(self, candle: MarketData) -> None:
@@ -1026,18 +1145,129 @@ class BluefinMarketDataProvider:
         Convert interval string to seconds.
 
         Args:
-            interval: Interval string (e.g., '1m', '5m', '1h')
+            interval: Interval string (e.g., '1s', '5s', '15s', '30s', '1m', '5m', '1h')
 
         Returns:
             Interval in seconds
         """
-        multipliers = {"m": 60, "h": 3600, "d": 86400}
+        multipliers = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 
         if interval[-1] in multipliers:
             return int(interval[:-1]) * multipliers[interval[-1]]
 
         # Default to 1 minute
         return 60
+
+    def _should_use_trade_aggregation(self, interval: str) -> bool:
+        """
+        Determine if trade aggregation should be used for the given interval.
+
+        Args:
+            interval: The requested interval
+
+        Returns:
+            True if trade aggregation should be used, False otherwise
+        """
+        # Only use trade aggregation for sub-minute intervals when enabled
+        if not self.use_trade_aggregation:
+            return False
+
+        # Sub-minute intervals that benefit from trade aggregation
+        sub_minute_intervals = {"1s", "5s", "15s", "30s"}
+        return interval in sub_minute_intervals
+
+    def _get_service_interval(self, interval: str) -> str:
+        """
+        Get the appropriate interval for Bluefin service client.
+
+        Args:
+            interval: The requested interval
+
+        Returns:
+            The interval to use with the service client
+        """
+        # Standard intervals supported by Bluefin service
+        service_interval_map = {
+            "1m": "1m",
+            "3m": "3m",
+            "5m": "5m",
+            "15m": "15m",
+            "30m": "30m",
+            "1h": "1h",
+            "2h": "2h",
+            "4h": "4h",
+            "1d": "1d",
+            "1w": "1w",
+        }
+
+        # If trade aggregation is enabled and this is a sub-minute interval,
+        # return the native interval for trade stream processing
+        if self._should_use_trade_aggregation(interval):
+            return interval  # Return native sub-minute interval for trade aggregation
+
+        # For non-aggregated intervals, use the mapping or default to 1m
+        return service_interval_map.get(interval, "1m")
+
+    def _get_direct_api_interval(self, interval: str) -> str:
+        """
+        Get the appropriate interval for direct Bluefin API calls.
+
+        Args:
+            interval: The requested interval
+
+        Returns:
+            The interval to use with direct API calls
+        """
+        # Direct API interval mapping (different format than service)
+        direct_interval_map = {
+            "1m": "1",
+            "3m": "3",
+            "5m": "5",
+            "15m": "15",
+            "30m": "30",
+            "1h": "60",
+            "2h": "120",
+            "4h": "240",
+            "1d": "1D",
+            "1w": "1W",
+        }
+
+        # If trade aggregation is enabled and this is a sub-minute interval,
+        # fall back to 1m for the API call since sub-minute klines aren't supported
+        if self._should_use_trade_aggregation(interval):
+            return "1"  # Use 1-minute as base interval for trade aggregation
+
+        # For standard intervals, use the mapping or default to 5-minute
+        return direct_interval_map.get(interval, "5")
+
+    def _convert_interval_to_direct_format(self, interval: str) -> str:
+        """
+        Convert a standard interval to direct API format for comparison.
+
+        Args:
+            interval: Standard interval (e.g., '1m', '5m')
+
+        Returns:
+            Direct API format equivalent
+        """
+        direct_format_map = {
+            "1m": "1",
+            "3m": "3",
+            "5m": "5",
+            "15m": "15",
+            "30m": "30",
+            "1h": "60",
+            "2h": "120",
+            "4h": "240",
+            "1d": "1D",
+            "1w": "1W",
+            # Sub-minute intervals would map to their equivalent if supported
+            "1s": "1s",
+            "5s": "5s",
+            "15s": "15s",
+            "30s": "30s",
+        }
+        return direct_format_map.get(interval, "5")
 
     async def _fetch_bluefin_ticker_price(self) -> Decimal | None:
         """
@@ -1163,32 +1393,22 @@ class BluefinMarketDataProvider:
             )
 
             async with BluefinServiceClient(service_url, api_key) as service_client:
-                # Convert interval to Bluefin format
-                interval_map = {
-                    "1m": "1m",
-                    "3m": "3m",
-                    "5m": "5m",
-                    "15m": "15m",
-                    "30m": "30m",
-                    "1h": "1h",
-                    "2h": "2h",
-                    "4h": "4h",
-                    "1d": "1d",
-                    "1w": "1w",
-                    # Note: 15s is not supported by Bluefin API - this will be handled by the service
-                    # The service will convert 15s to 1m with granularity loss warnings
-                    "15s": "1m",  # Convert sub-minute intervals to 1m
-                    "30s": "1m",
-                }
+                # Get the appropriate interval for service client based on trade aggregation
+                bluefin_interval = self._get_service_interval(interval)
 
-                bluefin_interval = interval_map.get(interval, "1m")
-
+                # Log interval conversion if necessary
                 if bluefin_interval != interval:
-                    logger.warning(
-                        "⚠️ Interval %s not supported by Bluefin, using %s instead (may affect granularity)",
-                        interval,
-                        bluefin_interval,
-                    )
+                    if self._should_use_trade_aggregation(interval):
+                        logger.info(
+                            "✅ Using trade aggregation for %s interval - will build candles from live trades",
+                            interval,
+                        )
+                    else:
+                        logger.warning(
+                            "⚠️ Interval %s not supported by Bluefin, using %s instead (may affect granularity)",
+                            interval,
+                            bluefin_interval,
+                        )
 
                 # Prepare request parameters with enhanced validation
                 params = {
@@ -1317,21 +1537,23 @@ class BluefinMarketDataProvider:
             return []
 
         try:
-            # Convert interval to Bluefin format
-            interval_map = {
-                "1m": "1",
-                "3m": "3",
-                "5m": "5",
-                "15m": "15",
-                "30m": "30",
-                "1h": "60",
-                "2h": "120",
-                "4h": "240",
-                "1d": "1D",
-                "1w": "1W",
-            }
+            # Get the appropriate interval for direct API based on trade aggregation
+            bluefin_interval = self._get_direct_api_interval(interval)
 
-            bluefin_interval = interval_map.get(interval, "5")
+            # Log interval conversion if necessary
+            if bluefin_interval != self._convert_interval_to_direct_format(interval):
+                if self._should_use_trade_aggregation(interval):
+                    logger.info(
+                        "✅ Using trade aggregation for %s interval - direct API will use %s",
+                        interval,
+                        bluefin_interval,
+                    )
+                else:
+                    logger.warning(
+                        "⚠️ Direct API: Interval %s not supported, using %s instead",
+                        interval,
+                        bluefin_interval,
+                    )
 
             # Prepare request parameters
             params = {
@@ -1719,6 +1941,22 @@ class BluefinMarketDataProvider:
                 candle_limit=self.candle_limit,
                 on_candle_update=self._on_websocket_candle,
                 network=self.network,
+                use_trade_aggregation=self.use_trade_aggregation,
+            )
+
+            # Log WebSocket client initialization with trade aggregation settings
+            logger.info(
+                "🔗 Initialized WebSocket client with trade aggregation support",
+                extra={
+                    "provider_id": self.provider_id,
+                    "symbol": self.symbol,
+                    "interval": self.interval,
+                    "use_trade_aggregation": self.use_trade_aggregation,
+                    "aggregation_mode": "trade->candle"
+                    if self.use_trade_aggregation
+                    else "kline",
+                    "network": self.network,
+                },
             )
 
             # Connect to WebSocket
@@ -2023,7 +2261,8 @@ class BluefinMarketDataClient:
 
         Args:
             symbol: Trading symbol (e.g., 'SUI-PERP')
-            interval: Candle interval (e.g., '1m', '5m', '1h')
+            interval: Candle interval (e.g., '1s', '5s', '15s', '30s', '1m', '5m', '1h').
+                     Sub-minute intervals use trade aggregation when enabled.
         """
         self.provider = BluefinMarketDataProvider(symbol, interval)
         self._initialized = False
@@ -2186,7 +2425,8 @@ def create_bluefin_market_data_client(
 
     Args:
         symbol: Trading symbol (default: from settings)
-        interval: Candle interval (default: from settings)
+        interval: Candle interval (default: from settings).
+                 Supports sub-minute intervals (1s, 5s, 15s, 30s) with trade aggregation.
 
     Returns:
         BluefinMarketDataClient instance

@@ -134,4 +134,3 @@ if __name__ == "__main__":
     asyncio.run(main())
 
     # Or run the integration example
-    # asyncio.run(integrate_with_existing_provider())

@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import aiohttp
 import pytest
+from pydantic import ValidationError
 
 from bot.mcp.omnisearch_client import (
     FinancialNewsResult,
@@ -194,7 +195,9 @@ class TestSearchResult:
 
     def test_search_result_validation(self):
         """Test SearchResult field validation."""
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValidationError, match="Input should be less than or equal to 1"
+        ):
             # Relevance score out of range
             SearchResult(
                 title="Test",
@@ -204,7 +207,9 @@ class TestSearchResult:
                 relevance_score=1.5,
             )
 
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValidationError, match="Input should be greater than or equal to 0"
+        ):
             # Negative relevance score
             SearchResult(
                 title="Test",
@@ -298,7 +303,9 @@ class TestSentimentAnalysis:
 
     def test_sentiment_analysis_validation(self):
         """Test SentimentAnalysis field validation."""
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValidationError, match="Input should be less than or equal to 1"
+        ):
             # Sentiment score out of range
             SentimentAnalysis(
                 symbol="BTC",
@@ -308,7 +315,9 @@ class TestSentimentAnalysis:
                 source_count=10,
             )
 
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValidationError, match="Input should be less than or equal to 1"
+        ):
             # Confidence out of range
             SentimentAnalysis(
                 symbol="BTC",
@@ -357,7 +366,9 @@ class TestMarketCorrelation:
 
     def test_market_correlation_validation(self):
         """Test MarketCorrelation validation."""
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValidationError, match="Input should be less than or equal to 1"
+        ):
             # Correlation coefficient out of range
             MarketCorrelation(
                 primary_symbol="BTC",

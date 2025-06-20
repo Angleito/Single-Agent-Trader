@@ -19,13 +19,13 @@ try:
     from coinbase.rest import RESTClient as _BaseClient
 
     # Use standard exceptions since SDK doesn't export specific ones
-    class CoinbaseAPIException(Exception):
+    class CoinbaseAPIError(Exception):
         pass
 
-    class CoinbaseAuthenticationException(Exception):
+    class CoinbaseAuthenticationError(Exception):
         pass
 
-    class CoinbaseConnectionException(Exception):
+    class CoinbaseConnectionError(Exception):
         pass
 
     class CoinbaseAdvancedTrader(_BaseClient):
@@ -68,20 +68,20 @@ except ImportError:
             CoinbaseAdvancedTrader as _FallbackTrader,  # type: ignore[import-untyped]
         )
         from coinbase_advanced_trader.exceptions import (  # type: ignore[import-untyped]
-            CoinbaseAPIException as _FallbackAPIException,
+            CoinbaseAPIException as _FallbackAPIError,
         )
         from coinbase_advanced_trader.exceptions import (
-            CoinbaseAuthenticationException as _FallbackAuthException,
+            CoinbaseAuthenticationException as _FallbackAuthError,
         )
         from coinbase_advanced_trader.exceptions import (
-            CoinbaseConnectionException as _FallbackConnectionException,
+            CoinbaseConnectionException as _FallbackConnectionError,
         )
 
         # Use fallback imports
         CoinbaseAdvancedTrader = _FallbackTrader  # type: ignore[misc]
-        CoinbaseAPIException = _FallbackAPIException  # type: ignore[misc]
-        CoinbaseAuthenticationException = _FallbackAuthException  # type: ignore[misc]
-        CoinbaseConnectionException = _FallbackConnectionException  # type: ignore[misc]
+        CoinbaseAPIError = _FallbackAPIError  # type: ignore[misc]
+        CoinbaseAuthenticationError = _FallbackAuthError  # type: ignore[misc]
+        CoinbaseConnectionError = _FallbackConnectionError  # type: ignore[misc]
 
         COINBASE_AVAILABLE = True
     except ImportError:  # pragma: no cover
@@ -90,13 +90,13 @@ except ImportError:
             def __init__(self, **kwargs):
                 pass
 
-        class CoinbaseAPIException(Exception):  # type: ignore[no-redef]
+        class CoinbaseAPIError(Exception):  # type: ignore[no-redef]
             pass
 
-        class CoinbaseConnectionException(Exception):  # type: ignore[no-redef]
+        class CoinbaseConnectionError(Exception):  # type: ignore[no-redef]
             pass
 
-        class CoinbaseAuthenticationException(Exception):  # type: ignore[no-redef]
+        class CoinbaseAuthenticationError(Exception):  # type: ignore[no-redef]
             pass
 
         COINBASE_AVAILABLE = False
@@ -197,51 +197,51 @@ class CoinbaseResponseValidator:
         try:
             self.response_count += 1
 
-            # Handle both dict and object responses
+            # Handle different response formats
             if hasattr(response, "balance_summary"):
-                # Object format from CDP SDK
-                balance_summary = response.balance_summary
-                if not hasattr(balance_summary, "cfm_usd_balance"):
-                    logger.warning("Balance response missing cfm_usd_balance")
-                    return False
-
-                balance_data = balance_summary.cfm_usd_balance
-                if not hasattr(balance_data, "value"):
-                    logger.warning("Balance data missing 'value' field")
-                    return False
-
-                # Validate balance value
-                try:
-                    balance_value = Decimal(str(balance_data.value))
-                    if balance_value < 0:
-                        logger.warning("Invalid negative balance: %s", balance_value)
-                        return False
-                except (ValueError, TypeError) as e:
-                    logger.warning("Invalid balance value format: %s", e)
-                    return False
-
-            elif isinstance(response, dict):
-                # Dict format
-                if "balance" not in response:
-                    logger.warning("Balance response missing 'balance' field")
-                    return False
-
-                try:
-                    balance_value = Decimal(str(response["balance"]))
-                    if balance_value < 0:
-                        logger.warning("Invalid negative balance: %s", balance_value)
-                        return False
-                except (ValueError, TypeError) as e:
-                    logger.warning("Invalid balance value format: %s", e)
-                    return False
-            else:
-                logger.warning(
-                    "Balance response is neither dict nor object with balance_summary"
-                )
-                return False
-
+                return self._validate_object_balance_response(response)
+            if isinstance(response, dict):
+                return self._validate_dict_balance_response(response)
         except Exception:
             logger.exception("Error validating balance response")
+            return False
+        else:
+            logger.warning(
+                "Balance response is neither dict nor object with balance_summary"
+            )
+            return False
+
+    def _validate_object_balance_response(self, response: object) -> bool:
+        """Validate object format balance response from CDP SDK."""
+        balance_summary = response.balance_summary
+        if not hasattr(balance_summary, "cfm_usd_balance"):
+            logger.warning("Balance response missing cfm_usd_balance")
+            return False
+
+        balance_data = balance_summary.cfm_usd_balance
+        if not hasattr(balance_data, "value"):
+            logger.warning("Balance data missing 'value' field")
+            return False
+
+        return self._validate_balance_value(balance_data.value)
+
+    def _validate_dict_balance_response(self, response: dict) -> bool:
+        """Validate dict format balance response."""
+        if "balance" not in response:
+            logger.warning("Balance response missing 'balance' field")
+            return False
+
+        return self._validate_balance_value(response["balance"])
+
+    def _validate_balance_value(self, balance_value: Any) -> bool:
+        """Validate balance value format and range."""
+        try:
+            balance_decimal = Decimal(str(balance_value))
+            if balance_decimal < 0:
+                logger.warning("Invalid negative balance: %s", balance_decimal)
+                return False
+        except (ValueError, TypeError) as e:
+            logger.warning("Invalid balance value format: %s", e)
             return False
         else:
             return True
@@ -340,11 +340,11 @@ class CoinbaseResponseValidator:
                 if not self._validate_position_data(position):
                     return False
 
-            return True
-
         except Exception:
             logger.exception("Error validating position response")
             return False
+        else:
+            return True
 
     def _validate_account_data(self, account: dict) -> bool:
         """
@@ -387,11 +387,11 @@ class CoinbaseResponseValidator:
                     logger.warning("Invalid account balance format: %s", e)
                     return False
 
-            return True
-
         except Exception:
             logger.exception("Error validating account data")
             return False
+        else:
+            return True
 
     def _validate_position_data(self, position: dict | object) -> bool:
         """
@@ -435,8 +435,8 @@ class CoinbaseResponseValidator:
             except (ValueError, TypeError) as e:
                 logger.warning("Invalid position size format: %s", e)
                 return False
-
-            return True
+            else:
+                return True
 
         except Exception:
             logger.exception("Error validating position data")
@@ -504,11 +504,11 @@ class CoinbaseResponseValidator:
                 logger.warning("Response object indicates failure")
                 return False
 
-            return True
-
         except Exception:
             logger.exception("Error validating exchange response")
             return False
+        else:
+            return True
 
     def validate_order_creation_response(self, response: dict | object) -> bool:
         """
@@ -564,12 +564,12 @@ class CoinbaseResponseValidator:
                     )
                 return False
 
-            return True
-
         except Exception:
             logger.exception("Error validating order creation response")
             self.validation_failures += 1
             return False
+        else:
+            return True
 
     def validate_order_cancellation_response(self, response: dict | object) -> bool:
         """
@@ -604,12 +604,12 @@ class CoinbaseResponseValidator:
                 self.validation_failures += 1
                 return False
 
-            return True
-
         except Exception:
             logger.exception("Error validating order cancellation response")
             self.validation_failures += 1
             return False
+        else:
+            return True
 
 
 class CoinbaseRateLimiter:
@@ -843,6 +843,100 @@ class CoinbaseClient(BaseExchange):
         """
         self._response_validator.failure_callback = callback
 
+    def _initialize_paper_trading(self) -> bool:
+        """Initialize paper trading mode."""
+        logger.info(
+            "PAPER TRADING MODE: Skipping Coinbase authentication. All trades will be simulated."
+        )
+        self._client = None
+        self._connected = True
+        self._last_health_check = datetime.now(UTC)
+
+        # Initialize mock portfolios for paper trading
+        self._portfolios = {}
+        self._default_portfolio_id = "paper-trading-portfolio"
+        if self.enable_futures:
+            self._futures_portfolio_id = "paper-trading-futures-portfolio"
+
+        # Initialize futures contract manager if futures are enabled
+        if self.enable_futures:
+            self._futures_contract_manager = FuturesContractManager(self)
+
+        logger.info("Paper trading mode initialized successfully")
+        return True
+
+    def _validate_coinbase_sdk(self) -> None:
+        """Validate that Coinbase SDK is available."""
+        if not COINBASE_AVAILABLE:
+            logger.error(
+                "coinbase-advanced-py is not installed. "
+                "Install it with: pip install coinbase-advanced-py"
+            )
+            raise ExchangeConnectionError(
+                "coinbase-advanced-py is required for live trading"
+            )
+
+    def _initialize_legacy_auth(self) -> None:
+        """Initialize client with legacy authentication."""
+        if not all([self.api_key, self.api_secret, self.passphrase]):
+            logger.error(
+                "Missing legacy Coinbase credentials. Please set CB_API_KEY, "
+                "CB_API_SECRET, and CB_PASSPHRASE environment variables."
+            )
+            raise ExchangeAuthError("Missing legacy API credentials")
+
+        self._client = CoinbaseAdvancedTrader(
+            api_key=self.api_key,
+            api_secret=self.api_secret,
+            passphrase=self.passphrase,
+            sandbox=self.sandbox,
+        )
+
+    def _initialize_cdp_auth(self) -> None:
+        """Initialize client with CDP authentication."""
+        if not all([self.cdp_api_key_name, self.cdp_private_key]):
+            logger.error(
+                "Missing CDP credentials. Please set CDP_API_KEY_NAME "
+                "and CDP_PRIVATE_KEY environment variables."
+            )
+            raise ExchangeAuthError("Missing CDP API credentials")
+
+        self._client = CoinbaseAdvancedTrader(
+            api_key=self.cdp_api_key_name, api_secret=self.cdp_private_key
+        )
+
+    def _initialize_authentication(self) -> None:
+        """Initialize client based on authentication method."""
+        if self.auth_method == "legacy":
+            self._initialize_legacy_auth()
+        elif self.auth_method == "cdp":
+            self._initialize_cdp_auth()
+        else:
+            logger.error(
+                "No valid authentication method configured. Please provide "
+                "either legacy (CB_API_KEY, CB_API_SECRET, CB_PASSPHRASE) or "
+                "CDP (CDP_API_KEY_NAME, CDP_PRIVATE_KEY) credentials."
+            )
+            raise ExchangeAuthError("No authentication credentials provided")
+
+    async def _finalize_connection(self) -> None:
+        """Finalize connection setup."""
+        self._connected = True
+        self._last_health_check = datetime.now(UTC)
+
+        logger.info(
+            "Connected to Coinbase %s successfully",
+            "Sandbox" if self.sandbox else "Live",
+        )
+
+        # Load portfolio information
+        await self._load_portfolios()
+
+        # Log connection success details
+        logger.debug("Connection Success Details:")
+        logger.debug("  Environment: %s", "Sandbox" if self.sandbox else "Production")
+        logger.debug("  Authentication method: %s", self.auth_method)
+
     async def connect(self) -> bool:
         """
         Connect and authenticate with Coinbase.
@@ -853,151 +947,28 @@ class CoinbaseClient(BaseExchange):
         try:
             # In paper trading mode, skip all authentication
             if self.dry_run:
-                logger.info(
-                    "PAPER TRADING MODE: Skipping Coinbase authentication. All trades will be simulated."
-                )
-                self._client = None
-                self._connected = True  # Set to True for paper trading
-                self._last_health_check = datetime.now(UTC)
-
-                # Initialize mock portfolios for paper trading
-                self._portfolios = {}
-                self._default_portfolio_id = "paper-trading-portfolio"
-                if self.enable_futures:
-                    self._futures_portfolio_id = "paper-trading-futures-portfolio"
-
-                # Initialize futures contract manager if futures are enabled
-                if self.enable_futures:
-                    self._futures_contract_manager = FuturesContractManager(self)
-
-                logger.info("Paper trading mode initialized successfully")
-                return True
+                return self._initialize_paper_trading()
 
             # Live trading mode requires SDK and credentials
-            if not COINBASE_AVAILABLE:
-                logger.error(
-                    "coinbase-advanced-py is not installed. "
-                    "Install it with: pip install coinbase-advanced-py"
-                )
-                raise ExchangeConnectionError(
-                    "coinbase-advanced-py is required for live trading"
-                )
-
-            # Check credentials based on authentication method
-            if self.auth_method == "legacy":
-                if not all([self.api_key, self.api_secret, self.passphrase]):
-                    logger.error(
-                        "Missing legacy Coinbase credentials. Please set CB_API_KEY, "
-                        "CB_API_SECRET, and CB_PASSPHRASE environment variables."
-                    )
-                    raise ExchangeAuthError("Missing legacy API credentials")
-
-                # Initialize with legacy credentials
-                self._client = CoinbaseAdvancedTrader(
-                    api_key=self.api_key,
-                    api_secret=self.api_secret,
-                    passphrase=self.passphrase,
-                    sandbox=self.sandbox,
-                )
-
-            elif self.auth_method == "cdp":
-                if not all([self.cdp_api_key_name, self.cdp_private_key]):
-                    logger.error(
-                        "Missing CDP credentials. Please set CDP_API_KEY_NAME "
-                        "and CDP_PRIVATE_KEY environment variables."
-                    )
-                    raise ExchangeAuthError("Missing CDP API credentials")
-
-                # Initialize RESTClient with CDP credentials directly
-                # Based on official docs: api_key should be the CDP key name, api_secret should be the private key
-                # Note: Modern coinbase-advanced-py SDK handles sandbox vs production based on the API key,
-                # not through a separate sandbox parameter
-                self._client = CoinbaseAdvancedTrader(
-                    api_key=self.cdp_api_key_name, api_secret=self.cdp_private_key
-                )
-
-            else:
-                logger.error(
-                    "No valid authentication method configured. Please provide "
-                    "either legacy (CB_API_KEY, CB_API_SECRET, CB_PASSPHRASE) or "
-                    "CDP (CDP_API_KEY_NAME, CDP_PRIVATE_KEY) credentials."
-                )
-                raise ExchangeAuthError("No authentication credentials provided")
+            self._validate_coinbase_sdk()
+            self._initialize_authentication()
 
             # Test connection with a simple API call
             await self._test_connection()
 
-            self._connected = True
-            self._last_health_check = datetime.now(UTC)
-
-            logger.info(
-                "Connected to Coinbase %s successfully",
-                "Sandbox" if self.sandbox else "Live",
-            )
-
-            # Load portfolio information
-            await self._load_portfolios()
-
-            # Log connection success details
-            logger.debug("Connection Success Details:")
-            logger.debug(
-                "  Environment: %s", "Sandbox" if self.sandbox else "Production"
-            )
-            logger.debug("  Authentication method: %s", self.auth_method)
-            logger.debug("  Health check timestamp: %s", self._last_health_check)
-            logger.debug("  SDK available: %s", COINBASE_AVAILABLE)
-
-            # Log account access test
-            try:
-                accounts = await self._retry_request(self._client.get_accounts)
-                account_count = len(accounts.get("accounts", []))
-                logger.debug(
-                    "  Account access test: SUCCESS (%s accounts found)", account_count
-                )
-            except Exception as e:
-                logger.warning("  Account access test: FAILED (%s)", e)
-
-            # Log futures capabilities if enabled
-            if self.enable_futures:
-                try:
-                    balance_response = await self._retry_request(
-                        self._client.get_fcm_balance_summary
-                    )
-                    logger.debug("  Futures access test: SUCCESS")
-                    logger.debug(
-                        "  CFM account ready: %s",
-                        hasattr(balance_response, "balance_summary"),
-                    )
-                except Exception as e:
-                    logger.warning("  Futures access test: FAILED (%s)", e)
-
-            # Load portfolios information
-            await self._load_portfolios()
-
-            # Initialize futures contract manager if futures are enabled
-            if self.enable_futures:
-                self._futures_contract_manager = FuturesContractManager(self)
-            else:
-                # For spot trading, get monthly volume to determine fee tier
-                try:
-                    await self.get_monthly_volume()
-                except Exception as e:
-                    logger.warning(
-                        "Failed to get monthly volume during initialization: %s", e
-                    )
-
-            return True
-
-        except CoinbaseAuthenticationException as e:
+            await self._finalize_connection()
+        except CoinbaseAuthenticationError as e:
             logger.exception("Coinbase authentication failed")
             raise ExchangeAuthError(f"Authentication failed: {e}") from e
-        except CoinbaseConnectionException as e:
+        except CoinbaseConnectionError as e:
             logger.exception("Coinbase connection failed")
             raise ExchangeConnectionError(f"Connection failed: {e}") from e
         except Exception as e:
             logger.exception("Failed to connect to Coinbase")
             logger.debug("Connection error traceback: %s", traceback.format_exc())
             raise ExchangeConnectionError(f"Unexpected error: {e}") from e
+        else:
+            return True
 
     async def _test_connection(self) -> None:
         """Test the connection with a simple API call."""
@@ -1010,9 +981,9 @@ class CoinbaseClient(BaseExchange):
                 "Connection test successful, found %s accounts",
                 len(accounts.get("accounts", [])),
             )
-        except Exception:
+        except Exception as e:
             logger.exception("Connection test failed")
-            raise
+            raise ExchangeConnectionError(f"Connection test failed: {e}") from e
 
     async def disconnect(self) -> None:
         """Disconnect from Coinbase."""
@@ -1054,12 +1025,12 @@ class CoinbaseClient(BaseExchange):
                 return False
             self._client.get_accounts()
             self._last_health_check = datetime.now(UTC)
-            return True
-
         except Exception as e:
             logger.warning("Health check failed: %s", e)
             self._connected = False
             return False
+        else:
+            return True
 
     async def _retry_request(self, func, *args, **kwargs):
         """Execute a request with retry logic."""
@@ -1120,7 +1091,7 @@ class CoinbaseClient(BaseExchange):
                 await self._rate_limiter.acquire()
                 return func(*args, **kwargs)
 
-            except (CoinbaseConnectionException, CoinbaseAPIException) as e:
+            except (CoinbaseConnectionError, CoinbaseAPIError) as e:
                 last_exception = e
 
                 if attempt < self._max_retries:
@@ -1137,11 +1108,14 @@ class CoinbaseClient(BaseExchange):
                     logger.exception(
                         "Request failed after %s attempts", self._max_retries + 1
                     )
-                    raise
+                    # Let the last_exception be raised below rather than bare raise
+                    break
 
-            except Exception:
+            except Exception as e:
                 logger.exception("Unexpected error in request")
-                raise
+                # Store as last exception to be raised below
+                last_exception = e
+                break
 
         if last_exception:
             raise last_exception
@@ -1242,11 +1216,11 @@ class CoinbaseClient(BaseExchange):
         if not isinstance(amount, Decimal):
             try:
                 amount = Decimal(str(amount))
-            except (ValueError, TypeError):
+            except (ValueError, TypeError) as e:
                 logger.exception(
                     "Invalid balance amount (type: %s)", type(amount).__name__
                 )
-                raise ValueError(f"Cannot convert to Decimal: {amount}")
+                raise ValueError(f"Cannot convert to Decimal: {amount}") from e
 
         # Check for invalid values
         if amount.is_nan():
@@ -1282,11 +1256,11 @@ class CoinbaseClient(BaseExchange):
         if not isinstance(amount, Decimal):
             try:
                 amount = Decimal(str(amount))
-            except (ValueError, TypeError):
+            except (ValueError, TypeError) as e:
                 logger.exception(
                     "Invalid crypto amount (type: %s)", type(amount).__name__
                 )
-                raise ValueError(f"Cannot convert to Decimal: {amount}")
+                raise ValueError(f"Cannot convert to Decimal: {amount}") from e
 
         # Check for invalid values
         if amount.is_nan():
@@ -1476,11 +1450,11 @@ class CoinbaseClient(BaseExchange):
                 logger.info("Futures contract %s: FIXED 1 contract (0.1 ETH)", symbol)
             else:
                 # Spot with leverage: use nano contract sizing
-                CONTRACT_SIZE = Decimal("0.1")  # 0.1 ETH per contract
+                contract_size = Decimal("0.1")  # 0.1 ETH per contract
 
                 # FIXED: Always trade exactly 1 contract
                 num_contracts = 1
-                quantity = CONTRACT_SIZE * num_contracts  # 0.1 ETH
+                quantity = contract_size * num_contracts  # 0.1 ETH
 
                 logger.info("Futures position: FIXED 1 contract = %s ETH", quantity)
 
@@ -1588,11 +1562,11 @@ class CoinbaseClient(BaseExchange):
                     logger.exception("❌ CRITICAL ERROR placing protective orders")
                     # Continue with trade but log the critical failure
 
-            return order
-
         except Exception:
             logger.exception("Failed to open futures position")
             return None
+        else:
+            return order
 
     async def _open_spot_position(
         self, trade_action: TradeAction, symbol: str, current_price: Decimal
@@ -1853,7 +1827,7 @@ class CoinbaseClient(BaseExchange):
                 )
                 raise ExchangeOrderError(f"Failed to parse order response: {e}") from e
 
-        except CoinbaseAPIException as e:
+        except CoinbaseAPIError as e:
             if "insufficient funds" in str(e).lower():
                 raise ExchangeInsufficientFundsError(f"Insufficient funds: {e}") from e
             raise ExchangeOrderError(f"API error: {e}") from e
@@ -1963,7 +1937,7 @@ class CoinbaseClient(BaseExchange):
             logger.error("Limit order placement failed: %s", error_msg)
             raise ExchangeOrderError(f"Limit order placement failed: {error_msg}")
 
-        except CoinbaseAPIException as e:
+        except CoinbaseAPIError as e:
             if "insufficient funds" in str(e).lower():
                 raise ExchangeInsufficientFundsError(f"Insufficient funds: {e}") from e
             raise ExchangeOrderError(f"API error: {e}") from e
@@ -2158,7 +2132,7 @@ class CoinbaseClient(BaseExchange):
             logger.error("Stop order placement failed: %s", error_msg)
             raise ExchangeOrderError(f"Stop order placement failed: {error_msg}")
 
-        except CoinbaseAPIException as e:
+        except CoinbaseAPIError as e:
             if "insufficient funds" in str(e).lower():
                 raise ExchangeInsufficientFundsError(f"Insufficient funds: {e}") from e
             raise ExchangeOrderError(f"API error: {e}") from e
@@ -2346,7 +2320,7 @@ class CoinbaseClient(BaseExchange):
                 )
                 raise ExchangeOrderError(f"Failed to parse order response: {e}") from e
 
-        except CoinbaseAPIException as e:
+        except CoinbaseAPIError as e:
             if (
                 "insufficient funds" in str(e).lower()
                 or "insufficient margin" in str(e).lower()
@@ -2409,7 +2383,8 @@ class CoinbaseClient(BaseExchange):
             BalanceTimeoutError,
             BalanceValidationError,
         ):
-            # Re-raise specific balance exceptions
+            # Re-raise specific balance exceptions with context
+            logger.exception("Balance operation failed")
             raise
         except Exception as e:
             logger.exception("Failed to get account balance")
@@ -2487,14 +2462,13 @@ class CoinbaseClient(BaseExchange):
                 logger.warning("Retrieved negative spot balance: $%s", total_balance)
 
             logger.debug("Retrieved spot USD balance: %s", total_balance)
-            return total_balance
-
         except (
             BalanceRetrievalError,
             BalanceServiceUnavailableError,
             BalanceValidationError,
         ):
-            # Re-raise specific balance exceptions
+            # Re-raise specific balance exceptions with context
+            logger.exception("Spot balance operation failed")
             raise
         except Exception as e:
             logger.exception("Failed to get spot balance")
@@ -2515,6 +2489,8 @@ class CoinbaseClient(BaseExchange):
                     "error_type": type(e).__name__,
                 },
             ) from e
+        else:
+            return total_balance
 
     async def get_futures_balance(self) -> Decimal:
         """
@@ -2604,14 +2580,13 @@ class CoinbaseClient(BaseExchange):
                 )
 
             logger.debug("Retrieved futures USD balance: %s", futures_balance)
-            return futures_balance
-
         except (
             BalanceRetrievalError,
             BalanceServiceUnavailableError,
             BalanceValidationError,
         ):
-            # Re-raise specific balance exceptions
+            # Re-raise specific balance exceptions with context
+            logger.exception("Futures balance operation failed")
             raise
         except Exception as e:
             logger.exception("Failed to get futures balance")
@@ -2631,6 +2606,8 @@ class CoinbaseClient(BaseExchange):
                         "error_type": type(e).__name__,
                     },
                 ) from e
+        else:
+            return futures_balance
 
     async def _get_futures_balance_fallback(self) -> Decimal:
         """
@@ -2687,10 +2664,12 @@ class CoinbaseClient(BaseExchange):
                             account_type="CFM",
                         ) from decimal_err
 
-            return total_balance
-
-        except (BalanceServiceUnavailableError, BalanceValidationError):
-            # Re-raise specific balance exceptions
+        except (
+            BalanceServiceUnavailableError,
+            BalanceValidationError,
+        ):
+            # Re-raise specific balance exceptions with context
+            logger.exception("Fallback futures balance operation failed")
             raise
         except Exception as e:
             logger.exception("Fallback futures balance failed")
@@ -2703,6 +2682,8 @@ class CoinbaseClient(BaseExchange):
                     "error_type": type(e).__name__,
                 },
             ) from e
+        else:
+            return total_balance
 
     async def get_futures_account_info(
         self, refresh: bool = False
@@ -2775,11 +2756,11 @@ class CoinbaseClient(BaseExchange):
             )
 
             self._futures_account_info = account_info
-            return account_info
-
         except Exception:
             logger.exception("Failed to get futures account info")
             return None
+        else:
+            return account_info
 
     async def get_margin_info(self) -> MarginInfo:
         """
@@ -2871,8 +2852,6 @@ class CoinbaseClient(BaseExchange):
             )
 
             self._last_margin_check = datetime.now(UTC)
-            return margin_info
-
         except Exception:
             logger.exception("Failed to get margin info")
             # Return default margin info
@@ -2888,6 +2867,8 @@ class CoinbaseClient(BaseExchange):
                 intraday_margin_requirement=Decimal(0),
                 overnight_margin_requirement=Decimal(0),
             )
+        else:
+            return margin_info
 
     async def transfer_cash_to_futures(
         self,
@@ -2961,11 +2942,11 @@ class CoinbaseClient(BaseExchange):
                         return True
 
                 logger.warning("Transfer scheduled but not yet completed")
-                return True  # Return true since sweep was scheduled
-
             except Exception:
                 logger.exception("Failed to schedule futures sweep")
                 return False
+            else:
+                return True  # Return true since sweep was scheduled
 
         except Exception:
             logger.exception("Failed to transfer cash to futures")
@@ -3026,8 +3007,8 @@ class CoinbaseClient(BaseExchange):
 
                 if num_contracts > 0:
                     # Convert contracts to ETH size (1 contract = 0.1 ETH for nano futures)
-                    CONTRACT_SIZE = Decimal("0.1")
-                    size = num_contracts * CONTRACT_SIZE
+                    contract_size = Decimal("0.1")
+                    size = num_contracts * contract_size
 
                     position = Position(
                         symbol=product_id,
@@ -3046,12 +3027,12 @@ class CoinbaseClient(BaseExchange):
                     positions.append(position)
 
             logger.debug("Retrieved %s futures positions", len(positions))
-            return positions
-
         except Exception:
             logger.exception("Failed to get futures positions")
             # Fallback to regular positions API
             return await self.get_positions(symbol)
+        else:
+            return positions
 
     async def get_positions(self, symbol: str | None = None) -> list[Position]:
         """
@@ -3102,11 +3083,11 @@ class CoinbaseClient(BaseExchange):
                     positions.append(position)
 
             logger.debug("Retrieved %s positions", len(positions))
-            return positions
-
         except Exception as e:
             logger.exception("Failed to get positions")
             raise ExchangeConnectionError(f"Failed to get positions: {e}") from e
+        else:
+            return positions
 
     async def cancel_order(self, order_id: str) -> bool:
         """
@@ -3147,14 +3128,14 @@ class CoinbaseClient(BaseExchange):
                     return True
 
             logger.warning("Order %s cancellation may have failed", order_id)
-            return False
-
         except Exception:
             logger.exception("Failed to cancel order %s", order_id)
             return False
+        else:
+            return False
 
     async def cancel_all_orders(
-        self, symbol: str | None = None, status: str | None = None
+        self, symbol: str | None = None, _status: str | None = None
     ) -> bool:
         """
         Cancel all open orders, optionally filtered by symbol.
@@ -3267,11 +3248,11 @@ class CoinbaseClient(BaseExchange):
             status = status_mapping.get(status_str, OrderStatus.PENDING)
             logger.debug("Order %s status: %s -> %s", order_id, status_str, status)
 
-            return status
-
         except Exception:
             logger.exception("Failed to get order status for %s", order_id)
             return None
+        else:
+            return status
 
     def is_connected(self) -> bool:
         """
@@ -3462,11 +3443,11 @@ class CoinbaseClient(BaseExchange):
             logger.info(
                 "Updated monthly trading volume: $%,.2f (Tier: %s)", volume, tier
             )
-            return volume
-
         except Exception:
             logger.exception("Failed to get monthly volume")
             return self._monthly_volume
+        else:
+            return volume
 
     def get_current_fee_rates(self) -> dict[str, float]:
         """

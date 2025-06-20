@@ -101,9 +101,7 @@ class TestSymbolConversionFixes:
         if hasattr(test_string, "value"):
             # This branch should not execute for strings
             raise AssertionError("String should not have .value attribute")
-        else:
-            # This is the expected path - no assertion needed, just continue
-            pass
+        # This is the expected path - no assertion needed, just continue
 
     def test_symbol_value_extraction_logic(self):
         """Test the complete symbol value extraction logic from the service."""

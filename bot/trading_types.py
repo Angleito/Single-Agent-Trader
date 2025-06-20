@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime  # noqa: TCH003
 from decimal import Decimal
 from enum import Enum
 from typing import Any, Literal

@@ -217,8 +217,8 @@ class SommiPatterns:
 
             return htf_wt1_aligned, htf_wt2_aligned, htf_vwap_aligned
 
-        except Exception as e:
-            logger.exception("Error calculating higher timeframe WaveTrend: %s", e)
+        except Exception:
+            logger.exception("Error calculating higher timeframe WaveTrend: %s")
             return self._empty_htf_series(price_data.index)
 
     def _calculate_vwap(self, ohlcv_data: pd.DataFrame) -> pd.Series:
@@ -239,8 +239,8 @@ class SommiPatterns:
                 "volume"
             ].cumsum()
             return vwap.fillna(0)
-        except Exception as e:
-            logger.exception("Error calculating VWAP: %s", e)
+        except Exception:
+            logger.exception("Error calculating VWAP: %s")
             return pd.Series(0, index=ohlcv_data.index)
 
     def _empty_htf_series(
@@ -388,8 +388,8 @@ class SommiPatterns:
 
             return ha_data
 
-        except Exception as e:
-            logger.exception("Error calculating Heikin Ashi candles: %s", e)
+        except Exception:
+            logger.exception("Error calculating Heikin Ashi candles: %s")
             return pd.DataFrame(index=ohlc_data.index)
 
     def calculate_sommi_flags(
@@ -475,8 +475,8 @@ class SommiPatterns:
                 "bull_confidence": bull_confidence,
             }
 
-        except Exception as e:
-            logger.exception("Error calculating Sommi flags: %s", e)
+        except Exception:
+            logger.exception("Error calculating Sommi flags: %s")
             return self._empty_flag_result(pd.Index([]))
 
     def _calculate_flag_confidence(
@@ -604,8 +604,8 @@ class SommiPatterns:
                 "bull_confidence": bull_confidence,
             }
 
-        except Exception as e:
-            logger.exception("Error calculating Sommi diamonds: %s", e)
+        except Exception:
+            logger.exception("Error calculating Sommi diamonds: %s")
             return self._empty_diamond_result(pd.Index([]))
 
     def _calculate_diamond_confidence(
@@ -770,8 +770,8 @@ class SommiPatterns:
             logger.debug("Sommi pattern analysis completed successfully")
             return result
 
-        except Exception as e:
-            logger.exception("Error in combined Sommi analysis: %s", e)
+        except Exception:
+            logger.exception("Error in combined Sommi analysis: %s")
             return price_data.copy()
 
     def _resample_for_htf(self, price_data: pd.DataFrame) -> pd.DataFrame:
@@ -800,8 +800,8 @@ class SommiPatterns:
                 .dropna()
             )
 
-        except Exception as e:
-            logger.exception("Error resampling for HTF: %s", e)
+        except Exception:
+            logger.exception("Error resampling for HTF: %s")
             return pd.DataFrame()
 
     def get_latest_signals(self, analysis_df: pd.DataFrame) -> list[PatternSignal]:
@@ -907,7 +907,7 @@ class SommiPatterns:
                 PatternType.SOMMI_FLAG_BEAR,
             ]:
                 return self._validate_flag_conditions(current_data, pattern_type)
-            elif pattern_type in [
+            if pattern_type in [
                 PatternType.SOMMI_DIAMOND_BULL,
                 PatternType.SOMMI_DIAMOND_BEAR,
             ]:
@@ -915,8 +915,8 @@ class SommiPatterns:
 
             return False
 
-        except Exception as e:
-            logger.exception("Error validating pattern conditions: %s", e)
+        except Exception:
+            logger.exception("Error validating pattern conditions: %s")
             return False
 
     def _validate_flag_conditions(self, data: dict, pattern_type: PatternType) -> bool:
@@ -932,13 +932,13 @@ class SommiPatterns:
                 and data["htf_vwap"] > self.levels.vwap_bull_level
                 and data.get("wt_cross_up", False)
             )
-        else:  # BEAR
-            return (
-                data["rsimfi"] < self.levels.rsimfi_bear_level
-                and data["wt2"] > self.levels.flag_wt_bear_level
-                and data["htf_vwap"] < self.levels.vwap_bear_level
-                and data.get("wt_cross_down", False)
-            )
+        # BEAR
+        return (
+            data["rsimfi"] < self.levels.rsimfi_bear_level
+            and data["wt2"] > self.levels.flag_wt_bear_level
+            and data["htf_vwap"] < self.levels.vwap_bear_level
+            and data.get("wt_cross_down", False)
+        )
 
     def _validate_diamond_conditions(
         self, data: dict, pattern_type: PatternType
@@ -954,12 +954,12 @@ class SommiPatterns:
                 and data.get("candle_alignment", False)
                 and data.get("wt_cross_up", False)
             )
-        else:  # BEAR
-            return (
-                data["wt2"] >= self.levels.diamond_wt_bear_level
-                and not data.get("candle_alignment", True)
-                and data.get("wt_cross_down", False)
-            )
+        # BEAR
+        return (
+            data["wt2"] >= self.levels.diamond_wt_bear_level
+            and not data.get("candle_alignment", True)
+            and data.get("wt_cross_down", False)
+        )
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -991,8 +991,8 @@ class SommiPatterns:
 
             return result
 
-        except Exception as e:
-            logger.exception("Error in Sommi patterns calculate method: %s", e)
+        except Exception:
+            logger.exception("Error in Sommi patterns calculate method: %s")
             # Return DataFrame with empty pattern columns
             result = df.copy()
             empty_bool = pd.Series(False, index=result.index)

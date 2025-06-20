@@ -6,6 +6,7 @@ reduces latency from 2-8 seconds to sub-2 seconds while maintaining decision qua
 """
 
 import asyncio
+import logging
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -16,6 +17,12 @@ from bot.strategy.llm_cache import LLMResponseCache, MarketStateHasher
 from bot.strategy.optimized_prompt import OptimizedPromptTemplate
 from bot.strategy.performance_monitor import LLMPerformanceMonitor
 from bot.trading_types import IndicatorData, MarketState, Position, TradeAction
+
+logger = logging.getLogger(__name__)
+
+
+class SimulatedLLMFailureError(Exception):
+    """Test exception to simulate LLM computation failures."""
 
 
 class TestLLMPerformanceOptimization:
@@ -180,7 +187,6 @@ class TestLLMPerformanceOptimization:
 
         # Simulate various performance scenarios
         test_scenarios = [
-            # (response_time_ms, cache_hit, expected_to_meet_target)
             (1500, False, True),  # Fast LLM response
             (1800, True, True),  # Fast cache hit
             (2200, False, False),  # Slow LLM response
@@ -336,14 +342,15 @@ class TestLLMPerformanceOptimization:
         cache = LLMResponseCache()
 
         async def failing_computation(*args, **kwargs):
-            raise Exception("Simulated LLM failure")
+            raise SimulatedLLMFailureError("Simulated LLM failure")
 
         async def test_cache_error_handling():
             try:
                 await cache.get_or_compute(mock_market_state, failing_computation)
                 raise AssertionError("Should have raised exception")
             except Exception as e:
-                assert "Simulated LLM failure" in str(e)
+                error_msg = str(e)
+                assert "Simulated LLM failure" in error_msg
 
                 # Verify cache doesn't break on errors
                 stats = cache.get_cache_stats()
@@ -358,8 +365,11 @@ class TestLLMPerformanceOptimization:
         try:
             result = optimizer.format_prompt({})  # Empty input
             assert len(result) > 0  # Should return fallback prompt
-        except Exception:
-            pass  # Acceptable to raise exception for invalid input
+        except Exception as e:
+            # Acceptable to raise exception for invalid input
+            logger.debug(
+                "Expected exception for invalid input in performance test: %s", str(e)
+            )
 
     def test_memory_efficiency(self, mock_market_state, mock_trade_action):
         """Test that optimizations don't cause memory leaks."""
@@ -453,28 +463,28 @@ if __name__ == "__main__":
     print("   • Market state similarity-based cache keys")
     print("   • 90-second TTL with intelligent cleanup")
     print("   • Target: 70%+ cache hit rate")
-    print("")
+    print()
     print("✅ Async LLM Processing: IMPLEMENTED")
     print("   • Non-blocking LLM calls")
     print("   • Concurrent cache lookups")
     print("   • Request queuing with timeout handling")
-    print("")
+    print()
     print("✅ Prompt Optimization: IMPLEMENTED")
     print("   • 48% size reduction (2700 → 1400 chars)")
     print("   • Compressed instructions and format")
     print("   • Essential context preservation")
-    print("")
+    print()
     print("✅ Performance Monitoring: IMPLEMENTED")
     print("   • Real-time response time tracking")
     print("   • Cache efficiency monitoring")
     print("   • Target achievement validation")
-    print("")
+    print()
     print("🎯 TARGET PERFORMANCE:")
     print("   • Response Time: <2.0 seconds (was 2-8 seconds)")
     print("   • Latency Reduction: 80%+ improvement")
     print("   • Cache Hit Rate: 70%+ in steady state")
     print("   • Decision Quality: Maintained")
-    print("")
+    print()
     print("🚀 LLM PERFORMANCE OPTIMIZER AGENT: READY")
 
     sys.exit(0)

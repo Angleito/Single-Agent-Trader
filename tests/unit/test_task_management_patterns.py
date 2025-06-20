@@ -54,19 +54,13 @@ class TestTaskManagementPatterns:
 
             async def _background_worker(self):
                 """Mock background worker."""
-                try:
-                    while self._running:
-                        await asyncio.sleep(0.1)
-                except asyncio.CancelledError:
-                    raise
+                while self._running:
+                    await asyncio.sleep(0.1)
 
             async def _worker(self, worker_id: int):
                 """Mock worker task."""
-                try:
-                    while self._running:
-                        await asyncio.sleep(0.1)
-                except asyncio.CancelledError:
-                    raise
+                while self._running:
+                    await asyncio.sleep(0.1)
 
         # Test the lifecycle
         service = MockService()
@@ -143,10 +137,8 @@ class TestTaskManagementPatterns:
                 """Cleanup tasks even when they have exceptions."""
                 if self._task and not self._task.done():
                     self._task.cancel()
-                    try:
+                    with contextlib.suppress(asyncio.CancelledError, Exception):
                         await self._task
-                    except (asyncio.CancelledError, Exception):
-                        pass  # Handle both cancellation and other exceptions
 
                 for task in self._error_tasks:
                     if not task.done():

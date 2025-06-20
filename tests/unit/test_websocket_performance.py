@@ -74,11 +74,8 @@ class TestWebSocketPerformance(unittest.TestCase):
         start_time = time.time()
 
         for message in messages:
-            try:
+            with contextlib.suppress(asyncio.QueueFull):
                 provider._message_queue.put_nowait(message)
-            except asyncio.QueueFull:
-                # Queue handling should prevent blocking
-                pass
 
         queue_time = time.time() - start_time
 
@@ -152,22 +149,22 @@ class TestWebSocketPerformance(unittest.TestCase):
                 }
             )
 
-        df = pd.DataFrame(df_data)
-        df = df.set_index("timestamp")
+        market_data = pd.DataFrame(df_data)
+        market_data = market_data.set_index("timestamp")
 
         # Test synchronous calculation time
         start_time = time.time()
-        sync_result = cipher_a.calculate(df)
+        sync_result = cipher_a.calculate(market_data)
         sync_time = time.time() - start_time
 
         # Test asynchronous calculation time
         start_time = time.time()
-        async_result = await cipher_a.calculate_async(df)
+        async_result = await cipher_a.calculate_async(market_data)
         async_time = time.time() - start_time
 
         # Test streaming calculation time (parallel)
         start_time = time.time()
-        streaming_result = await cipher_a.calculate_streaming(df)
+        streaming_result = await cipher_a.calculate_streaming(market_data)
         streaming_time = time.time() - start_time
 
         # Results should be similar
@@ -202,8 +199,8 @@ class TestWebSocketPerformance(unittest.TestCase):
                 }
             )
 
-        df = pd.DataFrame(df_data)
-        df = df.set_index("timestamp")
+        concurrent_data = pd.DataFrame(df_data)
+        concurrent_data = concurrent_data.set_index("timestamp")
 
         # Simulate concurrent operations
         start_time = time.time()
@@ -217,10 +214,10 @@ class TestWebSocketPerformance(unittest.TestCase):
         tasks.append(asyncio.create_task(provider._process_websocket_messages()))
 
         # Task 2: Calculate indicators
-        tasks.append(asyncio.create_task(cipher_a.calculate_async(df)))
+        tasks.append(asyncio.create_task(cipher_a.calculate_async(concurrent_data)))
 
         # Task 3: Calculate streaming indicators
-        tasks.append(asyncio.create_task(cipher_a.calculate_streaming(df)))
+        tasks.append(asyncio.create_task(cipher_a.calculate_streaming(concurrent_data)))
 
         # Task 4: Simulate message processing
         async def simulate_messages():
@@ -305,11 +302,11 @@ class TestWebSocketPerformance(unittest.TestCase):
                 }
             )
 
-        df = pd.DataFrame(df_data)
-        df = df.set_index("timestamp")
+        indicator_data = pd.DataFrame(df_data)
+        indicator_data = indicator_data.set_index("timestamp")
 
         # Calculate indicators synchronously
-        sync_result = cipher_a.calculate(df)
+        sync_result = cipher_a.calculate(indicator_data)
 
         # Verify key indicators are present
         required_indicators = [

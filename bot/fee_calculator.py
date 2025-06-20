@@ -165,6 +165,55 @@ class FeeCalculator:
         else:
             return fees
 
+    def _create_zero_fee_result(
+        self, trade_action: TradeAction, size_pct: int = None
+    ) -> tuple[TradeAction, TradeFees]:
+        """Helper method to create a zero fee result with adjusted trade action."""
+        adjusted_action = trade_action.copy()
+        if size_pct is not None:
+            adjusted_action.size_pct = size_pct
+        else:
+            adjusted_action.size_pct = 0
+
+        return adjusted_action, TradeFees(
+            entry_fee=Decimal(0),
+            exit_fee=Decimal(0),
+            total_fee=Decimal(0),
+            fee_rate=0.0,
+            net_position_value=Decimal(0),
+        )
+
+    def _validate_position_inputs(
+        self,
+        trade_action: TradeAction,
+        account_balance: Decimal,
+        current_price: Decimal,
+        leverage: int,
+    ) -> str | None:
+        """Validate inputs for position adjustment. Returns error message if invalid, None if valid."""
+        if trade_action.action in ["HOLD", "CLOSE"]:
+            return (
+                "hold_close"  # Special case - not an error but needs different handling
+            )
+
+        if account_balance <= 0:
+            logger.warning("Account balance must be positive for position sizing")
+            return "invalid_balance"
+
+        if trade_action.size_pct <= 0:
+            logger.warning("Position size percentage must be positive")
+            return "invalid_size"
+
+        if current_price <= 0:
+            logger.warning("Current price must be positive")
+            return "invalid_price"
+
+        if leverage == 0 and self.enable_futures:
+            logger.warning("Leverage cannot be zero for futures trading")
+            return "invalid_leverage"
+
+        return None
+
     def adjust_position_size_for_fees(
         self,
         trade_action: TradeAction,
@@ -188,62 +237,28 @@ class FeeCalculator:
             Tuple of (adjusted_trade_action, calculated_fees)
         """
         try:
-            if trade_action.action in ["HOLD", "CLOSE"]:
-                # No adjustment needed for HOLD/CLOSE actions
-                return trade_action, TradeFees(
-                    entry_fee=Decimal(0),
-                    exit_fee=Decimal(0),
-                    total_fee=Decimal(0),
-                    fee_rate=0.0,
-                    net_position_value=Decimal(0),
-                )
+            # Apply leverage first for validation
+            leverage = trade_action.leverage or settings.trading.leverage
 
-            # Check for zero or negative account balance
-            if account_balance <= 0:
-                logger.warning("Account balance must be positive for position sizing")
-                adjusted_action = trade_action.copy()
-                adjusted_action.size_pct = 0
-                return adjusted_action, TradeFees(
-                    entry_fee=Decimal(0),
-                    exit_fee=Decimal(0),
-                    total_fee=Decimal(0),
-                    fee_rate=0.0,
-                    net_position_value=Decimal(0),
-                )
+            # Validate all inputs
+            validation_result = self._validate_position_inputs(
+                trade_action, account_balance, current_price, leverage
+            )
 
-            # Check for zero or negative size percentage
-            if trade_action.size_pct <= 0:
-                logger.warning("Position size percentage must be positive")
-                adjusted_action = trade_action.copy()
-                adjusted_action.size_pct = 0
-                return adjusted_action, TradeFees(
-                    entry_fee=Decimal(0),
-                    exit_fee=Decimal(0),
-                    total_fee=Decimal(0),
-                    fee_rate=0.0,
-                    net_position_value=Decimal(0),
-                )
-
-            # Check for zero or negative current price
-            if current_price <= 0:
-                logger.warning("Current price must be positive")
-                adjusted_action = trade_action.copy()
-                adjusted_action.size_pct = 0
-                return adjusted_action, TradeFees(
-                    entry_fee=Decimal(0),
-                    exit_fee=Decimal(0),
-                    total_fee=Decimal(0),
-                    fee_rate=0.0,
-                    net_position_value=Decimal(0),
-                )
+            if validation_result == "hold_close":
+                return self._create_zero_fee_result(trade_action, trade_action.size_pct)
+            elif validation_result is not None:
+                return self._create_zero_fee_result(trade_action)
 
             # Calculate intended position value
             intended_position_value = account_balance * Decimal(
                 str(trade_action.size_pct / 100)
             )
 
-            # Apply leverage
-            leverage = trade_action.leverage or settings.trading.leverage
+            if intended_position_value == 0:
+                logger.warning("Intended position value cannot be zero")
+                return self._create_zero_fee_result(trade_action)
+
             leveraged_position_value = intended_position_value * Decimal(str(leverage))
 
             # Calculate fees for the intended position
@@ -251,66 +266,16 @@ class FeeCalculator:
                 trade_action, leveraged_position_value, current_price, is_market_order
             )
 
-            # Adjust position size to account for fees
-            # We want: (adjusted_position_value + fees) <= intended_position_value
-            # So: adjusted_position_value <= intended_position_value - fees
+            # Calculate available position value after fees
+            available_for_position = intended_position_value - initial_fees.total_fee
 
-            # For futures, the fee is on the notional value, but we pay from margin
-            if self.enable_futures:
-                # Check for zero leverage to prevent division by zero
-                if leverage == 0:
-                    logger.warning("Leverage cannot be zero for futures trading")
-                    adjusted_action = trade_action.copy()
-                    adjusted_action.size_pct = 0
-                    return adjusted_action, initial_fees
+            if available_for_position <= 0:
+                logger.warning("Insufficient funds after accounting for fees")
+                return self._create_zero_fee_result(trade_action)
 
-                # Fees are deducted from margin, so we need to ensure we have enough margin
-                leveraged_position_value / Decimal(str(leverage))
-                available_for_position = (
-                    intended_position_value - initial_fees.total_fee
-                )
-
-                if available_for_position <= 0:
-                    logger.warning("Insufficient funds after accounting for fees")
-                    # Return zero position
-                    adjusted_action = trade_action.copy()
-                    adjusted_action.size_pct = 0
-                    return adjusted_action, initial_fees
-
-                # Check for zero intended position value to prevent division by zero
-                if intended_position_value == 0:
-                    logger.warning("Intended position value cannot be zero")
-                    adjusted_action = trade_action.copy()
-                    adjusted_action.size_pct = 0
-                    return adjusted_action, initial_fees
-
-                # Calculate new position size
-                adjustment_ratio = available_for_position / intended_position_value
-                new_size_pct = trade_action.size_pct * float(adjustment_ratio)
-
-            else:
-                # For spot trading, fees come directly from position value
-                available_for_position = (
-                    intended_position_value - initial_fees.total_fee
-                )
-
-                if available_for_position <= 0:
-                    logger.warning("Insufficient funds after accounting for fees")
-                    # Return zero position
-                    adjusted_action = trade_action.copy()
-                    adjusted_action.size_pct = 0
-                    return adjusted_action, initial_fees
-
-                # Check for zero intended position value to prevent division by zero
-                if intended_position_value == 0:
-                    logger.warning("Intended position value cannot be zero")
-                    adjusted_action = trade_action.copy()
-                    adjusted_action.size_pct = 0
-                    return adjusted_action, initial_fees
-
-                # Calculate new position size
-                adjustment_ratio = available_for_position / intended_position_value
-                new_size_pct = trade_action.size_pct * float(adjustment_ratio)
+            # Calculate new position size (same logic for both futures and spot)
+            adjustment_ratio = available_for_position / intended_position_value
+            new_size_pct = trade_action.size_pct * float(adjustment_ratio)
 
             # Create adjusted trade action
             adjusted_action = trade_action.copy()
@@ -339,13 +304,7 @@ class FeeCalculator:
         except Exception:
             logger.exception("Error adjusting position size for fees")
             # Return original action as fallback
-            return trade_action, TradeFees(
-                entry_fee=Decimal(0),
-                exit_fee=Decimal(0),
-                total_fee=Decimal(0),
-                fee_rate=0.0,
-                net_position_value=Decimal(0),
-            )
+            return self._create_zero_fee_result(trade_action, trade_action.size_pct)
         else:
             return adjusted_action, final_fees
 

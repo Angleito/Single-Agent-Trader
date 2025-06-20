@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 
 from bot.utils.web_search_formatter import (
     ContentPriority,
@@ -73,7 +74,9 @@ class TestContentPriority:
 
     def test_content_priority_validation(self):
         """Test ContentPriority field validation."""
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValidationError, match="Input should be less than or equal to 1"
+        ):
             # Relevance score out of range
             ContentPriority(
                 relevance_score=1.5,
@@ -83,7 +86,9 @@ class TestContentPriority:
                 final_priority=0.82,
             )
 
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValidationError, match="Input should be greater than or equal to 0"
+        ):
             # Negative authority score
             ContentPriority(
                 relevance_score=0.8,
@@ -158,13 +163,17 @@ class TestFormattedContent:
             final_priority=0.5,
         )
 
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValidationError, match="Input should be less than or equal to 1"
+        ):
             # Confidence level out of range
             FormattedContent(
                 summary="Test", confidence_level=1.5, token_count=100, priority=priority
             )
 
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValidationError, match="Input should be greater than or equal to 0"
+        ):
             # Negative token count
             FormattedContent(
                 summary="Test", confidence_level=0.7, token_count=-10, priority=priority

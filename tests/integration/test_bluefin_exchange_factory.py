@@ -5,6 +5,7 @@ Tests the fixes implemented for exchange factory configuration, service URL pass
 and proper Bluefin client instantiation with correct network settings.
 """
 
+import logging
 import os
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -15,6 +16,8 @@ from bot.exchange.bluefin import BluefinClient
 from bot.exchange.bluefin_endpoints import BluefinEndpointConfig, get_rest_api_url
 from bot.exchange.factory import ExchangeFactory
 from bot.utils.symbol_utils import BluefinSymbolConverter
+
+logger = logging.getLogger(__name__)
 
 
 class TestBluefinExchangeFactory:

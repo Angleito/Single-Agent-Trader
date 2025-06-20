@@ -21,6 +21,23 @@ from pydantic import BaseModel, Field
 
 from bot.config import settings
 
+
+class OmniSearchError(Exception):
+    """Base exception for OmniSearch client errors."""
+
+
+class OmniSearchConnectionError(OmniSearchError):
+    """Raised when connection to OmniSearch service fails."""
+
+
+class OmniSearchAPIError(OmniSearchError):
+    """Raised when OmniSearch API returns an error."""
+
+
+class OmniSearchTimeoutError(OmniSearchError):
+    """Raised when OmniSearch requests timeout."""
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -249,10 +266,14 @@ class OmniSearchClient:
         # Local storage for fallback with permission handling
         try:
             self.local_storage_path = get_data_directory("omnisearch_cache")
-        except PermissionError as e:
-            logger.error("Failed to create data directory: %s", e)
+        except PermissionError:
+            logger.exception("Failed to create data directory")
             # Fall back to a minimal path that won't be used for actual storage
-            self.local_storage_path = Path("/tmp/omnisearch_cache_fallback")
+            import tempfile
+
+            self.local_storage_path = (
+                Path(tempfile.gettempdir()) / "omnisearch_cache_fallback"
+            )
             logger.warning("Using minimal fallback path: %s", self.local_storage_path)
 
         logger.info("🔍 OmniSearch Client: Initialized for %s", self.server_url)
@@ -739,7 +760,7 @@ class OmniSearchClient:
             Search results or fallback data
         """
         if not self._connected or not self._session:
-            raise Exception("Not connected to OmniSearch service")
+            raise OmniSearchConnectionError("Not connected to OmniSearch service")
 
         url = f"{self.server_url}/{endpoint}"
         headers = self._get_headers()
@@ -752,16 +773,16 @@ class OmniSearchClient:
                     return await response.json()
                 if response.status == 429:  # Rate limited
                     logger.warning("OmniSearch API rate limit hit")
-                    raise Exception("Rate limit exceeded")
+                    raise OmniSearchAPIError("Rate limit exceeded")
                 logger.warning("OmniSearch API returned status %s", response.status)
-                raise Exception(f"API error: {response.status}")
+                raise OmniSearchAPIError(f"API error: {response.status}")
 
         except TimeoutError as e:
             logger.warning("OmniSearch request timed out for %s", endpoint)
-            raise Exception("Request timeout") from e
+            raise OmniSearchTimeoutError("Request timeout") from e
         except aiohttp.ClientError as e:
             logger.warning("OmniSearch network error: %s", e)
-            raise Exception(f"Network error: {e}") from e
+            raise OmniSearchConnectionError(f"Network error: {e}") from e
 
     async def _get_fallback_news(
         self, query: str, limit: int

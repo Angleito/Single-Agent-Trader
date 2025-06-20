@@ -473,8 +473,8 @@ class ExperienceManager:
                 # Wait before next check
                 await asyncio.sleep(300)  # Check every 5 minutes
 
-            except Exception as e:
-                logger.exception("Error in trade monitoring: %s", e)
+            except Exception:
+                logger.exception("Error in trade monitoring")
                 await asyncio.sleep(60)
 
     async def _schedule_trade_reflection(
@@ -504,8 +504,8 @@ class ExperienceManager:
 
         except asyncio.CancelledError:
             pass
-        except Exception as e:
-            logger.exception("Error in trade reflection: %s", e)
+        except Exception:
+            logger.exception("Error in trade reflection")
 
     def _generate_trade_reflection(self, trade: ActiveTrade) -> str:
         """Generate reflection insights from completed trade."""

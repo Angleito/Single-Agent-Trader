@@ -16,6 +16,11 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
+
+class MCPConnectionError(Exception):
+    """Raised when MCP server connection fails."""
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -122,14 +127,15 @@ class MCPOmniSearchClient:
                 return False
 
             # Security: Validate server path exists and is not attempting path traversal
-            import os.path
+            from pathlib import Path
 
-            if not os.path.exists(self.server_path) or ".." in self.server_path:
+            if not Path(self.server_path).exists() or ".." in self.server_path:
                 logger.error("Invalid or unsafe server path: %s", self.server_path)
                 return False
 
             # Start the MCP server process with validated paths
-            self._process = subprocess.Popen(
+            self._process = await asyncio.to_thread(
+                subprocess.Popen,
                 [node_executable, self.server_path],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
@@ -145,8 +151,8 @@ class MCPOmniSearchClient:
             logger.info("✅ MCP-OmniSearch: Successfully connected")
             return True
 
-        except Exception as e:
-            logger.exception("Failed to connect to MCP-OmniSearch server: %s", e)
+        except Exception:
+            logger.exception("Failed to connect to MCP-OmniSearch server")
             return False
 
     async def disconnect(self) -> None:
@@ -159,8 +165,8 @@ class MCPOmniSearchClient:
 
             self._connected = False
             logger.info("Disconnected from MCP-OmniSearch server")
-        except Exception as e:
-            logger.exception("Error during disconnect: %s", e)
+        except Exception:
+            logger.exception("Error during disconnect")
 
     async def _send_initialize(self) -> None:
         """Send initialization message to MCP server."""
@@ -179,12 +185,12 @@ class MCPOmniSearchClient:
         response = await self._read_message()
 
         if response.get("error"):
-            raise Exception(f"MCP initialization failed: {response['error']}")
+            raise MCPConnectionError(f"MCP initialization failed: {response['error']}")
 
     async def _send_message(self, message: dict[str, Any]) -> None:
         """Send a message to the MCP server."""
         if not self._process or not self._process.stdin:
-            raise Exception("MCP server not connected")
+            raise MCPConnectionError("MCP server not connected")
 
         message_str = json.dumps(message) + "\n"
         self._process.stdin.write(message_str)
@@ -193,11 +199,11 @@ class MCPOmniSearchClient:
     async def _read_message(self) -> dict[str, Any]:
         """Read a message from the MCP server."""
         if not self._process or not self._process.stdout:
-            raise Exception("MCP server not connected")
+            raise MCPConnectionError("MCP server not connected")
 
         line = self._process.stdout.readline()
         if not line:
-            raise Exception("MCP server connection closed")
+            raise MCPConnectionError("MCP server connection closed")
 
         return json.loads(line.strip())
 
@@ -221,7 +227,7 @@ class MCPOmniSearchClient:
         response = await self._read_message()
 
         if response.get("error"):
-            raise Exception(f"Tool call failed: {response['error']}")
+            raise MCPConnectionError(f"Tool call failed: {response['error']}")
 
         return response.get("result", {})
 
@@ -293,8 +299,8 @@ class MCPOmniSearchClient:
             )
             return financial_results
 
-        except Exception as e:
-            logger.exception("Financial news search failed for '%s': %s", query, e)
+        except Exception:
+            logger.exception("Financial news search failed for '%s'", query)
             return []
 
     async def search_crypto_sentiment(self, symbol: str) -> SentimentAnalysis:
@@ -353,10 +359,8 @@ class MCPOmniSearchClient:
             )
             return sentiment
 
-        except Exception as e:
-            logger.exception(
-                "Crypto sentiment search failed for %s: %s", base_symbol, e
-            )
+        except Exception:
+            logger.exception("Crypto sentiment search failed for %s", base_symbol)
             return self._get_fallback_sentiment(base_symbol)
 
     async def search_nasdaq_sentiment(self) -> SentimentAnalysis:
@@ -408,8 +412,8 @@ class MCPOmniSearchClient:
             )
             return sentiment
 
-        except Exception as e:
-            logger.exception("NASDAQ sentiment search failed: %s", e)
+        except Exception:
+            logger.exception("NASDAQ sentiment search failed")
             return self._get_fallback_sentiment("NASDAQ")
 
     async def search_market_correlation(
@@ -458,12 +462,11 @@ class MCPOmniSearchClient:
             )
             return correlation
 
-        except Exception as e:
+        except Exception:
             logger.exception(
-                "Market correlation search failed for %s-%s: %s",
+                "Market correlation search failed for %s-%s",
                 crypto_base,
                 nasdaq_base,
-                e,
             )
             return self._get_fallback_correlation(crypto_base, nasdaq_base, timeframe)
 
