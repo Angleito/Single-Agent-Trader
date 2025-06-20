@@ -5,10 +5,17 @@
 # - Build contexts specify platforms to ensure consistent builds
 # - Runtime platform specifications prevent architecture conflicts
 # 
+# USER PERMISSIONS:
+# - Uses HOST_UID and HOST_GID environment variables for volume permissions
+# - Containers run as the host user to avoid permission issues with mounted volumes
+# - Default to 1000:1000 if environment variables are not set (Ubuntu VPS compatibility)
+# - Run: ./scripts/start-trading-bot.sh to automatically set correct user permissions
+# 
 # DEPLOYMENT NOTES:
 # - Use: DOCKER_DEFAULT_PLATFORM=linux/amd64 docker-compose up
 # - For building: docker-compose build --platform linux/amd64
 # - All Dockerfiles include --platform=linux/amd64 specifications
+# - Recommended: Use ./scripts/start-trading-bot.sh for proper user permission handling
 
 services:
   # Bluefin SDK Service - Isolated container for Bluefin DEX operations
@@ -24,7 +31,7 @@ services:
     restart: unless-stopped
 
     # SECURITY HARDENING - VPS-optimized Container Security  
-    user: "1000:1000"  # Run as non-root user
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"  # Run as host user for volume permissions
     read_only: true     # Read-only root filesystem
     security_opt:
       - no-new-privileges:false  # Allow privilege operations for VPS compatibility
@@ -103,7 +110,7 @@ services:
     restart: unless-stopped
 
     # SECURITY HARDENING - VPS-optimized Container Security
-    user: "1000:1000"  # Run as non-root user  
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"  # Run as host user for volume permissions
     read_only: true     # Read-only root filesystem
     security_opt:
       - no-new-privileges:false  # Allow privilege operations for VPS compatibility
@@ -236,7 +243,7 @@ services:
     restart: unless-stopped
 
     # SECURITY HARDENING - VPS-optimized Container Security
-    user: "1000:1000"  # Run as non-root user
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"  # Run as host user for volume permissions
     read_only: true     # Read-only root filesystem
     security_opt:
       - no-new-privileges:false  # Allow privilege operations for VPS compatibility
@@ -311,7 +318,7 @@ services:
     restart: unless-stopped
 
     # SECURITY HARDENING - VPS-optimized Container Security
-    user: "1000:1000"  # Run as non-root user
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"  # Run as host user for volume permissions
     read_only: true     # Read-only root filesystem
     security_opt:
       - no-new-privileges:false  # Allow privilege operations for VPS compatibility
@@ -377,7 +384,7 @@ services:
       - "8000:8000"  # Allow external access for frontend connectivity
 
     # SECURITY HARDENING - Container Security
-    user: "1000:1000"  # Run as non-root user
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"  # Run as host user for volume permissions
     read_only: true     # Read-only root filesystem
     security_opt:
       - no-new-privileges:true  # Prevent privilege escalation
@@ -512,7 +519,7 @@ services:
       - "3001:8080"  # Allow external access for frontend
 
     # SECURITY HARDENING - VPS-optimized Container Security
-    user: "1000:1000"  # Run as non-root user
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"  # Run as host user for volume permissions
     read_only: true     # Read-only root filesystem
     security_opt:
       - no-new-privileges:false  # Allow privilege operations for VPS compatibility

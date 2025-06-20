@@ -169,9 +169,9 @@ class TradingEngine:
         self._shutdown_requested = False
         self._memory_available = False  # Initialize early to prevent AttributeError
         self._last_position_log_time: datetime | None = None
-        self._background_tasks: list[asyncio.Task[Any]] = (
-            []
-        )  # Track background tasks for cleanup
+        self._background_tasks: list[
+            asyncio.Task[Any]
+        ] = []  # Track background tasks for cleanup
 
         # Load configuration
         self.settings = self._load_configuration(config_file, dry_run)
@@ -353,12 +353,15 @@ class TradingEngine:
         performance_thresholds = PerformanceThresholds()
 
         # Customize thresholds for trading environment
-        if interval in [
-            "1s",
-            "5s",
-            "10s",
-            "15s",
-        ]:  # High-frequency trading (Note: sub-minute intervals converted to 1m on Bluefin)
+        if (
+            interval
+            in [
+                "1s",
+                "5s",
+                "10s",
+                "15s",
+            ]
+        ):  # High-frequency trading (Note: sub-minute intervals converted to 1m on Bluefin)
             performance_thresholds.indicator_calculation_ms = 50
             performance_thresholds.market_data_processing_ms = 25
             performance_thresholds.trade_execution_ms = 500
@@ -759,21 +762,34 @@ class TradingEngine:
         return settings
 
     def _setup_logging(self) -> None:
-        """Setup logging configuration."""
+        """Setup logging configuration with graceful permission error handling."""
         log_level = getattr(logging, self.settings.system.log_level)
 
-        # Create logs directory if needed
-        if self.settings.system.log_file_path:
-            self.settings.system.log_file_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Configure logging
+        # Configure logging handlers
         handlers: list[logging.Handler] = []
+
+        # Always add console handler as primary fallback
         if self.settings.system.log_to_console:
             handlers.append(logging.StreamHandler())
+
+        # Attempt file logging with graceful fallback
         if self.settings.system.log_to_file:
-            handlers.append(
-                logging.FileHandler(str(self.settings.system.log_file_path))
+            file_handler = self._create_file_handler()
+            if file_handler:
+                handlers.append(file_handler)
+            elif not self.settings.system.log_to_console:
+                # If file logging fails and console logging is disabled, force console logging
+                print(
+                    "WARNING: File logging failed and console logging disabled. Enabling console logging as fallback."
+                )
+                handlers.append(logging.StreamHandler())
+
+        # Ensure we always have at least one handler
+        if not handlers:
+            print(
+                "WARNING: No logging handlers configured. Adding console handler as fallback."
             )
+            handlers.append(logging.StreamHandler())
 
         logging.basicConfig(
             level=log_level,
@@ -784,6 +800,60 @@ class TradingEngine:
         # Remove None handlers
         root_logger = logging.getLogger()
         root_logger.handlers = [h for h in root_logger.handlers if h is not None]
+
+    def _create_file_handler(self) -> logging.FileHandler | None:
+        """Create file handler with permission error handling and fallback locations."""
+        if not self.settings.system.log_file_path:
+            return None
+
+        # List of paths to try in order of preference
+        fallback_paths = [
+            self.settings.system.log_file_path,  # Original path
+            Path("/tmp") / "bot.log",  # Container fallback
+            Path.home() / "bot.log",  # User home fallback
+            Path.cwd() / "bot.log",  # Current directory fallback
+        ]
+
+        for log_path in fallback_paths:
+            try:
+                # Test write permissions by attempting to create parent directory
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+
+                # Test write access to the file location
+                test_file = log_path.with_suffix(".test")
+                try:
+                    test_file.touch()
+                    test_file.unlink()  # Clean up test file
+                except (PermissionError, OSError):
+                    # If we can't write test file, skip this path
+                    continue
+
+                # Create the actual file handler
+                handler = logging.FileHandler(str(log_path))
+
+                # Log success message (using print since logging isn't set up yet)
+                if log_path != self.settings.system.log_file_path:
+                    print(f"WARNING: Using fallback log file location: {log_path}")
+                else:
+                    print(f"INFO: Logging to file: {log_path}")
+
+                return handler
+
+            except (PermissionError, OSError, FileNotFoundError) as e:
+                # Continue to next fallback path
+                if log_path == fallback_paths[-1]:  # Last fallback failed
+                    print(f"WARNING: Failed to create log file at {log_path}: {e}")
+                continue
+
+        # All fallback paths failed
+        print(
+            "ERROR: Unable to create log file at any location. File logging disabled."
+        )
+        print("Available fallback locations were:")
+        for path in fallback_paths:
+            print(f"  - {path}")
+
+        return None
 
     async def run(self) -> None:
         """

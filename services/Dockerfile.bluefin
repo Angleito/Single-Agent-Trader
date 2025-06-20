@@ -83,6 +83,10 @@ RUN pip install --no-cache-dir bluefin-v2-client || \
 COPY bluefin_sdk_service.py /app/
 COPY scripts/validate_env.py /app/
 
+# Copy Docker entrypoint script
+COPY docker-entrypoint-bluefin.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh && chown bluefin:bluefin /app/docker-entrypoint.sh
+
 # Create necessary directories with Ubuntu-optimized permissions
 RUN mkdir -p /app/logs /app/data /app/tmp && \
     chmod 755 /app && \
@@ -192,6 +196,9 @@ USER bluefin
 # Ubuntu-optimized health check configuration
 HEALTHCHECK --interval=30s --timeout=15s --start-period=45s --retries=5 \
     CMD /app/healthcheck.sh || (echo "Health check failed on Ubuntu" && exit 1)
+
+# Set entrypoint to initialization script
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 
 # Ubuntu-optimized service startup
 CMD ["python", "-u", "-O", "bluefin_sdk_service.py"]

@@ -29,6 +29,11 @@ echo "========================="
 EXCHANGE_TYPE=${EXCHANGE_TYPE:-coinbase}
 COMPOSE_FILE=""
 
+# Set host user ID and group ID for proper volume permissions
+export HOST_UID=$(id -u)
+export HOST_GID=$(id -g)
+print_status "INFO" "Setting container user to $HOST_UID:$HOST_GID ($(whoami):$(id -gn))"
+
 case $EXCHANGE_TYPE in
     "coinbase")
         COMPOSE_FILE="docker-compose.yml"

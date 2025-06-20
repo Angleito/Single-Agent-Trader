@@ -129,6 +129,10 @@ COPY --chown=botuser:botuser prompts/*.txt ./prompts/
 COPY --chown=botuser:botuser healthcheck.sh /app/healthcheck.sh
 RUN chmod +x /app/healthcheck.sh
 
+# Copy Docker entrypoint script
+COPY --chown=botuser:botuser scripts/docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+
 # Switch to non-root user
 USER botuser
 
@@ -138,6 +142,9 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
 
 # Expose port for health checks and monitoring
 EXPOSE 8080
+
+# Set entrypoint to initialization script
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 
 # Default command - starts in safe dry-run mode
 CMD ["python", "-m", "bot.main", "live", "--dry-run"]

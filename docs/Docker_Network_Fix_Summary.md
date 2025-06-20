@@ -193,6 +193,45 @@ The `trading-network` is configured with:
 - No external connectivity unless explicitly exposed via ports
 - Security-hardened containers with minimal capabilities
 
+## User Permissions Fix (Added 2025-06-20)
+
+### Problem Description
+Docker containers configured with fixed user ID `1000:1000` could not write to host-mounted volumes on macOS (host user `501:20`) and potentially other systems with different user IDs, causing permission errors when writing to logs and data directories.
+
+### Solution Implemented
+Updated all services to use dynamic user mapping via environment variables:
+
+```yaml
+user: "${HOST_UID:-1000}:${HOST_GID:-1000}"  # Run as host user for volume permissions
+```
+
+### Benefits
+- **✅ Cross-Platform Compatibility**: Works on macOS, Ubuntu VPS, and other Linux systems
+- **✅ Automatic Permission Mapping**: Containers run as the host user automatically
+- **✅ Secure Default**: Falls back to `1000:1000` if environment variables aren't set
+- **✅ Volume Write Access**: All volume mounts now have correct permissions
+
+### Usage
+```bash
+# Automatic setup (recommended)
+./scripts/start-trading-bot.sh
+
+# Manual setup
+source scripts/setup-user-permissions.sh
+docker-compose up -d
+
+# Test permissions
+./scripts/test-docker-permissions.sh
+```
+
+### Files Modified
+- `/Users/angel/Documents/Projects/cursorprod/docker-compose.yml` - Updated all service user configurations
+- **New Files Created:**
+  - `/Users/angel/Documents/Projects/cursorprod/scripts/setup-user-permissions.sh`
+  - `/Users/angel/Documents/Projects/cursorprod/scripts/test-docker-permissions.sh`
+- **Modified Files:**
+  - `/Users/angel/Documents/Projects/cursorprod/scripts/start-trading-bot.sh` - Added automatic user ID export
+
 ## Conclusion
 
-The Docker networking issues have been completely resolved. Services can now communicate reliably using hostnames like `bluefin-service:8080`, ensuring proper integration between all components of the AI trading bot system.
+The Docker networking and user permission issues have been completely resolved. Services can now communicate reliably using hostnames like `bluefin-service:8080`, and all containers can write to host volumes without permission errors, ensuring proper integration between all components of the AI trading bot system.
