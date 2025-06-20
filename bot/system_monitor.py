@@ -364,13 +364,11 @@ class SystemHealthMonitor:
                 )
                 break
 
-            except Exception as e:
+            except Exception:
                 recovery_action.last_attempt = current_time
                 recovery_action.attempt_count += 1
 
-                logger.exception(
-                    "Recovery action %s failed: %s", recovery_action.name, e
-                )
+                logger.exception("Recovery action %s failed", recovery_action.name)
 
     def _can_attempt_recovery(
         self, recovery_action: RecoveryAction, current_time: datetime
@@ -431,7 +429,7 @@ class SystemHealthMonitor:
         }
 
     def get_health_history(
-        self, component_name: str, hours: int = 24
+        self, _component_name: str, hours: int = 24
     ) -> list[dict[str, Any]]:
         """Get health history for a component."""
         # This would typically be stored in a time-series database
@@ -513,8 +511,7 @@ class ErrorRecoveryManager:
                 logger.warning("Recovery failed for %s", error_type)
 
             return success
-
-        except Exception as e:
+        except Exception:
             logger.exception("Recovery strategy failed for %s", error_type)
 
             # Record failed recovery attempt
@@ -527,14 +524,14 @@ class ErrorRecoveryManager:
                     datetime.now(UTC) - recovery_start
                 ).total_seconds(),
                 "context": error_context,
-                "recovery_error": str(e),
+                "recovery_error": "exception_occurred",
             }
 
             self.recovery_history.append(recovery_record)
             return False
 
     async def _recover_network_connection(
-        self, error_context: dict[str, Any], component: str
+        self, _error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from network connection errors."""
         logger.info("Attempting network recovery for component %s", component)
@@ -553,13 +550,13 @@ class ErrorRecoveryManager:
                 if response.status == 200:
                     logger.info("Network connectivity restored")
                     return True
-        except Exception as e:
-            logger.warning("Network connectivity test failed: %s", e)
+        except Exception:
+            logger.warning("Network connectivity test failed")
 
         return False
 
     async def _recover_authentication(
-        self, error_context: dict[str, Any], component: str
+        self, _error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from authentication errors."""
         logger.info("Attempting authentication recovery for component %s", component)
@@ -633,7 +630,7 @@ class ErrorRecoveryManager:
         return True
 
     async def _recover_websocket_connection(
-        self, error_context: dict[str, Any], component: str
+        self, _error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from WebSocket connection errors."""
         logger.info("Attempting WebSocket recovery for component %s", component)
@@ -649,7 +646,7 @@ class ErrorRecoveryManager:
         return True
 
     async def _recover_database_connection(
-        self, error_context: dict[str, Any], component: str
+        self, _error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from database connection errors."""
         logger.info("Attempting database recovery for component %s", component)
@@ -665,7 +662,7 @@ class ErrorRecoveryManager:
         return True
 
     async def _recover_memory_issue(
-        self, error_context: dict[str, Any], component: str
+        self, _error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from memory-related errors."""
         logger.info("Attempting memory recovery for component %s", component)
@@ -720,12 +717,14 @@ class ErrorRecoveryManager:
             if record["success"]:
                 error_type_stats[error_type]["successful"] += 1
 
+        success_rate = (
+            successful_recoveries / total_recoveries if total_recoveries > 0 else 0
+        )
+
         return {
             "total_recoveries": total_recoveries,
             "successful_recoveries": successful_recoveries,
-            "success_rate": (
-                successful_recoveries / total_recoveries if total_recoveries > 0 else 0
-            ),
+            "success_rate": success_rate,
             "error_type_statistics": error_type_stats,
             "recent_recoveries": self.recovery_history[-10:],  # Last 10 recoveries
         }

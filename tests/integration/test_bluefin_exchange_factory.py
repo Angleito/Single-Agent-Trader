@@ -180,7 +180,7 @@ class TestBluefinExchangeFactory:
                 assert perp_symbol is not None
             except Exception:
                 # Some symbols might not be supported, which is fine
-                pass
+                logger.debug("Symbol %s not supported in test converter", symbol)
 
     @pytest.mark.asyncio()
     async def test_exchange_factory_async_initialization(

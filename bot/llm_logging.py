@@ -8,6 +8,7 @@ in the AI trading bot.
 
 import json
 import logging
+import os
 import time
 import uuid
 from datetime import UTC, datetime
@@ -50,6 +51,92 @@ import contextlib
 from bot.config import settings
 
 
+def get_logs_directory() -> Path:
+    """
+    Get the appropriate logs directory with fallback support.
+
+    This function handles permission errors by using fallback directories
+    when the primary logs directory is not writable.
+
+    Returns:
+        Path: The directory path to use for log files
+    """
+    # First try the default logs directory
+    default_logs_dir = Path("logs")
+
+    # Test if we can write to the default directory
+    try:
+        # Try to create the directory if it doesn't exist
+        default_logs_dir.mkdir(parents=True, exist_ok=True)
+
+        # Test write permissions by creating a temporary file
+        test_file = default_logs_dir / (".write_test_%s" % os.getpid())
+        test_file.write_text("test")
+        test_file.unlink()  # Remove test file
+
+    except (PermissionError, OSError) as e:
+        logging.getLogger(__name__).warning(
+            "Cannot write to default logs directory %s: %s", default_logs_dir, e
+        )
+    else:
+        return default_logs_dir
+
+    # Check for fallback directory from environment variable
+    fallback_logs_dir = os.getenv("FALLBACK_LOGS_DIR")
+
+    if fallback_logs_dir:
+        fallback_path = Path(fallback_logs_dir)
+        try:
+            # Try to create the fallback directory if it doesn't exist
+            fallback_path.mkdir(parents=True, exist_ok=True)
+
+            # Test write permissions
+            test_file = fallback_path / (".write_test_%s" % os.getpid())
+            test_file.write_text("test")
+            test_file.unlink()  # Remove test file
+
+            logging.getLogger(__name__).info(
+                "Using fallback logs directory: %s", fallback_path
+            )
+
+        except (PermissionError, OSError) as fallback_error:
+            logging.getLogger(__name__).warning(
+                "Cannot write to fallback logs directory %s: %s",
+                fallback_path,
+                fallback_error,
+            )
+        else:
+            return fallback_path
+
+    # Last resort: use a temporary directory
+    import tempfile
+
+    temp_logs_dir = Path(tempfile.gettempdir()) / (
+        "ai_trading_bot_logs_%s" % os.getpid()
+    )
+    temp_logs_dir.mkdir(parents=True, exist_ok=True)
+
+    logging.getLogger(__name__).warning(
+        "Using temporary logs directory: %s (logs will be lost on restart)",
+        temp_logs_dir,
+    )
+    return temp_logs_dir
+
+
+def get_log_file_path(filename: str) -> Path:
+    """
+    Get the full path for a log file with fallback directory support.
+
+    Args:
+        filename: The log file name (e.g., 'llm_completions.log')
+
+    Returns:
+        Path: Full path to the log file
+    """
+    logs_dir = get_logs_directory()
+    return logs_dir / filename
+
+
 class DecimalEncoder(json.JSONEncoder):
     """JSON encoder that handles Decimal objects."""
 
@@ -81,7 +168,13 @@ class ChatCompletionLogger:
             log_file: Path to log file (defaults to logs/llm_completions.log)
             log_level: Logging level for this logger
         """
-        self.log_file = log_file or "logs/llm_completions.log"
+        if log_file:
+            # If a specific log file path is provided, use it as-is
+            self.log_file = log_file
+        else:
+            # Use the fallback-aware log file path
+            self.log_file = str(get_log_file_path("llm_completions.log"))
+
         self.logger = self._setup_logger(log_level)
 
         # Performance tracking
@@ -114,28 +207,44 @@ class ChatCompletionLogger:
         if logger.handlers:
             return logger
 
-        # Create logs directory if it doesn't exist
+        # Ensure the log file directory exists (fallback logic is already handled)
         log_path = Path(self.log_file)
-        log_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+        except (PermissionError, OSError) as e:
+            # If we still can't create the directory, log a warning but continue
+            # The file handler will fail gracefully if needed
+            logger.warning("Could not ensure log directory exists: %s", e)
 
         # File handler with rotation
         from logging.handlers import RotatingFileHandler
 
-        file_handler = RotatingFileHandler(
-            self.log_file,
-            maxBytes=50 * 1024 * 1024,
-            backupCount=5,  # 50MB
-        )
+        try:
+            file_handler = RotatingFileHandler(
+                self.log_file,
+                maxBytes=50 * 1024 * 1024,
+                backupCount=5,  # 50MB
+            )
+        except (PermissionError, OSError) as e:
+            # If file handler creation fails, log error and use only console
+            logger.error(
+                "Failed to create log file handler for %s: %s", self.log_file, e
+            )
+            logger.warning("Logging will only go to console")
+            file_handler = None
 
         # JSON formatter for structured logging
         formatter = logging.Formatter(
             "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         )
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
 
-        # Console handler for development
-        if settings.system.log_to_console:
+        # Add file handler if it was created successfully
+        if file_handler:
+            file_handler.setFormatter(formatter)
+            logger.addHandler(file_handler)
+
+        # Console handler for development (always add if file handler failed)
+        if settings.system.log_to_console or file_handler is None:
             console_handler = logging.StreamHandler()
             console_handler.setFormatter(formatter)
             logger.addHandler(console_handler)
@@ -240,7 +349,8 @@ class ChatCompletionLogger:
         level = "INFO" if success else "ERROR"
         self.logger.log(
             getattr(logging, level),
-            f"LLM_RESPONSE: {json.dumps(log_entry, cls=DecimalEncoder)}",
+            "LLM_RESPONSE: %s",
+            json.dumps(log_entry, cls=DecimalEncoder),
         )
 
     def log_trading_decision(
@@ -578,12 +688,12 @@ class LangChainCallbackHandler(BaseCallbackHandler):
             if sentiment_match:
                 context["market_sentiment"] = sentiment_match.group(1)
 
-            # Only return context if we extracted at least some data
-            return context if context else None
-
         except Exception as e:
             self.logger.warning("Failed to extract market context from prompt: %s", e)
             return None
+        else:
+            # Only return context if we extracted at least some data
+            return context if context else None
 
 
 def create_llm_logger(
@@ -594,7 +704,7 @@ def create_llm_logger(
 
     Args:
         log_level: Logging level (defaults to system setting)
-        log_file: Log file path (defaults to logs/llm_completions.log)
+        log_file: Log file path (defaults to fallback-aware logs/llm_completions.log)
 
     Returns:
         Configured ChatCompletionLogger instance

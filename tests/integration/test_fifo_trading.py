@@ -51,7 +51,7 @@ class FIFOTradingTest:
             quantity=quantity,
             price=price,
             status=OrderStatus.FILLED,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
             filled_quantity=quantity,
         )
 

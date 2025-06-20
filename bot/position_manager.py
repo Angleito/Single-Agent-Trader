@@ -23,6 +23,7 @@ from .error_handling import (
 from .paper_trading import PaperTradingAccount
 from .trading.fifo_position_manager import FIFOPositionManager
 from .trading_types import Order, Position
+from .utils.path_utils import get_data_directory, get_data_file_path
 
 logger = logging.getLogger(__name__)
 
@@ -61,8 +62,12 @@ class PositionManager:
             paper_trading_account: Paper trading account for enhanced simulation
             use_fifo: Whether to use FIFO accounting (default: True)
         """
-        self.data_dir = data_dir or Path("data/positions")
-        self.data_dir.mkdir(parents=True, exist_ok=True)
+        if data_dir:
+            self.data_dir = data_dir
+            self.data_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            self.data_dir = get_data_directory() / "positions"
+            self.data_dir.mkdir(parents=True, exist_ok=True)
         self.use_fifo = use_fifo
 
         # Thread-safe position storage
@@ -72,7 +77,7 @@ class PositionManager:
 
         # FIFO position manager
         if self.use_fifo:
-            fifo_state_file = self.data_dir / "fifo_positions.json"
+            fifo_state_file = get_data_file_path("positions/fifo_positions.json")
             self.fifo_manager = FIFOPositionManager(state_file=fifo_state_file)
             logger.info("Using FIFO position tracking")
 
@@ -80,13 +85,12 @@ class PositionManager:
         self.paper_account = paper_trading_account
         if settings.system.dry_run and not self.paper_account:
             # Initialize paper trading account for dry run mode
-            self.paper_account = PaperTradingAccount(
-                data_dir=self.data_dir.parent / "paper_trading"
-            )
+            paper_trading_dir = get_data_directory() / "paper_trading"
+            self.paper_account = PaperTradingAccount(data_dir=paper_trading_dir)
 
         # State file paths
-        self.positions_file = self.data_dir / "positions.json"
-        self.history_file = self.data_dir / "position_history.json"
+        self.positions_file = get_data_file_path("positions/positions.json")
+        self.history_file = get_data_file_path("positions/position_history.json")
 
         # Enhanced validation tracking
         self._validation_errors = 0
@@ -259,7 +263,7 @@ class PositionManager:
 
             # Update FIFO manager if enabled
             if self.use_fifo and side in ["LONG", "SHORT"]:
-                side_literal: Literal["LONG", "SHORT"] = side  # type: ignore
+                side_literal: Literal["LONG", "SHORT"] = side  # type: ignore  # noqa: PGH003
                 self.fifo_manager.reconcile_position_from_exchange(
                     symbol=symbol,
                     side=side_literal,
@@ -1066,7 +1070,7 @@ class PositionManager:
 
         return self.fifo_manager.get_tax_lots_report(symbol)
 
-    def export_trade_history(self, days: int = 30, format: str = "json") -> str:
+    def export_trade_history(self, days: int = 30, export_format: str = "json") -> str:
         """
         Export trade history for analysis.
 
@@ -1098,9 +1102,9 @@ class PositionManager:
                 for pos in recent_positions
             ]
 
-        if format == "json":
+        if export_format == "json":
             return json.dumps(trade_history, indent=2)
-        elif format == "csv":
+        if export_format == "csv":
             if not trade_history:
                 return "No trade history available"
 
@@ -1264,8 +1268,8 @@ class PositionManager:
 
         if position.side == "LONG":
             return position.size * price_diff
-        else:  # SHORT
-            return position.size * (-price_diff)
+        # SHORT
+        return position.size * (-price_diff)
 
     def get_validation_status(self) -> dict[str, Any]:
         """

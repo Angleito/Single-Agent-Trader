@@ -16,6 +16,12 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlparse
 
+from bot.utils.path_utils import (
+    get_data_directory,
+    get_data_file_path,
+    get_logs_file_path,
+)
+
 # Optional dependency for network testing
 try:
     import aiohttp
@@ -385,11 +391,15 @@ class ConfigurationValidator:
         """Test connectivity to Bluefin service."""
         service_url = self.settings.exchange.bluefin_service_url
 
-        try:
-            # Parse URL to check if it's valid
-            parsed = urlparse(service_url)
+        def _validate_url_format(url: str) -> None:
+            """Validate URL format."""
+            parsed = urlparse(url)
             if not parsed.scheme or not parsed.netloc:
                 raise ValueError("Invalid service URL format")
+
+        try:
+            # Parse URL to check if it's valid
+            _validate_url_format(service_url)
 
             # Test connectivity
             async with aiohttp.ClientSession(
@@ -1438,67 +1448,99 @@ class ExchangeSettings(BaseModel):
             return
 
         private_key = self.bluefin_private_key.get_secret_value().strip()
-
-        # Track validation results
         validation_errors = []
         detected_formats = []
 
-        # 1. Check for mnemonic phrase format (12 or 24 words)
-        words = private_key.split()
-        if len(words) in [12, 24]:
-            if all(word.isalpha() and len(word) > 2 for word in words):
-                detected_formats.append("mnemonic")
-                # Additional mnemonic validation
-                if not self._validate_mnemonic_checksum(words):
-                    validation_errors.append(
-                        "Mnemonic phrase appears to have invalid checksum"
-                    )
-            else:
-                validation_errors.append(
-                    "Mnemonic phrase contains invalid words (must be alphabetic, >2 chars)"
-                )
-
-        # 2. Check for Bech32-encoded Sui private key
-        elif private_key.startswith("suiprivkey"):
-            if len(private_key) < 50:  # More realistic minimum length for Bech32
-                validation_errors.append("Sui Bech32 private key appears too short")
-            else:
-                detected_formats.append("sui_bech32")
-                # Additional Bech32 validation
-                if not self._validate_bech32_format(private_key):
-                    validation_errors.append(
-                        "Sui Bech32 private key has invalid format"
-                    )
-
-        # 3. Check for hex format (with or without 0x prefix)
+        # Use helper methods to reduce complexity
+        mnemonic_result = self._validate_mnemonic_key_format(private_key)
+        if mnemonic_result:
+            validation_errors.extend(mnemonic_result["errors"])
+            detected_formats.extend(mnemonic_result["formats"])
         else:
-            hex_key = private_key.removeprefix("0x")
-
-            if len(hex_key) == 64:
-                if all(c in "0123456789abcdefABCDEF" for c in hex_key):
-                    detected_formats.append("hex")
-                    # Additional hex validation
-                    if hex_key == "0" * 64:
-                        validation_errors.append("Private key cannot be all zeros")
-                    elif hex_key.upper() == "F" * 64:
-                        validation_errors.append("Private key cannot be all F's")
-                else:
-                    validation_errors.append(
-                        "Hex private key contains invalid characters"
-                    )
+            bech32_result = self._validate_bech32_key_format(private_key)
+            if bech32_result:
+                validation_errors.extend(bech32_result["errors"])
+                detected_formats.extend(bech32_result["formats"])
             else:
-                validation_errors.append(
-                    f"Hex private key must be exactly 64 characters, got {len(hex_key)}"
-                )
+                hex_result = self._validate_hex_key_format(private_key)
+                validation_errors.extend(hex_result["errors"])
+                detected_formats.extend(hex_result["formats"])
 
-        # Check if any format was detected
+        self._handle_validation_results(validation_errors, detected_formats)
+
+    def _validate_mnemonic_key_format(
+        self, private_key: str
+    ) -> dict[str, list[str]] | None:
+        """Validate mnemonic key format."""
+        words = private_key.split()
+        if len(words) not in [12, 24]:
+            return None
+
+        errors = []
+        formats = []
+
+        if all(word.isalpha() and len(word) > 2 for word in words):
+            formats.append("mnemonic")
+            if not self._validate_mnemonic_checksum(words):
+                errors.append("Mnemonic phrase appears to have invalid checksum")
+        else:
+            errors.append(
+                "Mnemonic phrase contains invalid words (must be alphabetic, >2 chars)"
+            )
+
+        return {"errors": errors, "formats": formats}
+
+    def _validate_bech32_key_format(
+        self, private_key: str
+    ) -> dict[str, list[str]] | None:
+        """Validate Bech32 key format."""
+        if not private_key.startswith("suiprivkey"):
+            return None
+
+        errors = []
+        formats = []
+
+        if len(private_key) < 50:
+            errors.append("Sui Bech32 private key appears too short")
+        else:
+            formats.append("sui_bech32")
+            if not self._validate_bech32_format(private_key):
+                errors.append("Sui Bech32 private key has invalid format")
+
+        return {"errors": errors, "formats": formats}
+
+    def _validate_hex_key_format(self, private_key: str) -> dict[str, list[str]]:
+        """Validate hex key format."""
+        errors = []
+        formats = []
+        hex_key = private_key.removeprefix("0x")
+
+        if len(hex_key) == 64:
+            if all(c in "0123456789abcdefABCDEF" for c in hex_key):
+                formats.append("hex")
+                if hex_key == "0" * 64:
+                    errors.append("Private key cannot be all zeros")
+                elif hex_key.upper() == "F" * 64:
+                    errors.append("Private key cannot be all F's")
+            else:
+                errors.append("Hex private key contains invalid characters")
+        else:
+            errors.append(
+                f"Hex private key must be exactly 64 characters, got {len(hex_key)}"
+            )
+
+        return {"errors": errors, "formats": formats}
+
+    def _handle_validation_results(
+        self, validation_errors: list[str], detected_formats: list[str]
+    ) -> None:
+        """Handle validation results and raise errors if needed."""
         if not detected_formats:
             validation_errors.append(
                 "Private key format not recognized. Expected: 64-char hex (with/without 0x), "
                 "Sui Bech32 (suiprivkey...), or 12/24-word mnemonic phrase"
             )
 
-        # Raise error if validation failed
         if validation_errors:
             error_msg = "Bluefin private key validation failed: " + "; ".join(
                 validation_errors
@@ -1519,10 +1561,7 @@ class ExchangeSettings(BaseModel):
             return False
 
         # Check for reasonable word lengths
-        if any(len(word) < 3 or len(word) > 12 for word in words):
-            return False
-
-        return True
+        return not any(len(word) < 3 or len(word) > 12 for word in words)
 
     def _validate_bech32_format(self, key: str) -> bool:
         """Basic Bech32 format validation for Sui private keys."""
@@ -1599,7 +1638,7 @@ class ExchangeSettings(BaseModel):
         if self.exchange_type == "bluefin":
             try:
                 # Try to import and use the endpoint config
-                from ..exchange.bluefin_endpoints import BluefinEndpointConfig
+                from bot.exchange.bluefin_endpoints import BluefinEndpointConfig
 
                 bluefin_endpoints = BluefinEndpointConfig.get_endpoints(
                     self.bluefin_network
@@ -1767,7 +1806,7 @@ class DataSettings(BaseModel):
 
     # Storage Configuration
     data_storage_path: Path = Field(
-        default_factory=lambda: Path("data"), description="Path for data storage"
+        default_factory=get_data_directory, description="Path for data storage"
     )
     keep_historical_days: int = Field(
         default=30, ge=1, le=365, description="Days of historical data to keep"
@@ -1920,7 +1959,7 @@ class MonitoringSettings(BaseModel):
         description="Maximum number of alerts to keep in history",
     )
     alert_config_file: str = Field(
-        default="data/alerts/config.json",
+        default_factory=lambda: str(get_data_file_path("alerts/config.json")),
         description="Path to alert configuration file",
     )
 
@@ -2016,7 +2055,8 @@ class MonitoringSettings(BaseModel):
         default=True, description="Enable file logging for alerts"
     )
     alert_log_file: str = Field(
-        default="data/alerts/alerts.log", description="Path to alert log file"
+        default_factory=lambda: str(get_data_file_path("alerts/alerts.log")),
+        description="Path to alert log file",
     )
 
     # Background Tasks
@@ -2079,7 +2119,8 @@ class SystemSettings(BaseModel):
         default="INFO", description="Logging level"
     )
     log_file_path: Path | None = Field(
-        default=Path("logs/bot.log"), description="Log file path"
+        default_factory=lambda: get_logs_file_path("bot.log"),
+        description="Log file path",
     )
     log_format: str = Field(
         default="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -2415,9 +2456,12 @@ class Settings(BaseSettings):
     def save_to_file(
         self, file_path: str | Path, include_secrets: bool = False
     ) -> None:
-        """Save configuration to JSON file."""
+        """Save configuration to JSON file with fallback directory support."""
+        from bot.utils.path_utils import ensure_directory_exists
+
         path = Path(file_path)
-        path.parent.mkdir(parents=True, exist_ok=True)
+        # Use fallback-aware directory creation
+        ensure_directory_exists(path.parent)
 
         # Export with or without secrets
         if include_secrets:
@@ -2459,8 +2503,21 @@ class Settings(BaseSettings):
 
     @classmethod
     def load_from_file(cls, file_path: str | Path) -> "Settings":
-        """Load configuration from JSON file."""
+        """Load configuration from JSON file with fallback directory support."""
+        from bot.utils.path_utils import get_config_directory
+
         path = Path(file_path)
+
+        # If the path doesn't exist and it's a relative path, try fallback directories
+        if not path.exists() and not path.is_absolute():
+            # Try in config directory with fallback support
+            try:
+                config_dir_path = get_config_directory() / path
+                if config_dir_path.exists():
+                    path = config_dir_path
+            except OSError:
+                pass  # Continue with original path
+
         if not path.exists():
             raise FileNotFoundError(f"Configuration file not found: {path}")
 

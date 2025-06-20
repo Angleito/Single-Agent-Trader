@@ -229,10 +229,13 @@ class BluefinServiceClient:
                 if not isinstance(value, int) or value < 1 or value > 1000:
                     logger.error("Invalid limit parameter: %s", value)
                     return False
-            elif key in ["startTime", "endTime"] and value:
-                if not isinstance(value, int) or value <= 0:
-                    logger.error("Invalid timestamp parameter %s: %s", key, value)
-                    return False
+            elif (
+                key in ["startTime", "endTime"]
+                and value
+                and (not isinstance(value, int) or value <= 0)
+            ):
+                logger.error("Invalid timestamp parameter %s: %s", key, value)
+                return False
         return True
 
     def _record_balance_operation_audit(
@@ -310,27 +313,27 @@ class BluefinServiceClient:
             )
 
             if duration_ms is not None:
-                self.balance_performance_metrics["balance_response_times"].append(  # type: ignore
+                self.balance_performance_metrics["balance_response_times"].append(  # type: ignore[index]
                     duration_ms
                 )
                 # Keep only recent response times
                 if (
-                    len(self.balance_performance_metrics["balance_response_times"])  # type: ignore
+                    len(self.balance_performance_metrics["balance_response_times"])  # type: ignore[arg-type]
                     > 100
                 ):
-                    self.balance_performance_metrics["balance_response_times"] = (  # type: ignore
-                        self.balance_performance_metrics["balance_response_times"][  # type: ignore
+                    self.balance_performance_metrics["balance_response_times"] = (  # type: ignore[index]
+                        self.balance_performance_metrics["balance_response_times"][  # type: ignore[index]
                             -100:
                         ]
                     )
 
                 # Update average
                 times = self.balance_performance_metrics["balance_response_times"]
-                self.balance_performance_metrics["average_balance_response_time"] = sum(  # type: ignore
+                self.balance_performance_metrics["average_balance_response_time"] = sum(  # type: ignore[index]
                     times
                 ) / len(
                     times
-                )  # type: ignore
+                )  # type: ignore[arg-type]
         else:
             self.balance_performance_metrics["failed_balance_requests"] += 1
 
@@ -340,12 +343,12 @@ class BluefinServiceClient:
                 )
                 if (
                     error_type
-                    not in self.balance_performance_metrics["balance_error_counts"]  # type: ignore
+                    not in self.balance_performance_metrics["balance_error_counts"]  # type: ignore[operator]
                 ):
-                    self.balance_performance_metrics["balance_error_counts"][  # type: ignore
+                    self.balance_performance_metrics["balance_error_counts"][  # type: ignore[index]
                         error_type
                     ] = 0
-                self.balance_performance_metrics["balance_error_counts"][  # type: ignore
+                self.balance_performance_metrics["balance_error_counts"][  # type: ignore[index]
                     error_type
                 ] += 1
 
@@ -2715,9 +2718,12 @@ class BluefinServiceClient:
         service_health = None
         try:
             # Try to get circuit breaker status from service if it has the method
-            if hasattr(self, "_service_client") and self._service_client:
-                if hasattr(self._service_client, "get_circuit_breaker_status"):
-                    service_health = self._service_client.get_circuit_breaker_status()
+            if (
+                hasattr(self, "_service_client")
+                and self._service_client
+                and hasattr(self._service_client, "get_circuit_breaker_status")
+            ):
+                service_health = self._service_client.get_circuit_breaker_status()
         except Exception as e:
             logger.debug(
                 "Could not get service health status: %s",

@@ -32,6 +32,10 @@ try:
     ENHANCED_MONITORING_AVAILABLE = True
 except ImportError:
     ENHANCED_MONITORING_AVAILABLE = False
+    get_balance_alert_manager = None
+    get_balance_metrics_collector = None
+    record_operation_complete = None
+    record_operation_start = None
 
 
 @dataclass
@@ -552,7 +556,7 @@ _global_monitor: BalanceOperationMonitor | None = None
 
 def get_balance_monitor() -> BalanceOperationMonitor:
     """Get the global balance operation monitor instance."""
-    global _global_monitor
+    global _global_monitor  # noqa: PLW0603
     if _global_monitor is None:
         _global_monitor = BalanceOperationMonitor()
     return _global_monitor
@@ -604,8 +608,8 @@ async def start_monitoring_cleanup_task(interval_minutes: int = 15) -> None:
             await monitor.cleanup_old_events()
         except asyncio.CancelledError:
             break
-        except Exception as e:
-            monitor.logger.exception("Error in monitoring cleanup task: %s", e)
+        except Exception:
+            monitor.logger.exception("Error in monitoring cleanup task")
 
 
 def generate_monitoring_report() -> dict[str, Any]:
@@ -672,7 +676,7 @@ def get_enhanced_metrics_summary() -> dict[str, Any]:
 
             return get_metrics_summary()
         except Exception as e:
-            logger.exception("Failed to get enhanced metrics summary: %s", e)
+            logger.exception("Failed to get enhanced metrics summary")
             return {"error": str(e)}
     return {"error": "Enhanced monitoring not available"}
 
@@ -684,8 +688,8 @@ def get_prometheus_metrics() -> list[str]:
             from bot.monitoring.balance_metrics import get_prometheus_metrics
 
             return get_prometheus_metrics()
-        except Exception as e:
-            logger.exception("Failed to get Prometheus metrics: %s", e)
+        except Exception:
+            logger.exception("Failed to get Prometheus metrics")
             return []
     return []
 
@@ -697,8 +701,8 @@ async def trigger_alert_evaluation() -> list:
             from bot.monitoring.balance_alerts import trigger_alert_evaluation
 
             return await trigger_alert_evaluation()
-        except Exception as e:
-            logger.exception("Failed to trigger alert evaluation: %s", e)
+        except Exception:
+            logger.exception("Failed to trigger alert evaluation")
             return []
     return []
 
@@ -721,8 +725,8 @@ def enable_enhanced_monitoring() -> bool:
 
             logger.info("✅ Enhanced balance monitoring enabled")
             return True
-        except Exception as e:
-            logger.exception("Failed to enable enhanced monitoring: %s", e)
+        except Exception:
+            logger.exception("Failed to enable enhanced monitoring")
             return False
     else:
         logger.warning("Enhanced monitoring components not available")

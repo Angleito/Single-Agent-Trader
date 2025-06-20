@@ -289,13 +289,15 @@ FINANCIAL INTELLIGENCE INTEGRATION:
         self.prompt_text = default_prompt
 
         # Try to load from file if available
-        prompt_file = Path("prompts/trade_action.txt")
-        if prompt_file.exists():
-            try:
+        try:
+            from ..utils.path_utils import get_project_root
+
+            prompt_file = get_project_root() / "prompts" / "trade_action.txt"
+            if prompt_file.exists():
                 self.prompt_text = prompt_file.read_text()
                 logger.info("Loaded prompt template from file")
-            except Exception as e:
-                logger.warning(f"Failed to load prompt file: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to load prompt file: {e}")
 
         if PromptTemplate is not None:
             self._prompt_template = PromptTemplate.from_template(self.prompt_text)

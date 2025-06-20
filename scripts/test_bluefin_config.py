@@ -26,6 +26,12 @@ import time
 from pathlib import Path
 from typing import Any
 
+# HTTP status codes as constants
+HTTP_OK = 200
+HTTP_TOO_MANY_REQUESTS = 429
+HTTP_SERVER_ERROR = 500
+HTTP_NOT_FOUND = 404
+
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -66,7 +72,7 @@ class BluefinConfigTester:
         elif level == "success":
             print(f"✅ {message}")
         elif level == "info" and self.verbose:
-            print(f"ℹ️  {message}")
+            print(f"INFO: {message}")
 
     def add_result(
         self,
@@ -128,13 +134,13 @@ class BluefinConfigTester:
                 f"Valid {key_type} private key",
                 {"format": key_type, "length": len(key)},
             )
-            return True
-
         except ValueError as e:
             self.add_result(
                 "private_key_validation", "fail", f"Invalid private key: {e!s}"
             )
             return False
+        else:
+            return True
 
     def validate_network_config(self, target_network: str | None = None) -> bool:
         """Validate network configuration."""
@@ -180,14 +186,15 @@ class BluefinConfigTester:
         """Get effective endpoints for the network."""
         try:
             endpoints = BluefinEndpointConfig.get_endpoints(network)
+        except Exception as e:
+            self.log(f"Failed to get endpoints: {e}", "error")
+            return {}
+        else:
             return {
                 "rest_api": endpoints.rest_api,
                 "websocket_api": endpoints.websocket_api,
                 "websocket_notifications": endpoints.websocket_notifications,
             }
-        except Exception as e:
-            self.log(f"Failed to get endpoints: {e}", "error")
-            return {}
 
     async def test_api_connectivity(self, network: str | None = None) -> bool:
         """Test Bluefin API connectivity."""
@@ -211,7 +218,7 @@ class BluefinConfigTester:
                 ) as session,
                 session.get(test_url) as response,
             ):
-                if response.status == 200:
+                if response.status == HTTP_OK:
                     data = await response.json()
                     ticker_count = len(data) if isinstance(data, list) else 1
                     self.add_result(
@@ -221,7 +228,7 @@ class BluefinConfigTester:
                         {"endpoint": rest_api, "status_code": response.status},
                     )
                     return True
-                elif response.status == 429:
+                if response.status == HTTP_TOO_MANY_REQUESTS:
                     self.add_result(
                         "api_connectivity",
                         "warning",
@@ -229,14 +236,14 @@ class BluefinConfigTester:
                         {"endpoint": rest_api, "status_code": response.status},
                     )
                     return True
-                else:
-                    self.add_result(
-                        "api_connectivity",
-                        "fail",
-                        f"API returned status {response.status}",
-                        {"endpoint": rest_api, "status_code": response.status},
-                    )
-                    return False
+
+                self.add_result(
+                    "api_connectivity",
+                    "fail",
+                    f"API returned status {response.status}",
+                    {"endpoint": rest_api, "status_code": response.status},
+                )
+                return False
         except Exception as e:
             self.add_result(
                 "api_connectivity",
@@ -274,7 +281,7 @@ class BluefinConfigTester:
                 ) as session,
                 session.post(rpc_url, json=payload) as response,
             ):
-                if response.status == 200:
+                if response.status == HTTP_OK:
                     data = await response.json()
                     if "result" in data:
                         epoch = data["result"].get("epoch", "unknown")
@@ -285,22 +292,22 @@ class BluefinConfigTester:
                             {"endpoint": rpc_url, "epoch": epoch},
                         )
                         return True
-                    else:
-                        self.add_result(
-                            "rpc_connectivity",
-                            "fail",
-                            f"Unexpected RPC response: {data}",
-                            {"endpoint": rpc_url},
-                        )
-                        return False
-                else:
+
                     self.add_result(
                         "rpc_connectivity",
                         "fail",
-                        f"RPC returned status {response.status}",
-                        {"endpoint": rpc_url, "status_code": response.status},
+                        f"Unexpected RPC response: {data}",
+                        {"endpoint": rpc_url},
                     )
                     return False
+
+                self.add_result(
+                    "rpc_connectivity",
+                    "fail",
+                    f"RPC returned status {response.status}",
+                    {"endpoint": rpc_url, "status_code": response.status},
+                )
+                return False
         except Exception as e:
             self.add_result(
                 "rpc_connectivity",
@@ -324,7 +331,7 @@ class BluefinConfigTester:
                 ) as session,
                 session.get(health_url) as response,
             ):
-                if response.status == 200:
+                if response.status == HTTP_OK:
                     data = await response.json()
                     self.add_result(
                         "service_connectivity",
@@ -333,14 +340,14 @@ class BluefinConfigTester:
                         {"endpoint": service_url, "health_data": data},
                     )
                     return True
-                else:
-                    self.add_result(
-                        "service_connectivity",
-                        "warning",
-                        f"Service returned status {response.status}",
-                        {"endpoint": service_url, "status_code": response.status},
-                    )
-                    return False
+
+                self.add_result(
+                    "service_connectivity",
+                    "warning",
+                    f"Service returned status {response.status}",
+                    {"endpoint": service_url, "status_code": response.status},
+                )
+                return False
         except Exception as e:
             self.add_result(
                 "service_connectivity",

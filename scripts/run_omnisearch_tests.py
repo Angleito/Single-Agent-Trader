@@ -19,15 +19,15 @@ def run_command(cmd: list[str], description: str) -> bool:
     print(f"Running: {' '.join(cmd)}")
 
     start_time = time.time()
-    result = subprocess.run(cmd, capture_output=False, check=False)
+    result = subprocess.run(cmd, capture_output=False, check=False, shell=False)
     elapsed = time.time() - start_time
 
     if result.returncode == 0:
         print(f"✅ {description} completed successfully in {elapsed:.2f}s")
         return True
-    else:
-        print(f"❌ {description} failed after {elapsed:.2f}s")
-        return False
+
+    print(f"❌ {description} failed after {elapsed:.2f}s")
+    return False
 
 
 def run_unit_tests(verbose: bool = False, coverage: bool = False) -> bool:

@@ -57,12 +57,12 @@ class TradeValidator:
                 trade_action, current_position
             )
 
-            logger.info("Validated trade action: %s", validated_action.action)
-            return validated_action
-
         except Exception as e:
             logger.exception("Validation failed")
             return self._get_default_hold_action(f"Validation error: {e!s}")
+        else:
+            logger.info("Validated trade action: %s", validated_action.action)
+            return validated_action
 
     def _parse_llm_output(
         self, llm_output: str | dict[str, Any] | TradeAction
@@ -82,12 +82,12 @@ class TradeValidator:
         if isinstance(llm_output, TradeAction):
             return llm_output
 
-        elif isinstance(llm_output, dict):
+        if isinstance(llm_output, dict):
             # Normalize action field before creating TradeAction
             normalized_dict = self._normalize_action_dict(llm_output)
             return TradeAction(**normalized_dict)
 
-        elif isinstance(llm_output, str):
+        if isinstance(llm_output, str):
             # Try to parse as JSON
             try:
                 parsed_json = json.loads(llm_output.strip())
@@ -97,8 +97,7 @@ class TradeValidator:
             except json.JSONDecodeError as e:
                 raise ValueError(f"Invalid JSON format: {e}") from e
 
-        else:
-            raise ValueError(f"Unsupported LLM output type: {type(llm_output)}")
+        raise TypeError(f"Unsupported LLM output type: {type(llm_output)}")
 
     def _normalize_action_dict(self, data: dict[str, Any]) -> dict[str, Any]:
         """
@@ -245,17 +244,19 @@ class TradeValidator:
         validated = action.model_copy()
 
         # ENFORCE SINGLE POSITION RULE
-        if current_position and current_position.side != "FLAT":
-            # We have an active position
-            if validated.action in ["LONG", "SHORT"]:
-                logger.warning(
-                    "Cannot open new %s position - existing %s position. Changing to HOLD.",
-                    validated.action,
-                    current_position.side,
-                )
-                return self._get_default_hold_action(
-                    f"Position exists ({current_position.side}) - only CLOSE or HOLD allowed"
-                )
+        if (
+            current_position
+            and current_position.side != "FLAT"
+            and validated.action in ["LONG", "SHORT"]
+        ):
+            logger.warning(
+                "Cannot open new %s position - existing %s position. Changing to HOLD.",
+                validated.action,
+                current_position.side,
+            )
+            return self._get_default_hold_action(
+                f"Position exists ({current_position.side}) - only CLOSE or HOLD allowed"
+            )
 
         # If action is HOLD or CLOSE, size should be 0
         if validated.action in ["HOLD", "CLOSE"] and validated.size_pct > 0:
@@ -269,8 +270,7 @@ class TradeValidator:
             if risk_reward_ratio < 0.5:
                 logger.warning("Poor risk-reward ratio detected, adjusting levels")
                 validated.take_profit_pct = max(validated.stop_loss_pct * 1.0, 1.0)
-
-            if risk_reward_ratio > 10.0:
+            elif risk_reward_ratio > 10.0:
                 logger.warning("Excessive risk-reward ratio detected, adjusting levels")
                 validated.stop_loss_pct = max(validated.take_profit_pct / 5.0, 0.5)
 
@@ -316,9 +316,10 @@ class TradeValidator:
         """
         try:
             TradeAction(**json_data)
-            return True
         except ValidationError:
             return False
+        else:
+            return True
 
     def sanitize_llm_output(self, raw_output: str) -> str:
         """

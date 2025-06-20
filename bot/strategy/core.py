@@ -98,8 +98,9 @@ class CoreStrategy:
 
             return is_healthy
 
-        except Exception as e:
-            logger.exception("Strategy health check error: %s", e)
+        except Exception:
+            logger.exception("Strategy health check error")
+        else:
             return False
 
     async def _reset_strategy_state(self, _component_name: str, _health: Any) -> None:
@@ -151,8 +152,9 @@ class CoreStrategy:
             logger.info("Core strategy decision: %s (%s)", action, rationale)
             return trade_action
 
-        except Exception as e:
-            logger.exception("Error in core strategy analysis: %s", e)
+        except Exception:
+            logger.exception("Error in core strategy analysis")
+        else:
             return self._get_safe_action()
 
     def _get_market_bias(self, indicators: IndicatorData) -> str:
@@ -190,21 +192,24 @@ class CoreStrategy:
                 bearish_signals += 1.0
 
         # RSI analysis
-        if indicators.rsi is not None and 30 < indicators.rsi < 70:
+        if (
+            indicators.rsi is not None
+            and 30 < indicators.rsi < 70
+            and indicators.ema_fast
+            and indicators.ema_slow
+        ):
             # Neutral RSI, look at trend
-            if indicators.ema_fast and indicators.ema_slow:
-                if indicators.ema_fast > indicators.ema_slow:
-                    bullish_signals += 0.5
-                else:
-                    bearish_signals += 0.5
+            if indicators.ema_fast > indicators.ema_slow:
+                bullish_signals += 0.5
+            else:
+                bearish_signals += 0.5
 
         # Determine bias
         if bullish_signals > bearish_signals + 1:
             return "bullish"
-        elif bearish_signals > bullish_signals + 1:
+        if bearish_signals > bullish_signals + 1:
             return "bearish"
-        else:
-            return "neutral"
+        return "neutral"
 
     def _determine_action(self, market_bias: str, current_position) -> str:
         """
@@ -222,24 +227,23 @@ class CoreStrategy:
         if market_bias == "bullish":
             if pos_side == "FLAT":
                 return "LONG"
-            elif pos_side == "SHORT":
+            if pos_side == "SHORT":
                 return "CLOSE"
-            else:  # Already LONG
-                return "HOLD"
+            # Already LONG
+            return "HOLD"
 
-        elif market_bias == "bearish":
+        if market_bias == "bearish":
             if pos_side == "FLAT":
                 return "SHORT"
-            elif pos_side == "LONG":
+            if pos_side == "LONG":
                 return "CLOSE"
-            else:  # Already SHORT
-                return "HOLD"
+            # Already SHORT
+            return "HOLD"
 
-        elif pos_side != "FLAT":
+        if pos_side != "FLAT":
             # Consider closing position in neutral market
             return "CLOSE"
-        else:
-            return "HOLD"
+        return "HOLD"
 
     def _calculate_position_size(
         self, market_bias: str, indicators: IndicatorData
@@ -356,10 +360,9 @@ class CoreStrategy:
 
         if action in ["LONG", "SHORT"]:
             return f"Core strategy: {bias_desc[market_bias]} favor {action.lower()}"
-        elif action == "CLOSE":
+        if action == "CLOSE":
             return f"Core strategy: {bias_desc[market_bias]} suggest close"
-        else:
-            return f"Core strategy: {bias_desc[market_bias]} recommend hold"
+        return f"Core strategy: {bias_desc[market_bias]} recommend hold"
 
     def _get_safe_action(self) -> TradeAction:
         """

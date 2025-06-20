@@ -191,11 +191,10 @@ class ErrorBoundary:
             try:
                 logger.info("Executing fallback behavior for %s", self.component_name)
                 await self._execute_fallback(exception, error_context)
-            except Exception as fallback_error:
+            except Exception:
                 logger.exception(
-                    "Fallback failed for %s: %s",
+                    "Fallback failed for %s",
                     self.component_name,
-                    fallback_error,
                     extra={"original_error": str(exception)},
                 )
 
@@ -275,11 +274,6 @@ class TradeSaga:
                 self.completed_steps.append((i, step_name, result, datetime.now(UTC)))
                 logger.debug("Saga step %s completed successfully", i)
 
-            self.status = "completed"
-            self.end_time = datetime.now(UTC)
-            logger.info("Saga %s completed successfully", self.saga_id)
-            return True
-
         except Exception:
             self.status = "failed"
             self.end_time = datetime.now(UTC)
@@ -292,6 +286,11 @@ class TradeSaga:
             # Execute compensation actions
             await self._compensate()
             raise
+        else:
+            self.status = "completed"
+            self.end_time = datetime.now(UTC)
+            logger.info("Saga %s completed successfully", self.saga_id)
+            return True
 
     async def _compensate(self) -> None:
         """Execute compensation actions in reverse order."""
@@ -403,10 +402,6 @@ class GracefulDegradation:
             else:
                 result = primary_action(*args, **kwargs)
 
-            # Service recovered - update status
-            await self._mark_service_healthy(service_name)
-            return result
-
         except Exception as e:
             # Service failed - update health and potentially degrade
             await self._handle_service_failure(service_name, e)
@@ -415,9 +410,12 @@ class GracefulDegradation:
             if service_name in self.fallback_strategies:
                 logger.warning("Service %s failed, using fallback: %s", service_name, e)
                 return await self._execute_fallback(service_name, *args, **kwargs)
-            else:
-                # No fallback available - re-raise exception
-                raise
+            # No fallback available - re-raise exception
+            raise
+        else:
+            # Service recovered - update status
+            await self._mark_service_healthy(service_name)
+            return result
 
     async def _execute_fallback(self, service_name: str, *args, **kwargs) -> Any:
         """Execute fallback strategy for a service."""
@@ -426,8 +424,7 @@ class GracefulDegradation:
         try:
             if asyncio.iscoroutinefunction(fallback_strategy):
                 return await fallback_strategy(*args, **kwargs)
-            else:
-                return fallback_strategy(*args, **kwargs)
+            return fallback_strategy(*args, **kwargs)
         except Exception:
             logger.exception("Fallback strategy failed for %s", service_name)
             raise
@@ -610,20 +607,17 @@ class EnhancedExceptionHandler:
 
         if any(isinstance(exception, exc_type) for exc_type in critical_exceptions):
             return ErrorSeverity.CRITICAL
-        elif any(
+        if any(
             isinstance(exception, exc_type) for exc_type in high_severity_exceptions
         ):
             return ErrorSeverity.HIGH
-        elif any(
+        if any(
             isinstance(exception, exc_type) for exc_type in medium_severity_exceptions
         ):
             return ErrorSeverity.MEDIUM
-        elif any(
-            isinstance(exception, exc_type) for exc_type in low_severity_exceptions
-        ):
+        if any(isinstance(exception, exc_type) for exc_type in low_severity_exceptions):
             return ErrorSeverity.LOW
-        else:
-            return ErrorSeverity.LOW
+        return ErrorSeverity.LOW
 
     def get_exception_statistics(self) -> dict[str, Any]:
         """Get statistics about handled exceptions."""
@@ -835,8 +829,7 @@ def retry_with_backoff(
                 try:
                     if asyncio.iscoroutinefunction(func):
                         return await func(*args, **kwargs)
-                    else:
-                        return func(*args, **kwargs)
+                    return func(*args, **kwargs)
 
                 except exceptions as e:
                     last_exception = e
@@ -912,8 +905,7 @@ def retry_with_backoff(
         # Return appropriate wrapper based on function type
         if asyncio.iscoroutinefunction(func):
             return async_wrapper
-        else:
-            return sync_wrapper
+        return sync_wrapper
 
     return decorator
 

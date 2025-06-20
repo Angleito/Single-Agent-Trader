@@ -20,7 +20,7 @@ client = RESTClient(api_key=cdp_api_key, api_secret=cdp_private_key)
 
 
 async def close_position():
-    FUTURES_SYMBOL = "ET-27JUN25-CDE"
+    futures_symbol = "ET-27JUN25-CDE"
 
     print("CLOSING FUTURES POSITION")
     print("=" * 60)
@@ -33,7 +33,7 @@ async def close_position():
 
         for pos in positions.positions:
             print(f"  {pos.product_id}: {pos.side} {pos.number_of_contracts} contracts")
-            if pos.product_id == FUTURES_SYMBOL:
+            if pos.product_id == futures_symbol:
                 position_to_close = pos
 
         if not position_to_close:
@@ -51,7 +51,7 @@ async def close_position():
 
         order_result = client.create_order(
             client_order_id=str(uuid.uuid4()),
-            product_id=FUTURES_SYMBOL,
+            product_id=futures_symbol,
             side="BUY",  # Buy to close short
             order_configuration={"market_market_ioc": {"base_size": str(eth_amount)}},
         )

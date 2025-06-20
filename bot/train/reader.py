@@ -54,11 +54,11 @@ class RAGReader:
             await self._load_indicator_docs()
 
             logger.info("Loaded %s knowledge documents", len(self.documents))
-            return True
-
-        except Exception as e:
-            logger.exception("Failed to load knowledge base: %s", e)
+        except Exception:
+            logger.exception("Failed to load knowledge base")
             return False
+        else:
+            return True
 
     async def _load_trading_strategies(self) -> None:
         """Load trading strategy documents."""
@@ -365,7 +365,7 @@ class RAGReader:
         if ema_fast and ema_slow:
             if ema_fast > ema_slow * 1.002:  # 0.2% threshold
                 return "uptrend"
-            elif ema_fast < ema_slow * 0.998:
+            if ema_fast < ema_slow * 0.998:
                 return "downtrend"
 
         return "sideways"

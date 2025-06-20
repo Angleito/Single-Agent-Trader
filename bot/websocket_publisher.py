@@ -151,8 +151,8 @@ class WebSocketPublisher:
                     self._auto_reconnect_manager()
                 )
                 return True
-        except Exception as e:
-            logger.exception("Failed to initialize WebSocket publisher: %s", e)
+        except Exception:
+            logger.exception("Failed to initialize WebSocket publisher")
             # Start auto-reconnect even if initial connection fails
             self._auto_reconnect_task = asyncio.create_task(
                 self._auto_reconnect_manager()
@@ -167,8 +167,8 @@ class WebSocketPublisher:
                     logger.info("Connection lost, attempting to reconnect...")
                     try:
                         await self._reconnect()
-                    except Exception as e:
-                        logger.exception("Auto-reconnect failed: %s", e)
+                    except Exception:
+                        logger.exception("Auto-reconnect failed")
                         # Reset URL index to try primary URL again after failures
                         self._url_index = 0
                         self._current_url = self.dashboard_url
@@ -178,8 +178,8 @@ class WebSocketPublisher:
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:
-                logger.exception("Error in auto-reconnect manager: %s", e)
+            except Exception:
+                logger.exception("Error in auto-reconnect manager")
                 await asyncio.sleep(30)  # Wait longer on unexpected errors
 
     async def _run_network_diagnostics(self) -> None:
@@ -221,18 +221,17 @@ class WebSocketPublisher:
                                         http_url,
                                         response.status,
                                     )
-                        except Exception as e:
+                        except Exception:
                             logger.warning(
-                                "✗ Network connectivity to %s failed: %s",
+                                "✗ Network connectivity to %s failed",
                                 http_url,
-                                e,
                             )
 
-                except Exception as e:
-                    logger.debug("Network diagnostic failed for %s: %s", url, e)
+                except Exception:
+                    logger.debug("Network diagnostic failed for %s", url)
 
-        except Exception as e:
-            logger.warning("Network diagnostics failed: %s", e)
+        except Exception:
+            logger.warning("Network diagnostics failed")
 
     async def _connect_with_fallback(self) -> None:
         """Try to connect using primary URL and fallback URLs if needed."""
@@ -255,8 +254,8 @@ class WebSocketPublisher:
                     logger.info("✓ Successfully connected to %s", url)
                     return
 
-            except Exception as e:
-                logger.warning("✗ Connection to %s failed: %s", url, e)
+            except Exception:
+                logger.warning("✗ Connection to %s failed", url)
 
                 if i < len(urls_to_try) - 1:
                     logger.info("Trying next fallback URL...")
@@ -265,7 +264,11 @@ class WebSocketPublisher:
                     logger.exception(
                         "All WebSocket URLs failed, no more fallbacks available"
                     )
-                    raise Exception(
+
+                    class WebSocketConnectionError(Exception):
+                        pass
+
+                    raise WebSocketConnectionError(
                         "All WebSocket connection attempts failed"
                     ) from None
 
@@ -317,17 +320,15 @@ class WebSocketPublisher:
                 connection_time,
             )
 
-        except (TimeoutError, OSError, InvalidURI) as e:
+        except (TimeoutError, OSError, InvalidURI):
             self._connected = False
             self._consecutive_failures += 1
-            logger.exception("Failed to connect to dashboard WebSocket: %s", e)
+            logger.exception("Failed to connect to dashboard WebSocket")
             raise
-        except Exception as e:
+        except Exception:
             self._connected = False
             self._consecutive_failures += 1
-            logger.exception(
-                "Unexpected error connecting to dashboard WebSocket: %s", e
-            )
+            logger.exception("Unexpected error connecting to dashboard WebSocket")
             raise
 
     async def _reconnect(self) -> None:
@@ -362,8 +363,8 @@ class WebSocketPublisher:
 
         try:
             await self._connect_with_fallback()
-        except Exception as e:
-            logger.exception("Reconnection attempt %s failed: %s", self._retry_count, e)
+        except Exception:
+            logger.exception("Reconnection attempt %s failed", self._retry_count)
             # If we've failed multiple times, check if URL is reachable
             if self._retry_count > 2:
                 await self._check_endpoint_health()
@@ -396,14 +397,15 @@ class WebSocketPublisher:
                         await asyncio.wait_for(
                             self._priority_queue.put(message), timeout=0.5
                         )
-                        logger.debug("Queued priority message: %s", message_type)
-                        return
                     except (TimeoutError, asyncio.QueueFull):
                         # Priority queue full, fall back to regular queue
                         logger.debug(
                             "Priority queue full, using regular queue for: %s",
                             message_type,
                         )
+                    else:
+                        logger.debug("Queued priority message: %s", message_type)
+                        return
 
                 # Queue message for delivery in regular queue
                 await asyncio.wait_for(self._message_queue.put(message), timeout=1.0)
@@ -433,8 +435,8 @@ class WebSocketPublisher:
                 if is_priority and current_queue_size > self.queue_size * 0.9:
                     self._make_room_for_priority_message(message)
 
-        except Exception as e:
-            logger.exception("Error queuing WebSocket message: %s", e)
+        except Exception:
+            logger.exception("Error queuing WebSocket message")
 
     def _make_room_for_priority_message(self, priority_message: dict[str, Any]) -> None:
         """Try to make room for a priority message by dropping non-priority messages."""
@@ -484,8 +486,8 @@ class WebSocketPublisher:
                         "Still couldn't queue priority message after cleanup"
                     )
 
-        except Exception as e:
-            logger.exception("Error making room for priority message: %s", e)
+        except Exception:
+            logger.exception("Error making room for priority message")
 
     async def _queue_worker(self) -> None:
         """Background worker to process message queue with priority handling."""
@@ -554,11 +556,11 @@ class WebSocketPublisher:
                                 message.get("type"),
                             )
 
-                    except Exception as e:
-                        logger.exception("Error sending WebSocket message: %s", e)
+                    except Exception:
+                        logger.exception("Error sending WebSocket message")
 
-            except Exception as e:
-                logger.exception("Error in queue worker: %s", e)
+            except Exception:
+                logger.exception("Error in queue worker")
                 await asyncio.sleep(1)
 
     def _log_queue_health(self) -> None:
@@ -568,11 +570,18 @@ class WebSocketPublisher:
 
         logger.info(
             "📊 WebSocket Queue Health: "
-            f"Regular={regular_queue_size}/{self.queue_size}, "
-            f"Priority={priority_queue_size}/{self._priority_queue.maxsize}, "
-            f"Sent={self._queue_stats['messages_sent']}, "
-            f"Dropped={self._queue_stats['messages_dropped']}, "
-            f"MaxSeen={self._queue_stats['max_queue_size_seen']}"
+            "Regular=%s/%s, "
+            "Priority=%s/%s, "
+            "Sent=%s, "
+            "Dropped=%s, "
+            "MaxSeen=%s",
+            regular_queue_size,
+            self.queue_size,
+            priority_queue_size,
+            self._priority_queue.maxsize,
+            self._queue_stats["messages_sent"],
+            self._queue_stats["messages_dropped"],
+            self._queue_stats["max_queue_size_seen"],
         )
 
     async def publish_system_status(
@@ -764,15 +773,15 @@ class WebSocketPublisher:
                     )
                     self._connected = False
                     break
-                except Exception as e:
-                    logger.warning("Health check failed: %s", e)
+                except Exception:
+                    logger.warning("Health check failed")
                     self._connected = False
                     break
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:
-                logger.exception("Error in connection monitor: %s", e)
+            except Exception:
+                logger.exception("Error in connection monitor")
                 await asyncio.sleep(5)
 
     async def _cleanup_connection(self) -> None:
@@ -789,9 +798,9 @@ class WebSocketPublisher:
         if self._ws:
             try:
                 await self._ws.close()
-            except Exception as e:
+            except Exception:
                 # Log cleanup errors but don't raise them
-                logger.debug("Error closing WebSocket connection during cleanup: %s", e)
+                logger.debug("Error closing WebSocket connection during cleanup")
             finally:
                 self._ws = None
 
@@ -828,13 +837,11 @@ class WebSocketPublisher:
                                     base_url,
                                     response.status,
                                 )
-                    except Exception as e:
-                        logger.warning(
-                            "Dashboard endpoint %s health check failed: %s", url, e
-                        )
+                    except Exception:
+                        logger.warning("Dashboard endpoint %s health check failed", url)
 
-        except Exception as e:
-            logger.warning("Dashboard endpoint health check failed: %s", e)
+        except Exception:
+            logger.warning("Dashboard endpoint health check failed")
 
     async def disconnect(self) -> None:
         """Disconnect WebSocket and cleanup resources - alias for close()."""

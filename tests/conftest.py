@@ -7,7 +7,7 @@ import tempfile
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
@@ -75,19 +75,19 @@ def event_loop_policy() -> asyncio.AbstractEventLoopPolicy:
 @pytest.fixture()
 def sample_timestamps() -> list[datetime]:
     """Generate sample timestamps for testing."""
-    base_time = datetime.utcnow()
+    base_time = datetime.now(UTC)
     return [base_time - timedelta(hours=i) for i in range(24)]
 
 
 @pytest.fixture()
 def sample_price_data() -> dict[str, Any]:
     """Generate realistic sample price data."""
-    np.random.seed(42)
+    rng = np.random.default_rng(42)
     base_price = 50000.0
     prices = [base_price]
 
     for _i in range(199):
-        change = np.random.normal(0.001, 0.02)  # 0.1% mean, 2% volatility
+        change = rng.normal(0.001, 0.02)  # 0.1% mean, 2% volatility
         new_price = prices[-1] * (1 + change)
         prices.append(new_price)
 
@@ -99,7 +99,7 @@ def sample_price_data() -> dict[str, Any]:
                 "high": price * 1.003,
                 "low": price * 0.997,
                 "close": price,
-                "volume": int(np.random.uniform(1000000, 5000000)),
+                "volume": int(rng.uniform(1000000, 5000000)),
             }
             for price in prices[-50:]  # Last 50 candles
         ],
@@ -109,12 +109,12 @@ def sample_price_data() -> dict[str, Any]:
 @pytest.fixture()
 def sample_nasdaq_data() -> dict[str, Any]:
     """Generate realistic NASDAQ sample data."""
-    np.random.seed(24)
+    rng = np.random.default_rng(24)
     base_price = 15000.0
     prices = [base_price]
 
     for _i in range(199):
-        change = np.random.normal(0.0005, 0.012)  # 0.05% mean, 1.2% volatility
+        change = rng.normal(0.0005, 0.012)  # 0.05% mean, 1.2% volatility
         new_price = prices[-1] * (1 + change)
         prices.append(new_price)
 
@@ -126,7 +126,7 @@ def sample_nasdaq_data() -> dict[str, Any]:
                 "high": price * 1.002,
                 "low": price * 0.998,
                 "close": price,
-                "volume": int(np.random.uniform(500000, 2000000)),
+                "volume": int(rng.uniform(500000, 2000000)),
             }
             for price in prices[-50:]
         ],
@@ -153,7 +153,7 @@ def sample_financial_news() -> list[dict[str, Any]]:
             """,
             "url": "https://bloomberg.com/bitcoin-etf-surge",
             "source": "bloomberg.com",
-            "published_time": datetime.utcnow(),
+            "published_time": datetime.now(UTC),
             "sentiment": "positive",
             "mentioned_symbols": ["BTC", "BTCUSD"],
             "category": "regulation",
@@ -178,7 +178,7 @@ def sample_financial_news() -> list[dict[str, Any]]:
             """,
             "url": "https://coindesk.com/ethereum-upgrade-gas-fees",
             "source": "coindesk.com",
-            "published_time": datetime.utcnow() - timedelta(hours=2),
+            "published_time": datetime.now(UTC) - timedelta(hours=2),
             "sentiment": "positive",
             "mentioned_symbols": ["ETH", "ETHUSD"],
             "category": "technology",
@@ -203,7 +203,7 @@ def sample_financial_news() -> list[dict[str, Any]]:
             """,
             "url": "https://reuters.com/fed-powell-testimony",
             "source": "reuters.com",
-            "published_time": datetime.utcnow() - timedelta(hours=4),
+            "published_time": datetime.now(UTC) - timedelta(hours=4),
             "sentiment": "neutral",
             "mentioned_symbols": [],
             "category": "monetary_policy",
@@ -392,7 +392,7 @@ def mock_omnisearch_client() -> Mock:
             "cache_enabled": True,
             "cache_size": 0,
             "rate_limit_remaining": 100,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
     )
     return client
@@ -481,7 +481,7 @@ def mock_cache_directory(temp_directory: Path) -> Path:
                     "title": "Cached News Item",
                     "content": "Cached content",
                     "url": "https://cached.com",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
             ]
         )

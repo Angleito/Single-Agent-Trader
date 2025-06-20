@@ -7,6 +7,7 @@ and ensure production reliability.
 """
 
 import logging
+from dataclasses import field
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_EVEN, Decimal, getcontext
 from typing import Any, NamedTuple
@@ -66,7 +67,7 @@ class BalanceChangeRecord(NamedTuple):
     change_amount: Decimal
     change_pct: float
     operation_type: str
-    metadata: dict[str, Any] = {}
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class BalanceValidator:
@@ -82,7 +83,7 @@ class BalanceValidator:
     - Balance reconciliation checks
     """
 
-    def __init__(self, thresholds: ValidationThresholds = None):
+    def __init__(self, thresholds: ValidationThresholds | None = None):
         """
         Initialize balance validator.
 
@@ -137,25 +138,19 @@ class BalanceValidator:
             if normalized_balance < self.thresholds.min_balance:
                 error_msg = f"Balance below minimum threshold: ${normalized_balance} < ${self.thresholds.min_balance}"
                 self._log_validation_error(error_msg, context, "RANGE_MIN")
-                raise BalanceValidationError(
-                    error_msg, error_code="BALANCE_BELOW_MIN", validation_type="range"
-                )
+                self._raise_balance_below_min(error_msg)
 
             # Check maximum threshold
             if normalized_balance > self.thresholds.max_balance:
                 error_msg = f"Balance exceeds maximum threshold: ${normalized_balance} > ${self.thresholds.max_balance}"
                 self._log_validation_error(error_msg, context, "RANGE_MAX")
-                raise BalanceValidationError(
-                    error_msg, error_code="BALANCE_ABOVE_MAX", validation_type="range"
-                )
+                self._raise_balance_above_max(error_msg)
 
             # Check for negative balance (additional safety check)
             if normalized_balance < Decimal("0"):
                 error_msg = f"Negative balance detected: ${normalized_balance}"
                 self._log_validation_error(error_msg, context, "NEGATIVE")
-                raise BalanceValidationError(
-                    error_msg, error_code="NEGATIVE_BALANCE", validation_type="range"
-                )
+                self._raise_negative_balance(error_msg)
 
         except BalanceValidationError:
             self.error_count += 1
@@ -164,9 +159,7 @@ class BalanceValidator:
             self.error_count += 1
             error_msg = f"Balance range validation error: {e}"
             self._log_validation_error(error_msg, context, "VALIDATION_ERROR")
-            raise BalanceValidationError(
-                error_msg, error_code="VALIDATION_ERROR", validation_type="range"
-            ) from e
+            self._raise_validation_error(error_msg, "range", e)
         else:
             logger.debug(
                 "✅ Balance range validation passed: $%s (%s)",
@@ -694,7 +687,7 @@ class BalanceValidator:
             }
 
         except BalanceValidationError as e:
-            logger.exception("❌ Comprehensive balance validation failed: %s", e)
+            logger.exception("❌ Comprehensive balance validation failed")
             validation_results["error"] = {
                 "error_code": e.error_code,
                 "validation_type": e.validation_type,
@@ -866,3 +859,29 @@ class BalanceValidator:
             "❌ Balance Validation Error [%s] in %s: %s", error_type, context, message
         )
         self.last_validation_time = datetime.now(UTC)
+
+    def _raise_balance_below_min(self, error_msg: str) -> None:
+        """Raise error for balance below minimum threshold."""
+        raise BalanceValidationError(
+            error_msg, error_code="BALANCE_BELOW_MIN", validation_type="range"
+        )
+
+    def _raise_balance_above_max(self, error_msg: str) -> None:
+        """Raise error for balance above maximum threshold."""
+        raise BalanceValidationError(
+            error_msg, error_code="BALANCE_ABOVE_MAX", validation_type="range"
+        )
+
+    def _raise_negative_balance(self, error_msg: str) -> None:
+        """Raise error for negative balance."""
+        raise BalanceValidationError(
+            error_msg, error_code="NEGATIVE_BALANCE", validation_type="range"
+        )
+
+    def _raise_validation_error(
+        self, error_msg: str, validation_type: str, cause: Exception
+    ) -> None:
+        """Raise general validation error."""
+        raise BalanceValidationError(
+            error_msg, error_code="VALIDATION_ERROR", validation_type=validation_type
+        ) from cause

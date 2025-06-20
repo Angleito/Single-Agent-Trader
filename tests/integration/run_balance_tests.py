@@ -80,19 +80,23 @@ def run_syntax_validation():
 
     try:
         # Test balance integration imports
-        from tests.integration.test_balance_integration import TestBalanceIntegration
+        from tests.integration.test_balance_integration import (
+            TestBalanceIntegration,  # noqa: F401
+        )
 
         print("✅ test_balance_integration.py imports successfully")
 
         # Test Bluefin service imports
         from tests.integration.test_bluefin_balance_service import (
-            TestBluefinBalanceServiceIntegration,
+            TestBluefinBalanceServiceIntegration,  # noqa: F401
         )
 
         print("✅ test_bluefin_balance_service.py imports successfully")
 
         # Verify we can import the updated complete trading flow
-        from tests.integration.test_complete_trading_flow import TestCompleteTradingFlow
+        from tests.integration.test_complete_trading_flow import (
+            TestCompleteTradingFlow,  # noqa: F401
+        )
 
         print("✅ test_complete_trading_flow.py imports successfully")
 

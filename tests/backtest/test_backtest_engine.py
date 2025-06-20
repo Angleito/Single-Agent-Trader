@@ -1,6 +1,6 @@
 """Tests for the backtest engine."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import numpy as np
@@ -21,18 +21,17 @@ class TestBacktestEngine:
 
         # Generate realistic price data with some trend
         base_price = 50000
-        price_change = np.random.normal(
-            0, 0.002, 1000
-        ).cumsum()  # 0.2% std dev per hour
+        rng = np.random.default_rng(42)
+        price_change = rng.normal(0, 0.002, 1000).cumsum()  # 0.2% std dev per hour
         prices = base_price * (1 + price_change)
 
         data = pd.DataFrame(
             {
                 "open": prices,
-                "high": prices * (1 + np.random.uniform(0, 0.01, 1000)),
-                "low": prices * (1 - np.random.uniform(0, 0.01, 1000)),
-                "close": prices * (1 + np.random.normal(0, 0.005, 1000)),
-                "volume": np.random.uniform(10, 100, 1000),
+                "high": prices * (1 + rng.uniform(0, 0.01, 1000)),
+                "low": prices * (1 - rng.uniform(0, 0.01, 1000)),
+                "close": prices * (1 + rng.normal(0, 0.005, 1000)),
+                "volume": rng.uniform(10, 100, 1000),
             },
             index=dates,
         )
@@ -121,9 +120,9 @@ class TestBacktestEngine:
 
         # Modify state
         engine.current_balance = Decimal("15000")
-        engine.trades = [BacktestTrade(entry_time=datetime.now(), symbol="BTC-USD")]
+        engine.trades = [BacktestTrade(entry_time=datetime.now(UTC), symbol="BTC-USD")]
         engine.current_position = BacktestTrade(
-            entry_time=datetime.now(), symbol="BTC-USD"
+            entry_time=datetime.now(UTC), symbol="BTC-USD"
         )
 
         # Reset
@@ -149,7 +148,7 @@ class TestBacktestEngine:
             rationale="Test long",
         )
 
-        timestamp = datetime.now()
+        timestamp = datetime.now(UTC)
         market_data = pd.Series(
             {"open": 50000, "high": 50100, "low": 49900, "close": 50050, "volume": 25}
         )
@@ -168,7 +167,7 @@ class TestBacktestEngine:
 
         # Manually create a position
         engine.current_position = BacktestTrade(
-            entry_time=datetime.now(),
+            entry_time=datetime.now(UTC),
             symbol="BTC-USD",
             side="LONG",
             entry_price=Decimal("50000"),
@@ -179,7 +178,7 @@ class TestBacktestEngine:
 
         # Close position at profit
         await engine._close_backtest_position(
-            timestamp=datetime.now(),
+            timestamp=datetime.now(UTC),
             price=Decimal("51000"),  # 2% profit
             reason="Take Profit",
         )
@@ -202,7 +201,7 @@ class TestBacktestEngine:
 
         # Create a long position
         engine.current_position = BacktestTrade(
-            entry_time=datetime.now(),
+            entry_time=datetime.now(UTC),
             symbol="BTC-USD",
             side="LONG",
             entry_price=Decimal("50000"),
@@ -220,7 +219,7 @@ class TestBacktestEngine:
             }
         )
 
-        await engine._check_exit_conditions(datetime.now(), market_data)
+        await engine._check_exit_conditions(datetime.now(UTC), market_data)
 
         # Position should be closed
         assert engine.current_position is None
@@ -234,7 +233,7 @@ class TestBacktestEngine:
 
         # Create a short position
         engine.current_position = BacktestTrade(
-            entry_time=datetime.now(),
+            entry_time=datetime.now(UTC),
             symbol="BTC-USD",
             side="SHORT",
             entry_price=Decimal("50000"),
@@ -252,7 +251,7 @@ class TestBacktestEngine:
             }
         )
 
-        await engine._check_exit_conditions(datetime.now(), market_data)
+        await engine._check_exit_conditions(datetime.now(UTC), market_data)
 
         # Position should be closed
         assert engine.current_position is None
@@ -263,8 +262,8 @@ class TestBacktestEngine:
         """Test results calculation with no trades."""
         engine = BacktestEngine()
 
-        start_date = datetime(2024, 1, 1)
-        end_date = datetime(2024, 1, 31)
+        start_date = datetime(2024, 1, 1, tzinfo=UTC)
+        end_date = datetime(2024, 1, 31, tzinfo=UTC)
 
         results = engine._calculate_results(start_date, end_date)
 
@@ -279,8 +278,8 @@ class TestBacktestEngine:
         # Add sample trades
         engine.trades = [
             BacktestTrade(
-                entry_time=datetime(2024, 1, 1),
-                exit_time=datetime(2024, 1, 1, 1),
+                entry_time=datetime(2024, 1, 1, tzinfo=UTC),
+                exit_time=datetime(2024, 1, 1, 1, tzinfo=UTC),
                 symbol="BTC-USD",
                 side="LONG",
                 entry_price=Decimal("50000"),
@@ -290,8 +289,8 @@ class TestBacktestEngine:
                 duration_minutes=60,
             ),
             BacktestTrade(
-                entry_time=datetime(2024, 1, 2),
-                exit_time=datetime(2024, 1, 2, 1),
+                entry_time=datetime(2024, 1, 2, tzinfo=UTC),
+                exit_time=datetime(2024, 1, 2, 1, tzinfo=UTC),
                 symbol="BTC-USD",
                 side="SHORT",
                 entry_price=Decimal("51000"),
@@ -302,8 +301,8 @@ class TestBacktestEngine:
             ),
         ]
 
-        start_date = datetime(2024, 1, 1)
-        end_date = datetime(2024, 1, 31)
+        start_date = datetime(2024, 1, 1, tzinfo=UTC)
+        end_date = datetime(2024, 1, 31, tzinfo=UTC)
 
         results = engine._calculate_results(start_date, end_date)
 

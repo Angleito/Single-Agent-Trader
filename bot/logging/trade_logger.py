@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from bot.trading_types import MarketState, TradeAction
+from bot.utils.path_utils import get_logs_directory, get_logs_file_path
 
 
 class TradeLogger:
@@ -25,7 +26,7 @@ class TradeLogger:
 
     def __init__(self, log_dir: Path | None = None):
         """Initialize the trade logger."""
-        self.log_dir = log_dir or Path("logs/trades")
+        self.log_dir = log_dir or (get_logs_directory() / "trades")
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
         # Setup loggers
@@ -33,15 +34,10 @@ class TradeLogger:
         self.memory_logger = logging.getLogger("bot.memory")
 
         # JSON log files
-        self.decisions_file = (
-            self.log_dir / f"decisions_{datetime.now(UTC).strftime('%Y%m%d')}.jsonl"
-        )
-        self.outcomes_file = (
-            self.log_dir / f"outcomes_{datetime.now(UTC).strftime('%Y%m%d')}.jsonl"
-        )
-        self.memory_file = (
-            self.log_dir / f"memory_{datetime.now(UTC).strftime('%Y%m%d')}.jsonl"
-        )
+        today_str = datetime.now(UTC).strftime("%Y%m%d")
+        self.decisions_file = get_logs_file_path(f"trades/decisions_{today_str}.jsonl")
+        self.outcomes_file = get_logs_file_path(f"trades/outcomes_{today_str}.jsonl")
+        self.memory_file = get_logs_file_path(f"trades/memory_{today_str}.jsonl")
 
     def log_trade_decision(
         self,
@@ -333,5 +329,5 @@ class TradeLogger:
         try:
             with file_path.open("a") as f:
                 f.write(json.dumps(data) + "\n")
-        except Exception as e:
-            self.logger.exception("Failed to write JSON log: %s", e)
+        except Exception:
+            self.logger.exception("Failed to write JSON log")

@@ -292,8 +292,6 @@ class EMAribbon:
                 },
             )
 
-            return result
-
         except Exception as e:
             logger.exception(
                 "EMA ribbon calculation failed with exception",
@@ -306,6 +304,8 @@ class EMAribbon:
                 },
             )
             return df.copy()
+        else:
+            return result
 
     def calculate_ribbon_direction(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -436,8 +436,6 @@ class EMAribbon:
                 },
             )
 
-            return result
-
         except Exception as e:
             logger.exception(
                 "Ribbon direction calculation failed",
@@ -448,6 +446,8 @@ class EMAribbon:
                 },
             )
             return result
+
+        return result
 
     def calculate_crossover_signals(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -551,8 +551,6 @@ class EMAribbon:
                 },
             )
 
-            return result
-
         except Exception as e:
             logger.exception(
                 "EMA crossover signal calculation failed",
@@ -563,6 +561,8 @@ class EMAribbon:
                 },
             )
             return result
+
+        return result
 
     def calculate_cross_patterns(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -728,8 +728,6 @@ class EMAribbon:
                 },
             )
 
-            return result
-
         except Exception as e:
             logger.exception(
                 "Comprehensive EMA ribbon analysis failed",
@@ -741,6 +739,8 @@ class EMAribbon:
                 },
             )
             return df.copy()
+
+        return result
 
     def _calculate_overall_signal(self, df: pd.DataFrame) -> pd.DataFrame:
         """

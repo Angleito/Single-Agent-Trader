@@ -12,8 +12,7 @@ import os
 import time
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, ClassVar, Literal, cast
 from uuid import uuid4
 
 import aiohttp
@@ -24,6 +23,7 @@ from pydantic import BaseModel, Field
 from bot.config import settings
 from bot.logging.trade_logger import TradeLogger
 from bot.trading_types import MarketState, TradeAction
+from bot.utils.path_utils import get_mcp_memory_directory, get_mcp_memory_file_path
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,10 @@ class TradingExperience(BaseModel):
     confidence_score: float = Field(default=0.5, ge=0.0, le=1.0)
 
     class Config:
-        json_encoders = {Decimal: str, datetime: lambda v: v.isoformat()}
+        json_encoders: ClassVar[dict[type, Any]] = {
+            Decimal: str,
+            datetime: lambda v: v.isoformat(),
+        }
 
 
 class MemoryQuery(BaseModel):
@@ -99,9 +102,8 @@ class MCPMemoryServer:
         self._session_closed = False
         self._connected = False
 
-        # Local persistence
-        self.local_storage_path = Path("data/mcp_memory")
-        self.local_storage_path.mkdir(parents=True, exist_ok=True)
+        # Local persistence with fallback support
+        self.local_storage_path = get_mcp_memory_directory()
 
         # Initialize trade logger
         self.trade_logger = TradeLogger()
@@ -137,8 +139,8 @@ class MCPMemoryServer:
                 logger.warning("MCP server returned status %s", response.status)
                 return False
 
-        except Exception as e:
-            logger.exception("Failed to connect to MCP memory server: %s", e)
+        except Exception:
+            logger.exception("Failed to connect to MCP memory server")
             # Fall back to local-only mode
             await self._load_local_cache()
             return False
@@ -204,8 +206,8 @@ class MCPMemoryServer:
         if self._connected and self._session:
             try:
                 await self._store_remote(experience)
-            except Exception as e:
-                logger.exception("Failed to store experience remotely: %s", e)
+            except Exception:
+                logger.exception("Failed to store experience remotely")
 
         # Persist locally
         await self._save_experience_local(experience)
@@ -783,8 +785,8 @@ class MCPMemoryServer:
             ) as response:
                 if response.status != 201:
                     logger.warning("Failed to store remotely: %s", response.status)
-        except Exception as e:
-            logger.exception("Remote storage error: %s", e)
+        except Exception:
+            logger.exception("Remote storage error")
 
     async def _update_remote(self, experience: TradingExperience) -> None:
         """Update experience on remote MCP server."""
@@ -817,8 +819,8 @@ class MCPMemoryServer:
             )
         except aiohttp.ClientError as e:
             logger.warning("Remote update network error: %s", e)
-        except Exception as e:
-            logger.exception("Remote update error: %s", e)
+        except Exception:
+            logger.exception("Remote update error")
 
     async def __aenter__(self) -> "MCPMemoryServer":
         """Async context manager entry."""
@@ -836,7 +838,7 @@ class MCPMemoryServer:
 
     async def _save_experience_local(self, experience: TradingExperience) -> None:
         """Save experience to local storage."""
-        file_path = self.local_storage_path / f"{experience.experience_id}.json"
+        file_path = get_mcp_memory_file_path(f"{experience.experience_id}.json")
 
         try:
             # Use asyncio to run blocking I/O in thread pool
@@ -851,8 +853,8 @@ class MCPMemoryServer:
             await loop.run_in_executor(
                 None, lambda: file_path.write_text(experience.json(indent=2))
             )
-        except Exception as e:
-            logger.exception("Failed to save experience locally: %s", e)
+        except Exception:
+            logger.exception("Failed to save experience locally")
 
     async def _load_local_cache(self) -> None:
         """Load experiences from local storage into cache."""
@@ -873,8 +875,8 @@ class MCPMemoryServer:
                 "Loaded %s experiences from local cache", len(self.memory_cache)
             )
 
-        except Exception as e:
-            logger.exception("Failed to load local cache: %s", e)
+        except Exception:
+            logger.exception("Failed to load local cache")
 
     async def _save_local_cache(self) -> None:
         """Save current cache to local storage."""
@@ -913,7 +915,7 @@ class MCPMemoryServer:
                         self.pattern_index[pattern].remove(exp_id)
 
             # Remove local file
-            file_path = self.local_storage_path / f"{exp_id}.json"
+            file_path = get_mcp_memory_file_path(f"{exp_id}.json")
             if file_path.exists():
                 file_path.unlink()
 

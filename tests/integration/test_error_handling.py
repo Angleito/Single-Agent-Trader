@@ -35,7 +35,7 @@ class TestErrorHandlingIntegration:
         return [
             MarketData(
                 symbol="BTC-USD",
-                timestamp=datetime.utcnow() - timedelta(minutes=i),
+                timestamp=datetime.now(timezone.utc) - timedelta(minutes=i),
                 open=Decimal("50000"),
                 high=Decimal("50100"),
                 low=Decimal("49900"),
@@ -140,7 +140,7 @@ class TestErrorHandlingIntegration:
             market_state = MarketState(
                 symbol=engine.symbol,
                 interval=engine.interval,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 current_price=current_price,
                 ohlcv_data=mock_market_data[-10:],
                 indicators=IndicatorData(**indicator_state),
@@ -167,7 +167,7 @@ class TestErrorHandlingIntegration:
             [
                 MarketData(
                     symbol="BTC-USD",
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     open=Decimal("NaN"),
                     high=Decimal("50100"),
                     low=Decimal("49900"),
@@ -179,7 +179,7 @@ class TestErrorHandlingIntegration:
             [
                 MarketData(
                     symbol="BTC-USD",
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     open=Decimal("-1000"),
                     high=Decimal("50100"),
                     low=Decimal("49900"),
@@ -191,7 +191,7 @@ class TestErrorHandlingIntegration:
             [
                 MarketData(
                     symbol="BTC-USD",
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     open=Decimal("50000"),
                     high=Decimal("49000"),  # High less than low
                     low=Decimal("50000"),
@@ -240,7 +240,7 @@ class TestErrorHandlingIntegration:
                 quantity=Decimal("0.1"),
                 price=Decimal("50000"),
                 status=OrderStatus.PENDING,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 filled_quantity=Decimal("0.05"),  # Only half filled
             ),
             # Order failed/rejected
@@ -252,7 +252,7 @@ class TestErrorHandlingIntegration:
                 quantity=Decimal("0.1"),
                 price=Decimal("50000"),
                 status=OrderStatus.REJECTED,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 filled_quantity=Decimal("0"),
             ),
         ]
@@ -546,7 +546,7 @@ class TestErrorHandlingIntegration:
             market_state = MarketState(
                 symbol=engine.symbol,
                 interval=engine.interval,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 current_price=current_price,
                 ohlcv_data=mock_market_data[-10:],
                 indicators=IndicatorData(**indicator_state),

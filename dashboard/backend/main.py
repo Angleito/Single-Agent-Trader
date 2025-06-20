@@ -13,7 +13,8 @@ import os
 import subprocess
 import time
 from contextlib import asynccontextmanager, suppress
-from datetime import datetime
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 # Optional imports for fallback functionality
@@ -297,11 +298,11 @@ class ConnectionManager:
 
         # Enhanced connection metadata with diagnostics
         self.connection_metadata[websocket] = {
-            "connected_at": datetime.now().isoformat(),
+            "connected_at": datetime.now(UTC).isoformat(),
             "categories": replay_categories or list(self.message_buffers.keys()),
             "messages_sent": 0,
             "messages_received": 0,
-            "last_activity": datetime.now().isoformat(),
+            "last_activity": datetime.now(UTC).isoformat(),
             "connection_info": connection_info or {},
             "client_ip": (
                 connection_info.get("client_ip", "unknown")
@@ -344,7 +345,7 @@ class ConnectionManager:
 
         # Send a connection status message first
         status_message = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "type": "connection_status",
             "source": "dashboard-backend",
             "message": "Connection established - replaying recent messages",
@@ -391,7 +392,7 @@ class ConnectionManager:
 
         # Send replay completion message
         completion_message = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "type": "replay_complete",
             "source": "dashboard-backend",
             "message": f"Replay complete - {total_sent} messages sent",
@@ -444,7 +445,7 @@ class ConnectionManager:
 
             # Ensure required fields
             if "timestamp" not in message:
-                message["timestamp"] = datetime.now().isoformat()
+                message["timestamp"] = datetime.now(UTC).isoformat()
 
             if "type" not in message:
                 message["type"] = "unknown"
@@ -461,7 +462,7 @@ class ConnectionManager:
             logger.exception("Invalid message for broadcast")
             # Create a safe fallback message
             message = {
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "type": "error",
                 "message": "Invalid message format",
                 "source": "dashboard-api",
@@ -566,7 +567,8 @@ class LogStreamer:
         """Start Docker socket-based log streaming"""
         try:
             # Check if docker command is available
-            result = subprocess.run(
+            result = await asyncio.to_thread(
+                subprocess.run,
                 ["docker", "--version"],
                 capture_output=True,
                 text=True,
@@ -607,7 +609,7 @@ class LogStreamer:
             ]
 
             for log_path in log_paths:
-                if os.path.exists(log_path):
+                if Path(log_path).exists():
                     task = asyncio.create_task(self._watch_log_file(log_path))
                     self._file_watcher_tasks.append(task)
                     self.file_watchers.append(log_path)
@@ -629,11 +631,11 @@ class LogStreamer:
         """Watch a log file for new lines"""
         try:
             # Get initial file size
-            if not os.path.exists(file_path):
+            if not Path(file_path).exists():
                 logger.warning("Log file not found: %s", file_path)
                 return
 
-            with file_path.open() as f:
+            with Path(file_path).open() as f:
                 # Go to end of file
                 f.seek(0, 2)
 
@@ -642,10 +644,10 @@ class LogStreamer:
                     if line:
                         # Broadcast new log line
                         log_entry = {
-                            "timestamp": datetime.now().isoformat(),
+                            "timestamp": datetime.now(UTC).isoformat(),
                             "level": "INFO",
                             "message": line.strip(),
-                            "source": f"file-{os.path.basename(file_path)}",
+                            "source": f"file-{Path(file_path).name}",
                             "file_path": file_path,
                         }
 
@@ -674,7 +676,7 @@ class LogStreamer:
 
                 # Parse and broadcast log entry
                 log_entry = {
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "level": "INFO",
                     "message": line.strip(),
                     "source": "docker-logs",
@@ -1149,7 +1151,7 @@ async def websocket_endpoint(websocket: WebSocket):
             "user_agent": user_agent,
             "host": host,
             "cors_validated": cors_validation_passed,
-            "connection_time": datetime.now().isoformat(),
+            "connection_time": datetime.now(UTC).isoformat(),
         }
 
         await manager.connect(websocket, connection_info=connection_info)
@@ -1157,7 +1159,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
         # Send initial connection confirmation with enhanced details
         welcome_message = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "type": "connection_established",
             "message": "WebSocket connection successful",
             "connection_id": str(id(websocket)),  # Simple connection identifier
@@ -1207,14 +1209,14 @@ async def websocket_endpoint(websocket: WebSocket):
             try:
                 if message_type == "ping":
                     response = {
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                         "type": "pong",
                         "message": "Server is alive",
                     }
                 elif message_type == "subscribe":
                     # Handle subscription requests
                     response = {
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                         "type": "subscription_confirmed",
                         "subscriptions": parsed_data.get("channels", []),
                         "message": f"Subscribed to {len(parsed_data.get('channels', []))} channels",
@@ -1222,7 +1224,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 else:
                     # Default echo response
                     response = {
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                         "type": "echo",
                         "message": f"Server received: {message_type}",
                         "parsed": parsed_data,
@@ -1235,7 +1237,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 # Try to send a simple error message
                 try:
                     error_response = {
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                         "type": "error",
                         "message": "Failed to process message",
                         "error_details": str(e),
@@ -1256,14 +1258,16 @@ async def websocket_endpoint(websocket: WebSocket):
         try:
             if websocket.client_state == websocket.CONNECTED:
                 error_msg = {
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "type": "connection_error",
                     "message": "WebSocket connection error occurred",
                     "error": str(e),
                 }
                 await websocket.send_text(json.dumps(error_msg))
         except Exception:
-            pass  # Connection already closed
+            logger.exception(
+                "Failed to send error message to closed WebSocket connection"
+            )
 
 
 # REST API Endpoints
@@ -1275,7 +1279,7 @@ async def root():
     return {
         "service": "AI Trading Bot Dashboard",
         "version": "1.0.0",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "status": "running",
     }
 
@@ -1287,7 +1291,8 @@ async def get_status():
         # Check if Docker container is running with error handling
         container_status = "unknown"
         try:
-            result = subprocess.run(
+            result = await asyncio.to_thread(
+                subprocess.run,
                 [
                     "docker",
                     "ps",
@@ -1317,8 +1322,13 @@ async def get_status():
         # Get basic system info with graceful fallback
         system_uptime = "unknown"
         try:
-            uptime_result = subprocess.run(
-                ["uptime"], capture_output=True, text=True, timeout=3, check=False
+            uptime_result = await asyncio.to_thread(
+                subprocess.run,
+                ["uptime"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+                check=False,
             )
             if uptime_result.returncode == 0:
                 system_uptime = uptime_result.stdout.strip()
@@ -1327,8 +1337,8 @@ async def get_status():
             # Provide a simple alternative if psutil is available
             if psutil:
                 try:
-                    boot_time = datetime.fromtimestamp(psutil.boot_time())
-                    uptime_seconds = (datetime.now() - boot_time).total_seconds()
+                    boot_time = datetime.fromtimestamp(psutil.boot_time(), tz=UTC)
+                    uptime_seconds = (datetime.now(UTC) - boot_time).total_seconds()
                     hours = int(uptime_seconds // 3600)
                     minutes = int((uptime_seconds % 3600) // 60)
                     system_uptime = f"up {hours}:{minutes:02d}"
@@ -1336,7 +1346,7 @@ async def get_status():
                     system_uptime = "unknown"
 
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "bot_status": container_status,
             "system_uptime": system_uptime,
             "websocket_connections": len(manager.active_connections),
@@ -1348,7 +1358,7 @@ async def get_status():
         logger.exception("Error getting status")
         # Return a minimal but functional response instead of raising
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "bot_status": "error",
             "system_uptime": "unknown",
             "websocket_connections": len(manager.active_connections),
@@ -1367,7 +1377,8 @@ async def get_trading_data():
         memory_usage = "N/A"
 
         try:
-            stats_result = subprocess.run(
+            stats_result = await asyncio.to_thread(
+                subprocess.run,
                 [
                     "docker",
                     "stats",
@@ -1398,7 +1409,7 @@ async def get_trading_data():
                     memory = psutil.virtual_memory()
                     memory_usage = f"{memory.used / (1024**3):.1f}GiB / {memory.total / (1024**3):.1f}GiB"
                 except Exception:
-                    pass  # Keep N/A values
+                    logger.exception("Failed to get system stats from psutil")
 
         # Determine trading mode from environment or config
         # In real implementation, this would come from the bot's config
@@ -1499,7 +1510,7 @@ async def get_trading_data():
                     recent_trades.append(
                         {
                             "timestamp": order.get(
-                                "created_at", datetime.now().isoformat()
+                                "created_at", datetime.now(UTC).isoformat()
                             ),
                             "symbol": order.get("symbol", "BTC-PERP"),
                             "side": order.get("side", "buy"),
@@ -1541,7 +1552,7 @@ async def get_trading_data():
 
             recent_trades = [
                 {
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "symbol": f"BTC{symbol_suffix}",
                     "side": "buy",
                     "quantity": "0.05",
@@ -1554,7 +1565,7 @@ async def get_trading_data():
 
         # Mock trading data - in real implementation, this would come from the bot
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "trading_mode": trading_mode,
             "futures_enabled": futures_enabled,
             "exchange_type": exchange_type,
@@ -1573,7 +1584,7 @@ async def get_trading_data():
             "system": {
                 "cpu_usage": cpu_usage,
                 "memory_usage": memory_usage,
-                "last_update": datetime.now().isoformat(),
+                "last_update": datetime.now(UTC).isoformat(),
             },
             "bluefin_data": bluefin_data if exchange_type == "bluefin" else None,
         }
@@ -1582,7 +1593,7 @@ async def get_trading_data():
         logger.exception("Error getting trading data")
         # Return mock data even on error to keep dashboard functional
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "trading_mode": "spot",  # Default to spot mode on error
             "futures_enabled": False,
             "account_type": "CBI",
@@ -1612,7 +1623,7 @@ async def get_trading_data():
             "system": {
                 "cpu_usage": "N/A",
                 "memory_usage": "N/A",
-                "last_update": datetime.now().isoformat(),
+                "last_update": datetime.now(UTC).isoformat(),
             },
             "error": str(e),
         }
@@ -1691,7 +1702,7 @@ async def get_trading_mode():
             }
 
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "trading_mode": "futures" if futures_enabled else "spot",
             "futures_enabled": futures_enabled,
             "exchange_type": exchange_type,
@@ -1740,7 +1751,7 @@ async def get_logs(limit: int = 100):
             else []
         )
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "total_logs": len(manager.message_buffers.get("log", [])),
             "returned_logs": len(logs),
             "logs": logs,
@@ -1763,7 +1774,7 @@ async def get_llm_status():
         if not llm_parser:
             logger.warning("LLM parser not available")
             return {
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "monitoring_active": False,
                 "log_file": "not_available",
                 "total_parsed": {
@@ -1804,7 +1815,7 @@ async def get_llm_status():
                 recent_decisions = [
                     d
                     for d in llm_parser.decisions
-                    if d.timestamp >= datetime.now() - timedelta(hours=1)
+                    if d.timestamp >= datetime.now(UTC) - timedelta(hours=1)
                 ]
 
             # Calculate decision distribution
@@ -1836,14 +1847,14 @@ async def get_llm_status():
                     [
                         a
                         for a in llm_parser.alerts
-                        if a.timestamp >= datetime.now() - timedelta(hours=1)
+                        if a.timestamp >= datetime.now(UTC) - timedelta(hours=1)
                     ]
                 )
         except Exception as e:
             logger.warning("Failed to count active alerts: %s", e)
 
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "monitoring_active": True,
             "log_file": str(getattr(llm_parser, "log_file", "unknown")),
             "total_parsed": {
@@ -1870,7 +1881,7 @@ async def get_llm_status():
         logger.exception("Error getting LLM status")
         # Return a functional response instead of raising an exception
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "monitoring_active": False,
             "log_file": "error",
             "total_parsed": {
@@ -1941,7 +1952,7 @@ async def get_llm_metrics(
             }
 
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "time_window": time_window or "24h",
             "metrics": metrics,
         }
@@ -1950,7 +1961,7 @@ async def get_llm_metrics(
         logger.exception("Error getting LLM metrics")
         # Return empty metrics instead of raising
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "time_window": time_window or "24h",
             "metrics": {
                 "total_requests": 0,
@@ -1979,7 +1990,7 @@ async def get_llm_activity(limit: int = Query(50, ge=1, le=500)):
             logger.warning("LLM parser not available for activity")
 
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "limit": limit,
             "total_events": len(activity),
             "activity": activity,
@@ -1989,7 +2000,7 @@ async def get_llm_activity(limit: int = Query(50, ge=1, le=500)):
         logger.exception("Error getting LLM activity")
         # Return empty activity instead of raising
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "limit": limit,
             "total_events": 0,
             "activity": [],
@@ -2023,7 +2034,7 @@ async def get_llm_decisions(
             action_counts[action] = action_counts.get(action, 0) + 1
 
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "total_decisions": len(decisions),
             "returned_decisions": len(recent_decisions),
             "action_distribution": action_counts,
@@ -2050,14 +2061,14 @@ async def get_llm_alerts(
 
         if active_only:
             # Only alerts from last hour
-            cutoff = datetime.now() - timedelta(hours=1)
+            cutoff = datetime.now(UTC) - timedelta(hours=1)
             alerts = [a for a in alerts if a.timestamp >= cutoff]
 
         # Apply limit
         alerts = alerts[-limit:] if len(alerts) > limit else alerts
 
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "active_only": active_only,
             "total_alerts": len(alerts),
             "alerts": [alert.to_dict() for alert in alerts],
@@ -2127,7 +2138,7 @@ async def get_llm_sessions():
         session_stats.sort(key=lambda x: x["start_time"], reverse=True)
 
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "total_sessions": len(session_stats),
             "sessions": session_stats,
         }
@@ -2169,7 +2180,7 @@ async def get_llm_cost_analysis():
                 costs_by_model[request.model] += cost
 
         # Calculate current hour and day costs
-        now = datetime.now()
+        now = datetime.now(UTC)
         current_hour_key = now.strftime("%Y-%m-%d-%H")
         current_day_key = now.strftime("%Y-%m-%d")
 
@@ -2178,7 +2189,7 @@ async def get_llm_cost_analysis():
         avg_hourly_cost = sum(hourly_costs) / len(hourly_costs) if hourly_costs else 0
 
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "current_hour_cost": costs_by_hour.get(current_hour_key, 0),
             "current_day_cost": costs_by_day.get(current_day_key, 0),
             "total_cost": sum(r.cost_estimate_usd for r in llm_parser.responses),
@@ -2213,7 +2224,7 @@ async def export_llm_data(
         exported_data = llm_parser.export_data(format)
 
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "format": format,
             "data": json.loads(exported_data),
         }
@@ -2269,7 +2280,8 @@ async def configure_llm_alerts(thresholds: dict[str, Any]):
 async def restart_bot():
     """Restart the trading bot container"""
     try:
-        result = subprocess.run(
+        result = await asyncio.to_thread(
+            subprocess.run,
             ["docker", "restart", "ai-trading-bot"],
             capture_output=True,
             text=True,
@@ -2281,7 +2293,7 @@ async def restart_bot():
             # Broadcast restart notification
             await manager.broadcast(
                 {
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "level": "INFO",
                     "message": "Trading bot container restarted",
                     "source": "dashboard-api",
@@ -2332,7 +2344,7 @@ async def get_messages_by_category(
         "returned": len(paginated_messages),
         "offset": offset,
         "limit": limit,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
@@ -2342,7 +2354,7 @@ async def get_message_statistics():
     stats = manager.get_message_stats()
     return {
         **stats,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "uptime_seconds": time.time() - (stats.get("start_time", time.time())),
     }
 
@@ -2364,7 +2376,7 @@ async def broadcast_message(message: dict):
             **message,
             "source": "dashboard-api",
             "manual_broadcast": True,
-            "api_timestamp": datetime.now().isoformat(),
+            "api_timestamp": datetime.now(UTC).isoformat(),
         }
 
         await manager.broadcast(enhanced_message)
@@ -2373,7 +2385,7 @@ async def broadcast_message(message: dict):
             "status": "success",
             "message": "Message broadcasted successfully",
             "active_connections": len(manager.active_connections),
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     except Exception as e:
@@ -2394,7 +2406,7 @@ class BotCommand:
         self.command_type = command_type
         self.parameters = parameters or {}
         self.priority = priority  # 1=highest, 10=lowest
-        self.created_at = datetime.now().isoformat()
+        self.created_at = datetime.now(UTC).isoformat()
         self.status = "pending"  # pending, sent, acknowledged, failed
         self.attempts = 0
         self.max_attempts = 3
@@ -2422,7 +2434,7 @@ async def emergency_stop_bot():
             "message": "Emergency stop command issued",
             "source": "dashboard-api",
             "priority": "critical",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         await manager.broadcast(emergency_message)
@@ -2432,7 +2444,7 @@ async def emergency_stop_bot():
             "command_id": command.id,
             "message": "Emergency stop command queued",
             "queue_position": 0,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     except Exception as e:
@@ -2453,7 +2465,7 @@ async def pause_trading():
                 "command_id": command.id,
                 "message": "Trading pause command issued",
                 "source": "dashboard-api",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
         )
 
@@ -2462,7 +2474,7 @@ async def pause_trading():
             "command_id": command.id,
             "message": "Trading pause command queued",
             "queue_size": len(bot_command_queue),
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     except Exception as e:
@@ -2483,7 +2495,7 @@ async def resume_trading():
                 "command_id": command.id,
                 "message": "Trading resume command issued",
                 "source": "dashboard-api",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
         )
 
@@ -2492,7 +2504,7 @@ async def resume_trading():
             "command_id": command.id,
             "message": "Trading resume command queued",
             "queue_size": len(bot_command_queue),
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     except Exception as e:
@@ -2529,7 +2541,7 @@ async def update_risk_limits(
                 "parameters": parameters,
                 "message": "Risk limits update command issued",
                 "source": "dashboard-api",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
         )
 
@@ -2539,7 +2551,7 @@ async def update_risk_limits(
             "message": "Risk limits update command queued",
             "parameters": parameters,
             "queue_size": len(bot_command_queue),
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     except Exception as e:
@@ -2599,7 +2611,7 @@ async def manual_trade_command(
                 "message": f"Manual trade command issued: {action} {size_percentage}% {symbol} on {exchange_type}",
                 "source": "dashboard-api",
                 "warning": "This may execute real trades!",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
         )
 
@@ -2610,7 +2622,7 @@ async def manual_trade_command(
             "parameters": parameters,
             "queue_size": len(bot_command_queue),
             "warning": "This command may execute real trades if bot is in live mode!",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     except Exception as e:
@@ -2635,7 +2647,7 @@ async def get_command_queue():
             for cmd in bot_command_queue
         ],
         "history_size": len(command_history),
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
@@ -2646,7 +2658,7 @@ async def get_command_history(limit: int = Query(default=50, ge=1, le=500)):
         "history": command_history[-limit:],
         "total_executed": len(command_history),
         "returned": min(limit, len(command_history)),
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
@@ -2665,7 +2677,7 @@ async def cancel_command(command_id: str):
                         "id": removed_cmd.id,
                         "type": removed_cmd.command_type,
                         "status": "cancelled",
-                        "cancelled_at": datetime.now().isoformat(),
+                        "cancelled_at": datetime.now(UTC).isoformat(),
                         "created_at": removed_cmd.created_at,
                     }
                 )
@@ -2676,14 +2688,14 @@ async def cancel_command(command_id: str):
                         "command_id": command_id,
                         "message": f"Command {command_id} cancelled",
                         "source": "dashboard-api",
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                     }
                 )
 
                 return {
                     "status": "success",
                     "message": f"Command {command_id} cancelled successfully",
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
 
         raise HTTPException(
@@ -2764,7 +2776,7 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "version": "1.0.0",
         "websocket": {
             "endpoint": "/ws",
@@ -2788,7 +2800,7 @@ async def websocket_health_check():
         "endpoint": "/ws",
         "active_connections": len(manager.active_connections),
         "connection_manager_status": "operational",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
@@ -2810,7 +2822,7 @@ async def websocket_test():
         },
         "protocols": ["ws", "wss"],
         "cors_enabled": True,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "environment": environment,
     }
 
@@ -2859,7 +2871,7 @@ async def connectivity_test(request: Request):
 
     # Backend health
     backend_health = {
-        "server_time": datetime.now().isoformat(),
+        "server_time": datetime.now(UTC).isoformat(),
         "environment": os.getenv("ENVIRONMENT", "development"),
         "docker_env": bool(os.getenv("DOCKER_ENV")),
         "container": bool(os.getenv("CONTAINER")),
@@ -2872,7 +2884,7 @@ async def connectivity_test(request: Request):
         "cors": cors_info,
         "websocket": websocket_info,
         "backend": backend_health,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
@@ -2923,7 +2935,7 @@ async def websocket_connections():
             for category, buffer in manager.message_buffers.items()
         },
         "connections": connections_info,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
@@ -3149,7 +3161,7 @@ async def get_tradingview_symbols():
     """Get all available symbols for TradingView"""
     return {
         "symbols": tradingview_feed.get_symbols_list(),
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
@@ -3166,7 +3178,7 @@ async def get_indicator_data(
         "symbol": symbol,
         "indicator": indicator,
         "data": data,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
@@ -3216,7 +3228,7 @@ async def update_trading_data(symbol: str, data: dict[str, Any]):
         # Broadcast update to WebSocket clients
         await manager.broadcast(
             {
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "type": "tradingview_update",
                 "symbol": symbol,
                 "data": data,
@@ -3255,7 +3267,7 @@ async def add_llm_decision_to_chart(decision_data: dict[str, Any]):
             # Broadcast to WebSocket clients
             await manager.broadcast(
                 {
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "type": "tradingview_decision",
                     "symbol": symbol,
                     "decision": marker.__dict__,
@@ -3280,7 +3292,7 @@ async def websocket_status():
         "active_connections": len(manager.active_connections),
         "buffer_size": len(manager.message_buffers.get("log", [])),
         "log_streamer_running": log_streamer.running if log_streamer else False,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
@@ -3291,7 +3303,7 @@ async def get_bluefin_health():
     try:
         health = await bluefin_client.health_check()
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "service_url": bluefin_client.base_url,
             "health": health,
         }
@@ -3305,7 +3317,10 @@ async def get_bluefin_account():
     """Get Bluefin account information"""
     try:
         account_info = await bluefin_client.get_account_info()
-        return {"timestamp": datetime.now().isoformat(), "account": account_info}
+        return {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "account": account_info,
+        }
     except HTTPException:
         raise  # Re-raise HTTP exceptions from the client
     except Exception as e:
@@ -3318,7 +3333,10 @@ async def get_bluefin_positions():
     """Get current Bluefin positions"""
     try:
         positions = await bluefin_client.get_positions()
-        return {"timestamp": datetime.now().isoformat(), "positions": positions}
+        return {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "positions": positions,
+        }
     except HTTPException:
         raise  # Re-raise HTTP exceptions from the client
     except Exception as e:
@@ -3331,7 +3349,7 @@ async def get_bluefin_orders():
     """Get current Bluefin orders"""
     try:
         orders = await bluefin_client.get_orders()
-        return {"timestamp": datetime.now().isoformat(), "orders": orders}
+        return {"timestamp": datetime.now(UTC).isoformat(), "orders": orders}
     except HTTPException:
         raise  # Re-raise HTTP exceptions from the client
     except Exception as e:
@@ -3345,7 +3363,7 @@ async def get_bluefin_market_ticker(symbol: str):
     try:
         ticker = await bluefin_client.get_market_ticker(symbol)
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "symbol": symbol,
             "ticker": ticker,
         }
@@ -3370,7 +3388,7 @@ async def place_bluefin_order(order_data: dict):
 
         # Add source information
         order_data["source"] = "dashboard-api"
-        order_data["timestamp"] = datetime.now().isoformat()
+        order_data["timestamp"] = datetime.now(UTC).isoformat()
 
         result = await bluefin_client.place_order(order_data)
 
@@ -3381,12 +3399,12 @@ async def place_bluefin_order(order_data: dict):
                 "order_data": order_data,
                 "result": result,
                 "source": "dashboard-api",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
         )
 
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "status": "success",
             "order": result,
         }
@@ -3407,7 +3425,7 @@ async def global_exception_handler(request, exc):
         content={
             "error": "Internal server error",
             "message": str(exc),
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         },
     )
 

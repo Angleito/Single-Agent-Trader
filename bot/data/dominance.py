@@ -12,7 +12,7 @@ import contextlib
 import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, ClassVar
 
 import aiohttp
 import numpy as np
@@ -64,7 +64,7 @@ class DominanceDataProvider:
     """
 
     # Class variable to track all instances for cleanup
-    _instances: list["DominanceDataProvider"] = []
+    _instances: ClassVar[list["DominanceDataProvider"]] = []
     _cleanup_registered = False
 
     # API endpoints for different data sources
@@ -696,7 +696,7 @@ class DominanceCandleBuilder:
     and calculates volume based on stablecoin market cap changes.
     """
 
-    SUPPORTED_INTERVALS = ["1T", "3T", "5T", "15T", "30T", "1H"]
+    SUPPORTED_INTERVALS: ClassVar[list[str]] = ["1T", "3T", "5T", "15T", "30T", "1H"]
 
     def __init__(self, snapshots: list[DominanceData]):
         """

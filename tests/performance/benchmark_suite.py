@@ -167,7 +167,8 @@ class PerformanceBenchmarks:
 
             data.append(
                 {
-                    "timestamp": datetime.utcnow() - timedelta(minutes=size - i),
+                    "timestamp": datetime.now(timezone.utc)
+                    - timedelta(minutes=size - i),
                     "open": open_price,
                     "high": high,
                     "low": low,
@@ -191,7 +192,7 @@ class PerformanceBenchmarks:
             description="Comprehensive performance testing of all trading bot components",
         )
 
-        suite.start_time = datetime.utcnow()
+        suite.start_time = datetime.now(timezone.utc)
         logger.info("Starting comprehensive performance benchmark suite...")
 
         try:
@@ -223,7 +224,7 @@ class PerformanceBenchmarks:
             logger.exception("Benchmark suite failed: %s", e)
             raise
         finally:
-            suite.end_time = datetime.utcnow()
+            suite.end_time = datetime.now(timezone.utc)
 
         return suite
 
@@ -296,7 +297,7 @@ class PerformanceBenchmarks:
             symbol="BTC-USD",
             side="FLAT",
             size=Decimal("0"),
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         test_indicators = IndicatorData(
@@ -311,7 +312,7 @@ class PerformanceBenchmarks:
         test_market_state = MarketState(
             symbol="BTC-USD",
             interval="1m",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             current_price=Decimal("50000"),
             ohlcv_data=self.test_data.tail(10).to_dict("records"),
             indicators=test_indicators,

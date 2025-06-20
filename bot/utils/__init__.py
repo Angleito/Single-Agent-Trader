@@ -35,10 +35,37 @@ try:
 
     _web_search_formatter_available = True
 except ImportError:
-    WebSearchFormatter = None  # type: ignore
-    ContentPriority = None  # type: ignore
-    FormattedContent = None  # type: ignore
+    WebSearchFormatter = None
+    ContentPriority = None
+    FormattedContent = None
     _web_search_formatter_available = False
+
+# Import path utilities
+try:
+    from .path_utils import (
+        ensure_directory_exists,
+        get_bluefin_logs_directory,
+        get_bluefin_logs_file_path,
+        get_config_directory,
+        get_config_file_path,
+        get_data_directory,
+        get_data_file_path,
+        get_logs_directory,
+        get_logs_file_path,
+        get_mcp_logs_directory,
+        get_mcp_logs_file_path,
+        get_mcp_memory_directory,
+        get_mcp_memory_file_path,
+        get_omnisearch_cache_directory,
+        get_omnisearch_cache_file_path,
+        get_safe_file_path,
+        get_tmp_directory,
+        get_tmp_file_path,
+    )
+
+    _path_utils_available = True
+except ImportError:
+    _path_utils_available = False
 
 __all__ = [
     "init_all_suppressions",
@@ -57,3 +84,28 @@ if _ta_available:
 # Only add web search formatter to __all__ if it's available
 if _web_search_formatter_available:
     __all__.extend(["ContentPriority", "FormattedContent", "WebSearchFormatter"])
+
+# Only add path utilities to __all__ if they're available
+if _path_utils_available:
+    __all__.extend(
+        [
+            "ensure_directory_exists",
+            "get_bluefin_logs_directory",
+            "get_bluefin_logs_file_path",
+            "get_config_directory",
+            "get_config_file_path",
+            "get_data_directory",
+            "get_data_file_path",
+            "get_logs_directory",
+            "get_logs_file_path",
+            "get_mcp_logs_directory",
+            "get_mcp_logs_file_path",
+            "get_mcp_memory_directory",
+            "get_mcp_memory_file_path",
+            "get_omnisearch_cache_directory",
+            "get_omnisearch_cache_file_path",
+            "get_safe_file_path",
+            "get_tmp_directory",
+            "get_tmp_file_path",
+        ]
+    )

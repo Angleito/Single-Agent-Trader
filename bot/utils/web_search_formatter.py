@@ -10,7 +10,7 @@ import hashlib
 import logging
 import re
 from collections import Counter
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -72,7 +72,7 @@ class FormattedContent(BaseModel):
     )
     priority: ContentPriority = Field(description="Content priority scoring")
     timestamp: datetime = Field(
-        default_factory=datetime.utcnow, description="Processing timestamp"
+        default_factory=lambda: datetime.now(UTC), description="Processing timestamp"
     )
 
 
@@ -216,7 +216,7 @@ class WebSearchFormatter:
             return self._format_news_for_llm(sorted_items[:10])  # Top 10 items
 
         except Exception as e:
-            logger.error(f"Error formatting news results: {e}", exc_info=True)
+            logger.exception("Error formatting news results")
             return f"📰 **NEWS ANALYSIS**\n\n❌ Error processing news data: {e!s}\n"
 
     async def format_sentiment_data(self, sentiment: SentimentResult) -> str:
@@ -294,7 +294,7 @@ class WebSearchFormatter:
             return "\n".join(output_lines)
 
         except Exception as e:
-            logger.error(f"Error formatting sentiment data: {e}", exc_info=True)
+            logger.exception("Error formatting sentiment data")
             return f"📊 **MARKET SENTIMENT ANALYSIS**\n\n❌ Error processing sentiment data: {e!s}\n"
 
     async def format_correlation_analysis(
@@ -364,7 +364,7 @@ class WebSearchFormatter:
             return "\n".join(output_lines)
 
         except Exception as e:
-            logger.error(f"Error formatting correlation analysis: {e}", exc_info=True)
+            logger.exception("Error formatting correlation analysis")
             return f"🔗 **CRYPTO-NASDAQ CORRELATION ANALYSIS**\n\n❌ Error processing correlation data: {e!s}\n"
 
     async def format_market_context(self, context: dict[str, Any]) -> str:
@@ -423,6 +423,10 @@ class WebSearchFormatter:
             # Combine all sections
             full_content = "\n".join(output_sections)
 
+        except Exception as e:
+            logger.exception("Error formatting market context")
+            return f"🌐 **MARKET CONTEXT ANALYSIS**\n\n❌ Error processing market context: {e!s}\n"
+        else:
             # Apply token limits and optimization
             optimized_content = self._optimize_content_for_tokens(full_content)
 
@@ -430,10 +434,6 @@ class WebSearchFormatter:
             summary_header = self._generate_context_summary_header(context)
 
             return f"{summary_header}\n\n{optimized_content}"
-
-        except Exception as e:
-            logger.error(f"Error formatting market context: {e}", exc_info=True)
-            return f"🌐 **MARKET CONTEXT ANALYSIS**\n\n❌ Error processing market context: {e!s}\n"
 
     def truncate_content(self, text: str, max_length: int) -> str:
         """
@@ -468,8 +468,8 @@ class WebSearchFormatter:
 
             return text[: max_length - 3] + "..."
 
-        except Exception as e:
-            logger.error(f"Error truncating content: {e}", exc_info=True)
+        except Exception:
+            logger.exception("Error truncating content")
             return text[: max_length - 3] + "..." if len(text) > max_length else text
 
     async def extract_key_insights(self, search_results: dict) -> list[str]:
@@ -517,7 +517,7 @@ class WebSearchFormatter:
             return prioritized_insights[:10]  # Return top 10 insights
 
         except Exception as e:
-            logger.error(f"Error extracting key insights: {e}", exc_info=True)
+            logger.exception("Error extracting key insights")
             return [f"Error extracting insights: {e!s}"]
 
     # Private helper methods
@@ -545,7 +545,7 @@ class WebSearchFormatter:
             title = item.get("title", "")
             content = item.get("content", item.get("description", ""))
             url = item.get("url", "")
-            published_time = item.get("published_time", datetime.utcnow())
+            published_time = item.get("published_time", datetime.now(UTC))
 
             # Calculate priority scores
             relevance_score = self._calculate_relevance_score(title, content)
@@ -593,7 +593,7 @@ class WebSearchFormatter:
             )
 
         except Exception as e:
-            logger.error(f"Error processing single news item: {e}", exc_info=True)
+            logger.exception("Error processing single news item")
             # Return minimal formatted content for failed items
             return FormattedContent(
                 summary=f"Error processing item: {e!s}",
@@ -756,7 +756,7 @@ class WebSearchFormatter:
 
                 published_time = parser.parse(published_time)
 
-            time_diff = datetime.utcnow() - published_time
+            time_diff = datetime.now(UTC) - published_time
             hours_old = time_diff.total_seconds() / 3600
 
             if hours_old < 1:
@@ -769,10 +769,11 @@ class WebSearchFormatter:
                 return 0.6
             if hours_old < 168:  # 1 week
                 return 0.4
-            return 0.2
 
         except Exception:
             return 0.5  # Default for unparseable dates
+        else:
+            return 0.2
 
     def _calculate_authority_score(self, url: str) -> float:
         """Calculate source authority score."""
@@ -780,9 +781,10 @@ class WebSearchFormatter:
             for domain, score in self._authority_sources.items():
                 if domain in url.lower():
                     return score
-            return 0.3  # Default for unknown sources
         except Exception:
             return 0.3
+        else:
+            return 0.3  # Default for unknown sources
 
     def _calculate_trading_impact_score(self, title: str, content: str) -> float:
         """Calculate potential trading impact score."""
@@ -1209,7 +1211,7 @@ class WebSearchFormatter:
 
     def _generate_context_summary_header(self, context: dict[str, Any]) -> str:
         """Generate summary header for market context."""
-        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
 
         # Count available data sources
         data_sources = []

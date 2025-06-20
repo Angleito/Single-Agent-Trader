@@ -23,13 +23,14 @@ class TestCipherA:
         """Test Cipher A calculation with sample data."""
         # Create sample OHLCV data
         dates = pd.date_range("2024-01-01", periods=100, freq="1h")
+        rng = np.random.default_rng(42)
         data = pd.DataFrame(
             {
-                "open": np.random.uniform(45000, 55000, 100),
-                "high": np.random.uniform(46000, 56000, 100),
-                "low": np.random.uniform(44000, 54000, 100),
-                "close": np.random.uniform(45000, 55000, 100),
-                "volume": np.random.uniform(10, 100, 100),
+                "open": rng.uniform(45000, 55000, 100),
+                "high": rng.uniform(46000, 56000, 100),
+                "low": rng.uniform(44000, 54000, 100),
+                "close": rng.uniform(45000, 55000, 100),
+                "volume": rng.uniform(10, 100, 100),
             },
             index=dates,
         )
@@ -80,13 +81,14 @@ class TestCipherB:
         """Test Cipher B calculation with sample data."""
         # Create sample OHLCV data
         dates = pd.date_range("2024-01-01", periods=100, freq="1h")
+        rng = np.random.default_rng(43)
         data = pd.DataFrame(
             {
-                "open": np.random.uniform(45000, 55000, 100),
-                "high": np.random.uniform(46000, 56000, 100),
-                "low": np.random.uniform(44000, 54000, 100),
-                "close": np.random.uniform(45000, 55000, 100),
-                "volume": np.random.uniform(10, 100, 100),
+                "open": rng.uniform(45000, 55000, 100),
+                "high": rng.uniform(46000, 56000, 100),
+                "low": rng.uniform(44000, 54000, 100),
+                "close": rng.uniform(45000, 55000, 100),
+                "volume": rng.uniform(10, 100, 100),
             },
             index=dates,
         )
@@ -115,13 +117,14 @@ class TestVuManChuIndicators:
         """Test calculation of all indicators."""
         # Create sample data
         dates = pd.date_range("2024-01-01", periods=100, freq="1h")
+        rng = np.random.default_rng(44)
         data = pd.DataFrame(
             {
-                "open": np.random.uniform(45000, 55000, 100),
-                "high": np.random.uniform(46000, 56000, 100),
-                "low": np.random.uniform(44000, 54000, 100),
-                "close": np.random.uniform(45000, 55000, 100),
-                "volume": np.random.uniform(10, 100, 100),
+                "open": rng.uniform(45000, 55000, 100),
+                "high": rng.uniform(46000, 56000, 100),
+                "low": rng.uniform(44000, 54000, 100),
+                "close": rng.uniform(45000, 55000, 100),
+                "volume": rng.uniform(10, 100, 100),
             },
             index=dates,
         )
@@ -151,13 +154,14 @@ class TestVuManChuIndicators:
         """Test getting latest indicator state."""
         # Create sample data
         dates = pd.date_range("2024-01-01", periods=50, freq="1h")
+        rng = np.random.default_rng(45)
         data = pd.DataFrame(
             {
-                "open": np.random.uniform(45000, 55000, 50),
-                "high": np.random.uniform(46000, 56000, 50),
-                "low": np.random.uniform(44000, 54000, 50),
-                "close": np.random.uniform(45000, 55000, 50),
-                "volume": np.random.uniform(10, 100, 50),
+                "open": rng.uniform(45000, 55000, 50),
+                "high": rng.uniform(46000, 56000, 50),
+                "low": rng.uniform(44000, 54000, 50),
+                "close": rng.uniform(45000, 55000, 50),
+                "volume": rng.uniform(10, 100, 50),
             },
             index=dates,
         )

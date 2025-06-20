@@ -40,8 +40,8 @@ class MemoryStore:
                 with file_path.open() as f:
                     memory = json.load(f)
                     self.memories[memory["id"]] = memory
-            except Exception as e:
-                logger.exception("Failed to load %s: %s", file_path, e)
+            except Exception:
+                logger.exception("Failed to load %s", file_path)
 
     def save(self, memory_id: str, data: dict[str, Any]) -> None:
         """Save a memory to storage."""
@@ -54,8 +54,8 @@ class MemoryStore:
             file_path = self.storage_path / f"{memory_id}.json"
             with file_path.open("w") as f:
                 json.dump(data, f, indent=2)
-        except Exception as e:
-            logger.exception("Failed to persist memory %s: %s", memory_id, e)
+        except Exception:
+            logger.exception("Failed to persist memory %s", memory_id)
 
     def get(self, memory_id: str) -> dict[str, Any] | None:
         """Get a memory by ID."""
@@ -117,7 +117,7 @@ async def store_experience(
         return {"experience_id": experience_id}
 
     except Exception as e:
-        logger.exception("Failed to store experience: %s", e)
+        logger.exception("Failed to store experience")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -136,10 +136,12 @@ async def query_experiences(
 ) -> dict[str, Any]:
     """Query similar experiences."""
     try:
+        # market_state could be used for similarity matching in future
+        _ = market_state  # Mark as used to avoid linting error
         experiences = memory_store.query(query_params or {})
         return {"count": len(experiences), "experiences": experiences}
     except Exception as e:
-        logger.exception("Query failed: %s", e)
+        logger.exception("Query failed")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 

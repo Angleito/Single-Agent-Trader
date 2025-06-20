@@ -269,7 +269,8 @@ def generate_html_report(results: dict[str, Any], output_file: Path):
     # Generate final HTML
     content = "".join(content_sections)
     html_content = html_template.format(
-        timestamp=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"), content=content
+        timestamp=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+        content=content,
     )
 
     with output_file.open("w") as f:

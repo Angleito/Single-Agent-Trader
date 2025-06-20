@@ -11,7 +11,7 @@ from typing import Any
 try:
     import requests
 except ImportError:
-    requests = None  # type: ignore
+    requests = None  # type: ignore[assignment]
 
 from .config import Environment, Settings, TradingProfile, create_settings
 
@@ -48,9 +48,11 @@ class StartupValidator:
                 issues.append(
                     "Anthropic API key is required when using Anthropic provider"
                 )
-        elif self.settings.llm.provider == "ollama":
-            if not self.settings.llm.ollama_base_url:
-                issues.append("Ollama base URL is required when using Ollama provider")
+        elif (
+            self.settings.llm.provider == "ollama"
+            and not self.settings.llm.ollama_base_url
+        ):
+            issues.append("Ollama base URL is required when using Ollama provider")
 
         # Exchange credentials validation (for live trading)
         if not self.settings.system.dry_run:
@@ -136,9 +138,14 @@ class StartupValidator:
             issues.append(f"Cannot write to logs directory: {log_path}")
 
         # Check config directory
-        config_path = Path("config")
-        if not self._check_directory_permissions(config_path):
-            issues.append(f"Cannot write to config directory: {config_path}")
+        from .utils.path_utils import get_config_directory
+
+        try:
+            config_path = get_config_directory()
+            if not self._check_directory_permissions(config_path):
+                issues.append(f"Cannot write to config directory: {config_path}")
+        except OSError as e:
+            issues.append(f"Cannot access config directory: {e}")
 
         self.validation_results["file_permissions"] = issues
         return issues
@@ -238,61 +245,68 @@ class StartupValidator:
     def _test_llm_connectivity(self) -> dict[str, Any]:
         """Test LLM provider connectivity."""
         try:
-            if self.settings.llm.provider == "openai" and requests:
-                # Check if API key is available
-                if not self.settings.llm.openai_api_key:
-                    return {"success": False, "error": "OpenAI API key not configured"}
-
-                # Get the secret value properly
-                api_key = self.settings.llm.openai_api_key.get_secret_value()
-                headers = {"Authorization": f"Bearer {api_key}"}
-                response = requests.get(
-                    "https://api.openai.com/v1/models", headers=headers, timeout=10
-                )
-
-                if response.status_code == 200:
-                    return {"success": True, "error": None}
-                else:
-                    return {
-                        "success": False,
-                        "error": f"HTTP {response.status_code}: {response.text[:200]}",
-                    }
-
-            elif self.settings.llm.provider == "anthropic" and requests:
-                # Check if API key is available
-                if not self.settings.llm.anthropic_api_key:
-                    return {
-                        "success": False,
-                        "error": "Anthropic API key not configured",
-                    }
-
-                api_key = self.settings.llm.anthropic_api_key.get_secret_value()
-                headers = {"x-api-key": api_key}
-                # Anthropic doesn't have a simple health check, so we'll just verify key format
-                return {"success": True, "error": None}
-
-            elif self.settings.llm.provider == "ollama" and requests:
-                response = requests.get(
-                    f"{self.settings.llm.ollama_base_url}/api/tags", timeout=10
-                )
-
-                if response.status_code == 200:
-                    return {"success": True, "error": None}
-                else:
-                    return {
-                        "success": False,
-                        "error": f"HTTP {response.status_code}: {response.text[:200]}",
-                    }
-
-            else:
+            if not requests:
                 return {
                     "success": True,
-                    "error": "Connectivity test skipped "
-                    "(requests module not available)",
+                    "error": "Connectivity test skipped (requests module not available)",
                 }
+
+            return self._test_provider_connectivity()
 
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+    def _test_provider_connectivity(self) -> dict[str, Any]:
+        """Test specific provider connectivity."""
+        if self.settings.llm.provider == "openai":
+            return self._test_openai_connectivity()
+        if self.settings.llm.provider == "anthropic":
+            return self._test_anthropic_connectivity()
+        if self.settings.llm.provider == "ollama":
+            return self._test_ollama_connectivity()
+
+        return {"success": True, "error": "Unknown provider"}
+
+    def _test_openai_connectivity(self) -> dict[str, Any]:
+        """Test OpenAI connectivity."""
+        if not self.settings.llm.openai_api_key:
+            return {"success": False, "error": "OpenAI API key not configured"}
+
+        api_key = self.settings.llm.openai_api_key.get_secret_value()
+        headers = {"Authorization": f"Bearer {api_key}"}
+        response = requests.get(
+            "https://api.openai.com/v1/models", headers=headers, timeout=10
+        )
+
+        if response.status_code == 200:
+            return {"success": True, "error": None}
+
+        return {
+            "success": False,
+            "error": f"HTTP {response.status_code}: {response.text[:200]}",
+        }
+
+    def _test_anthropic_connectivity(self) -> dict[str, Any]:
+        """Test Anthropic connectivity."""
+        if not self.settings.llm.anthropic_api_key:
+            return {"success": False, "error": "Anthropic API key not configured"}
+
+        # Anthropic doesn't have a simple health check, so we'll just verify key format
+        return {"success": True, "error": None}
+
+    def _test_ollama_connectivity(self) -> dict[str, Any]:
+        """Test Ollama connectivity."""
+        response = requests.get(
+            f"{self.settings.llm.ollama_base_url}/api/tags", timeout=10
+        )
+
+        if response.status_code == 200:
+            return {"success": True, "error": None}
+
+        return {
+            "success": False,
+            "error": f"HTTP {response.status_code}: {response.text[:200]}",
+        }
 
     def _test_exchange_connectivity(self) -> dict[str, Any]:
         """Test exchange connectivity."""
@@ -303,10 +317,10 @@ class StartupValidator:
                 and self.settings.exchange.cb_api_secret
             ):
                 return {"success": True, "error": None}
-            else:
-                return {"success": False, "error": "Missing exchange credentials"}
         except Exception as e:
             return {"success": False, "error": str(e)}
+        else:
+            return {"success": False, "error": "Missing exchange credentials"}
 
     def _check_system_resources(self) -> str | None:
         """Check system resources like memory and disk space."""
@@ -337,9 +351,10 @@ class StartupValidator:
             test_file = path / f"test_{int(time.time())}.tmp"
             test_file.write_text("test")
             test_file.unlink()
-            return True
         except Exception:
             return False
+        else:
+            return True
 
     def _get_system_info(self) -> dict[str, Any]:
         """Get system information for debugging."""
@@ -464,7 +479,21 @@ class ConfigManager:
 
     def __init__(self, config_dir: Path | None = None):
         """Initialize configuration manager."""
-        self.config_dir = config_dir or Path("config")
+        if config_dir:
+            self.config_dir = config_dir
+        else:
+            from .utils.path_utils import get_config_directory
+
+            try:
+                self.config_dir = get_config_directory()
+            except OSError:
+                # Fallback to a secure temporary directory
+                import tempfile
+
+                temp_config_dir = Path(tempfile.mkdtemp(prefix="config_"))
+                logger.warning("Using temporary config directory: %s", temp_config_dir)
+                self.config_dir = temp_config_dir
+
         self.config_dir.mkdir(exist_ok=True)
         self.backup_dir = self.config_dir / "backups"
         self.backup_dir.mkdir(exist_ok=True)
@@ -490,11 +519,12 @@ class ConfigManager:
 
         try:
             settings = Settings.load_from_file(file_path)
+        except Exception:
+            logger.exception("Failed to load configuration from %s", file_path)
+            return None
+        else:
             logger.info("Loaded %s configuration from %s", profile.value, file_path)
             return settings
-        except Exception as e:
-            logger.exception("Failed to load configuration from %s: %s", file_path, e)
-            return None
 
     def create_environment_configs(self) -> dict[Environment, Path]:
         """Create configuration files for different environments."""
@@ -564,7 +594,7 @@ class ConfigManager:
     ) -> Path:
         """Create a backup of the current configuration."""
         if not backup_name:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
             backup_name = f"config_backup_{timestamp}.json"
 
         backup_path = self.backup_dir / backup_name
@@ -581,11 +611,12 @@ class ConfigManager:
 
         try:
             settings = Settings.load_from_file(backup_path)
+        except Exception:
+            logger.exception("Failed to restore backup %s", backup_path)
+            return None
+        else:
             logger.info("Configuration restored from backup: %s", backup_path)
             return settings
-        except Exception as e:
-            logger.exception("Failed to restore backup %s: %s", backup_path, e)
-            return None
 
     def list_config_backups(self) -> list[dict[str, Any]]:
         """List all available configuration backups."""
@@ -597,7 +628,9 @@ class ConfigManager:
                     {
                         "name": backup_file.name,
                         "path": str(backup_file),
-                        "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                        "created": datetime.fromtimestamp(
+                            stat.st_ctime, UTC
+                        ).isoformat(),
                         "size": stat.st_size,
                     }
                 )
@@ -610,7 +643,7 @@ class ConfigManager:
         self, settings: Settings, export_format: str = "json"
     ) -> Path:
         """Export configuration in various formats."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
         if export_format.lower() == "json":
             export_path = self.config_dir / f"export_{timestamp}.json"
@@ -636,27 +669,27 @@ class ConfigManager:
             logger.error("Import file not found: %s", import_path)
             return None
 
-        try:
-            if import_format.lower() == "json":
-                settings = Settings.load_from_file(import_path)
-            else:
-                raise ValueError(f"Unsupported import format: {import_format}")
+        def _validate_import_format(fmt: str) -> None:
+            """Validate import format."""
+            if fmt.lower() != "json":
+                raise ValueError(f"Unsupported import format: {fmt}")
 
+        try:
+            _validate_import_format(import_format)
+            settings = Settings.load_from_file(import_path)
+        except Exception:
+            logger.exception("Failed to import configuration from %s", import_path)
+            return None
+        else:
             logger.info("Configuration imported from: %s", import_path)
             return settings
-
-        except Exception as e:
-            logger.exception(
-                "Failed to import configuration from %s: %s", import_path, e
-            )
-            return None
 
     def switch_profile(
         self, settings: Settings, new_profile: TradingProfile, save_current: bool = True
     ) -> Settings:
         """Switch trading profile with optional backup of current settings."""
         if save_current:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
             backup_name = f"profile_{settings.profile.value}_backup_{timestamp}.json"
             self.create_config_backup(settings, backup_name)
 
@@ -899,14 +932,11 @@ class HealthMonitor:
                 "issues": [],
                 "metrics": {"connectivity_test": "passed"},
             }
-        else:
-            return {
-                "status": (
-                    "critical" if not self.settings.system.dry_run else "warning"
-                ),
-                "issues": api_issues,
-                "metrics": {"connectivity_test": "failed"},
-            }
+        return {
+            "status": ("critical" if not self.settings.system.dry_run else "warning"),
+            "issues": api_issues,
+            "metrics": {"connectivity_test": "failed"},
+        }
 
     def _check_filesystem_health(self) -> dict[str, Any]:
         """Check filesystem health."""
@@ -920,12 +950,11 @@ class HealthMonitor:
                 "issues": [],
                 "metrics": {"file_permissions": "valid"},
             }
-        else:
-            return {
-                "status": "critical",
-                "issues": fs_issues,
-                "metrics": {"file_permissions": "invalid"},
-            }
+        return {
+            "status": "critical",
+            "issues": fs_issues,
+            "metrics": {"file_permissions": "invalid"},
+        }
 
     def _check_configuration_health(self) -> dict[str, Any]:
         """Check configuration health."""
@@ -967,8 +996,8 @@ class HealthMonitor:
                     "threads": process.num_threads(),
                 }
             )
-        except (ImportError, Exception):
-            pass
+        except (ImportError, Exception) as e:
+            logger.debug("Could not collect process metrics: %s", e)
 
         return metrics
 
@@ -980,10 +1009,9 @@ class HealthMonitor:
 
         if hours > 0:
             return f"{hours}h {minutes}m {secs}s"
-        elif minutes > 0:
+        if minutes > 0:
             return f"{minutes}m {secs}s"
-        else:
-            return f"{secs}s"
+        return f"{secs}s"
 
 
 def create_startup_report(settings: Settings) -> dict[str, Any]:

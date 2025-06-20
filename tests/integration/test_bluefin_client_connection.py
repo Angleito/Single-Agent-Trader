@@ -198,11 +198,11 @@ class TestBluefinClientConnection:
     async def test_bluefin_client_private_key_validation(self):
         """Test private key validation."""
         # Test invalid private key format
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Invalid private key"):
             BluefinClient(private_key="invalid_key", network="testnet", dry_run=True)
 
         # Test missing private key
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Private key is required"):
             BluefinClient(private_key=None, network="testnet", dry_run=True)
 
     @pytest.mark.asyncio()

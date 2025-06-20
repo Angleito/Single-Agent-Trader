@@ -19,7 +19,7 @@ import argparse
 import json
 import logging
 import warnings
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -43,7 +43,7 @@ class MarketDataGenerator:
         """Initialize generator with base parameters."""
         self.base_price = base_price
         self.random_seed = random_seed
-        np.random.seed(random_seed)
+        self.rng = np.random.default_rng(random_seed)
 
         # Market parameters
         self.min_price = 0.01
@@ -62,7 +62,7 @@ class MarketDataGenerator:
         daily_vol = 0.015  # 1.5% daily volatility
         minute_vol = daily_vol / np.sqrt(24 * 60)  # Scale to minute
 
-        returns = np.random.normal(0, minute_vol, periods)
+        returns = self.rng.normal(0, minute_vol, periods)
 
         # Add some trend and mean reversion
         trend_component = np.sin(np.linspace(0, 4 * np.pi, periods)) * 0.0005
@@ -95,7 +95,7 @@ class MarketDataGenerator:
         trend_returns = trend_strength * (1 + 0.5 * np.sin(trend_factor * 2 * np.pi))
 
         # Random component
-        random_returns = np.random.normal(0, base_vol, periods)
+        random_returns = self.rng.normal(0, base_vol, periods)
 
         # Combine trend and random
         returns = trend_returns + random_returns
@@ -117,7 +117,7 @@ class MarketDataGenerator:
 
         # Oscillating pattern within range
         center_drift = np.sin(np.linspace(0, 8 * np.pi, periods)) * range_size * 0.3
-        random_component = np.random.normal(0, base_vol, periods)
+        random_component = self.rng.normal(0, base_vol, periods)
 
         # Mean reversion force
         cumulative_drift = np.cumsum(center_drift + random_component)
@@ -153,15 +153,15 @@ class MarketDataGenerator:
             volatilities[i] = (
                 0.1 * base_vol
                 + 0.8 * volatilities[i - 1]
-                + 0.1 * abs(np.random.normal(0, base_vol))
+                + 0.1 * abs(self.rng.normal(0, base_vol))
             )
 
         # Generate returns with time-varying volatility
-        returns = np.random.normal(0, volatilities, periods)
+        returns = self.rng.normal(0, volatilities, periods)
 
         # Add occasional volatility spikes
-        spike_indices = np.random.choice(periods, size=periods // 20, replace=False)
-        returns[spike_indices] *= np.random.uniform(2, 5, len(spike_indices))
+        spike_indices = self.rng.choice(periods, size=periods // 20, replace=False)
+        returns[spike_indices] *= self.rng.uniform(2, 5, len(spike_indices))
 
         return self._create_ohlcv_data(timestamps, returns)
 
@@ -183,7 +183,7 @@ class MarketDataGenerator:
 
         # Start with normal returns
         base_vol = 0.01
-        returns = np.random.normal(0, base_vol, periods)
+        returns = self.rng.normal(0, base_vol, periods)
 
         # Add gaps at regular intervals
         gap_indices = list(range(gap_frequency, periods, gap_frequency))
@@ -191,8 +191,8 @@ class MarketDataGenerator:
         for gap_idx in gap_indices:
             if gap_idx < periods:
                 # Random gap size and direction
-                gap_size = np.random.uniform(gap_size_range[0], gap_size_range[1])
-                gap_direction = np.random.choice([-1, 1])
+                gap_size = self.rng.uniform(gap_size_range[0], gap_size_range[1])
+                gap_direction = self.rng.choice([-1, 1])
 
                 # Apply gap
                 returns[gap_idx] = gap_size * gap_direction
@@ -202,10 +202,10 @@ class MarketDataGenerator:
                     returns[gap_idx + 1] = gap_size * gap_direction * 0.3
 
         # Add some extreme moves (flash crashes/spikes)
-        extreme_indices = np.random.choice(periods, size=periods // 100, replace=False)
+        extreme_indices = self.rng.choice(periods, size=periods // 100, replace=False)
         for extreme_idx in extreme_indices:
-            extreme_size = np.random.uniform(0.05, 0.15)
-            extreme_direction = np.random.choice([-1, 1])
+            extreme_size = self.rng.uniform(0.05, 0.15)
+            extreme_direction = self.rng.choice([-1, 1])
             returns[extreme_idx] = extreme_size * extreme_direction
 
         return self._create_ohlcv_data(timestamps, returns)
@@ -227,7 +227,7 @@ class MarketDataGenerator:
         data["volume"] *= volume_factor
 
         # Add volume clustering (low volume periods)
-        low_volume_periods = np.random.choice(periods, size=periods // 5, replace=False)
+        low_volume_periods = self.rng.choice(periods, size=periods // 5, replace=False)
         for period_start in low_volume_periods:
             period_end = min(period_start + 20, periods)  # 20-minute low volume periods
             data.iloc[period_start:period_end, data.columns.get_loc("volume")] *= 0.1
@@ -253,10 +253,10 @@ class MarketDataGenerator:
             is_weekend = timestamp.weekday() >= 5  # Saturday/Sunday
 
             if is_weekend:
-                returns[i] = np.random.normal(0, weekend_vol)
+                returns[i] = self.rng.normal(0, weekend_vol)
                 volumes[i] = self.volume_base * 0.6  # Lower weekend volume
             else:
-                returns[i] = np.random.normal(0, weekday_vol)
+                returns[i] = self.rng.normal(0, weekday_vol)
                 volumes[i] = self.volume_base * 1.2  # Higher weekday volume
 
         return self._create_ohlcv_data(timestamps, returns, custom_volumes=volumes)
@@ -268,7 +268,6 @@ class MarketDataGenerator:
         custom_volumes: np.ndarray | None = None,
     ) -> pd.DataFrame:
         """Create realistic OHLCV data from returns."""
-        # periods = len(timestamps)  # Commented out as it's not used
 
         # Generate price series
         prices = self.base_price * np.exp(np.cumsum(returns))
@@ -282,17 +281,17 @@ class MarketDataGenerator:
         ):
             # Calculate realistic OHLC from close and return
             return_vol = abs(returns[i]) if i < len(returns) else 0.01
-            price_range = close_price * return_vol * np.random.uniform(0.5, 2.0)
+            price_range = close_price * return_vol * self.rng.uniform(0.5, 2.0)
 
             # Generate open price (previous close + some gap)
             if i == 0:
-                open_price = close_price * (1 + np.random.normal(0, 0.001))
+                open_price = close_price * (1 + self.rng.normal(0, 0.001))
             else:
-                open_price = prices[i - 1] * (1 + np.random.normal(0, 0.002))
+                open_price = prices[i - 1] * (1 + self.rng.normal(0, 0.002))
 
             # Generate high and low
-            high_offset = np.random.exponential(price_range * 0.3)
-            low_offset = np.random.exponential(price_range * 0.3)
+            high_offset = self.rng.exponential(price_range * 0.3)
+            low_offset = self.rng.exponential(price_range * 0.3)
 
             high = max(open_price, close_price) + high_offset
             low = min(open_price, close_price) - low_offset
@@ -305,7 +304,7 @@ class MarketDataGenerator:
                 # Volume correlated with price movement and randomness
                 volume_factor = 1 + abs(returns[i]) * 10  # More volume on big moves
                 base_volume = self.volume_base * volume_factor
-                volume = np.random.gamma(
+                volume = self.rng.gamma(
                     2, base_volume / 2
                 )  # Gamma distribution for volume
 
@@ -320,33 +319,39 @@ class MarketDataGenerator:
                 }
             )
 
-        df = pd.DataFrame(data)
-        df = df.set_index("timestamp")
+        market_data = pd.DataFrame(data)
+        market_data = market_data.set_index("timestamp")
 
         # Validate OHLC relationships
-        self._validate_ohlc_data(df)
+        self._validate_ohlc_data(market_data)
 
-        return df
+        return market_data
 
-    def _validate_ohlc_data(self, df: pd.DataFrame) -> None:
+    def _validate_ohlc_data(self, market_data: pd.DataFrame) -> None:
         """Validate OHLC data relationships."""
         # Check that high >= max(open, close) and low <= min(open, close)
-        high_valid = (df["high"] >= df[["open", "close"]].max(axis=1)).all()
-        low_valid = (df["low"] <= df[["open", "close"]].min(axis=1)).all()
+        high_valid = (
+            market_data["high"] >= market_data[["open", "close"]].max(axis=1)
+        ).all()
+        low_valid = (
+            market_data["low"] <= market_data[["open", "close"]].min(axis=1)
+        ).all()
 
         if not high_valid:
             logger.warning("Some high prices are below open/close - fixing")
-            df["high"] = df[["high", "open", "close"]].max(axis=1)
+            market_data["high"] = market_data[["high", "open", "close"]].max(axis=1)
 
         if not low_valid:
             logger.warning("Some low prices are above open/close - fixing")
-            df["low"] = df[["low", "open", "close"]].min(axis=1)
+            market_data["low"] = market_data[["low", "open", "close"]].min(axis=1)
 
         # Check for non-positive values
         for col in ["open", "high", "low", "close", "volume"]:
-            if (df[col] <= 0).any():
+            if (market_data[col] <= 0).any():
                 logger.warning("Non-positive values found in %s - fixing", col)
-                df[col] = df[col].clip(lower=self.min_price if col != "volume" else 0.1)
+                market_data[col] = market_data[col].clip(
+                    lower=self.min_price if col != "volume" else 0.1
+                )
 
 
 class TestDataSuite:
@@ -453,7 +458,7 @@ class TestDataSuite:
     def generate_data_summary(self) -> dict:
         """Generate summary of all test data."""
         summary = {
-            "generation_time": datetime.now().isoformat(),
+            "generation_time": datetime.now(UTC).isoformat(),
             "output_directory": str(self.output_dir),
             "scenarios": self.scenarios,
             "files": [],
@@ -466,15 +471,15 @@ class TestDataSuite:
                 "filepath": str(csv_file),
                 "size_bytes": csv_file.stat().st_size,
                 "modified_time": datetime.fromtimestamp(
-                    csv_file.stat().st_mtime
+                    csv_file.stat().st_mtime, tz=UTC
                 ).isoformat(),
             }
 
             # Get row count if possible
             try:
-                df = pd.read_csv(csv_file)
-                file_info["row_count"] = len(df)
-                file_info["columns"] = list(df.columns)
+                test_data = pd.read_csv(csv_file)
+                file_info["row_count"] = len(test_data)
+                file_info["columns"] = list(test_data.columns)
             except Exception as e:
                 file_info["error"] = str(e)
 

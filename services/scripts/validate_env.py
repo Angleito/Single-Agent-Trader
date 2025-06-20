@@ -4,7 +4,6 @@ Environment validation script for AI Trading Bot.
 Checks .env file existence, permissions, and validates all required variables.
 """
 
-import os
 import re
 import stat
 import sys
@@ -24,9 +23,9 @@ class Colors:
 
 
 class ValidationStatus(Enum):
-    PASS = "✓"
-    FAIL = "✗"
-    WARN = "⚠"
+    SUCCESS = "success"
+    FAIL = "error"
+    WARN = "warning"
 
 
 @dataclass
@@ -92,14 +91,16 @@ class EnvValidator:
             return False
 
         self.successes.append(
-            ValidationResult(status=ValidationStatus.PASS, message=".env file exists")
+            ValidationResult(
+                status=ValidationStatus.SUCCESS, message=".env file exists"
+            )
         )
         return True
 
     def _check_file_permissions(self) -> None:
         """Check if .env file has secure permissions."""
         try:
-            file_stat = os.stat(self.env_path)
+            file_stat = self.env_path.stat()
             mode = file_stat.st_mode
             permissions = stat.filemode(mode)
 
@@ -133,9 +134,9 @@ class EnvValidator:
         try:
             with self.env_path.open() as f:
                 line_num = 0
-                for line in f:
+                for file_line in f:
                     line_num += 1
-                    line = line.strip()
+                    line = file_line.strip()
 
                     # Skip empty lines and comments
                     if not line or line.startswith("#"):
@@ -283,7 +284,14 @@ class EnvValidator:
 
     def _validate_bluefin_vars(self, env_vars: dict[str, str]) -> None:
         """Validate Bluefin-specific variables with comprehensive validation."""
-        # Bluefin Private Key - Enhanced validation
+        # Split validation into smaller methods
+        self._validate_bluefin_private_key(env_vars)
+        self._validate_bluefin_network(env_vars)
+        self._validate_bluefin_urls(env_vars)
+        self._validate_bluefin_environment_consistency(env_vars)
+
+    def _validate_bluefin_private_key(self, env_vars: dict[str, str]) -> None:
+        """Validate Bluefin private key."""
         private_key = env_vars.get("EXCHANGE__BLUEFIN_PRIVATE_KEY", "")
         if not private_key:
             self.errors.append(
@@ -293,23 +301,25 @@ class EnvValidator:
                     fix="Add your Sui wallet private key (hex, mnemonic, or Sui Bech32 format) to .env",
                 )
             )
-        else:
-            # Comprehensive private key validation
-            validation_result = self._validate_bluefin_private_key_comprehensive(
-                private_key
-            )
-            if validation_result:
-                self.successes.append(validation_result)
-            else:
-                self.errors.append(
-                    ValidationResult(
-                        status=ValidationStatus.FAIL,
-                        message="Bluefin private key format is invalid",
-                        fix="Use one of: 64-char hex (with/without 0x), 12/24-word mnemonic, or Sui Bech32 (suiprivkey...)",
-                    )
-                )
+            return
 
-        # Bluefin Network
+        # Comprehensive private key validation
+        validation_result = self._validate_bluefin_private_key_comprehensive(
+            private_key
+        )
+        if validation_result:
+            self.successes.append(validation_result)
+        else:
+            self.errors.append(
+                ValidationResult(
+                    status=ValidationStatus.FAIL,
+                    message="Bluefin private key format is invalid",
+                    fix="Use one of: 64-char hex (with/without 0x), 12/24-word mnemonic, or Sui Bech32 (suiprivkey...)",
+                )
+            )
+
+    def _validate_bluefin_network(self, env_vars: dict[str, str]) -> None:
+        """Validate Bluefin network setting."""
         network = env_vars.get("EXCHANGE__BLUEFIN_NETWORK", "mainnet").lower()
         if network not in ["mainnet", "testnet"]:
             self.warnings.append(
@@ -326,6 +336,10 @@ class EnvValidator:
                     message=f"Bluefin network is valid: {network}",
                 )
             )
+
+    def _validate_bluefin_urls(self, env_vars: dict[str, str]) -> None:
+        """Validate Bluefin URL settings."""
+        network = env_vars.get("EXCHANGE__BLUEFIN_NETWORK", "mainnet").lower()
 
         # Bluefin Service URL
         service_url = env_vars.get("EXCHANGE__BLUEFIN_SERVICE_URL", "")
@@ -383,7 +397,11 @@ class EnvValidator:
                     )
                 )
 
-        # Environment consistency checks
+    def _validate_bluefin_environment_consistency(
+        self, env_vars: dict[str, str]
+    ) -> None:
+        """Validate environment consistency for Bluefin."""
+        network = env_vars.get("EXCHANGE__BLUEFIN_NETWORK", "mainnet").lower()
         environment = env_vars.get("SYSTEM__ENVIRONMENT", "development").lower()
         dry_run = env_vars.get("SYSTEM__DRY_RUN", "true").lower()
 
@@ -413,9 +431,19 @@ class EnvValidator:
         detected_formats = []
 
         # 1. Check for mnemonic phrase format (12 or 24 words)
+        # Constants
+        MIN_MNEMONIC_WORDS = 12
+        MAX_MNEMONIC_WORDS = 24
+        MIN_WORD_LENGTH = 2
+        MIN_BECH32_LENGTH = 50
+        HEX_KEY_LENGTH = 64
+        BECH32_PREFIX_LENGTH = 10  # Length of "suiprivkey" prefix
+        MAX_LEVERAGE = 20  # Maximum leverage allowed
+        MIN_KEY_VALUE_LENGTH = 10  # Minimum length for key values
+
         words = private_key.split()
-        if len(words) in [12, 24]:
-            if all(word.isalpha() and len(word) > 2 for word in words):
+        if len(words) in [MIN_MNEMONIC_WORDS, MAX_MNEMONIC_WORDS]:
+            if all(word.isalpha() and len(word) > MIN_WORD_LENGTH for word in words):
                 detected_formats.append(f"mnemonic ({len(words)} words)")
 
                 # Additional mnemonic validation
@@ -424,12 +452,14 @@ class EnvValidator:
 
         # 2. Check for Bech32-encoded Sui private key
         elif private_key.startswith("suiprivkey"):
-            if len(private_key) >= 50:  # Reasonable minimum length
+            if len(private_key) >= MIN_BECH32_LENGTH:  # Reasonable minimum length
                 detected_formats.append("Sui Bech32")
 
                 # Basic Bech32 character validation
                 bech32_chars = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
-                key_part = private_key[10:]  # Remove "suiprivkey" prefix
+                key_part = private_key[
+                    BECH32_PREFIX_LENGTH:
+                ]  # Remove "suiprivkey" prefix
                 if not all(c.lower() in bech32_chars for c in key_part):
                     return None
 
@@ -437,7 +467,7 @@ class EnvValidator:
         else:
             hex_key = private_key[2:] if private_key.startswith("0x") else private_key
 
-            if len(hex_key) == 64 and all(
+            if len(hex_key) == HEX_KEY_LENGTH and all(
                 c in "0123456789abcdefABCDEF" for c in hex_key
             ):
                 detected_formats.append("hex")
@@ -549,7 +579,7 @@ class EnvValidator:
         if leverage:
             try:
                 leverage_int = int(leverage)
-                if leverage_int < 1 or leverage_int > 20:
+                if leverage_int < 1 or leverage_int > MAX_LEVERAGE:
                     self.warnings.append(
                         ValidationResult(
                             status=ValidationStatus.WARN,
@@ -590,7 +620,7 @@ class EnvValidator:
                 )
 
             # Check for exposed secrets in common mistake patterns
-            if "key" in key.lower() and value and len(value) < 10:
+            if "key" in key.lower() and value and len(value) < MIN_KEY_VALUE_LENGTH:
                 self.warnings.append(
                     ValidationResult(
                         status=ValidationStatus.WARN,

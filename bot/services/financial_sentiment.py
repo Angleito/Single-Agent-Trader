@@ -262,7 +262,7 @@ class FinancialSentimentService:
             return self._aggregate_sentiment_results(individual_results, news_items)
 
         except Exception as e:
-            logger.error(f"Error analyzing news sentiment: {e}", exc_info=True)
+            logger.exception("Error analyzing news sentiment: %s", e)
             return SentimentResult(
                 sentiment_score=0.0,
                 confidence=0.0,
@@ -413,7 +413,7 @@ class FinancialSentimentService:
             )
 
         except Exception as e:
-            logger.error(f"Error extracting crypto indicators: {e}", exc_info=True)
+            logger.exception("Error extracting crypto indicators: %s", e)
             return CryptoIndicators()
 
     def extract_nasdaq_indicators(self, text: str) -> NasdaqIndicators:
@@ -469,7 +469,7 @@ class FinancialSentimentService:
             )
 
         except Exception as e:
-            logger.error(f"Error extracting NASDAQ indicators: {e}", exc_info=True)
+            logger.exception("Error extracting NASDAQ indicators: %s", e)
             return NasdaqIndicators()
 
     def calculate_correlation_score(
@@ -519,11 +519,10 @@ class FinancialSentimentService:
             # Calculate weighted average
             if correlation_factors:
                 return sum(correlation_factors) / len(correlation_factors)
-            else:
-                return 0.0
-
         except Exception as e:
-            logger.error(f"Error calculating correlation score: {e}", exc_info=True)
+            logger.exception("Error calculating correlation score: %s", e)
+            return 0.0
+        else:
             return 0.0
 
     def format_sentiment_for_llm(self, sentiment_data: dict) -> str:
@@ -662,7 +661,7 @@ class FinancialSentimentService:
             return "\n".join(output_lines)
 
         except Exception as e:
-            logger.error(f"Error formatting sentiment for LLM: {e}", exc_info=True)
+            logger.exception("Error formatting sentiment for LLM: %s", e)
             return "Error: Could not format sentiment analysis data"
 
     # Helper methods for text analysis
@@ -700,10 +699,9 @@ class FinancialSentimentService:
 
         if bullish_words > bearish_words * 1.5:
             return "BULLISH"
-        elif bearish_words > bullish_words * 1.5:
+        if bearish_words > bullish_words * 1.5:
             return "BEARISH"
-        else:
-            return "NEUTRAL"
+        return "NEUTRAL"
 
     def _extract_price_levels(self, text: str, level_words: list[str]) -> list[float]:
         """Extract price levels associated with specific words."""
@@ -898,27 +896,25 @@ class FinancialSentimentService:
         """Convert sentiment score to human-readable label."""
         if score > 0.3:
             return "STRONGLY BULLISH"
-        elif score > 0.1:
+        if score > 0.1:
             return "BULLISH"
-        elif score > -0.1:
+        if score > -0.1:
             return "NEUTRAL"
-        elif score > -0.3:
+        if score > -0.3:
             return "BEARISH"
-        else:
-            return "STRONGLY BEARISH"
+        return "STRONGLY BEARISH"
 
     def _get_correlation_label(self, score: float) -> str:
         """Convert correlation score to human-readable label."""
         if score > 0.5:
             return "STRONG POSITIVE"
-        elif score > 0.2:
+        if score > 0.2:
             return "MODERATE POSITIVE"
-        elif score > -0.2:
+        if score > -0.2:
             return "WEAK/UNCORRELATED"
-        elif score > -0.5:
+        if score > -0.5:
             return "MODERATE NEGATIVE"
-        else:
-            return "STRONG NEGATIVE"
+        return "STRONG NEGATIVE"
 
     def _generate_trading_implications(self, sentiment_data: dict) -> str:
         """Generate trading implications from sentiment data."""
@@ -966,5 +962,5 @@ class FinancialSentimentService:
             return " | ".join(implications)
 
         except Exception as e:
-            logger.error(f"Error generating trading implications: {e}", exc_info=True)
+            logger.exception("Error generating trading implications: %s", e)
             return "Error generating trading implications"

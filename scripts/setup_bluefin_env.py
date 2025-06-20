@@ -112,13 +112,13 @@ class BluefinEnvSetup:
             )
 
             # Set secure file permissions
-            os.chmod(self.env_file, 0o600)
+            self.env_file.chmod(0o600)
             print(f"{Colors.GREEN}✅ Set secure file permissions (600){Colors.END}")
-
-            return True
         except Exception as e:
             print(f"{Colors.RED}❌ Failed to create .env file: {e}{Colors.END}")
             return False
+        else:
+            return True
 
     def generate_bluefin_api_key(self) -> str | None:
         """Generate a new Bluefin service API key."""
@@ -130,11 +130,11 @@ class BluefinEnvSetup:
             print(f"\n{Colors.YELLOW}📝 Add this to your .env file:{Colors.END}")
             print(f"BLUEFIN_SERVICE_API_KEY={api_key}")
             print()
-
-            return api_key
         except Exception as e:
             print(f"{Colors.RED}❌ Failed to generate API key: {e}{Colors.END}")
             return None
+        else:
+            return api_key
 
     def update_env_with_api_key(self, api_key: str) -> bool:
         """Update .env file with the generated API key."""
@@ -164,11 +164,11 @@ class BluefinEnvSetup:
                 f.writelines(lines)
 
             print(f"{Colors.GREEN}✅ Updated .env file with API key{Colors.END}")
-            return True
-
         except Exception as e:
             print(f"{Colors.RED}❌ Failed to update .env file: {e}{Colors.END}")
             return False
+        else:
+            return True
 
     def validate_configuration(self) -> bool:
         """Run the environment validation script."""
@@ -184,7 +184,7 @@ class BluefinEnvSetup:
             return False
 
         # Change to project directory for validation
-        original_cwd = os.getcwd()
+        original_cwd = Path.cwd()
         try:
             os.chdir(self.project_root)
 
@@ -196,6 +196,7 @@ class BluefinEnvSetup:
                 capture_output=True,
                 text=True,
                 check=False,
+                shell=False,
             )
 
             # Display validation output
@@ -214,12 +215,11 @@ class BluefinEnvSetup:
                 print(
                     f"\n{Colors.YELLOW}⚠️ Configuration validation found issues. Please review above.{Colors.END}"
                 )
-
-            return success
-
         except Exception as e:
             print(f"{Colors.RED}❌ Failed to run validation: {e}{Colors.END}")
             return False
+        else:
+            return success
         finally:
             os.chdir(original_cwd)
 

@@ -13,7 +13,6 @@ real trading conditions including:
 import json
 import logging
 import os
-import tempfile
 import threading
 import time
 from dataclasses import asdict, dataclass
@@ -145,7 +144,15 @@ class PaperTradingAccount:
         elif fallback_data_dir:
             self.data_dir = Path(fallback_data_dir) / "paper_trading"
         else:
-            self.data_dir = Path("data/paper_trading")
+            from .utils.path_utils import get_data_directory
+
+            try:
+                self.data_dir = get_data_directory() / "paper_trading"
+            except OSError:
+                # Fallback to temporary directory
+                import tempfile
+
+                self.data_dir = Path(tempfile.mkdtemp(prefix="paper_trading_"))
 
         try:
             self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -155,7 +162,8 @@ class PaperTradingAccount:
                 temp_dir = tempfile.mkdtemp(prefix="paper_trading_")
                 self.data_dir = Path(temp_dir)
                 logging.warning(
-                    f"Created paper trading directory in secure temporary space: {self.data_dir}"
+                    "Created paper trading directory in secure temporary space: %s",
+                    self.data_dir,
                 )
             else:
                 raise
@@ -306,11 +314,11 @@ class PaperTradingAccount:
         if not isinstance(amount, Decimal):
             try:
                 amount = Decimal(str(amount))
-            except (ValueError, TypeError):
+            except (ValueError, TypeError) as e:
                 logger.exception(
                     "Invalid balance amount (type: %s)", type(amount).__name__
                 )
-                raise ValueError(f"Cannot convert to Decimal: {amount}")
+                raise ValueError(f"Cannot convert to Decimal: {amount}") from e
 
         # Check for invalid values
         if amount.is_nan():
@@ -348,11 +356,11 @@ class PaperTradingAccount:
         if not isinstance(amount, Decimal):
             try:
                 amount = Decimal(str(amount))
-            except (ValueError, TypeError):
+            except (ValueError, TypeError) as e:
                 logger.exception(
                     "Invalid crypto amount (type: %s)", type(amount).__name__
                 )
-                raise ValueError(f"Cannot convert to Decimal: {amount}")
+                raise ValueError(f"Cannot convert to Decimal: {amount}") from e
 
         # Check for invalid values
         if amount.is_nan():
@@ -609,21 +617,22 @@ class PaperTradingAccount:
                 )
 
                 # Check available balance
-                if action.action in ["LONG", "SHORT"]:
+                if action.action in ["LONG", "SHORT"] and required_margin + fees > (
+                    self.equity - self.margin_used
+                ):
                     # Opening new position
-                    if required_margin + fees > (self.equity - self.margin_used):
-                        logger.warning(
-                            "❌ INSUFFICIENT FUNDS SIMULATION:"
-                            "\n  • Required: $%.2f"
-                            "\n  • Available: $%.2f"
-                            "\n  • Shortfall: $%.2f",
-                            required_margin + fees,
-                            self.equity - self.margin_used,
-                            (required_margin + fees) - (self.equity - self.margin_used),
-                        )
-                        return self._create_failed_order(
-                            action, symbol, "INSUFFICIENT_FUNDS"
-                        )
+                    logger.warning(
+                        "❌ INSUFFICIENT FUNDS SIMULATION:"
+                        "\n  • Required: $%.2f"
+                        "\n  • Available: $%.2f"
+                        "\n  • Shortfall: $%.2f",
+                        required_margin + fees,
+                        self.equity - self.margin_used,
+                        (required_margin + fees) - (self.equity - self.margin_used),
+                    )
+                    return self._create_failed_order(
+                        action, symbol, "INSUFFICIENT_FUNDS"
+                    )
 
                 # Execute the simulated trade
                 order = self._execute_paper_trade(
@@ -751,7 +760,7 @@ class PaperTradingAccount:
 
                 return order
 
-            except Exception as e:
+            except Exception:
                 logger.exception("❌ Error simulating paper trade")
 
                 # Record failed trade execution in monitoring
@@ -785,16 +794,18 @@ class PaperTradingAccount:
         leveraged_value = position_value * Decimal(str(settings.trading.leverage))
 
         # Check if this is a futures trade for ETH
-        symbol = action.symbol if hasattr(action, "symbol") else settings.trading.symbol
-        if settings.trading.enable_futures and symbol == "ETH-USD":
+        trading_symbol = (
+            action.symbol if hasattr(action, "symbol") else settings.trading.symbol
+        )
+        if settings.trading.enable_futures and trading_symbol == "ETH-USD":
             # Apply futures contract size logic for ETH
-            CONTRACT_SIZE = Decimal("0.1")  # 0.1 ETH per contract
+            contract_size = Decimal("0.1")  # 0.1 ETH per contract
 
             # Check if we're using fixed contract size from config
             if settings.trading.fixed_contract_size:
                 # Use fixed number of contracts
                 num_contracts = settings.trading.fixed_contract_size
-                trade_size = CONTRACT_SIZE * num_contracts
+                trade_size = contract_size * num_contracts
                 logger.debug(
                     "Using fixed contract size: %s contracts = %s ETH",
                     num_contracts,
@@ -805,11 +816,11 @@ class PaperTradingAccount:
                 quantity_in_eth = leveraged_value / current_price
 
                 # Convert to number of contracts and round down
-                num_contracts = int(quantity_in_eth / CONTRACT_SIZE)
+                num_contracts = int(quantity_in_eth / contract_size)
                 num_contracts = max(1, num_contracts)  # Minimum 1 contract
 
                 # Return the actual quantity in ETH (multiples of 0.1)
-                trade_size = CONTRACT_SIZE * num_contracts
+                trade_size = contract_size * num_contracts
 
                 logger.debug(
                     "Futures contract calculation: %.6f ETH -> %s contracts = %s ETH",
@@ -1182,7 +1193,7 @@ class PaperTradingAccount:
         return order
 
     def _create_failed_order(
-        self, action: TradeAction, symbol: str, reason: str
+        self, action: TradeAction, symbol: str, _reason: str
     ) -> Order:
         """Create a failed order object."""
         return Order(
@@ -1736,12 +1747,11 @@ class PaperTradingAccount:
                             # Test if object is JSON serializable
                             json.dumps(obj)
                             return obj
-                        except (TypeError, ValueError) as e:
+                        except (TypeError, ValueError):
                             logger.warning(
-                                "⚠️ Serialization issue with %s '%s': %s",
+                                "⚠️ Serialization issue with %s '%s'",
                                 type(obj).__name__,
                                 obj,
-                                e,
                             )
                             return str(obj)  # Fallback to string representation
 

@@ -6,7 +6,7 @@ LLM processing time while maintaining decision quality.
 """
 
 import logging
-from typing import Any
+from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,9 @@ class OptimizedPromptTemplate:
     """
 
     # Compressed core prompt (reduced from ~2700 to ~1400 chars - 48% reduction)
-    COMPRESSED_CORE_PROMPT = """You are a crypto momentum trader on 5min timeframes. Trade ONLY on strong momentum signals.
+    COMPRESSED_CORE_PROMPT: ClassVar[
+        str
+    ] = """You are a crypto momentum trader on 5min timeframes. Trade ONLY on strong momentum signals.
 
 RESPONSE FORMAT:
 ANALYSIS: [2-3 sentences on momentum assessment]
@@ -62,7 +64,7 @@ CONSTRAINTS: Max size {max_size_pct}%, Max leverage {max_leverage}x
 OVERRIDE AUTHORITY: You can trade with mixed Cipher B if momentum is very strong. Use dominance as market regime filter (high=bearish bias, low=bullish bias)."""
 
     # Static context that doesn't change much
-    STATIC_CONTEXT = {
+    STATIC_CONTEXT: ClassVar[dict[str, str]] = {
         "trading_philosophy": "Momentum-based 5min trading with VuManChu indicators",
         "dominance_interpretation": "High dominance=risk-off, Rising=bearish, Falling=bullish",
         "futures_guidelines": "Consider margin health, use appropriate leverage, set reduce_only for closes",
@@ -102,6 +104,7 @@ OVERRIDE AUTHORITY: You can trade with mixed Cipher B if momentum is very strong
         except Exception:
             logger.exception("Error formatting optimized prompt")
             logger.debug("Available keys in llm_input: %s", list(llm_input.keys()))
+        else:
             # Fallback to minimal prompt
             return self._get_minimal_fallback_prompt(llm_input)
 
@@ -177,20 +180,18 @@ OVERRIDE AUTHORITY: You can trade with mixed Cipher B if momentum is very strong
         lines = memory_context.split("\n")
         compressed_lines = []
 
-        for line in lines:
-            line = line.strip()
+        for original_line in lines:
+            line = original_line.strip()
             # Keep only essential information
-            if any(
-                keyword in line.lower()
-                for keyword in [
-                    "success",
-                    "failure",
-                    "pnl",
-                    "insight",
-                    "outcome",
-                    "similar",
-                ]
-            ):
+            essential_keywords = [
+                "success",
+                "failure",
+                "pnl",
+                "insight",
+                "outcome",
+                "similar",
+            ]
+            if any(keyword in line.lower() for keyword in essential_keywords):
                 # Compress the line
                 if "SUCCESS" in line:
                     compressed_lines.append("✓ Past success")
@@ -423,7 +424,7 @@ def get_optimized_prompt_template() -> OptimizedPromptTemplate:
     Returns:
         Global optimized prompt template instance
     """
-    global _global_optimizer
+    global _global_optimizer  # pylint: disable=global-statement # noqa: PLW0603
 
     if _global_optimizer is None:
         _global_optimizer = OptimizedPromptTemplate()

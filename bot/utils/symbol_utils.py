@@ -238,14 +238,15 @@ class BluefinSymbolConverter:
         """Validate if symbol can be converted to market symbol."""
         try:
             self.to_market_symbol(symbol)
-            return True
         except (SymbolConversionError, InvalidSymbolError):
             return False
+        else:
+            return True
 
     def to_market_symbol(self, symbol: str):
         """Convert string symbol to MARKET_SYMBOLS enum value."""
         if not symbol or not isinstance(symbol, str):
-            raise InvalidSymbolError(f"Invalid symbol: {symbol}")
+            raise TypeError(f"Invalid symbol: {symbol}")
 
         # Normalize the symbol
         normalized = normalize_symbol(symbol, "PERP")
@@ -347,7 +348,8 @@ class BluefinSymbolConverter:
             # Clean up any enum prefixes
             if "MARKET_SYMBOLS." in symbol_str:
                 symbol_str = symbol_str.replace("MARKET_SYMBOLS.", "")
-            return f"{symbol_str}-PERP"
         except Exception:
             # Ultimate fallback
             return "UNKNOWN-PERP"
+        else:
+            return f"{symbol_str}-PERP"

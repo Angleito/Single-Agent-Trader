@@ -8,7 +8,7 @@ optimal LLM consumption in trading decisions.
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from .web_search_formatter import WebSearchFormatter
 
@@ -27,7 +27,7 @@ async def example_news_formatting():
             "driven by increasing institutional adoption and positive regulatory developments. "
             "Technical indicators suggest further upside potential with RSI entering bullish territory.",
             "url": "https://coindesk.com/markets/2024/01/15/bitcoin-institutional-demand",
-            "published_time": datetime.now() - timedelta(hours=2),
+            "published_time": datetime.now(UTC) - timedelta(hours=2),
         },
         {
             "title": "Federal Reserve Hints at More Dovish Policy Stance",
@@ -35,7 +35,7 @@ async def example_news_formatting():
             "citing concerns about economic growth. This development is generally positive for "
             "risk assets including cryptocurrencies and growth stocks.",
             "url": "https://reuters.com/business/fed-policy-2024",
-            "published_time": datetime.now() - timedelta(hours=4),
+            "published_time": datetime.now(UTC) - timedelta(hours=4),
         },
         {
             "title": "Crypto Regulation Clarity Expected This Quarter",
@@ -43,7 +43,7 @@ async def example_news_formatting():
             "operations, potentially reducing uncertainty in the market. Industry leaders remain "
             "optimistic about the regulatory framework's impact on adoption.",
             "url": "https://bloomberg.com/crypto-regulation-2024",
-            "published_time": datetime.now() - timedelta(hours=6),
+            "published_time": datetime.now(UTC) - timedelta(hours=6),
         },
     ]
 
@@ -147,14 +147,14 @@ async def example_comprehensive_market_context():
                 "content": "Bitcoin ETFs recorded their highest daily inflows this year, "
                 "signaling strong institutional interest in cryptocurrency exposure.",
                 "url": "https://coindesk.com/etf-inflows-2024",
-                "published_time": datetime.now() - timedelta(hours=1),
+                "published_time": datetime.now(UTC) - timedelta(hours=1),
             },
             {
                 "title": "Tech Stocks Rally on AI Optimism",
                 "content": "Technology stocks surged as investors show renewed optimism "
                 "about artificial intelligence developments and earnings prospects.",
                 "url": "https://wsj.com/tech-rally-2024",
-                "published_time": datetime.now() - timedelta(hours=3),
+                "published_time": datetime.now(UTC) - timedelta(hours=3),
             },
         ],
         "sentiment_result": type(
@@ -210,13 +210,13 @@ async def example_key_insights_extraction():
                 "title": "Bitcoin Technical Analysis: Breakout Confirmed",
                 "content": "Bitcoin has confirmed a technical breakout above the $49,500 resistance level "
                 "with strong volume support. RSI indicates bullish momentum continuation.",
-                "published_time": datetime.now() - timedelta(hours=2),
+                "published_time": datetime.now(UTC) - timedelta(hours=2),
             },
             {
                 "title": "Institutional Whale Activity Detected",
                 "content": "Large Bitcoin transfers to institutional wallets suggest continued "
                 "accumulation by major players in the cryptocurrency space.",
-                "published_time": datetime.now() - timedelta(hours=4),
+                "published_time": datetime.now(UTC) - timedelta(hours=4),
             },
         ],
         "sentiment_data": {

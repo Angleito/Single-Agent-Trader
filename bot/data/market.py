@@ -211,10 +211,7 @@ class WebSocketMessageValidator:
                 return False
 
             # Advanced data quality validation
-            if not self.validate_data_quality(ticker, ticker["product_id"]):
-                return False
-
-            return True
+            return self.validate_data_quality(ticker, ticker["product_id"])
 
         except Exception:
             logger.exception("Error validating ticker data")
@@ -243,8 +240,8 @@ class WebSocketMessageValidator:
 
             return all(self._validate_trade_data(trade) for trade in trades)
 
-        except Exception as e:
-            logger.exception("Error validating trade event: %s", e)
+        except Exception:
+            logger.exception("Error validating trade event")
             return False
 
     def _validate_trade_data(self, trade: dict) -> bool:
@@ -288,8 +285,8 @@ class WebSocketMessageValidator:
 
             return True
 
-        except Exception as e:
-            logger.exception("Error validating trade data: %s", e)
+        except Exception:
+            logger.exception("Error validating trade data")
             return False
 
     def get_validation_stats(self) -> dict[str, Any]:
@@ -336,11 +333,12 @@ class WebSocketMessageValidator:
                 if price < Decimal(1000) or price > Decimal(500000):
                     logger.warning("Suspicious BTC price: %s", price)
                     return False
-            elif symbol.startswith("ETH"):
+            elif symbol.startswith("ETH") and (
+                price < Decimal(10) or price > Decimal(50000)
+            ):
                 # Ethereum price bounds
-                if price < Decimal(10) or price > Decimal(50000):
-                    logger.warning("Suspicious ETH price: %s", price)
-                    return False
+                logger.warning("Suspicious ETH price: %s", price)
+                return False
 
             # Check for excessive decimal precision (market manipulation indicator)
             price_str = str(price)
@@ -354,8 +352,8 @@ class WebSocketMessageValidator:
 
             return True
 
-        except Exception as e:
-            logger.exception("Error in data quality validation: %s", e)
+        except Exception:
+            logger.exception("Error in data quality validation")
             return False
 
     def validate_message_timing(self, message: dict) -> bool:
@@ -392,8 +390,8 @@ class WebSocketMessageValidator:
 
             return True
 
-        except Exception as e:
-            logger.exception("Error validating message timing: %s", e)
+        except Exception:
+            logger.exception("Error validating message timing")
             return False
 
 
@@ -565,10 +563,8 @@ class MarketDataProvider:
                 )
                 return None
 
-            except Exception as jwt_error:
-                logger.exception(
-                    "Exception in jwt_generator.build_ws_jwt: %s", jwt_error
-                )
+            except Exception:
+                logger.exception("Exception in jwt_generator.build_ws_jwt: %s")
                 import traceback
 
                 logger.debug("JWT generation traceback: %s", traceback.format_exc())
@@ -622,8 +618,8 @@ class MarketDataProvider:
             self._is_connected = True
             logger.info("Successfully connected to market data feeds")
 
-        except Exception as e:
-            logger.exception("Failed to connect to market data feeds: %s", e)
+        except Exception:
+            logger.exception("Failed to connect to market data feeds")
             self._is_connected = False
             raise
 
@@ -776,8 +772,8 @@ class MarketDataProvider:
                 # Add small delay between requests to be respectful to API
                 await asyncio.sleep(0.1)
 
-            except Exception as e:
-                logger.exception("Error fetching batch %s: %s", batch_num + 1, e)
+            except Exception:
+                logger.exception("Error fetching batch %s", batch_num + 1)
                 # Continue with other batches even if one fails
 
             # Move to next batch
@@ -848,9 +844,9 @@ class MarketDataProvider:
 
                 return batch_data
 
-        except Exception as e:
+        except Exception:
             logger.exception(
-                "Failed to fetch batch from %s to %s: %s", start_time, end_time, e
+                "Failed to fetch batch from %s to %s: %s", start_time, end_time
             )
             return []
 
@@ -1001,8 +997,8 @@ class MarketDataProvider:
 
                 return historical_data
 
-        except Exception as e:
-            logger.exception("Failed to fetch historical data: %s", e)
+        except Exception:
+            logger.exception("Failed to fetch historical data")
             # Fallback to cached data if available
             if self._ohlcv_cache:
                 logger.info("Using cached historical data")
@@ -1040,8 +1036,8 @@ class MarketDataProvider:
                     self._cache_timestamps["price"] = datetime.now(UTC)
                     return price
 
-        except Exception as e:
-            logger.exception("Error fetching latest price: %s", e)
+        except Exception:
+            logger.exception("Error fetching latest price")
 
         # Fall back to cached OHLCV data
         return self.get_latest_price()
@@ -1093,8 +1089,8 @@ class MarketDataProvider:
 
                 return orderbook
 
-        except Exception as e:
-            logger.exception("Error fetching orderbook: %s", e)
+        except Exception:
+            logger.exception("Error fetching orderbook")
             return None
 
     async def _start_websocket(self) -> None:
@@ -1125,8 +1121,8 @@ class MarketDataProvider:
         while self._is_connected:
             try:
                 await self._connect_websocket()
-            except Exception as e:
-                logger.exception("WebSocket connection error: %s", e)
+            except Exception:
+                logger.exception("WebSocket connection error")
                 if self._reconnect_attempts < self._max_reconnect_attempts:
                     self._reconnect_attempts += 1
                     delay = min(
@@ -1240,8 +1236,8 @@ class MarketDataProvider:
 
                 except json.JSONDecodeError as e:
                     logger.warning("Failed to parse WebSocket message: %s", e)
-                except Exception as e:
-                    logger.exception("Error handling WebSocket message: %s", e)
+                except Exception:
+                    logger.exception("Error handling WebSocket message")
 
     async def _process_websocket_messages(self) -> None:
         """
@@ -1260,8 +1256,8 @@ class MarketDataProvider:
             except TimeoutError:
                 # No message available, continue loop
                 continue
-            except Exception as e:
-                logger.exception("Error in message processor: %s", e)
+            except Exception:
+                logger.exception("Error in message processor: %s")
                 await asyncio.sleep(0.1)
 
     async def _handle_websocket_message_async(self, message: dict[str, Any]) -> None:
@@ -1273,8 +1269,8 @@ class MarketDataProvider:
         """
         try:
             await self._handle_websocket_message(message)
-        except Exception as e:
-            logger.exception("Error in async message handler: %s", e)
+        except Exception:
+            logger.exception("Error in async message handler: %s")
 
     async def _handle_websocket_message(self, message: dict[str, Any]) -> None:
         """
@@ -1402,8 +1398,8 @@ class MarketDataProvider:
                                 # Notify subscribers
                                 await self._notify_subscribers(updated_candle)
 
-        except Exception as e:
-            logger.exception("Error handling ticker update: %s", e)
+        except Exception:
+            logger.exception("Error handling ticker update: %s")
             logger.debug("Ticker message: %s", json.dumps(message, indent=2))
 
     async def _handle_trade_update(self, message: dict[str, Any]) -> None:
@@ -1491,8 +1487,8 @@ class MarketDataProvider:
                                 )
                                 self._ohlcv_cache[-1] = updated_candle
 
-        except Exception as e:
-            logger.exception("Error handling trade update: %s", e)
+        except Exception:
+            logger.exception("Error handling trade update: %s")
             logger.debug("Trade message: %s", json.dumps(message, indent=2))
 
     def get_latest_ohlcv(self, limit: int | None = None) -> list[MarketData]:
@@ -1600,9 +1596,9 @@ class MarketDataProvider:
                     # Create task for sync callback
                     task = asyncio.create_task(self._safe_callback_sync(callback, data))
                     tasks.append(task)
-            except Exception as e:
+            except Exception:
                 logger.exception(
-                    "Error creating subscriber task for %s: %s", callback.__name__, e
+                    "Error creating subscriber task for %s: %s", callback.__name__
                 )
 
         # Don't wait for all tasks to complete - fire and forget for non-blocking behavior
@@ -1612,9 +1608,9 @@ class MarketDataProvider:
         """Safely execute async callback."""
         try:
             await callback(data)
-        except Exception as e:
+        except Exception:
             logger.exception(
-                "Error in async subscriber callback %s: %s", callback.__name__, e
+                "Error in async subscriber callback %s: %s", callback.__name__
             )
 
     async def _safe_callback_sync(self, callback: Callable, data: MarketData) -> None:
@@ -1628,9 +1624,9 @@ class MarketDataProvider:
                 callback(data)
                 return
             await loop.run_in_executor(None, callback, data)
-        except Exception as e:
+        except Exception:
             logger.exception(
-                "Error in sync subscriber callback %s: %s", callback.__name__, e
+                "Error in sync subscriber callback %s: %s", callback.__name__
             )
 
     def is_connected(self) -> bool:
@@ -1904,8 +1900,8 @@ class MarketDataProvider:
 
             return True
 
-        except Exception as e:
-            logger.exception("Error validating market data: %s", e)
+        except Exception:
+            logger.exception("Error validating market data: %s")
             return False
 
     def _validate_price_data(
@@ -1946,8 +1942,8 @@ class MarketDataProvider:
 
             return True
 
-        except Exception as e:
-            logger.exception("Error validating price data: %s", e)
+        except Exception:
+            logger.exception("Error validating price data: %s")
             return True  # Default to allowing data on validation error
 
     def _validate_data_sufficiency(self, candle_count: int) -> None:

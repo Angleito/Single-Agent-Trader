@@ -9,7 +9,7 @@ import contextlib
 import logging
 import time
 import unittest
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pandas as pd
@@ -30,7 +30,7 @@ class TestWebSocketPerformance(unittest.TestCase):
         """Set up test fixtures."""
         # Create test market data
         self.test_data = []
-        base_time = datetime.now()
+        base_time = datetime.now(UTC)
         for i in range(100):
             self.test_data.append(
                 MarketData(
@@ -139,7 +139,7 @@ class TestWebSocketPerformance(unittest.TestCase):
 
         # Create test DataFrame with sufficient data
         df_data = []
-        base_time = datetime.now()
+        base_time = datetime.now(UTC)
         for i in range(200):  # Enough for indicators
             df_data.append(
                 {
@@ -193,7 +193,7 @@ class TestWebSocketPerformance(unittest.TestCase):
         for i in range(100):
             df_data.append(
                 {
-                    "timestamp": datetime.now() + timedelta(minutes=i),
+                    "timestamp": datetime.now(UTC) + timedelta(minutes=i),
                     "open": 45000 + i,
                     "high": 45100 + i,
                     "low": 44900 + i,
@@ -296,7 +296,7 @@ class TestWebSocketPerformance(unittest.TestCase):
         for i in range(150):
             df_data.append(
                 {
-                    "timestamp": datetime.now() + timedelta(minutes=i),
+                    "timestamp": datetime.now(UTC) + timedelta(minutes=i),
                     "open": 45000 + i * 10,
                     "high": 45100 + i * 10,
                     "low": 44900 + i * 10,

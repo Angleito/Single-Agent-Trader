@@ -238,7 +238,7 @@ class TestStartupValidation:
                     return_value=[
                         MarketData(
                             symbol="BTC-USD",
-                            timestamp=datetime.utcnow(),
+                            timestamp=datetime.now(timezone.utc),
                             open=Decimal("50000"),
                             high=Decimal("50100"),
                             low=Decimal("49900"),
@@ -338,7 +338,7 @@ class TestStartupValidation:
                 return_value={
                     "overall_status": "healthy",
                     "components": {},
-                    "timestamp": datetime.utcnow(),
+                    "timestamp": datetime.now(timezone.utc),
                 }
             )
 

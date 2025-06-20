@@ -15,7 +15,6 @@ IMPORTANT INTERVAL LIMITATIONS:
 import asyncio
 import logging
 import os
-import random
 import secrets
 import sys
 import time
@@ -24,7 +23,39 @@ import uuid
 from collections import defaultdict
 from datetime import UTC, datetime
 from enum import Enum
+from pathlib import Path
 from typing import Any
+
+from aiohttp import ClientError, ClientTimeout, web
+from bluefin_v2_client import MARKET_SYMBOLS, BluefinClient, Networks
+from bluefin_v2_client.interfaces import GetOrderbookRequest
+
+# HTTP status codes
+HTTP_OK = 200
+HTTP_NOT_FOUND = 404
+HTTP_TOO_MANY_REQUESTS = 429
+HTTP_SERVER_ERROR = 500
+
+# Configuration constants
+MIN_KEY_LENGTH = 64  # Minimum hex key length
+MIN_MNEMONIC_WORDS = 12  # BIP39 minimum words
+MAX_MNEMONIC_WORDS = 24  # BIP39 maximum words
+MIN_WORD_LENGTH = 2  # Minimum mnemonic word length
+DEFAULT_API_LIMIT = 50  # Default API request limit
+DEFAULT_RETRY_LIMIT = 10  # Default retry attempts
+DEFAULT_TIMEOUT_SECONDS = 10  # Default timeout
+ORDERBOOK_PRECISION_LIMIT = 6  # Decimal precision for orderbook
+VALIDATION_TIMEOUT = 20  # Validation timeout
+LARGE_DECIMAL_LIMIT = 80  # Large decimal validation
+LARGE_PERCENTAGE_LIMIT = 80  # Large percentage validation
+DEFAULT_PRICE_PRECISION = 5  # Default price precision
+DECIMAL_PRECISION_BASE = 64  # Base decimal precision
+API_LIMIT_MAX = 1000  # Maximum API request limit
+SCALE_MULTIPLIER_BASE = 10  # Base for scale calculations
+ADDRESS_DISPLAY_MIN_LENGTH = 12  # Minimum address length for truncation
+
+# Add parent directory to path to import secure logging and utilities
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
 class ErrorType(Enum):
@@ -34,13 +65,6 @@ class ErrorType(Enum):
     PERMANENT = "permanent"  # Non-retryable errors (auth, invalid params)
     UNKNOWN = "unknown"  # Unclassified errors
 
-
-from aiohttp import ClientError, ClientTimeout, web
-from bluefin_v2_client import MARKET_SYMBOLS, BluefinClient, Networks
-from bluefin_v2_client.interfaces import GetOrderbookRequest
-
-# Add parent directory to path to import secure logging and utilities
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
     from bot.exchange.bluefin_endpoints import BluefinEndpointConfig, get_rest_api_url
@@ -76,18 +100,19 @@ except ImportError:
 
         def to_market_symbol(self, symbol: str):
             if not self.market_symbols_enum:
-                raise Exception("MARKET_SYMBOLS enum not available")
+                raise BluefinMarketSymbolError("MARKET_SYMBOLS enum not available")
             base_symbol = symbol.split("-")[0].upper()
             if hasattr(self.market_symbols_enum, base_symbol):
                 return getattr(self.market_symbols_enum, base_symbol)
-            raise Exception(f"Unknown symbol: {symbol}")
+            raise BluefinSymbolError(f"Unknown symbol: {symbol}")
 
         def validate_market_symbol(self, symbol: str) -> bool:
             try:
                 self.to_market_symbol(symbol)
-                return True
             except Exception:
                 return False
+            else:
+                return True
 
         def from_market_symbol(self, market_symbol) -> str:
             # Convert market symbol back to string format
@@ -147,6 +172,22 @@ class BluefinAPIError(BluefinServiceError):
 
 class BluefinDataError(BluefinServiceError):
     """Exception raised when Bluefin data is invalid or missing."""
+
+
+class BluefinSymbolError(BluefinServiceError):
+    """Exception raised when symbol conversion or validation fails."""
+
+
+class BluefinMarketSymbolError(BluefinServiceError):
+    """Exception raised when market symbols enum is not available."""
+
+
+class BluefinDataFetchError(BluefinServiceError):
+    """Exception raised when unable to fetch market data from any source."""
+
+
+class BluefinSDKNotInitializedError(BluefinServiceError):
+    """Exception raised when SDK is not properly initialized."""
 
 
 class BluefinSDKService:
@@ -494,7 +535,9 @@ class BluefinSDKService:
         delay = min(delay, config["max_delay"])
 
         # Add jitter to prevent thundering herd
-        jitter = delay * config["jitter_factor"] * random.uniform(-1, 1)
+        jitter = (
+            delay * config["jitter_factor"] * (secrets.randbits(32) / (2**32) * 2 - 1)
+        )
         final_delay = max(0.1, delay + jitter)  # Minimum 100ms delay
 
         logger.debug(
@@ -1039,25 +1082,24 @@ class BluefinSDKService:
 
     def _validate_limit(self, limit: int) -> bool:
         """Validate limit parameter."""
-        return isinstance(limit, int) and 1 <= limit <= 1000
+        return isinstance(limit, int) and 1 <= limit <= API_LIMIT_MAX
 
     def _get_circuit_state(self) -> str:
         """Get current circuit breaker state with transitions."""
         current_time = time.time()
 
-        if self.circuit_state == "OPEN":
-            if current_time >= self.circuit_open_until:
-                # Transition to HALF_OPEN
-                self.circuit_state = "HALF_OPEN"
-                self.circuit_half_open_calls = 0
-                logger.info(
-                    "Circuit breaker transitioning from OPEN to HALF_OPEN",
-                    extra={
-                        "service_id": self.service_id,
-                        "failure_count": self.failure_count,
-                        "failure_types": self.failure_types,
-                    },
-                )
+        if self.circuit_state == "OPEN" and current_time >= self.circuit_open_until:
+            # Transition to HALF_OPEN
+            self.circuit_state = "HALF_OPEN"
+            self.circuit_half_open_calls = 0
+            logger.info(
+                "Circuit breaker transitioning from OPEN to HALF_OPEN",
+                extra={
+                    "service_id": self.service_id,
+                    "failure_count": self.failure_count,
+                    "failure_types": self.failure_types,
+                },
+            )
 
         return self.circuit_state
 
@@ -1067,13 +1109,15 @@ class BluefinSDKService:
 
         if state == "OPEN":
             return True
-        if state == "HALF_OPEN":
-            if self.circuit_half_open_calls >= self.circuit_half_open_max_calls:
-                logger.warning(
-                    "Circuit breaker HALF_OPEN call limit exceeded",
-                    extra={"service_id": self.service_id},
-                )
-                return True
+        if (
+            state == "HALF_OPEN"
+            and self.circuit_half_open_calls >= self.circuit_half_open_max_calls
+        ):
+            logger.warning(
+                "Circuit breaker HALF_OPEN call limit exceeded",
+                extra={"service_id": self.service_id},
+            )
+            return True
 
         return False
 
@@ -1334,7 +1378,7 @@ class BluefinSDKService:
             "status": (
                 "healthy"
                 if self.initialized
-                and success_rate > 50
+                and success_rate > DEFAULT_API_LIMIT
                 and self.circuit_state == "CLOSED"
                 else "degraded"
             ),
@@ -1367,7 +1411,9 @@ class BluefinSDKService:
                 self._record_api_failure("timeout")
                 if attempt < self.max_retries - 1:
                     delay = (
-                        self.base_retry_delay * (2**attempt) * random.uniform(0.8, 1.2)
+                        self.base_retry_delay
+                        * (2**attempt)
+                        * (0.8 + secrets.randbits(16) / (2**16) * 0.4)
                     )
                     logger.warning(
                         "Timeout error (attempt %s/%s), retrying in %.2fs: %s",
@@ -1403,7 +1449,9 @@ class BluefinSDKService:
 
                 if attempt < self.max_retries - 1:
                     delay = (
-                        self.base_retry_delay * (2**attempt) * random.uniform(0.8, 1.2)
+                        self.base_retry_delay
+                        * (2**attempt)
+                        * (0.8 + secrets.randbits(16) / (2**16) * 0.4)
                     )
                     logger.warning(
                         "Client error (attempt %s/%s), retrying in %.2fs: %s",
@@ -1482,7 +1530,7 @@ class BluefinSDKService:
 
             # Check if the key is a mnemonic phrase (12 or 24 words)
             words = original_key.split()
-            if len(words) in [12, 24]:
+            if len(words) in [MIN_MNEMONIC_WORDS, MAX_MNEMONIC_WORDS]:
                 logger.info(
                     "Detected %s-word mnemonic phrase, keeping original format for BluefinClient",
                     len(words),
@@ -1494,7 +1542,9 @@ class BluefinSDKService:
                 )
 
                 # Basic mnemonic validation
-                if all(word.isalpha() and len(word) > 2 for word in words):
+                if all(
+                    word.isalpha() and len(word) > MIN_WORD_LENGTH for word in words
+                ):
                     logger.info(
                         "Mnemonic validation passed, will pass directly to BluefinClient",
                         extra={
@@ -1512,9 +1562,9 @@ class BluefinSDKService:
                     )
             else:
                 # Check minimum length for hex keys (64 hex chars = 32 bytes)
-                if len(original_key) < 64:
+                if len(original_key) < MIN_KEY_LENGTH:
                     key_validation_errors.append(
-                        f"Too short: got {len(original_key)} chars, expected 64+ for hex or 12/24 words for mnemonic"
+                        f"Too short: got {len(original_key)} chars, expected {MIN_KEY_LENGTH}+ for hex or {MIN_MNEMONIC_WORDS}/{MAX_MNEMONIC_WORDS} words for mnemonic"
                     )
 
                 # Check if it's valid hexadecimal
@@ -1778,16 +1828,22 @@ class BluefinSDKService:
                 # Try to close any underlying HTTP sessions
                 try:
                     # Check if the client has a session attribute to close
-                    if hasattr(self.client, "session") and self.client.session:
-                        if hasattr(self.client.session, "close"):
-                            await self.client.session.close()
-                            logger.debug("Closed Bluefin client HTTP session")
+                    if (
+                        hasattr(self.client, "session")
+                        and self.client.session
+                        and hasattr(self.client.session, "close")
+                    ):
+                        await self.client.session.close()
+                        logger.debug("Closed Bluefin client HTTP session")
 
                     # Check for other common session attributes
-                    if hasattr(self.client, "_session") and self.client._session:
-                        if hasattr(self.client._session, "close"):
-                            await self.client._session.close()
-                            logger.debug("Closed Bluefin client private HTTP session")
+                    if (
+                        hasattr(self.client, "_session")
+                        and self.client._session
+                        and hasattr(self.client._session, "close")
+                    ):
+                        await self.client._session.close()
+                        logger.debug("Closed Bluefin client private HTTP session")
 
                     # Check if client has a cleanup/close method
                     if hasattr(self.client, "close"):
@@ -1884,7 +1940,8 @@ class BluefinSDKService:
                             + "..."
                             + account_data["address"][-4:]
                             if account_data["address"]
-                            and len(account_data["address"]) > 12
+                            and len(account_data["address"])
+                            > ADDRESS_DISPLAY_MIN_LENGTH
                             else account_data["address"]
                         ),
                         "address_length": (
@@ -2531,10 +2588,11 @@ class BluefinSDKService:
 
         try:
             await self.client.cancel_order(order_id)
-            return True
         except Exception:
             logger.exception("Error canceling order")
             return False
+        else:
+            return True
 
     async def set_leverage(self, symbol: str, leverage: int) -> bool:
         """Set leverage for a symbol."""
@@ -2549,10 +2607,11 @@ class BluefinSDKService:
                 symbol=self._get_market_symbol_value(validated_symbol),
                 leverage=leverage,
             )
-            return True
         except Exception:
             logger.exception("Error setting leverage for %s", symbol)
             return False
+        else:
+            return True
 
     async def get_candlestick_data(
         self, symbol: str, interval: str, limit: int, start_time: int, end_time: int
@@ -2608,7 +2667,9 @@ class BluefinSDKService:
 
         # If we reach here, all methods failed
         logger.error("🚨 ALL DATA SOURCES FAILED - no real-time data available")
-        raise Exception("Unable to fetch real-time market data from any source")
+        raise BluefinDataFetchError(
+            "Unable to fetch real-time market data from any source"
+        )
 
     async def _get_candles_via_rest_api_with_retry(
         self, symbol: str, interval: str, limit: int, start_time: int, end_time: int
@@ -2636,9 +2697,8 @@ class BluefinSDKService:
                 logger.warning("⚠️ REST API attempt %s returned empty data", attempt + 1)
 
             except Exception as e:
-                wait_time = base_delay * (2**attempt) + random.uniform(
-                    0, 1
-                )  # Exponential backoff with jitter
+                wait_time = base_delay * (2**attempt) + (secrets.randbits(16) / (2**16))
+                # Exponential backoff with jitter
 
                 if attempt < max_retries - 1:
                     logger.warning(
@@ -2663,7 +2723,7 @@ class BluefinSDKService:
         """Get candlestick data via SDK with retry logic."""
         if not self.initialized:
             logger.warning("⚠️ SDK not initialized, skipping SDK retry attempts")
-            raise Exception("SDK not initialized")
+            raise BluefinSDKNotInitializedError("SDK not initialized")
 
         max_retries = 2  # Fewer retries for SDK as it's often a dependency issue
         base_delay = 0.5
@@ -2759,7 +2819,6 @@ class BluefinSDKService:
     ) -> list[list]:
         """Generate realistic mock candlestick data as fallback."""
         import math
-        import random
         import time
 
         logger.info(
@@ -2794,7 +2853,7 @@ class BluefinSDKService:
             num_candles = min(int(time_range / interval_seconds), limit)
         else:
             # Fallback to limit if time range is invalid
-            num_candles = min(limit, 1000)
+            num_candles = min(limit, API_LIMIT_MAX)
             current_time = int(time.time() * 1000)
             end_time = current_time
             start_time = current_time - (num_candles * interval_seconds * 1000)
@@ -2810,8 +2869,10 @@ class BluefinSDKService:
         current_price = base_price
 
         # Add some market trend simulation
-        trend_direction = random.choice([-1, 0, 1])  # Bear, sideways, bull
-        trend_strength = random.uniform(0.0001, 0.0005)  # Subtle trend
+        trend_direction = secrets.choice([-1, 0, 1])  # Bear, sideways, bull
+        trend_strength = (
+            0.0001 + (secrets.randbits(16) / (2**16)) * 0.0004
+        )  # Subtle trend
 
         for i in range(num_candles):
             # Calculate timestamp for this candle
@@ -2823,16 +2884,17 @@ class BluefinSDKService:
             trend_effect = trend_direction * trend_strength * i
 
             # Generate realistic OHLCV data with variable volatility
-            volatility = base_volatility * random.uniform(
-                0.5, 1.5
-            )  # Variable volatility
+            volatility = base_volatility * (0.5 + (secrets.randbits(16) / (2**16)))
+            # Variable volatility
 
             # Use sine wave component for more realistic price movement
             sine_component = math.sin(i / 10) * 0.002
 
             # Calculate price change
             change = (
-                random.uniform(-volatility, volatility) + trend_effect + sine_component
+                (-volatility + (secrets.randbits(16) / (2**16)) * 2 * volatility)
+                + trend_effect
+                + sine_component
             ) / 100
 
             open_price = current_price
@@ -2844,11 +2906,15 @@ class BluefinSDKService:
 
             # Add realistic wicks
             wick_volatility = volatility / 200  # Smaller wick movements
-            high_price = high_base * (1 + random.uniform(0, wick_volatility))
-            low_price = low_base * (1 - random.uniform(0, wick_volatility))
+            high_price = high_base * (
+                1 + (secrets.randbits(16) / (2**16)) * wick_volatility
+            )
+            low_price = low_base * (
+                1 - (secrets.randbits(16) / (2**16)) * wick_volatility
+            )
 
             # Generate volume with realistic patterns
-            volume_multiplier = random.uniform(0.3, 2.0)
+            volume_multiplier = 0.3 + (secrets.randbits(16) / (2**16)) * 1.7
 
             # Higher volume on larger price moves
             price_change_impact = abs(change) * 5
@@ -2863,7 +2929,7 @@ class BluefinSDKService:
                 high_price = open_price
                 low_price = open_price
 
-            # Format: [timestamp, open, high, low, close, volume]
+            # Create candle data: [timestamp, open, high, low, close, volume]
             candle = [
                 int(candle_time),
                 round(float(open_price), 6),
@@ -2910,9 +2976,10 @@ class BluefinSDKService:
                 return int(interval[:-1]) * 3600
             if interval.endswith("d"):
                 return int(interval[:-1]) * 86400
-            # Default to 60 seconds if format is unclear
-            return 60
         except Exception:
+            return 60
+        else:
+            # Default to 60 seconds if format is unclear
             return 60
 
     def _normalize_interval(self, interval: str) -> str:
@@ -3079,84 +3146,84 @@ class BluefinSDKService:
 
             import aiohttp
 
-            async with aiohttp.ClientSession(timeout=self.heavy_timeout) as session:
-                async with session.get(url, params=params, headers=headers) as response:
-                    # Validate response size
-                    content_length = response.headers.get("Content-Length")
-                    if (
-                        content_length and int(content_length) > 10 * 1024 * 1024
-                    ):  # 10MB limit
-                        raise ValueError(f"Response too large: {content_length} bytes")
+            async with (
+                aiohttp.ClientSession(timeout=self.heavy_timeout) as session,
+                session.get(url, params=params, headers=headers) as response,
+            ):
+                # Validate response size
+                content_length = response.headers.get("Content-Length")
+                if (
+                    content_length and int(content_length) > 10 * 1024 * 1024
+                ):  # 10MB limit
+                    raise ValueError(f"Response too large: {content_length} bytes")
 
-                    if response.status == 200:
-                        data = await response.json()
+                if response.status == HTTP_OK:
+                    data = await response.json()
 
-                        # Validate response structure
-                        if not isinstance(data, list):
-                            logger.warning(
-                                "Expected list response, got %s: %s", type(data), data
-                            )
-                            return []
-
-                        if len(data) == 0:
-                            logger.info(
-                                "API returned empty array - no data available for requested parameters"
-                            )
-                            return []
-
-                        logger.info(
-                            "Successfully got %s candles from Bluefin REST API",
-                            len(data),
+                    # Validate response structure
+                    if not isinstance(data, list):
+                        logger.warning(
+                            "Expected list response, got %s: %s", type(data), data
                         )
-
-                        # Format candles: [timestamp, open, high, low, close, volume]
-                        # Convert from Bluefin's 18-decimal format
-                        formatted_candles = []
-                        for i, candle in enumerate(data):
-                            if not isinstance(candle, list) or len(candle) < 6:
-                                logger.warning(
-                                    "Invalid candle format at index %s: %s", i, candle
-                                )
-                                continue
-
-                            try:
-                                # Import price conversion utility
-                                from bot.utils.price_conversion import (
-                                    convert_candle_data,
-                                )
-
-                                # Use smart conversion that detects 18-decimal format
-                                formatted_candle = convert_candle_data(candle, symbol)
-                                formatted_candles.append(formatted_candle)
-                            except (ValueError, TypeError) as e:
-                                logger.warning(
-                                    "Error formatting candle at index %s: %s", i, e
-                                )
-                                continue
-
-                        if formatted_candles:
-                            logger.info(
-                                "Successfully formatted %s candles from REST API",
-                                len(formatted_candles),
-                            )
-                            return formatted_candles
-                        logger.warning("No valid candles after formatting")
                         return []
-                    if response.status == 429:
-                        retry_after = int(response.headers.get("Retry-After", "60"))
-                        raise ClientError(f"Rate limited, retry after {retry_after}s")
-                    if response.status >= 500:
-                        error_text = await response.text()
-                        raise ClientError(
-                            f"Server error {response.status}: {error_text}"
+
+                    if len(data) == 0:
+                        logger.info(
+                            "API returned empty array - no data available for requested parameters"
                         )
-                    error_text = await response.text()
-                    logger.error(
-                        "REST API call failed with status %s: %s",
-                        response.status,
-                        error_text,
+                        return []
+
+                    logger.info(
+                        "Successfully got %s candles from Bluefin REST API",
+                        len(data),
                     )
+
+                    # Format candles: [timestamp, open, high, low, close, volume]
+                    # Convert from Bluefin's 18-decimal format
+                    formatted_candles = []
+                    for i, candle in enumerate(data):
+                        if not isinstance(candle, list) or len(candle) < 6:
+                            logger.warning(
+                                "Invalid candle format at index %s: %s", i, candle
+                            )
+                            continue
+
+                        try:
+                            # Import price conversion utility
+                            from bot.utils.price_conversion import (
+                                convert_candle_data,
+                            )
+
+                            # Use smart conversion that detects 18-decimal format
+                            formatted_candle = convert_candle_data(candle, symbol)
+                            formatted_candles.append(formatted_candle)
+                        except (ValueError, TypeError) as e:
+                            logger.warning(
+                                "Error formatting candle at index %s: %s", i, e
+                            )
+                            continue
+
+                    if formatted_candles:
+                        logger.info(
+                            "Successfully formatted %s candles from REST API",
+                            len(formatted_candles),
+                        )
+                        return formatted_candles
+                    logger.warning("No valid candles after formatting")
                     return []
+                if response.status == HTTP_TOO_MANY_REQUESTS:
+                    retry_after = int(response.headers.get("Retry-After", "60"))
+                    raise ClientError(f"Rate limited, retry after {retry_after}s")
+                if response.status >= 500:
+                    error_text = await response.text()
+                    raise ClientError(f"Server error {response.status}: {error_text}")
+                error_text = await response.text()
+                logger.error(
+                    "REST API call failed with status %s: %s",
+                    response.status,
+                    error_text,
+                )
+                return []
 
         try:
             # For real-time data, try multiple symbol formats if first fails
@@ -3216,7 +3283,7 @@ class BluefinSDKService:
 
         # Add limit if specified
         if limit > 0:
-            params["limit"] = min(limit, 1000)
+            params["limit"] = min(limit, API_LIMIT_MAX)
 
         # Add time parameters for historical data only
         if limit > 10 and start_time > 0 and end_time > 0:
@@ -3235,62 +3302,62 @@ class BluefinSDKService:
 
         import aiohttp
 
-        async with aiohttp.ClientSession(timeout=self.heavy_timeout) as session:
-            async with session.get(url, params=params, headers=headers) as response:
-                if response.status == 200:
-                    data = await response.json()
+        async with (
+            aiohttp.ClientSession(timeout=self.heavy_timeout) as session,
+            session.get(url, params=params, headers=headers) as response,
+        ):
+            if response.status == HTTP_OK:
+                data = await response.json()
 
-                    if not isinstance(data, list):
-                        logger.warning(
-                            "Expected list response, got %s: %s", type(data), data
-                        )
-                        return []
-
-                    if len(data) == 0:
-                        logger.info(
-                            "API returned empty array - no data available for requested parameters"
-                        )
-                        return []
-
-                    logger.info(
-                        "Successfully got %s candles from Bluefin REST API", len(data)
+                if not isinstance(data, list):
+                    logger.warning(
+                        "Expected list response, got %s: %s", type(data), data
                     )
-
-                    # Format candles
-                    formatted_candles = []
-                    for i, candle in enumerate(data):
-                        if not isinstance(candle, list) or len(candle) < 6:
-                            logger.warning(
-                                "Invalid candle format at index %s: %s", i, candle
-                            )
-                            continue
-
-                        try:
-                            from bot.utils.price_conversion import convert_candle_data
-
-                            formatted_candle = convert_candle_data(candle, symbol_str)
-                            formatted_candles.append(formatted_candle)
-                        except (ValueError, TypeError) as e:
-                            logger.warning(
-                                "Error formatting candle at index %s: %s", i, e
-                            )
-                            continue
-
-                    if formatted_candles:
-                        logger.info(
-                            "Successfully formatted %s candles from REST API",
-                            len(formatted_candles),
-                        )
-                        return formatted_candles
-                    logger.warning("No valid candles after formatting")
                     return []
 
-                logger.error(
-                    "API request failed with status %s: %s",
-                    response.status,
-                    await response.text(),
+                if len(data) == 0:
+                    logger.info(
+                        "API returned empty array - no data available for requested parameters"
+                    )
+                    return []
+
+                logger.info(
+                    "Successfully got %s candles from Bluefin REST API", len(data)
                 )
+
+                # Format candles
+                formatted_candles = []
+                for i, candle in enumerate(data):
+                    if not isinstance(candle, list) or len(candle) < 6:
+                        logger.warning(
+                            "Invalid candle format at index %s: %s", i, candle
+                        )
+                        continue
+
+                    try:
+                        from bot.utils.price_conversion import convert_candle_data
+
+                        formatted_candle = convert_candle_data(candle, symbol_str)
+                        formatted_candles.append(formatted_candle)
+                    except (ValueError, TypeError) as e:
+                        logger.warning("Error formatting candle at index %s: %s", i, e)
+                        continue
+
+                if formatted_candles:
+                    logger.info(
+                        "Successfully formatted %s candles from REST API",
+                        len(formatted_candles),
+                    )
+                    return formatted_candles
+                logger.warning("No valid candles after formatting")
                 return []
+
+            logger.error(
+                "API request failed with status %s: %s",
+                response.status,
+                await response.text(),
+            )
+            return []
 
 
 # Global service instance
@@ -3428,14 +3495,14 @@ async def validate_endpoint_connectivity(
             for test_path in test_endpoints:
                 try:
                     async with session.get(f"{endpoint_url}{test_path}") as response:
-                        if response.status == 200:
+                        if response.status == HTTP_OK:
                             logger.debug(
                                 "Endpoint %s is accessible via %s",
                                 endpoint_url,
                                 test_path,
                             )
                             return True, ""
-                        if response.status == 404:
+                        if response.status == HTTP_NOT_FOUND:
                             # Endpoint might not support this path, try next
                             continue
                         logger.warning(
@@ -3516,7 +3583,7 @@ async def validate_network_endpoints(network: str) -> dict[str, tuple[bool, str]
 
 
 # REST API Routes
-async def health_check(request):
+async def health_check(_request):
     """Health check endpoint."""
     try:
         # Basic health status
@@ -3567,7 +3634,7 @@ async def health_check(request):
         )
 
 
-async def detailed_health_check(request):
+async def detailed_health_check(_request):
     """Comprehensive health check with detailed component status."""
     try:
         health_data = {
@@ -3700,7 +3767,7 @@ async def detailed_health_check(request):
         )
 
 
-async def connectivity_health_check(request):
+async def connectivity_health_check(_request):
     """Check external connectivity to BlueFin services."""
     start_time = time.time()
 
@@ -3798,7 +3865,7 @@ async def connectivity_health_check(request):
         )
 
 
-async def performance_metrics(request):
+async def performance_metrics(_request):
     """Get performance metrics for monitoring."""
     try:
         metrics_data = {
@@ -3893,7 +3960,7 @@ async def performance_metrics(request):
         return web.json_response({"error": str(e)}, status=500)
 
 
-async def service_status(request):
+async def service_status(_request):
     """Get comprehensive service status."""
     try:
         status_data = {
@@ -3963,7 +4030,7 @@ async def service_status(request):
         return web.json_response({"error": str(e)}, status=500)
 
 
-async def service_diagnostics(request):
+async def service_diagnostics(_request):
     """Run diagnostic checks for troubleshooting."""
     try:
         diagnostics_data = {
@@ -4076,8 +4143,6 @@ async def service_diagnostics(request):
         perf_check = {"status": "healthy", "details": {}}
 
         try:
-            import os
-
             import psutil
 
             process = psutil.Process(os.getpid())
@@ -4134,7 +4199,7 @@ async def service_diagnostics(request):
         )
 
 
-async def get_account(request):
+async def get_account(_request):
     """Get account data."""
     try:
         data = await service.get_account_data()
@@ -4144,7 +4209,7 @@ async def get_account(request):
         return web.json_response({"error": str(e)}, status=500)
 
 
-async def get_positions(request):
+async def get_positions(_request):
     """Get positions."""
     try:
         positions = await service.get_positions()
@@ -4283,7 +4348,7 @@ async def get_ticker(request):
                     async with session.get(
                         f"{api_url}/ticker24hr", params={"symbol": symbol_str}
                     ) as response:
-                        if response.status == 200:
+                        if response.status == HTTP_OK:
                             data = await response.json()
                             if data and "price" in data:
                                 # Import price conversion utility
@@ -4390,7 +4455,7 @@ async def get_market_candles(request):
         return web.json_response({"error": str(e)}, status=500)
 
 
-async def debug_symbols(request):
+async def debug_symbols(_request):
     """Debug endpoint to inspect available symbols."""
     try:
         # Get all attributes of MARKET_SYMBOLS
@@ -4435,13 +4500,13 @@ async def debug_symbols(request):
         return web.json_response({"error": str(e)}, status=500)
 
 
-async def validate_endpoints(request):
+async def validate_endpoints(_request):
     """Validate endpoint connectivity and configuration."""
     try:
         logger.info("Validating endpoint configuration and connectivity")
 
         # Get network from query parameter or use service default
-        network = request.query.get("network", service.network.lower())
+        network = _request.query.get("network", service.network.lower())
 
         if network not in ["mainnet", "testnet"]:
             return web.json_response(
@@ -4455,12 +4520,6 @@ async def validate_endpoints(request):
         validation_results = await validate_network_endpoints(network)
 
         # Determine overall status (checking if any endpoints are valid)
-        # all_valid = all(
-        #     result[0]
-        #     for result in validation_results.values()
-        #     if result[0] is not True
-        #     or result[1] != "WebSocket validation not implemented"
-        # )
         rest_api_valid = validation_results.get("rest_api", (False, "Not tested"))[0]
 
         # Prepare response
@@ -4521,14 +4580,14 @@ async def validate_endpoints(request):
         )
 
 
-async def startup(app):
+async def startup(_app):
     """Initialize service on startup."""
     logger.info("Starting Bluefin SDK service...")
     await service.initialize()
     logger.info("Bluefin SDK service startup completed")
 
 
-async def cleanup(app):
+async def cleanup(_app):
     """Cleanup service on shutdown."""
     logger.info("Shutting down Bluefin SDK service...")
     await service.cleanup()
@@ -4571,8 +4630,8 @@ def create_app():
 
 if __name__ == "__main__":
     # Get host and port from environment
-    host = os.getenv("HOST", "0.0.0.0")
-    port = int(os.getenv("PORT", 8080))
+    host = os.getenv("HOST", "127.0.0.1")
+    port = int(os.getenv("PORT", "8080"))
 
     # Check if API key is configured
     if not os.getenv("BLUEFIN_SERVICE_API_KEY"):

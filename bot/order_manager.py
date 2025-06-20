@@ -18,6 +18,7 @@ from typing import Any, Literal
 
 from .config import settings
 from .trading_types import Order, OrderStatus
+from .utils.path_utils import get_data_directory, get_data_file_path
 
 logger = logging.getLogger(__name__)
 
@@ -48,10 +49,15 @@ class OrderManager:
         Initialize the order manager.
 
         Args:
-            data_dir: Directory for state persistence (default: data/orders)
+            data_dir: Directory for state persistence (default: uses fallback-aware data/orders)
         """
-        self.data_dir = data_dir or Path("data/orders")
-        self.data_dir.mkdir(parents=True, exist_ok=True)
+        if data_dir:
+            self.data_dir = data_dir
+            self.data_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            # Use fallback-aware path utilities
+            self.data_dir = get_data_directory() / "orders"
+            self.data_dir.mkdir(parents=True, exist_ok=True)
 
         # Thread-safe order storage
         self._active_orders: dict[str, Order] = {}
@@ -63,9 +69,15 @@ class OrderManager:
         self._timeout_tasks: dict[str, asyncio.Task] = {}
         self._running = False
 
-        # State file paths
-        self.orders_file = self.data_dir / "active_orders.json"
-        self.history_file = self.data_dir / "order_history.json"
+        # State file paths - use fallback-aware utilities
+        if data_dir:
+            # Use provided data_dir
+            self.orders_file = self.data_dir / "active_orders.json"
+            self.history_file = self.data_dir / "order_history.json"
+        else:
+            # Use fallback-aware file paths
+            self.orders_file = get_data_file_path("orders/active_orders.json")
+            self.history_file = get_data_file_path("orders/order_history.json")
 
         # Load persisted state
         self._load_state()
@@ -325,9 +337,10 @@ class OrderManager:
 
             # Check active orders
             for order in self._active_orders.values():
-                if order.status == status:
-                    if symbol is None or order.symbol == symbol:
-                        orders.append(order.copy())
+                if order.status == status and (
+                    symbol is None or order.symbol == symbol
+                ):
+                    orders.append(order.copy())
 
             # Check recent history for completed orders
             if status in [
@@ -338,9 +351,12 @@ class OrderManager:
             ]:
                 cutoff_time = datetime.now(UTC) - timedelta(hours=24)
                 for order in self._order_history:
-                    if order.status == status and order.timestamp >= cutoff_time:
-                        if symbol is None or order.symbol == symbol:
-                            orders.append(order.copy())
+                    if (
+                        order.status == status
+                        and order.timestamp >= cutoff_time
+                        and (symbol is None or order.symbol == symbol)
+                    ):
+                        orders.append(order.copy())
 
             return orders
 
@@ -399,14 +415,13 @@ class OrderManager:
             orders_to_cancel = []
 
             for order_id, order in self._active_orders.items():
-                if symbol is None or order.symbol == symbol:
-                    if order.status not in [
-                        OrderStatus.FILLED,
-                        OrderStatus.CANCELLED,
-                        OrderStatus.REJECTED,
-                        OrderStatus.FAILED,
-                    ]:
-                        orders_to_cancel.append(order_id)
+                if (symbol is None or order.symbol == symbol) and order.status not in [
+                    OrderStatus.FILLED,
+                    OrderStatus.CANCELLED,
+                    OrderStatus.REJECTED,
+                    OrderStatus.FAILED,
+                ]:
+                    orders_to_cancel.append(order_id)
 
             cancelled_count = 0
             for order_id in orders_to_cancel:
@@ -414,9 +429,9 @@ class OrderManager:
                     cancelled_count += 1
 
             logger.info(
-                "Cancelled %s orders" + (" for %s" if symbol else ""),
+                "Cancelled %s orders%s",
                 cancelled_count,
-                symbol,
+                f" for {symbol}" if symbol else "",
             )
             return cancelled_count
 
@@ -454,15 +469,17 @@ class OrderManager:
             # Collect orders from history
             recent_orders = []
             for order in self._order_history:
-                if order.timestamp >= cutoff_time:
-                    if symbol is None or order.symbol == symbol:
-                        recent_orders.append(order)
+                if order.timestamp >= cutoff_time and (
+                    symbol is None or order.symbol == symbol
+                ):
+                    recent_orders.append(order)
 
             # Add active orders
             for order in self._active_orders.values():
-                if order.timestamp >= cutoff_time:
-                    if symbol is None or order.symbol == symbol:
-                        recent_orders.append(order)
+                if order.timestamp >= cutoff_time and (
+                    symbol is None or order.symbol == symbol
+                ):
+                    recent_orders.append(order)
 
             # Calculate statistics
             total_orders = len(recent_orders)
@@ -561,8 +578,8 @@ class OrderManager:
             for callback in self._order_callbacks[order_id]:
                 try:
                     callback(order_id, event)
-                except Exception as e:
-                    logger.exception("Order callback error for %s: %s", order_id, e)
+                except Exception:
+                    logger.exception("Order callback error for %s", order_id)
 
             # Clean up callbacks for completed orders
             if event in [
@@ -621,8 +638,8 @@ class OrderManager:
 
             logger.debug("Order state saved successfully")
 
-        except Exception as e:
-            logger.exception("Failed to save order state: %s", e)
+        except Exception:
+            logger.exception("Failed to save order state")
 
     def _load_state(self) -> None:
         """Load state from files."""
@@ -687,8 +704,8 @@ class OrderManager:
 
                 logger.info("Loaded %s historical orders", len(self._order_history))
 
-        except Exception as e:
-            logger.exception("Failed to load order state: %s", e)
+        except Exception:
+            logger.exception("Failed to load order state")
             # Continue with empty state
 
     def clear_old_history(self, days_to_keep: int = 7) -> None:

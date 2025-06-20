@@ -39,7 +39,7 @@ try:
     from .bluefin_client import BluefinServiceClient
 except ImportError:
     # Fallback if BluefinServiceClient is not available
-    class BluefinServiceClient:  # type: ignore
+    class BluefinServiceClient:  # type: ignore[misc]
         def __init__(self):
             pass
 
@@ -324,11 +324,13 @@ class BluefinClient(BaseExchange):
                 # In paper trading, accept all converted symbols
                 logger.debug("Paper trading: accepting symbol %s", bluefin_symbol)
                 return True
-
-            # For live trading, we rely on the supported symbols list
-            # In the future, we could add a ticker API call here for real-time validation
-            logger.info("Symbol %s validated for %s", bluefin_symbol, self.network_name)
-            return True
+            else:
+                # For live trading, we rely on the supported symbols list
+                # In the future, we could add a ticker API call here for real-time validation
+                logger.info(
+                    "Symbol %s validated for %s", bluefin_symbol, self.network_name
+                )
+                return True
 
         except Exception:
             logger.exception("Symbol validation failed for %s", symbol)
@@ -375,15 +377,16 @@ class BluefinClient(BaseExchange):
                 self._last_health_check = datetime.now(UTC)
                 await self._init_client()
                 return True
-            # For testing: Allow connection without service in live mode
-            logger.warning(
-                "⚠️ LIVE MODE: Proceeding without Bluefin service connection. "
-                "Position queries and order execution will not work!"
-            )
-            self._connected = True
-            self._last_health_check = datetime.now(UTC)
-            await self._init_client()
-            return True
+            else:
+                # For testing: Allow connection without service in live mode
+                logger.warning(
+                    "⚠️ LIVE MODE: Proceeding without Bluefin service connection. "
+                    "Position queries and order execution will not work!"
+                )
+                self._connected = True
+                self._last_health_check = datetime.now(UTC)
+                await self._init_client()
+                return True
 
         except Exception as e:
             logger.exception("Failed to connect to Bluefin")
@@ -541,17 +544,15 @@ class BluefinClient(BaseExchange):
             if trade_action.action == "HOLD":
                 logger.info("Action is HOLD - no trade executed")
                 return None
-
-            if trade_action.action == "CLOSE":
+            elif trade_action.action == "CLOSE":
                 return await self._close_position(bluefin_symbol)
-
-            if trade_action.action in ["LONG", "SHORT"]:
+            elif trade_action.action in ["LONG", "SHORT"]:
                 return await self._open_position(
                     trade_action, bluefin_symbol, current_price
                 )
-
-            logger.error("Unknown action: %s", trade_action.action)
-            return None
+            else:
+                logger.error("Unknown action: %s", trade_action.action)
+                return None
 
         except ValueError:
             logger.exception("Symbol validation error")
@@ -609,13 +610,14 @@ class BluefinClient(BaseExchange):
             fallback_symbol = symbol_map.get(symbol, symbol)
 
             # Final check - if even fallback is not supported, use BTC-PERP
-            if not is_bluefin_symbol_supported(fallback_symbol, self.network_name):
-                if self.network_name.lower() in ["testnet", "staging", "sui_staging"]:
-                    fallback_symbol = "BTC-PERP"  # Safe fallback for testnet
-                    logger.warning(
-                        "All conversions failed, using safe testnet fallback: %s",
-                        fallback_symbol,
-                    )
+            if not is_bluefin_symbol_supported(
+                fallback_symbol, self.network_name
+            ) and self.network_name.lower() in ["testnet", "staging", "sui_staging"]:
+                fallback_symbol = "BTC-PERP"  # Safe fallback for testnet
+                logger.warning(
+                    "All conversions failed, using safe testnet fallback: %s",
+                    fallback_symbol,
+                )
 
             logger.warning(
                 "Using fallback conversion: %s -> %s", symbol, fallback_symbol
@@ -748,13 +750,13 @@ class BluefinClient(BaseExchange):
                             "⚠️ Take profit order failed for position %s", order.id
                         )
 
-                except Exception as e:
-                    logger.exception(
-                        "❌ CRITICAL ERROR placing protective orders: %s", e
-                    )
+                except Exception:
+                    logger.exception("❌ CRITICAL ERROR placing protective orders")
                     # Continue with trade but log the critical failure
 
-            return order
+                return order
+            else:
+                return order
 
         except Exception:
             logger.exception("Failed to open position")

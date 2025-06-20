@@ -8,7 +8,7 @@ error scenarios, and validation logic for both live and paper trading modes.
 import asyncio
 import logging
 import tempfile
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from unittest.mock import patch
@@ -566,7 +566,7 @@ class TestBalanceOperations:
             futures_balance=Decimal("50000"),
             total_balance=Decimal("60000"),
             max_position_size=Decimal("1000000"),
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             margin_info=MarginInfo(
                 total_margin=Decimal("10000"),
                 available_margin=Decimal("8000"),

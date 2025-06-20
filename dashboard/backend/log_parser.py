@@ -13,7 +13,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from queue import Queue
 from typing import Any
@@ -232,10 +232,12 @@ class DockerLogParser:
 
             # Parse timestamp
             try:
-                timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S,%f")
+                timestamp = datetime.strptime(
+                    timestamp_str, "%Y-%m-%d %H:%M:%S,%f"
+                ).replace(tzinfo=UTC)
             except ValueError:
                 logger.warning("Failed to parse timestamp: %s", timestamp_str)
-                timestamp = datetime.now()
+                timestamp = datetime.now(UTC)
 
             # Parse log level
             try:
@@ -249,8 +251,8 @@ class DockerLogParser:
                 timestamp, log_level, logger_name, message, container
             )
 
-        except Exception as e:
-            logger.exception("Error parsing log line '%s': %s", line, e)
+        except Exception:
+            logger.exception("Error parsing log line '%s'", line)
             return None
 
     def _parse_specific_log_type(
@@ -425,15 +427,15 @@ class DockerLogParser:
             return parsed_logs
 
         except subprocess.TimeoutExpired:
-            logger.exception("Docker logs command timed out")
+            logger.error("Docker logs command timed out")
             return []
         except FileNotFoundError:
-            logger.exception(
+            logger.error(
                 "Docker command not found. Make sure Docker is installed and in PATH"
             )
             return []
-        except Exception as e:
-            logger.exception("Error getting historical logs: %s", e)
+        except Exception:
+            logger.exception("Error getting historical logs")
             return []
 
     def stream_logs(self, callback: Callable[[ParsedLogEntry], None]) -> None:
@@ -468,8 +470,8 @@ class DockerLogParser:
                         if parsed_entry and callback:
                             callback(parsed_entry)
 
-                    except Exception as e:
-                        logger.exception("Error processing log line: %s", e)
+                    except Exception:
+                        logger.exception("Error processing log line")
                         continue
 
                 # Clean up process
@@ -478,11 +480,11 @@ class DockerLogParser:
                     process.wait(timeout=5)
 
             except FileNotFoundError:
-                logger.exception(
+                logger.error(
                     "Docker command not found. Make sure Docker is installed and in PATH"
                 )
-            except Exception as e:
-                logger.exception("Error in log streaming worker: %s", e)
+            except Exception:
+                logger.exception("Error in log streaming worker")
 
         # Start streaming in background thread
         self._parsing_thread = threading.Thread(target=_stream_worker, daemon=True)
@@ -511,8 +513,8 @@ class DockerLogParser:
 
             return self.container_name in result.stdout
 
-        except Exception as e:
-            logger.exception("Error checking container status: %s", e)
+        except Exception:
+            logger.exception("Error checking container status")
             return False
 
 
@@ -546,7 +548,7 @@ class LogFormatter:
     def format_for_json_export(log_entries: list[ParsedLogEntry]) -> str:
         """Format log entries for JSON export."""
         data = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "total_entries": len(log_entries),
             "entries": [entry.to_dict() for entry in log_entries],
         }

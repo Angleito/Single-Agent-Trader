@@ -99,25 +99,26 @@ def validate_symbol_format(
     """Validate trading symbol format for the exchange."""
     if exchange_type == ExchangeType.COINBASE:
         # Coinbase uses format like "BTC-USD", "ETH-USD"
-        if "-" in symbol and len(symbol.split("-")) == 2:
+        EXPECTED_SYMBOL_PARTS = 2
+        if "-" in symbol and len(symbol.split("-")) == EXPECTED_SYMBOL_PARTS:
             base, quote = symbol.split("-")
             if base.isalpha() and quote.isalpha():
                 return True, "Valid Coinbase format (BASE-QUOTE)"
-            else:
-                return False, "Invalid format: Both parts should be alphabetic"
-        else:
-            return False, "Coinbase requires BASE-QUOTE format (e.g., BTC-USD)"
 
-    elif exchange_type == ExchangeType.BLUEFIN:
+            return False, "Invalid format: Both parts should be alphabetic"
+
+        return False, "Coinbase requires BASE-QUOTE format (e.g., BTC-USD)"
+
+    if exchange_type == ExchangeType.BLUEFIN:
         # Bluefin uses format like "BTC-PERP", "ETH-PERP"
         if "-" in symbol and symbol.endswith("-PERP"):
             base = symbol.replace("-PERP", "")
             if base.isalpha():
                 return True, "Valid Bluefin format (BASE-PERP)"
-            else:
-                return False, "Invalid format: Base currency should be alphabetic"
-        else:
-            return False, "Bluefin requires BASE-PERP format (e.g., BTC-PERP)"
+
+            return False, "Invalid format: Base currency should be alphabetic"
+
+        return False, "Bluefin requires BASE-PERP format (e.g., BTC-PERP)"
 
     return False, "Unknown exchange type"
 
@@ -219,13 +220,15 @@ def display_recommendations(settings: Settings, env_check: dict[str, bool]) -> N
         )
 
     # Exchange-specific recommendations
-    if settings.exchange.exchange_type == ExchangeType.BLUEFIN:
-        if settings.exchange.bluefin_network == "testnet":
-            recommendations.append(
-                "[cyan]Bluefin Testnet:[/cyan]\n"
-                "  • Using testnet is good for testing\n"
-                "  • Get testnet SUI from: https://docs.sui.io/guides/developer/getting-started/sui-token"
-            )
+    if (
+        settings.exchange.exchange_type == ExchangeType.BLUEFIN
+        and settings.exchange.bluefin_network == "testnet"
+    ):
+        recommendations.append(
+            "[cyan]Bluefin Testnet:[/cyan]\n"
+            "  • Using testnet is good for testing\n"
+            "  • Get testnet SUI from: https://docs.sui.io/guides/developer/getting-started/sui-token"
+        )
 
     if recommendations:
         console.print("\n")

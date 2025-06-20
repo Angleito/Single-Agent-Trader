@@ -171,13 +171,15 @@ class LLMPerformanceMonitor:
                 self.slow_response_threshold_ms,
                 "HIT" if metric.cache_hit else "MISS",
             )
-        elif metric.response_time_ms <= self.target_response_time_ms:
-            if not metric.cache_hit:
-                logger.info(
-                    "⚡ FAST: %.1fms (target: %sms) FRESH",
-                    metric.response_time_ms,
-                    self.target_response_time_ms,
-                )
+        elif (
+            metric.response_time_ms <= self.target_response_time_ms
+            and not metric.cache_hit
+        ):
+            logger.info(
+                "⚡ FAST: %.1fms (target: %sms) FRESH",
+                metric.response_time_ms,
+                self.target_response_time_ms,
+            )
 
     def get_current_stats(self) -> PerformanceStats:
         """
@@ -375,8 +377,8 @@ class LLMPerformanceMonitor:
             except asyncio.CancelledError:
                 logger.info("Performance monitoring stopped")
                 break
-            except Exception as e:
-                logger.exception("Error in performance monitoring: %s", e)
+            except Exception:
+                logger.exception("Error in performance monitoring")
 
     def get_cache_effectiveness_analysis(self) -> dict[str, Any]:
         """
@@ -412,7 +414,7 @@ class LLMPerformanceMonitor:
             ) * 100
 
         # Generate recommendations
-        recommendations: list[str] = analysis["recommendations"]  # type: ignore
+        recommendations: list[str] = analysis["recommendations"]  # type: ignore[assignment]
         if analysis["cache_hit_rate"] < 50:
             recommendations.append("Increase cache TTL")
         if analysis["cache_hit_rate"] < 30:
@@ -434,7 +436,7 @@ def get_performance_monitor() -> LLMPerformanceMonitor:
     Returns:
         Global performance monitor instance
     """
-    global _global_monitor
+    global _global_monitor  # pylint: disable=global-statement # noqa: PLW0603
 
     if _global_monitor is None:
         _global_monitor = LLMPerformanceMonitor()

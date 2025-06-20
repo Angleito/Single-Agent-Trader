@@ -1,6 +1,6 @@
 """Unit tests for web search formatter module."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -33,7 +33,7 @@ except ImportError:
             self.bullish_indicators = bullish_indicators or []
             self.bearish_indicators = bearish_indicators or []
             self.volatility_signals = volatility_signals or []
-            self.timestamp = datetime.utcnow()
+            self.timestamp = datetime.now(UTC)
 
     class CorrelationAnalysis:
         def __init__(self, **kwargs):
@@ -213,13 +213,13 @@ class TestWebSearchFormatter:
                 "title": "Bitcoin Surges Past $60K on ETF Hopes",
                 "content": "Bitcoin price rallies with strong bullish momentum as ETF approval hopes grow",
                 "url": "https://bloomberg.com/bitcoin-surge",
-                "published_time": datetime.utcnow(),
+                "published_time": datetime.now(UTC),
             },
             {
                 "title": "Ethereum DeFi TVL Reaches Record High",
                 "content": "Ethereum ecosystem shows bullish growth with institutional adoption",
                 "url": "https://coindesk.com/ethereum-defi",
-                "published_time": datetime.utcnow() - timedelta(hours=2),
+                "published_time": datetime.now(UTC) - timedelta(hours=2),
             },
         ]
 
@@ -241,7 +241,7 @@ class TestWebSearchFormatter:
                 "title": "Fed Policy Impacts Crypto Markets",
                 "content": "Federal Reserve policy changes affect cryptocurrency trading",
                 "url": "https://reuters.com/fed-crypto",
-                "published_time": datetime.utcnow(),
+                "published_time": datetime.now(UTC),
             }
         ]
 
@@ -381,7 +381,7 @@ class TestWebSearchFormatter:
                     "title": "Bitcoin Bull Run Continues",
                     "content": "Strong institutional demand drives prices higher",
                     "url": "https://bloomberg.com/bitcoin",
-                    "published_time": datetime.utcnow(),
+                    "published_time": datetime.now(UTC),
                 }
             ],
             "sentiment_result": SentimentResult(
@@ -546,7 +546,7 @@ class TestWebSearchFormatter:
         """Test freshness score with recent content."""
         formatter = WebSearchFormatter()
 
-        recent_time = datetime.utcnow() - timedelta(minutes=30)
+        recent_time = datetime.now(UTC) - timedelta(minutes=30)
         score = formatter._calculate_freshness_score(recent_time)
 
         assert score > 0.9  # Very fresh content
@@ -555,7 +555,7 @@ class TestWebSearchFormatter:
         """Test freshness score with old content."""
         formatter = WebSearchFormatter()
 
-        old_time = datetime.utcnow() - timedelta(days=10)
+        old_time = datetime.now(UTC) - timedelta(days=10)
         score = formatter._calculate_freshness_score(old_time)
 
         assert score < 0.5  # Old content
@@ -565,7 +565,7 @@ class TestWebSearchFormatter:
         formatter = WebSearchFormatter()
 
         with patch("dateutil.parser.parse") as mock_parse:
-            mock_parse.return_value = datetime.utcnow() - timedelta(hours=2)
+            mock_parse.return_value = datetime.now(UTC) - timedelta(hours=2)
 
             score = formatter._calculate_freshness_score("2024-01-01T12:00:00Z")
 
@@ -1044,7 +1044,7 @@ def sample_news_items():
             Institutional buying pressure continues to support the rally.
             """,
             "url": "https://bloomberg.com/bitcoin-breakout",
-            "published_time": datetime.utcnow(),
+            "published_time": datetime.now(UTC),
         },
         {
             "title": "Ethereum DeFi TVL Reaches New High",
@@ -1054,7 +1054,7 @@ def sample_news_items():
             while gas fees remain manageable. Institutional DeFi adoption accelerates.
             """,
             "url": "https://coindesk.com/ethereum-defi",
-            "published_time": datetime.utcnow() - timedelta(hours=2),
+            "published_time": datetime.now(UTC) - timedelta(hours=2),
         },
         {
             "title": "Regulatory Clarity Expected Soon",
@@ -1064,7 +1064,7 @@ def sample_news_items():
             guidance on compliance requirements.
             """,
             "url": "https://reuters.com/crypto-regulation",
-            "published_time": datetime.utcnow() - timedelta(hours=4),
+            "published_time": datetime.now(UTC) - timedelta(hours=4),
         },
     ]
 
@@ -1285,7 +1285,7 @@ class TestWebSearchFormatterIntegration:
                 "content": f"This is a very long news article with extensive content that goes on and on about market conditions and trading implications. Article number {i} contains detailed analysis and comprehensive market insights that would normally be very valuable for trading decisions."
                 * 5,
                 "url": f"https://example.com/article-{i}",
-                "published_time": datetime.utcnow(),
+                "published_time": datetime.now(UTC),
             }
             for i in range(10)
         ]
@@ -1362,7 +1362,7 @@ class TestWebSearchFormatterIntegration:
                 with institutional sentiment remaining {'positive' if i % 3 == 0 else 'neutral'}.
                 """,
                 "url": f"https://tradinganalysis.com/update-{i}",
-                "published_time": datetime.utcnow() - timedelta(hours=i),
+                "published_time": datetime.now(UTC) - timedelta(hours=i),
             }
             for i in range(50)  # 50 news items
         ]

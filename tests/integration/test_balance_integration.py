@@ -595,5 +595,5 @@ class TestBalanceIntegration:
                 }
             )
 
-        df = pd.DataFrame(data)
-        return df.set_index("timestamp")
+        market_df = pd.DataFrame(data)
+        return market_df.set_index("timestamp")

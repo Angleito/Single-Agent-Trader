@@ -38,12 +38,13 @@ class TestCompleteTradingFlow:
         market_data = []
         for i, timestamp in enumerate(timestamps):
             # Create realistic price movement
-            price_change = np.random.normal(0, 100)
+            rng = np.random.default_rng()
+            price_change = rng.normal(0, 100)
             current_price = base_price + (i * 10) + price_change
 
-            high = current_price + abs(np.random.normal(0, 50))
-            low = current_price - abs(np.random.normal(0, 50))
-            volume = np.random.uniform(10, 100)
+            high = current_price + abs(rng.normal(0, 50))
+            low = current_price - abs(rng.normal(0, 50))
+            volume = rng.uniform(10, 100)
 
             market_data.append(
                 MarketData(

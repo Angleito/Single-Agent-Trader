@@ -39,9 +39,10 @@ def is_likely_18_decimal(value: float | int | str | Decimal) -> bool:
         numeric_value = float(value)
         # Values larger than 1e10 are likely in 18-decimal format
         # This catches values like 3.45e12 which should be ~3.45 after conversion
-        return numeric_value > 1e10
     except (ValueError, TypeError):
         return False
+    else:
+        return numeric_value > 1e10
 
 
 def convert_from_18_decimal(
@@ -99,11 +100,11 @@ def convert_from_18_decimal(
                 field_name,
             )
 
-        return converted_value
-
     except (ValueError, TypeError, ArithmeticError) as e:
-        logger.exception("Error converting value %s: %s", value, e)
+        logger.exception("Error converting value %s", value)
         raise ValueError(f"Invalid numeric value: {value}") from e
+    else:
+        return converted_value
 
 
 def is_price_valid(price: float | Decimal, symbol: str) -> bool:
@@ -156,11 +157,11 @@ def convert_candle_data(candle: list, symbol: str | None = None) -> list:
         logger.debug(
             "Converted candle for %s: OHLCV = %s", symbol, converted_candle[1:6]
         )
-        return converted_candle
-
     except (ValueError, TypeError, IndexError) as e:
-        logger.exception("Error converting candle data: %s", e)
+        logger.exception("Error converting candle data")
         raise ValueError(f"Failed to convert candle data: {candle}") from e
+    else:
+        return converted_candle
 
 
 def convert_ticker_price(

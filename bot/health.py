@@ -13,6 +13,7 @@ from typing import Any
 
 from .config import Settings
 from .config_utils import HealthMonitor, StartupValidator, create_startup_report
+from .utils.path_utils import get_logs_directory, get_safe_file_path
 
 
 class HealthCheckEndpoints:
@@ -223,13 +224,13 @@ class MonitoringExporter:
     def save_monitoring_snapshot(self, output_dir: Path | None = None) -> Path:
         """Save a complete monitoring snapshot to disk."""
         if not output_dir:
-            output_dir = Path("logs") / "monitoring"
-
-        output_dir.mkdir(parents=True, exist_ok=True)
+            output_dir = get_logs_directory() / "monitoring"
 
         # Generate filename with timestamp
         timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-        snapshot_file = output_dir / f"monitoring_snapshot_{timestamp}.json"
+        snapshot_file = get_safe_file_path(
+            output_dir, f"monitoring_snapshot_{timestamp}.json"
+        )
 
         # Collect all monitoring data
         snapshot_data = {

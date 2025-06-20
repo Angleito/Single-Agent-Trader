@@ -11,7 +11,7 @@ import logging
 import shutil
 import subprocess
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, ClassVar
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -31,7 +31,7 @@ class SearchResult(BaseModel):
     relevance_score: float = Field(default=0.0, ge=0.0, le=1.0)
 
     class Config:
-        json_encoders = {datetime: lambda v: v.isoformat()}
+        json_encoders: ClassVar[dict[type, Any]] = {datetime: lambda v: v.isoformat()}
 
 
 class FinancialNewsResult(BaseModel):

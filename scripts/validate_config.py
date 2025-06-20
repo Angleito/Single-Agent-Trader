@@ -67,11 +67,11 @@ class ConfigurationTester:
 
         if self.settings.exchange.exchange_type == "bluefin":
             return self.settings.test_bluefin_configuration()
-        else:
-            return {
-                "status": "skipped",
-                "reason": f"Exchange type {self.settings.exchange.exchange_type} not supported for advanced testing",
-            }
+
+        return {
+            "status": "skipped",
+            "reason": f"Exchange type {self.settings.exchange.exchange_type} not supported for advanced testing",
+        }
 
     def run_bluefin_validation(self) -> dict[str, Any]:
         """Run Bluefin-specific validation tests."""

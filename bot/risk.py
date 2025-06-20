@@ -228,7 +228,6 @@ class APIFailureProtection:
                 self.consecutive_failures = 0
                 self.last_success_time = datetime.now(UTC)
                 return result
-
             except Exception as e:
                 last_exception = e
                 self.consecutive_failures += 1
@@ -247,7 +246,7 @@ class APIFailureProtection:
                     await asyncio.sleep(delay)
                 else:
                     logger.exception(
-                        "API call failed after %s attempts: %s", self.max_retries, e
+                        "API call failed after %s attempts", self.max_retries
                     )
 
         # All attempts failed
@@ -326,22 +325,22 @@ class EmergencyStopManager:
             recent_loss = current_value
             return recent_loss >= threshold
 
-        elif trigger_name == "api_failures":
+        if trigger_name == "api_failures":
             # Check API failure rate
             failure_count = current_value
             return failure_count >= threshold
 
-        elif trigger_name == "position_errors":
+        if trigger_name == "position_errors":
             # Check position validation errors
             error_count = current_value
             return error_count >= threshold
 
-        elif trigger_name == "margin_critical":
+        if trigger_name == "margin_critical":
             # Check margin usage
             margin_usage = current_value
             return margin_usage >= threshold
 
-        elif trigger_name == "consecutive_losses":
+        if trigger_name == "consecutive_losses":
             # Check consecutive losing trades
             consecutive_losses = current_value
             return consecutive_losses >= threshold
@@ -673,9 +672,11 @@ class RiskManager:
 
             return True, modified_action, "Advanced risk checks passed"
 
-        except Exception as e:
+        except Exception:
             logger.exception("Risk evaluation error")
-            self.circuit_breaker.record_failure("risk_evaluation_error", str(e), "high")
+            self.circuit_breaker.record_failure(
+                "risk_evaluation_error", "exception_occurred", "high"
+            )
             return False, self._get_hold_action("Risk evaluation error"), "Error"
 
     def validate_balance_for_trade(
@@ -705,7 +706,7 @@ class RiskManager:
             )
             leveraged_value = position_value * Decimal(str(self.leverage))
             required_margin = leveraged_value / Decimal(str(self.leverage))
-            required_margin + estimated_fees
+            _total_required = required_margin + estimated_fees
 
             # Validate current balance can support this trade
             validation_result = self.balance_validator.validate_balance_range(
@@ -765,10 +766,9 @@ class RiskManager:
                 "✅ Balance validation passed for %s trade", trade_action.action
             )
             return True, "Balance validation successful"
-
-        except Exception as e:
+        except Exception:
             logger.exception("Error in balance validation for trade")
-            return False, f"Balance validation error: {e}"
+            return False, "Balance validation error occurred"
 
     def _calculate_current_margin_usage(self) -> Decimal:
         """Calculate current margin usage across all positions."""
@@ -893,7 +893,7 @@ class RiskManager:
         if modified.size_pct > max_allowed_size:
             modified.size_pct = int(max_allowed_size)
             logger.warning(
-                "Position size reduced to %s% due to margin constraints",
+                "Position size reduced to %s%% due to margin constraints",
                 max_allowed_size,
             )
 
@@ -1080,12 +1080,11 @@ class RiskManager:
                 "reason": "Position validation passed",
                 "severity": "none",
             }
-
-        except Exception as e:
+        except Exception:
             logger.exception("Position validation error")
             return {
                 "valid": False,
-                "reason": f"Validation error: {e}",
+                "reason": "Validation error occurred",
                 "severity": "high",
             }
 
@@ -1100,8 +1099,8 @@ class RiskManager:
 
         if position.side == "LONG":
             return position.size * price_diff
-        else:  # SHORT
-            return position.size * (-price_diff)
+        # SHORT
+        return position.size * (-price_diff)
 
     def _monitor_risk_metrics(self) -> dict[str, Any]:
         """
@@ -1150,8 +1149,6 @@ class RiskManager:
                 if isinstance(m["timestamp"], datetime)
                 and m["timestamp"] >= cutoff_time
             ]
-
-            return metrics
 
         except Exception:
             logger.exception("Risk metrics monitoring error")
@@ -1276,10 +1273,9 @@ class RiskManager:
 
         if any(high_risk_conditions):
             return "HIGH"
-        elif any(medium_risk_conditions):
+        if any(medium_risk_conditions):
             return "MEDIUM"
-        else:
-            return "LOW"
+        return "LOW"
 
     def _get_available_margin(self) -> Decimal:
         """

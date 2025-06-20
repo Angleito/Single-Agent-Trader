@@ -7,7 +7,7 @@ This shows how to use the BluefinWebSocketClient for real-time market data strea
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from bot.data.bluefin_websocket import BluefinWebSocketClient
 from bot.types import MarketData
@@ -59,14 +59,14 @@ async def main():
 
         # Run for a while to collect data
         run_duration = 300  # 5 minutes
-        start_time = datetime.now()
+        start_time = datetime.now(UTC)
 
-        while (datetime.now() - start_time).total_seconds() < run_duration:
+        while (datetime.now(UTC) - start_time).total_seconds() < run_duration:
             # Get current status
             status = ws_client.get_status()
 
             # Log status every 30 seconds
-            if int((datetime.now() - start_time).total_seconds()) % 30 == 0:
+            if int((datetime.now(UTC) - start_time).total_seconds()) % 30 == 0:
                 logger.info("Status: %s", status)
 
                 # Get latest price
@@ -104,8 +104,8 @@ async def main():
 
     except KeyboardInterrupt:
         logger.info("Interrupted by user")
-    except Exception as e:
-        logger.exception("Error: %s", e)
+    except Exception:
+        logger.exception("Error")
     finally:
         # Disconnect
         logger.info("Disconnecting from WebSocket...")

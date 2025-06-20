@@ -39,13 +39,13 @@ try:
             return self.list_futures_positions(**kwargs)
 
         # Override get_accounts to return a dict similar to legacy SDK
-        def get_accounts(self, *args, **kwargs):  # type: ignore
+        def get_accounts(self, *args, **kwargs):  # type: ignore[override]
             resp = super().get_accounts(*args, **kwargs)
             if isinstance(resp, dict):
                 return resp
             # RESTClient returns an object with `.accounts` attribute
             try:
-                accounts = resp.accounts  # type: ignore
+                accounts = resp.accounts  # type: ignore[attr-defined]
             except AttributeError:
                 return {"accounts": []}
             # Convert each account object to dict if possible
@@ -65,9 +65,9 @@ except ImportError:
     # Fallback to the deprecated coinbase-advanced-trader package if present
     try:
         from coinbase_advanced_trader.client import (
-            CoinbaseAdvancedTrader as _FallbackTrader,  # type: ignore
+            CoinbaseAdvancedTrader as _FallbackTrader,  # type: ignore[import-untyped]
         )
-        from coinbase_advanced_trader.exceptions import (  # type: ignore
+        from coinbase_advanced_trader.exceptions import (  # type: ignore[import-untyped]
             CoinbaseAPIException as _FallbackAPIException,
         )
         from coinbase_advanced_trader.exceptions import (
@@ -86,7 +86,7 @@ except ImportError:
         COINBASE_AVAILABLE = True
     except ImportError:  # pragma: no cover
         # Mock classes for when *no* Coinbase SDK is installed
-        class CoinbaseAdvancedTrader:  # type: ignore
+        class CoinbaseAdvancedTrader:  # type: ignore[misc]
             def __init__(self, **kwargs):
                 pass
 

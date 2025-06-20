@@ -1166,95 +1166,161 @@ class MarketContextAnalyzer:
             risk_off_factors = []
             key_drivers = []
 
-            # Fed policy
-            if fed_stance == "DOVISH":
-                risk_on_factors.append(1.0)
-                key_drivers.append("Dovish Fed policy supports risk assets")
-            elif fed_stance == "HAWKISH":
-                risk_off_factors.append(1.0)
-                key_drivers.append("Hawkish Fed policy pressures risk assets")
+            # Analyze macroeconomic factors
+            self._analyze_macro_factors(
+                fed_stance,
+                inflation_env,
+                rate_trend,
+                risk_on_factors,
+                risk_off_factors,
+                key_drivers,
+            )
 
-            # Inflation
-            if inflation_env == "HIGH":
-                risk_off_factors.append(0.8)
-                key_drivers.append("High inflation environment")
-            elif inflation_env == "LOW":
-                risk_on_factors.append(0.6)
+            # Analyze risk factors
+            self._analyze_risk_factors(
+                geo_risk,
+                volatility_regime,
+                liquidity_conditions,
+                risk_on_factors,
+                risk_off_factors,
+                key_drivers,
+            )
 
-            # Interest rates
-            if rate_trend == "RISING":
-                risk_off_factors.append(0.8)
-                key_drivers.append("Rising interest rate environment")
-            elif rate_trend == "FALLING":
-                risk_on_factors.append(0.8)
-                key_drivers.append("Falling interest rate environment")
+            # Analyze crypto-specific factors
+            self._analyze_crypto_factors(
+                crypto_adoption,
+                institutional_sentiment,
+                regulatory_env,
+                risk_on_factors,
+                risk_off_factors,
+                key_drivers,
+            )
 
-            # Geopolitical risk
-            if geo_risk == "HIGH":
-                risk_off_factors.append(1.0)
-                key_drivers.append("Elevated geopolitical risk")
-            elif geo_risk == "LOW":
-                risk_on_factors.append(0.5)
-
-            # Crypto adoption
-            if crypto_adoption == "HIGH":
-                risk_on_factors.append(0.6)
-                key_drivers.append("Strong crypto adoption momentum")
-            elif crypto_adoption == "LOW":
-                risk_off_factors.append(0.4)
-
-            # Institutional sentiment
-            if institutional_sentiment == "POSITIVE":
-                risk_on_factors.append(0.7)
-                key_drivers.append("Positive institutional sentiment")
-            elif institutional_sentiment == "NEGATIVE":
-                risk_off_factors.append(0.7)
-                key_drivers.append("Negative institutional sentiment")
-
-            # Regulatory environment
-            if regulatory_env == "FAVORABLE":
-                risk_on_factors.append(0.5)
-                key_drivers.append("Favorable regulatory environment")
-            elif regulatory_env == "RESTRICTIVE":
-                risk_off_factors.append(0.8)
-                key_drivers.append("Restrictive regulatory environment")
-
-            # Volatility regime
-            if volatility_regime == "HIGH":
-                risk_off_factors.append(0.6)
-                key_drivers.append("High volatility environment")
-
-            # Liquidity conditions
-            if liquidity_conditions == "TIGHT":
-                risk_off_factors.append(0.7)
-                key_drivers.append("Tight liquidity conditions")
-            elif liquidity_conditions == "ABUNDANT":
-                risk_on_factors.append(0.5)
-
-            # Calculate scores
-            risk_on_score = sum(risk_on_factors)
-            risk_off_score = sum(risk_off_factors)
-
-            # Determine regime
-            if risk_on_score > risk_off_score * 1.3:
-                regime = MarketRegimeType.RISK_ON
-                confidence = min(
-                    risk_on_score / (risk_on_score + risk_off_score + 1), 0.9
-                )
-            elif risk_off_score > risk_on_score * 1.3:
-                regime = MarketRegimeType.RISK_OFF
-                confidence = min(
-                    risk_off_score / (risk_on_score + risk_off_score + 1), 0.9
-                )
-            else:
-                regime = MarketRegimeType.TRANSITION
-                confidence = 0.5
-                key_drivers.append("Mixed signals suggest transitional regime")
-
-            return regime, confidence, key_drivers[:5]
+            # Calculate final regime
+            return self._calculate_regime_from_factors(
+                risk_on_factors, risk_off_factors, key_drivers
+            )
 
         except Exception:
             return MarketRegimeType.UNKNOWN, 0.0, ["Error in regime analysis"]
+
+    def _analyze_macro_factors(
+        self,
+        fed_stance: str,
+        inflation_env: str,
+        rate_trend: str,
+        risk_on_factors: list[float],
+        risk_off_factors: list[float],
+        key_drivers: list[str],
+    ) -> None:
+        """Analyze macroeconomic factors affecting market regime."""
+        # Fed policy
+        if fed_stance == "DOVISH":
+            risk_on_factors.append(1.0)
+            key_drivers.append("Dovish Fed policy supports risk assets")
+        elif fed_stance == "HAWKISH":
+            risk_off_factors.append(1.0)
+            key_drivers.append("Hawkish Fed policy pressures risk assets")
+
+        # Inflation
+        if inflation_env == "HIGH":
+            risk_off_factors.append(0.8)
+            key_drivers.append("High inflation environment")
+        elif inflation_env == "LOW":
+            risk_on_factors.append(0.6)
+
+        # Interest rates
+        if rate_trend == "RISING":
+            risk_off_factors.append(0.8)
+            key_drivers.append("Rising interest rate environment")
+        elif rate_trend == "FALLING":
+            risk_on_factors.append(0.8)
+            key_drivers.append("Falling interest rate environment")
+
+    def _analyze_risk_factors(
+        self,
+        geo_risk: str,
+        volatility_regime: str,
+        liquidity_conditions: str,
+        risk_on_factors: list[float],
+        risk_off_factors: list[float],
+        key_drivers: list[str],
+    ) -> None:
+        """Analyze risk factors affecting market regime."""
+        # Geopolitical risk
+        if geo_risk == "HIGH":
+            risk_off_factors.append(1.0)
+            key_drivers.append("Elevated geopolitical risk")
+        elif geo_risk == "LOW":
+            risk_on_factors.append(0.5)
+
+        # Volatility regime
+        if volatility_regime == "HIGH":
+            risk_off_factors.append(0.6)
+            key_drivers.append("High volatility environment")
+
+        # Liquidity conditions
+        if liquidity_conditions == "TIGHT":
+            risk_off_factors.append(0.7)
+            key_drivers.append("Tight liquidity conditions")
+        elif liquidity_conditions == "ABUNDANT":
+            risk_on_factors.append(0.5)
+
+    def _analyze_crypto_factors(
+        self,
+        crypto_adoption: str,
+        institutional_sentiment: str,
+        regulatory_env: str,
+        risk_on_factors: list[float],
+        risk_off_factors: list[float],
+        key_drivers: list[str],
+    ) -> None:
+        """Analyze crypto-specific factors affecting market regime."""
+        # Crypto adoption
+        if crypto_adoption == "HIGH":
+            risk_on_factors.append(0.6)
+            key_drivers.append("Strong crypto adoption momentum")
+        elif crypto_adoption == "LOW":
+            risk_off_factors.append(0.4)
+
+        # Institutional sentiment
+        if institutional_sentiment == "POSITIVE":
+            risk_on_factors.append(0.7)
+            key_drivers.append("Positive institutional sentiment")
+        elif institutional_sentiment == "NEGATIVE":
+            risk_off_factors.append(0.7)
+            key_drivers.append("Negative institutional sentiment")
+
+        # Regulatory environment
+        if regulatory_env == "FAVORABLE":
+            risk_on_factors.append(0.5)
+            key_drivers.append("Favorable regulatory environment")
+        elif regulatory_env == "RESTRICTIVE":
+            risk_off_factors.append(0.8)
+            key_drivers.append("Restrictive regulatory environment")
+
+    def _calculate_regime_from_factors(
+        self,
+        risk_on_factors: list[float],
+        risk_off_factors: list[float],
+        key_drivers: list[str],
+    ) -> tuple[MarketRegimeType, float, list[str]]:
+        """Calculate market regime from risk factors."""
+        risk_on_score = sum(risk_on_factors)
+        risk_off_score = sum(risk_off_factors)
+
+        if risk_on_score > risk_off_score * 1.3:
+            regime = MarketRegimeType.RISK_ON
+            confidence = min(risk_on_score / (risk_on_score + risk_off_score + 1), 0.9)
+        elif risk_off_score > risk_on_score * 1.3:
+            regime = MarketRegimeType.RISK_OFF
+            confidence = min(risk_off_score / (risk_on_score + risk_off_score + 1), 0.9)
+        else:
+            regime = MarketRegimeType.TRANSITION
+            confidence = 0.5
+            key_drivers.append("Mixed signals suggest transitional regime")
+
+        return regime, confidence, key_drivers[:5]
 
     def _calculate_regime_change_probability(
         self, sentiment_data: dict[str, Any]

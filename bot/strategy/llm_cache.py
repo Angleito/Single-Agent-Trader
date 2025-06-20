@@ -125,6 +125,7 @@ class MarketStateHasher:
 
         except Exception:
             logger.exception("Error generating cache key")
+        else:
             # Return timestamp-based key as fallback
             return hashlib.sha256(
                 f"fallback_{time.time()}".encode(), usedforsecurity=False
@@ -460,7 +461,7 @@ def get_llm_cache() -> LLMResponseCache:
     Returns:
         Global LLM cache instance
     """
-    global _global_cache
+    global _global_cache  # pylint: disable=global-statement # noqa: PLW0603
 
     if _global_cache is None:
         # Get settings from config

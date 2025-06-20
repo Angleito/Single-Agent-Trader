@@ -10,7 +10,7 @@ import json
 import logging
 import sys
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -44,7 +44,7 @@ class WebSocketConnectivityTester:
                 "test": test_name,
                 "passed": passed,
                 "details": details,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
         )
 
@@ -77,7 +77,7 @@ class WebSocketConnectivityTester:
                 # Send a test message
                 test_message = {
                     "type": "test_message",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "source": "connectivity_test",
                     "data": {"test_id": "conn_test_001"},
                 }
@@ -146,7 +146,7 @@ class WebSocketConnectivityTester:
                 # Create a large message (1MB)
                 large_data = {
                     "type": "large_test_message",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "data": "x" * (1024 * 1024),  # 1MB of data
                 }
 
@@ -177,7 +177,7 @@ class WebSocketConnectivityTester:
                 for i in range(count):
                     message = {
                         "type": "rapid_test",
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                         "sequence": i,
                     }
                     await websocket.send(json.dumps(message))
@@ -239,7 +239,7 @@ class WebSocketConnectivityTester:
                 message = {
                     "type": "concurrent_test",
                     "connection_id": i,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
                 tasks.append(ws.send(json.dumps(message)))
 
@@ -297,7 +297,7 @@ class WebSocketConnectivityTester:
 
     def print_summary(self):
         """Print test results summary."""
-        logger.info("\n" + "=" * 60)
+        logger.info("\n%s", "=" * 60)
         logger.info("Test Results Summary")
         logger.info("=" * 60)
 

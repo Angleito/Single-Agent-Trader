@@ -11,7 +11,7 @@ import statistics
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import docker
@@ -113,7 +113,7 @@ class PerformanceMonitor:
         event_id = f"{event_type}_{int(time.time() * 1000)}"
 
         # Record timestamp
-        self.message_timestamps[event_id] = datetime.utcnow()
+        self.message_timestamps[event_id] = datetime.now(UTC)
 
         # Send test event through bot
         if event_type == "market_data":
@@ -138,8 +138,8 @@ class PerformanceMonitor:
                 stream=False,
             )
             logger.debug("Triggered market update: %s", event_id)
-        except Exception as e:
-            logger.exception("Failed to trigger market update: %s", e)
+        except Exception:
+            logger.exception("Failed to trigger market update")
 
     async def _trigger_decision(self, event_id: str):
         """Trigger an AI decision."""
@@ -150,8 +150,8 @@ class PerformanceMonitor:
                 stream=False,
             )
             logger.debug("Triggered AI decision: %s", event_id)
-        except Exception as e:
-            logger.exception("Failed to trigger decision: %s", e)
+        except Exception:
+            logger.exception("Failed to trigger decision")
 
     async def _trigger_indicators(self, event_id: str):
         """Trigger indicator calculation."""
@@ -162,22 +162,22 @@ class PerformanceMonitor:
                 stream=False,
             )
             logger.debug("Triggered indicators: %s", event_id)
-        except Exception as e:
-            logger.exception("Failed to trigger indicators: %s", e)
+        except Exception:
+            logger.exception("Failed to trigger indicators")
 
     async def monitor_messages(self, duration: int = 60):
         """Monitor WebSocket messages and measure latency."""
-        end_time = datetime.utcnow() + timedelta(seconds=duration)
+        end_time = datetime.now(UTC) + timedelta(seconds=duration)
 
         try:
             async with websockets.connect(self.dashboard_url) as websocket:
                 logger.info("Connected to dashboard WebSocket")
 
-                while datetime.utcnow() < end_time:
+                while datetime.now(UTC) < end_time:
                     try:
                         # Receive message
                         message = await asyncio.wait_for(websocket.recv(), timeout=1.0)
-                        receive_time = datetime.utcnow()
+                        receive_time = datetime.now(UTC)
 
                         # Parse message
                         data = json.loads(message)
@@ -210,14 +210,14 @@ class PerformanceMonitor:
 
                     except TimeoutError:
                         continue
-                    except Exception as e:
-                        logger.exception("Error processing message: %s", e)
+                    except Exception:
+                        logger.exception("Error processing message")
                         self.metrics.error_counts["message_processing"] = (
                             self.metrics.error_counts.get("message_processing", 0) + 1
                         )
 
-        except Exception as e:
-            logger.exception("WebSocket connection error: %s", e)
+        except Exception:
+            logger.exception("WebSocket connection error")
             self.metrics.error_counts["connection"] = (
                 self.metrics.error_counts.get("connection", 0) + 1
             )
@@ -253,7 +253,7 @@ class PerformanceMonitor:
 
                         self.metrics.container_stats[container_name].append(
                             {
-                                "timestamp": datetime.utcnow().isoformat(),
+                                "timestamp": datetime.now(UTC).isoformat(),
                                 "cpu_percent": cpu_percent,
                                 "memory_mb": memory_usage,
                                 "memory_limit_mb": memory_limit,
@@ -268,8 +268,8 @@ class PerformanceMonitor:
 
                 await asyncio.sleep(interval)
 
-            except Exception as e:
-                logger.exception("Container monitoring error: %s", e)
+            except Exception:
+                logger.exception("Container monitoring error")
                 await asyncio.sleep(interval)
 
     def _calculate_cpu_percent(self, stats: dict) -> float:
@@ -292,7 +292,7 @@ class PerformanceMonitor:
                 )
                 return round(cpu_percent, 2)
         except Exception:
-            pass
+            logger.debug("Failed to calculate CPU percentage")
 
         return 0.0
 
@@ -337,7 +337,7 @@ class PerformanceMonitor:
 
     def print_results(self):
         """Print performance test results."""
-        logger.info("\n" + "=" * 60)
+        logger.info("\n%s", "=" * 60)
         logger.info("Performance Test Results")
         logger.info("=" * 60)
 
@@ -394,7 +394,7 @@ class PerformanceMonitor:
     def save_results(self, filename: str = "performance_results.json"):
         """Save results to JSON file."""
         results = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "latency_stats": self.metrics.get_latency_stats(),
             "message_rates": self.metrics.message_rates,
             "container_stats_summary": self._summarize_container_stats(),

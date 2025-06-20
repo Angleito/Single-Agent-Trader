@@ -95,8 +95,8 @@ class ComprehensiveMonitoringSystem:
             # Demonstrate monitoring capabilities
             await self._demonstrate_monitoring()
 
-        except Exception as e:
-            logger.exception("❌ Failed to start monitoring system: %s", e)
+        except Exception:
+            logger.exception("❌ Failed to start monitoring system")
             await self.stop()
             raise
 
@@ -115,8 +115,8 @@ class ComprehensiveMonitoringSystem:
             await self.health_monitor.stop_monitoring()
 
             logger.info("✅ All monitoring components stopped successfully")
-        except Exception as e:
-            logger.exception("❌ Error stopping monitoring system: %s", e)
+        except Exception:
+            logger.exception("❌ Error stopping monitoring system")
 
     async def _run_initial_diagnostics(self) -> None:
         """Run initial diagnostic checks."""
@@ -142,8 +142,8 @@ class ComprehensiveMonitoringSystem:
                     for check in failed_checks:
                         logger.warning("  - %s: %s", check.check_name, check.message)
 
-        except Exception as e:
-            logger.exception("❌ Initial diagnostics failed: %s", e)
+        except Exception:
+            logger.exception("❌ Initial diagnostics failed")
 
     async def _demonstrate_monitoring(self) -> None:
         """Demonstrate monitoring capabilities."""
@@ -190,8 +190,8 @@ class ComprehensiveMonitoringSystem:
             logger.info("🔄 Recovery Rules: %s", recovery_status["total_rules"])
             logger.info("✅ Enabled Rules: %s", recovery_status["enabled_rules"])
 
-        except Exception as e:
-            logger.exception("❌ Error demonstrating monitoring: %s", e)
+        except Exception:
+            logger.exception("❌ Error demonstrating monitoring")
 
     async def get_system_status(self) -> dict:
         """Get comprehensive system status."""
@@ -230,7 +230,7 @@ class ComprehensiveMonitoringSystem:
                 "dashboard": {"url": "http://localhost:9090", "active": True},
             }
         except Exception as e:
-            logger.exception("Error getting system status: %s", e)
+            logger.exception("Error getting system status")
             return {"error": str(e)}
 
     async def run_diagnostic_suite(self) -> dict:
@@ -260,20 +260,20 @@ class ComprehensiveMonitoringSystem:
                     for rec in summary["recommendations"][:3]:  # Show top 3
                         logger.info("  - %s", rec)
 
-            return report.__dict__
-
         except Exception as e:
-            logger.exception("❌ Diagnostic suite failed: %s", e)
+            logger.exception("❌ Diagnostic suite failed")
             return {"error": str(e)}
+        else:
+            return report.__dict__
 
 
 async def main():
     """Main function demonstrating the monitoring system."""
     # Configuration
-    BLUEFIN_SERVICE_URL = "http://localhost:8080"  # Adjust as needed
+    bluefin_service_url = "http://localhost:8080"  # Adjust as needed
 
     # Create monitoring system
-    monitoring_system = ComprehensiveMonitoringSystem(BLUEFIN_SERVICE_URL)
+    monitoring_system = ComprehensiveMonitoringSystem(bluefin_service_url)
 
     # Setup signal handlers for graceful shutdown
     def signal_handler(signum, _frame):
@@ -345,8 +345,8 @@ async def main():
 
     except KeyboardInterrupt:
         logger.info("🛑 Shutdown requested by user")
-    except Exception as e:
-        logger.exception("❌ Unexpected error: %s", e)
+    except Exception:
+        logger.exception("❌ Unexpected error")
     finally:
         # Cleanup
         await monitoring_system.stop()

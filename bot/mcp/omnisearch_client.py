@@ -9,10 +9,11 @@ import asyncio
 import contextlib
 import json
 import logging
+import os
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 from uuid import uuid4
 
 import aiohttp
@@ -21,6 +22,65 @@ from pydantic import BaseModel, Field
 from bot.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def get_data_directory(subdirectory: str = "omnisearch_cache") -> Path:
+    """
+    Get the appropriate data directory with fallback support.
+
+    Args:
+        subdirectory: The subdirectory name within the data directory
+
+    Returns:
+        Path to the data directory that can be written to
+
+    Raises:
+        PermissionError: If neither the original nor fallback directory can be created
+    """
+    # Try original data directory first
+    original_path = Path("data") / subdirectory
+
+    def try_create_directory(path: Path) -> bool:
+        """Try to create a directory and test write permissions."""
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            # Test write permissions by creating a temporary file
+            test_file = path / ".write_test"
+            test_file.write_text("test")
+            test_file.unlink()
+            return True
+        except (PermissionError, OSError):
+            return False
+
+    # Try original path first
+    if try_create_directory(original_path):
+        logger.debug("Using original data directory: %s", original_path)
+        return original_path
+
+    # Try fallback directory from environment variable
+    fallback_dir = os.getenv("FALLBACK_DATA_DIR")
+    if fallback_dir:
+        fallback_path = Path(fallback_dir) / subdirectory
+        if try_create_directory(fallback_path):
+            logger.info("Using fallback data directory: %s", fallback_path)
+            return fallback_path
+        else:
+            logger.warning("Could not create fallback directory: %s", fallback_path)
+
+    # Try system temporary directory as last resort
+    import tempfile
+
+    temp_path = Path(tempfile.gettempdir()) / "ai_trading_bot" / subdirectory
+    if try_create_directory(temp_path):
+        logger.warning("Using temporary directory for data storage: %s", temp_path)
+        return temp_path
+
+    # If all else fails, raise an error
+    raise PermissionError(
+        f"Cannot create data directory. Tried: {original_path}, "
+        f"{fallback_path if fallback_dir else 'no fallback set'}, {temp_path}. "
+        "Set FALLBACK_DATA_DIR environment variable to specify an alternative location."
+    )
 
 
 class SearchResult(BaseModel):
@@ -35,7 +95,7 @@ class SearchResult(BaseModel):
     relevance_score: float = Field(default=0.0, ge=0.0, le=1.0)
 
     class Config:
-        json_encoders = {datetime: lambda v: v.isoformat()}
+        json_encoders: ClassVar[dict[type, Any]] = {datetime: lambda v: v.isoformat()}
 
 
 class FinancialNewsResult(BaseModel):
@@ -99,8 +159,7 @@ class SearchCache:
             entry = self.cache[key]
             if entry["expires_at"] > time.time():
                 return entry["value"]
-            else:
-                del self.cache[key]
+            del self.cache[key]
         return None
 
     def set(self, key: str, value: Any, ttl: int | None = None) -> None:
@@ -188,9 +247,14 @@ class OmniSearchClient:
         self.cache = SearchCache(cache_ttl) if enable_cache else None
         self.rate_limiter = RateLimiter(rate_limit_requests, rate_limit_window)
 
-        # Local storage for fallback
-        self.local_storage_path = Path("data/omnisearch_cache")
-        self.local_storage_path.mkdir(parents=True, exist_ok=True)
+        # Local storage for fallback with permission handling
+        try:
+            self.local_storage_path = get_data_directory("omnisearch_cache")
+        except PermissionError as e:
+            logger.error("Failed to create data directory: %s", e)
+            # Fall back to a minimal path that won't be used for actual storage
+            self.local_storage_path = Path("/tmp/omnisearch_cache_fallback")
+            logger.warning("Using minimal fallback path: %s", self.local_storage_path)
 
         logger.info("🔍 OmniSearch Client: Initialized for %s", self.server_url)
 
@@ -211,14 +275,11 @@ class OmniSearchClient:
                     self._connected = True
                     logger.info("✅ OmniSearch: Successfully connected")
                     return True
-                else:
-                    logger.warning(
-                        "OmniSearch server returned status %s", response.status
-                    )
-                    return False
+                logger.warning("OmniSearch server returned status %s", response.status)
+                return False
 
-        except Exception as e:
-            logger.exception("Failed to connect to OmniSearch service: %s", e)
+        except Exception:
+            logger.exception("Failed to connect to OmniSearch service")
             # Fall back to cached/local results only
             return False
 
@@ -315,8 +376,8 @@ class OmniSearchClient:
 
             return financial_results
 
-        except Exception as e:
-            logger.exception("Financial news search failed for '%s': %s", query, e)
+        except Exception:
+            logger.exception("Financial news search failed for '%s'", query)
             return await self._get_fallback_news(query, limit)
 
     async def search_crypto_sentiment(self, symbol: str) -> SentimentAnalysis:
@@ -385,10 +446,8 @@ class OmniSearchClient:
 
             return sentiment
 
-        except Exception as e:
-            logger.exception(
-                "Crypto sentiment search failed for %s: %s", base_symbol, e
-            )
+        except Exception:
+            logger.exception("Crypto sentiment search failed for %s", base_symbol)
             return await self._get_fallback_sentiment(base_symbol)
 
     async def search_nasdaq_sentiment(self) -> SentimentAnalysis:
@@ -447,8 +506,8 @@ class OmniSearchClient:
 
             return sentiment
 
-        except Exception as e:
-            logger.exception("NASDAQ sentiment search failed: %s", e)
+        except Exception:
+            logger.exception("NASDAQ sentiment search failed")
             return await self._get_fallback_sentiment("NASDAQ")
 
     async def search_market_correlation(
@@ -562,14 +621,13 @@ class OmniSearchClient:
                     )
                     correlation_coeff = max(-1.0, min(1.0, correlation_coeff))
 
-            except (ValueError, TypeError) as e:
+            except (ValueError, TypeError):
                 logger.exception(
-                    "Invalid correlation coefficient type %s: %s from API for %s-%s. Using fallback value 0.0. Error: %s",
+                    "Invalid correlation coefficient type %s: %s from API for %s-%s. Using fallback value 0.0",
                     type(raw_correlation_coeff),
                     raw_correlation_coeff,
                     crypto_base,
                     nasdaq_base,
-                    e,
                 )
                 correlation_coeff = 0.0
 
@@ -646,12 +704,11 @@ class OmniSearchClient:
 
             return correlation
 
-        except Exception as e:
+        except Exception:
             logger.exception(
-                "Market correlation search failed for %s-%s: %s",
+                "Market correlation search failed for %s-%s",
                 crypto_base,
                 nasdaq_base,
-                e,
             )
             return await self._get_fallback_correlation(
                 crypto_base, nasdaq_base, timeframe
@@ -694,12 +751,11 @@ class OmniSearchClient:
             ) as response:
                 if response.status == 200:
                     return await response.json()
-                elif response.status == 429:  # Rate limited
+                if response.status == 429:  # Rate limited
                     logger.warning("OmniSearch API rate limit hit")
                     raise Exception("Rate limit exceeded")
-                else:
-                    logger.warning("OmniSearch API returned status %s", response.status)
-                    raise Exception(f"API error: {response.status}")
+                logger.warning("OmniSearch API returned status %s", response.status)
+                raise Exception(f"API error: {response.status}")
 
         except TimeoutError as e:
             logger.warning("OmniSearch request timed out for %s", endpoint)
@@ -717,16 +773,21 @@ class OmniSearchClient:
         # Simple fallback with basic results
         fallback_results = []
 
-        # Check local cache files
-        local_file = self.local_storage_path / f"news_{hash(query) % 1000}.json"
-        if local_file.exists():
-            try:
-                with local_file.open() as f:
-                    cached_data = json.load(f)
-                    for item in cached_data[:limit]:
-                        fallback_results.append(FinancialNewsResult(**item))
-            except Exception as e:
-                logger.debug("Failed to load local cache: %s", e)
+        # Check local cache files if storage path is available
+        try:
+            local_file = self.local_storage_path / f"news_{hash(query) % 1000}.json"
+            if local_file.exists() and local_file.is_file():
+                try:
+                    with local_file.open() as f:
+                        cached_data = json.load(f)
+                        for item in cached_data[:limit]:
+                            fallback_results.append(FinancialNewsResult(**item))
+                except (OSError, PermissionError, json.JSONDecodeError):
+                    logger.debug("Failed to load local cache from %s", local_file)
+        except (OSError, PermissionError):
+            logger.debug(
+                "Cannot access local storage directory: %s", self.local_storage_path
+            )
 
         # If no cached results, return empty with warning
         if not fallback_results:
@@ -786,8 +847,8 @@ class OmniSearchClient:
             logger.debug("Could not parse date: %s", date_str)
             return None
 
-        except Exception as e:
-            logger.debug("Date parsing error: %s", e)
+        except Exception:
+            logger.debug("Date parsing error")
             return None
 
     async def health_check(self) -> dict[str, Any]:

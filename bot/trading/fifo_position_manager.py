@@ -55,7 +55,7 @@ class FIFOPositionManager:
                     timestamp=datetime.now(UTC),
                 )
 
-            side_literal: Literal["LONG", "SHORT", "FLAT"] = fifo_pos.side  # type: ignore
+            side_literal: Literal["LONG", "SHORT", "FLAT"] = fifo_pos.side  # type: ignore[assignment]
             return Position(
                 symbol=symbol,
                 side=side_literal,
@@ -147,8 +147,11 @@ class FIFOPositionManager:
                 # Log each lot sale
                 for sale in sales:
                     logger.info(
-                        f"Sold {sale.quantity_sold} units from lot {sale.lot_id} "
-                        f"at {sale.sale_price}, realized P&L: {sale.realized_pnl}"
+                        "Sold %s units from lot %s " "at %s, realized P&L: %s",
+                        sale.quantity_sold,
+                        sale.lot_id,
+                        sale.sale_price,
+                        sale.realized_pnl,
                     )
 
                 # Record to position history
@@ -164,8 +167,8 @@ class FIFOPositionManager:
                     }
                 )
 
-            except ValueError as e:
-                logger.exception("Error selling FIFO: %s", e)
+            except ValueError:
+                logger.exception("Error selling FIFO")
         else:
             # For futures, this would open a SHORT position
             # For spot trading, we typically don't support shorting
@@ -195,11 +198,11 @@ class FIFOPositionManager:
             if symbol:
                 fifo_pos = self._positions.get(symbol)
                 return fifo_pos.total_realized_pnl if fifo_pos else Decimal("0")
-            else:
-                total_pnl = Decimal("0")
-                for pos in self._positions.values():
-                    total_pnl += pos.total_realized_pnl
-                return total_pnl
+
+            total_pnl = Decimal("0")
+            for pos in self._positions.values():
+                total_pnl += pos.total_realized_pnl
+            return total_pnl
 
     async def _save_state_async(self) -> None:
         """Save position state to file asynchronously."""
@@ -241,8 +244,8 @@ class FIFOPositionManager:
             async with aiofiles.open(self._state_file, "w") as f:
                 await f.write(json.dumps(state, indent=2))
 
-        except Exception as e:
-            logger.exception("Failed to save position state: %s", e)
+        except Exception:
+            logger.exception("Failed to save position state")
 
     def _save_state_sync(self) -> None:
         """Save position state to file synchronously (fallback method)."""
@@ -283,8 +286,8 @@ class FIFOPositionManager:
 
             self._state_file.write_text(json.dumps(state, indent=2))
 
-        except Exception as e:
-            logger.exception("Failed to save position state (sync): %s", e)
+        except Exception:
+            logger.exception("Failed to save position state (sync)")
 
     def reconcile_position_from_exchange(
         self,
@@ -315,7 +318,8 @@ class FIFOPositionManager:
 
             # Create a single synthetic lot representing the entire position
             synthetic_lot = TradeLot(
-                lot_id=f"exchange_reconcile_{symbol}_{datetime.now(UTC).isoformat()}",
+                lot_id="exchange_reconcile_%s_%s"
+                % (symbol, datetime.now(UTC).isoformat()),
                 symbol=symbol,
                 quantity=size,
                 purchase_price=entry_price,
@@ -330,8 +334,11 @@ class FIFOPositionManager:
             self._save_state()
 
             logger.info(
-                f"FIFO position reconciled from exchange for {symbol}: "
-                f"{side} {size} @ {entry_price}"
+                "FIFO position reconciled from exchange for %s: " "%s %s @ %s",
+                symbol,
+                side,
+                size,
+                entry_price,
             )
 
     def _save_state(self) -> None:
@@ -355,15 +362,15 @@ class FIFOPositionManager:
             except RuntimeError:
                 # No event loop running, do synchronous save
                 self._save_state_sync()
-        except Exception as e:
-            logger.exception("Failed to save state: %s", e)
+        except Exception:
+            logger.exception("Failed to save state")
 
     def _handle_save_error(self, task: asyncio.Task) -> None:
         """Handle errors from async save task."""
         try:
             task.result()
-        except Exception as e:
-            logger.exception("Async save failed: %s", e)
+        except Exception:
+            logger.exception("Async save failed")
 
     def _load_state(self) -> None:
         """Load position state from file."""
@@ -424,6 +431,6 @@ class FIFOPositionManager:
 
             logger.info("Loaded %s positions from state file", len(self._positions))
 
-        except Exception as e:
-            logger.exception("Failed to load position state: %s", e)
+        except Exception:
+            logger.exception("Failed to load position state")
             # Continue with empty state

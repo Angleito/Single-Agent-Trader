@@ -1,6 +1,6 @@
 """Integration tests for strategy decision flow."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import numpy as np
@@ -54,11 +54,11 @@ class TestStrategyFlow:
         market_state = MarketState(
             symbol="BTC-USD",
             interval="1h",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             current_price=Decimal(str(latest_data["close"])),
             ohlcv_data=[],
             indicators=IndicatorData(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
                 cipher_a_dot=latest_data.get("trend_dot"),
                 cipher_b_wave=latest_data.get("wave"),
                 cipher_b_money_flow=latest_data.get("money_flow"),
@@ -70,7 +70,7 @@ class TestStrategyFlow:
                 symbol="BTC-USD",
                 side="FLAT",
                 size=Decimal("0"),
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
             ),
         )
 
@@ -136,7 +136,7 @@ class TestStrategyFlow:
             symbol="BTC-USD",
             side="FLAT",
             size=Decimal("0"),
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         )
 
         approved, final_action, reason = risk_manager.evaluate_risk(
@@ -163,11 +163,11 @@ class TestStrategyFlow:
         market_state = MarketState(
             symbol="BTC-USD",
             interval="1h",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             current_price=Decimal("50000"),
             ohlcv_data=[],
             indicators=IndicatorData(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
                 **{
                     k: v
                     for k, v in latest_state.items()
@@ -186,7 +186,7 @@ class TestStrategyFlow:
                 symbol="BTC-USD",
                 side="FLAT",
                 size=Decimal("0"),
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
             ),
         )
 
@@ -206,15 +206,15 @@ class TestStrategyFlow:
         empty_market_state = MarketState(
             symbol="BTC-USD",
             interval="1h",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             current_price=Decimal("50000"),
             ohlcv_data=[],
-            indicators=IndicatorData(timestamp=datetime.utcnow()),
+            indicators=IndicatorData(timestamp=datetime.now(UTC)),
             current_position=Position(
                 symbol="BTC-USD",
                 side="FLAT",
                 size=Decimal("0"),
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
             ),
         )
 

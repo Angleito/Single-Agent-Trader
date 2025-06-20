@@ -155,9 +155,12 @@ class SelfImprovementEngine:
         }
 
         logger.info(
-            f"Performance analysis complete: {total_trades} trades, "
-            f"{analysis['success_rate']:.1%} success rate, "
-            f"${total_pnl:.2f} total PnL"
+            "Performance analysis complete: %s trades, "
+            "%.1%% success rate, "
+            "$%.2f total PnL",
+            total_trades,
+            analysis["success_rate"] * 100,
+            total_pnl,
         )
 
         return analysis
@@ -341,7 +344,8 @@ class SelfImprovementEngine:
                     parameter="max_size_pct",
                     current_value=current_max_size,
                     suggested_value=10,
-                    reason=f"Small positions showing {best_win_rate:.1%} win rate",
+                    reason="Small positions showing %.1%% win rate"
+                    % (best_win_rate * 100,),
                     confidence=0.7,
                     expected_improvement=0.1,
                 )
@@ -350,7 +354,8 @@ class SelfImprovementEngine:
                     parameter="max_size_pct",
                     current_value=current_max_size,
                     suggested_value=25,
-                    reason=f"Larger positions showing {best_win_rate:.1%} win rate",
+                    reason="Larger positions showing %.1%% win rate"
+                    % (best_win_rate * 100,),
                     confidence=0.6,
                     expected_improvement=0.15,
                 )
@@ -401,7 +406,7 @@ class SelfImprovementEngine:
                 parameter="leverage",
                 current_value=current_leverage,
                 suggested_value=best_leverage,
-                reason=f"Leverage {best_leverage}x showing optimal risk/reward",
+                reason="Leverage %sx showing optimal risk/reward" % best_leverage,
                 confidence=0.65,
                 expected_improvement=0.08,
             )
@@ -445,7 +450,7 @@ class SelfImprovementEngine:
                 parameter="default_stop_loss_pct",
                 current_value=current_stop,
                 suggested_value=round(suggested_stop, 1),
-                reason=f"{large_losses} trades exceeded stop loss significantly",
+                reason="%s trades exceeded stop loss significantly" % large_losses,
                 confidence=0.75,
                 expected_improvement=0.05,
             )
@@ -499,7 +504,8 @@ class SelfImprovementEngine:
                 parameter="suggested_trading_style",
                 current_value="mixed",
                 suggested_value="scalping",
-                reason=f"Short-term trades showing {best_win_rate:.1%} success",
+                reason="Short-term trades showing %.1%% success"
+                % (best_win_rate * 100,),
                 confidence=0.6,
                 expected_improvement=0.1,
             )
@@ -578,9 +584,11 @@ class SelfImprovementEngine:
                 if win_rate > 0.7:
                     insights.append(
                         LearningInsight(
-                            insight_id=f"correlation_{combo}_{datetime.now(UTC).timestamp()}",
+                            insight_id="correlation_%s_%s"
+                            % (combo, datetime.now(UTC).timestamp()),
                             insight_type="correlation",
-                            description=f"Pattern combination '{combo}' shows {win_rate:.1%} success rate",
+                            description="Pattern combination '%s' shows %.1%% success rate"
+                            % (combo, win_rate * 100),
                             supporting_evidence=[],  # Would add experience IDs
                             confidence=min(0.5 + stats["count"] * 0.05, 0.9),
                             actionable=True,
@@ -619,13 +627,13 @@ class SelfImprovementEngine:
 
         if best_hours:
             best_hours.sort(key=lambda x: x[1], reverse=True)
-            hours_str = ", ".join([f"{h}:00 UTC" for h, _ in best_hours[:3]])
+            hours_str = ", ".join(["%s:00 UTC" % h for h, _ in best_hours[:3]])
 
             insights.append(
                 LearningInsight(
-                    insight_id=f"timing_pattern_{datetime.now(UTC).timestamp()}",
+                    insight_id="timing_pattern_%s" % datetime.now(UTC).timestamp(),
                     insight_type="timing",
-                    description=f"Best trading performance during: {hours_str}",
+                    description="Best trading performance during: %s" % hours_str,
                     supporting_evidence=[],
                     confidence=0.65,
                     actionable=True,
@@ -674,9 +682,11 @@ class SelfImprovementEngine:
                 if count / total_losses > 0.4:  # 40% of losses
                     insights.append(
                         LearningInsight(
-                            insight_id=f"risk_factor_{pattern}_{datetime.now(UTC).timestamp()}",
+                            insight_id="risk_factor_%s_%s"
+                            % (pattern, datetime.now(UTC).timestamp()),
                             insight_type="risk",
-                            description=f"Risk factor '{pattern}' present in {count}/{total_losses} losing trades",
+                            description="Risk factor '%s' present in %s/%s losing trades"
+                            % (pattern, count, total_losses),
                             supporting_evidence=[],
                             confidence=0.7,
                             actionable=True,
@@ -767,8 +777,13 @@ class SelfImprovementEngine:
             reasoning_list = recommendations.get("reasoning", [])
             if isinstance(reasoning_list, list):
                 reasoning_list.append(
-                    f"Pattern '{best_pattern.pattern_name}' shows {best_pattern.win_rate:.1%} "
-                    f"success rate over {best_pattern.occurrence_count} trades"
+                    "Pattern '%s' shows %.1%% "
+                    "success rate over %s trades"
+                    % (
+                        best_pattern.pattern_name,
+                        best_pattern.win_rate * 100,
+                        best_pattern.occurrence_count,
+                    )
                 )
 
             # Adjust size based on confidence

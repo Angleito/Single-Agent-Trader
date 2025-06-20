@@ -205,7 +205,7 @@ class TestBluefinBalanceServiceIntegration:
             try:
                 await bluefin_service.get_account_balance()
             except Exception:
-                pass  # Expected to fail
+                logger.debug("Expected circuit breaker test failure")
 
         # Circuit should be open now
         assert bluefin_service.circuit_state == "OPEN"
@@ -215,10 +215,8 @@ class TestBluefinBalanceServiceIntegration:
 
         # Further calls should fail fast
         start_time = time.perf_counter()
-        try:
+        with pytest.raises(BluefinServiceError, match="circuit breaker"):
             await bluefin_service.get_account_balance()
-        except BluefinServiceError as e:
-            assert "circuit breaker" in str(e).lower()
 
         elapsed_time = time.perf_counter() - start_time
         assert elapsed_time < 0.1  # Should fail fast

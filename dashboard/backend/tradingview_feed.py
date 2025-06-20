@@ -268,7 +268,7 @@ class TradingViewDataFeed:
             return response
 
         except Exception as e:
-            logger.exception("Error getting history for %s: %s", symbol, e)
+            logger.exception("Error getting history for %s", symbol)
             return {"s": "error", "errmsg": str(e)}
 
     def get_marks(
@@ -330,8 +330,8 @@ class TradingViewDataFeed:
             logger.info("Returning %s AI decision marks for %s", len(marks), symbol)
             return marks
 
-        except Exception as e:
-            logger.exception("Error getting marks for %s: %s", symbol, e)
+        except Exception:
+            logger.exception("Error getting marks for %s", symbol)
             return []
 
     def get_timescale_marks(
@@ -407,12 +407,11 @@ class TradingViewDataFeed:
 
             return study_data
 
-        except Exception as e:
+        except Exception:
             logger.exception(
-                "Error getting indicator values for %s %s: %s",
+                "Error getting indicator values for %s %s",
                 symbol,
                 indicator_name,
-                e,
             )
             return []
 
@@ -440,8 +439,8 @@ class TradingViewDataFeed:
                 "volume": latest_bar.volume,
             }
 
-        except Exception as e:
-            logger.exception("Error getting real-time bar for %s: %s", symbol, e)
+        except Exception:
+            logger.exception("Error getting real-time bar for %s", symbol)
             return None
 
     def update_real_time_bar(
@@ -472,8 +471,8 @@ class TradingViewDataFeed:
 
             logger.debug("Updated real-time bar for %s %s", symbol, resolution)
 
-        except Exception as e:
-            logger.exception("Error updating real-time bar for %s: %s", symbol, e)
+        except Exception:
+            logger.exception("Error updating real-time bar for %s", symbol)
 
     def create_new_bar(self, symbol: str, resolution: str, bar_data: dict[str, Any]):
         """Create a new bar when timeframe completes"""
@@ -496,8 +495,8 @@ class TradingViewDataFeed:
                 "Created new bar for %s %s at %s", symbol, resolution, new_bar.timestamp
             )
 
-        except Exception as e:
-            logger.exception("Error creating new bar for %s: %s", symbol, e)
+        except Exception:
+            logger.exception("Error creating new bar for %s", symbol)
 
     @staticmethod
     def resolution_to_seconds(resolution: str) -> int:
@@ -581,8 +580,8 @@ def convert_bot_trade_to_ai_decision(
             indicator_values=trade_data.get("indicators", {}),
         )
 
-    except Exception as e:
-        logger.exception("Error converting bot trade to AI decision: %s", e)
+    except Exception:
+        logger.exception("Error converting bot trade to AI decision")
         return None
 
 
@@ -596,8 +595,8 @@ def convert_market_data_to_ohlcv(market_data: list[dict[str, Any]]) -> list[OHLC
 
         return sorted(bars, key=lambda x: x.timestamp)
 
-    except Exception as e:
-        logger.exception("Error converting market data to OHLCV: %s", e)
+    except Exception:
+        logger.exception("Error converting market data to OHLCV")
         return []
 
 
@@ -613,8 +612,8 @@ def convert_indicator_data_to_technical_indicator(
             parameters=indicator_data.get("parameters", {}),
         )
 
-    except Exception as e:
-        logger.exception("Error converting indicator data: %s", e)
+    except Exception:
+        logger.exception("Error converting indicator data")
         return None
 
 

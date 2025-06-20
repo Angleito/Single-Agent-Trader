@@ -117,6 +117,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
 
         except Exception:
             logger.exception("Error in memory-enhanced analysis")
+        else:
             # Fall back to base implementation
             return await super().analyze_market(market_state)
 
@@ -355,17 +356,17 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             # Format basic trade info
             action = exp.decision.get("action", "UNKNOWN")
 
-            context_lines.append(f"\n{i + 1}. Past {action} trade:")
-            context_lines.append(f"   Market conditions: ${float(exp.price)}")
+            context_lines.append("\n%s. Past %s trade:" % (i + 1, action))
+            context_lines.append("   Market conditions: $%s" % float(exp.price))
 
             # Add indicator snapshot
             indicators = []
             if exp.indicators and exp.indicators.get("rsi"):
-                indicators.append(f"RSI={exp.indicators['rsi']:.1f}")
+                indicators.append("RSI=%.1f" % exp.indicators["rsi"])
             if exp.indicators and exp.indicators.get("cipher_b_wave"):
-                indicators.append(f"Wave={exp.indicators['cipher_b_wave']:.1f}")
+                indicators.append("Wave=%.1f" % exp.indicators["cipher_b_wave"])
             if indicators:
-                context_lines.append(f"   Indicators: {', '.join(indicators)}")
+                context_lines.append("   Indicators: %s" % ", ".join(indicators))
 
             # Add outcome if available
             if exp.outcome:
@@ -374,18 +375,18 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                 duration = exp.trade_duration_minutes or 0
 
                 context_lines.append(
-                    f"   Outcome: {success} (PnL=${pnl:.2f}, "
-                    f"Duration={duration:.0f}min)"
+                    "   Outcome: %s (PnL=$%.2f, "
+                    "Duration=%.0fmin)" % (success, pnl, duration)
                 )
 
                 # Add learned insights
                 if exp.learned_insights:
-                    context_lines.append(f"   Insight: {exp.learned_insights}")
+                    context_lines.append("   Insight: %s" % exp.learned_insights)
             else:
                 context_lines.append("   Outcome: Trade still active")
 
             # Add confidence score
-            context_lines.append(f"   Relevance: {exp.confidence_score:.1%}")
+            context_lines.append("   Relevance: %.1f%%" % (exp.confidence_score * 100))
 
         return "\n".join(context_lines)
 
@@ -417,10 +418,16 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             for pattern, stats in sorted_patterns[:3]:
                 if stats["count"] >= settings.mcp.min_samples_for_pattern:
                     insights.append(
-                        f"• Pattern '{pattern}': "
-                        f"{stats['success_rate']:.1%} win rate "
-                        f"({stats['count']} trades, "
-                        f"avg PnL=${stats['avg_pnl']:.2f})"
+                        "• Pattern '%s': "
+                        "%.1f%% win rate "
+                        "(%s trades, "
+                        "avg PnL=$%.2f)"
+                        % (
+                            pattern,
+                            stats["success_rate"] * 100,
+                            stats["count"],
+                            stats["avg_pnl"],
+                        )
                     )
 
             return (
@@ -482,12 +489,17 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             # Append memory and sentiment context to the OHLCV tail
             # This is a workaround - ideally we'd have a dedicated field
             memory_section = (
-                f"\n\n=== MEMORY CONTEXT ===\n"
-                f"{self._temp_memory_context['memory_context']}\n\n"
-                f"=== PATTERN INSIGHTS ===\n"
-                f"{self._temp_memory_context['pattern_insights']}\n\n"
-                f"=== SENTIMENT-ENHANCED CONTEXT ===\n"
-                f"{self._temp_memory_context['sentiment_enhanced_context']}"
+                "\n\n=== MEMORY CONTEXT ===\n"
+                "%s\n\n"
+                "=== PATTERN INSIGHTS ===\n"
+                "%s\n\n"
+                "=== SENTIMENT-ENHANCED CONTEXT ===\n"
+                "%s"
+                % (
+                    self._temp_memory_context["memory_context"],
+                    self._temp_memory_context["pattern_insights"],
+                    self._temp_memory_context["sentiment_enhanced_context"],
+                )
             )
 
             llm_input["ohlcv_tail"] += memory_section
@@ -596,9 +608,10 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                 return "\n\n".join(context_sections)
             return "No sentiment-enhanced context available"
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error generating sentiment-enhanced context")
-            return f"Error generating sentiment context: {e!s}"
+        else:
+            return "Error generating sentiment context"
 
     async def _get_financial_sentiment_context(self, market_state: MarketState) -> str:
         """
@@ -671,26 +684,38 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             # Process crypto sentiment results
             if crypto_sentiment and not isinstance(crypto_sentiment, Exception):
                 context_lines.append(
-                    f"=== {base_symbol} Financial Sentiment Context ==="
+                    "=== %s Financial Sentiment Context ===" % base_symbol
                 )
                 context_lines.append(
-                    f"Current Sentiment: {crypto_sentiment.overall_sentiment.upper()} ({crypto_sentiment.sentiment_score:+.2f})"
+                    "Current Sentiment: %s (%+.2f)"
+                    % (
+                        crypto_sentiment.overall_sentiment.upper(),
+                        crypto_sentiment.sentiment_score,
+                    )
                 )
-                context_lines.append(f"Confidence: {crypto_sentiment.confidence:.1%}")
+                context_lines.append(
+                    "Confidence: %.1f%%" % (crypto_sentiment.confidence * 100)
+                )
 
                 if crypto_sentiment.key_drivers:
                     context_lines.append(
-                        f"Key Drivers: {', '.join(crypto_sentiment.key_drivers[:3])}"
+                        "Key Drivers: %s" % ", ".join(crypto_sentiment.key_drivers[:3])
                     )
                 if crypto_sentiment.risk_factors:
                     context_lines.append(
-                        f"Risk Factors: {', '.join(crypto_sentiment.risk_factors[:3])}"
+                        "Risk Factors: %s"
+                        % ", ".join(crypto_sentiment.risk_factors[:3])
                     )
 
             # Process correlation results
             if correlation and not isinstance(correlation, Exception):
                 context_lines.append(
-                    f"Market Correlation: {correlation.direction.upper()} {correlation.strength.upper()} ({correlation.correlation_coefficient:+.3f})"
+                    "Market Correlation: %s %s (%+.3f)"
+                    % (
+                        correlation.direction.upper(),
+                        correlation.strength.upper(),
+                        correlation.correlation_coefficient,
+                    )
                 )
 
                 if abs(correlation.correlation_coefficient) > 0.5:
@@ -699,7 +724,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                     )
                 else:
                     correlation_impact = "Low correlation - crypto moving independently"
-                context_lines.append(f"Correlation Impact: {correlation_impact}")
+                context_lines.append("Correlation Impact: %s" % correlation_impact)
 
             # Log performance metrics
             execution_time = time.time() - start_time
@@ -707,11 +732,19 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                 "parallel" if self._enable_api_parallelization else "sequential"
             )
             logger.debug(
-                "⚡ Sentiment context (%s): %.3fs | "
-                f"Sentiment: {'✅' if crypto_sentiment and not isinstance(crypto_sentiment, Exception) else '❌'} | "
-                f"Correlation: {'✅' if correlation and not isinstance(correlation, Exception) else '❌'}",
+                "⚡ Sentiment context (%s): %.3fs | Sentiment: %s | Correlation: %s",
                 method_type,
                 execution_time,
+                (
+                    "✅"
+                    if crypto_sentiment and not isinstance(crypto_sentiment, Exception)
+                    else "❌"
+                ),
+                (
+                    "✅"
+                    if correlation and not isinstance(correlation, Exception)
+                    else "❌"
+                ),
             )
 
             return "\n".join(context_lines) if context_lines else ""
@@ -767,7 +800,13 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                 if data["total"] >= 3:  # Only show if we have enough samples
                     success_rate = data["successful"] / data["total"] * 100
                     correlation_lines.append(
-                        f"{sentiment.upper()} sentiment: {success_rate:.1f}% success rate ({data['successful']}/{data['total']} trades)"
+                        "%s sentiment: %.1f%% success rate (%s/%s trades)"
+                        % (
+                            sentiment.upper(),
+                            success_rate,
+                            data["successful"],
+                            data["total"],
+                        )
                     )
 
             # Find best performing sentiment conditions
@@ -777,7 +816,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                     key=lambda x: x[1]["successful"] / max(x[1]["total"], 1),
                 )
                 correlation_lines.append(
-                    f"Best performing sentiment: {best_sentiment[0].upper()}"
+                    "Best performing sentiment: %s" % best_sentiment[0].upper()
                 )
 
             return "\n".join(correlation_lines)
@@ -821,19 +860,18 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
 
             if len(sentiment_scores) >= 3:
                 # Calculate trend direction
-                if len(sentiment_scores) >= 2:
-                    recent_change = sentiment_scores[-1] - sentiment_scores[-2]
-                    if recent_change > 0.1:
-                        trend_direction = "📈 IMPROVING"
-                    elif recent_change < -0.1:
-                        trend_direction = "📉 DETERIORATING"
-                    else:
-                        trend_direction = "➡️ STABLE"
+                recent_change = sentiment_scores[-1] - sentiment_scores[-2]
+                if recent_change > 0.1:
+                    trend_direction = "📈 IMPROVING"
+                elif recent_change < -0.1:
+                    trend_direction = "📉 DETERIORATING"
+                else:
+                    trend_direction = "➡️ STABLE"
 
-                    trend_lines.append(f"Recent Sentiment Trend: {trend_direction}")
-                    trend_lines.append(f"Latest Score: {sentiment_scores[-1]:+.2f}")
-                    trend_lines.append(f"Previous Score: {sentiment_scores[-2]:+.2f}")
-                    trend_lines.append(f"Change: {recent_change:+.2f}")
+                trend_lines.append("Recent Sentiment Trend: %s" % trend_direction)
+                trend_lines.append("Latest Score: %+.2f" % sentiment_scores[-1])
+                trend_lines.append("Previous Score: %+.2f" % sentiment_scores[-2])
+                trend_lines.append("Change: %+.2f" % recent_change)
 
             return "\n".join(trend_lines)
 
@@ -892,8 +930,9 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
 
             return sentiment_experiences
 
-        except Exception as e:
-            logger.warning("Failed to get recent experiences with sentiment: %s", e)
+        except Exception:
+            logger.warning("Failed to get recent experiences with sentiment")
+        else:
             return []
 
     async def _store_sentiment_data_for_learning(

@@ -157,10 +157,14 @@ class ExperienceManager:
         )
 
         logger.info(
-            f"📝 Experience Manager: Recorded {trade_action.action} decision | "
-            f"Experience ID: {experience_id[:8]}... | "
-            f"Price: ${market_state.current_price} | "
-            f"Position: {market_state.current_position.side}"
+            "📝 Experience Manager: Recorded %s decision | "
+            "Experience ID: %s... | "
+            "Price: $%s | "
+            "Position: %s",
+            trade_action.action,
+            experience_id[:8],
+            market_state.current_price,
+            market_state.current_position.side,
         )
 
         # Log structured trade decision
@@ -211,7 +215,7 @@ class ExperienceManager:
             return None
 
         # Create active trade tracking
-        trade_id = f"trade_{uuid4().hex[:8]}"
+        trade_id = "trade_%s" % uuid4().hex[:8]
         active_trade = ActiveTrade(
             trade_id=trade_id,
             experience_id=experience_id,
@@ -226,16 +230,27 @@ class ExperienceManager:
         del self.pending_experiences[order.id]
 
         logger.info(
-            f"🚀 Experience Manager: Started tracking {trade_action.action} trade | "
-            f"Trade ID: {trade_id} | Price: ${order.price} | "
-            f"Size: {order.quantity} | Experience: {experience_id[:8]}..."
+            "🚀 Experience Manager: Started tracking %s trade | "
+            "Trade ID: %s | Price: $%s | "
+            "Size: %s | Experience: %s...",
+            trade_action.action,
+            trade_id,
+            order.price,
+            order.quantity,
+            experience_id[:8],
         )
 
         # Log detailed trade entry
         logger.debug(
-            f"Trade entry details: Symbol={order.symbol}, Side={order.side}, "
-            f"Size={order.quantity}, Price=${order.price}, "
-            f"Order Type={order.type}, Status={order.status}"
+            "Trade entry details: Symbol=%s, Side=%s, "
+            "Size=%s, Price=$%s, "
+            "Order Type=%s, Status=%s",
+            order.symbol,
+            order.side,
+            order.quantity,
+            order.price,
+            order.type,
+            order.status,
         )
 
         return trade_id
@@ -381,9 +396,15 @@ class ExperienceManager:
             pnl_percentage = float(realized_pnl) / float(entry_price) * 100
 
         logger.info(
-            f"🏁 Experience Manager: Trade completed | ID: {active_trade.trade_id} | "
-            f"PnL: ${realized_pnl:.2f} ({'+' if realized_pnl > 0 else ''}{pnl_percentage:.2f}%) | "
-            f"Duration: {duration_minutes:.1f}min | {'✅ WIN' if realized_pnl > 0 else '❌ LOSS'}"
+            "🏁 Experience Manager: Trade completed | ID: %s | "
+            "PnL: $%.2f (%s%.2f%%) | "
+            "Duration: %.1fmin | %s",
+            active_trade.trade_id,
+            realized_pnl,
+            "+" if realized_pnl > 0 else "",
+            pnl_percentage,
+            duration_minutes,
+            "✅ WIN" if realized_pnl > 0 else "❌ LOSS",
         )
 
         # Log structured trade outcome
@@ -432,7 +453,9 @@ class ExperienceManager:
 
                     if trade_duration > 24:  # 24 hours
                         logger.warning(
-                            f"Trade {trade_id} has been open for {trade_duration:.1f} hours"
+                            "Trade %s has been open for %.1f hours",
+                            trade_id,
+                            trade_duration,
                         )
                         stale_trades.append(trade_id)
 
@@ -492,8 +515,8 @@ class ExperienceManager:
 
             if capture_ratio < 0.5 and trade.realized_pnl > 0:
                 insights.append(
-                    f"Only captured {capture_ratio:.1%} of max profit - "
-                    "consider trailing stops or partial exits"
+                    "Only captured %.1f%% of max profit - "
+                    "consider trailing stops or partial exits" % (capture_ratio * 100)
                 )
             elif capture_ratio > 0.9:
                 insights.append("Excellent profit capture - near optimal exit")
@@ -502,13 +525,13 @@ class ExperienceManager:
         if trade.max_adverse_excursion < -100:  # Significant drawdown
             if trade.realized_pnl and trade.realized_pnl > 0:
                 insights.append(
-                    f"Endured ${abs(trade.max_adverse_excursion):.2f} drawdown before profit - "
-                    "high risk tolerance paid off"
+                    "Endured $%.2f drawdown before profit - "
+                    "high risk tolerance paid off" % abs(trade.max_adverse_excursion)
                 )
             else:
                 insights.append(
-                    f"Large drawdown of ${abs(trade.max_adverse_excursion):.2f} - "
-                    "consider tighter stops"
+                    "Large drawdown of $%.2f - "
+                    "consider tighter stops" % abs(trade.max_adverse_excursion)
                 )
 
         # Analyze hold duration

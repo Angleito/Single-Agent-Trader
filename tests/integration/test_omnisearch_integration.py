@@ -732,13 +732,13 @@ class TestWebSearchFormatterIntegration:
                 "title": "Bitcoin ETF Approval Triggers Institutional Rush",
                 "content": "SEC approves multiple Bitcoin ETFs, triggering massive institutional inflows",
                 "url": "https://reuters.com/bitcoin-etf-approval",
-                "published_time": datetime.utcnow(),
+                "published_time": datetime.now(timezone.utc),
             },
             {
                 "title": "Ethereum DeFi TVL Reaches $50 Billion Milestone",
                 "content": "DeFi protocols surge as institutional adoption accelerates",
                 "url": "https://bloomberg.com/ethereum-defi",
-                "published_time": datetime.utcnow() - timedelta(hours=1),
+                "published_time": datetime.now(timezone.utc) - timedelta(hours=1),
             },
         ]
 
@@ -849,7 +849,7 @@ class TestWebSearchFormatterIntegration:
                 momentum with RSI at 72 and volume confirming the breakout.
                 """,
                 "url": "https://wsj.com/bitcoin-65k-breakthrough",
-                "published_time": datetime.utcnow(),
+                "published_time": datetime.now(timezone.utc),
             },
             {
                 "title": "Fed Chair Powell: 'Crypto Innovation Can Coexist with Regulation'",
@@ -860,7 +860,7 @@ class TestWebSearchFormatterIntegration:
                 interpreted the comments as dovish for crypto regulation.
                 """,
                 "url": "https://reuters.com/fed-crypto-regulation",
-                "published_time": datetime.utcnow() - timedelta(minutes=30),
+                "published_time": datetime.now(timezone.utc) - timedelta(minutes=30),
             },
             {
                 "title": "Ethereum Gas Fees Drop 60% Following Latest Upgrade",
@@ -871,7 +871,7 @@ class TestWebSearchFormatterIntegration:
                 with improved economics.
                 """,
                 "url": "https://coindesk.com/ethereum-gas-fees-drop",
-                "published_time": datetime.utcnow() - timedelta(hours=1),
+                "published_time": datetime.now(timezone.utc) - timedelta(hours=1),
             },
         ]
 
@@ -916,7 +916,7 @@ class TestWebSearchFormatterIntegration:
                     """
                     * 10,  # Make it very long
                     "url": f"https://analysis.com/report-{i}",
-                    "published_time": datetime.utcnow() - timedelta(hours=i),
+                    "published_time": datetime.now(timezone.utc) - timedelta(hours=i),
                 }
                 for i in range(20)  # 20 large articles
             ],
@@ -1140,7 +1140,7 @@ class TestFullOmniSearchLLMIntegration:
                         "title": result.base_result.title,
                         "content": result.base_result.snippet,
                         "url": result.base_result.url,
-                        "published_time": datetime.utcnow(),
+                        "published_time": datetime.now(timezone.utc),
                     }
                     for result in news_results
                 ],
@@ -1292,7 +1292,7 @@ def sample_trading_context():
         "24h_change": 0.045,  # 4.5% gain
         "volume_24h": 28500000000,  # $28.5B volume
         "market_cap": 1200000000000,  # $1.2T market cap
-        "timestamp": datetime.utcnow(),
+        "timestamp": datetime.now(timezone.utc),
         "technical_indicators": {
             "rsi": 68,
             "macd": "BULLISH",

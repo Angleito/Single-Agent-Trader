@@ -487,18 +487,20 @@ class AlertManager:
                     )
                 )
 
-        elif metric.name == "resource.cpu_percent":
-            if metric.value > self.thresholds.max_cpu_usage_percent:
-                alerts.append(
-                    self._create_alert(
-                        AlertLevel.WARNING,
-                        f"CPU usage high: {metric.value:.1f}%",
-                        metric.name,
-                        metric.value,
-                        self.thresholds.max_cpu_usage_percent,
-                        metric.tags,
-                    )
+        elif (
+            metric.name == "resource.cpu_percent"
+            and metric.value > self.thresholds.max_cpu_usage_percent
+        ):
+            alerts.append(
+                self._create_alert(
+                    AlertLevel.WARNING,
+                    f"CPU usage high: {metric.value:.1f}%",
+                    metric.name,
+                    metric.value,
+                    self.thresholds.max_cpu_usage_percent,
+                    metric.tags,
                 )
+            )
 
         # Process alerts
         for alert in alerts:
@@ -545,8 +547,8 @@ class AlertManager:
         for callback in self._alert_callbacks:
             try:
                 callback(alert)
-            except Exception as e:
-                logger.exception("Alert callback failed: %s", e)
+            except Exception:
+                logger.exception("Alert callback failed")
 
     def get_recent_alerts(
         self, duration: timedelta = timedelta(hours=1)
@@ -906,7 +908,7 @@ _performance_monitor: PerformanceMonitor | None = None
 
 def get_performance_monitor() -> PerformanceMonitor:
     """Get the global performance monitor instance."""
-    global _performance_monitor
+    global _performance_monitor  # noqa: PLW0603
     if _performance_monitor is None:
         _performance_monitor = PerformanceMonitor()
     return _performance_monitor
@@ -924,7 +926,7 @@ def init_performance_monitoring(
     Returns:
         Performance monitor instance
     """
-    global _performance_monitor
+    global _performance_monitor  # noqa: PLW0603
     _performance_monitor = PerformanceMonitor(thresholds)
     return _performance_monitor
 

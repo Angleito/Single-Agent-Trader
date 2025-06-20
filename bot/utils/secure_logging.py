@@ -5,7 +5,7 @@ Secure logging utilities to prevent sensitive data exposure.
 import logging
 import re
 from re import Pattern
-from typing import Any
+from typing import Any, ClassVar
 
 
 class SensitiveDataFilter(logging.Filter):
@@ -14,7 +14,7 @@ class SensitiveDataFilter(logging.Filter):
     """
 
     # Patterns for sensitive data
-    SENSITIVE_PATTERNS: list[Pattern] = [
+    SENSITIVE_PATTERNS: ClassVar[list[Pattern[str]]] = [
         # API Keys
         re.compile(
             r'(api[_-]?key|apikey|api_secret)[\s:=]+[\'""]?([A-Za-z0-9\-_]{20,})[\'""]?',
@@ -354,7 +354,7 @@ def get_balance_operation_context(
         "correlation_id": correlation_id,
         "operation": operation,
         "operation_type": "balance_operation",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
     if balance_amount is not None:

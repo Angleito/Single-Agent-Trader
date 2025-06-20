@@ -12,7 +12,7 @@ import os
 import sys
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -83,8 +83,8 @@ class WebSocketLoadTester:
                 self.cpu_samples.append(cpu_percent)
 
                 await asyncio.sleep(interval)
-            except Exception as e:
-                logger.exception("Resource monitoring error: %s", e)
+            except Exception:
+                logger.exception("Resource monitoring error")
                 break
 
     async def send_burst_messages(
@@ -101,7 +101,7 @@ class WebSocketLoadTester:
             try:
                 message = {
                     "type": "load_test",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "sequence": i,
                     "data": {
                         "test_id": f"load_{i}",
@@ -156,8 +156,8 @@ class WebSocketLoadTester:
                 self.metrics.messages_sent = sent
                 self.metrics.messages_failed = failed
 
-        except Exception as e:
-            logger.exception("Connection error during sustained load: %s", e)
+        except Exception:
+            logger.exception("Connection error during sustained load")
             self.metrics.connection_failures += 1
 
         # Stop monitoring
@@ -203,8 +203,8 @@ class WebSocketLoadTester:
                     if burst_num < burst_count - 1:
                         await asyncio.sleep(burst_interval)
 
-        except Exception as e:
-            logger.exception("Connection error during burst load: %s", e)
+        except Exception:
+            logger.exception("Connection error during burst load")
             self.metrics.connection_failures += 1
 
         # Stop monitoring
@@ -237,8 +237,8 @@ class WebSocketLoadTester:
                         websocket, messages_per_connection, delay=0.01
                     )
                     return sent, failed
-            except Exception as e:
-                logger.exception("Connection %s failed: %s", conn_id, e)
+            except Exception:
+                logger.exception("Connection %s failed", conn_id)
                 return 0, messages_per_connection
 
         # Run concurrent connections
@@ -292,8 +292,8 @@ class WebSocketLoadTester:
                 # Calculate how many should be queued
                 self.metrics.messages_queued = min(queue_size, sent)
 
-        except Exception as e:
-            logger.exception("Connection error during overflow test: %s", e)
+        except Exception:
+            logger.exception("Connection error during overflow test")
             self.metrics.connection_failures += 1
 
         # Stop monitoring
@@ -472,7 +472,7 @@ class WebSocketLoadTester:
             json.dump(
                 {
                     "test_results": results,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "environment": {
                         "dashboard_url": self.dashboard_url,
                         "queue_size": os.getenv("SYSTEM__WEBSOCKET_QUEUE_SIZE", "100"),
@@ -486,7 +486,7 @@ class WebSocketLoadTester:
 
     def print_summary(self, results: dict[str, Any]):
         """Print test summary."""
-        logger.info("\n" + "=" * 60)
+        logger.info("\n%s", "=" * 60)
         logger.info("Load Test Summary")
         logger.info("=" * 60)
 

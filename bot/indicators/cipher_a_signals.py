@@ -655,10 +655,7 @@ class CipherASignals:
         green_cross = wt1_cross_above_wt2 & (wt2 < os_level2_val)
 
         # Calculate extreme diamonds
-        # dumpDiamond = redDiamond and redCross
         dump_diamond = red_diamond & red_cross
-
-        # moonDiamond = greenDiamond and greenCross
         moon_diamond = green_diamond & green_cross
 
         return {
@@ -779,7 +776,6 @@ class CipherASignals:
             ).fillna(False)
 
         # Bull Candle Pattern
-        # bullCandle = open > ema2 and open > ema8 and (close[1] > open[1]) and (close > open) and not redDiamond and not redCross
         bull_candle = (
             open_above_ema2
             & open_above_ema8
@@ -790,7 +786,6 @@ class CipherASignals:
         )
 
         # Bear Candle Pattern
-        # bearCandle = open < ema2 and open < ema8 and (close[1] < open[1]) and (close < open) and not greenDiamond and not redCross
         bear_candle = (
             open_below_ema2
             & open_below_ema8
@@ -1285,16 +1280,29 @@ class CipherASignals:
         Returns:
             Tuple of (is_valid, error_message)
         """
-        if df is None:
-            return False, "DataFrame is None"
+        # Basic checks
+        validation_error = self._get_basic_validation_error(df)
+        if validation_error:
+            return False, validation_error
 
+        # Advanced validation
+        validation_error = self._get_advanced_validation_error(df)
+        if validation_error:
+            return False, validation_error
+
+        return True, ""
+
+    def _get_basic_validation_error(self, df: pd.DataFrame) -> str | None:
+        """Get basic validation error message, if any."""
+        if df is None:
+            return "DataFrame is None"
         if df.empty:
-            return False, "DataFrame is empty"
+            return "DataFrame is empty"
 
         required_columns = ["open", "high", "low", "close"]
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
-            return False, f"Missing required columns: {missing_columns}"
+            return f"Missing required columns: {missing_columns}"
 
         # Check minimum data length
         min_length = (
@@ -1308,32 +1316,33 @@ class CipherASignals:
                 self.ema8_length,
             )
             + 10
-        )  # Add buffer for lookbacks
-
+        )
         if len(df) < min_length:
             return (
-                False,
-                f"Insufficient data length. Need at least {min_length}, got {len(df)}",
+                f"Insufficient data length. Need at least {min_length}, got {len(df)}"
             )
 
-        # Validate OHLC relationships
+        return None
+
+    def _get_advanced_validation_error(self, df: pd.DataFrame) -> str | None:
+        """Get advanced validation error message, if any."""
+        required_columns = ["open", "high", "low", "close"]
         try:
             for col in required_columns:
                 if not pd.api.types.is_numeric_dtype(df[col]):
-                    return False, f"Column {col} is not numeric"
-
+                    return f"Column {col} is not numeric"
                 if df[col].isna().all():
-                    return False, f"Column {col} contains only NaN values"
+                    return f"Column {col} contains only NaN values"
 
             # Check OHLC logic
             invalid_rows = (df["high"] < df["low"]).sum()
             if invalid_rows > 0:
-                return False, f"Found {invalid_rows} rows where high < low"
+                return f"Found {invalid_rows} rows where high < low"
 
         except Exception as e:
-            return False, f"Data validation error: {e!s}"
+            return f"Data validation error: {e!s}"
 
-        return True, ""
+        return None
 
     def _validate_input_data_quality(self, df: pd.DataFrame) -> None:
         """

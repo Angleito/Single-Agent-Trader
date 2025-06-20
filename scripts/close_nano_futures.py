@@ -20,7 +20,7 @@ client = RESTClient(api_key=cdp_api_key, api_secret=cdp_private_key)
 
 
 async def close_position():
-    FUTURES_SYMBOL = "ET-27JUN25-CDE"
+    futures_symbol = "ET-27JUN25-CDE"
 
     print("CLOSING NANO FUTURES POSITION")
     print("=" * 60)
@@ -31,7 +31,7 @@ async def close_position():
         positions = client.list_futures_positions()
 
         for pos in positions.positions:
-            if pos.product_id == FUTURES_SYMBOL:
+            if pos.product_id == futures_symbol:
                 print("\nPosition Found:")
                 print(f"  Product: {pos.product_id}")
                 print(f"  Side: {pos.side}")
@@ -46,7 +46,7 @@ async def close_position():
                 try:
                     order_result = client.create_order(
                         client_order_id=str(uuid.uuid4()),
-                        product_id=FUTURES_SYMBOL,
+                        product_id=futures_symbol,
                         side="BUY",
                         order_configuration={"market_market_ioc": {"base_size": "1"}},
                     )
@@ -61,7 +61,7 @@ async def close_position():
                 try:
                     order_result = client.create_order(
                         client_order_id=str(uuid.uuid4()),
-                        product_id=FUTURES_SYMBOL,
+                        product_id=futures_symbol,
                         side="BUY",
                         order_configuration={"market_market_ioc": {"base_size": "0.1"}},
                     )
@@ -76,7 +76,7 @@ async def close_position():
                 try:
                     order_result = client.create_order(
                         client_order_id=str(uuid.uuid4()),
-                        product_id=FUTURES_SYMBOL,
+                        product_id=futures_symbol,
                         side="BUY",
                         order_configuration={"market_market_ioc": {"base_size": "1"}},
                         reduce_only=True,

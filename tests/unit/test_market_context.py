@@ -282,9 +282,9 @@ class TestMarketContextAnalyzer:
         analyzer = MarketContextAnalyzer()
 
         # Generate correlated price series
-        np.random.seed(42)
-        base_crypto = np.random.normal(0, 0.01, 100)
-        base_nasdaq = np.random.normal(0, 0.005, 100)
+        rng = np.random.default_rng(42)
+        base_crypto = rng.normal(0, 0.01, 100)
+        base_nasdaq = rng.normal(0, 0.005, 100)
 
         # Add some correlation
         correlated_nasdaq = 0.7 * base_crypto + 0.3 * base_nasdaq
@@ -313,9 +313,9 @@ class TestMarketContextAnalyzer:
         analyzer = MarketContextAnalyzer()
 
         # Generate negatively correlated data
-        np.random.seed(42)
-        crypto_returns = np.random.normal(0.001, 0.02, 50)
-        nasdaq_returns = -0.8 * crypto_returns + np.random.normal(0, 0.01, 50)
+        rng = np.random.default_rng(42)
+        crypto_returns = rng.normal(0.001, 0.02, 50)
+        nasdaq_returns = -0.8 * crypto_returns + rng.normal(0, 0.01, 50)
 
         crypto_prices = [50000]
         nasdaq_prices = [100]
@@ -953,10 +953,10 @@ class TestMarketContextAnalyzer:
 @pytest.fixture()
 def sample_crypto_data():
     """Sample crypto market data."""
-    np.random.seed(42)
+    rng = np.random.default_rng(42)
     prices = [50000]
     for _i in range(99):
-        change = np.random.normal(0.001, 0.02)
+        change = rng.normal(0.001, 0.02)
         prices.append(prices[-1] * (1 + change))
 
     return {
@@ -968,10 +968,10 @@ def sample_crypto_data():
 @pytest.fixture()
 def sample_nasdaq_data():
     """Sample NASDAQ market data."""
-    np.random.seed(24)
+    rng = np.random.default_rng(24)
     prices = [100]
     for _i in range(99):
-        change = np.random.normal(0.0005, 0.01)
+        change = rng.normal(0.0005, 0.01)
         prices.append(prices[-1] * (1 + change))
 
     return {
@@ -1146,8 +1146,9 @@ class TestMarketContextAnalyzerIntegration:
 
         # Generate large price series
         large_crypto_prices = list(range(1000))
+        rng = np.random.default_rng(42)
         large_nasdaq_prices = [
-            p * 0.1 + np.random.normal(0, 0.01) for p in large_crypto_prices
+            p * 0.1 + rng.normal(0, 0.01) for p in large_crypto_prices
         ]
 
         crypto_data = {"prices": large_crypto_prices}

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Find the correct futures contract symbols."""
 
+import logging
 import os
 
 from coinbase.rest import RESTClient
@@ -79,8 +80,8 @@ if not valid_contracts:
             if product:
                 print(f"\n✅ Found with alternate format: {symbol}")
                 valid_contracts.append(symbol)
-        except Exception:
-            pass
+        except Exception as e:
+            logging.warning("Failed to check alternate symbol %s: %s", symbol, e)
 
 # Try to place a test order with the correct symbol
 if valid_contracts:

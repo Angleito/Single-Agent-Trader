@@ -8,19 +8,89 @@ performance metrics aggregation, and cost tracking capabilities.
 
 import json
 import logging
+import os
 import re
 import threading
 import time
 from collections import defaultdict, deque
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from pathlib import Path
 from typing import Any
 
 # Set up logging for this module
 logger = logging.getLogger(__name__)
+
+
+def _resolve_log_file_path(relative_path: str) -> Path | None:
+    """
+    Resolve log file path with fallback directory support.
+
+    This function tries to find log files in multiple locations to handle
+    scenarios where logs might be written to fallback directories due to
+    permission issues.
+
+    Args:
+        relative_path: Relative path from logs directory (e.g., "llm_completions.log")
+
+    Returns:
+        Path object for the first existing log file found, or None if not found
+    """
+    # List of potential log file locations to check
+    candidate_paths = []
+
+    # 1. Original logs directory (relative to current working directory)
+    original_logs_dir = Path("logs")
+    candidate_paths.append(original_logs_dir / relative_path)
+
+    # 2. Fallback logs directory from environment variable
+    fallback_logs_dir = os.getenv("FALLBACK_LOGS_DIR")
+    if fallback_logs_dir:
+        candidate_paths.append(Path(fallback_logs_dir) / relative_path)
+
+    # 3. System temp directory variations
+    import tempfile
+
+    temp_base = Path(tempfile.gettempdir())
+    candidate_paths.extend(
+        [
+            temp_base / "ai_trading_bot_logs" / relative_path,
+            temp_base / "logs" / relative_path,
+        ]
+    )
+
+    # 4. Dashboard backend directory logs (if logs are written locally)
+    dashboard_logs = Path(__file__).parent / "logs"
+    candidate_paths.append(dashboard_logs / relative_path)
+
+    # 5. Project root logs directory (in case we're running from a subdirectory)
+    # Try to find project root by looking for pyproject.toml
+    current_dir = Path(__file__).parent
+    for _ in range(5):  # Limit search depth
+        if (current_dir / "pyproject.toml").exists():
+            candidate_paths.append(current_dir / "logs" / relative_path)
+            break
+        if current_dir.parent == current_dir:  # Reached filesystem root
+            break
+        current_dir = current_dir.parent
+
+    # Try each candidate path and return the first one that exists
+    for path in candidate_paths:
+        if path.exists() and path.is_file():
+            logger.debug("Found log file at: %s", path)
+            return path
+        else:
+            logger.debug("Log file not found at: %s", path)
+
+    # Log all attempted paths for debugging
+    logger.warning(
+        "Log file '%s' not found in any of these locations: %s",
+        relative_path,
+        [str(p) for p in candidate_paths],
+    )
+    return None
 
 
 class EventType(Enum):
@@ -209,11 +279,24 @@ class LLMLogParser:
 
     def __init__(
         self,
-        log_file: str = "logs/llm_completions.log",
+        log_file: str = "llm_completions.log",
         alert_thresholds: AlertThresholds | None = None,
     ):
         """Initialize the LLM log parser."""
-        self.log_file = Path(log_file)
+        # Resolve log file path with fallback directory support
+        resolved_path = _resolve_log_file_path(log_file)
+        if resolved_path:
+            self.log_file = resolved_path
+            logger.info("Using LLM log file: %s", self.log_file)
+        else:
+            # Fallback to original behavior if no file found
+            # Use just the filename (not full path) as it might be created later
+            self.log_file = Path("logs") / log_file
+            logger.warning(
+                "LLM log file not found, will monitor: %s (may be created later)",
+                self.log_file,
+            )
+
         self.alert_thresholds = alert_thresholds or AlertThresholds()
 
         # Parsed data storage
@@ -241,9 +324,20 @@ class LLMLogParser:
     def parse_log_file(self) -> dict[str, int]:
         """Parse the entire log file and return counts."""
         try:
+            # If the log file doesn't exist, try to re-resolve it in case it was created
+            # in a fallback directory after initialization
             if not self.log_file.exists():
-                logger.warning("Log file not found: %s", self.log_file)
-                return {"requests": 0, "responses": 0, "decisions": 0, "metrics": 0}
+                filename = (
+                    self.log_file.name if self.log_file else "llm_completions.log"
+                )
+                new_resolved_path = _resolve_log_file_path(filename)
+
+                if new_resolved_path:
+                    logger.info("Found log file at new location: %s", new_resolved_path)
+                    self.log_file = new_resolved_path
+                else:
+                    logger.warning("Log file not found: %s", self.log_file)
+                    return {"requests": 0, "responses": 0, "decisions": 0, "metrics": 0}
 
             with self.log_file.open() as f:
                 content = f.read()
@@ -261,8 +355,8 @@ class LLMLogParser:
                 "alerts": len(self.alerts),
             }
 
-        except Exception as e:
-            logger.exception("Error parsing log file: %s", e)
+        except Exception:
+            logger.exception("Error parsing log file")
             return {"requests": 0, "responses": 0, "decisions": 0, "metrics": 0}
 
     def _parse_line(self, line: str) -> dict[str, Any] | None:
@@ -292,10 +386,8 @@ class LLMLogParser:
 
                         return parsed_entry.to_dict()
 
-            return None
-
-        except Exception as e:
-            logger.exception("Error parsing line '%s...': %s", line[:100], e)
+        except Exception:
+            logger.exception("Error parsing line '%s...'", line[:100])
             return None
 
     def _create_typed_entry(self, event_type: EventType, data: dict[str, Any]):
@@ -358,10 +450,8 @@ class LLMLogParser:
                     tokens_per_second=data["tokens_per_second"],
                 )
 
-            return None
-
-        except Exception as e:
-            logger.exception("Error creating typed entry for %s: %s", event_type, e)
+        except Exception:
+            logger.exception("Error creating typed entry for %s", event_type)
             return None
 
     def _store_entry(self, event_type: EventType, entry):
@@ -474,8 +564,8 @@ class LLMLogParser:
         for callback in self._callbacks:
             try:
                 callback(data)
-            except Exception as e:
-                logger.exception("Error in callback: %s", e)
+            except Exception:
+                logger.exception("Error in callback")
 
     def add_callback(self, callback: Callable[[dict[str, Any]], None]):
         """Add callback for real-time notifications."""
@@ -514,8 +604,31 @@ class LLMLogParser:
                 logger.info(
                     "Starting log monitoring from position %s", self._last_position
                 )
+            else:
+                self._last_position = 0
+
+            # Track when we last checked for new log files
+            last_fallback_check = time.time()
+            fallback_check_interval = 30  # Check for new log files every 30 seconds
 
             while not self._stop_event.is_set():
+                current_time = time.time()
+
+                # Periodically check if a new log file has appeared in fallback directories
+                if (current_time - last_fallback_check) >= fallback_check_interval:
+                    # Re-resolve log file path to check for new files
+                    filename = (
+                        self.log_file.name if self.log_file else "llm_completions.log"
+                    )
+                    new_resolved_path = _resolve_log_file_path(filename)
+
+                    if new_resolved_path and new_resolved_path != self.log_file:
+                        logger.info("Found new log file at: %s", new_resolved_path)
+                        self.log_file = new_resolved_path
+                        self._last_position = 0  # Start from beginning of new file
+
+                    last_fallback_check = current_time
+
                 if self.log_file.exists():
                     try:
                         # Check if file has grown
@@ -533,22 +646,22 @@ class LLMLogParser:
                                 if line.strip():
                                     self._parse_line(line)
 
-                    except Exception as e:
-                        logger.exception("Error reading log file: %s", e)
+                    except Exception:
+                        logger.exception("Error reading log file")
                 else:
                     logger.debug("Log file not found: %s", self.log_file)
 
                 time.sleep(poll_interval)
 
-        except Exception as e:
-            logger.exception("Error in log monitoring: %s", e)
+        except Exception:
+            logger.exception("Error in log monitoring")
 
     def get_aggregated_metrics(
         self, time_window: timedelta | None = None
     ) -> dict[str, Any]:
         """Get aggregated performance metrics."""
         if time_window:
-            cutoff = datetime.now() - time_window
+            cutoff = datetime.now(UTC) - time_window
             responses = [r for r in self.responses if r.timestamp >= cutoff]
             requests = [r for r in self.requests if r.timestamp >= cutoff]
             decisions = [d for d in self.decisions if d.timestamp >= cutoff]
@@ -588,13 +701,13 @@ class LLMLogParser:
                     [
                         a
                         for a in self.alerts
-                        if a.timestamp >= datetime.now() - timedelta(hours=1)
+                        if a.timestamp >= datetime.now(UTC) - timedelta(hours=1)
                     ]
                 ),
             }
 
         # If we only have decisions (no request/response logs), provide decision-based metrics
-        elif decisions:
+        if decisions:
             # Calculate decision rate
             if decisions and len(decisions) >= 2:
                 time_span = (
@@ -618,7 +731,7 @@ class LLMLogParser:
                     [
                         a
                         for a in self.alerts
-                        if a.timestamp >= datetime.now() - timedelta(hours=1)
+                        if a.timestamp >= datetime.now(UTC) - timedelta(hours=1)
                     ]
                 ),
                 "no_llm_logs": True,  # Indicate that we only have decision logs
@@ -646,10 +759,10 @@ class LLMLogParser:
         all_events.sort(key=lambda x: x["timestamp"], reverse=True)
         return all_events[:limit]
 
-    def export_data(self, format: str = "json") -> str:
+    def export_data(self, format_type: str = "json") -> str:
         """Export all parsed data."""
         data = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "summary": {
                 "requests": len(self.requests),
                 "responses": len(self.responses),
@@ -664,15 +777,15 @@ class LLMLogParser:
             "alerts": [a.to_dict() for a in self.alerts],
         }
 
-        if format.lower() == "json":
+        if format_type.lower() == "json":
             return json.dumps(data, indent=2, default=str)
-        else:
-            raise ValueError(f"Unsupported format: {format}")
+
+        raise ValueError(f"Unsupported format: {format_type}")
 
 
 # Factory function
 def create_llm_log_parser(
-    log_file: str = "logs/llm_completions.log",
+    log_file: str = "llm_completions.log",
     alert_thresholds: AlertThresholds | None = None,
 ) -> LLMLogParser:
     """Create configured LLM log parser."""

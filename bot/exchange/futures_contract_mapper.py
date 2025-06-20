@@ -1,7 +1,8 @@
 """Map spot symbols to actual futures contracts."""
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
+from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -10,7 +11,7 @@ class FuturesContractMapper:
     """Maps spot symbols to their corresponding futures contracts."""
 
     # Map base symbols to their futures contract prefixes
-    FUTURES_PREFIXES = {
+    FUTURES_PREFIXES: ClassVar[dict[str, str]] = {
         "ETH-USD": "ET",
         "BTC-USD": "BT",
         "SOL-USD": "SOL",
@@ -24,7 +25,7 @@ class FuturesContractMapper:
         """Get the current/next contract month in format DDMMMYY."""
         # Futures typically expire on the last Friday of the month
         # We should use the next month's contract if we're past expiry
-        datetime.now()
+        datetime.now(UTC)
 
         # For now, return the known active contract
         # In production, this would calculate based on current date

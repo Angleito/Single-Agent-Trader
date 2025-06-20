@@ -113,7 +113,7 @@ class MarketDataSimulator:
             List of OHLCV data points
         """
         ticks = []
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
 
         for i in range(count):
             # Simulate price movement
@@ -408,11 +408,11 @@ class LoadTestSuite:
                 symbol="BTC-USD",
                 side="FLAT",
                 size=Decimal("0"),
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
             )
 
             test_indicators = IndicatorData(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 cipher_a_dot=random.uniform(-2, 2),
                 cipher_b_wave=random.uniform(-1, 1),
                 cipher_b_money_flow=random.uniform(30, 70),
@@ -424,7 +424,7 @@ class LoadTestSuite:
             market_state = MarketState(
                 symbol="BTC-USD",
                 interval="1m",
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 current_price=Decimal("50000"),
                 ohlcv_data=[],
                 indicators=test_indicators,

@@ -20,7 +20,7 @@ client = RESTClient(api_key=cdp_api_key, api_secret=cdp_private_key)
 
 
 async def open_position():
-    FUTURES_SYMBOL = "ET-27JUN25-CDE"
+    futures_symbol = "ET-27JUN25-CDE"
 
     print("OPENING NEW FUTURES POSITION")
     print("=" * 60)
@@ -37,8 +37,8 @@ async def open_position():
         print(f"   Futures Buying Power: ${buying_power}")
 
         # Get current price
-        print(f"\n2. Getting {FUTURES_SYMBOL} price...")
-        product = client.get_product(FUTURES_SYMBOL)
+        print(f"\n2. Getting {futures_symbol} price...")
+        product = client.get_product(futures_symbol)
         current_price = float(product.price)
         print(f"   Current price: ${current_price}")
 
@@ -67,7 +67,7 @@ async def open_position():
 
         order_result = client.create_order(
             client_order_id=str(uuid.uuid4()),
-            product_id=FUTURES_SYMBOL,
+            product_id=futures_symbol,
             side="BUY",  # Long position
             order_configuration={
                 "market_market_ioc": {

@@ -152,10 +152,8 @@ class FeeCalculator:
                 net_position_value,
             )
 
-            return fees
-
-        except Exception as e:
-            logger.exception("Error calculating trade fees: %s", e)
+        except Exception:
+            logger.exception("Error calculating trade fees")
             # Return zero fees as fallback
             return TradeFees(
                 entry_fee=Decimal("0"),
@@ -164,6 +162,8 @@ class FeeCalculator:
                 fee_rate=0.0,
                 net_position_value=position_value,
             )
+        else:
+            return fees
 
     def adjust_position_size_for_fees(
         self,
@@ -336,10 +336,8 @@ class FeeCalculator:
                 initial_fees.total_fee,
             )
 
-            return adjusted_action, final_fees
-
-        except Exception as e:
-            logger.exception("Error adjusting position size for fees: %s", e)
+        except Exception:
+            logger.exception("Error adjusting position size for fees")
             # Return original action as fallback
             return trade_action, TradeFees(
                 entry_fee=Decimal("0"),
@@ -348,6 +346,8 @@ class FeeCalculator:
                 fee_rate=0.0,
                 net_position_value=Decimal("0"),
             )
+        else:
+            return adjusted_action, final_fees
 
     def calculate_minimum_profitable_move(
         self,
@@ -410,11 +410,11 @@ class FeeCalculator:
                 min_move_percentage * 100,
             )
 
-            return Decimal(str(min_move_percentage))
-
-        except Exception as e:
-            logger.exception("Error calculating minimum profitable move: %s", e)
+        except Exception:
+            logger.exception("Error calculating minimum profitable move")
             return Decimal("0.001")  # 0.1% fallback
+        else:
+            return Decimal(str(min_move_percentage))
 
     def validate_trade_profitability(
         self,
@@ -473,11 +473,11 @@ class FeeCalculator:
                     f"Risk/reward ratio {risk_reward_ratio:.2f} too low after accounting for fees",
                 )
 
-            return True, "Trade profitability validated"
-
-        except Exception as e:
-            logger.exception("Error validating trade profitability: %s", e)
+        except Exception:
+            logger.exception("Error validating trade profitability")
             return True, "Validation error - allowing trade"
+        else:
+            return True, "Trade profitability validated"
 
     def _get_fee_tier(self, volume: float) -> dict[str, float]:
         """

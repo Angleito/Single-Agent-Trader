@@ -12,7 +12,7 @@ import logging
 import sys
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -146,8 +146,8 @@ class MessageFlowValidator:
             self.websocket = await websockets.connect(self.dashboard_url)
             logger.info("Connected to dashboard at %s", self.dashboard_url)
             return True
-        except Exception as e:
-            logger.exception("Failed to connect: %s", e)
+        except Exception:
+            logger.exception("Failed to connect")
             return False
 
     async def disconnect(self):
@@ -170,13 +170,13 @@ class MessageFlowValidator:
                     # Parse and store message
                     try:
                         data = json.loads(message)
-                        data["received_at"] = datetime.utcnow().isoformat()
+                        data["received_at"] = datetime.now(UTC).isoformat()
                         self.received_messages.append(data)
                         logger.debug(
                             "Received message: %s", data.get("type", "unknown")
                         )
-                    except json.JSONDecodeError as e:
-                        logger.exception("Failed to parse message: %s", e)
+                    except json.JSONDecodeError:
+                        logger.exception("Failed to parse message")
 
                 except TimeoutError:
                     # No message received, continue
@@ -185,8 +185,8 @@ class MessageFlowValidator:
                     logger.warning("WebSocket connection closed")
                     break
 
-        except Exception as e:
-            logger.exception("Error in message listener: %s", e)
+        except Exception:
+            logger.exception("Error in message listener")
 
     def validate_message_schema(
         self, message: dict[str, Any]
@@ -294,28 +294,28 @@ class MessageFlowValidator:
                 message = {
                     "type": "test_stimulus",
                     "stimulus": "market_update",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "data": {"symbol": "BTC-USD", "price": 50000.0, "volume": 100.5},
                 }
             elif stimulus_type == "trigger_decision":
                 message = {
                     "type": "test_stimulus",
                     "stimulus": "trigger_decision",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
             else:
                 message = {
                     "type": "test_stimulus",
                     "stimulus": stimulus_type,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
 
             await self.websocket.send(json.dumps(message))
             logger.info("Sent test stimulus: %s", stimulus_type)
             return True
 
-        except Exception as e:
-            logger.exception("Failed to send stimulus: %s", e)
+        except Exception:
+            logger.exception("Failed to send stimulus")
             return False
 
     async def test_message_type(
@@ -410,7 +410,7 @@ class MessageFlowValidator:
             message = {
                 "type": "sequence_test",
                 "sequence": i,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
             await self.websocket.send(json.dumps(message))
             sent_sequence.append(i)
@@ -477,7 +477,7 @@ class MessageFlowValidator:
         self, type_results: dict[MessageType, bool], ordering_result: bool
     ):
         """Print test summary."""
-        logger.info("\n" + "=" * 60)
+        logger.info("\n%s", "=" * 60)
         logger.info("Test Summary")
         logger.info("=" * 60)
 

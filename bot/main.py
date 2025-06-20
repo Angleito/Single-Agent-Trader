@@ -3142,7 +3142,11 @@ class TradingEngine:
                     trade_history = self.position_manager.export_trade_history(
                         days=30, format="json"
                     )
-                    history_file = Path("data/paper_trading/session_trades.json")
+                    from .utils.path_utils import get_data_file_path
+
+                    history_file = get_data_file_path(
+                        "paper_trading/session_trades.json"
+                    )
                     history_file.parent.mkdir(parents=True, exist_ok=True)
                     with history_file.open("w") as f:
                         f.write(trade_history)
