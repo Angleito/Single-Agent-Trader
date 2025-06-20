@@ -9,7 +9,7 @@ HTTP polling and executed safely with proper validation and error handling.
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -148,7 +148,7 @@ class CommandConsumer:
         while self.running:
             try:
                 await self._poll_for_commands()
-                self.stats["last_poll_time"] = datetime.now().isoformat()
+                self.stats["last_poll_time"] = datetime.now(UTC).isoformat()
                 await asyncio.sleep(self.poll_interval)
             except asyncio.CancelledError:
                 logger.info("Command polling cancelled")
@@ -266,7 +266,7 @@ class CommandConsumer:
                 self.stats["commands_succeeded"] = (
                     self.stats.get("commands_succeeded", 0) or 0
                 ) + 1
-                self.stats["last_command_time"] = datetime.now().isoformat()
+                self.stats["last_command_time"] = datetime.now(UTC).isoformat()
             else:
                 self.stats["commands_failed"] = (
                     self.stats.get("commands_failed", 0) or 0
@@ -282,7 +282,7 @@ class CommandConsumer:
 
         except Exception as e:
             logger.exception(
-                "Error processing command %s: %s", cmd_data.get("id", "unknown"), e
+                "Error processing command %s", cmd_data.get("id", "unknown")
             )
             await self._report_command_status(
                 cmd_data.get("id", "unknown"), "failed", str(e)
@@ -307,7 +307,7 @@ class CommandConsumer:
         # Validate command-specific parameters
         if command.command_type == "update_risk_limits":
             return self._validate_risk_limits(command.parameters)
-        elif command.command_type == "manual_trade":
+        if command.command_type == "manual_trade":
             return self._validate_manual_trade(command.parameters)
 
         return True
@@ -359,6 +359,7 @@ class CommandConsumer:
                 return False, f"No callback registered for command type: {command_type}"
 
             # Execute the command through registered callback
+            result = False, "Unknown error"
             if command_type == "emergency_stop":
                 result = await self._execute_emergency_stop(callback)
             elif command_type == "pause_trading":
@@ -374,11 +375,10 @@ class CommandConsumer:
             else:
                 return False, f"Unsupported command type: {command_type}"
 
-            return result
-
         except Exception as e:
             logger.exception("Error executing command %s", command.id)
             return False, str(e)
+        return result
 
     async def _execute_emergency_stop(self, callback) -> tuple[bool, str]:
         """Execute emergency stop command."""
@@ -388,9 +388,9 @@ class CommandConsumer:
             self.emergency_stopped = True
             self.trading_paused = True
             logger.critical("EMERGENCY STOP EXECUTED")
-            return True, "Emergency stop executed successfully"
         except Exception as e:
             return False, f"Emergency stop failed: {e}"
+        return True, "Emergency stop executed successfully"
 
     async def _execute_pause_trading(self, callback) -> tuple[bool, str]:
         """Execute pause trading command."""
@@ -402,9 +402,9 @@ class CommandConsumer:
                 await callback()
             self.trading_paused = True
             logger.info("Trading paused by dashboard command")
-            return True, "Trading paused successfully"
         except Exception as e:
             return False, f"Pause trading failed: {e}"
+        return True, "Trading paused successfully"
 
     async def _execute_resume_trading(self, callback) -> tuple[bool, str]:
         """Execute resume trading command."""
@@ -417,9 +417,9 @@ class CommandConsumer:
             self.trading_paused = False
             self.emergency_stopped = False
             logger.info("Trading resumed by dashboard command")
-            return True, "Trading resumed successfully"
         except Exception as e:
             return False, f"Resume trading failed: {e}"
+        return True, "Trading resumed successfully"
 
     async def _execute_update_risk_limits(
         self, callback, parameters: dict[str, Any]
@@ -431,32 +431,34 @@ class CommandConsumer:
 
             self.current_risk_limits.update(parameters)
             logger.info("Risk limits updated: %s", parameters)
-            return True, f"Risk limits updated: {parameters}"
         except Exception as e:
             return False, f"Update risk limits failed: {e}"
+        return True, f"Risk limits updated: {parameters}"
 
     async def _execute_manual_trade(
         self, callback, parameters: dict[str, Any]
     ) -> tuple[bool, str]:
         """Execute manual trade command."""
-        try:
-            if self.emergency_stopped:
-                return False, "Cannot execute manual trade: emergency stop active"
+        if self.emergency_stopped:
+            return False, "Cannot execute manual trade: emergency stop active"
 
+        try:
             if callable(callback):
                 result = await callback(parameters)
                 if result:
                     logger.info("Manual trade executed: %s", parameters)
-                    return (
+                    success_result = (
                         True,
                         f"Manual trade executed: {parameters['action']} {parameters['size_percentage']}% {parameters['symbol']}",
                     )
                 else:
-                    return False, "Manual trade execution returned false"
+                    success_result = False, "Manual trade execution returned false"
             else:
-                return False, "No manual trade callback registered"
+                success_result = False, "No manual trade callback registered"
         except Exception as e:
             return False, f"Manual trade failed: {e}"
+        else:
+            return success_result
 
     async def _report_command_status(self, command_id: str, status: str, message: str):
         """Report command execution status back to dashboard."""
@@ -468,7 +470,7 @@ class CommandConsumer:
                 "command_id": command_id,
                 "status": status,
                 "message": message,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "bot_id": "ai-trading-bot",
             }
 

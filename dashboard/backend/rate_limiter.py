@@ -199,24 +199,23 @@ class RateLimiter:
             }
 
             return None
-        else:
-            # No tokens available
-            retry_after = 60 - int(current_time - last_update)
-            logger.info("Rate limit exceeded for IP %s", ip)
+        # No tokens available
+        retry_after = 60 - int(current_time - last_update)
+        logger.info("Rate limit exceeded for IP %s", ip)
 
-            return JSONResponse(
-                status_code=429,
-                content={
-                    "error": "Rate limit exceeded. Please try again later.",
-                    "retry_after": retry_after,
-                },
-                headers={
-                    "Retry-After": str(retry_after),
-                    "X-RateLimit-Limit": str(self.requests_per_minute),
-                    "X-RateLimit-Remaining": "0",
-                    "X-RateLimit-Reset": str(int(current_time + retry_after)),
-                },
-            )
+        return JSONResponse(
+            status_code=429,
+            content={
+                "error": "Rate limit exceeded. Please try again later.",
+                "retry_after": retry_after,
+            },
+            headers={
+                "Retry-After": str(retry_after),
+                "X-RateLimit-Limit": str(self.requests_per_minute),
+                "X-RateLimit-Remaining": "0",
+                "X-RateLimit-Reset": str(int(current_time + retry_after)),
+            },
+        )
 
 
 # Global rate limiter instances for different endpoints

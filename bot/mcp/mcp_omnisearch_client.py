@@ -8,6 +8,7 @@ AI responses, content processing, and market intelligence for trading decisions.
 import asyncio
 import json
 import logging
+import shutil
 import subprocess
 from datetime import UTC, datetime
 from typing import Any
@@ -114,9 +115,22 @@ class MCPOmniSearchClient:
     async def connect(self) -> bool:
         """Connect to the MCP-OmniSearch server."""
         try:
-            # Start the MCP server process
+            # Security: Validate that node executable exists and server path is safe
+            node_executable = shutil.which("node")
+            if not node_executable:
+                logger.error("Node.js executable not found in PATH")
+                return False
+
+            # Security: Validate server path exists and is not attempting path traversal
+            import os.path
+
+            if not os.path.exists(self.server_path) or ".." in self.server_path:
+                logger.error("Invalid or unsafe server path: %s", self.server_path)
+                return False
+
+            # Start the MCP server process with validated paths
             self._process = subprocess.Popen(
-                ["node", self.server_path],
+                [node_executable, self.server_path],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -482,10 +496,9 @@ class MCPOmniSearchClient:
 
         if pos_count > neg_count:
             return "positive"
-        elif neg_count > pos_count:
+        if neg_count > pos_count:
             return "negative"
-        else:
-            return "neutral"
+        return "neutral"
 
     def _extract_symbols(self, text: str) -> list[str]:
         """Extract crypto symbols from text."""
@@ -524,19 +537,17 @@ class MCPOmniSearchClient:
         sentiment = self._analyze_sentiment(text)
         if sentiment == "positive":
             return 0.3
-        elif sentiment == "negative":
+        if sentiment == "negative":
             return -0.3
-        else:
-            return 0.0
+        return 0.0
 
     def _score_to_sentiment(self, score: float) -> str:
         """Convert sentiment score to sentiment label."""
         if score > 0.2:
             return "bullish"
-        elif score < -0.2:
+        if score < -0.2:
             return "bearish"
-        else:
-            return "neutral"
+        return "neutral"
 
     def _extract_key_drivers(self, text: str) -> list[str]:
         """Extract key market drivers from text."""

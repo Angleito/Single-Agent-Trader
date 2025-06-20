@@ -211,7 +211,7 @@ class BluefinClient(BaseExchange):
                 self.monitoring_enabled = False
 
         logger.info(
-            "Initialized BluefinClient (network=%s, " "service_url=%s, dry_run=%s)",
+            "Initialized BluefinClient (network=%s, service_url=%s, dry_run=%s)",
             network,
             service_url,
             dry_run,
@@ -365,27 +365,25 @@ class BluefinClient(BaseExchange):
                 self._last_health_check = datetime.now(UTC)
                 await self._init_client()
                 return True
-            else:
-                logger.warning("Failed to connect to Bluefin service")
-                if self.dry_run:
-                    logger.info(
-                        "PAPER TRADING MODE: Bluefin connection failed but continuing with simulation. "
-                        "All trades will be simulated."
-                    )
-                    self._connected = True  # Allow dry run to continue
-                    self._last_health_check = datetime.now(UTC)
-                    await self._init_client()
-                    return True
-                else:
-                    # For testing: Allow connection without service in live mode
-                    logger.warning(
-                        "⚠️ LIVE MODE: Proceeding without Bluefin service connection. "
-                        "Position queries and order execution will not work!"
-                    )
-                    self._connected = True
-                    self._last_health_check = datetime.now(UTC)
-                    await self._init_client()
-                    return True
+            logger.warning("Failed to connect to Bluefin service")
+            if self.dry_run:
+                logger.info(
+                    "PAPER TRADING MODE: Bluefin connection failed but continuing with simulation. "
+                    "All trades will be simulated."
+                )
+                self._connected = True  # Allow dry run to continue
+                self._last_health_check = datetime.now(UTC)
+                await self._init_client()
+                return True
+            # For testing: Allow connection without service in live mode
+            logger.warning(
+                "⚠️ LIVE MODE: Proceeding without Bluefin service connection. "
+                "Position queries and order execution will not work!"
+            )
+            self._connected = True
+            self._last_health_check = datetime.now(UTC)
+            await self._init_client()
+            return True
 
         except Exception as e:
             logger.exception("Failed to connect to Bluefin")
@@ -406,10 +404,9 @@ class BluefinClient(BaseExchange):
             logger.exception("Failed to initialize Bluefin client")
             if not self.dry_run:
                 raise
-            else:
-                logger.warning(
-                    "Continuing in paper trading mode despite initialization failure"
-                )
+            logger.warning(
+                "Continuing in paper trading mode despite initialization failure"
+            )
 
     async def _load_contract_info(self) -> None:
         """Load and cache perpetual contract information."""
@@ -450,7 +447,7 @@ class BluefinClient(BaseExchange):
                     "min_quantity": Decimal(str(info.get("min_trade_size", 0.001))),
                     "max_quantity": Decimal(str(info.get("max_trade_size", 1000000))),
                     "tick_size": Decimal(str(info.get("step_size", 0.001))),
-                    "min_notional": Decimal("10"),
+                    "min_notional": Decimal(10),
                 }
 
             logger.debug("Loaded %s perpetual contracts", len(self._contract_info))
@@ -477,7 +474,7 @@ class BluefinClient(BaseExchange):
                             str(info.get("max_trade_size", 1000000))
                         ),
                         "tick_size": Decimal(str(info.get("step_size", 0.001))),
-                        "min_notional": Decimal("10"),
+                        "min_notional": Decimal(10),
                     }
             except ImportError:
                 # Ultimate fallback if imports fail
@@ -491,9 +488,9 @@ class BluefinClient(BaseExchange):
                         "base_asset": symbol.split("-")[0],
                         "quote_asset": "USDC",
                         "min_quantity": Decimal("0.001"),
-                        "max_quantity": Decimal("1000000"),
+                        "max_quantity": Decimal(1000000),
                         "tick_size": Decimal("0.01"),
-                        "min_notional": Decimal("10"),
+                        "min_notional": Decimal(10),
                     }
             logger.info(
                 "Using fallback contract info for %s symbols", len(self._contract_info)
@@ -545,17 +542,16 @@ class BluefinClient(BaseExchange):
                 logger.info("Action is HOLD - no trade executed")
                 return None
 
-            elif trade_action.action == "CLOSE":
+            if trade_action.action == "CLOSE":
                 return await self._close_position(bluefin_symbol)
 
-            elif trade_action.action in ["LONG", "SHORT"]:
+            if trade_action.action in ["LONG", "SHORT"]:
                 return await self._open_position(
                     trade_action, bluefin_symbol, current_price
                 )
 
-            else:
-                logger.error("Unknown action: %s", trade_action.action)
-                return None
+            logger.error("Unknown action: %s", trade_action.action)
+            return None
 
         except ValueError:
             logger.exception("Symbol validation error")
@@ -636,7 +632,7 @@ class BluefinClient(BaseExchange):
             logger.info("Account balance: $%s", account_balance)
 
             # If balance is too low, log error and return None
-            if account_balance <= Decimal("10"):
+            if account_balance <= Decimal(10):
                 logger.error(
                     "Account balance $%s is too low for trading (minimum $10)",
                     account_balance,
@@ -688,7 +684,7 @@ class BluefinClient(BaseExchange):
                 quantity = min_qty
 
             # Final validation - ensure quantity is not zero
-            if quantity <= Decimal("0"):
+            if quantity <= Decimal(0):
                 logger.error(
                     "Final quantity %s is zero or negative, cannot place order",
                     quantity,
@@ -709,7 +705,7 @@ class BluefinClient(BaseExchange):
 
             # Place market order
             order = await self.place_market_order(
-                symbol, cast(Literal["BUY", "SELL"], side), quantity
+                symbol, cast("Literal['BUY', 'SELL']", side), quantity
             )
 
             if order:
@@ -781,7 +777,7 @@ class BluefinClient(BaseExchange):
 
             # Place market order to close
             return await self.place_market_order(
-                symbol, cast(Literal["BUY", "SELL"], side), abs(position.size)
+                symbol, cast("Literal['BUY', 'SELL']", side), abs(position.size)
             )
 
         except Exception:
@@ -809,7 +805,7 @@ class BluefinClient(BaseExchange):
             return Order(
                 id=f"paper_bluefin_{int(datetime.now(UTC).timestamp() * 1000)}",
                 symbol=symbol,
-                side=cast(Literal["BUY", "SELL"], side),
+                side=cast("Literal['BUY', 'SELL']", side),
                 type="MARKET",
                 quantity=quantity,
                 status=OrderStatus.FILLED,
@@ -842,27 +838,25 @@ class BluefinClient(BaseExchange):
                 order = Order(
                     id=order_data.get("id", f"bluefin_{datetime.now(UTC).timestamp()}"),
                     symbol=symbol,
-                    side=cast(Literal["BUY", "SELL"], side),
+                    side=cast("Literal['BUY', 'SELL']", side),
                     type="MARKET",
                     quantity=quantity,
                     status=OrderStatus.PENDING,
                     timestamp=datetime.now(UTC),
-                    filled_quantity=Decimal("0"),
+                    filled_quantity=Decimal(0),
                 )
 
                 logger.info("Market order placed successfully: %s", order.id)
                 return order
-            else:
-                error_msg = response.get("message", "Unknown error")
-                logger.error("Order placement failed: %s", error_msg)
-                raise ExchangeOrderError(f"Order placement failed: {error_msg}")
+            error_msg = response.get("message", "Unknown error")
+            logger.error("Order placement failed: %s", error_msg)
+            raise ExchangeOrderError(f"Order placement failed: {error_msg}")
 
         except Exception as e:
             logger.exception("Failed to place market order")
             if "insufficient" in str(e).lower():
                 raise ExchangeInsufficientFundsError(f"Insufficient funds: {e}") from e
-            else:
-                raise ExchangeOrderError(f"Failed to place market order: {e}") from e
+            raise ExchangeOrderError(f"Failed to place market order: {e}") from e
 
     async def place_limit_order(
         self,
@@ -894,7 +888,7 @@ class BluefinClient(BaseExchange):
             return Order(
                 id=f"paper_limit_{int(datetime.now(UTC).timestamp() * 1000)}",
                 symbol=symbol,
-                side=cast(Literal["BUY", "SELL"], side),
+                side=cast("Literal['BUY', 'SELL']", side),
                 type="LIMIT",
                 quantity=quantity,
                 price=price,
@@ -927,21 +921,20 @@ class BluefinClient(BaseExchange):
                         "id", f"bluefin_limit_{datetime.now(UTC).timestamp()}"
                     ),
                     symbol=symbol,
-                    side=cast(Literal["BUY", "SELL"], side),
+                    side=cast("Literal['BUY', 'SELL']", side),
                     type="LIMIT",
                     quantity=quantity,
                     price=price,
                     status=OrderStatus.OPEN,
                     timestamp=datetime.now(UTC),
-                    filled_quantity=Decimal("0"),
+                    filled_quantity=Decimal(0),
                 )
 
                 logger.info("Limit order placed successfully: %s", order.id)
                 return order
-            else:
-                error_msg = response.get("message", "Unknown error")
-                logger.error("Limit order placement failed: %s", error_msg)
-                raise ExchangeOrderError(f"Limit order placement failed: {error_msg}")
+            error_msg = response.get("message", "Unknown error")
+            logger.error("Limit order placement failed: %s", error_msg)
+            raise ExchangeOrderError(f"Limit order placement failed: {error_msg}")
 
         except Exception as e:
             logger.exception("Failed to place limit order")
@@ -981,7 +974,7 @@ class BluefinClient(BaseExchange):
                     side = pos_data.get("side", "LONG" if size > 0 else "SHORT")
                     position = Position(
                         symbol=pos_symbol,
-                        side=cast(Literal["LONG", "SHORT", "FLAT"], side),
+                        side=cast("Literal['LONG', 'SHORT', 'FLAT']", side),
                         size=abs(size),
                         entry_price=Decimal(str(pos_data.get("avgPrice", "0"))),
                         unrealized_pnl=Decimal(str(pos_data.get("unrealizedPnl", "0"))),
@@ -1149,7 +1142,7 @@ class BluefinClient(BaseExchange):
             total_balance = self._normalize_balance(raw_balance)
 
             # Validate balance is not negative (unless explicitly allowed)
-            if total_balance < Decimal("0"):
+            if total_balance < Decimal(0):
                 logger.warning("Retrieved negative balance: $%s", total_balance)
                 # For Bluefin, negative balance might be valid due to unrealized PnL
                 # But log it for monitoring
@@ -1159,7 +1152,7 @@ class BluefinClient(BaseExchange):
             logger.debug("Balance normalization: %s -> %s", raw_balance, total_balance)
 
             # For live trading, check minimum balance requirements
-            if total_balance <= Decimal("0") and not self.dry_run:
+            if total_balance <= Decimal(0) and not self.dry_run:
                 logger.warning(
                     "Zero or negative balance in live mode - this will prevent trading"
                 )
@@ -1184,7 +1177,7 @@ class BluefinClient(BaseExchange):
                             "network": self.network_name,
                             "raw_balance": str(raw_balance),
                             "normalized_balance": str(total_balance),
-                            "is_negative": total_balance < Decimal("0"),
+                            "is_negative": total_balance < Decimal(0),
                         },
                     )
                 except Exception as e:
@@ -1294,9 +1287,8 @@ class BluefinClient(BaseExchange):
             if response.get("status") == "success":
                 logger.info("Order %s cancelled successfully", order_id)
                 return True
-            else:
-                logger.warning("Order %s cancellation failed", order_id)
-                return False
+            logger.warning("Order %s cancellation failed", order_id)
+            return False
 
         except Exception:
             logger.exception("Failed to cancel order %s", order_id)
@@ -1328,13 +1320,12 @@ class BluefinClient(BaseExchange):
             if self.dry_run:
                 logger.info("PAPER TRADING: Simulated cancelling all orders")
                 return True
-            else:
-                # For live trading, we would need to implement actual Bluefin API calls
-                # For now, log that this needs implementation
-                logger.warning(
-                    "Cancel all orders not yet implemented for live Bluefin trading"
-                )
-                return True  # Return True to avoid errors during shutdown
+            # For live trading, we would need to implement actual Bluefin API calls
+            # For now, log that this needs implementation
+            logger.warning(
+                "Cancel all orders not yet implemented for live Bluefin trading"
+            )
+            return True  # Return True to avoid errors during shutdown
 
         except Exception:
             logger.exception("Failed to cancel all orders")
@@ -1431,7 +1422,7 @@ class BluefinClient(BaseExchange):
         # For now, using limit order as placeholder
         return await self.place_limit_order(
             base_order.symbol,
-            cast(Literal["BUY", "SELL"], side),
+            cast("Literal['BUY', 'SELL']", side),
             base_order.quantity,
             limit_price,
         )
@@ -1457,14 +1448,14 @@ class BluefinClient(BaseExchange):
 
         return await self.place_limit_order(
             base_order.symbol,
-            cast(Literal["BUY", "SELL"], side),
+            cast("Literal['BUY', 'SELL']", side),
             base_order.quantity,
             limit_price,
         )
 
     def _round_to_tick(self, value: Decimal, tick_size: Decimal) -> Decimal:
         """Round a value to the nearest tick size."""
-        return (value / tick_size).quantize(Decimal("1")) * tick_size
+        return (value / tick_size).quantize(Decimal(1)) * tick_size
 
     async def _retry_request(self, func, *args, **kwargs):
         """Execute a request with retry logic."""
@@ -1531,9 +1522,8 @@ class BluefinClient(BaseExchange):
                         )
 
                 return formatted_candles
-            else:
-                logger.warning("No candlestick data returned for %s", bluefin_symbol)
-                return []
+            logger.warning("No candlestick data returned for %s", bluefin_symbol)
+            return []
 
         except Exception:
             logger.exception("Failed to fetch historical candles from Bluefin")

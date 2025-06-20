@@ -12,6 +12,8 @@ real trading conditions including:
 
 import json
 import logging
+import os
+import tempfile
 import threading
 import time
 from dataclasses import asdict, dataclass
@@ -58,26 +60,26 @@ class PaperTrade:
     exit_time: datetime | None = None
     exit_price: Decimal | None = None
     realized_pnl: Decimal | None = None
-    fees: Decimal = Decimal("0")
-    slippage: Decimal = Decimal("0")
+    fees: Decimal = Decimal(0)
+    slippage: Decimal = Decimal(0)
     status: str = "OPEN"  # OPEN, CLOSED, PARTIAL
 
     def calculate_unrealized_pnl(self, current_price: Decimal) -> Decimal:
         """Calculate unrealized P&L based on current price."""
         if self.status == "CLOSED":
-            return Decimal("0")
+            return Decimal(0)
 
         price_diff = current_price - self.entry_price
         if self.side == "LONG":
             return self.size * price_diff - self.fees
-        else:  # SHORT
-            return self.size * (-price_diff) - self.fees
+        # SHORT
+        return self.size * (-price_diff) - self.fees
 
     def close_trade(
         self,
         exit_price: Decimal,
         exit_time: datetime,
-        additional_fees: Decimal = Decimal("0"),
+        additional_fees: Decimal = Decimal(0),
     ) -> Decimal:
         """Close the trade and calculate realized P&L."""
         self.exit_time = exit_time
@@ -136,8 +138,27 @@ class PaperTradingAccount:
             starting_balance: Initial account balance (default from config)
             data_dir: Directory for state persistence
         """
-        self.data_dir = data_dir or Path("data/paper_trading")
-        self.data_dir.mkdir(parents=True, exist_ok=True)
+        # Use fallback directory if available from Docker entrypoint
+        fallback_data_dir = os.getenv("FALLBACK_DATA_DIR")
+        if data_dir:
+            self.data_dir = data_dir
+        elif fallback_data_dir:
+            self.data_dir = Path(fallback_data_dir) / "paper_trading"
+        else:
+            self.data_dir = Path("data/paper_trading")
+
+        try:
+            self.data_dir.mkdir(parents=True, exist_ok=True)
+        except PermissionError:
+            if fallback_data_dir:
+                # Already using fallback, create secure temporary directory
+                temp_dir = tempfile.mkdtemp(prefix="paper_trading_")
+                self.data_dir = Path(temp_dir)
+                logging.warning(
+                    f"Created paper trading directory in secure temporary space: {self.data_dir}"
+                )
+            else:
+                raise
 
         # Account state with normalized precision
         if starting_balance is not None:
@@ -148,7 +169,7 @@ class PaperTradingAccount:
             )
         self.current_balance = self.starting_balance
         self.equity = self.starting_balance
-        self.margin_used = Decimal("0")
+        self.margin_used = Decimal(0)
 
         # Trading state
         self.open_trades: dict[str, PaperTrade] = {}
@@ -159,7 +180,7 @@ class PaperTradingAccount:
         self.session_start_time = datetime.now(UTC)
         self.daily_metrics: dict[str, DailyPerformance] = {}
         self.peak_equity = self.starting_balance
-        self.max_drawdown = Decimal("0")
+        self.max_drawdown = Decimal(0)
 
         # Configuration
         self.fee_rate = Decimal(
@@ -301,7 +322,7 @@ class PaperTradingAccount:
             raise ValueError("Balance amount cannot be infinite")
 
         # Check for extremely large values (> $1 billion)
-        if abs(amount) > Decimal("1000000000"):
+        if abs(amount) > Decimal(1000000000):
             logger.warning("Extremely large balance amount: %s", amount)
 
         # Quantize to 2 decimal places using banker's rounding
@@ -343,11 +364,11 @@ class PaperTradingAccount:
             raise ValueError("Crypto amount cannot be infinite")
 
         # Check for negative values (most crypto amounts should be positive)
-        if amount < Decimal("0"):
+        if amount < Decimal(0):
             logger.warning("Negative crypto amount: %s", amount)
 
         # Check for extremely small values (dust)
-        if Decimal("0") < amount < Decimal("0.00000001"):
+        if Decimal(0) < amount < Decimal("0.00000001"):
             logger.warning("Dust amount (< 1 satoshi): %s", amount)
 
         return amount.quantize(Decimal("0.00000001"), rounding=ROUND_HALF_EVEN)
@@ -376,7 +397,7 @@ class PaperTradingAccount:
             normalized_balance = self._normalize_balance(new_balance)
 
             # Check for critical issues
-            if normalized_balance < Decimal("-1000"):
+            if normalized_balance < Decimal(-1000):
                 logger.error(
                     "Critical: Balance would become severely negative: $%s from %s",
                     normalized_balance,
@@ -387,12 +408,12 @@ class PaperTradingAccount:
                 )
 
             # Check for suspicious large changes
-            if self.current_balance > Decimal("0"):
+            if self.current_balance > Decimal(0):
                 change_ratio = (
                     abs(normalized_balance - self.current_balance)
                     / self.current_balance
                 )
-                if change_ratio > Decimal("10"):  # 1000% change
+                if change_ratio > Decimal(10):  # 1000% change
                     logger.warning(
                         "Large balance change detected: $%s -> $%s from %s",
                         self.current_balance,
@@ -412,7 +433,7 @@ class PaperTradingAccount:
         """Get current account status."""
         with self._lock:
             # Calculate unrealized P&L for open trades
-            unrealized_pnl = Decimal("0")
+            unrealized_pnl = Decimal(0)
             for trade in self.open_trades.values():
                 if current_prices and trade.symbol in current_prices:
                     price = current_prices[trade.symbol]
@@ -428,19 +449,17 @@ class PaperTradingAccount:
             roi = (
                 (total_pnl / self.starting_balance * 100)
                 if self.starting_balance > 0
-                else Decimal("0")
+                else Decimal(0)
             )
 
             # Update drawdown
-            if self.equity > self.peak_equity:
-                self.peak_equity = self.equity
+            self.peak_equity = max(self.peak_equity, self.equity)
             current_drawdown = (
                 (self.peak_equity - self.equity) / self.peak_equity * 100
                 if self.peak_equity > 0
-                else Decimal("0")
+                else Decimal(0)
             )
-            if current_drawdown > self.max_drawdown:
-                self.max_drawdown = current_drawdown
+            self.max_drawdown = max(self.max_drawdown, current_drawdown)
 
             return {
                 "starting_balance": float(
@@ -759,7 +778,7 @@ class PaperTradingAccount:
         if action.action == "CLOSE":
             # Close existing position
             existing_position = self._find_open_position(symbol)
-            return existing_position.size if existing_position else Decimal("0")
+            return existing_position.size if existing_position else Decimal(0)
 
         # Calculate position size based on percentage of equity
         position_value = self.equity * (Decimal(str(action.size_pct)) / 100)
@@ -813,8 +832,8 @@ class PaperTradingAccount:
         # Market orders typically get worse fill prices
         if action in ["LONG", "BUY"]:
             return price + slippage_amount  # Pay slightly more when buying
-        else:  # SHORT, SELL
-            return price - slippage_amount  # Receive slightly less when selling
+        # SHORT, SELL
+        return price - slippage_amount  # Receive slightly less when selling
 
     def _execute_paper_trade(
         self,
@@ -833,7 +852,7 @@ class PaperTradingAccount:
             # Close existing position
             return self._close_position(symbol, price, current_time, fees)
 
-        elif action.action in ["LONG", "SHORT"]:
+        if action.action in ["LONG", "SHORT"]:
             # Check if we already have an open position for this symbol
             existing_position = self._find_open_position(symbol)
             if existing_position:
@@ -846,23 +865,20 @@ class PaperTradingAccount:
                     return self._increase_position(
                         existing_position, price, size, fees, current_time
                     )
-                else:
-                    # Opposite direction - close existing position and open new one
-                    logger.info(
-                        "Closing existing %s position and opening new %s position for %s",
-                        existing_position.side,
-                        action.action,
-                        symbol,
+                # Opposite direction - close existing position and open new one
+                logger.info(
+                    "Closing existing %s position and opening new %s position for %s",
+                    existing_position.side,
+                    action.action,
+                    symbol,
+                )
+                # First close the existing position
+                close_order = self._close_position(symbol, price, current_time, fees)
+                if close_order.status != OrderStatus.FILLED:
+                    logger.error(
+                        "Failed to close existing position: %s", close_order.status
                     )
-                    # First close the existing position
-                    close_order = self._close_position(
-                        symbol, price, current_time, fees
-                    )
-                    if close_order.status != OrderStatus.FILLED:
-                        logger.error(
-                            "Failed to close existing position: %s", close_order.status
-                        )
-                        return self._create_failed_order(action, symbol, "CLOSE_FAILED")
+                    return self._create_failed_order(action, symbol, "CLOSE_FAILED")
 
                     # Now continue to open the new position (fall through to position opening logic)
 
@@ -1174,9 +1190,9 @@ class PaperTradingAccount:
             symbol=symbol,
             side="BUY" if action.action == "LONG" else "SELL",
             type="MARKET",
-            quantity=Decimal("0"),
-            price=Decimal("0"),
-            filled_quantity=Decimal("0"),
+            quantity=Decimal(0),
+            price=Decimal(0),
+            filled_quantity=Decimal(0),
             status=OrderStatus.REJECTED,
             timestamp=datetime.now(UTC),
         )
@@ -1200,11 +1216,11 @@ class PaperTradingAccount:
         if "SUI" in symbol:
             price = Decimal("3.50")  # Realistic SUI price post-fix
         elif "ETH" in symbol:
-            price = Decimal("2500")  # Realistic ETH price
+            price = Decimal(2500)  # Realistic ETH price
         elif "BTC" in symbol:
-            price = Decimal("50000")  # Realistic BTC price
+            price = Decimal(50000)  # Realistic BTC price
         else:
-            price = Decimal("100")  # Generic reasonable price
+            price = Decimal(100)  # Generic reasonable price
 
         logger.debug("📊 Using fallback price for %s: $%s", symbol, price)
         return price
@@ -1243,14 +1259,14 @@ class PaperTradingAccount:
                 if t.exit_time
                 and t.exit_time.date().isoformat() == today
                 and t.realized_pnl is not None
-            ) or Decimal("0")
+            ) or Decimal(0)
             today_fees = sum(
                 t.fees
                 for t in self.closed_trades
                 if t.exit_time
                 and t.exit_time.date().isoformat() == today
                 and t.fees is not None
-            ) or Decimal("0")
+            ) or Decimal(0)
 
             # Win rate calculation
             today_closed_trades = [
@@ -1282,11 +1298,11 @@ class PaperTradingAccount:
                     largest_win = max(pnl_values)
                     largest_loss = min(pnl_values)
                 else:
-                    largest_win = Decimal("0")
-                    largest_loss = Decimal("0")
+                    largest_win = Decimal(0)
+                    largest_loss = Decimal(0)
             else:
-                largest_win = Decimal("0")
-                largest_loss = Decimal("0")
+                largest_win = Decimal(0)
+                largest_loss = Decimal(0)
 
             # Get previous day's balance
             yesterday = (datetime.now(UTC).date() - timedelta(days=1)).isoformat()
@@ -1380,17 +1396,17 @@ class PaperTradingAccount:
             total_days = len(relevant_metrics)
 
             avg_daily_pnl = (
-                total_realized_pnl / total_days if total_days > 0 else Decimal("0")
+                total_realized_pnl / total_days if total_days > 0 else Decimal(0)
             )
             max_daily_gain = (
                 max(m.total_pnl for m in relevant_metrics.values())
                 if relevant_metrics
-                else Decimal("0")
+                else Decimal(0)
             )
             max_daily_loss = (
                 min(m.total_pnl for m in relevant_metrics.values())
                 if relevant_metrics
-                else Decimal("0")
+                else Decimal(0)
             )
 
             # Win rate across all trades
@@ -1604,12 +1620,12 @@ class PaperTradingAccount:
 
         return f"""
 🗓️  Daily Trading Report - {target_date}
-{'=' * 50}
+{"=" * 50}
 
 💰 Account Status:
    Starting Balance: ${metrics.starting_balance:,.2f}
    Ending Balance:   ${metrics.ending_balance:,.2f}
-   Current Equity:   ${account_status['equity']:,.2f}
+   Current Equity:   ${account_status["equity"]:,.2f}
    Daily P&L:        ${metrics.total_pnl:,.2f}
 
 📊 Trading Activity:
@@ -1622,11 +1638,11 @@ class PaperTradingAccount:
    Largest Win:      ${metrics.largest_win:.2f}
    Largest Loss:     ${metrics.largest_loss:.2f}
    Drawdown:         {metrics.drawdown:.2f}%
-   ROI (Total):      {account_status['roi_percent']:.2f}%
+   ROI (Total):      {account_status["roi_percent"]:.2f}%
 
-🔄 Open Positions:   {account_status['open_positions']}
-💸 Margin Used:      ${account_status['margin_used']:,.2f}
-💳 Available:        ${account_status['margin_available']:,.2f}
+🔄 Open Positions:   {account_status["open_positions"]}
+💸 Margin Used:      ${account_status["margin_used"]:,.2f}
+💳 Available:        ${account_status["margin_available"]:,.2f}
 """
 
     def _save_state(self) -> None:
@@ -1713,14 +1729,13 @@ class PaperTradingAccount:
                         try:
                             if isinstance(obj, datetime):
                                 return obj.isoformat()
-                            elif isinstance(obj, Decimal):
+                            if isinstance(obj, Decimal):
                                 return str(obj)
-                            elif obj is None:
+                            if obj is None:
                                 return None
-                            else:
-                                # Test if object is JSON serializable
-                                json.dumps(obj)
-                                return obj
+                            # Test if object is JSON serializable
+                            json.dumps(obj)
+                            return obj
                         except (TypeError, ValueError) as e:
                             logger.warning(
                                 "⚠️ Serialization issue with %s '%s': %s",
@@ -1733,10 +1748,9 @@ class PaperTradingAccount:
                     def serialize_dict(d):
                         if isinstance(d, dict):
                             return {k: serialize_dict(v) for k, v in d.items()}
-                        elif isinstance(d, list):
+                        if isinstance(d, list):
                             return [serialize_dict(item) for item in d]
-                        else:
-                            return serialize_value(d)
+                        return serialize_value(d)
 
                     trades_data = serialize_dict(trades_data)
 
@@ -1808,8 +1822,11 @@ class PaperTradingAccount:
                 for temp_file in self.data_dir.glob("*.tmp"):
                     try:
                         temp_file.unlink()
-                    except Exception:
-                        pass  # Ignore cleanup errors
+                    except Exception as e:
+                        # Log cleanup errors but don't fail the save operation
+                        logger.debug(
+                            "Failed to clean up temporary file %s: %s", temp_file, e
+                        )
 
             except OSError:
                 # IO-specific errors (permissions, disk space, etc.)
@@ -2105,17 +2122,17 @@ class PaperTradingAccount:
     def reset_account(self, new_balance: Decimal | None = None) -> None:
         """Reset the paper trading account."""
         with self._lock:
-            self.starting_balance = new_balance or Decimal("10000")
+            self.starting_balance = new_balance or Decimal(10000)
             self.current_balance = self.starting_balance
             self.equity = self.starting_balance
-            self.margin_used = Decimal("0")
+            self.margin_used = Decimal(0)
             self.open_trades.clear()
             self.closed_trades.clear()
             self.daily_metrics.clear()
             self.trade_counter = 0
             self.session_start_time = datetime.now(UTC)
             self.peak_equity = self.starting_balance
-            self.max_drawdown = Decimal("0")
+            self.max_drawdown = Decimal(0)
 
             self._save_state()
             logger.info("Paper trading account reset to $%.2f", self.starting_balance)

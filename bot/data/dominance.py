@@ -202,11 +202,10 @@ class DominanceDataProvider:
         try:
             if self.data_source == "coingecko":
                 return await self._fetch_coingecko_dominance()
-            elif self.data_source == "coinmarketcap":
+            if self.data_source == "coinmarketcap":
                 return await self._fetch_coinmarketcap_dominance()
-            else:
-                logger.error("Unsupported data source: %s", self.data_source)
-                return None
+            logger.error("Unsupported data source: %s", self.data_source)
+            return None
 
         except Exception as e:
             logger.exception("Error fetching dominance data: %s", e)
@@ -469,34 +468,38 @@ class DominanceDataProvider:
                 return
 
             # Create DataFrame with clean data
-            df = pd.DataFrame({"dominance": dominance_values})
+            dominance_df = pd.DataFrame({"dominance": dominance_values})
 
             # Calculate 20-period SMA
-            df["sma_20"] = df["dominance"].rolling(window=20).mean()
+            dominance_df["sma_20"] = dominance_df["dominance"].rolling(window=20).mean()
 
             # Calculate RSI
-            df["change"] = df["dominance"].diff()
-            df["gain"] = df["change"].where(df["change"] > 0, 0)
-            df["loss"] = -df["change"].where(df["change"] < 0, 0)
+            dominance_df["change"] = dominance_df["dominance"].diff()
+            dominance_df["gain"] = dominance_df["change"].where(
+                dominance_df["change"] > 0, 0
+            )
+            dominance_df["loss"] = -dominance_df["change"].where(
+                dominance_df["change"] < 0, 0
+            )
 
-            avg_gain = df["gain"].rolling(window=14).mean()
-            avg_loss = df["loss"].rolling(window=14).mean()
+            avg_gain = dominance_df["gain"].rolling(window=14).mean()
+            avg_loss = dominance_df["loss"].rolling(window=14).mean()
 
             # Prevent division by zero in RSI calculation
             rs = avg_gain / avg_loss.replace(0, 1e-8)
-            df["rsi"] = 100 - (100 / (1 + rs))
+            dominance_df["rsi"] = 100 - (100 / (1 + rs))
 
             # Update latest entry with indicators
             if len(self._dominance_cache) > 0:
                 latest = self._dominance_cache[-1]
                 latest.dominance_sma_20 = (
-                    float(df["sma_20"].iloc[-1])
-                    if not pd.isna(df["sma_20"].iloc[-1])
+                    float(dominance_df["sma_20"].iloc[-1])
+                    if not pd.isna(dominance_df["sma_20"].iloc[-1])
                     else None
                 )
                 latest.dominance_rsi = (
-                    float(df["rsi"].iloc[-1])
-                    if not pd.isna(df["rsi"].iloc[-1])
+                    float(dominance_df["rsi"].iloc[-1])
+                    if not pd.isna(dominance_df["rsi"].iloc[-1])
                     else None
                 )
 
@@ -833,7 +836,7 @@ class DominanceCandleBuilder:
             Volume as change in market cap from start to end of interval
         """
         if not group_snapshots or len(group_snapshots) < 2:
-            return Decimal("0")
+            return Decimal(0)
 
         # Sort by timestamp to ensure correct start/end
         sorted_snapshots = sorted(group_snapshots, key=lambda x: x.timestamp)
@@ -1166,10 +1169,9 @@ class DominanceCandleBuilder:
             # Determine overall signal
             if bullish_signals > bearish_signals:
                 return "BULLISH"
-            elif bearish_signals > bullish_signals:
+            if bearish_signals > bullish_signals:
                 return "BEARISH"
-            else:
-                return "NEUTRAL"
+            return "NEUTRAL"
 
         except Exception as e:
             logger.exception("Error determining trend signal: %s", e)
@@ -1254,7 +1256,7 @@ class DominanceCandleBuilder:
 
             # Previous period: fast was above slow
             # Current period: fast is below slow -> Bearish crossover
-            elif (
+            if (
                 prev_candle.ema_fast is not None
                 and prev_candle.ema_slow is not None
                 and curr_candle.ema_fast is not None
@@ -1426,7 +1428,7 @@ class DominanceCandleBuilder:
                     }
 
                 # Bearish divergence: Price rising, RSI declining
-                elif recent_price_trend > 0 and recent_rsi_trend < 0:
+                if recent_price_trend > 0 and recent_rsi_trend < 0:
                     return {
                         "type": "BEARISH",
                         "strength": abs(correlation) * 100,
@@ -2207,10 +2209,9 @@ class DominanceCandleBuilder:
 
             if slope > 0.01:  # Threshold for significant uptrend
                 return "UPTREND"
-            elif slope < -0.01:  # Threshold for significant downtrend
+            if slope < -0.01:  # Threshold for significant downtrend
                 return "DOWNTREND"
-            else:
-                return "SIDEWAYS"
+            return "SIDEWAYS"
 
         except Exception as e:
             logger.exception("Error determining overall trend: %s", e)
@@ -2285,7 +2286,7 @@ def test_dominance_candlestick_functionality():
                 0.1, min(99.9, base_dominance + trend + dominance_change)
             )
 
-            market_cap_base = Decimal("150000000000")  # $150B base
+            market_cap_base = Decimal(150000000000)  # $150B base
             market_cap_change = Decimal(
                 str(np.random.normal(0, 1000000000))
             )  # ±$1B variation
@@ -2436,7 +2437,9 @@ def test_dominance_candlestick_functionality():
             print("   ✓ CSV Export successful")
             print(f"   ✓ Header: {lines[0]}")
             print(f"   ✓ Sample data line: {lines[1] if len(lines) > 1 else 'No data'}")
-            print(f"   ✓ Total lines: {len(lines)} (header + {len(lines)-1} data rows)")
+            print(
+                f"   ✓ Total lines: {len(lines)} (header + {len(lines) - 1} data rows)"
+            )
 
             # Validate CSV format
             if len(lines) > 1:
@@ -2493,7 +2496,7 @@ def test_dominance_candlestick_functionality():
         large_snapshots = []
         for i in range(1000):
             dominance = 8.5 + np.random.normal(0, 0.5)
-            market_cap = Decimal("150000000000") + Decimal(
+            market_cap = Decimal(150000000000) + Decimal(
                 str(np.random.normal(0, 5000000000))
             )
 

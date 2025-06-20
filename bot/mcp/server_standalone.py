@@ -154,11 +154,13 @@ async def main() -> None:
     """Main entry point for standalone server."""
     logger.info("Starting MCP Memory Server...")
 
-    # Get port from environment
+    # Get configuration from environment
     port = int(os.getenv("MCP_SERVER_PORT", "8765"))
+    # Default to localhost for security, allow override for containerized deployments
+    host = os.getenv("MCP_SERVER_HOST", "127.0.0.1")
 
     # Run server
-    config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="info")
+    config = uvicorn.Config(app, host=host, port=port, log_level="info")
     server = uvicorn.Server(config)
 
     logger.info("MCP Memory Server starting on port %s", port)

@@ -274,11 +274,10 @@ class CoinbaseResponseValidator:
             for field in required_fields:
                 if hasattr(order_data, field):
                     continue  # Object format
-                elif isinstance(order_data, dict) and field in order_data:
+                if isinstance(order_data, dict) and field in order_data:
                     continue  # Dict format
-                else:
-                    logger.warning("Order response missing required field: %s", field)
-                    return False
+                logger.warning("Order response missing required field: %s", field)
+                return False
 
             # Validate order status
             if hasattr(order_data, "status"):
@@ -792,7 +791,7 @@ class CoinbaseClient(BaseExchange):
         self._futures_contract_manager: Any | None = None
 
         # Volume tracking for fee tiers
-        self._monthly_volume = Decimal("0")
+        self._monthly_volume = Decimal(0)
         self._last_volume_check: datetime | None = None
         self._volume_check_interval = timedelta(hours=1)
 
@@ -1070,9 +1069,9 @@ class CoinbaseClient(BaseExchange):
             # Return mock responses for common methods
             if "get_accounts" in func.__name__:
                 return {"accounts": []}
-            elif "get_portfolios" in func.__name__:
+            if "get_portfolios" in func.__name__:
                 return {"portfolios": []}
-            elif "get_fcm_balance_summary" in func.__name__:
+            if "get_fcm_balance_summary" in func.__name__:
                 return {
                     "balance_summary": {
                         "cbi_usd_balance": {"value": "10000.00"},
@@ -1084,9 +1083,9 @@ class CoinbaseClient(BaseExchange):
                         "futures_buying_power": {"value": "10000.00"},
                     }
                 }
-            elif "list_futures_positions" in func.__name__:
+            if "list_futures_positions" in func.__name__:
                 return {"positions": []}
-            elif "get_products" in func.__name__:
+            if "get_products" in func.__name__:
                 # Mock futures contracts for paper trading
                 return {
                     "products": [
@@ -1106,8 +1105,7 @@ class CoinbaseClient(BaseExchange):
                         },
                     ]
                 }
-            else:
-                return {}
+            return {}
 
         last_exception = None
 
@@ -1389,17 +1387,16 @@ class CoinbaseClient(BaseExchange):
                 logger.info("Action is HOLD - no trade executed")
                 return None
 
-            elif trade_action.action == "CLOSE":
+            if trade_action.action == "CLOSE":
                 return await self._close_position(actual_symbol)
 
-            elif trade_action.action in ["LONG", "SHORT"]:
+            if trade_action.action in ["LONG", "SHORT"]:
                 return await self._open_position(
                     trade_action, actual_symbol, current_price
                 )
 
-            else:
-                logger.error("Unknown action: %s", trade_action.action)
-                return None
+            logger.error("Unknown action: %s", trade_action.action)
+            return None
 
         except Exception:
             logger.exception("Failed to execute trade action")
@@ -1425,10 +1422,7 @@ class CoinbaseClient(BaseExchange):
                 return await self._open_futures_position(
                     trade_action, symbol, current_price
                 )
-            else:
-                return await self._open_spot_position(
-                    trade_action, symbol, current_price
-                )
+            return await self._open_spot_position(trade_action, symbol, current_price)
         except Exception:
             logger.exception("Failed to open position")
             return None
@@ -1477,7 +1471,7 @@ class CoinbaseClient(BaseExchange):
                 # FIXED: Always trade exactly 1 contract
                 num_contracts = 1
                 quantity = Decimal(
-                    "1"
+                    1
                 )  # For CDE contracts, quantity is the number of contracts
                 logger.info("Futures contract %s: FIXED 1 contract (0.1 ETH)", symbol)
             else:
@@ -1499,7 +1493,7 @@ class CoinbaseClient(BaseExchange):
             # Check CFM balance and transfer if needed
             if futures_account.futures_balance < margin_required:
                 transfer_amount = (
-                    margin_required - futures_account.futures_balance + Decimal("10")
+                    margin_required - futures_account.futures_balance + Decimal(10)
                 )  # Add buffer
                 logger.info(
                     "CFM balance $%.2f < margin required $%.2f. "
@@ -1536,7 +1530,7 @@ class CoinbaseClient(BaseExchange):
 
             # Determine order side
             side = cast(
-                Literal["BUY", "SELL"],
+                "Literal['BUY', 'SELL']",
                 "BUY" if trade_action.action == "LONG" else "SELL",
             )
 
@@ -1632,7 +1626,7 @@ class CoinbaseClient(BaseExchange):
 
         # Determine order side (BUY/SELL for spot)
         side = cast(
-            Literal["BUY", "SELL"], "BUY" if trade_action.action == "LONG" else "SELL"
+            "Literal['BUY', 'SELL']", "BUY" if trade_action.action == "LONG" else "SELL"
         )
 
         # Place market order
@@ -1700,7 +1694,7 @@ class CoinbaseClient(BaseExchange):
 
         # Determine opposite side
         side = cast(
-            Literal["BUY", "SELL"], "SELL" if position.side == "LONG" else "BUY"
+            "Literal['BUY', 'SELL']", "SELL" if position.side == "LONG" else "BUY"
         )
 
         # Place market order to close
@@ -1730,7 +1724,7 @@ class CoinbaseClient(BaseExchange):
             return Order(
                 id=f"paper_{int(datetime.now(UTC).timestamp() * 1000)}",
                 symbol=symbol,
-                side=cast(Literal["BUY", "SELL"], side),
+                side=cast("Literal['BUY', 'SELL']", side),
                 type="MARKET",
                 quantity=quantity,
                 status=OrderStatus.FILLED,
@@ -1801,17 +1795,17 @@ class CoinbaseClient(BaseExchange):
                         id=order_id
                         or f"cb_{int(datetime.now(UTC).timestamp() * 1000)}",
                         symbol=symbol,
-                        side=cast(Literal["BUY", "SELL"], side),
+                        side=cast("Literal['BUY', 'SELL']", side),
                         type="MARKET",
                         quantity=quantity,
                         status=OrderStatus.PENDING,
                         timestamp=datetime.now(UTC),
-                        filled_quantity=Decimal("0"),
+                        filled_quantity=Decimal(0),
                     )
 
                     logger.info("Market order placed successfully: %s", order_id)
                     return order
-                elif hasattr(result, "order_id"):
+                if hasattr(result, "order_id"):
                     # Fallback for old format
                     order_id = result.order_id
 
@@ -1819,17 +1813,17 @@ class CoinbaseClient(BaseExchange):
                         id=order_id
                         or f"cb_{int(datetime.now(UTC).timestamp() * 1000)}",
                         symbol=symbol,
-                        side=cast(Literal["BUY", "SELL"], side),
+                        side=cast("Literal['BUY', 'SELL']", side),
                         type="MARKET",
                         quantity=quantity,
                         status=OrderStatus.PENDING,
                         timestamp=datetime.now(UTC),
-                        filled_quantity=Decimal("0"),
+                        filled_quantity=Decimal(0),
                     )
 
                     logger.info("Market order placed successfully: %s", order_id)
                     return order
-                elif isinstance(result, dict) and result.get("success"):
+                if isinstance(result, dict) and result.get("success"):
                     order_info = result.get("order", {})
                     order_id = order_info.get("order_id")
 
@@ -1837,20 +1831,19 @@ class CoinbaseClient(BaseExchange):
                         id=order_id
                         or f"cb_{int(datetime.now(UTC).timestamp() * 1000)}",
                         symbol=symbol,
-                        side=cast(Literal["BUY", "SELL"], side),
+                        side=cast("Literal['BUY', 'SELL']", side),
                         type="MARKET",
                         quantity=quantity,
                         status=OrderStatus.PENDING,
                         timestamp=datetime.now(UTC),
-                        filled_quantity=Decimal("0"),
+                        filled_quantity=Decimal(0),
                     )
 
                     logger.info("Market order placed successfully: %s", order_id)
                     return order
-                else:
-                    error_msg = str(result) if result else "Unknown error"
-                    logger.error("Order placement failed: %s", error_msg)
-                    raise ExchangeOrderError(f"Order placement failed: {error_msg}")
+                error_msg = str(result) if result else "Unknown error"
+                logger.error("Order placement failed: %s", error_msg)
+                raise ExchangeOrderError(f"Order placement failed: {error_msg}")
             except AttributeError as e:
                 logger.exception("Error parsing order response")
                 logger.exception(
@@ -1863,8 +1856,7 @@ class CoinbaseClient(BaseExchange):
         except CoinbaseAPIException as e:
             if "insufficient funds" in str(e).lower():
                 raise ExchangeInsufficientFundsError(f"Insufficient funds: {e}") from e
-            else:
-                raise ExchangeOrderError(f"API error: {e}") from e
+            raise ExchangeOrderError(f"API error: {e}") from e
         except Exception as e:
             logger.exception("Failed to place market order")
             logger.debug("Market order error traceback: %s", traceback.format_exc())
@@ -1900,7 +1892,7 @@ class CoinbaseClient(BaseExchange):
             return Order(
                 id=f"paper_limit_{int(datetime.now(UTC).timestamp() * 1000)}",
                 symbol=symbol,
-                side=cast(Literal["BUY", "SELL"], side),
+                side=cast("Literal['BUY', 'SELL']", side),
                 type="LIMIT",
                 quantity=quantity,
                 price=price,
@@ -1956,29 +1948,25 @@ class CoinbaseClient(BaseExchange):
                     id=order_id
                     or f"cb_limit_{int(datetime.now(UTC).timestamp() * 1000)}",
                     symbol=symbol,
-                    side=cast(Literal["BUY", "SELL"], side),
+                    side=cast("Literal['BUY', 'SELL']", side),
                     type="LIMIT",
                     quantity=quantity,
                     price=price,
                     status=OrderStatus.OPEN,
                     timestamp=datetime.now(UTC),
-                    filled_quantity=Decimal("0"),
+                    filled_quantity=Decimal(0),
                 )
 
                 logger.info("Limit order placed successfully: %s", order_id)
                 return order
-            else:
-                error_msg = result.get("error_response", {}).get(
-                    "message", "Unknown error"
-                )
-                logger.error("Limit order placement failed: %s", error_msg)
-                raise ExchangeOrderError(f"Limit order placement failed: {error_msg}")
+            error_msg = result.get("error_response", {}).get("message", "Unknown error")
+            logger.error("Limit order placement failed: %s", error_msg)
+            raise ExchangeOrderError(f"Limit order placement failed: {error_msg}")
 
         except CoinbaseAPIException as e:
             if "insufficient funds" in str(e).lower():
                 raise ExchangeInsufficientFundsError(f"Insufficient funds: {e}") from e
-            else:
-                raise ExchangeOrderError(f"API error: {e}") from e
+            raise ExchangeOrderError(f"API error: {e}") from e
         except Exception as e:
             logger.exception("Failed to place limit order")
             logger.debug("Limit order error traceback: %s", traceback.format_exc())
@@ -2003,10 +1991,10 @@ class CoinbaseClient(BaseExchange):
 
         if base_order.side == "BUY":  # Long position
             stop_price = current_price * (1 - Decimal(str(sl_pct)))
-            side = cast(Literal["BUY", "SELL"], "SELL")
+            side = cast("Literal['BUY', 'SELL']", "SELL")
         else:  # Short position
             stop_price = current_price * (1 + Decimal(str(sl_pct)))
-            side = cast(Literal["BUY", "SELL"], "BUY")
+            side = cast("Literal['BUY', 'SELL']", "BUY")
 
         return await self._place_stop_order(
             symbol=base_order.symbol,
@@ -2034,10 +2022,10 @@ class CoinbaseClient(BaseExchange):
 
         if base_order.side == "BUY":  # Long position
             limit_price = current_price * (1 + Decimal(str(tp_pct)))
-            side = cast(Literal["BUY", "SELL"], "SELL")
+            side = cast("Literal['BUY', 'SELL']", "SELL")
         else:  # Short position
             limit_price = current_price * (1 - Decimal(str(tp_pct)))
-            side = cast(Literal["BUY", "SELL"], "BUY")
+            side = cast("Literal['BUY', 'SELL']", "BUY")
 
         return await self.place_limit_order(
             symbol=base_order.symbol,
@@ -2076,7 +2064,7 @@ class CoinbaseClient(BaseExchange):
             return Order(
                 id=f"paper_stop_{int(datetime.now(UTC).timestamp() * 1000)}",
                 symbol=symbol,
-                side=cast(Literal["BUY", "SELL"], side),
+                side=cast("Literal['BUY', 'SELL']", side),
                 type="STOP",
                 quantity=quantity,
                 stop_price=stop_price,
@@ -2154,30 +2142,26 @@ class CoinbaseClient(BaseExchange):
                     id=order_id
                     or f"cb_stop_{int(datetime.now(UTC).timestamp() * 1000)}",
                     symbol=symbol,
-                    side=cast(Literal["BUY", "SELL"], side),
+                    side=cast("Literal['BUY', 'SELL']", side),
                     type="STOP_LIMIT",
                     quantity=quantity,
                     price=Decimal(str(limit_price_float)),
                     stop_price=Decimal(str(stop_price_float)),
                     status=OrderStatus.OPEN,
                     timestamp=datetime.now(UTC),
-                    filled_quantity=Decimal("0"),
+                    filled_quantity=Decimal(0),
                 )
 
                 logger.info("Stop order placed successfully: %s", order_id)
                 return order
-            else:
-                error_msg = result.get("error_response", {}).get(
-                    "message", "Unknown error"
-                )
-                logger.error("Stop order placement failed: %s", error_msg)
-                raise ExchangeOrderError(f"Stop order placement failed: {error_msg}")
+            error_msg = result.get("error_response", {}).get("message", "Unknown error")
+            logger.error("Stop order placement failed: %s", error_msg)
+            raise ExchangeOrderError(f"Stop order placement failed: {error_msg}")
 
         except CoinbaseAPIException as e:
             if "insufficient funds" in str(e).lower():
                 raise ExchangeInsufficientFundsError(f"Insufficient funds: {e}") from e
-            else:
-                raise ExchangeOrderError(f"API error: {e}") from e
+            raise ExchangeOrderError(f"API error: {e}") from e
         except Exception as e:
             logger.exception("Failed to place stop order")
             logger.debug("Stop order error traceback: %s", traceback.format_exc())
@@ -2216,7 +2200,7 @@ class CoinbaseClient(BaseExchange):
             return Order(
                 id=f"paper_futures_{int(datetime.now(UTC).timestamp() * 1000)}",
                 symbol=symbol,
-                side=cast(Literal["BUY", "SELL"], side),
+                side=cast("Literal['BUY', 'SELL']", side),
                 type="MARKET",
                 quantity=quantity,
                 status=OrderStatus.FILLED,
@@ -2298,19 +2282,19 @@ class CoinbaseClient(BaseExchange):
                         id=order_id
                         or f"cb_futures_{int(datetime.now(UTC).timestamp() * 1000)}",
                         symbol=symbol,
-                        side=cast(Literal["BUY", "SELL"], side),
+                        side=cast("Literal['BUY', 'SELL']", side),
                         type="MARKET",
                         quantity=quantity,
                         status=OrderStatus.PENDING,
                         timestamp=datetime.now(UTC),
-                        filled_quantity=Decimal("0"),
+                        filled_quantity=Decimal(0),
                     )
 
                     logger.info(
                         "Futures market order placed successfully: %s", order_id
                     )
                     return order
-                elif hasattr(result, "order_id"):
+                if hasattr(result, "order_id"):
                     # Fallback for old format
                     order_id = result.order_id
 
@@ -2318,19 +2302,19 @@ class CoinbaseClient(BaseExchange):
                         id=order_id
                         or f"cb_futures_{int(datetime.now(UTC).timestamp() * 1000)}",
                         symbol=symbol,
-                        side=cast(Literal["BUY", "SELL"], side),
+                        side=cast("Literal['BUY', 'SELL']", side),
                         type="MARKET",
                         quantity=quantity,
                         status=OrderStatus.PENDING,
                         timestamp=datetime.now(UTC),
-                        filled_quantity=Decimal("0"),
+                        filled_quantity=Decimal(0),
                     )
 
                     logger.info(
                         "Futures market order placed successfully: %s", order_id
                     )
                     return order
-                elif isinstance(result, dict) and result.get("success"):
+                if isinstance(result, dict) and result.get("success"):
                     order_info = result.get("order", {})
                     order_id = order_info.get("order_id")
 
@@ -2338,24 +2322,21 @@ class CoinbaseClient(BaseExchange):
                         id=order_id
                         or f"cb_futures_{int(datetime.now(UTC).timestamp() * 1000)}",
                         symbol=symbol,
-                        side=cast(Literal["BUY", "SELL"], side),
+                        side=cast("Literal['BUY', 'SELL']", side),
                         type="MARKET",
                         quantity=quantity,
                         status=OrderStatus.PENDING,
                         timestamp=datetime.now(UTC),
-                        filled_quantity=Decimal("0"),
+                        filled_quantity=Decimal(0),
                     )
 
                     logger.info(
                         "Futures market order placed successfully: %s", order_id
                     )
                     return order
-                else:
-                    error_msg = str(result) if result else "Unknown error"
-                    logger.error("Futures order placement failed: %s", error_msg)
-                    raise ExchangeOrderError(
-                        f"Futures order placement failed: {error_msg}"
-                    )
+                error_msg = str(result) if result else "Unknown error"
+                logger.error("Futures order placement failed: %s", error_msg)
+                raise ExchangeOrderError(f"Futures order placement failed: {error_msg}")
             except AttributeError as e:
                 logger.exception("Error parsing order response")
                 logger.exception(
@@ -2373,8 +2354,7 @@ class CoinbaseClient(BaseExchange):
                 raise ExchangeInsufficientFundsError(
                     f"Insufficient margin for futures order: {e}"
                 ) from e
-            else:
-                raise ExchangeOrderError(f"Futures API error: {e}") from e
+            raise ExchangeOrderError(f"Futures API error: {e}") from e
         except Exception as e:
             logger.exception("Failed to place futures market order")
             logger.debug(
@@ -2412,17 +2392,16 @@ class CoinbaseClient(BaseExchange):
             if self.enable_futures and account_type == AccountType.CFM:
                 futures_balance = await self.get_futures_balance()
                 return self._normalize_balance(futures_balance)
-            elif account_type == AccountType.CBI:
+            if account_type == AccountType.CBI:
                 spot_balance = await self.get_spot_balance()
                 return self._normalize_balance(spot_balance)
-            else:
-                # Get total balance across all accounts
-                spot_balance = await self.get_spot_balance()
-                if self.enable_futures:
-                    futures_balance = await self.get_futures_balance()
-                    total_balance = spot_balance + futures_balance
-                    return self._normalize_balance(total_balance)
-                return self._normalize_balance(spot_balance)
+            # Get total balance across all accounts
+            spot_balance = await self.get_spot_balance()
+            if self.enable_futures:
+                futures_balance = await self.get_futures_balance()
+                total_balance = spot_balance + futures_balance
+                return self._normalize_balance(total_balance)
+            return self._normalize_balance(spot_balance)
 
         except (
             BalanceRetrievalError,
@@ -2478,7 +2457,7 @@ class CoinbaseClient(BaseExchange):
                 )
 
             # Find USD balance in spot accounts
-            total_balance = Decimal("0")
+            total_balance = Decimal(0)
             for account in accounts_data.get("accounts", []):
                 if (
                     account.get("currency") == "USD"
@@ -2504,7 +2483,7 @@ class CoinbaseClient(BaseExchange):
                         ) from decimal_err
 
             # Validate final balance
-            if total_balance < Decimal("0"):
+            if total_balance < Decimal(0):
                 logger.warning("Retrieved negative spot balance: $%s", total_balance)
 
             logger.debug("Retrieved spot USD balance: %s", total_balance)
@@ -2619,7 +2598,7 @@ class CoinbaseClient(BaseExchange):
                 )
 
             # Validate balance value
-            if futures_balance < Decimal("0"):
+            if futures_balance < Decimal(0):
                 logger.warning(
                     "Retrieved negative futures balance: $%s", futures_balance
                 )
@@ -2683,7 +2662,7 @@ class CoinbaseClient(BaseExchange):
                     account_type="CFM",
                 )
 
-            total_balance = Decimal("0")
+            total_balance = Decimal(0)
             for account in accounts_data.get("accounts", []):
                 if (
                     account.get("currency") == "USD"
@@ -2786,8 +2765,8 @@ class CoinbaseClient(BaseExchange):
                 total_balance=total_balance,
                 margin_info=margin_info,
                 auto_cash_transfer_enabled=self.auto_cash_transfer,
-                min_cash_transfer_amount=Decimal("100"),
-                max_cash_transfer_amount=Decimal("10000"),
+                min_cash_transfer_amount=Decimal(100),
+                max_cash_transfer_amount=Decimal(10000),
                 max_leverage=self.max_futures_leverage,
                 max_position_size=total_balance
                 * Decimal(str(settings.trading.max_size_pct / 100)),
@@ -2898,16 +2877,16 @@ class CoinbaseClient(BaseExchange):
             logger.exception("Failed to get margin info")
             # Return default margin info
             return MarginInfo(
-                total_margin=Decimal("0"),
-                available_margin=Decimal("0"),
-                used_margin=Decimal("0"),
-                maintenance_margin=Decimal("0"),
-                initial_margin=Decimal("0"),
+                total_margin=Decimal(0),
+                available_margin=Decimal(0),
+                used_margin=Decimal(0),
+                maintenance_margin=Decimal(0),
+                initial_margin=Decimal(0),
                 margin_ratio=0.0,
                 health_status=MarginHealthStatus.HEALTHY,
-                liquidation_threshold=Decimal("0"),
-                intraday_margin_requirement=Decimal("0"),
-                overnight_margin_requirement=Decimal("0"),
+                liquidation_threshold=Decimal(0),
+                intraday_margin_requirement=Decimal(0),
+                overnight_margin_requirement=Decimal(0),
             )
 
     async def transfer_cash_to_futures(
@@ -2955,8 +2934,9 @@ class CoinbaseClient(BaseExchange):
                 try:
                     await self._retry_request(self._client.cancel_pending_futures_sweep)
                     logger.debug("Cancelled pending futures sweep")
-                except Exception:
-                    pass  # Ignore if no pending sweep
+                except Exception as e:
+                    # Log but ignore if no pending sweep exists
+                    logger.debug("No pending futures sweep to cancel: %s", e)
 
                 # Schedule a new sweep
                 await self._retry_request(
@@ -3055,12 +3035,12 @@ class CoinbaseClient(BaseExchange):
                         size=size,
                         entry_price=avg_entry_price,
                         unrealized_pnl=unrealized_pnl,
-                        realized_pnl=Decimal("0"),  # Not provided in API
+                        realized_pnl=Decimal(0),  # Not provided in API
                         timestamp=datetime.now(UTC),
                         is_futures=True,
                         leverage=self.max_futures_leverage,  # Actual leverage not in response
-                        margin_used=Decimal("0"),  # Calculate from position if needed
-                        liquidation_price=Decimal("0"),  # Not provided directly
+                        margin_used=Decimal(0),  # Calculate from position if needed
+                        liquidation_price=Decimal(0),  # Not provided directly
                         margin_health=MarginHealthStatus.HEALTHY,  # Would calculate based on margin
                     )
                     positions.append(position)
@@ -3114,9 +3094,9 @@ class CoinbaseClient(BaseExchange):
                         size=abs(balance),
                         entry_price=None,  # Would need additional API call to get this
                         unrealized_pnl=Decimal(
-                            "0"
+                            0
                         ),  # Would need market data to calculate
-                        realized_pnl=Decimal("0"),
+                        realized_pnl=Decimal(0),
                         timestamp=datetime.now(UTC),
                     )
                     positions.append(position)
@@ -3365,7 +3345,7 @@ class CoinbaseClient(BaseExchange):
             else Position(
                 symbol=symbol,
                 side="FLAT",
-                size=Decimal("0"),
+                size=Decimal(0),
                 timestamp=datetime.now(UTC),
             )
         )
@@ -3375,7 +3355,7 @@ class CoinbaseClient(BaseExchange):
     ) -> Order | None:
         """Legacy method for backward compatibility."""
         return await self.place_market_order(
-            symbol, cast(Literal["BUY", "SELL"], side), quantity
+            symbol, cast("Literal['BUY', 'SELL']", side), quantity
         )
 
     async def _place_limit_order(
@@ -3383,7 +3363,7 @@ class CoinbaseClient(BaseExchange):
     ) -> Order | None:
         """Legacy method for backward compatibility."""
         return await self.place_limit_order(
-            symbol, cast(Literal["BUY", "SELL"], side), quantity, price
+            symbol, cast("Literal['BUY', 'SELL']", side), quantity, price
         )
 
     @property
@@ -3408,7 +3388,7 @@ class CoinbaseClient(BaseExchange):
         """
         if self.dry_run:
             # Return mock volume for paper trading
-            return Decimal("0")  # Basic tier
+            return Decimal(0)  # Basic tier
 
         # Check if we need to refresh volume
         now = datetime.now(UTC)
@@ -3427,7 +3407,7 @@ class CoinbaseClient(BaseExchange):
             # Get fills/trades for the period
             # Note: This is a simplified implementation. The actual Coinbase API
             # may require pagination for large trade histories
-            volume = Decimal("0")
+            volume = Decimal(0)
 
             try:
                 # Check if client is available
@@ -3452,7 +3432,7 @@ class CoinbaseClient(BaseExchange):
             except Exception as e:
                 logger.warning("Failed to get fills for volume calculation: %s", e)
                 # Fallback to basic tier
-                volume = Decimal("0")
+                volume = Decimal(0)
 
             self._monthly_volume = volume
             self._last_volume_check = now

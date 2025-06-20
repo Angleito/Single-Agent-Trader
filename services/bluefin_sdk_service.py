@@ -67,8 +67,7 @@ except ImportError:
         """Fallback endpoint resolver when centralized config is not available."""
         if network.lower() == "testnet":
             return "https://dapi.api.sui-staging.bluefin.io"
-        else:
-            return "https://dapi.api.sui-prod.bluefin.io"
+        return "https://dapi.api.sui-prod.bluefin.io"
 
     # Create fallback symbol utilities
     class BluefinSymbolConverter:
@@ -371,20 +370,19 @@ class BluefinSDKService:
 
         if "'data'" in error_str or "keyerror" in error_type:
             return "api_response_structure"
-        elif "timeout" in error_str or "timeout" in error_type:
+        if "timeout" in error_str or "timeout" in error_type:
             return "network_timeout"
-        elif "connection" in error_str or "connection" in error_type:
+        if "connection" in error_str or "connection" in error_type:
             return "network_connection"
-        elif "authentication" in error_str or "auth" in error_str:
+        if "authentication" in error_str or "auth" in error_str:
             return "authentication"
-        elif "rate" in error_str and "limit" in error_str:
+        if "rate" in error_str and "limit" in error_str:
             return "rate_limiting"
-        elif "balance" in error_str:
+        if "balance" in error_str:
             return "balance_specific"
-        elif "sdk" in error_str:
+        if "sdk" in error_str:
             return "sdk_internal"
-        else:
-            return "unknown"
+        return "unknown"
 
     def _get_actionable_error_message(self, error: Exception) -> str:
         """
@@ -403,16 +401,15 @@ class BluefinSDKService:
             return (
                 "Account may not be initialized on Bluefin. Try depositing funds first."
             )
-        elif "timeout" in error_str:
+        if "timeout" in error_str:
             return "Network request timed out. Check internet connection and try again."
-        elif "connection" in error_str:
+        if "connection" in error_str:
             return "Unable to connect to Bluefin network. Check network connectivity."
-        elif "authentication" in error_str or "auth" in error_str:
+        if "authentication" in error_str or "auth" in error_str:
             return "Authentication failed. Verify private key configuration."
-        elif "rate" in error_str and "limit" in error_str:
+        if "rate" in error_str and "limit" in error_str:
             return "Rate limit exceeded. Please wait before making another request."
-        else:
-            return "An unexpected error occurred. Check logs for details."
+        return "An unexpected error occurred. Check logs for details."
 
     def _classify_error(self, error: Exception) -> ErrorType:
         """
@@ -700,8 +697,7 @@ class BluefinSDKService:
 
         if last_exception:
             raise last_exception
-        else:
-            raise BluefinConnectionError(f"All retries exhausted for {operation_name}")
+        raise BluefinConnectionError(f"All retries exhausted for {operation_name}")
 
     def _get_market_symbol(self, symbol: str):
         """
@@ -984,8 +980,7 @@ class BluefinSDKService:
                         },
                     )
                     return base_symbol
-                else:
-                    return symbol.upper()
+                return symbol.upper()
             except Exception as fallback_err:
                 logger.exception(
                     "Even fallback normalization failed, returning original symbol",
@@ -1072,7 +1067,7 @@ class BluefinSDKService:
 
         if state == "OPEN":
             return True
-        elif state == "HALF_OPEN":
+        if state == "HALF_OPEN":
             if self.circuit_half_open_calls >= self.circuit_half_open_max_calls:
                 logger.warning(
                     "Circuit breaker HALF_OPEN call limit exceeded",
@@ -1137,7 +1132,7 @@ class BluefinSDKService:
                 self.failure_count = 0
                 self.circuit_half_open_calls = 0
                 # Reset failure type counters on successful recovery
-                self.failure_types = {key: 0 for key in self.failure_types}
+                self.failure_types = dict.fromkeys(self.failure_types, 0)
                 logger.info(
                     "Circuit breaker closed after successful recovery",
                     extra={"service_id": self.service_id},
@@ -1175,7 +1170,7 @@ class BluefinSDKService:
             self.failure_count = 0
             self.circuit_half_open_calls = 0
             # Reset failure type counters
-            self.failure_types = {key: 0 for key in self.failure_types}
+            self.failure_types = dict.fromkeys(self.failure_types, 0)
 
             logger.info(
                 "SDK service circuit breaker manually reset",
@@ -1192,29 +1187,28 @@ class BluefinSDKService:
                 },
             )
             return True
+        if self.circuit_state == "OPEN":
+            remaining_time = self.circuit_open_until - current_time
+            logger.warning(
+                "SDK circuit breaker reset not ready - %.1fs remaining",
+                remaining_time,
+                extra={
+                    "service_id": self.service_id,
+                    "remaining_seconds": remaining_time,
+                    "current_state": self.circuit_state,
+                    "use_force_to_override": True,
+                },
+            )
         else:
-            if self.circuit_state == "OPEN":
-                remaining_time = self.circuit_open_until - current_time
-                logger.warning(
-                    "SDK circuit breaker reset not ready - %.1fs remaining",
-                    remaining_time,
-                    extra={
-                        "service_id": self.service_id,
-                        "remaining_seconds": remaining_time,
-                        "current_state": self.circuit_state,
-                        "use_force_to_override": True,
-                    },
-                )
-            else:
-                logger.info(
-                    "SDK circuit breaker already in %s state",
-                    self.circuit_state,
-                    extra={
-                        "service_id": self.service_id,
-                        "current_state": self.circuit_state,
-                    },
-                )
-            return False
+            logger.info(
+                "SDK circuit breaker already in %s state",
+                self.circuit_state,
+                extra={
+                    "service_id": self.service_id,
+                    "current_state": self.circuit_state,
+                },
+            )
+        return False
 
     def get_circuit_breaker_status(self) -> dict[str, Any]:
         """
@@ -1717,35 +1711,33 @@ class BluefinSDKService:
                             )
                             await asyncio.sleep(delay)
                             continue
-                        else:
-                            # Non-retryable error
-                            logger.exception(
-                                "Non-retryable initialization error",
-                                extra={
-                                    "service_id": self.service_id,
-                                    "error_type": type(e).__name__,
-                                    "error_message": str(e),
-                                    "attempt": init_attempt + 1,
-                                    "non_retryable": True,
-                                },
-                            )
-                            raise BluefinAPIError(
-                                f"Failed to initialize Bluefin client: {e!s}"
-                            ) from e
-                    else:
-                        # Final attempt failed
-                        error_msg = f"Failed to initialize Bluefin client after {max_init_retries} attempts: {e!s}"
+                        # Non-retryable error
                         logger.exception(
-                            "All initialization attempts failed",
+                            "Non-retryable initialization error",
                             extra={
                                 "service_id": self.service_id,
                                 "error_type": type(e).__name__,
                                 "error_message": str(e),
-                                "total_attempts": max_init_retries,
-                                "traceback": traceback.format_exc(),
+                                "attempt": init_attempt + 1,
+                                "non_retryable": True,
                             },
                         )
-                        raise BluefinAPIError(error_msg) from e
+                        raise BluefinAPIError(
+                            f"Failed to initialize Bluefin client: {e!s}"
+                        ) from e
+                    # Final attempt failed
+                    error_msg = f"Failed to initialize Bluefin client after {max_init_retries} attempts: {e!s}"
+                    logger.exception(
+                        "All initialization attempts failed",
+                        extra={
+                            "service_id": self.service_id,
+                            "error_type": type(e).__name__,
+                            "error_message": str(e),
+                            "total_attempts": max_init_retries,
+                            "traceback": traceback.format_exc(),
+                        },
+                    )
+                    raise BluefinAPIError(error_msg) from e
 
             self.initialized = True
             logger.info(
@@ -2024,22 +2016,21 @@ class BluefinSDKService:
                                 )
                                 # Return a default balance structure for account not initialized
                                 return {"balance": 0, "amount": 0}
-                            else:
-                                # Log the error but re-raise for retry logic to handle
-                                logger.debug(
-                                    "SDK balance call failed, will be retried",
-                                    extra={
-                                        "service_id": self.service_id,
-                                        "correlation_id": correlation_id,
-                                        "sdk_error_type": error_type,
-                                        "sdk_error_message": error_str,
-                                        "operation": "get_usdc_balance",
-                                        "sdk_call_duration_ms": round(
-                                            sdk_call_duration * 1000, 2
-                                        ),
-                                    },
-                                )
-                                raise
+                            # Log the error but re-raise for retry logic to handle
+                            logger.debug(
+                                "SDK balance call failed, will be retried",
+                                extra={
+                                    "service_id": self.service_id,
+                                    "correlation_id": correlation_id,
+                                    "sdk_error_type": error_type,
+                                    "sdk_error_message": error_str,
+                                    "operation": "get_usdc_balance",
+                                    "sdk_call_duration_ms": round(
+                                        sdk_call_duration * 1000, 2
+                                    ),
+                                },
+                            )
+                            raise
 
                     # Execute with retry logic
                     balance_response = await self._retry_balance_operation(
@@ -2237,19 +2228,18 @@ class BluefinSDKService:
                             )
                             # Return a default margin structure for account not initialized
                             return {"available": 0, "used": 0, "total": 0}
-                        else:
-                            # Log the error but re-raise for retry logic to handle
-                            logger.debug(
-                                "SDK margin call failed, will be retried",
-                                extra={
-                                    "service_id": self.service_id,
-                                    "correlation_id": correlation_id,
-                                    "sdk_error_type": error_type,
-                                    "sdk_error_message": error_str,
-                                    "operation": "get_margin_bank_balance",
-                                },
-                            )
-                            raise
+                        # Log the error but re-raise for retry logic to handle
+                        logger.debug(
+                            "SDK margin call failed, will be retried",
+                            extra={
+                                "service_id": self.service_id,
+                                "correlation_id": correlation_id,
+                                "sdk_error_type": error_type,
+                                "sdk_error_message": error_str,
+                                "operation": "get_margin_bank_balance",
+                            },
+                        )
+                        raise
 
                 # Execute with retry logic
                 margin_response = await self._retry_balance_operation(
@@ -2395,7 +2385,7 @@ class BluefinSDKService:
                         )
                 return formatted_positions
             # If it's a single position dict
-            elif isinstance(position, dict):
+            if isinstance(position, dict):
                 # Log position symbol only for debugging
                 logger.debug(
                     "Processing position for symbol: %s",
@@ -2431,9 +2421,8 @@ class BluefinSDKService:
                         "side": side,
                     }
                 ]
-            else:
-                logger.warning("Unexpected position type: %s", type(position))
-                return []
+            logger.warning("Unexpected position type: %s", type(position))
+            return []
 
         except Exception:
             logger.exception("Error getting positions")
@@ -2486,10 +2475,9 @@ class BluefinSDKService:
                         "Normalized invalid symbol %s to %s", symbol, normalized
                     )
                     return normalized
-                else:
-                    raise BluefinDataError(
-                        f"Symbol {symbol} cannot be normalized to valid format"
-                    )
+                raise BluefinDataError(
+                    f"Symbol {symbol} cannot be normalized to valid format"
+                )
             except Exception as e:
                 raise BluefinDataError(
                     f"Symbol validation failed for {symbol}: {e}"
@@ -2609,10 +2597,9 @@ class BluefinSDKService:
                         source_name,
                     )
                     return candles
-                else:
-                    logger.warning(
-                        "❌ %s returned no data, trying next fallback", source_name
-                    )
+                logger.warning(
+                    "❌ %s returned no data, trying next fallback", source_name
+                )
 
             except Exception:
                 logger.exception(
@@ -2646,10 +2633,7 @@ class BluefinSDKService:
                         len(candles),
                     )
                     return candles
-                else:
-                    logger.warning(
-                        "⚠️ REST API attempt %s returned empty data", attempt + 1
-                    )
+                logger.warning("⚠️ REST API attempt %s returned empty data", attempt + 1)
 
             except Exception as e:
                 wait_time = base_delay * (2**attempt) + random.uniform(
@@ -2745,11 +2729,10 @@ class BluefinSDKService:
                             len(formatted_candles),
                         )
                         return formatted_candles
-                    else:
-                        logger.warning(
-                            "⚠️ SDK attempt %s - no valid candles after formatting",
-                            attempt + 1,
-                        )
+                    logger.warning(
+                        "⚠️ SDK attempt %s - no valid candles after formatting",
+                        attempt + 1,
+                    )
                 else:
                     logger.warning("⚠️ SDK attempt %s returned empty data", attempt + 1)
 
@@ -2921,15 +2904,14 @@ class BluefinSDKService:
         try:
             if interval.endswith("s"):
                 return int(interval[:-1])
-            elif interval.endswith("m"):
+            if interval.endswith("m"):
                 return int(interval[:-1]) * 60
-            elif interval.endswith("h"):
+            if interval.endswith("h"):
                 return int(interval[:-1]) * 3600
-            elif interval.endswith("d"):
+            if interval.endswith("d"):
                 return int(interval[:-1]) * 86400
-            else:
-                # Default to 60 seconds if format is unclear
-                return 60
+            # Default to 60 seconds if format is unclear
+            return 60
         except Exception:
             return 60
 
@@ -3158,25 +3140,23 @@ class BluefinSDKService:
                                 len(formatted_candles),
                             )
                             return formatted_candles
-                        else:
-                            logger.warning("No valid candles after formatting")
-                            return []
-                    elif response.status == 429:
+                        logger.warning("No valid candles after formatting")
+                        return []
+                    if response.status == 429:
                         retry_after = int(response.headers.get("Retry-After", "60"))
                         raise ClientError(f"Rate limited, retry after {retry_after}s")
-                    elif response.status >= 500:
+                    if response.status >= 500:
                         error_text = await response.text()
                         raise ClientError(
                             f"Server error {response.status}: {error_text}"
                         )
-                    else:
-                        error_text = await response.text()
-                        logger.error(
-                            "REST API call failed with status %s: %s",
-                            response.status,
-                            error_text,
-                        )
-                        return []
+                    error_text = await response.text()
+                    logger.error(
+                        "REST API call failed with status %s: %s",
+                        response.status,
+                        error_text,
+                    )
+                    return []
 
         try:
             # For real-time data, try multiple symbol formats if first fails
@@ -3215,9 +3195,8 @@ class BluefinSDKService:
                         result = await self._retry_request(_make_alternate_request)
 
                 return result
-            else:
-                # For historical data, just use the original request
-                return await self._retry_request(_make_request)
+            # For historical data, just use the original request
+            return await self._retry_request(_make_request)
         except Exception:
             logger.exception("Error in REST API call after retries")
             return []
@@ -3303,17 +3282,15 @@ class BluefinSDKService:
                             len(formatted_candles),
                         )
                         return formatted_candles
-                    else:
-                        logger.warning("No valid candles after formatting")
-                        return []
-
-                else:
-                    logger.error(
-                        "API request failed with status %s: %s",
-                        response.status,
-                        await response.text(),
-                    )
+                    logger.warning("No valid candles after formatting")
                     return []
+
+                logger.error(
+                    "API request failed with status %s: %s",
+                    response.status,
+                    await response.text(),
+                )
+                return []
 
 
 # Global service instance
@@ -3458,17 +3435,16 @@ async def validate_endpoint_connectivity(
                                 test_path,
                             )
                             return True, ""
-                        elif response.status == 404:
+                        if response.status == 404:
                             # Endpoint might not support this path, try next
                             continue
-                        else:
-                            logger.warning(
-                                "Endpoint %s%s returned status %s",
-                                endpoint_url,
-                                test_path,
-                                response.status,
-                            )
-                            continue
+                        logger.warning(
+                            "Endpoint %s%s returned status %s",
+                            endpoint_url,
+                            test_path,
+                            response.status,
+                        )
+                        continue
                 except Exception as e:
                     logger.debug("Test path %s failed: %s", test_path, e)
                     continue
@@ -3763,8 +3739,7 @@ async def connectivity_health_check(request):
                             "ws://", "http://"
                         )
                         # Remove /ws path for basic connectivity test
-                        if test_url.endswith("/ws"):
-                            test_url = test_url[:-3]
+                        test_url = test_url.removesuffix("/ws")
                     else:
                         test_url = endpoint_url
 

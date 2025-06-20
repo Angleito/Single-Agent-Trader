@@ -41,16 +41,16 @@ def save_results_to_file(results: dict[str, Any], output_file: Path):
 
 def print_benchmark_summary(suite: BenchmarkSuite):
     """Print benchmark suite summary."""
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print("BENCHMARK RESULTS SUMMARY")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
 
     summary = suite.get_summary()
     print(f"Suite: {summary['suite_name']}")
     print(f"Description: {summary['description']}")
     print(f"Total Benchmarks: {summary['total_benchmarks']}")
     print(f"Total Duration: {summary['total_duration_seconds']:.2f} seconds")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
 
     # Sort results by execution time
     results = sorted(
@@ -85,9 +85,9 @@ def print_benchmark_summary(suite: BenchmarkSuite):
 
 def print_load_test_summary(results):
     """Print load test results summary."""
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print("LOAD TEST RESULTS SUMMARY")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
 
     for result in results:
         result_dict = result.to_dict() if hasattr(result, "to_dict") else result
@@ -197,8 +197,8 @@ def generate_html_report(results: dict[str, Any], output_file: Path):
             f"""
         <div class="section">
             <h2>Benchmark Results</h2>
-            <p>Total Benchmarks: {benchmarks.get('total_benchmarks', 0)}</p>
-            <p>Total Duration: {benchmarks.get('total_duration_seconds', 0):.2f} seconds</p>
+            <p>Total Benchmarks: {benchmarks.get("total_benchmarks", 0)}</p>
+            <p>Total Duration: {benchmarks.get("total_duration_seconds", 0):.2f} seconds</p>
 
             <table>
                 <tr>
@@ -221,11 +221,11 @@ def generate_html_report(results: dict[str, Any], output_file: Path):
             content_sections.append(
                 f"""
                 <tr>
-                    <td>{result.get('name', 'Unknown')}</td>
-                    <td class="{status_class}">{result.get('avg_time_per_iteration_ms', 0):.2f}</td>
-                    <td>{result.get('throughput_per_sec', 0):.2f}</td>
-                    <td>{result.get('memory_usage_mb', 0):.2f}</td>
-                    <td class="{status_class}">{'OK' if status_class == 'good' else 'SLOW' if status_class == 'warning' else 'CRITICAL'}</td>
+                    <td>{result.get("name", "Unknown")}</td>
+                    <td class="{status_class}">{result.get("avg_time_per_iteration_ms", 0):.2f}</td>
+                    <td>{result.get("throughput_per_sec", 0):.2f}</td>
+                    <td>{result.get("memory_usage_mb", 0):.2f}</td>
+                    <td class="{status_class}">{"OK" if status_class == "good" else "SLOW" if status_class == "warning" else "CRITICAL"}</td>
                 </tr>
             """
             )
@@ -252,13 +252,13 @@ def generate_html_report(results: dict[str, Any], output_file: Path):
             content_sections.append(
                 f"""
             <div class="benchmark">
-                <h3>{result.get('test_name', 'Unknown Test')}</h3>
-                <p>{result.get('description', '')}</p>
-                <div class="metric">Duration: {result.get('duration_seconds', 0):.2f}s</div>
-                <div class="metric">Throughput: {result.get('operations_per_second', 0):.2f} ops/sec</div>
-                <div class="metric">Avg Response Time: {result.get('avg_response_time_ms', 0):.2f} ms</div>
-                <div class="metric">P95 Response Time: {result.get('p95_response_time_ms', 0):.2f} ms</div>
-                <div class="metric">Memory Usage: {result.get('memory_usage_mb', 0):.2f} MB</div>
+                <h3>{result.get("test_name", "Unknown Test")}</h3>
+                <p>{result.get("description", "")}</p>
+                <div class="metric">Duration: {result.get("duration_seconds", 0):.2f}s</div>
+                <div class="metric">Throughput: {result.get("operations_per_second", 0):.2f} ops/sec</div>
+                <div class="metric">Avg Response Time: {result.get("avg_response_time_ms", 0):.2f} ms</div>
+                <div class="metric">P95 Response Time: {result.get("p95_response_time_ms", 0):.2f} ms</div>
+                <div class="metric">Memory Usage: {result.get("memory_usage_mb", 0):.2f} MB</div>
                 <div class="metric {status_class}">Error Rate: {error_rate:.2f}%</div>
             </div>
             """
@@ -337,7 +337,7 @@ def main():
             html_path = Path(args.html_report)
             generate_html_report(results, html_path)
 
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print("🎉 Performance testing completed successfully!")
 
         # Show summary statistics
@@ -349,7 +349,7 @@ def main():
             load_test_count = len(results["load_tests"])
             print(f"🔥 Load tests completed: {load_test_count}")
 
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
 
     except KeyboardInterrupt:
         print("\n❌ Performance testing interrupted by user")

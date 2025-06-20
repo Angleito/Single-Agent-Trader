@@ -319,7 +319,9 @@ class BaseExchange(ABC):
                     ) from e
 
             # Check for negative balance in most cases (some DEXs allow negative due to unrealized PnL)
-            if new_balance < Decimal("0") and not metadata.get("allow_negative", False):
+            if new_balance < Decimal(0) and not (
+                metadata and metadata.get("allow_negative", False)
+            ):
                 logger.warning(
                     "Negative balance detected: $%s for operation %s",
                     new_balance,
@@ -327,7 +329,7 @@ class BaseExchange(ABC):
                 )
 
             # Check for unrealistic balance values
-            max_reasonable_balance = Decimal("1000000000")  # $1B threshold
+            max_reasonable_balance = Decimal(1000000000)  # $1B threshold
             if new_balance > max_reasonable_balance:
                 raise BalanceValidationError(
                     f"Balance value too large: ${new_balance}",
@@ -385,14 +387,14 @@ class BaseExchange(ABC):
         """
         try:
             # Inline margin validation
-            if balance < Decimal("0"):
+            if balance < Decimal(0):
                 raise BalanceValidationError(
                     "Account balance cannot be negative for margin calculation",
                     invalid_value=float(balance),
                     validation_rule="negative_balance_check",
                 )
 
-            if used_margin < Decimal("0"):
+            if used_margin < Decimal(0):
                 raise BalanceValidationError(
                     "Used margin cannot be negative",
                     invalid_value=float(used_margin),
@@ -406,7 +408,7 @@ class BaseExchange(ABC):
 
             available_margin = balance - used_margin
             margin_ratio = (
-                (used_margin / balance * 100) if balance > 0 else Decimal("100")
+                (used_margin / balance * 100) if balance > 0 else Decimal(100)
             )
 
             return {
@@ -462,11 +464,11 @@ class BaseExchange(ABC):
             difference = abs(calculated_balance - exchange_reported_balance)
             relative_difference = 0.0
 
-            if exchange_reported_balance != Decimal("0"):
+            if exchange_reported_balance != Decimal(0):
                 relative_difference = float(
                     difference / abs(exchange_reported_balance) * 100
                 )
-            elif calculated_balance != Decimal("0"):
+            elif calculated_balance != Decimal(0):
                 # If reported balance is 0 but calculated isn't, this is a significant discrepancy
                 relative_difference = 100.0
 
@@ -905,7 +907,7 @@ class BaseExchange(ABC):
                 )
 
                 # Return safe default
-                return Decimal("0")
+                return Decimal(0)
 
     async def get_positions_with_error_handling(
         self, symbol: str | None = None

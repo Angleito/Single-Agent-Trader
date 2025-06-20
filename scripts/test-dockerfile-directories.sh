@@ -41,7 +41,7 @@ print_result "INFO" "Testing directory structure and permissions..."
 # Expected directories with their permissions
 EXPECTED_DIRS=(
     "/app:755"
-    "/app/config:755" 
+    "/app/config:755"
     "/app/logs:775"
     "/app/data:775"
     "/app/prompts:755"
@@ -65,7 +65,7 @@ for dir_perm in "${EXPECTED_DIRS[@]}"; do
     DIR_PATH="${dir_perm%:*}"
     EXPECTED_PERM="${dir_perm#*:}"
     ((TEST_TOTAL++))
-    
+
     # Test if directory exists
     if docker run --rm "${TEST_IMAGE}" test -d "${DIR_PATH}"; then
         # Test permissions

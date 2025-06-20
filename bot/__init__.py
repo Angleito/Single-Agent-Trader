@@ -35,9 +35,9 @@ except ImportError:
         pass
 
     # Assign dummy classes to expected names
-    BacktestEngine = _BacktestEngine
-    BacktestResults = _BacktestResults
-    BacktestTrade = _BacktestTrade
+    BacktestEngine = _BacktestEngine  # type: ignore[assignment]
+    BacktestResults = _BacktestResults  # type: ignore[assignment]
+    BacktestTrade = _BacktestTrade  # type: ignore[assignment]
 
     _BACKTEST_AVAILABLE = False
 
@@ -60,24 +60,24 @@ from .train.reader import RAGReader
 from .validator import TradeValidator
 
 __all__ = [
-    "settings",
-    "TradeAction",
-    "Position",
-    "MarketData",
-    "MarketState",
-    "TradeValidator",
-    "RiskManager",
-    "LLMAgent",
-    "CoreStrategy",
-    "MarketDataProvider",
-    "DominanceData",
-    "DominanceDataProvider",
-    "VuManChuIndicators",
-    "CipherA",
-    "CipherB",
-    "CoinbaseClient",
     "BacktestEngine",
     "BacktestResults",
     "BacktestTrade",
+    "CipherA",
+    "CipherB",
+    "CoinbaseClient",
+    "CoreStrategy",
+    "DominanceData",
+    "DominanceDataProvider",
+    "LLMAgent",
+    "MarketData",
+    "MarketDataProvider",
+    "MarketState",
+    "Position",
     "RAGReader",
+    "RiskManager",
+    "TradeAction",
+    "TradeValidator",
+    "VuManChuIndicators",
+    "settings",
 ]

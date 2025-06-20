@@ -27,22 +27,16 @@ except ImportError:
 if TYPE_CHECKING:
     # Type hints only - import for static analysis
     from langchain_core.callbacks import BaseCallbackHandler
-    from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+    from langchain_core.messages import HumanMessage
     from langchain_core.outputs import LLMResult
 elif LANGCHAIN_AVAILABLE:
     from langchain_core.callbacks import BaseCallbackHandler
-    from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+    from langchain_core.messages import HumanMessage
     from langchain_core.outputs import LLMResult
 else:
     # Graceful degradation when LangChain is not available
     class BaseCallbackHandler:
         """Dummy BaseCallbackHandler for when LangChain is unavailable."""
-
-    class AIMessage:
-        """Dummy AIMessage for when LangChain is unavailable."""
-
-    class BaseMessage:
-        """Dummy BaseMessage for when LangChain is unavailable."""
 
     class HumanMessage:
         """Dummy HumanMessage for when LangChain is unavailable."""
@@ -405,12 +399,12 @@ class LangChainCallbackHandler(BaseCallbackHandler):
     def on_chain_start(
         self,
         serialized: dict[str, Any],
-        inputs: dict[str, Any],  # noqa: ARG002
+        _inputs: dict[str, Any],
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,  # noqa: ARG002
+        _parent_run_id: UUID | None = None,
         tags: list[str] | None = None,  # noqa: ARG002
-        metadata: dict[str, Any] | None = None,
+        _metadata: dict[str, Any] | None = None,
         **kwargs: Any,  # noqa: ARG002
     ) -> Any:
         """Called when a chain starts running."""
@@ -422,10 +416,10 @@ class LangChainCallbackHandler(BaseCallbackHandler):
 
     def on_chain_end(
         self,
-        outputs: dict[str, Any],  # noqa: ARG002
+        _outputs: dict[str, Any],
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,  # noqa: ARG002
+        _parent_run_id: UUID | None = None,
         **kwargs: Any,  # noqa: ARG002
     ) -> Any:
         """Called when a chain finishes running."""

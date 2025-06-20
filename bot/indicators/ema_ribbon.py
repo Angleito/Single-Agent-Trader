@@ -938,7 +938,7 @@ class EMAribbon:
                 False,
                 f"Insufficient data. Need at least {max_length} rows, got {len(df)}",
             )
-        elif len(df) < min_recommended:
+        if len(df) < min_recommended:
             logger.info(
                 "Limited data for optimal EMA convergence. Have %s rows, recommend %s for best results",
                 len(df),

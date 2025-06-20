@@ -160,7 +160,7 @@ class BalanceOperationMonitor:
                 extra=get_balance_operation_context(
                     correlation_id,
                     operation,
-                    {
+                    additional_context={
                         "component": component,
                         "event_type": "operation_start",
                         "metadata": metadata,
@@ -289,11 +289,11 @@ class BalanceOperationMonitor:
                 extra=get_balance_operation_context(
                     correlation_id,
                     start_event.operation,
-                    {
-                        "balance_amount": balance_amount,
-                        "duration_ms": duration_ms,
-                        "success": (status == "success"),
-                        "error_category": error_category,
+                    balance_amount=balance_amount,
+                    duration_ms=duration_ms,
+                    success=(status == "success"),
+                    error_category=error_category,
+                    additional_context={
                         "component": start_event.component,
                         "event_type": "operation_complete",
                         "final_status": status,
@@ -499,7 +499,7 @@ class BalanceOperationMonitor:
 
     def _get_top_error_categories(self) -> list[dict[str, Any]]:
         """Get top error categories across all components."""
-        error_totals = defaultdict(int)
+        error_totals: dict[str, int] = defaultdict(int)
 
         for component_metrics in self.metrics.values():
             for operation_metrics in component_metrics.values():

@@ -35,9 +35,9 @@ try:
 
     _web_search_formatter_available = True
 except ImportError:
-    WebSearchFormatter = None
-    ContentPriority = None
-    FormattedContent = None
+    WebSearchFormatter = None  # type: ignore
+    ContentPriority = None  # type: ignore
+    FormattedContent = None  # type: ignore
     _web_search_formatter_available = False
 
 __all__ = [
@@ -56,4 +56,4 @@ if _ta_available:
 
 # Only add web search formatter to __all__ if it's available
 if _web_search_formatter_available:
-    __all__.extend(["WebSearchFormatter", "ContentPriority", "FormattedContent"])
+    __all__.extend(["ContentPriority", "FormattedContent", "WebSearchFormatter"])

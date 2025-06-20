@@ -115,8 +115,8 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
 
             return result
 
-        except Exception as e:
-            logger.exception("Error in memory-enhanced analysis: %s", e)
+        except Exception:
+            logger.exception("Error in memory-enhanced analysis")
             # Fall back to base implementation
             return await super().analyze_market(market_state)
 
@@ -332,8 +332,8 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                 market_state, query
             )
 
-        except Exception as e:
-            logger.exception("Failed to retrieve memories: %s", e)
+        except Exception:
+            logger.exception("Failed to retrieve memories")
             return []
 
     def _format_memory_context(self, experiences: list[TradingExperience]) -> str:
@@ -355,7 +355,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             # Format basic trade info
             action = exp.decision.get("action", "UNKNOWN")
 
-            context_lines.append(f"\n{i+1}. Past {action} trade:")
+            context_lines.append(f"\n{i + 1}. Past {action} trade:")
             context_lines.append(f"   Market conditions: ${float(exp.price)}")
 
             # Add indicator snapshot
@@ -429,8 +429,8 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                 else "No significant patterns identified yet."
             )
 
-        except Exception as e:
-            logger.exception("Failed to get pattern insights: %s", e)
+        except Exception:
+            logger.exception("Failed to get pattern insights")
             return "Pattern analysis temporarily unavailable."
 
     def _enhance_with_memory(
@@ -594,11 +594,10 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             # Combine all sections
             if context_sections:
                 return "\n\n".join(context_sections)
-            else:
-                return "No sentiment-enhanced context available"
+            return "No sentiment-enhanced context available"
 
         except Exception as e:
-            logger.exception("Error generating sentiment-enhanced context: %s", e)
+            logger.exception("Error generating sentiment-enhanced context")
             return f"Error generating sentiment context: {e!s}"
 
     async def _get_financial_sentiment_context(self, market_state: MarketState) -> str:

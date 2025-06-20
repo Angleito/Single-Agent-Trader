@@ -70,7 +70,7 @@ DIRECTORIES=(
     "logs"
     "data"
     "tmp"
-    
+
     # Exchange-specific directories
     "logs/bluefin"
     "logs/trades"
@@ -82,7 +82,7 @@ DIRECTORIES=(
     "data/mcp_memory"
     "data/omnisearch_cache"
     "tmp/bluefin"
-    
+
     # Dashboard directories
     "dashboard/backend/logs"
     "dashboard/backend/data"
@@ -132,7 +132,7 @@ for log_file in "${LOG_FILES[@]}"; do
     if [ ! -f "$log_file" ]; then
         # Ensure parent directory exists
         mkdir -p "$(dirname "$log_file")"
-        
+
         # Create appropriate default content based on file type
         case "$log_file" in
             *.json)
@@ -145,7 +145,7 @@ for log_file in "${LOG_FILES[@]}"; do
                 touch "$log_file"
                 ;;
         esac
-        
+
         chown "$HOST_UID:$HOST_GID" "$log_file" 2>/dev/null || true
         chmod 664 "$log_file"
         print_status "SUCCESS" "Created file: $log_file"
@@ -198,7 +198,7 @@ update_env_var() {
     local var_name="$1"
     local var_value="$2"
     local temp_file="$3"
-    
+
     if grep -q "^${var_name}=" "$temp_file"; then
         # Variable exists, update it
         if [[ "$OS_TYPE" == "Darwin" ]]; then
@@ -256,7 +256,7 @@ print_status "VALIDATE" "Testing Docker container user mapping..."
 if command -v docker >/dev/null 2>&1; then
     # Test with a simple alpine container
     print_status "INFO" "Running Docker permission test container..."
-    
+
     TEST_RESULT=$(docker run --rm \
         --user "$HOST_UID:$HOST_GID" \
         -v "$(pwd)/logs:/test/logs" \
@@ -268,7 +268,7 @@ if command -v docker >/dev/null 2>&1; then
             rm /test/logs/docker-test-$$.txt &&
             echo 'SUCCESS: Container can write to host volumes'
         " 2>&1)
-    
+
     if echo "$TEST_RESULT" | grep -q "SUCCESS: Container can write to host volumes"; then
         print_status "SUCCESS" "Docker container user mapping works correctly"
         CONTAINER_USER=$(echo "$TEST_RESULT" | head -1)
@@ -289,7 +289,7 @@ print_status "VALIDATE" "Validating docker-compose configuration..."
 if command -v docker-compose >/dev/null 2>&1; then
     if docker-compose config >/dev/null 2>&1; then
         print_status "SUCCESS" "docker-compose.yml configuration is valid"
-        
+
         # Show resolved user configuration
         RESOLVED_USER=$(docker-compose config 2>/dev/null | grep -A 5 "ai-trading-bot:" | grep "user:" | head -1 | sed 's/.*user: //' | tr -d '"')
         if [ -n "$RESOLVED_USER" ]; then

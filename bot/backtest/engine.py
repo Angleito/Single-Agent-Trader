@@ -37,10 +37,10 @@ class BacktestTrade:
     exit_time: datetime | None = None
     symbol: str = ""
     side: Literal["LONG", "SHORT"] = "LONG"  # LONG/SHORT
-    entry_price: Decimal = Decimal("0")
+    entry_price: Decimal = Decimal(0)
     exit_price: Decimal | None = None
-    size: Decimal = Decimal("0")
-    pnl: Decimal = Decimal("0")
+    size: Decimal = Decimal(0)
+    pnl: Decimal = Decimal(0)
     pnl_pct: float = 0.0
     duration_minutes: int = 0
     exit_reason: str = ""
@@ -56,15 +56,15 @@ class BacktestResults:
     winning_trades: int = 0
     losing_trades: int = 0
     win_rate: float = 0.0
-    total_pnl: Decimal = Decimal("0")
+    total_pnl: Decimal = Decimal(0)
     total_return_pct: float = 0.0
-    max_drawdown: Decimal = Decimal("0")
+    max_drawdown: Decimal = Decimal(0)
     max_drawdown_pct: float = 0.0
     sharpe_ratio: float = 0.0
     profit_factor: float = 0.0
     avg_trade_duration: int = 0
-    largest_win: Decimal = Decimal("0")
-    largest_loss: Decimal = Decimal("0")
+    largest_win: Decimal = Decimal(0)
+    largest_loss: Decimal = Decimal(0)
     trades: list[BacktestTrade] = field(default_factory=list)
 
 
@@ -76,7 +76,7 @@ class BacktestEngine:
     realistic execution modeling and comprehensive performance metrics.
     """
 
-    def __init__(self, initial_balance: Decimal = Decimal("10000")) -> None:
+    def __init__(self, initial_balance: Decimal = Decimal(10000)) -> None:
         """
         Initialize the backtest engine.
 
@@ -290,14 +290,12 @@ class BacktestEngine:
         if not self.current_position:
             position_side: Literal["LONG", "SHORT", "FLAT"] = "FLAT"
         else:
-            position_side = self.current_position.side  # type: ignore
+            position_side = self.current_position.side  # type: ignore[union-attr]
         current_position = Position(
             symbol="BTC-USD",
             side=position_side,
             size=(
-                Decimal("0")
-                if not self.current_position
-                else self.current_position.size
+                Decimal(0) if not self.current_position else self.current_position.size
             ),
             entry_price=(
                 None if not self.current_position else self.current_position.entry_price
@@ -331,12 +329,12 @@ class BacktestEngine:
         if action.action == "HOLD":
             return
 
-        elif action.action == "CLOSE" and self.current_position:
+        if action.action == "CLOSE" and self.current_position:
             await self._close_backtest_position(
                 timestamp, current_price, "Manual close"
             )
 
-        elif action.action in ["LONG", "SHORT"] and not self.current_position:
+        if action.action in ["LONG", "SHORT"] and not self.current_position:
             await self._open_backtest_position(action, timestamp, current_price)
 
     async def _open_backtest_position(
@@ -351,14 +349,12 @@ class BacktestEngine:
             price: Entry price
         """
         # Calculate position size
-        position_value = (
-            self.current_balance * Decimal(action.size_pct) / Decimal("100")
-        )
-        leverage = Decimal("5")  # Default leverage
+        position_value = self.current_balance * Decimal(action.size_pct) / Decimal(100)
+        leverage = Decimal(5)  # Default leverage
         position_size = position_value * leverage / price
 
         # Ensure side is a valid Literal type
-        trade_side: Literal["LONG", "SHORT"] = action.action  # type: ignore
+        trade_side: Literal["LONG", "SHORT"] = action.action  # type: ignore[assignment]
         self.current_position = BacktestTrade(
             entry_time=timestamp,
             symbol="BTC-USD",
@@ -496,20 +492,18 @@ class BacktestEngine:
 
         # P&L metrics
         pnl_values = [trade.pnl for trade in self.trades]
-        total_pnl = Decimal(sum(pnl_values)) if pnl_values else Decimal("0")
+        total_pnl = Decimal(sum(pnl_values)) if pnl_values else Decimal(0)
         total_return_pct = float(total_pnl / self.initial_balance * 100)
 
         # Drawdown calculation
         max_balance = self.initial_balance
-        max_drawdown = Decimal("0")
+        max_drawdown = Decimal(0)
 
         for _, equity in self.equity_curve:
-            if equity > max_balance:
-                max_balance = equity
+            max_balance = max(max_balance, equity)
 
             drawdown = max_balance - equity
-            if drawdown > max_drawdown:
-                max_drawdown = drawdown
+            max_drawdown = max(max_drawdown, drawdown)
 
         max_drawdown_pct = (
             float(max_drawdown / max_balance * 100) if max_balance > 0 else 0
@@ -529,8 +523,8 @@ class BacktestEngine:
             else 0
         )
 
-        largest_win = max((trade.pnl for trade in self.trades), default=Decimal("0"))
-        largest_loss = min((trade.pnl for trade in self.trades), default=Decimal("0"))
+        largest_win = max((trade.pnl for trade in self.trades), default=Decimal(0))
+        largest_loss = min((trade.pnl for trade in self.trades), default=Decimal(0))
 
         return BacktestResults(
             start_date=start_date,

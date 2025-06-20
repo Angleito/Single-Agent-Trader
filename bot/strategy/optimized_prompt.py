@@ -99,8 +99,8 @@ OVERRIDE AUTHORITY: You can trade with mixed Cipher B if momentum is very strong
 
             return formatted_prompt
 
-        except Exception as e:
-            logger.exception("Error formatting optimized prompt: %s", e)
+        except Exception:
+            logger.exception("Error formatting optimized prompt")
             logger.debug("Available keys in llm_input: %s", list(llm_input.keys()))
             # Fallback to minimal prompt
             return self._get_minimal_fallback_prompt(llm_input)
@@ -213,9 +213,9 @@ OVERRIDE AUTHORITY: You can trade with mixed Cipher B if momentum is very strong
             Minimal prompt string
         """
         try:
-            return f"""Crypto momentum trader. Analyze {llm_input.get('symbol', 'BTC-USD')} at ${llm_input.get('current_price', 'N/A')}.
+            return f"""Crypto momentum trader. Analyze {llm_input.get("symbol", "BTC-USD")} at ${llm_input.get("current_price", "N/A")}.
 
-Indicators: RSI {llm_input.get('rsi', 'N/A')}, Cipher A {llm_input.get('cipher_a_dot', 'N/A')}, Wave {llm_input.get('cipher_b_wave', 'N/A')}
+Indicators: RSI {llm_input.get("rsi", "N/A")}, Cipher A {llm_input.get("cipher_a_dot", "N/A")}, Wave {llm_input.get("cipher_b_wave", "N/A")}
 
 Respond: ANALYSIS + JSON with action, size_pct, take_profit_pct, stop_loss_pct, leverage, reduce_only, rationale"""
 

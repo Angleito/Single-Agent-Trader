@@ -123,8 +123,8 @@ class MarketStateHasher:
             logger.debug("Generated cache key: %s from %s", cache_key, key_string)
             return cache_key
 
-        except Exception as e:
-            logger.exception("Error generating cache key: %s", e)
+        except Exception:
+            logger.exception("Error generating cache key")
             # Return timestamp-based key as fallback
             return hashlib.sha256(
                 f"fallback_{time.time()}".encode(), usedforsecurity=False
@@ -225,8 +225,8 @@ class LLMResponseCache:
                 self._cleanup_expired_entries()
             except asyncio.CancelledError:
                 break
-            except Exception as e:
-                logger.exception("Error in cache cleanup: %s", e)
+            except Exception:
+                logger.exception("Error in cache cleanup")
 
     def _cleanup_expired_entries(self):
         """Remove expired entries from cache."""

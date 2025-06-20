@@ -666,7 +666,7 @@ def generate_sample_data():
             decision=decision_type,
             price=base_price + random.uniform(-100, 100),
             confidence=random.uniform(0.6, 0.95),
-            reasoning=f"AI decision based on market analysis #{i+1}",
+            reasoning=f"AI decision based on market analysis #{i + 1}",
             indicator_values={"rsi": random.uniform(30, 70), "ema": base_price},
         )
 

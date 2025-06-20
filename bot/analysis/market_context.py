@@ -354,7 +354,7 @@ class MarketContextAnalyzer:
 
             # Regime-dependent correlation
             regime_correlation = await self._calculate_regime_dependent_correlation(
-                crypto_data, nasdaq_data, crypto_aligned, nasdaq_aligned
+                crypto_aligned, nasdaq_aligned
             )
 
             # Determine correlation strength and direction
@@ -380,10 +380,8 @@ class MarketContextAnalyzer:
                 reliability_score=reliability,
             )
 
-        except Exception as e:
-            logger.error(
-                "Error analyzing crypto/NASDAQ correlation: %s", e, exc_info=True
-            )
+        except Exception:
+            logger.exception("Error analyzing crypto/NASDAQ correlation")
             return CorrelationAnalysis(
                 correlation_coefficient=0.0,
                 correlation_strength=CorrelationStrength.VERY_WEAK,
@@ -742,9 +740,9 @@ class MarketContextAnalyzer:
                 return [float(candle["close"]) for candle in data["ohlcv"]]
             if "candles" in data:
                 return [float(candle["close"]) for candle in data["candles"]]
-            return []
         except (ValueError, KeyError, TypeError):
-            return []
+            pass
+        return []
 
     def _align_time_series(
         self, crypto_prices: list[float], nasdaq_prices: list[float]
@@ -800,8 +798,6 @@ class MarketContextAnalyzer:
 
     async def _calculate_regime_dependent_correlation(
         self,
-        crypto_data: dict[str, Any],
-        nasdaq_data: dict[str, Any],
         crypto_aligned: list[float],
         nasdaq_aligned: list[float],
     ) -> dict[str, float]:
@@ -852,10 +848,9 @@ class MarketContextAnalyzer:
                     if not np.isnan(corr):
                         regime_correlations["LOW_VOLATILITY"] = float(corr)
 
-            return regime_correlations
-
         except Exception:
-            return {}
+            regime_correlations = {}
+        return regime_correlations
 
     def _classify_correlation_strength(
         self, abs_correlation: float
@@ -941,12 +936,11 @@ class MarketContextAnalyzer:
 
             if hawkish_score > dovish_score * 1.5:
                 return "HAWKISH"
-            elif dovish_score > hawkish_score * 1.5:
+            if dovish_score > hawkish_score * 1.5:
                 return "DOVISH"
-            else:
-                return "NEUTRAL"
-
         except Exception:
+            return "NEUTRAL"
+        else:
             return "NEUTRAL"
 
     def _analyze_inflation_environment(self, sentiment_data: dict[str, Any]) -> str:
@@ -967,12 +961,11 @@ class MarketContextAnalyzer:
 
             if high_inflation_indicators > low_inflation_indicators:
                 return "HIGH"
-            elif low_inflation_indicators > high_inflation_indicators:
+            if low_inflation_indicators > high_inflation_indicators:
                 return "LOW"
-            else:
-                return "STABLE"
-
         except Exception:
+            return "STABLE"
+        else:
             return "STABLE"
 
     def _analyze_interest_rate_trend(self, sentiment_data: dict[str, Any]) -> str:
@@ -989,15 +982,14 @@ class MarketContextAnalyzer:
                 for phrase in ["rate hike", "raising rates", "higher rates"]
             ):
                 return "RISING"
-            elif any(
+            if any(
                 phrase in text
                 for phrase in ["rate cut", "lowering rates", "rate reduction"]
             ):
                 return "FALLING"
-            else:
-                return "STABLE"
-
         except Exception:
+            return "STABLE"
+        else:
             return "STABLE"
 
     def _assess_geopolitical_risk(self, sentiment_data: dict[str, Any]) -> str:
@@ -1018,12 +1010,11 @@ class MarketContextAnalyzer:
 
             if high_risk_indicators > 2:
                 return "HIGH"
-            elif low_risk_indicators > high_risk_indicators:
+            if low_risk_indicators > high_risk_indicators:
                 return "LOW"
-            else:
-                return "MEDIUM"
-
         except Exception:
+            return "MEDIUM"
+        else:
             return "MEDIUM"
 
     def _analyze_crypto_adoption_momentum(self, sentiment_data: dict[str, Any]) -> str:
@@ -1048,12 +1039,11 @@ class MarketContextAnalyzer:
 
             if high_adoption_indicators > low_adoption_indicators:
                 return "HIGH"
-            elif low_adoption_indicators > high_adoption_indicators:
+            if low_adoption_indicators > high_adoption_indicators:
                 return "LOW"
-            else:
-                return "MODERATE"
-
         except Exception:
+            return "MODERATE"
+        else:
             return "MODERATE"
 
     def _assess_institutional_sentiment(self, sentiment_data: dict[str, Any]) -> str:
@@ -1085,12 +1075,11 @@ class MarketContextAnalyzer:
 
             if positive_score > negative_score:
                 return "POSITIVE"
-            elif negative_score > positive_score:
+            if negative_score > positive_score:
                 return "NEGATIVE"
-            else:
-                return "NEUTRAL"
-
         except Exception:
+            return "NEUTRAL"
+        else:
             return "NEUTRAL"
 
     def _analyze_regulatory_environment(self, sentiment_data: dict[str, Any]) -> str:
@@ -1111,15 +1100,14 @@ class MarketContextAnalyzer:
                 ]
             ):
                 return "FAVORABLE"
-            elif any(
+            if any(
                 phrase in text
                 for phrase in ["regulatory crackdown", "ban", "restriction"]
             ):
                 return "RESTRICTIVE"
-            else:
-                return "STABLE"
-
         except Exception:
+            return "STABLE"
+        else:
             return "STABLE"
 
     def _assess_volatility_regime(self, sentiment_data: dict[str, Any]) -> str:
@@ -1129,12 +1117,11 @@ class MarketContextAnalyzer:
 
             if vix_level > 30:
                 return "HIGH"
-            elif vix_level > 20:
+            if vix_level > 20:
                 return "ELEVATED"
-            else:
-                return "NORMAL"
-
         except Exception:
+            return "NORMAL"
+        else:
             return "NORMAL"
 
     def _assess_liquidity_conditions(self, sentiment_data: dict[str, Any]) -> str:
@@ -1151,15 +1138,14 @@ class MarketContextAnalyzer:
                 for phrase in ["liquidity crisis", "illiquid", "tight liquidity"]
             ):
                 return "TIGHT"
-            elif any(
+            if any(
                 phrase in text
                 for phrase in ["ample liquidity", "liquid markets", "easy liquidity"]
             ):
                 return "ABUNDANT"
-            else:
-                return "NORMAL"
-
         except Exception:
+            return "NORMAL"
+        else:
             return "NORMAL"
 
     def _determine_market_regime(
@@ -1288,13 +1274,12 @@ class MarketContextAnalyzer:
 
             if sentiment_divergence:
                 base_probability += 0.2
-
-            return min(base_probability, 0.8)
-
         except Exception:
             return 0.1
+        else:
+            return min(base_probability, 0.8)
 
-    def _estimate_regime_duration(self, sentiment_data: dict[str, Any]) -> int | None:
+    def _estimate_regime_duration(self, _sentiment_data: dict[str, Any]) -> int | None:
         """Estimate how long current regime has been in place."""
         try:
             # In a full implementation, this would track regime changes over time
@@ -1334,23 +1319,22 @@ class MarketContextAnalyzer:
 
             # Convert to 0-100 scale (0 = extreme fear, 100 = extreme greed)
             greed_ratio = greed_score / total_score
-            return greed_ratio * 100
-
         except Exception:
             return 50.0
+        else:
+            return greed_ratio * 100
 
     def _classify_sentiment_level(self, fear_greed_index: float) -> SentimentLevel:
         """Classify sentiment level based on fear & greed index."""
         if fear_greed_index >= 80:
             return SentimentLevel.EXTREME_GREED
-        elif fear_greed_index >= 60:
+        if fear_greed_index >= 60:
             return SentimentLevel.GREED
-        elif fear_greed_index >= 40:
+        if fear_greed_index >= 40:
             return SentimentLevel.NEUTRAL
-        elif fear_greed_index >= 20:
+        if fear_greed_index >= 20:
             return SentimentLevel.FEAR
-        else:
-            return SentimentLevel.EXTREME_FEAR
+        return SentimentLevel.EXTREME_FEAR
 
     def _calculate_volatility_expectation(
         self, news_data: list[dict[str, Any]]
@@ -1378,13 +1362,12 @@ class MarketContextAnalyzer:
             # Adjust based on mentions
             if volatility_mentions > 5:
                 return min(base_volatility * 2, 60.0)
-            elif volatility_mentions > 2:
+            if volatility_mentions > 2:
                 return min(base_volatility * 1.5, 40.0)
-            else:
-                return base_volatility
-
         except Exception:
             return 20.0
+        else:
+            return base_volatility
 
     def _calculate_market_stress_indicator(
         self, news_data: list[dict[str, Any]]
@@ -1421,9 +1404,9 @@ class MarketContextAnalyzer:
                 match = vix_pattern.search(text)
                 if match:
                     return float(match.group(1))
-
-            return None
         except Exception:
+            return None
+        else:
             return None
 
     def _extract_crypto_fear_greed(
@@ -1439,9 +1422,9 @@ class MarketContextAnalyzer:
                     numbers = re.findall(r"\d+", text)
                     if numbers:
                         return float(numbers[0])
-
-            return None
         except Exception:
+            return None
+        else:
             return None
 
     def _calculate_social_sentiment(
@@ -1516,15 +1499,14 @@ class MarketContextAnalyzer:
                 if "funding rate" in text:
                     if "high" in text or "elevated" in text:
                         return 0.8  # High funding rates suggest bullish sentiment
-                    elif "low" in text or "negative" in text:
+                    if "low" in text or "negative" in text:
                         return (
                             -0.5
                         )  # Low/negative funding rates suggest bearish sentiment
-                    else:
-                        return 0.0
-
-            return None
+                    return 0.0
         except Exception:
+            return None
+        else:
             return None
 
     def _analyze_options_flow_sentiment(
@@ -1541,16 +1523,15 @@ class MarketContextAnalyzer:
                         for word in ["calls", "bullish options", "call buying"]
                     ):
                         return "BULLISH"
-                    elif any(
+                    if any(
                         word in text
                         for word in ["puts", "bearish options", "put buying"]
                     ):
                         return "BEARISH"
-                    else:
-                        return "NEUTRAL"
-
-            return None
+                    return "NEUTRAL"
         except Exception:
+            return None
+        else:
             return None
 
     def _analyze_insider_activity(self, news_data: list[dict[str, Any]]) -> str | None:
@@ -1562,13 +1543,12 @@ class MarketContextAnalyzer:
                 if any(word in text for word in ["insider", "institutional", "whale"]):
                     if any(word in text for word in ["buying", "accumulating", "long"]):
                         return "BULLISH"
-                    elif any(word in text for word in ["selling", "dumping", "short"]):
+                    if any(word in text for word in ["selling", "dumping", "short"]):
                         return "BEARISH"
-                    else:
-                        return "NEUTRAL"
-
-            return None
+                    return "NEUTRAL"
         except Exception:
+            return None
+        else:
             return None
 
     def _analyze_retail_sentiment(self, news_data: list[dict[str, Any]]) -> str | None:
@@ -1585,15 +1565,14 @@ class MarketContextAnalyzer:
                         word in text for word in ["buying", "optimistic", "bullish"]
                     ):
                         return "BULLISH"
-                    elif any(
+                    if any(
                         word in text for word in ["selling", "pessimistic", "bearish"]
                     ):
                         return "BEARISH"
-                    else:
-                        return "NEUTRAL"
-
-            return None
+                    return "NEUTRAL"
         except Exception:
+            return None
+        else:
             return None
 
     def _detect_sentiment_divergence(self, news_data: list[dict[str, Any]]) -> bool:
@@ -1607,9 +1586,9 @@ class MarketContextAnalyzer:
                     word in text for word in ["divergence", "disconnect", "contrary"]
                 ):
                     return True
-
-            return False
         except Exception:
+            return False
+        else:
             return False
 
     def _calculate_crypto_momentum_score(
@@ -1686,8 +1665,7 @@ class MarketContextAnalyzer:
                 crypto_momentum < 0 and nasdaq_momentum < 0
             ):
                 return min(abs(crypto_momentum), abs(nasdaq_momentum))
-            else:
-                return -min(abs(crypto_momentum), abs(nasdaq_momentum))
+            return -min(abs(crypto_momentum), abs(nasdaq_momentum))
 
         except Exception:
             return 0.0
@@ -1709,10 +1687,9 @@ class MarketContextAnalyzer:
 
             if max_strength > 0:
                 return 1.0 - (strength_diff / max_strength)
-            else:
-                return 0.0
-
         except Exception:
+            return 0.0
+        else:
             return 0.0
 
     def _identify_momentum_divergences(
@@ -1742,11 +1719,10 @@ class MarketContextAnalyzer:
                     f"Volume divergence: Crypto {crypto_volume_trend}, "
                     f"NASDAQ {nasdaq_volume_trend}"
                 )
-
-            return divergences
-
         except Exception:
             return []
+        else:
+            return divergences
 
     def _calculate_trend_strength(self, indicators: dict[str, Any]) -> float:
         """Calculate trend strength from indicators."""
@@ -1792,8 +1768,7 @@ class MarketContextAnalyzer:
                 crypto_volume_change < 0 and nasdaq_volume_change < 0
             ):
                 return min(abs(crypto_volume_change), abs(nasdaq_volume_change))
-            else:
-                return -min(abs(crypto_volume_change), abs(nasdaq_volume_change))
+            return -min(abs(crypto_volume_change), abs(nasdaq_volume_change))
 
         except Exception:
             return None
@@ -1836,12 +1811,11 @@ class MarketContextAnalyzer:
 
             if avg_momentum > 0.6:
                 return "ACCELERATION"
-            elif avg_momentum < 0.2:
+            if avg_momentum < 0.2:
                 return "DECELERATION"
-            else:
-                return "NORMAL"
-
         except Exception:
+            return "NORMAL"
+        else:
             return "NORMAL"
 
     def _analyze_cross_asset_momentum_flow(
@@ -1854,16 +1828,15 @@ class MarketContextAnalyzer:
 
             if crypto_momentum > nasdaq_momentum + 0.2:
                 return "CRYPTO_OUTPERFORMING"
-            elif nasdaq_momentum > crypto_momentum + 0.2:
+            if nasdaq_momentum > crypto_momentum + 0.2:
                 return "NASDAQ_OUTPERFORMING"
-            elif crypto_momentum > 0.3 and nasdaq_momentum > 0.3:
+            if crypto_momentum > 0.3 and nasdaq_momentum > 0.3:
                 return "RISK_ON_FLOW"
-            elif crypto_momentum < -0.3 and nasdaq_momentum < -0.3:
+            if crypto_momentum < -0.3 and nasdaq_momentum < -0.3:
                 return "RISK_OFF_FLOW"
-            else:
-                return "NEUTRAL"
-
         except Exception:
+            return "NEUTRAL"
+        else:
             return "NEUTRAL"
 
     def _generate_trading_implications(

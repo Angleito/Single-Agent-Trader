@@ -112,8 +112,8 @@ class WebSocketMessageValidator:
             # Validate ticker events
             return all(self._validate_ticker_event(event) for event in events)
 
-        except Exception as e:
-            logger.exception("Error validating ticker message: %s", e)
+        except Exception:
+            logger.exception("Error validating ticker message")
             return False
 
     def validate_trade_message(self, message: dict) -> bool:
@@ -152,8 +152,8 @@ class WebSocketMessageValidator:
 
             return all(self._validate_trade_event(event) for event in events)
 
-        except Exception as e:
-            logger.exception("Error validating trade message: %s", e)
+        except Exception:
+            logger.exception("Error validating trade message")
             return False
 
     def _validate_ticker_event(self, event: dict) -> bool:
@@ -179,8 +179,8 @@ class WebSocketMessageValidator:
 
             return all(self._validate_ticker_data(ticker) for ticker in tickers)
 
-        except Exception as e:
-            logger.exception("Error validating ticker event: %s", e)
+        except Exception:
+            logger.exception("Error validating ticker event")
             return False
 
     def _validate_ticker_data(self, ticker: dict) -> bool:
@@ -216,8 +216,8 @@ class WebSocketMessageValidator:
 
             return True
 
-        except Exception as e:
-            logger.exception("Error validating ticker data: %s", e)
+        except Exception:
+            logger.exception("Error validating ticker data")
             return False
 
     def _validate_trade_event(self, event: dict) -> bool:
@@ -333,12 +333,12 @@ class WebSocketMessageValidator:
             # Check for unrealistic prices based on symbol
             if symbol.startswith("BTC"):
                 # Bitcoin price should be within reasonable bounds
-                if price < Decimal("1000") or price > Decimal("500000"):
+                if price < Decimal(1000) or price > Decimal(500000):
                     logger.warning("Suspicious BTC price: %s", price)
                     return False
             elif symbol.startswith("ETH"):
                 # Ethereum price bounds
-                if price < Decimal("10") or price > Decimal("50000"):
+                if price < Decimal(10) or price > Decimal(50000):
                     logger.warning("Suspicious ETH price: %s", price)
                     return False
 
@@ -459,7 +459,7 @@ class MarketDataProvider:
 
         # Data validation settings
         self._max_price_deviation = 0.1  # 10% max price deviation
-        self._min_volume = Decimal("0")
+        self._min_volume = Decimal(0)
 
         # WebSocket message validator
         self._ws_validator = WebSocketMessageValidator()
@@ -560,11 +560,10 @@ class MarketDataProvider:
                     )
                     logger.debug("JWT preview: %s...", jwt_token[:50])
                     return jwt_token
-                else:
-                    logger.warning(
-                        "SDK jwt_generator returned None - this should not happen with valid credentials"
-                    )
-                    return None
+                logger.warning(
+                    "SDK jwt_generator returned None - this should not happen with valid credentials"
+                )
+                return None
 
             except Exception as jwt_error:
                 logger.exception(
@@ -751,8 +750,7 @@ class MarketDataProvider:
             )
 
             # Ensure we don't go before the requested start time
-            if batch_start < start_time:
-                batch_start = start_time
+            batch_start = max(batch_start, start_time)
 
             logger.info(
                 "Fetching batch %s/%s: %s to %s",
@@ -1557,8 +1555,8 @@ class MarketDataProvider:
                 }
             )
 
-        df = pd.DataFrame(df_data)
-        return df.set_index("timestamp")
+        market_df = pd.DataFrame(df_data)
+        return market_df.set_index("timestamp")
 
     def subscribe_to_updates(self, callback: Callable[[MarketData], None]) -> None:
         """
@@ -2174,9 +2172,9 @@ class MarketDataClient:
                 }
             )
 
-        df = pd.DataFrame(df_data)
-        df = df.set_index("timestamp")
-        return df.sort_index()
+        historical_df = pd.DataFrame(df_data)
+        historical_df = historical_df.set_index("timestamp")
+        return historical_df.sort_index()
 
 
 # Factory function for easy client creation

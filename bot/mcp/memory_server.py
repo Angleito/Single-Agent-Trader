@@ -134,9 +134,8 @@ class MCPMemoryServer:
                     # Load any cached memories
                     await self._load_local_cache()
                     return True
-                else:
-                    logger.warning("MCP server returned status %s", response.status)
-                    return False
+                logger.warning("MCP server returned status %s", response.status)
+                return False
 
         except Exception as e:
             logger.exception("Failed to connect to MCP memory server: %s", e)
@@ -1043,7 +1042,7 @@ async def main() -> None:
                 action_value = "HOLD"
 
             trade_action_obj = TradeAction(
-                action=cast(Literal["LONG", "SHORT", "CLOSE", "HOLD"], action_value),
+                action=cast("Literal['LONG', 'SHORT', 'CLOSE', 'HOLD']", action_value),
                 size_pct=float(trade_action.get("size_pct", 0)),
                 take_profit_pct=float(trade_action.get("take_profit_pct", 0)),
                 stop_loss_pct=float(trade_action.get("stop_loss_pct", 0)),
@@ -1191,11 +1190,13 @@ async def main() -> None:
         """Cleanup on shutdown."""
         await memory_server.disconnect()
 
-    # Get port from environment
+    # Get configuration from environment
     port = int(os.getenv("MCP_SERVER_PORT", "8765"))
+    # Default to localhost for security, allow override for containerized deployments
+    host = os.getenv("MCP_SERVER_HOST", "127.0.0.1")
 
     # Run server
-    config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="info")
+    config = uvicorn.Config(app, host=host, port=port, log_level="info")
     server = uvicorn.Server(config)
     await server.serve()
 

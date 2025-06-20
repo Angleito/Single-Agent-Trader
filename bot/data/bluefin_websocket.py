@@ -9,7 +9,7 @@ from collections import deque
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import websockets
 from websockets.exceptions import ConnectionClosed, WebSocketException
@@ -25,19 +25,21 @@ try:
     from bot.exchange.bluefin_endpoints import get_notifications_url, get_websocket_url
 except ImportError:
     # Fallback endpoint resolver if centralized config is not available
-    def get_websocket_url(network: str | None = "mainnet") -> str:
+    def get_websocket_url(
+        network: Literal["mainnet", "testnet"] | None = "mainnet",
+    ) -> str:
         """Fallback WebSocket URL resolver."""
-        if network.lower() == "testnet":
+        if network and network.lower() == "testnet":
             return "wss://dapi.api.sui-staging.bluefin.io"
-        else:
-            return "wss://dapi.api.sui-prod.bluefin.io"
+        return "wss://dapi.api.sui-prod.bluefin.io"
 
-    def get_notifications_url(network: str | None = "mainnet") -> str:
+    def get_notifications_url(
+        network: Literal["mainnet", "testnet"] | None = "mainnet",
+    ) -> str:
         """Fallback notifications URL resolver."""
-        if network.lower() == "testnet":
+        if network and network.lower() == "testnet":
             return "wss://notifications.api.sui-staging.bluefin.io"
-        else:
-            return "wss://notifications.api.sui-prod.bluefin.io"
+        return "wss://notifications.api.sui-prod.bluefin.io"
 
 
 logger = logging.getLogger(__name__)
@@ -478,7 +480,7 @@ class BluefinWebSocketClient:
                     )
                 return
 
-            elif "error" in data:
+            if "error" in data:
                 # Subscription error
                 if sub_id in self._pending_subscriptions:
                     channel = self._pending_subscriptions.pop(sub_id)
@@ -1008,7 +1010,7 @@ class BluefinWebSocketClient:
             high=price,
             low=price,
             close=price,
-            volume=Decimal("0"),
+            volume=Decimal(0),
         )
 
         logger.debug("Created new %s candle at %s", self.interval, candle_timestamp)
@@ -1407,8 +1409,7 @@ class BluefinWebSocketClient:
             # Assume milliseconds if large number
             if ts > 1e10:
                 return datetime.fromtimestamp(ts / 1000, UTC)
-            else:
-                return datetime.fromtimestamp(ts, UTC)
+            return datetime.fromtimestamp(ts, UTC)
 
         if isinstance(ts, str):
             try:

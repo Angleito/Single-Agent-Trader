@@ -213,26 +213,28 @@ class ConfigurationValidator:
         results: dict[str, Any] = {"status": "pass", "checks": []}
 
         # Check for secure private key handling
-        if self.settings.exchange.exchange_type == "bluefin":
-            if self.settings.exchange.bluefin_private_key:
-                key = self.settings.exchange.bluefin_private_key.get_secret_value()
+        if (
+            self.settings.exchange.exchange_type == "bluefin"
+            and self.settings.exchange.bluefin_private_key
+        ):
+            key = self.settings.exchange.bluefin_private_key.get_secret_value()
 
-                # Check if key appears to be exposed in logs or config
-                if len(key) < 32:
-                    self.errors.append(
-                        "Bluefin private key appears to be truncated or invalid"
-                    )
-                    results["status"] = "fail"
-                    results["checks"].append({"name": "key_length", "status": "error"})
+            # Check if key appears to be exposed in logs or config
+            if len(key) < 32:
+                self.errors.append(
+                    "Bluefin private key appears to be truncated or invalid"
+                )
+                results["status"] = "fail"
+                results["checks"].append({"name": "key_length", "status": "error"})
 
-                # Security recommendations
-                if not self.settings.system.dry_run:
-                    self.warnings.append(
-                        "Live trading enabled - ensure private keys are securely stored"
-                    )
-                    results["checks"].append(
-                        {"name": "live_trading_security", "status": "warning"}
-                    )
+            # Security recommendations
+            if not self.settings.system.dry_run:
+                self.warnings.append(
+                    "Live trading enabled - ensure private keys are securely stored"
+                )
+                results["checks"].append(
+                    {"name": "live_trading_security", "status": "warning"}
+                )
 
         return results
 
@@ -401,15 +403,14 @@ class ConfigurationValidator:
                             "status": "pass",
                             "message": "Bluefin service reachable",
                         }
-                    else:
-                        self.warnings.append(
-                            f"Bluefin service returned status {response.status}"
-                        )
-                        return {
-                            "name": "bluefin_service",
-                            "status": "warning",
-                            "message": f"Service status: {response.status}",
-                        }
+                    self.warnings.append(
+                        f"Bluefin service returned status {response.status}"
+                    )
+                    return {
+                        "name": "bluefin_service",
+                        "status": "warning",
+                        "message": f"Service status: {response.status}",
+                    }
         except Exception as e:
             self.errors.append(f"Cannot reach Bluefin service at {service_url}: {e!s}")
             return {
@@ -444,16 +445,17 @@ class ConfigurationValidator:
 
         # 1. Mnemonic phrase (12 or 24 words)
         words = key.split()
-        if len(words) in [12, 24]:
-            if all(word.isalpha() and len(word) > 2 for word in words):
-                formats_detected.append("mnemonic")
+        if len(words) in [12, 24] and all(
+            word.isalpha() and len(word) > 2 for word in words
+        ):
+            formats_detected.append("mnemonic")
 
         # 2. Bech32-encoded Sui private key
         if key.startswith("suiprivkey") and len(key) > 20:
             formats_detected.append("sui_bech32")
 
         # 3. Hex format (with or without 0x prefix)
-        hex_key = key[2:] if key.startswith("0x") else key
+        hex_key = key.removeprefix("0x")
         if len(hex_key) == 64 and all(c in "0123456789abcdefABCDEF" for c in hex_key):
             formats_detected.append("hex")
 
@@ -496,15 +498,14 @@ class ConfigurationValidator:
                         "status": "pass",
                         "message": f"Endpoints reachable ({network})",
                     }
-                else:
-                    self.warnings.append(
-                        f"Bluefin {network} endpoint returned status {response.status}"
-                    )
-                    return {
-                        "name": "bluefin_endpoints",
-                        "status": "warning",
-                        "message": f"Endpoint status: {response.status}",
-                    }
+                self.warnings.append(
+                    f"Bluefin {network} endpoint returned status {response.status}"
+                )
+                return {
+                    "name": "bluefin_endpoints",
+                    "status": "warning",
+                    "message": f"Endpoint status: {response.status}",
+                }
         except Exception as e:
             self.errors.append(f"Cannot validate Bluefin endpoints: {e!s}")
             return {
@@ -543,22 +544,19 @@ class ConfigurationValidator:
                         "status": "pass",
                         "message": "OpenAI API accessible",
                     }
-                elif response.status == 401:
+                if response.status == 401:
                     self.errors.append("OpenAI API key is invalid")
                     return {
                         "name": "openai_api",
                         "status": "error",
                         "message": "Invalid API key",
                     }
-                else:
-                    self.warnings.append(
-                        f"OpenAI API returned status {response.status}"
-                    )
-                    return {
-                        "name": "openai_api",
-                        "status": "warning",
-                        "message": f"API status: {response.status}",
-                    }
+                self.warnings.append(f"OpenAI API returned status {response.status}")
+                return {
+                    "name": "openai_api",
+                    "status": "warning",
+                    "message": f"API status: {response.status}",
+                }
         except Exception as e:
             self.errors.append(f"Cannot reach OpenAI API: {e!s}")
             return {
@@ -602,22 +600,20 @@ class ConfigurationValidator:
                             "status": "pass",
                             "message": f"Sui RPC accessible ({network})",
                         }
-                    else:
-                        self.warnings.append(
-                            f"Sui RPC returned unexpected response: {data}"
-                        )
-                        return {
-                            "name": "sui_rpc",
-                            "status": "warning",
-                            "message": "Unexpected RPC response",
-                        }
-                else:
-                    self.errors.append(f"Sui RPC returned status {response.status}")
+                    self.warnings.append(
+                        f"Sui RPC returned unexpected response: {data}"
+                    )
                     return {
                         "name": "sui_rpc",
-                        "status": "error",
-                        "message": f"RPC status: {response.status}",
+                        "status": "warning",
+                        "message": "Unexpected RPC response",
                     }
+                self.errors.append(f"Sui RPC returned status {response.status}")
+                return {
+                    "name": "sui_rpc",
+                    "status": "error",
+                    "message": f"RPC status: {response.status}",
+                }
         except Exception as e:
             self.errors.append(f"Cannot reach Sui RPC at {rpc_url}: {e!s}")
             return {
@@ -649,22 +645,19 @@ class ConfigurationValidator:
                         "status": "pass",
                         "message": f"Bluefin API accessible ({network})",
                     }
-                elif response.status == 429:
+                if response.status == 429:
                     self.warnings.append("Bluefin API rate limited - this is normal")
                     return {
                         "name": "bluefin_api",
                         "status": "warning",
                         "message": "API rate limited",
                     }
-                else:
-                    self.warnings.append(
-                        f"Bluefin API returned status {response.status}"
-                    )
-                    return {
-                        "name": "bluefin_api",
-                        "status": "warning",
-                        "message": f"API status: {response.status}",
-                    }
+                self.warnings.append(f"Bluefin API returned status {response.status}")
+                return {
+                    "name": "bluefin_api",
+                    "status": "warning",
+                    "message": f"API status: {response.status}",
+                }
         except Exception as e:
             self.errors.append(f"Cannot reach Bluefin API: {e!s}")
             return {
@@ -1479,7 +1472,7 @@ class ExchangeSettings(BaseModel):
 
         # 3. Check for hex format (with or without 0x prefix)
         else:
-            hex_key = private_key[2:] if private_key.startswith("0x") else private_key
+            hex_key = private_key.removeprefix("0x")
 
             if len(hex_key) == 64:
                 if all(c in "0123456789abcdefABCDEF" for c in hex_key):
@@ -1698,8 +1691,8 @@ class RiskSettings(BaseModel):
 
     # Account Protection
     min_account_balance: Decimal = Field(
-        default=Decimal("100"),
-        ge=Decimal("10"),
+        default=Decimal(100),
+        ge=Decimal(10),
         description="Minimum account balance to continue trading",
     )
     emergency_stop_loss_pct: float = Field(
@@ -1840,8 +1833,8 @@ class PaperTradingSettings(BaseModel):
 
     # Account Configuration
     starting_balance: Decimal = Field(
-        default=Decimal("10000"),
-        ge=Decimal("100"),
+        default=Decimal(10000),
+        ge=Decimal(100),
         description="Starting balance for paper trading",
     )
     fee_rate: float = Field(
@@ -2274,7 +2267,7 @@ class Settings(BaseSettings):
             # Validate LLM API keys
             if self.llm.provider == "openai" and not self.llm.openai_api_key:
                 raise ValueError("OpenAI API key required for live trading")
-            elif self.llm.provider == "anthropic" and not self.llm.anthropic_api_key:
+            if self.llm.provider == "anthropic" and not self.llm.anthropic_api_key:
                 raise ValueError("Anthropic API key required for live trading")
 
             # Validate exchange API keys
@@ -2770,7 +2763,7 @@ class Settings(BaseSettings):
                 ]
             )
             return has_legacy or has_cdp
-        elif self.exchange.exchange_type == "bluefin":
+        if self.exchange.exchange_type == "bluefin":
             return bool(self.exchange.bluefin_private_key)
 
         return False

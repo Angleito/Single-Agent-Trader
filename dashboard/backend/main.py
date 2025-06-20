@@ -87,12 +87,11 @@ class BluefinServiceClient:
             async with session.get(f"{self.base_url}/health") as response:
                 if response.status == 200:
                     return await response.json()
-                else:
-                    return {
-                        "status": "unhealthy",
-                        "error": f"HTTP {response.status}",
-                        "message": await response.text(),
-                    }
+                return {
+                    "status": "unhealthy",
+                    "error": f"HTTP {response.status}",
+                    "message": await response.text(),
+                }
         except Exception as e:
             logger.exception("Bluefin health check failed")
             return {
@@ -108,11 +107,10 @@ class BluefinServiceClient:
             async with session.get(f"{self.base_url}/account") as response:
                 if response.status == 200:
                     return await response.json()
-                else:
-                    raise HTTPException(
-                        status_code=response.status,
-                        detail=f"Bluefin service error: {await response.text()}",
-                    )
+                raise HTTPException(
+                    status_code=response.status,
+                    detail=f"Bluefin service error: {await response.text()}",
+                )
         except aiohttp.ClientError as e:
             logger.exception("Failed to get Bluefin account info")
             raise HTTPException(
@@ -126,11 +124,10 @@ class BluefinServiceClient:
             async with session.get(f"{self.base_url}/positions") as response:
                 if response.status == 200:
                     return await response.json()
-                else:
-                    raise HTTPException(
-                        status_code=response.status,
-                        detail=f"Bluefin service error: {await response.text()}",
-                    )
+                raise HTTPException(
+                    status_code=response.status,
+                    detail=f"Bluefin service error: {await response.text()}",
+                )
         except aiohttp.ClientError as e:
             logger.exception("Failed to get Bluefin positions")
             raise HTTPException(
@@ -144,11 +141,10 @@ class BluefinServiceClient:
             async with session.get(f"{self.base_url}/orders") as response:
                 if response.status == 200:
                     return await response.json()
-                else:
-                    raise HTTPException(
-                        status_code=response.status,
-                        detail=f"Bluefin service error: {await response.text()}",
-                    )
+                raise HTTPException(
+                    status_code=response.status,
+                    detail=f"Bluefin service error: {await response.text()}",
+                )
         except aiohttp.ClientError as e:
             logger.exception("Failed to get Bluefin orders")
             raise HTTPException(
@@ -164,11 +160,10 @@ class BluefinServiceClient:
             ) as response:
                 if response.status == 200:
                     return await response.json()
-                else:
-                    raise HTTPException(
-                        status_code=response.status,
-                        detail=f"Bluefin service error: {await response.text()}",
-                    )
+                raise HTTPException(
+                    status_code=response.status,
+                    detail=f"Bluefin service error: {await response.text()}",
+                )
         except aiohttp.ClientError as e:
             logger.exception("Failed to get Bluefin market ticker")
             raise HTTPException(
@@ -184,11 +179,10 @@ class BluefinServiceClient:
             ) as response:
                 if response.status in [200, 201]:
                     return await response.json()
-                else:
-                    raise HTTPException(
-                        status_code=response.status,
-                        detail=f"Bluefin order error: {await response.text()}",
-                    )
+                raise HTTPException(
+                    status_code=response.status,
+                    detail=f"Bluefin order error: {await response.text()}",
+                )
         except aiohttp.ClientError as e:
             logger.exception("Failed to place Bluefin order")
             raise HTTPException(
@@ -242,7 +236,7 @@ class ConnectionManager:
         # Performance tracking
         self.stats = {
             "total_messages": 0,
-            "messages_by_category": {cat: 0 for cat in self.message_buffers},
+            "messages_by_category": dict.fromkeys(self.message_buffers, 0),
             "connections_served": 0,
             "total_replay_messages": 0,
         }
@@ -2295,10 +2289,9 @@ async def restart_bot():
             )
 
             return {"status": "success", "message": "Bot restarted successfully"}
-        else:
-            raise HTTPException(
-                status_code=500, detail=f"Failed to restart bot: {result.stderr}"
-            )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to restart bot: {result.stderr}"
+        )
 
     except subprocess.TimeoutExpired as e:
         raise HTTPException(status_code=500, detail="Timeout restarting bot") from e
@@ -2965,16 +2958,15 @@ async def udf_config():
     def clean_response(obj):
         if isinstance(obj, dict):
             return {k: clean_response(v) for k, v in obj.items() if v is not None}
-        elif isinstance(obj, list):
+        if isinstance(obj, list):
             return [clean_response(item) for item in obj if item is not None]
-        elif isinstance(obj, str):
+        if isinstance(obj, str):
             return str(obj)
-        elif isinstance(obj, bool):
+        if isinstance(obj, bool):
             return bool(obj)
-        elif isinstance(obj, int | float):
+        if isinstance(obj, int | float):
             return obj if obj == obj else 0  # Handle NaN
-        else:
-            return obj
+        return obj
 
     return clean_response(config)
 
@@ -3271,8 +3263,7 @@ async def add_llm_decision_to_chart(decision_data: dict[str, Any]):
             )
 
             return {"status": "success", "message": "Decision added to chart"}
-        else:
-            raise HTTPException(status_code=400, detail="Invalid decision data")
+        raise HTTPException(status_code=400, detail="Invalid decision data")
 
     except Exception as e:
         logger.exception("Error adding LLM decision to chart")

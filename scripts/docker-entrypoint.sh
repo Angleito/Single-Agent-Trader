@@ -119,14 +119,14 @@ verify_directory() {
     # Check if directory exists and is accessible
     if [[ -d "${dir_path}" ]] && [[ -r "${dir_path}" ]]; then
         log_debug "Directory exists and is accessible: ${dir_path}"
-        
+
         # Try to set permissions if possible (but don't fail if it doesn't work)
         if chmod "${permissions}" "${dir_path}" 2>/dev/null; then
             log_debug "Set permissions ${permissions} on ${dir_path}"
         else
             log_debug "Cannot set permissions on ${dir_path} (may be read-only filesystem)"
         fi
-        
+
         return 0
     else
         log_warning "Directory ${dir_path} is not accessible or does not exist"
@@ -160,18 +160,18 @@ setup_fallback() {
 
     # Create fallback in tmpfs
     local tmpfs_fallback="/tmp/$(basename "${original_dir}")-$$"
-    
+
     if mkdir -p "${tmpfs_fallback}" 2>/dev/null; then
         log_success "Created tmpfs fallback: ${tmpfs_fallback}"
-        
+
         # Set permissions (but don't fail if it doesn't work)
         chmod 755 "${tmpfs_fallback}" 2>/dev/null || true
-        
+
         # Set environment variable for application to use
         local env_var_name="FALLBACK_$(basename "${original_dir}" | tr '[:lower:]' '[:upper:]')_DIR"
         export "${env_var_name}=${tmpfs_fallback}"
         log_info "Set environment variable: ${env_var_name}=${tmpfs_fallback}"
-        
+
         return 0
     else
         log_warning "Failed to create tmpfs fallback for ${original_dir}"

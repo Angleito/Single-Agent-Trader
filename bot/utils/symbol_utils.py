@@ -5,8 +5,11 @@ Provides functions for symbol validation and conversion between different
 exchange formats.
 """
 
+import logging
 import re
 from typing import Literal
+
+logger = logging.getLogger(__name__)
 
 
 class SymbolConversionError(Exception):
@@ -136,10 +139,9 @@ def get_symbol_type(symbol: str) -> Literal["spot", "futures", "perpetual"]:
 
     if "PERP" in symbol_upper:
         return "perpetual"
-    elif any(month in symbol_upper for month in ["MAR", "JUN", "SEP", "DEC"]):
+    if any(month in symbol_upper for month in ["MAR", "JUN", "SEP", "DEC"]):
         return "futures"
-    else:
-        return "spot"
+    return "spot"
 
 
 # Bluefin supported symbols (based on official documentation)
@@ -173,11 +175,10 @@ def is_bluefin_symbol_supported(symbol: str, network: str = "mainnet") -> bool:
     symbol = symbol.upper()
     if network.lower() in ["mainnet", "production", "sui_prod"]:
         return symbol in BLUEFIN_MAINNET_SYMBOLS
-    elif network.lower() in ["testnet", "staging", "sui_staging"]:
+    if network.lower() in ["testnet", "staging", "sui_staging"]:
         return symbol in BLUEFIN_TESTNET_SYMBOLS
-    else:
-        # Default to mainnet for unknown networks
-        return symbol in BLUEFIN_MAINNET_SYMBOLS
+    # Default to mainnet for unknown networks
+    return symbol in BLUEFIN_MAINNET_SYMBOLS
 
 
 def get_bluefin_symbol_info(symbol: str, network: str = "mainnet") -> dict:
@@ -194,10 +195,9 @@ def get_bluefin_symbol_info(symbol: str, network: str = "mainnet") -> dict:
     symbol = symbol.upper()
     if network.lower() in ["mainnet", "production", "sui_prod"]:
         return BLUEFIN_MAINNET_SYMBOLS.get(symbol, {})
-    elif network.lower() in ["testnet", "staging", "sui_staging"]:
+    if network.lower() in ["testnet", "staging", "sui_staging"]:
         return BLUEFIN_TESTNET_SYMBOLS.get(symbol, {})
-    else:
-        return BLUEFIN_MAINNET_SYMBOLS.get(symbol, {})
+    return BLUEFIN_MAINNET_SYMBOLS.get(symbol, {})
 
 
 def get_testnet_symbol_fallback(symbol: str) -> str:
@@ -313,9 +313,9 @@ class BluefinSymbolConverter:
 
                     except (AttributeError, TypeError):
                         continue
-        except Exception:
-            # If introspection fails, continue to final error
-            pass
+        except Exception as e:
+            # If introspection fails, log the error and continue to final error
+            logger.debug("Failed to introspect symbol during conversion: %s", e)
 
         raise SymbolConversionError(
             f"Unknown symbol: {symbol} (base: {base}) - not found in MARKET_SYMBOLS enum"

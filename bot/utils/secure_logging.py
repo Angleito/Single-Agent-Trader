@@ -109,21 +109,20 @@ class SensitiveDataFilter(logging.Filter):
             return f"{full_match[:6]}...{full_match[-4:]}"
 
         # Handle Sui addresses - preserve first 8 and last 4 chars
-        elif full_match.startswith("sui") and len(full_match) > 20:
+        if full_match.startswith("sui") and len(full_match) > 20:
             return f"{full_match[:8]}...{full_match[-4:]}"
 
         # Handle private keys - completely redact
-        elif full_match.startswith("0x") and len(full_match) == 66:
+        if full_match.startswith("0x") and len(full_match) == 66:
             return "[PRIVATE_KEY_REDACTED]"
 
         # Handle balance amounts - preserve structure but redact large amounts
-        elif '"balance":' in full_match.lower():
+        if '"balance":' in full_match.lower():
             if len(groups) >= 3:
                 balance_value = groups[1]
                 if len(balance_value) >= 10:  # Large balance
                     return f"{groups[0]}[LARGE_BALANCE]{groups[2]}"
-                else:
-                    return full_match  # Keep small balances
+                return full_match  # Keep small balances
 
         # Handle account IDs - preserve first 4 and last 4 chars
         elif '"account' in full_match.lower() and len(groups) >= 3:

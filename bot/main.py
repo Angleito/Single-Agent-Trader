@@ -2964,8 +2964,12 @@ class TradingEngine:
                             and self.dominance_provider._session._connector is not None
                         ):
                             self.dominance_provider._session._connector.close()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        # Log cleanup errors but don't fail shutdown
+                        logger.debug(
+                            "Error closing dominance provider connector during cleanup: %s",
+                            e,
+                        )
 
     async def _reconcile_positions(self) -> None:
         """
