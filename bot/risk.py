@@ -1150,6 +1150,8 @@ class RiskManager:
                 and m["timestamp"] >= cutoff_time
             ]
 
+            return metrics
+
         except Exception:
             logger.exception("Risk metrics monitoring error")
             return {}

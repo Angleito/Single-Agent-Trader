@@ -26,6 +26,11 @@ def _get_project_root() -> Path:
     return Path.cwd()
 
 
+def get_project_root() -> Path:
+    """Get the project root directory (public interface)."""
+    return _get_project_root()
+
+
 def _is_directory_writable(directory: Path) -> bool:
     """
     Check if a directory is writable by attempting to create a test file.
