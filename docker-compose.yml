@@ -23,11 +23,12 @@ services:
     container_name: bluefin-service
     restart: unless-stopped
 
-    # SECURITY HARDENING - Ubuntu-optimized Container Security  
+    # SECURITY HARDENING - VPS-optimized Container Security  
     user: "1000:1000"  # Run as non-root user
     read_only: true     # Read-only root filesystem
     security_opt:
-      - no-new-privileges:true  # Prevent privilege escalation
+      - no-new-privileges:false  # Allow privilege operations for VPS compatibility
+      - seccomp:unconfined      # Disable seccomp restrictions for VPS
       - apparmor:unconfined     # Ubuntu AppArmor compatibility
     cap_drop:
       - ALL             # Drop all capabilities
@@ -101,11 +102,12 @@ services:
     container_name: ai-trading-bot
     restart: unless-stopped
 
-    # SECURITY HARDENING - Ubuntu-optimized Container Security
+    # SECURITY HARDENING - VPS-optimized Container Security
     user: "1000:1000"  # Run as non-root user  
     read_only: true     # Read-only root filesystem
     security_opt:
-      - no-new-privileges:true  # Prevent privilege escalation
+      - no-new-privileges:false  # Allow privilege operations for VPS compatibility
+      - seccomp:unconfined      # Disable seccomp restrictions for VPS
       - apparmor:unconfined     # Ubuntu AppArmor compatibility
     cap_drop:
       - ALL             # Drop all capabilities
@@ -233,11 +235,12 @@ services:
     container_name: mcp-omnisearch-server
     restart: unless-stopped
 
-    # SECURITY HARDENING - Ubuntu-optimized Container Security
+    # SECURITY HARDENING - VPS-optimized Container Security
     user: "1000:1000"  # Run as non-root user
     read_only: true     # Read-only root filesystem
     security_opt:
-      - no-new-privileges:true  # Prevent privilege escalation
+      - no-new-privileges:false  # Allow privilege operations for VPS compatibility
+      - seccomp:unconfined      # Disable seccomp restrictions for VPS
       - apparmor:unconfined     # Ubuntu AppArmor compatibility
     cap_drop:
       - ALL             # Drop all capabilities
@@ -307,11 +310,12 @@ services:
     container_name: mcp-memory-server
     restart: unless-stopped
 
-    # SECURITY HARDENING - Ubuntu-optimized Container Security
+    # SECURITY HARDENING - VPS-optimized Container Security
     user: "1000:1000"  # Run as non-root user
     read_only: true     # Read-only root filesystem
     security_opt:
-      - no-new-privileges:true  # Prevent privilege escalation
+      - no-new-privileges:false  # Allow privilege operations for VPS compatibility
+      - seccomp:unconfined      # Disable seccomp restrictions for VPS
       - apparmor:unconfined     # Ubuntu AppArmor compatibility
     cap_drop:
       - ALL             # Drop all capabilities
@@ -507,11 +511,12 @@ services:
     ports:
       - "3001:8080"  # Allow external access for frontend
 
-    # SECURITY HARDENING - Ubuntu-optimized Container Security
+    # SECURITY HARDENING - VPS-optimized Container Security
     user: "1000:1000"  # Run as non-root user
     read_only: true     # Read-only root filesystem
     security_opt:
-      - no-new-privileges:true  # Prevent privilege escalation
+      - no-new-privileges:false  # Allow privilege operations for VPS compatibility
+      - seccomp:unconfined      # Disable seccomp restrictions for VPS
       - apparmor:unconfined     # Ubuntu AppArmor compatibility
     cap_drop:
       - ALL             # Drop all capabilities
