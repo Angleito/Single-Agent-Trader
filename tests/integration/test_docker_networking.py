@@ -73,7 +73,7 @@ class TestDockerNetworking:
             "BOT_SERVICE_URL": "http://ai-trading-bot:8000",
         }
 
-        for var, expected_url in env_vars.items():
+        for _var, expected_url in env_vars.items():
             # Test URL format validation
             parsed = urlparse(expected_url)
             assert parsed.scheme in ["http", "https"]
@@ -99,7 +99,7 @@ class TestDockerNetworking:
             },
         }
 
-        for service, expected_response in health_responses.items():
+        for _service, expected_response in health_responses.items():
             # Validate health check response structure
             assert "status" in expected_response
             assert expected_response["status"] == "healthy"
@@ -165,7 +165,7 @@ class TestDockerNetworking:
             "ai-trading-bot": {"internal": 8000, "external": None},
         }
 
-        for service, ports in port_mappings.items():
+        for _service, ports in port_mappings.items():
             assert ports["internal"] > 0
             # External port should be None for internal services or a valid port
             if ports["external"] is not None:
@@ -179,7 +179,7 @@ class TestDockerNetworking:
             "config": "./config:/app/config",
         }
 
-        for volume_name, mapping in volume_config.items():
+        for _volume_name, mapping in volume_config.items():
             # Validate volume mapping format
             assert ":" in mapping
             host_path, container_path = mapping.split(":", 1)
@@ -209,7 +209,7 @@ class TestServiceDiscovery:
         }
 
         # Test service lookup
-        for service_name, config in service_registry.items():
+        for _service_name, config in service_registry.items():
             assert "url" in config
             assert "status" in config
             assert "endpoints" in config
@@ -342,7 +342,7 @@ class TestNetworkResilience:
             },
         }
 
-        for scenario, config in degradation_scenarios.items():
+        for _scenario, config in degradation_scenarios.items():
             assert "fallback" in config
             assert "functionality" in config
             assert len(config["fallback"]) > 0

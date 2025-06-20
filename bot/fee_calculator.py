@@ -149,7 +149,7 @@ class FeeCalculator:
             return fees
 
         except Exception as e:
-            logger.error(f"Error calculating trade fees: {e}")
+            logger.exception(f"Error calculating trade fees: {e}")
             # Return zero fees as fallback
             return TradeFees(
                 entry_fee=Decimal("0"),
@@ -331,7 +331,7 @@ class FeeCalculator:
             return adjusted_action, final_fees
 
         except Exception as e:
-            logger.error(f"Error adjusting position size for fees: {e}")
+            logger.exception(f"Error adjusting position size for fees: {e}")
             # Return original action as fallback
             return trade_action, TradeFees(
                 entry_fee=Decimal("0"),
@@ -344,7 +344,7 @@ class FeeCalculator:
     def calculate_minimum_profitable_move(
         self,
         position_value: Decimal,
-        leverage: int = None,
+        leverage: int | None = None,
         is_market_order: bool = True,
     ) -> Decimal:
         """
@@ -403,7 +403,7 @@ class FeeCalculator:
             return Decimal(str(min_move_percentage))
 
         except Exception as e:
-            logger.error(f"Error calculating minimum profitable move: {e}")
+            logger.exception(f"Error calculating minimum profitable move: {e}")
             return Decimal("0.001")  # 0.1% fallback
 
     def validate_trade_profitability(
@@ -411,7 +411,7 @@ class FeeCalculator:
         trade_action: TradeAction,
         position_value: Decimal,
         current_price: Decimal,
-        leverage: int = None,
+        leverage: int | None = None,
     ) -> tuple[bool, str]:
         """
         Validate that a trade has sufficient profit targets to cover fees.
@@ -466,7 +466,7 @@ class FeeCalculator:
             return True, "Trade profitability validated"
 
         except Exception as e:
-            logger.error(f"Error validating trade profitability: {e}")
+            logger.exception(f"Error validating trade profitability: {e}")
             return True, "Validation error - allowing trade"
 
     def _get_fee_tier(self, volume: float) -> dict[str, float]:

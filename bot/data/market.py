@@ -47,8 +47,10 @@ except ImportError:
 
     COINBASE_AVAILABLE = False
 
-from ..config import settings
-from ..trading_types import MarketData
+import contextlib
+
+from bot.config import settings
+from bot.trading_types import MarketData
 
 logger = logging.getLogger(__name__)
 
@@ -108,14 +110,10 @@ class WebSocketMessageValidator:
                 return False
 
             # Validate ticker events
-            for event in events:
-                if not self._validate_ticker_event(event):
-                    return False
-
-            return True
+            return all(self._validate_ticker_event(event) for event in events)
 
         except Exception as e:
-            logger.error(f"Error validating ticker message: {e}")
+            logger.exception(f"Error validating ticker message: {e}")
             return False
 
     def validate_trade_message(self, message: dict) -> bool:
@@ -152,14 +150,10 @@ class WebSocketMessageValidator:
                 logger.warning("Trade events is not a list")
                 return False
 
-            for event in events:
-                if not self._validate_trade_event(event):
-                    return False
-
-            return True
+            return all(self._validate_trade_event(event) for event in events)
 
         except Exception as e:
-            logger.error(f"Error validating trade message: {e}")
+            logger.exception(f"Error validating trade message: {e}")
             return False
 
     def _validate_ticker_event(self, event: dict) -> bool:
@@ -183,14 +177,10 @@ class WebSocketMessageValidator:
                 logger.warning("Ticker event has no tickers array")
                 return False
 
-            for ticker in tickers:
-                if not self._validate_ticker_data(ticker):
-                    return False
-
-            return True
+            return all(self._validate_ticker_data(ticker) for ticker in tickers)
 
         except Exception as e:
-            logger.error(f"Error validating ticker event: {e}")
+            logger.exception(f"Error validating ticker event: {e}")
             return False
 
     def _validate_ticker_data(self, ticker: dict) -> bool:
@@ -227,7 +217,7 @@ class WebSocketMessageValidator:
             return True
 
         except Exception as e:
-            logger.error(f"Error validating ticker data: {e}")
+            logger.exception(f"Error validating ticker data: {e}")
             return False
 
     def _validate_trade_event(self, event: dict) -> bool:
@@ -251,14 +241,10 @@ class WebSocketMessageValidator:
                 logger.warning("Trade event has no trades array")
                 return False
 
-            for trade in trades:
-                if not self._validate_trade_data(trade):
-                    return False
-
-            return True
+            return all(self._validate_trade_data(trade) for trade in trades)
 
         except Exception as e:
-            logger.error(f"Error validating trade event: {e}")
+            logger.exception(f"Error validating trade event: {e}")
             return False
 
     def _validate_trade_data(self, trade: dict) -> bool:
@@ -303,7 +289,7 @@ class WebSocketMessageValidator:
             return True
 
         except Exception as e:
-            logger.error(f"Error validating trade data: {e}")
+            logger.exception(f"Error validating trade data: {e}")
             return False
 
     def get_validation_stats(self) -> dict[str, Any]:
@@ -369,7 +355,7 @@ class WebSocketMessageValidator:
             return True
 
         except Exception as e:
-            logger.error(f"Error in data quality validation: {e}")
+            logger.exception(f"Error in data quality validation: {e}")
             return False
 
     def validate_message_timing(self, message: dict) -> bool:
@@ -407,7 +393,7 @@ class WebSocketMessageValidator:
             return True
 
         except Exception as e:
-            logger.error(f"Error validating message timing: {e}")
+            logger.exception(f"Error validating message timing: {e}")
             return False
 
 
@@ -504,7 +490,7 @@ class MarketDataProvider:
             Symbol to use for data fetching
         """
         # Import here to avoid circular imports
-        from ..exchange.futures_contract_mapper import FuturesContractMapper
+        from bot.exchange.futures_contract_mapper import FuturesContractMapper
 
         # Check if this looks like a futures contract (contains month/expiry info)
         if "-" in symbol and len(symbol.split("-")) >= 3:
@@ -572,7 +558,7 @@ class MarketDataProvider:
                     return None
 
             except Exception as jwt_error:
-                logger.error(f"Exception in jwt_generator.build_ws_jwt: {jwt_error}")
+                logger.exception(f"Exception in jwt_generator.build_ws_jwt: {jwt_error}")
                 import traceback
 
                 logger.debug(f"JWT generation traceback: {traceback.format_exc()}")
@@ -624,7 +610,7 @@ class MarketDataProvider:
             logger.info("Successfully connected to market data feeds")
 
         except Exception as e:
-            logger.error(f"Failed to connect to market data feeds: {e}")
+            logger.exception(f"Failed to connect to market data feeds: {e}")
             self._is_connected = False
             raise
 
@@ -636,18 +622,14 @@ class MarketDataProvider:
         # Stop message processing task
         if self._processing_task and not self._processing_task.done():
             self._processing_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._processing_task
-            except asyncio.CancelledError:
-                pass
 
         # Stop WebSocket connection
         if self._ws_task and not self._ws_task.done():
             self._ws_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._ws_task
-            except asyncio.CancelledError:
-                pass
 
         if self._ws_connection:
             await self._ws_connection.close()
@@ -777,7 +759,7 @@ class MarketDataProvider:
                 await asyncio.sleep(0.1)
 
             except Exception as e:
-                logger.error(f"Error fetching batch {batch_num + 1}: {e}")
+                logger.exception(f"Error fetching batch {batch_num + 1}: {e}")
                 # Continue with other batches even if one fails
 
             # Move to next batch
@@ -847,7 +829,7 @@ class MarketDataProvider:
                 return batch_data
 
         except Exception as e:
-            logger.error(f"Failed to fetch batch from {start_time} to {end_time}: {e}")
+            logger.exception(f"Failed to fetch batch from {start_time} to {end_time}: {e}")
             return []
 
     async def fetch_historical_data(
@@ -988,7 +970,7 @@ class MarketDataProvider:
                 return historical_data
 
         except Exception as e:
-            logger.error(f"Failed to fetch historical data: {e}")
+            logger.exception(f"Failed to fetch historical data: {e}")
             # Fallback to cached data if available
             if self._ohlcv_cache:
                 logger.info("Using cached historical data")
@@ -1027,7 +1009,7 @@ class MarketDataProvider:
                     return price
 
         except Exception as e:
-            logger.error(f"Error fetching latest price: {e}")
+            logger.exception(f"Error fetching latest price: {e}")
 
         # Fall back to cached OHLCV data
         return self.get_latest_price()
@@ -1080,7 +1062,7 @@ class MarketDataProvider:
                 return orderbook
 
         except Exception as e:
-            logger.error(f"Error fetching orderbook: {e}")
+            logger.exception(f"Error fetching orderbook: {e}")
             return None
 
     async def _start_websocket(self) -> None:
@@ -1112,7 +1094,7 @@ class MarketDataProvider:
             try:
                 await self._connect_websocket()
             except Exception as e:
-                logger.error(f"WebSocket connection error: {e}")
+                logger.exception(f"WebSocket connection error: {e}")
                 if self._reconnect_attempts < self._max_reconnect_attempts:
                     self._reconnect_attempts += 1
                     delay = min(
@@ -1123,7 +1105,7 @@ class MarketDataProvider:
                     )
                     await asyncio.sleep(delay)
                 else:
-                    logger.error(
+                    logger.exception(
                         "Max reconnection attempts reached, stopping WebSocket"
                     )
                     break
@@ -1216,7 +1198,7 @@ class MarketDataProvider:
                 except json.JSONDecodeError as e:
                     logger.warning(f"Failed to parse WebSocket message: {e}")
                 except Exception as e:
-                    logger.error(f"Error handling WebSocket message: {e}")
+                    logger.exception(f"Error handling WebSocket message: {e}")
 
     async def _process_websocket_messages(self) -> None:
         """
@@ -1236,7 +1218,7 @@ class MarketDataProvider:
                 # No message available, continue loop
                 continue
             except Exception as e:
-                logger.error(f"Error in message processor: {e}")
+                logger.exception(f"Error in message processor: {e}")
                 await asyncio.sleep(0.1)
 
     async def _handle_websocket_message_async(self, message: dict[str, Any]) -> None:
@@ -1249,7 +1231,7 @@ class MarketDataProvider:
         try:
             await self._handle_websocket_message(message)
         except Exception as e:
-            logger.error(f"Error in async message handler: {e}")
+            logger.exception(f"Error in async message handler: {e}")
 
     async def _handle_websocket_message(self, message: dict[str, Any]) -> None:
         """
@@ -1376,7 +1358,7 @@ class MarketDataProvider:
                                 await self._notify_subscribers(updated_candle)
 
         except Exception as e:
-            logger.error(f"Error handling ticker update: {e}")
+            logger.exception(f"Error handling ticker update: {e}")
             logger.debug(f"Ticker message: {json.dumps(message, indent=2)}")
 
     async def _handle_trade_update(self, message: dict[str, Any]) -> None:
@@ -1459,7 +1441,7 @@ class MarketDataProvider:
                                 self._ohlcv_cache[-1] = updated_candle
 
         except Exception as e:
-            logger.error(f"Error handling trade update: {e}")
+            logger.exception(f"Error handling trade update: {e}")
             logger.debug(f"Trade message: {json.dumps(message, indent=2)}")
 
     def get_latest_ohlcv(self, limit: int | None = None) -> list[MarketData]:
@@ -1523,9 +1505,8 @@ class MarketDataProvider:
             )
 
         df = pd.DataFrame(df_data)
-        df.set_index("timestamp", inplace=True)
+        return df.set_index("timestamp")
 
-        return df
 
     def subscribe_to_updates(self, callback: Callable[[MarketData], None]) -> None:
         """
@@ -1570,7 +1551,7 @@ class MarketDataProvider:
                     task = asyncio.create_task(self._safe_callback_sync(callback, data))
                     tasks.append(task)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     f"Error creating subscriber task for {callback.__name__}: {e}"
                 )
 
@@ -1582,7 +1563,7 @@ class MarketDataProvider:
         try:
             await callback(data)
         except Exception as e:
-            logger.error(f"Error in async subscriber callback {callback.__name__}: {e}")
+            logger.exception(f"Error in async subscriber callback {callback.__name__}: {e}")
 
     async def _safe_callback_sync(self, callback: Callable, data: MarketData) -> None:
         """Safely execute sync callback in thread pool."""
@@ -1596,7 +1577,7 @@ class MarketDataProvider:
                 return
             await loop.run_in_executor(None, callback, data)
         except Exception as e:
-            logger.error(f"Error in sync subscriber callback {callback.__name__}: {e}")
+            logger.exception(f"Error in sync subscriber callback {callback.__name__}: {e}")
 
     def is_connected(self) -> bool:
         """
@@ -1685,7 +1666,7 @@ class MarketDataProvider:
             "subscribers": len(self._subscribers),
             "reconnect_attempts": self._reconnect_attempts,
             "cache_status": {
-                key: self._is_cache_valid(key) for key in self._cache_timestamps.keys()
+                key: self._is_cache_valid(key) for key in self._cache_timestamps
             },
         }
 
@@ -1862,7 +1843,7 @@ class MarketDataProvider:
             return True
 
         except Exception as e:
-            logger.error(f"Error validating market data: {e}")
+            logger.exception(f"Error validating market data: {e}")
             return False
 
     def _validate_price_data(
@@ -1900,7 +1881,7 @@ class MarketDataProvider:
             return True
 
         except Exception as e:
-            logger.error(f"Error validating price data: {e}")
+            logger.exception(f"Error validating price data: {e}")
             return True  # Default to allowing data on validation error
 
     def _validate_data_sufficiency(self, candle_count: int) -> None:
@@ -2125,10 +2106,9 @@ class MarketDataClient:
             )
 
         df = pd.DataFrame(df_data)
-        df.set_index("timestamp", inplace=True)
-        df.sort_index(inplace=True)
+        df = df.set_index("timestamp")
+        return df.sort_index()
 
-        return df
 
 
 # Factory function for easy client creation

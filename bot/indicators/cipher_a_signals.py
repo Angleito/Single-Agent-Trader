@@ -24,7 +24,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from ..utils import ta
+from bot.utils import ta
+
 from .rsimfi import RSIMFIIndicator
 from .wavetrend import WaveTrend
 
@@ -1045,7 +1046,7 @@ class CipherASignals:
             end_time = time.perf_counter()
             error_duration = (end_time - start_time) * 1000
 
-            logger.error(
+            logger.exception(
                 "Cipher A signals calculation failed with exception",
                 extra={
                     "indicator": "cipher_a_signals",

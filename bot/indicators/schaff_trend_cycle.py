@@ -17,7 +17,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from ..utils import ta
+from bot.utils import ta
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class SchaffTrendCycle:
         factor: float = 0.5,
         overbought: float = 75.0,
         oversold: float = 25.0,
-        gap_threshold_multiplier: float = None,
+        gap_threshold_multiplier: float | None = None,
     ):
         """
         Initialize Schaff Trend Cycle parameters.
@@ -349,7 +349,7 @@ class SchaffTrendCycle:
             return stc_return.astype("float64")
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "Schaff Trend Cycle calculation failed with exception",
                 extra={
                     "indicator": "schaff_trend_cycle",
@@ -643,7 +643,7 @@ class SchaffTrendCycle:
             return result
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "Schaff Trend Cycle DataFrame calculation failed",
                 extra={
                     "indicator": "schaff_trend_cycle",

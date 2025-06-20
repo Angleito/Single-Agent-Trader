@@ -6,6 +6,7 @@ across the codebase to fix fire-and-forget task creation.
 """
 
 import asyncio
+import contextlib
 
 import pytest
 
@@ -39,19 +40,15 @@ class TestTaskManagementPatterns:
                 # Cancel main background task
                 if self._background_task and not self._background_task.done():
                     self._background_task.cancel()
-                    try:
+                    with contextlib.suppress(asyncio.CancelledError):
                         await self._background_task
-                    except asyncio.CancelledError:
-                        pass
 
                 # Cancel worker tasks
                 for task in self._worker_tasks:
                     if not task.done():
                         task.cancel()
-                        try:
+                        with contextlib.suppress(asyncio.CancelledError):
                             await task
-                        except asyncio.CancelledError:
-                            pass
 
                 self._worker_tasks.clear()
 
@@ -119,10 +116,8 @@ class TestTaskManagementPatterns:
 
         # Cancel long task (simulating shutdown)
         background_task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await background_task
-        except asyncio.CancelledError:
-            pass
 
         # Verify all tasks completed or were cancelled
         assert all(task.done() for task in message_processing_tasks)
@@ -156,10 +151,8 @@ class TestTaskManagementPatterns:
                 for task in self._error_tasks:
                     if not task.done():
                         task.cancel()
-                        try:
+                        with contextlib.suppress(asyncio.CancelledError, Exception):
                             await task
-                        except (asyncio.CancelledError, Exception):
-                            pass
 
                 self._error_tasks.clear()
 

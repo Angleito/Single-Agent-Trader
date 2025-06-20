@@ -69,7 +69,7 @@ class RateLimiter:
 
     def _is_whitelisted(self, ip: str) -> bool:
         """Check if IP is whitelisted."""
-        return ip in self.whitelist or ip.startswith("172.") or ip.startswith("10.")
+        return ip in self.whitelist or ip.startswith(("172.", "10."))
 
     def _refill_bucket(self, ip: str, current_time: float) -> tuple[float, float]:
         """Refill token bucket based on time elapsed."""

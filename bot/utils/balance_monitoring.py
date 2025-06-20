@@ -7,6 +7,7 @@ metrics collection and alerting capabilities.
 """
 
 import asyncio
+import contextlib
 import logging
 import time
 from collections import defaultdict, deque
@@ -18,8 +19,8 @@ from .secure_logging import get_balance_operation_context
 
 # Import new monitoring components
 try:
-    from ..monitoring.balance_alerts import get_balance_alert_manager
-    from ..monitoring.balance_metrics import (
+    from bot.monitoring.balance_alerts import get_balance_alert_manager
+    from bot.monitoring.balance_metrics import (
         get_balance_metrics_collector,
         record_operation_complete,
         record_operation_start,
@@ -110,7 +111,7 @@ class BalanceOperationMonitor:
         correlation_id: str,
         component: str,
         operation: str,
-        metadata: dict[str, Any] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> float:
         """
         Record the start of a balance operation.
@@ -169,10 +170,10 @@ class BalanceOperationMonitor:
         self,
         correlation_id: str,
         status: str,
-        balance_amount: str = None,
-        error: str = None,
-        error_category: str = None,
-        metadata: dict[str, Any] = None,
+        balance_amount: str | None = None,
+        error: str | None = None,
+        error_category: str | None = None,
+        metadata: dict[str, Any] | None = None,
         start_time: float | None = None,
     ) -> None:
         """
@@ -194,12 +195,10 @@ class BalanceOperationMonitor:
                 balance_before = None
                 balance_after = None
                 if balance_amount:
-                    try:
+                    with contextlib.suppress(ValueError, AttributeError):
                         balance_after = float(
                             balance_amount.replace("$", "").replace(",", "")
                         )
-                    except (ValueError, AttributeError):
-                        pass
 
                 record_operation_complete(
                     operation="unknown",  # Will be determined from start_event
@@ -234,12 +233,10 @@ class BalanceOperationMonitor:
                     balance_before = None
                     balance_after = None
                     if balance_amount:
-                        try:
+                        with contextlib.suppress(ValueError, AttributeError):
                             balance_after = float(
                                 balance_amount.replace("$", "").replace(",", "")
                             )
-                        except (ValueError, AttributeError):
-                            pass
 
                     record_operation_complete(
                         operation=start_event.operation,
@@ -410,7 +407,7 @@ class BalanceOperationMonitor:
             )
 
     def get_performance_summary(
-        self, component: str = None, operation: str = None
+        self, component: str | None = None, operation: str | None = None
     ) -> dict[str, Any]:
         """
         Get performance summary for balance operations.
@@ -558,7 +555,7 @@ async def record_balance_operation_start(
     correlation_id: str,
     component: str,
     operation: str,
-    metadata: dict[str, Any] = None,
+    metadata: dict[str, Any] | None = None,
 ) -> float:
     """Convenience function to record balance operation start."""
     monitor = get_balance_monitor()
@@ -570,10 +567,10 @@ async def record_balance_operation_start(
 async def record_balance_operation_complete(
     correlation_id: str,
     status: str,
-    balance_amount: str = None,
-    error: str = None,
-    error_category: str = None,
-    metadata: dict[str, Any] = None,
+    balance_amount: str | None = None,
+    error: str | None = None,
+    error_category: str | None = None,
+    metadata: dict[str, Any] | None = None,
     start_time: float | None = None,
 ) -> None:
     """Convenience function to record balance operation completion."""
@@ -601,7 +598,7 @@ async def start_monitoring_cleanup_task(interval_minutes: int = 15) -> None:
         except asyncio.CancelledError:
             break
         except Exception as e:
-            monitor.logger.error(f"Error in monitoring cleanup task: {e}")
+            monitor.logger.exception(f"Error in monitoring cleanup task: {e}")
 
 
 def generate_monitoring_report() -> dict[str, Any]:
@@ -626,8 +623,8 @@ def generate_monitoring_report() -> dict[str, Any]:
     # Add enhanced metrics if available
     if ENHANCED_MONITORING_AVAILABLE:
         try:
-            from ..monitoring.balance_alerts import get_balance_alert_manager
-            from ..monitoring.balance_metrics import get_metrics_summary
+            from bot.monitoring.balance_alerts import get_balance_alert_manager
+            from bot.monitoring.balance_metrics import get_metrics_summary
 
             enhanced_metrics = get_metrics_summary()
             alert_manager = get_balance_alert_manager()
@@ -664,11 +661,11 @@ def get_enhanced_metrics_summary() -> dict[str, Any]:
     """Get enhanced metrics summary if available."""
     if ENHANCED_MONITORING_AVAILABLE:
         try:
-            from ..monitoring.balance_metrics import get_metrics_summary
+            from bot.monitoring.balance_metrics import get_metrics_summary
 
             return get_metrics_summary()
         except Exception as e:
-            logger.error(f"Failed to get enhanced metrics summary: {e}")
+            logger.exception(f"Failed to get enhanced metrics summary: {e}")
             return {"error": str(e)}
     return {"error": "Enhanced monitoring not available"}
 
@@ -677,11 +674,11 @@ def get_prometheus_metrics() -> list[str]:
     """Get Prometheus format metrics if available."""
     if ENHANCED_MONITORING_AVAILABLE:
         try:
-            from ..monitoring.balance_metrics import get_prometheus_metrics
+            from bot.monitoring.balance_metrics import get_prometheus_metrics
 
             return get_prometheus_metrics()
         except Exception as e:
-            logger.error(f"Failed to get Prometheus metrics: {e}")
+            logger.exception(f"Failed to get Prometheus metrics: {e}")
             return []
     return []
 
@@ -690,11 +687,11 @@ async def trigger_alert_evaluation() -> list:
     """Trigger alert evaluation if alerting is available."""
     if ENHANCED_MONITORING_AVAILABLE:
         try:
-            from ..monitoring.balance_alerts import trigger_alert_evaluation
+            from bot.monitoring.balance_alerts import trigger_alert_evaluation
 
             return await trigger_alert_evaluation()
         except Exception as e:
-            logger.error(f"Failed to trigger alert evaluation: {e}")
+            logger.exception(f"Failed to trigger alert evaluation: {e}")
             return []
     return []
 
@@ -709,16 +706,16 @@ def enable_enhanced_monitoring() -> bool:
     if ENHANCED_MONITORING_AVAILABLE:
         try:
             # Initialize enhanced components
-            from ..monitoring.balance_alerts import get_balance_alert_manager
-            from ..monitoring.balance_metrics import get_balance_metrics_collector
+            from bot.monitoring.balance_alerts import get_balance_alert_manager
+            from bot.monitoring.balance_metrics import get_balance_metrics_collector
 
-            metrics_collector = get_balance_metrics_collector()
-            alert_manager = get_balance_alert_manager()
+            get_balance_metrics_collector()
+            get_balance_alert_manager()
 
             logger.info("✅ Enhanced balance monitoring enabled")
             return True
         except Exception as e:
-            logger.error(f"Failed to enable enhanced monitoring: {e}")
+            logger.exception(f"Failed to enable enhanced monitoring: {e}")
             return False
     else:
         logger.warning("Enhanced monitoring components not available")

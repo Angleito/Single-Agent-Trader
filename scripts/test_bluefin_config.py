@@ -69,7 +69,7 @@ class BluefinConfigTester:
             print(f"ℹ️  {message}")
 
     def add_result(
-        self, test_name: str, status: str, message: str, details: dict[str, Any] = None
+        self, test_name: str, status: str, message: str, details: dict[str, Any] | None = None
     ) -> None:
         """Add test result."""
         result = {
@@ -132,7 +132,7 @@ class BluefinConfigTester:
             )
             return False
 
-    def validate_network_config(self, target_network: str = None) -> bool:
+    def validate_network_config(self, target_network: str | None = None) -> bool:
         """Validate network configuration."""
         network = target_network or self.settings.exchange.bluefin_network
         self.log(f"Testing network configuration for {network}...", "info")
@@ -185,7 +185,7 @@ class BluefinConfigTester:
             self.log(f"Failed to get endpoints: {e}", "error")
             return {}
 
-    async def test_api_connectivity(self, network: str = None) -> bool:
+    async def test_api_connectivity(self, network: str | None = None) -> bool:
         """Test Bluefin API connectivity."""
         network = network or self.settings.exchange.bluefin_network
         self.log(f"Testing Bluefin API connectivity ({network})...", "info")
@@ -203,34 +203,33 @@ class BluefinConfigTester:
         try:
             async with aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=15)
-            ) as session:
-                async with session.get(test_url) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        ticker_count = len(data) if isinstance(data, list) else 1
-                        self.add_result(
-                            "api_connectivity",
-                            "pass",
-                            f"API accessible ({ticker_count} symbols)",
-                            {"endpoint": rest_api, "status_code": response.status},
-                        )
-                        return True
-                    elif response.status == 429:
-                        self.add_result(
-                            "api_connectivity",
-                            "warning",
-                            "API rate limited (this is normal)",
-                            {"endpoint": rest_api, "status_code": response.status},
-                        )
-                        return True
-                    else:
-                        self.add_result(
-                            "api_connectivity",
-                            "fail",
-                            f"API returned status {response.status}",
-                            {"endpoint": rest_api, "status_code": response.status},
-                        )
-                        return False
+            ) as session, session.get(test_url) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    ticker_count = len(data) if isinstance(data, list) else 1
+                    self.add_result(
+                        "api_connectivity",
+                        "pass",
+                        f"API accessible ({ticker_count} symbols)",
+                        {"endpoint": rest_api, "status_code": response.status},
+                    )
+                    return True
+                elif response.status == 429:
+                    self.add_result(
+                        "api_connectivity",
+                        "warning",
+                        "API rate limited (this is normal)",
+                        {"endpoint": rest_api, "status_code": response.status},
+                    )
+                    return True
+                else:
+                    self.add_result(
+                        "api_connectivity",
+                        "fail",
+                        f"API returned status {response.status}",
+                        {"endpoint": rest_api, "status_code": response.status},
+                    )
+                    return False
         except Exception as e:
             self.add_result(
                 "api_connectivity",
@@ -240,7 +239,7 @@ class BluefinConfigTester:
             )
             return False
 
-    async def test_rpc_connectivity(self, network: str = None) -> bool:
+    async def test_rpc_connectivity(self, network: str | None = None) -> bool:
         """Test Sui RPC connectivity."""
         network = network or self.settings.exchange.bluefin_network
         self.log(f"Testing Sui RPC connectivity ({network})...", "info")
@@ -264,35 +263,34 @@ class BluefinConfigTester:
         try:
             async with aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=15)
-            ) as session:
-                async with session.post(rpc_url, json=payload) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        if "result" in data:
-                            epoch = data["result"].get("epoch", "unknown")
-                            self.add_result(
-                                "rpc_connectivity",
-                                "pass",
-                                f"RPC accessible (epoch: {epoch})",
-                                {"endpoint": rpc_url, "epoch": epoch},
-                            )
-                            return True
-                        else:
-                            self.add_result(
-                                "rpc_connectivity",
-                                "fail",
-                                f"Unexpected RPC response: {data}",
-                                {"endpoint": rpc_url},
-                            )
-                            return False
+            ) as session, session.post(rpc_url, json=payload) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if "result" in data:
+                        epoch = data["result"].get("epoch", "unknown")
+                        self.add_result(
+                            "rpc_connectivity",
+                            "pass",
+                            f"RPC accessible (epoch: {epoch})",
+                            {"endpoint": rpc_url, "epoch": epoch},
+                        )
+                        return True
                     else:
                         self.add_result(
                             "rpc_connectivity",
                             "fail",
-                            f"RPC returned status {response.status}",
-                            {"endpoint": rpc_url, "status_code": response.status},
+                            f"Unexpected RPC response: {data}",
+                            {"endpoint": rpc_url},
                         )
                         return False
+                else:
+                    self.add_result(
+                        "rpc_connectivity",
+                        "fail",
+                        f"RPC returned status {response.status}",
+                        {"endpoint": rpc_url, "status_code": response.status},
+                    )
+                    return False
         except Exception as e:
             self.add_result(
                 "rpc_connectivity",
@@ -312,25 +310,24 @@ class BluefinConfigTester:
             health_url = f"{service_url.rstrip('/')}/health"
             async with aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=10)
-            ) as session:
-                async with session.get(health_url) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        self.add_result(
-                            "service_connectivity",
-                            "pass",
-                            "Bluefin service accessible",
-                            {"endpoint": service_url, "health_data": data},
-                        )
-                        return True
-                    else:
-                        self.add_result(
-                            "service_connectivity",
-                            "warning",
-                            f"Service returned status {response.status}",
-                            {"endpoint": service_url, "status_code": response.status},
-                        )
-                        return False
+            ) as session, session.get(health_url) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    self.add_result(
+                        "service_connectivity",
+                        "pass",
+                        "Bluefin service accessible",
+                        {"endpoint": service_url, "health_data": data},
+                    )
+                    return True
+                else:
+                    self.add_result(
+                        "service_connectivity",
+                        "warning",
+                        f"Service returned status {response.status}",
+                        {"endpoint": service_url, "status_code": response.status},
+                    )
+                    return False
         except Exception as e:
             self.add_result(
                 "service_connectivity",
@@ -364,7 +361,7 @@ class BluefinConfigTester:
         else:
             self.add_result("service_url_format", "fail", "Invalid service URL format")
 
-    async def run_full_validation(self, network: str = None) -> None:
+    async def run_full_validation(self, network: str | None = None) -> None:
         """Run full validation including network tests."""
         print("🔍 Running comprehensive Bluefin configuration validation...")
 
@@ -382,7 +379,7 @@ class BluefinConfigTester:
         test_api: bool = False,
         test_rpc: bool = False,
         test_service: bool = False,
-        network: str = None,
+        network: str | None = None,
     ) -> None:
         """Run specific targeted tests."""
         print("🔍 Running targeted Bluefin tests...")

@@ -9,12 +9,10 @@ and comprehensive recovery mechanisms.
 import logging
 from typing import Any, Literal, cast
 
-from ..config import settings
-from ..error_handling import (
-    ErrorBoundary,
-)
-from ..system_monitor import error_recovery_manager, system_monitor
-from ..trading_types import IndicatorData, MarketState, TradeAction
+from bot.config import settings
+from bot.error_handling import ErrorBoundary
+from bot.system_monitor import error_recovery_manager, system_monitor
+from bot.trading_types import IndicatorData, MarketState, TradeAction
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +98,7 @@ class CoreStrategy:
             return is_healthy
 
         except Exception as e:
-            logger.error(f"Strategy health check error: {e}")
+            logger.exception(f"Strategy health check error: {e}")
             return False
 
     async def _reset_strategy_state(self, component_name: str, health: Any) -> None:
@@ -153,7 +151,7 @@ class CoreStrategy:
             return trade_action
 
         except Exception as e:
-            logger.error(f"Error in core strategy analysis: {e}")
+            logger.exception(f"Error in core strategy analysis: {e}")
             return self._get_safe_action()
 
     def _get_market_bias(self, indicators: IndicatorData) -> str:
@@ -191,14 +189,13 @@ class CoreStrategy:
                 bearish_signals += 1.0
 
         # RSI analysis
-        if indicators.rsi is not None:
-            if 30 < indicators.rsi < 70:
-                # Neutral RSI, look at trend
-                if indicators.ema_fast and indicators.ema_slow:
-                    if indicators.ema_fast > indicators.ema_slow:
-                        bullish_signals += 0.5
-                    else:
-                        bearish_signals += 0.5
+        if indicators.rsi is not None and 30 < indicators.rsi < 70:
+            # Neutral RSI, look at trend
+            if indicators.ema_fast and indicators.ema_slow:
+                if indicators.ema_fast > indicators.ema_slow:
+                    bullish_signals += 0.5
+                else:
+                    bearish_signals += 0.5
 
         # Determine bias
         if bullish_signals > bearish_signals + 1:

@@ -29,10 +29,7 @@ try:
     spot_products = []
 
     # Handle the products response
-    if hasattr(products, "products"):
-        product_list = products.products
-    else:
-        product_list = products
+    product_list = products.products if hasattr(products, "products") else products
 
     for product in product_list:
         # Get product details

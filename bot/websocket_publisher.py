@@ -1,20 +1,23 @@
 """WebSocket publisher for sending real-time trading data to dashboard."""
 
 import asyncio
+import contextlib
 import json
 import logging
 import time
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 import websockets
-from websockets.client import WebSocketClientProtocol
 from websockets.exceptions import ConnectionClosed, InvalidURI, WebSocketException
 
 from .config import Settings
 from .trading_types import MarketState, Position, TradeAction
+
+if TYPE_CHECKING:
+    from websockets.client import WebSocketClientProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +150,7 @@ class WebSocketPublisher:
                 )
                 return True
         except Exception as e:
-            logger.error(f"Failed to initialize WebSocket publisher: {e}")
+            logger.exception(f"Failed to initialize WebSocket publisher: {e}")
             # Start auto-reconnect even if initial connection fails
             self._auto_reconnect_task = asyncio.create_task(
                 self._auto_reconnect_manager()
@@ -163,7 +166,7 @@ class WebSocketPublisher:
                     try:
                         await self._reconnect()
                     except Exception as e:
-                        logger.error(f"Auto-reconnect failed: {e}")
+                        logger.exception(f"Auto-reconnect failed: {e}")
                         # Reset URL index to try primary URL again after failures
                         self._url_index = 0
                         self._current_url = self.dashboard_url
@@ -174,7 +177,7 @@ class WebSocketPublisher:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error in auto-reconnect manager: {e}")
+                logger.exception(f"Error in auto-reconnect manager: {e}")
                 await asyncio.sleep(30)  # Wait longer on unexpected errors
 
     async def _run_network_diagnostics(self) -> None:
@@ -183,7 +186,7 @@ class WebSocketPublisher:
             logger.info("Running network diagnostics for dashboard connectivity...")
 
             # Test DNS resolution and basic connectivity
-            urls_to_test = [self.dashboard_url] + self.fallback_urls
+            urls_to_test = [self.dashboard_url, *self.fallback_urls]
 
             for url in urls_to_test[:3]:  # Test first 3 URLs
                 try:
@@ -226,7 +229,7 @@ class WebSocketPublisher:
 
     async def _connect_with_fallback(self) -> None:
         """Try to connect using primary URL and fallback URLs if needed."""
-        urls_to_try = [self.dashboard_url] + self.fallback_urls
+        urls_to_try = [self.dashboard_url, *self.fallback_urls]
 
         for i, url in enumerate(urls_to_try):
             try:
@@ -249,7 +252,7 @@ class WebSocketPublisher:
                     logger.info("Trying next fallback URL...")
                     await asyncio.sleep(2)  # Brief delay between attempts
                 else:
-                    logger.error(
+                    logger.exception(
                         "All WebSocket URLs failed, no more fallbacks available"
                     )
                     raise Exception(
@@ -306,12 +309,12 @@ class WebSocketPublisher:
         except (TimeoutError, OSError, InvalidURI) as e:
             self._connected = False
             self._consecutive_failures += 1
-            logger.error(f"Failed to connect to dashboard WebSocket: {e}")
+            logger.exception(f"Failed to connect to dashboard WebSocket: {e}")
             raise
         except Exception as e:
             self._connected = False
             self._consecutive_failures += 1
-            logger.error(f"Unexpected error connecting to dashboard WebSocket: {e}")
+            logger.exception(f"Unexpected error connecting to dashboard WebSocket: {e}")
             raise
 
     async def _reconnect(self) -> None:
@@ -343,7 +346,7 @@ class WebSocketPublisher:
         try:
             await self._connect_with_fallback()
         except Exception as e:
-            logger.error(f"Reconnection attempt {self._retry_count} failed: {e}")
+            logger.exception(f"Reconnection attempt {self._retry_count} failed: {e}")
             # If we've failed multiple times, check if URL is reachable
             if self._retry_count > 2:
                 await self._check_endpoint_health()
@@ -410,7 +413,7 @@ class WebSocketPublisher:
                     self._make_room_for_priority_message(message)
 
         except Exception as e:
-            logger.error(f"Error queuing WebSocket message: {e}")
+            logger.exception(f"Error queuing WebSocket message: {e}")
 
     def _make_room_for_priority_message(self, priority_message: dict[str, Any]) -> None:
         """Try to make room for a priority message by dropping non-priority messages."""
@@ -460,7 +463,7 @@ class WebSocketPublisher:
                     )
 
         except Exception as e:
-            logger.error(f"Error making room for priority message: {e}")
+            logger.exception(f"Error making room for priority message: {e}")
 
     async def _queue_worker(self) -> None:
         """Background worker to process message queue with priority handling."""
@@ -527,10 +530,10 @@ class WebSocketPublisher:
                             )
 
                     except Exception as e:
-                        logger.error(f"Error sending WebSocket message: {e}")
+                        logger.exception(f"Error sending WebSocket message: {e}")
 
             except Exception as e:
-                logger.error(f"Error in queue worker: {e}")
+                logger.exception(f"Error in queue worker: {e}")
                 await asyncio.sleep(1)
 
     def _log_queue_health(self) -> None:
@@ -551,8 +554,8 @@ class WebSocketPublisher:
         self,
         status: str,
         details: dict[str, Any] | None = None,
-        health: bool = None,
-        status_message_text: str = None,
+        health: bool | None = None,
+        status_message_text: str | None = None,
         **kwargs,
     ) -> None:
         """Publish system status update."""
@@ -600,8 +603,8 @@ class WebSocketPublisher:
 
     async def publish_ai_decision(
         self,
-        action: str = None,
-        decision: str = None,
+        action: str | None = None,
+        decision: str | None = None,
         confidence: float = 0,
         reasoning: str = "",
         context: dict[str, Any] | None = None,
@@ -743,7 +746,7 @@ class WebSocketPublisher:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error in connection monitor: {e}")
+                logger.exception(f"Error in connection monitor: {e}")
                 await asyncio.sleep(5)
 
     async def _cleanup_connection(self) -> None:
@@ -753,10 +756,8 @@ class WebSocketPublisher:
         # Cancel monitoring tasks
         if self._connection_monitor_task and not self._connection_monitor_task.done():
             self._connection_monitor_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._connection_monitor_task
-            except asyncio.CancelledError:
-                pass
 
         # Close WebSocket connection
         if self._ws:
@@ -773,7 +774,7 @@ class WebSocketPublisher:
             # Try a simple HTTP request to the URLs
             import aiohttp
 
-            urls_to_check = [self.dashboard_url] + self.fallback_urls
+            urls_to_check = [self.dashboard_url, *self.fallback_urls]
 
             async with aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=10)
@@ -818,26 +819,20 @@ class WebSocketPublisher:
         # Cancel ping task
         if self._ping_task and not self._ping_task.done():
             self._ping_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._ping_task
-            except asyncio.CancelledError:
-                pass
 
         # Cancel queue worker
         if self._queue_worker_task and not self._queue_worker_task.done():
             self._queue_worker_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._queue_worker_task
-            except asyncio.CancelledError:
-                pass
 
         # Cancel auto-reconnect task
         if self._auto_reconnect_task and not self._auto_reconnect_task.done():
             self._auto_reconnect_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._auto_reconnect_task
-            except asyncio.CancelledError:
-                pass
 
         # Cleanup connection
         await self._cleanup_connection()

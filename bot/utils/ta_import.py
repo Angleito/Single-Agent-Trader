@@ -8,12 +8,14 @@ Designed to work in Docker environments where warnings may persist.
 
 import sys
 import warnings
+from types import ModuleType
 
 # Set up warning registry for this module safely
-current_module = sys.modules[__name__]
+current_module: ModuleType = sys.modules[__name__]
 try:
     if not hasattr(current_module, "__warningregistry__"):
-        current_module.__warningregistry__ = {}
+        # Type ignore needed because __warningregistry__ is dynamically added
+        current_module.__warningregistry__ = {}  # type: ignore[attr-defined]
 except (AttributeError, TypeError):
     # Some modules don't support setting attributes
     # This is fine, warnings will still be filtered

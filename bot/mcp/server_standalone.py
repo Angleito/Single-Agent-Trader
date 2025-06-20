@@ -41,7 +41,7 @@ class MemoryStore:
                     memory = json.load(f)
                     self.memories[memory["id"]] = memory
             except Exception as e:
-                logger.error(f"Failed to load {file_path}: {e}")
+                logger.exception(f"Failed to load {file_path}: {e}")
 
     def save(self, memory_id: str, data: dict[str, Any]) -> None:
         """Save a memory to storage."""
@@ -55,7 +55,7 @@ class MemoryStore:
             with open(file_path, "w") as f:
                 json.dump(data, f, indent=2)
         except Exception as e:
-            logger.error(f"Failed to persist memory {memory_id}: {e}")
+            logger.exception(f"Failed to persist memory {memory_id}: {e}")
 
     def get(self, memory_id: str) -> dict[str, Any] | None:
         """Get a memory by ID."""
@@ -117,7 +117,7 @@ async def store_experience(
         return {"experience_id": experience_id}
 
     except Exception as e:
-        logger.error(f"Failed to store experience: {e}")
+        logger.exception(f"Failed to store experience: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -139,7 +139,7 @@ async def query_experiences(
         experiences = memory_store.query(query_params or {})
         return {"count": len(experiences), "experiences": experiences}
     except Exception as e:
-        logger.error(f"Query failed: {e}")
+        logger.exception(f"Query failed: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 

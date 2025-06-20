@@ -11,7 +11,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from ..utils import ta
+from bot.utils import ta
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ class StochasticRSI:
         smooth_d: int = 3,
         use_log: bool = False,
         use_avg: bool = False,
-        gap_threshold_multiplier: float = None,
+        gap_threshold_multiplier: float | None = None,
     ):
         """
         Initialize Stochastic RSI parameters.
@@ -452,7 +452,7 @@ class StochasticRSI:
             return signals
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "Failed to calculate Stochastic RSI cross signals",
                 extra={
                     "indicator": "stochastic_rsi",

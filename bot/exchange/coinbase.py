@@ -101,8 +101,8 @@ except ImportError:
 
         COINBASE_AVAILABLE = False
 
-from ..config import settings
-from ..trading_types import (
+from bot.config import settings
+from bot.trading_types import (
     AccountType,
     CashTransferRequest,
     FuturesAccountInfo,
@@ -113,6 +113,7 @@ from ..trading_types import (
     Position,
     TradeAction,
 )
+
 from .base import (
     BalanceRetrievalError,
     BalanceServiceUnavailableError,
@@ -177,14 +178,10 @@ class CoinbaseResponseValidator:
                 return False
 
             # Validate individual accounts
-            for account in accounts:
-                if not self._validate_account_data(account):
-                    return False
-
-            return True
+            return all(self._validate_account_data(account) for account in accounts)
 
         except Exception as e:
-            logger.error(f"Error validating account response: {e}")
+            logger.exception(f"Error validating account response: {e}")
             return False
 
     def validate_balance_response(self, response: dict | object) -> bool:
@@ -246,7 +243,7 @@ class CoinbaseResponseValidator:
             return True
 
         except Exception as e:
-            logger.error(f"Error validating balance response: {e}")
+            logger.exception(f"Error validating balance response: {e}")
             return False
 
     def validate_order_response(self, response: dict | object) -> bool:
@@ -307,7 +304,7 @@ class CoinbaseResponseValidator:
             return True
 
         except Exception as e:
-            logger.error(f"Error validating order response: {e}")
+            logger.exception(f"Error validating order response: {e}")
             return False
 
     def validate_position_response(self, response: dict | object) -> bool:
@@ -347,7 +344,7 @@ class CoinbaseResponseValidator:
             return True
 
         except Exception as e:
-            logger.error(f"Error validating position response: {e}")
+            logger.exception(f"Error validating position response: {e}")
             return False
 
     def _validate_account_data(self, account: dict) -> bool:
@@ -394,7 +391,7 @@ class CoinbaseResponseValidator:
             return True
 
         except Exception as e:
-            logger.error(f"Error validating account data: {e}")
+            logger.exception(f"Error validating account data: {e}")
             return False
 
     def _validate_position_data(self, position: dict | object) -> bool:
@@ -443,7 +440,7 @@ class CoinbaseResponseValidator:
             return True
 
         except Exception as e:
-            logger.error(f"Error validating position data: {e}")
+            logger.exception(f"Error validating position data: {e}")
             return False
 
     def get_validation_stats(self) -> dict[str, Any]:
@@ -510,7 +507,7 @@ class CoinbaseResponseValidator:
             return True
 
         except Exception as e:
-            logger.error(f"Error validating exchange response: {e}")
+            logger.exception(f"Error validating exchange response: {e}")
             return False
 
     def validate_order_creation_response(self, response: dict | object) -> bool:
@@ -570,7 +567,7 @@ class CoinbaseResponseValidator:
             return True
 
         except Exception as e:
-            logger.error(f"Error validating order creation response: {e}")
+            logger.exception(f"Error validating order creation response: {e}")
             self.validation_failures += 1
             return False
 
@@ -610,7 +607,7 @@ class CoinbaseResponseValidator:
             return True
 
         except Exception as e:
-            logger.error(f"Error validating order cancellation response: {e}")
+            logger.exception(f"Error validating order cancellation response: {e}")
             self.validation_failures += 1
             return False
 
@@ -645,6 +642,7 @@ class CoinbaseRateLimiter:
                     return await self.acquire()
 
             self.requests.append(now)
+            return None
 
 
 class CoinbaseClient(BaseExchange):
@@ -658,12 +656,12 @@ class CoinbaseClient(BaseExchange):
 
     def __init__(
         self,
-        api_key: str = None,
-        api_secret: str = None,
-        passphrase: str = None,
-        cdp_api_key_name: str = None,
-        cdp_private_key: str = None,
-        dry_run: bool = None,
+        api_key: str | None = None,
+        api_secret: str | None = None,
+        passphrase: str | None = None,
+        cdp_api_key_name: str | None = None,
+        cdp_private_key: str | None = None,
+        dry_run: bool | None = None,
     ):
         """
         Initialize the Coinbase client.
@@ -987,13 +985,13 @@ class CoinbaseClient(BaseExchange):
             return True
 
         except CoinbaseAuthenticationException as e:
-            logger.error(f"Coinbase authentication failed: {e}")
+            logger.exception(f"Coinbase authentication failed: {e}")
             raise ExchangeAuthError(f"Authentication failed: {e}") from e
         except CoinbaseConnectionException as e:
-            logger.error(f"Coinbase connection failed: {e}")
+            logger.exception(f"Coinbase connection failed: {e}")
             raise ExchangeConnectionError(f"Connection failed: {e}") from e
         except Exception as e:
-            logger.error(f"Failed to connect to Coinbase: {e}")
+            logger.exception(f"Failed to connect to Coinbase: {e}")
             logger.debug(f"Connection error traceback: {traceback.format_exc()}")
             raise ExchangeConnectionError(f"Unexpected error: {e}") from e
 
@@ -1008,7 +1006,7 @@ class CoinbaseClient(BaseExchange):
                 f"Connection test successful, found {len(accounts.get('accounts', []))} accounts"
             )
         except Exception as e:
-            logger.error(f"Connection test failed: {e}")
+            logger.exception(f"Connection test failed: {e}")
             raise
 
     async def disconnect(self) -> None:
@@ -1132,17 +1130,18 @@ class CoinbaseClient(BaseExchange):
                     )
                     await asyncio.sleep(wait_time)
                 else:
-                    logger.error(
+                    logger.exception(
                         f"Request failed after {self._max_retries + 1} attempts: {e}"
                     )
                     raise
 
             except Exception as e:
-                logger.error(f"Unexpected error in request: {e}")
+                logger.exception(f"Unexpected error in request: {e}")
                 raise
 
         if last_exception:
             raise last_exception
+        return None
 
     async def _load_portfolios(self) -> None:
         """Load portfolio information and identify futures portfolio."""
@@ -1240,7 +1239,7 @@ class CoinbaseClient(BaseExchange):
             try:
                 amount = Decimal(str(amount))
             except (ValueError, TypeError):
-                logger.error(f"Invalid balance amount: {amount} (type: {type(amount)})")
+                logger.exception(f"Invalid balance amount: {amount} (type: {type(amount)})")
                 raise ValueError(f"Cannot convert to Decimal: {amount}")
 
         # Check for invalid values
@@ -1278,7 +1277,7 @@ class CoinbaseClient(BaseExchange):
             try:
                 amount = Decimal(str(amount))
             except (ValueError, TypeError):
-                logger.error(f"Invalid crypto amount: {amount} (type: {type(amount)})")
+                logger.exception(f"Invalid crypto amount: {amount} (type: {type(amount)})")
                 raise ValueError(f"Cannot convert to Decimal: {amount}")
 
         # Check for invalid values
@@ -1391,7 +1390,7 @@ class CoinbaseClient(BaseExchange):
                 return None
 
         except Exception as e:
-            logger.error(f"Failed to execute trade action: {e}")
+            logger.exception(f"Failed to execute trade action: {e}")
             return None
 
     async def _open_position(
@@ -1419,7 +1418,7 @@ class CoinbaseClient(BaseExchange):
                     trade_action, symbol, current_price
                 )
         except Exception as e:
-            logger.error(f"Failed to open position: {e}")
+            logger.exception(f"Failed to open position: {e}")
             return None
 
     async def _open_futures_position(
@@ -1570,13 +1569,13 @@ class CoinbaseClient(BaseExchange):
                         )
 
                 except Exception as e:
-                    logger.error(f"❌ CRITICAL ERROR placing protective orders: {e}")
+                    logger.exception(f"❌ CRITICAL ERROR placing protective orders: {e}")
                     # Continue with trade but log the critical failure
 
             return order
 
         except Exception as e:
-            logger.error(f"Failed to open futures position: {e}")
+            logger.exception(f"Failed to open futures position: {e}")
             return None
 
     async def _open_spot_position(
@@ -1650,7 +1649,7 @@ class CoinbaseClient(BaseExchange):
                     )
 
             except Exception as e:
-                logger.error(f"❌ CRITICAL ERROR placing protective orders: {e}")
+                logger.exception(f"❌ CRITICAL ERROR placing protective orders: {e}")
                 # Continue with trade but log the critical failure
 
         return order
@@ -1826,8 +1825,8 @@ class CoinbaseClient(BaseExchange):
                     logger.error(f"Order placement failed: {error_msg}")
                     raise ExchangeOrderError(f"Order placement failed: {error_msg}")
             except AttributeError as e:
-                logger.error(f"Error parsing order response: {e}")
-                logger.error(f"Response type: {type(result)}, Response: {result}")
+                logger.exception(f"Error parsing order response: {e}")
+                logger.exception(f"Response type: {type(result)}, Response: {result}")
                 raise ExchangeOrderError(f"Failed to parse order response: {e}") from e
 
         except CoinbaseAPIException as e:
@@ -1836,7 +1835,7 @@ class CoinbaseClient(BaseExchange):
             else:
                 raise ExchangeOrderError(f"API error: {e}") from e
         except Exception as e:
-            logger.error(f"Failed to place market order: {e}")
+            logger.exception(f"Failed to place market order: {e}")
             logger.debug(f"Market order error traceback: {traceback.format_exc()}")
             raise ExchangeOrderError(f"Failed to place market order: {e}") from e
 
@@ -1944,7 +1943,7 @@ class CoinbaseClient(BaseExchange):
             else:
                 raise ExchangeOrderError(f"API error: {e}") from e
         except Exception as e:
-            logger.error(f"Failed to place limit order: {e}")
+            logger.exception(f"Failed to place limit order: {e}")
             logger.debug(f"Limit order error traceback: {traceback.format_exc()}")
             raise ExchangeOrderError(f"Failed to place limit order: {e}") from e
 
@@ -2134,7 +2133,7 @@ class CoinbaseClient(BaseExchange):
             else:
                 raise ExchangeOrderError(f"API error: {e}") from e
         except Exception as e:
-            logger.error(f"Failed to place stop order: {e}")
+            logger.exception(f"Failed to place stop order: {e}")
             logger.debug(f"Stop order error traceback: {traceback.format_exc()}")
             raise ExchangeOrderError(f"Failed to place stop order: {e}") from e
 
@@ -2298,8 +2297,8 @@ class CoinbaseClient(BaseExchange):
                         f"Futures order placement failed: {error_msg}"
                     )
             except AttributeError as e:
-                logger.error(f"Error parsing order response: {e}")
-                logger.error(f"Response type: {type(result)}, Response: {result}")
+                logger.exception(f"Error parsing order response: {e}")
+                logger.exception(f"Response type: {type(result)}, Response: {result}")
                 raise ExchangeOrderError(f"Failed to parse order response: {e}") from e
 
         except CoinbaseAPIException as e:
@@ -2313,7 +2312,7 @@ class CoinbaseClient(BaseExchange):
             else:
                 raise ExchangeOrderError(f"Futures API error: {e}") from e
         except Exception as e:
-            logger.error(f"Failed to place futures market order: {e}")
+            logger.exception(f"Failed to place futures market order: {e}")
             logger.debug(
                 f"Futures market order error traceback: {traceback.format_exc()}"
             )
@@ -2370,7 +2369,7 @@ class CoinbaseClient(BaseExchange):
             # Re-raise specific balance exceptions
             raise
         except Exception as e:
-            logger.error(f"Failed to get account balance: {e}")
+            logger.exception(f"Failed to get account balance: {e}")
             # Wrap generic exceptions in BalanceRetrievalError
             raise BalanceRetrievalError(
                 f"Failed to retrieve account balance: {e}",
@@ -2400,7 +2399,6 @@ class CoinbaseClient(BaseExchange):
                 raise BalanceServiceUnavailableError(
                     "Coinbase client not initialized",
                     service_name="coinbase_client",
-                    account_type="CBI",
                 )
 
             # Use retry request which handles API-level errors
@@ -2456,16 +2454,14 @@ class CoinbaseClient(BaseExchange):
             # Re-raise specific balance exceptions
             raise
         except Exception as e:
-            logger.error(f"Failed to get spot balance: {e}")
+            logger.exception(f"Failed to get spot balance: {e}")
             # Check for specific API error types
-            if hasattr(e, "status_code"):
-                if e.status_code == 503:
-                    raise BalanceServiceUnavailableError(
-                        f"Coinbase API service unavailable: {e}",
-                        service_name="coinbase_api",
-                        status_code=e.status_code,
-                        account_type="CBI",
-                    ) from e
+            if hasattr(e, "status_code") and e.status_code == 503:
+                raise BalanceServiceUnavailableError(
+                    f"Coinbase API service unavailable: {e}",
+                    service_name="coinbase_api",
+                    status_code=e.status_code,
+                ) from e
 
             raise BalanceRetrievalError(
                 f"Failed to retrieve spot balance: {e}",
@@ -2494,7 +2490,6 @@ class CoinbaseClient(BaseExchange):
                 raise BalanceServiceUnavailableError(
                     "Coinbase client not initialized",
                     service_name="coinbase_client",
-                    account_type="CFM",
                 )
 
             # Get FCM balance summary with retry mechanism
@@ -2576,12 +2571,12 @@ class CoinbaseClient(BaseExchange):
             # Re-raise specific balance exceptions
             raise
         except Exception as e:
-            logger.error(f"Failed to get futures balance: {e}")
+            logger.exception(f"Failed to get futures balance: {e}")
             # Try fallback method before raising final exception
             try:
                 return await self._get_futures_balance_fallback()
             except Exception as fallback_error:
-                logger.error(f"Fallback futures balance also failed: {fallback_error}")
+                logger.exception(f"Fallback futures balance also failed: {fallback_error}")
                 raise BalanceRetrievalError(
                     f"Failed to retrieve futures balance (primary and fallback): {e}",
                     account_type="CFM",
@@ -2611,7 +2606,6 @@ class CoinbaseClient(BaseExchange):
                 raise BalanceServiceUnavailableError(
                     "Coinbase client not initialized for fallback balance retrieval",
                     service_name="coinbase_client",
-                    account_type="CFM",
                 )
 
             accounts_data = await self._retry_request(self._client.get_accounts)
@@ -2656,7 +2650,7 @@ class CoinbaseClient(BaseExchange):
             # Re-raise specific balance exceptions
             raise
         except Exception as e:
-            logger.error(f"Fallback futures balance failed: {e}")
+            logger.exception(f"Fallback futures balance failed: {e}")
             raise BalanceRetrievalError(
                 f"Fallback futures balance retrieval failed: {e}",
                 account_type="CFM",
@@ -2741,7 +2735,7 @@ class CoinbaseClient(BaseExchange):
             return account_info
 
         except Exception as e:
-            logger.error(f"Failed to get futures account info: {e}")
+            logger.exception(f"Failed to get futures account info: {e}")
             return None
 
     async def get_margin_info(self) -> MarginInfo:
@@ -2837,7 +2831,7 @@ class CoinbaseClient(BaseExchange):
             return margin_info
 
         except Exception as e:
-            logger.error(f"Failed to get margin info: {e}")
+            logger.exception(f"Failed to get margin info: {e}")
             # Return default margin info
             return MarginInfo(
                 total_margin=Decimal("0"),
@@ -2926,11 +2920,11 @@ class CoinbaseClient(BaseExchange):
                 return True  # Return true since sweep was scheduled
 
             except Exception as e:
-                logger.error(f"Failed to schedule futures sweep: {e}")
+                logger.exception(f"Failed to schedule futures sweep: {e}")
                 return False
 
         except Exception as e:
-            logger.error(f"Failed to transfer cash to futures: {e}")
+            logger.exception(f"Failed to transfer cash to futures: {e}")
             return False
 
     async def get_futures_positions(self, symbol: str | None = None) -> list[Position]:
@@ -3011,7 +3005,7 @@ class CoinbaseClient(BaseExchange):
             return positions
 
         except Exception as e:
-            logger.error(f"Failed to get futures positions: {e}")
+            logger.exception(f"Failed to get futures positions: {e}")
             # Fallback to regular positions API
             return await self.get_positions(symbol)
 
@@ -3067,7 +3061,7 @@ class CoinbaseClient(BaseExchange):
             return positions
 
         except Exception as e:
-            logger.error(f"Failed to get positions: {e}")
+            logger.exception(f"Failed to get positions: {e}")
             raise ExchangeConnectionError(f"Failed to get positions: {e}") from e
 
     async def cancel_order(self, order_id: str) -> bool:
@@ -3112,7 +3106,7 @@ class CoinbaseClient(BaseExchange):
             return False
 
         except Exception as e:
-            logger.error(f"Failed to cancel order {order_id}: {e}")
+            logger.exception(f"Failed to cancel order {order_id}: {e}")
             return False
 
     async def cancel_all_orders(
@@ -3181,7 +3175,7 @@ class CoinbaseClient(BaseExchange):
             return successful_cancellations == len(orders_to_cancel)
 
         except Exception as e:
-            logger.error(f"Failed to cancel orders: {e}")
+            logger.exception(f"Failed to cancel orders: {e}")
             return False
 
     async def get_order_status(self, order_id: str) -> OrderStatus | None:
@@ -3227,7 +3221,7 @@ class CoinbaseClient(BaseExchange):
             return status
 
         except Exception as e:
-            logger.error(f"Failed to get order status for {order_id}: {e}")
+            logger.exception(f"Failed to get order status for {order_id}: {e}")
             return None
 
     def is_connected(self) -> bool:
@@ -3395,7 +3389,7 @@ class CoinbaseClient(BaseExchange):
             self._last_volume_check = now
 
             # Update fee calculator with current volume
-            from ..fee_calculator import fee_calculator
+            from bot.fee_calculator import fee_calculator
 
             fee_calculator.update_volume_tier(float(volume))
 
@@ -3422,7 +3416,7 @@ class CoinbaseClient(BaseExchange):
             return volume
 
         except Exception as e:
-            logger.error(f"Failed to get monthly volume: {e}")
+            logger.exception(f"Failed to get monthly volume: {e}")
             return self._monthly_volume
 
     def get_current_fee_rates(self) -> dict[str, float]:
@@ -3432,7 +3426,7 @@ class CoinbaseClient(BaseExchange):
         Returns:
             Dictionary with maker and taker fee rates
         """
-        from ..fee_calculator import fee_calculator
+        from bot.fee_calculator import fee_calculator
 
         return {
             "maker": fee_calculator.maker_fee_rate,

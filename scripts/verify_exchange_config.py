@@ -53,8 +53,7 @@ def load_settings() -> Settings:
     try:
         # Load environment variables
         load_dotenv()
-        settings = Settings()
-        return settings
+        return Settings()
     except Exception as e:
         console.print(f"[red]Error loading settings: {e}[/red]")
         sys.exit(1)

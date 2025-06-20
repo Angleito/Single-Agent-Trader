@@ -1,6 +1,7 @@
 """Unit tests for stablecoin dominance data provider."""
 
 import asyncio
+import contextlib
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -267,10 +268,8 @@ class TestDominanceDataProvider:
         dominance_provider._running = False
         update_task.cancel()
 
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await update_task
-        except asyncio.CancelledError:
-            pass
 
         # Verify updates were called
         assert dominance_provider.fetch_current_dominance.call_count >= 2

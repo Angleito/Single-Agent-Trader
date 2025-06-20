@@ -8,6 +8,7 @@ suggests risk-on behavior and potential market recovery.
 
 import asyncio
 import atexit
+import contextlib
 import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -18,7 +19,7 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel, Field
 
-from ..config import settings
+from bot.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +146,7 @@ class DominanceDataProvider:
                     # Force close the connector
                     instance._session._connector.close()
                 except Exception as e:
-                    logger.error(f"Error during emergency cleanup: {e}")
+                    logger.exception(f"Error during emergency cleanup: {e}")
 
     async def connect(self) -> None:
         """Initialize connection and start data updates."""
@@ -175,10 +176,8 @@ class DominanceDataProvider:
 
         if self._update_task:
             self._update_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._update_task
-            except asyncio.CancelledError:
-                pass
             self._update_task = None
 
         if self._session:
@@ -210,7 +209,7 @@ class DominanceDataProvider:
                 return None
 
         except Exception as e:
-            logger.error(f"Error fetching dominance data: {e}")
+            logger.exception(f"Error fetching dominance data: {e}")
             return None
 
     async def _fetch_coingecko_dominance(self) -> DominanceData | None:
@@ -323,7 +322,7 @@ class DominanceDataProvider:
             return dominance_data
 
         except Exception as e:
-            logger.error(f"Error in CoinGecko dominance fetch: {e}")
+            logger.exception(f"Error in CoinGecko dominance fetch: {e}")
             return None
 
     async def _fetch_coinmarketcap_dominance(self) -> DominanceData | None:
@@ -426,7 +425,7 @@ class DominanceDataProvider:
                 return dominance_data
 
         except Exception as e:
-            logger.error(f"Error in CoinMarketCap dominance fetch: {e}")
+            logger.exception(f"Error in CoinMarketCap dominance fetch: {e}")
             return None
 
     def _calculate_trend_indicators(self) -> None:
@@ -498,7 +497,7 @@ class DominanceDataProvider:
                 )
 
         except Exception as e:
-            logger.error(f"Error calculating dominance trend indicators: {e}")
+            logger.exception(f"Error calculating dominance trend indicators: {e}")
             # Don't let trend calculation failures break the system
             return
 
@@ -512,7 +511,7 @@ class DominanceDataProvider:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error in update loop: {e}")
+                logger.exception(f"Error in update loop: {e}")
                 await asyncio.sleep(60)  # Wait a minute before retry
 
     def get_latest_dominance(self) -> DominanceData | None:
@@ -647,8 +646,7 @@ class DominanceDataProvider:
             )
 
         df = pd.DataFrame(data)
-        df.set_index("timestamp", inplace=True)
-        return df
+        return df.set_index("timestamp")
 
 
 class DominanceCandleData(BaseModel):
@@ -756,8 +754,8 @@ class DominanceCandleBuilder:
                 )
 
             df = pd.DataFrame(df_data)
-            df.set_index("timestamp", inplace=True)
-            df.sort_index(inplace=True)
+            df = df.set_index("timestamp")
+            df = df.sort_index()
 
             # Resample data using pandas
             resampled = df.resample(interval).agg(
@@ -817,7 +815,7 @@ class DominanceCandleBuilder:
             return candles
 
         except Exception as e:
-            logger.error(f"Error building candles: {e}")
+            logger.exception(f"Error building candles: {e}")
             raise ValueError(f"Failed to build candles: {e}") from e
 
     def _calculate_volume(self, group_snapshots: list[DominanceData]) -> Decimal:
@@ -964,7 +962,7 @@ class DominanceCandleBuilder:
             }
 
         except Exception as e:
-            logger.error(f"Error calculating technical indicators: {e}")
+            logger.exception(f"Error calculating technical indicators: {e}")
             raise ValueError(f"Failed to calculate technical indicators: {e}") from e
 
     def _calculate_rsi(
@@ -1029,7 +1027,7 @@ class DominanceCandleBuilder:
             return rsi_list
 
         except Exception as e:
-            logger.error(f"Error calculating RSI: {e}")
+            logger.exception(f"Error calculating RSI: {e}")
             return [None] * len(values)
 
     def _calculate_ema(self, values: list[float], period: int) -> list[float | None]:
@@ -1068,7 +1066,7 @@ class DominanceCandleBuilder:
             return ema_list
 
         except Exception as e:
-            logger.error(f"Error calculating EMA: {e}")
+            logger.exception(f"Error calculating EMA: {e}")
             return [None] * len(values)
 
     def _calculate_momentum(
@@ -1106,7 +1104,7 @@ class DominanceCandleBuilder:
             return momentum_list
 
         except Exception as e:
-            logger.error(f"Error calculating momentum: {e}")
+            logger.exception(f"Error calculating momentum: {e}")
             return [None] * len(values)
 
     def _determine_trend_signal(
@@ -1168,7 +1166,7 @@ class DominanceCandleBuilder:
                 return "NEUTRAL"
 
         except Exception as e:
-            logger.error(f"Error determining trend signal: {e}")
+            logger.exception(f"Error determining trend signal: {e}")
             return "NEUTRAL"
 
     def _calculate_summary_metrics(
@@ -1203,7 +1201,7 @@ class DominanceCandleBuilder:
             }
 
         except Exception as e:
-            logger.error(f"Error calculating summary metrics: {e}")
+            logger.exception(f"Error calculating summary metrics: {e}")
             return {"error": str(e)}
 
     def _detect_ema_crossover(
@@ -1263,7 +1261,7 @@ class DominanceCandleBuilder:
             return None
 
         except Exception as e:
-            logger.error(f"Error detecting EMA crossover: {e}")
+            logger.exception(f"Error detecting EMA crossover: {e}")
             return None
 
     def detect_divergences(
@@ -1373,7 +1371,7 @@ class DominanceCandleBuilder:
             }
 
         except Exception as e:
-            logger.error(f"Error detecting divergences: {e}")
+            logger.exception(f"Error detecting divergences: {e}")
             raise ValueError(f"Failed to detect divergences: {e}") from e
 
     def _analyze_divergence_pattern(
@@ -1433,7 +1431,7 @@ class DominanceCandleBuilder:
             return None
 
         except Exception as e:
-            logger.error(f"Error analyzing divergence pattern: {e}")
+            logger.exception(f"Error analyzing divergence pattern: {e}")
             return None
 
     def validate_candles(self, candles: list[DominanceCandleData]) -> dict[str, Any]:
@@ -1554,7 +1552,7 @@ class DominanceCandleBuilder:
             }
 
         except Exception as e:
-            logger.error(f"Error during candle validation: {e}")
+            logger.exception(f"Error during candle validation: {e}")
             return {
                 "is_valid": False,
                 "errors": [f"Validation failed with exception: {e!s}"],
@@ -1737,7 +1735,7 @@ class DominanceCandleBuilder:
             }
 
         except Exception as e:
-            logger.error(f"Error during data integrity check: {e}")
+            logger.exception(f"Error during data integrity check: {e}")
             return {
                 "integrity_score": 0,
                 "issues": [f"Integrity check failed with exception: {e!s}"],
@@ -1812,7 +1810,7 @@ class DominanceCandleBuilder:
             return csv_content
 
         except Exception as e:
-            logger.error(f"Error exporting candles for TradingView: {e}")
+            logger.exception(f"Error exporting candles for TradingView: {e}")
             raise ValueError(f"Failed to export candles: {e}") from e
 
     def get_candle_statistics(
@@ -1943,7 +1941,7 @@ class DominanceCandleBuilder:
             return statistics
 
         except Exception as e:
-            logger.error(f"Error calculating candle statistics: {e}")
+            logger.exception(f"Error calculating candle statistics: {e}")
             return {"error": f"Failed to calculate statistics: {e!s}"}
 
     def _validate_ohlc_relationship(
@@ -2049,12 +2047,11 @@ class DominanceCandleBuilder:
             valid = True
 
             # Validate RSI range (0-100)
-            if candle.rsi is not None:
-                if not (0 <= candle.rsi <= 100):
-                    errors.append(
-                        f"Candle {index}: RSI {candle.rsi} out of range (0-100)"
-                    )
-                    valid = False
+            if candle.rsi is not None and not (0 <= candle.rsi <= 100):
+                errors.append(
+                    f"Candle {index}: RSI {candle.rsi} out of range (0-100)"
+                )
+                valid = False
 
             # Validate EMA values (should be positive for dominance percentages)
             for field_name, value in [
@@ -2184,7 +2181,7 @@ class DominanceCandleBuilder:
             return crossovers
 
         except Exception as e:
-            logger.error(f"Error counting EMA crossovers: {e}")
+            logger.exception(f"Error counting EMA crossovers: {e}")
             return {"bullish": 0, "bearish": 0}
 
     def _determine_overall_trend(self, close_values: list[float]) -> str:
@@ -2205,7 +2202,7 @@ class DominanceCandleBuilder:
                 return "SIDEWAYS"
 
         except Exception as e:
-            logger.error(f"Error determining overall trend: {e}")
+            logger.exception(f"Error determining overall trend: {e}")
             return "UNKNOWN"
 
 

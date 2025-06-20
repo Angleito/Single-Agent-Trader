@@ -5,6 +5,7 @@ Tests the non-blocking message processing and async indicator calculations.
 """
 
 import asyncio
+import contextlib
 import logging
 import time
 import unittest
@@ -82,7 +83,7 @@ class TestWebSocketPerformance(unittest.TestCase):
         queue_time = time.time() - start_time
 
         # Should be very fast (under 100ms for 1000 messages)
-        self.assertLess(queue_time, 0.1, "Message queueing should be non-blocking")
+        assert queue_time < 0.1, "Message queueing should be non-blocking"
 
         # Stop processor
         provider._running = False
@@ -120,9 +121,7 @@ class TestWebSocketPerformance(unittest.TestCase):
         notification_time = time.time() - start_time
 
         # Should complete immediately (tasks run in background)
-        self.assertLess(
-            notification_time, 0.005, "Subscriber notification should be non-blocking"
-        )
+        assert notification_time < 0.005, "Subscriber notification should be non-blocking"
 
         # Wait a bit for background tasks to complete
         await asyncio.sleep(0.1)
@@ -152,7 +151,7 @@ class TestWebSocketPerformance(unittest.TestCase):
             )
 
         df = pd.DataFrame(df_data)
-        df.set_index("timestamp", inplace=True)
+        df = df.set_index("timestamp")
 
         # Test synchronous calculation time
         start_time = time.time()
@@ -170,13 +169,11 @@ class TestWebSocketPerformance(unittest.TestCase):
         streaming_time = time.time() - start_time
 
         # Results should be similar
-        self.assertEqual(len(sync_result), len(async_result))
-        self.assertEqual(len(sync_result), len(streaming_result))
+        assert len(sync_result) == len(async_result)
+        assert len(sync_result) == len(streaming_result)
 
         # Async should not be significantly slower
-        self.assertLess(
-            async_time, sync_time * 2, "Async calculation should not be much slower"
-        )
+        assert async_time < sync_time * 2, "Async calculation should not be much slower"
 
         logger.info("✅ Indicator calculation times:")
         logger.info(f"   Sync: {sync_time:.3f}s")
@@ -204,7 +201,7 @@ class TestWebSocketPerformance(unittest.TestCase):
             )
 
         df = pd.DataFrame(df_data)
-        df.set_index("timestamp", inplace=True)
+        df = df.set_index("timestamp")
 
         # Simulate concurrent operations
         start_time = time.time()
@@ -227,10 +224,8 @@ class TestWebSocketPerformance(unittest.TestCase):
         async def simulate_messages():
             for i in range(50):
                 message = {"type": "test", "data": i}
-                try:
+                with contextlib.suppress(asyncio.QueueFull):
                     provider._message_queue.put_nowait(message)
-                except asyncio.QueueFull:
-                    pass
                 await asyncio.sleep(0.001)  # 1ms between messages
 
         tasks.append(asyncio.create_task(simulate_messages()))
@@ -245,15 +240,11 @@ class TestWebSocketPerformance(unittest.TestCase):
         tasks[0].cancel()
 
         # Should complete in reasonable time
-        self.assertLess(
-            concurrent_time, 5.0, "Concurrent processing should be efficient"
-        )
+        assert concurrent_time < 5.0, "Concurrent processing should be efficient"
 
         # Check that calculations completed successfully
         for i, result in enumerate(results[:-1]):  # Exclude message simulation task
-            self.assertFalse(
-                isinstance(result, Exception), f"Task {i+1} should not fail"
-            )
+            assert not isinstance(result, Exception), f"Task {i + 1} should not fail"
 
         logger.info(f"✅ Concurrent processing completed in {concurrent_time:.3f}s")
 
@@ -279,15 +270,13 @@ class TestWebSocketPerformance(unittest.TestCase):
         start_time = time.time()
 
         for message in messages:
-            try:
+            with contextlib.suppress(asyncio.QueueFull):
                 provider._message_queue.put_nowait(message)
-            except asyncio.QueueFull:
-                pass
 
         queue_time = time.time() - start_time
 
         # Should be fast
-        self.assertLess(queue_time, 0.05, "Bluefin message queueing should be fast")
+        assert queue_time < 0.05, "Bluefin message queueing should be fast"
 
         # Stop processor
         provider._running = False
@@ -315,7 +304,7 @@ class TestWebSocketPerformance(unittest.TestCase):
             )
 
         df = pd.DataFrame(df_data)
-        df.set_index("timestamp", inplace=True)
+        df = df.set_index("timestamp")
 
         # Calculate indicators synchronously
         sync_result = cipher_a.calculate(df)
@@ -329,14 +318,10 @@ class TestWebSocketPerformance(unittest.TestCase):
             "ema_ribbon_bearish",
         ]
         for indicator in required_indicators:
-            self.assertIn(
-                indicator, sync_result.columns, f"Missing indicator: {indicator}"
-            )
+            assert indicator in sync_result.columns, f"Missing indicator: {indicator}"
             # Check that we have actual values (not all NaN)
             non_nan_count = sync_result[indicator].notna().sum()
-            self.assertGreater(
-                non_nan_count, 50, f"Indicator {indicator} has too many NaN values"
-            )
+            assert non_nan_count > 50, f"Indicator {indicator} has too many NaN values"
 
         logger.info(
             f"✅ Data integrity verified - {len(required_indicators)} indicators present"

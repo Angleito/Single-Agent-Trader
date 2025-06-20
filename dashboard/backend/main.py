@@ -12,7 +12,7 @@ import logging
 import os
 import subprocess
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime
 from typing import Any
 
@@ -94,7 +94,7 @@ class BluefinServiceClient:
                         "message": await response.text(),
                     }
         except Exception as e:
-            logger.error(f"Bluefin health check failed: {e}")
+            logger.exception(f"Bluefin health check failed: {e}")
             return {
                 "status": "unreachable",
                 "error": str(e),
@@ -114,7 +114,7 @@ class BluefinServiceClient:
                         detail=f"Bluefin service error: {await response.text()}",
                     )
         except aiohttp.ClientError as e:
-            logger.error(f"Failed to get Bluefin account info: {e}")
+            logger.exception(f"Failed to get Bluefin account info: {e}")
             raise HTTPException(
                 status_code=503, detail=f"Bluefin service unavailable: {e!s}"
             ) from e
@@ -132,7 +132,7 @@ class BluefinServiceClient:
                         detail=f"Bluefin service error: {await response.text()}",
                     )
         except aiohttp.ClientError as e:
-            logger.error(f"Failed to get Bluefin positions: {e}")
+            logger.exception(f"Failed to get Bluefin positions: {e}")
             raise HTTPException(
                 status_code=503, detail=f"Bluefin service unavailable: {e!s}"
             ) from e
@@ -150,7 +150,7 @@ class BluefinServiceClient:
                         detail=f"Bluefin service error: {await response.text()}",
                     )
         except aiohttp.ClientError as e:
-            logger.error(f"Failed to get Bluefin orders: {e}")
+            logger.exception(f"Failed to get Bluefin orders: {e}")
             raise HTTPException(
                 status_code=503, detail=f"Bluefin service unavailable: {e!s}"
             ) from e
@@ -170,7 +170,7 @@ class BluefinServiceClient:
                         detail=f"Bluefin service error: {await response.text()}",
                     )
         except aiohttp.ClientError as e:
-            logger.error(f"Failed to get Bluefin market ticker: {e}")
+            logger.exception(f"Failed to get Bluefin market ticker: {e}")
             raise HTTPException(
                 status_code=503, detail=f"Bluefin service unavailable: {e!s}"
             ) from e
@@ -190,7 +190,7 @@ class BluefinServiceClient:
                         detail=f"Bluefin order error: {await response.text()}",
                     )
         except aiohttp.ClientError as e:
-            logger.error(f"Failed to place Bluefin order: {e}")
+            logger.exception(f"Failed to place Bluefin order: {e}")
             raise HTTPException(
                 status_code=503, detail=f"Bluefin service unavailable: {e!s}"
             ) from e
@@ -242,7 +242,7 @@ class ConnectionManager:
         # Performance tracking
         self.stats = {
             "total_messages": 0,
-            "messages_by_category": {cat: 0 for cat in self.message_buffers.keys()},
+            "messages_by_category": {cat: 0 for cat in self.message_buffers},
             "connections_served": 0,
             "total_replay_messages": 0,
         }
@@ -287,8 +287,8 @@ class ConnectionManager:
     async def connect(
         self,
         websocket: WebSocket,
-        replay_categories: list[str] = None,
-        connection_info: dict = None,
+        replay_categories: list[str] | None = None,
+        connection_info: dict | None = None,
     ):
         """
         Accept WebSocket connection and send buffered messages by category.
@@ -341,7 +341,7 @@ class ConnectionManager:
         self.stats["connections_served"] += 1
 
     async def _send_replay_messages(
-        self, websocket: WebSocket, categories: list[str] = None
+        self, websocket: WebSocket, categories: list[str] | None = None
     ):
         """Send buffered messages to new connection, organized by category."""
         categories = categories or list(self.message_buffers.keys())
@@ -361,7 +361,7 @@ class ConnectionManager:
             await websocket.send_text(json.dumps(status_message))
             total_sent += 1
         except Exception as e:
-            logger.error(f"Error sending connection status: {e}")
+            logger.exception(f"Error sending connection status: {e}")
             return
 
         # Send messages by category with limits
@@ -389,7 +389,7 @@ class ConnectionManager:
                         await websocket.send_text(json.dumps(replay_message))
                         total_sent += 1
                     except Exception as e:
-                        logger.error(
+                        logger.exception(
                             f"Error sending replay message from {category}: {e}"
                         )
                         break
@@ -407,7 +407,7 @@ class ConnectionManager:
         try:
             await websocket.send_text(json.dumps(completion_message))
         except Exception as e:
-            logger.error(f"Error sending replay completion: {e}")
+            logger.exception(f"Error sending replay completion: {e}")
 
         # Update connection metadata
         if websocket in self.connection_metadata:
@@ -462,7 +462,7 @@ class ConnectionManager:
             json.dumps(message)
 
         except (TypeError, ValueError) as e:
-            logger.error(f"Invalid message for broadcast: {e}")
+            logger.exception(f"Invalid message for broadcast: {e}")
             # Create a safe fallback message
             message = {
                 "timestamp": datetime.now().isoformat(),
@@ -493,7 +493,7 @@ class ConnectionManager:
                 try:
                     await connection.send_text(json.dumps(message))
                 except Exception as e:
-                    logger.error(f"Error broadcasting to connection: {e}")
+                    logger.exception(f"Error broadcasting to connection: {e}")
                     disconnected.add(connection)
 
             # Remove disconnected connections
@@ -594,7 +594,7 @@ class LogStreamer:
             logger.info(f"Started Docker-based log streaming for {self.container_name}")
 
         except Exception as e:
-            logger.error(f"Failed to start Docker log streaming: {e}")
+            logger.exception(f"Failed to start Docker log streaming: {e}")
             logger.info("Falling back to file-based log streaming")
             await self._start_file_based_streaming()
 
@@ -623,7 +623,7 @@ class LogStreamer:
                 )
 
         except Exception as e:
-            logger.error(f"Failed to start file-based log streaming: {e}")
+            logger.exception(f"Failed to start file-based log streaming: {e}")
             self.running = False
 
     async def _watch_log_file(self, file_path: str):
@@ -663,7 +663,7 @@ class LogStreamer:
                         await asyncio.sleep(0.5)
 
         except Exception as e:
-            logger.error(f"Error watching log file {file_path}: {e}")
+            logger.exception(f"Error watching log file {file_path}: {e}")
 
     async def _stream_logs(self):
         """Stream logs from Docker container"""
@@ -694,7 +694,7 @@ class LogStreamer:
                 await manager.broadcast(log_entry)
 
         except Exception as e:
-            logger.error(f"Error in log streaming: {e}")
+            logger.exception(f"Error in log streaming: {e}")
         finally:
             self.running = False
             if self.process:
@@ -707,19 +707,15 @@ class LogStreamer:
         # Cancel stream logs task
         if self._stream_logs_task and not self._stream_logs_task.done():
             self._stream_logs_task.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 await self._stream_logs_task
-            except asyncio.CancelledError:
-                pass
 
         # Cancel file watcher tasks
         for task in self._file_watcher_tasks:
             if not task.done():
                 task.cancel()
-                try:
+                with suppress(asyncio.CancelledError):
                     await task
-                except asyncio.CancelledError:
-                    pass
 
         self._file_watcher_tasks.clear()
 
@@ -852,10 +848,8 @@ async def lifespan(app: FastAPI):
     # Cancel delayed startup task
     if _delayed_startup_task and not _delayed_startup_task.done():
         _delayed_startup_task.cancel()
-        try:
+        with suppress(asyncio.CancelledError):
             await _delayed_startup_task
-        except asyncio.CancelledError:
-            pass
 
     await log_streamer.stop()
 
@@ -891,63 +885,7 @@ app = FastAPI(
 # - CORS_DEFAULT_ORIGIN: Default origin when no other fallback applies
 # - CORS_ALLOW_CREDENTIALS: Enable/disable credentials (default: true)
 # - ENVIRONMENT: When set to 'development', allows '*' origin for WebSocket upgrades
-default_origins = ",".join(
-    [
-        # Development frontend
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "https://localhost:3000",
-        "https://127.0.0.1:3000",
-        # Production frontend
-        "http://localhost:3001",
-        "http://127.0.0.1:3001",
-        "https://localhost:3001",
-        "https://127.0.0.1:3001",
-        # Nginx proxy
-        "http://localhost:8080",
-        "http://127.0.0.1:8080",
-        "https://localhost:8080",
-        "https://127.0.0.1:8080",
-        # Production port 80/443
-        "http://localhost:80",
-        "http://127.0.0.1:80",
-        "https://localhost:443",
-        "https://127.0.0.1:443",
-        "http://localhost",
-        "https://localhost",
-        # Docker internal network - comprehensive container names
-        "http://dashboard-frontend:8080",
-        "http://dashboard-frontend-prod:8080",
-        "http://cursorprod-dashboard-frontend:8080",
-        "http://cursorprod_dashboard_frontend:8080",
-        "https://dashboard-frontend:8080",
-        "https://dashboard-frontend-prod:8080",
-        # Container-to-container communication
-        "http://dashboard-backend:8000",
-        "http://cursorprod-dashboard-backend:8000",
-        "http://cursorprod_dashboard_backend:8000",
-        # Alternative localhost variations
-        "http://0.0.0.0:3000",
-        "http://0.0.0.0:3001",
-        "http://0.0.0.0:8080",
-        "http://0.0.0.0:80",
-        # WebSocket-specific origins (for browser connections)
-        "ws://localhost:8000",
-        "ws://127.0.0.1:8000",
-        "ws://0.0.0.0:8000",
-        # HTTPS/WSS variants for production
-        "wss://localhost:8000",
-        "wss://127.0.0.1:8000",
-        "wss://0.0.0.0:8000",
-        # Direct browser access to backend port
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "http://0.0.0.0:8000",
-        "https://localhost:8000",
-        "https://127.0.0.1:8000",
-        "https://0.0.0.0:8000",
-    ]
-)
+default_origins = "http://localhost:3000,http://127.0.0.1:3000,https://localhost:3000,https://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,https://localhost:3001,https://127.0.0.1:3001,http://localhost:8080,http://127.0.0.1:8080,https://localhost:8080,https://127.0.0.1:8080,http://localhost:80,http://127.0.0.1:80,https://localhost:443,https://127.0.0.1:443,http://localhost,https://localhost,http://dashboard-frontend:8080,http://dashboard-frontend-prod:8080,http://cursorprod-dashboard-frontend:8080,http://cursorprod_dashboard_frontend:8080,https://dashboard-frontend:8080,https://dashboard-frontend-prod:8080,http://dashboard-backend:8000,http://cursorprod-dashboard-backend:8000,http://cursorprod_dashboard_backend:8000,http://0.0.0.0:3000,http://0.0.0.0:3001,http://0.0.0.0:8080,http://0.0.0.0:80,ws://localhost:8000,ws://127.0.0.1:8000,ws://0.0.0.0:8000,wss://localhost:8000,wss://127.0.0.1:8000,wss://0.0.0.0:8000,http://localhost:8000,http://127.0.0.1:8000,http://0.0.0.0:8000,https://localhost:8000,https://127.0.0.1:8000,https://0.0.0.0:8000"
 
 allowed_origins = os.getenv("CORS_ORIGINS", default_origins).split(",")
 # Strip whitespace from origins
@@ -1162,9 +1100,7 @@ async def websocket_endpoint(websocket: WebSocket):
             )
             cors_validation_passed = True
         # Docker internal network origins
-        elif origin.startswith("http://dashboard-frontend") or origin.startswith(
-            "http://dashboard-backend"
-        ):
+        elif origin.startswith(("http://dashboard-frontend", "http://dashboard-backend")):
             logger.info(
                 f"WebSocket origin '{origin}' allowed as container network connection"
             )
@@ -1283,7 +1219,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_text(json.dumps(response))
 
             except Exception as e:
-                logger.error(f"Failed to send WebSocket response: {e}")
+                logger.exception(f"Failed to send WebSocket response: {e}")
                 # Try to send a simple error message
                 try:
                     error_response = {
@@ -1295,14 +1231,14 @@ async def websocket_endpoint(websocket: WebSocket):
                     await websocket.send_text(json.dumps(error_response))
                 except Exception:
                     # If we can't send error response, break the connection
-                    logger.error("Cannot send error response, breaking connection")
+                    logger.exception("Cannot send error response, breaking connection")
                     break
 
     except WebSocketDisconnect:
         logger.info(f"WebSocket client disconnected gracefully from {origin}")
         manager.disconnect(websocket)
     except Exception as e:
-        logger.error(f"WebSocket error from {origin}: {e}")
+        logger.exception(f"WebSocket error from {origin}: {e}")
         manager.disconnect(websocket)
         # Try to send error information back to client
         try:
@@ -1397,7 +1333,7 @@ async def get_status():
         }
 
     except Exception as e:
-        logger.error(f"Error getting status: {e}")
+        logger.exception(f"Error getting status: {e}")
         # Return a minimal but functional response instead of raising
         return {
             "timestamp": datetime.now().isoformat(),
@@ -1490,7 +1426,7 @@ async def get_trading_data():
                         "error": health.get("error", "Service unhealthy"),
                     }
             except Exception as e:
-                logger.error(f"Bluefin service error: {e}")
+                logger.exception(f"Bluefin service error: {e}")
                 bluefin_data = {"service_status": "unreachable", "error": str(e)}
 
         # Use real Bluefin data if available, otherwise use mock data
@@ -1605,7 +1541,7 @@ async def get_trading_data():
             ]
 
         # Mock trading data - in real implementation, this would come from the bot
-        trading_data = {
+        return {
             "timestamp": datetime.now().isoformat(),
             "trading_mode": trading_mode,
             "futures_enabled": futures_enabled,
@@ -1630,10 +1566,9 @@ async def get_trading_data():
             "bluefin_data": bluefin_data if exchange_type == "bluefin" else None,
         }
 
-        return trading_data
 
     except Exception as e:
-        logger.error(f"Error getting trading data: {e}")
+        logger.exception(f"Error getting trading data: {e}")
         # Return mock data even on error to keep dashboard functional
         return {
             "timestamp": datetime.now().isoformat(),
@@ -1723,7 +1658,7 @@ async def get_trading_mode():
                         "error": bluefin_health.get("error", "Unknown error"),
                     }
             except Exception as e:
-                logger.error(f"Error checking Bluefin service: {e}")
+                logger.exception(f"Error checking Bluefin service: {e}")
                 exchange_config = {
                     "service_url": bluefin_client.base_url,
                     "service_status": "unreachable",
@@ -1778,7 +1713,7 @@ async def get_trading_mode():
             "taker_fee_rate": spot_taker_fee if not futures_enabled else futures_fee,
         }
     except Exception as e:
-        logger.error(f"Error getting trading mode: {e}")
+        logger.exception(f"Error getting trading mode: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error getting trading mode: {e!s}"
         ) from e
@@ -1800,7 +1735,7 @@ async def get_logs(limit: int = 100):
             "logs": logs,
         }
     except Exception as e:
-        logger.error(f"Error getting logs: {e}")
+        logger.exception(f"Error getting logs: {e}")
         raise HTTPException(status_code=500, detail=f"Error getting logs: {e!s}") from e
 
 
@@ -1921,7 +1856,7 @@ async def get_llm_status():
         }
 
     except Exception as e:
-        logger.error(f"Error getting LLM status: {e}")
+        logger.exception(f"Error getting LLM status: {e}")
         # Return a functional response instead of raising an exception
         return {
             "timestamp": datetime.now().isoformat(),
@@ -2001,7 +1936,7 @@ async def get_llm_metrics(
         }
 
     except Exception as e:
-        logger.error(f"Error getting LLM metrics: {e}")
+        logger.exception(f"Error getting LLM metrics: {e}")
         # Return empty metrics instead of raising
         return {
             "timestamp": datetime.now().isoformat(),
@@ -2040,7 +1975,7 @@ async def get_llm_activity(limit: int = Query(50, ge=1, le=500)):
         }
 
     except Exception as e:
-        logger.error(f"Error getting LLM activity: {e}")
+        logger.exception(f"Error getting LLM activity: {e}")
         # Return empty activity instead of raising
         return {
             "timestamp": datetime.now().isoformat(),
@@ -2085,7 +2020,7 @@ async def get_llm_decisions(
         }
 
     except Exception as e:
-        logger.error(f"Error getting LLM decisions: {e}")
+        logger.exception(f"Error getting LLM decisions: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error getting LLM decisions: {e!s}"
         ) from e
@@ -2118,7 +2053,7 @@ async def get_llm_alerts(
         }
 
     except Exception as e:
-        logger.error(f"Error getting LLM alerts: {e}")
+        logger.exception(f"Error getting LLM alerts: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error getting LLM alerts: {e!s}"
         ) from e
@@ -2187,7 +2122,7 @@ async def get_llm_sessions():
         }
 
     except Exception as e:
-        logger.error(f"Error getting LLM sessions: {e}")
+        logger.exception(f"Error getting LLM sessions: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error getting LLM sessions: {e!s}"
         ) from e
@@ -2247,7 +2182,7 @@ async def get_llm_cost_analysis():
         }
 
     except Exception as e:
-        logger.error(f"Error getting LLM cost analysis: {e}")
+        logger.exception(f"Error getting LLM cost analysis: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error getting LLM cost analysis: {e!s}"
         ) from e
@@ -2273,7 +2208,7 @@ async def export_llm_data(
         }
 
     except Exception as e:
-        logger.error(f"Error exporting LLM data: {e}")
+        logger.exception(f"Error exporting LLM data: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error exporting LLM data: {e!s}"
         ) from e
@@ -2313,7 +2248,7 @@ async def configure_llm_alerts(thresholds: dict[str, Any]):
         }
 
     except Exception as e:
-        logger.error(f"Error configuring LLM alerts: {e}")
+        logger.exception(f"Error configuring LLM alerts: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error configuring alerts: {e!s}"
         ) from e
@@ -2351,7 +2286,7 @@ async def restart_bot():
     except subprocess.TimeoutExpired as e:
         raise HTTPException(status_code=500, detail="Timeout restarting bot") from e
     except Exception as e:
-        logger.error(f"Error restarting bot: {e}")
+        logger.exception(f"Error restarting bot: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error restarting bot: {e!s}"
         ) from e
@@ -2432,7 +2367,7 @@ async def broadcast_message(message: dict):
         }
 
     except Exception as e:
-        logger.error(f"Error broadcasting message: {e}")
+        logger.exception(f"Error broadcasting message: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -2442,7 +2377,7 @@ async def broadcast_message(message: dict):
 class BotCommand:
     """Represents a command to be sent to the trading bot."""
 
-    def __init__(self, command_type: str, parameters: dict = None, priority: int = 5):
+    def __init__(self, command_type: str, parameters: dict | None = None, priority: int = 5):
         self.id = f"cmd_{int(time.time() * 1000000)}"
         self.command_type = command_type
         self.parameters = parameters or {}
@@ -2489,7 +2424,7 @@ async def emergency_stop_bot():
         }
 
     except Exception as e:
-        logger.error(f"Error issuing emergency stop: {e}")
+        logger.exception(f"Error issuing emergency stop: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -2519,7 +2454,7 @@ async def pause_trading():
         }
 
     except Exception as e:
-        logger.error(f"Error pausing trading: {e}")
+        logger.exception(f"Error pausing trading: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -2549,7 +2484,7 @@ async def resume_trading():
         }
 
     except Exception as e:
-        logger.error(f"Error resuming trading: {e}")
+        logger.exception(f"Error resuming trading: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -2596,7 +2531,7 @@ async def update_risk_limits(
         }
 
     except Exception as e:
-        logger.error(f"Error updating risk limits: {e}")
+        logger.exception(f"Error updating risk limits: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -2637,7 +2572,7 @@ async def manual_trade_command(
                     )
                 parameters["bluefin_service_available"] = True
             except Exception as e:
-                logger.error(f"Bluefin service check failed: {e}")
+                logger.exception(f"Bluefin service check failed: {e}")
                 parameters["bluefin_service_available"] = False
                 parameters["bluefin_error"] = str(e)
 
@@ -2667,7 +2602,7 @@ async def manual_trade_command(
         }
 
     except Exception as e:
-        logger.error(f"Error issuing manual trade: {e}")
+        logger.exception(f"Error issuing manual trade: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -2744,7 +2679,7 @@ async def cancel_command(command_id: str):
         )
 
     except Exception as e:
-        logger.error(f"Error cancelling command: {e}")
+        logger.exception(f"Error cancelling command: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -3280,7 +3215,7 @@ async def update_trading_data(symbol: str, data: dict[str, Any]):
         return {"status": "success", "message": "Data updated successfully"}
 
     except Exception as e:
-        logger.error(f"Error updating trading data: {e}")
+        logger.exception(f"Error updating trading data: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error updating data: {e!s}"
         ) from e
@@ -3321,7 +3256,7 @@ async def add_llm_decision_to_chart(decision_data: dict[str, Any]):
             raise HTTPException(status_code=400, detail="Invalid decision data")
 
     except Exception as e:
-        logger.error(f"Error adding LLM decision to chart: {e}")
+        logger.exception(f"Error adding LLM decision to chart: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error adding decision: {e!s}"
         ) from e
@@ -3351,7 +3286,7 @@ async def get_bluefin_health():
             "health": health,
         }
     except Exception as e:
-        logger.error(f"Error checking Bluefin health: {e}")
+        logger.exception(f"Error checking Bluefin health: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -3364,7 +3299,7 @@ async def get_bluefin_account():
     except HTTPException:
         raise  # Re-raise HTTP exceptions from the client
     except Exception as e:
-        logger.error(f"Error getting Bluefin account: {e}")
+        logger.exception(f"Error getting Bluefin account: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -3377,7 +3312,7 @@ async def get_bluefin_positions():
     except HTTPException:
         raise  # Re-raise HTTP exceptions from the client
     except Exception as e:
-        logger.error(f"Error getting Bluefin positions: {e}")
+        logger.exception(f"Error getting Bluefin positions: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -3390,7 +3325,7 @@ async def get_bluefin_orders():
     except HTTPException:
         raise  # Re-raise HTTP exceptions from the client
     except Exception as e:
-        logger.error(f"Error getting Bluefin orders: {e}")
+        logger.exception(f"Error getting Bluefin orders: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -3407,7 +3342,7 @@ async def get_bluefin_market_ticker(symbol: str):
     except HTTPException:
         raise  # Re-raise HTTP exceptions from the client
     except Exception as e:
-        logger.error(f"Error getting Bluefin market ticker: {e}")
+        logger.exception(f"Error getting Bluefin market ticker: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -3448,7 +3383,7 @@ async def place_bluefin_order(order_data: dict):
     except HTTPException:
         raise  # Re-raise HTTP exceptions from the client
     except Exception as e:
-        logger.error(f"Error placing Bluefin order: {e}")
+        logger.exception(f"Error placing Bluefin order: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 

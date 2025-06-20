@@ -8,6 +8,7 @@ particularly pandas_ta, LangChain, and their dependencies.
 
 import sys
 import warnings
+from typing import ClassVar
 
 
 class WarningsFilter:
@@ -19,7 +20,7 @@ class WarningsFilter:
     """
 
     # Known warning patterns to suppress
-    PANDAS_TA_WARNINGS = [
+    PANDAS_TA_WARNINGS: ClassVar[list[str]] = [
         # pkg_resources deprecation warning
         r"pkg_resources is deprecated as an API",
         r"The pkg_resources package is slated for removal",
@@ -41,7 +42,7 @@ class WarningsFilter:
     ]
 
     # LangChain-specific warning patterns
-    LANGCHAIN_WARNINGS = [
+    LANGCHAIN_WARNINGS: ClassVar[list[str]] = [
         # LangChain deprecation warnings
         r".*langchain.*deprecated.*",
         r".*langchain_core.*deprecated.*",
@@ -60,7 +61,7 @@ class WarningsFilter:
     ]
 
     # Additional third-party library warnings
-    GENERAL_WARNINGS = [
+    GENERAL_WARNINGS: ClassVar[list[str]] = [
         # Setuptools warnings
         r"setup\.py install is deprecated",
         # Other common deprecation warnings
@@ -338,7 +339,9 @@ def initialize_early_warning_suppression() -> None:
     current_module = sys.modules[__name__]
     try:
         if not hasattr(current_module, "__warningregistry__"):
-            current_module.__warningregistry__ = {}
+            # Type ignore needed as __warningregistry__ is a dynamic attribute
+            # that Python uses internally for warning management
+            current_module.__warningregistry__ = {}  # type: ignore[attr-defined]
     except (AttributeError, TypeError):
         # Some modules don't support setting attributes
         # This is fine, warnings will still be filtered

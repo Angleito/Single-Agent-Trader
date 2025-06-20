@@ -138,7 +138,7 @@ class PerformanceMonitor:
             )
             logger.debug(f"Triggered market update: {event_id}")
         except Exception as e:
-            logger.error(f"Failed to trigger market update: {e}")
+            logger.exception(f"Failed to trigger market update: {e}")
 
     async def _trigger_decision(self, event_id: str):
         """Trigger an AI decision."""
@@ -150,7 +150,7 @@ class PerformanceMonitor:
             )
             logger.debug(f"Triggered AI decision: {event_id}")
         except Exception as e:
-            logger.error(f"Failed to trigger decision: {e}")
+            logger.exception(f"Failed to trigger decision: {e}")
 
     async def _trigger_indicators(self, event_id: str):
         """Trigger indicator calculation."""
@@ -162,7 +162,7 @@ class PerformanceMonitor:
             )
             logger.debug(f"Triggered indicators: {event_id}")
         except Exception as e:
-            logger.error(f"Failed to trigger indicators: {e}")
+            logger.exception(f"Failed to trigger indicators: {e}")
 
     async def monitor_messages(self, duration: int = 60):
         """Monitor WebSocket messages and measure latency."""
@@ -210,13 +210,13 @@ class PerformanceMonitor:
                     except TimeoutError:
                         continue
                     except Exception as e:
-                        logger.error(f"Error processing message: {e}")
+                        logger.exception(f"Error processing message: {e}")
                         self.metrics.error_counts["message_processing"] = (
                             self.metrics.error_counts.get("message_processing", 0) + 1
                         )
 
         except Exception as e:
-            logger.error(f"WebSocket connection error: {e}")
+            logger.exception(f"WebSocket connection error: {e}")
             self.metrics.error_counts["connection"] = (
                 self.metrics.error_counts.get("connection", 0) + 1
             )
@@ -266,7 +266,7 @@ class PerformanceMonitor:
                 await asyncio.sleep(interval)
 
             except Exception as e:
-                logger.error(f"Container monitoring error: {e}")
+                logger.exception(f"Container monitoring error: {e}")
                 await asyncio.sleep(interval)
 
     def _calculate_cpu_percent(self, stats: dict) -> float:

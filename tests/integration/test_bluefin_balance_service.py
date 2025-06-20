@@ -173,7 +173,7 @@ class TestBluefinBalanceServiceIntegration:
             ("server_error", Exception("Internal server error"), "server_error"),
         ]
 
-        for scenario_name, exception, expected_failure_type in error_scenarios:
+        for _scenario_name, exception, expected_failure_type in error_scenarios:
             # Reset service state
             bluefin_service.failure_count = 0
             bluefin_service.circuit_state = "CLOSED"
@@ -201,7 +201,7 @@ class TestBluefinBalanceServiceIntegration:
         )
 
         # Make multiple failing calls
-        for i in range(bluefin_service.circuit_failure_threshold + 1):
+        for _i in range(bluefin_service.circuit_failure_threshold + 1):
             try:
                 await bluefin_service.get_account_balance()
             except Exception:
@@ -305,7 +305,7 @@ class TestBluefinBalanceServiceIntegration:
 
         # Calculate total unrealized P&L from positions
         positions = positions_data["data"]
-        total_unrealized_pnl = sum(
+        sum(
             Decimal(pos.get("unrealizedPnl", "0")) for pos in positions
         )
 

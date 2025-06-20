@@ -132,7 +132,7 @@ class MCPOmniSearchClient:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to connect to MCP-OmniSearch server: {e}")
+            logger.exception(f"Failed to connect to MCP-OmniSearch server: {e}")
             return False
 
     async def disconnect(self) -> None:
@@ -146,7 +146,7 @@ class MCPOmniSearchClient:
             self._connected = False
             logger.info("Disconnected from MCP-OmniSearch server")
         except Exception as e:
-            logger.error(f"Error during disconnect: {e}")
+            logger.exception(f"Error during disconnect: {e}")
 
     async def _send_initialize(self) -> None:
         """Send initialization message to MCP server."""
@@ -278,7 +278,7 @@ class MCPOmniSearchClient:
             return financial_results
 
         except Exception as e:
-            logger.error(f"Financial news search failed for '{query}': {e}")
+            logger.exception(f"Financial news search failed for '{query}': {e}")
             return []
 
     async def search_crypto_sentiment(self, symbol: str) -> SentimentAnalysis:
@@ -335,7 +335,7 @@ class MCPOmniSearchClient:
             return sentiment
 
         except Exception as e:
-            logger.error(f"Crypto sentiment search failed for {base_symbol}: {e}")
+            logger.exception(f"Crypto sentiment search failed for {base_symbol}: {e}")
             return self._get_fallback_sentiment(base_symbol)
 
     async def search_nasdaq_sentiment(self) -> SentimentAnalysis:
@@ -386,7 +386,7 @@ class MCPOmniSearchClient:
             return sentiment
 
         except Exception as e:
-            logger.error(f"NASDAQ sentiment search failed: {e}")
+            logger.exception(f"NASDAQ sentiment search failed: {e}")
             return self._get_fallback_sentiment("NASDAQ")
 
     async def search_market_correlation(
@@ -434,7 +434,7 @@ class MCPOmniSearchClient:
             return correlation
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 f"Market correlation search failed for {crypto_base}-{nasdaq_base}: {e}"
             )
             return self._get_fallback_correlation(crypto_base, nasdaq_base, timeframe)

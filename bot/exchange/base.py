@@ -13,14 +13,14 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, Literal
 
-from ..error_handling import (
+from bot.error_handling import (
     ErrorBoundary,
     TradeSaga,
     exception_handler,
     graceful_degradation,
 )
-from ..system_monitor import error_recovery_manager
-from ..trading_types import (
+from bot.system_monitor import error_recovery_manager
+from bot.trading_types import (
     AccountType,
     FuturesAccountInfo,
     MarginInfo,
@@ -282,7 +282,7 @@ class BaseExchange(ABC):
         self,
         new_balance: Decimal,
         operation_type: str = "balance_update",
-        metadata: dict[str, Any] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Validate balance update with comprehensive checks.
@@ -349,7 +349,7 @@ class BaseExchange(ABC):
             # Re-raise balance validation errors
             raise
         except Exception as e:
-            logger.error(f"Balance validation error in {self.exchange_name}: {e}")
+            logger.exception(f"Balance validation error in {self.exchange_name}: {e}")
             raise BalanceValidationError(
                 f"Balance validation failed for {operation_type}: {e}",
                 invalid_value=str(new_balance) if new_balance is not None else None,
@@ -360,8 +360,8 @@ class BaseExchange(ABC):
         self,
         balance: Decimal,
         used_margin: Decimal,
-        position_value: Decimal = None,
-        leverage: int = None,
+        position_value: Decimal | None = None,
+        leverage: int | None = None,
     ) -> dict[str, Any]:
         """
         Validate margin requirements and calculations.
@@ -417,7 +417,7 @@ class BaseExchange(ABC):
             # Re-raise balance validation errors
             raise
         except Exception as e:
-            logger.error(f"Margin validation error in {self.exchange_name}: {e}")
+            logger.exception(f"Margin validation error in {self.exchange_name}: {e}")
             raise BalanceValidationError(
                 f"Margin validation failed: {e}",
                 invalid_value=f"balance:{balance}, used_margin:{used_margin}",
@@ -490,7 +490,7 @@ class BaseExchange(ABC):
             # Re-raise balance validation errors
             raise
         except Exception as e:
-            logger.error(f"Balance reconciliation error in {self.exchange_name}: {e}")
+            logger.exception(f"Balance reconciliation error in {self.exchange_name}: {e}")
             raise BalanceValidationError(
                 f"Balance reconciliation failed: {e}",
                 invalid_value=f"calculated:{calculated_balance}, reported:{exchange_reported_balance}",
@@ -875,7 +875,7 @@ class BaseExchange(ABC):
                     return validation_result.get("balance", balance)
 
                 except BalanceValidationError as ve:
-                    logger.error(f"Balance validation error: {ve}")
+                    logger.exception(f"Balance validation error: {ve}")
                     # Return original balance if validation fails but log the issue
                     return balance
 

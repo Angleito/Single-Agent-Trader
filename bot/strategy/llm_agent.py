@@ -11,7 +11,7 @@ to analyze market state and generate trading actions.
 import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Type, Union
+from typing import Any, Literal, Type, cast
 
 try:
     from langchain_core.output_parsers import JsonOutputParser
@@ -48,9 +48,9 @@ class LLMAgent:
 
     def __init__(
         self,
-        model_provider: Optional[str] = None,
-        model_name: Optional[str] = None,
-        omnisearch_client: Optional[OmniSearchClient] = None,
+        model_provider: str | None = None,
+        model_name: str | None = None,
+        omnisearch_client: OmniSearchClient | None = None,
     ):
         """
         Initialize the LLM agent.
@@ -70,13 +70,13 @@ class LLMAgent:
             self.temperature = settings.llm.temperature
 
         # LangChain components
-        self._model: Optional[Any] = None
-        self._prompt_template: Optional[Any] = None
-        self._chain: Optional[Any] = None
+        self._model: Any | None = None
+        self._prompt_template: Any | None = None
+        self._chain: Any | None = None
 
         # Enhanced logging components
-        self._completion_logger: Optional[Any] = None
-        self._langchain_callback: Optional[Any] = None
+        self._completion_logger: Any | None = None
+        self._langchain_callback: Any | None = None
         self._completion_count = 0
 
         # OmniSearch integration
@@ -309,7 +309,7 @@ FINANCIAL INTELLIGENCE INTEGRATION:
                     raise ValueError("OpenAI API key not configured")
 
                 # Base kwargs required for any OpenAI chat completion
-                base_kwargs: Dict[str, Any] = {
+                base_kwargs: dict[str, Any] = {
                     "model": self.model_name,
                     "api_key": settings.llm.openai_api_key.get_secret_value(),
                 }
@@ -471,7 +471,7 @@ FINANCIAL INTELLIGENCE INTEGRATION:
                 rationale="Error in analysis - holding position",
             )
 
-    async def _prepare_llm_input(self, market_state: MarketState) -> Dict[str, Any]:
+    async def _prepare_llm_input(self, market_state: MarketState) -> dict[str, Any]:
         """
         Prepare market state data for LLM input.
 
@@ -520,7 +520,7 @@ FINANCIAL INTELLIGENCE INTEGRATION:
 
         # Get futures-specific information if available
         margin_health = "N/A"
-        available_margin: Union[str, float] = "N/A"
+        available_margin: str | float = "N/A"
 
         if hasattr(market_state, "futures_account") and market_state.futures_account:
             margin_health = market_state.futures_account.margin_info.health_status.value
@@ -623,7 +623,9 @@ FINANCIAL INTELLIGENCE INTEGRATION:
                 direction = (
                     "🟢"
                     if candle.close > candle.open
-                    else "🔴" if candle.close < candle.open else "⚪"
+                    else "🔴"
+                    if candle.close < candle.open
+                    else "⚪"
                 )
                 change_pct = (
                     ((candle.close - candle.open) / candle.open * 100)
@@ -669,7 +671,9 @@ FINANCIAL INTELLIGENCE INTEGRATION:
                 trend_direction = (
                     "RISING"
                     if overall_trend > 0.1
-                    else "FALLING" if overall_trend < -0.1 else "SIDEWAYS"
+                    else "FALLING"
+                    if overall_trend < -0.1
+                    else "SIDEWAYS"
                 )
                 trend_line = f"Overall Trend: {trend_direction} ({overall_trend:+.2f}% over {len(recent_candles)} candles)"
             else:
@@ -1005,7 +1009,7 @@ FINANCIAL INTELLIGENCE INTEGRATION:
             logger.error(f"Error getting financial context: {e}")
             return f"Error retrieving financial context: {str(e)}"
 
-    async def _get_scalping_analysis(self, market_state: MarketState) -> Dict[str, Any]:
+    async def _get_scalping_analysis(self, market_state: MarketState) -> dict[str, Any]:
         """
         Get scalping analysis - currently disabled after module removal.
 
@@ -1039,7 +1043,7 @@ FINANCIAL INTELLIGENCE INTEGRATION:
             "scalping_consensus": "DISABLED",
         }
 
-    async def _get_llm_decision(self, llm_input: Dict[str, Any]) -> TradeAction:
+    async def _get_llm_decision(self, llm_input: dict[str, Any]) -> TradeAction:
         """
         Get decision from LLM using LangChain with enhanced logging and optimized prompts.
 
@@ -1360,8 +1364,6 @@ FINANCIAL INTELLIGENCE INTEGRATION:
         )
 
         # Cast action to proper literal type
-        from typing import cast, Literal
-
         valid_action = cast(Literal["LONG", "SHORT", "CLOSE", "HOLD"], action)
 
         return TradeAction(
@@ -1383,7 +1385,7 @@ FINANCIAL INTELLIGENCE INTEGRATION:
         """
         return self._chain is not None or True  # Fallback always available
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """
         Get status information about the LLM agent including logging and caching status.
 
@@ -1464,7 +1466,7 @@ FINANCIAL INTELLIGENCE INTEGRATION:
 
         return status
 
-    def _extract_json_from_response(self, response_content: str) -> Dict[str, Any]:
+    def _extract_json_from_response(self, response_content: str) -> dict[str, Any]:
         """
         Extract JSON from a verbose response that contains both analysis and JSON.
 
@@ -1563,8 +1565,8 @@ FINANCIAL INTELLIGENCE INTEGRATION:
         request_id: str,
         trade_action: TradeAction,
         market_state: MarketState,
-        validation_result: Optional[str] = None,
-        risk_assessment: Optional[str] = None,
+        validation_result: str | None = None,
+        risk_assessment: str | None = None,
     ) -> None:
         """
         Log a trading decision with validation and risk assessment results.

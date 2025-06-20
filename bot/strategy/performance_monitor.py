@@ -214,7 +214,7 @@ class LLMPerformanceMonitor:
             * 100
         )
 
-        stats = PerformanceStats(
+        return PerformanceStats(
             total_requests=len(recent_metrics),
             cache_hits=cache_hits,
             cache_misses=len(recent_metrics) - cache_hits,
@@ -230,7 +230,6 @@ class LLMPerformanceMonitor:
             recent_metrics=recent_metrics,
         )
 
-        return stats
 
     def get_performance_report(self) -> str:
         """
@@ -253,7 +252,7 @@ class LLMPerformanceMonitor:
             status_emoji = "🔴"
             status_text = "NEEDS OPTIMIZATION"
 
-        report = f"""
+        return f"""
 🚀 LLM PERFORMANCE OPTIMIZER REPORT
 {'=' * 45}
 
@@ -285,7 +284,6 @@ class LLMPerformanceMonitor:
 🔧 RECOMMENDATIONS:
 {self._get_optimization_recommendations(stats)}
 """
-        return report
 
     def _get_trend_analysis(self) -> str:
         """Get trend analysis from recent metrics."""
@@ -374,7 +372,7 @@ class LLMPerformanceMonitor:
                 logger.info("Performance monitoring stopped")
                 break
             except Exception as e:
-                logger.error(f"Error in performance monitoring: {e}")
+                logger.exception(f"Error in performance monitoring: {e}")
 
     def get_cache_effectiveness_analysis(self) -> dict[str, Any]:
         """

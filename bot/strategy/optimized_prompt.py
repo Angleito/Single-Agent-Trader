@@ -100,7 +100,7 @@ OVERRIDE AUTHORITY: You can trade with mixed Cipher B if momentum is very strong
             return formatted_prompt
 
         except Exception as e:
-            logger.error(f"Error formatting optimized prompt: {e}")
+            logger.exception(f"Error formatting optimized prompt: {e}")
             logger.debug(f"Available keys in llm_input: {list(llm_input.keys())}")
             # Fallback to minimal prompt
             return self._get_minimal_fallback_prompt(llm_input)

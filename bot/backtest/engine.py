@@ -13,18 +13,18 @@ from typing import Literal
 
 import pandas as pd
 
-from ..indicators.vumanchu import VuManChuIndicators
-from ..risk import RiskManager
-from ..strategy.core import CoreStrategy
-from ..strategy.llm_agent import LLMAgent
-from ..trading_types import (
+from bot.indicators.vumanchu import VuManChuIndicators
+from bot.risk import RiskManager
+from bot.strategy.core import CoreStrategy
+from bot.strategy.llm_agent import LLMAgent
+from bot.trading_types import (
     IndicatorData,
     MarketData,
     MarketState,
     Position,
     TradeAction,
 )
-from ..validator import TradeValidator
+from bot.validator import TradeValidator
 
 logger = logging.getLogger(__name__)
 
@@ -105,8 +105,8 @@ class BacktestEngine:
     async def run_backtest(
         self,
         historical_data: pd.DataFrame,
-        start_date: datetime = None,
-        end_date: datetime = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
         strategy_type: str = "llm",
     ) -> BacktestResults:
         """
@@ -154,7 +154,7 @@ class BacktestEngine:
         return results
 
     def _prepare_data(
-        self, data: pd.DataFrame, start_date: datetime = None, end_date: datetime = None
+        self, data: pd.DataFrame, start_date: datetime | None = None, end_date: datetime | None = None
     ) -> pd.DataFrame:
         """
         Prepare and filter historical data for backtesting.

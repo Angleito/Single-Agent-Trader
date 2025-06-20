@@ -255,10 +255,10 @@ class BluefinSDKService:
         correlation_id: str,
         operation: str,
         status: str,
-        balance_amount: str = None,
-        error: str = None,
-        duration_ms: float = None,
-        metadata: dict = None,
+        balance_amount: str | None = None,
+        error: str | None = None,
+        duration_ms: float | None = None,
+        metadata: dict | None = None,
     ) -> None:
         """
         Record balance operation in audit trail.
@@ -320,8 +320,8 @@ class BluefinSDKService:
         correlation_id: str,
         operation: str,
         error: Exception,
-        duration_ms: float = None,
-        additional_context: dict = None,
+        duration_ms: float | None = None,
+        additional_context: dict | None = None,
     ) -> dict:
         """
         Generate comprehensive error context for logging.
@@ -661,7 +661,7 @@ class BluefinSDKService:
 
                 # Don't retry permanent errors
                 if error_type == ErrorType.PERMANENT:
-                    logger.error(
+                    logger.exception(
                         f"Permanent error in {operation_name}, not retrying",
                         extra={
                             "service_id": self.service_id,
@@ -755,7 +755,7 @@ class BluefinSDKService:
         except (SymbolConversionError, InvalidSymbolError) as e:
             # Convert symbol utility exceptions to service exceptions
             error_msg = f"Unable to resolve market symbol '{symbol}': {e!s}"
-            logger.error(
+            logger.exception(
                 error_msg,
                 extra={
                     "service_id": self.service_id,
@@ -768,7 +768,7 @@ class BluefinSDKService:
 
         except Exception as e:
             error_msg = f"Unexpected error processing symbol '{symbol}': {e!s}"
-            logger.error(
+            logger.exception(
                 "Unexpected error in symbol conversion",
                 extra={
                     "service_id": self.service_id,
@@ -793,7 +793,7 @@ class BluefinSDKService:
         try:
             return self.symbol_converter.from_market_symbol(market_symbol)
         except Exception as e:
-            logger.error(f"Failed to convert market symbol to string: {e}")
+            logger.exception(f"Failed to convert market symbol to string: {e}")
             return str(market_symbol)
 
     def _validate_symbol(self, symbol: str) -> bool:
@@ -951,7 +951,7 @@ class BluefinSDKService:
                 raise
 
             # If all else fails, provide a safe fallback
-            logger.error(
+            logger.exception(
                 "Critical error in symbol value extraction, using normalized symbol as fallback",
                 extra={
                     "service_id": self.service_id,
@@ -980,7 +980,7 @@ class BluefinSDKService:
                 else:
                     return symbol.upper()
             except Exception as fallback_err:
-                logger.error(
+                logger.exception(
                     "Even fallback normalization failed, returning original symbol",
                     extra={
                         "service_id": self.service_id,
@@ -1368,7 +1368,7 @@ class BluefinSDKService:
                     )
                     await asyncio.sleep(delay)
                 else:
-                    logger.error(
+                    logger.exception(
                         f"Timeout error after {self.max_retries} attempts: {e}",
                         extra={"service_id": self.service_id},
                     )
@@ -1402,7 +1402,7 @@ class BluefinSDKService:
                     )
                     await asyncio.sleep(delay)
                 else:
-                    logger.error(
+                    logger.exception(
                         f"Client error after {self.max_retries} attempts: {e}",
                         extra={
                             "service_id": self.service_id,
@@ -1410,7 +1410,7 @@ class BluefinSDKService:
                         },
                     )
             except Exception as e:
-                logger.error(
+                logger.exception(
                     f"Non-retryable error: {e}",
                     extra={
                         "service_id": self.service_id,
@@ -1503,7 +1503,7 @@ class BluefinSDKService:
                 try:
                     # Remove common prefixes if present
                     clean_key = original_key
-                    if clean_key.startswith("0x") or clean_key.startswith("0X"):
+                    if clean_key.startswith(("0x", "0X")):
                         clean_key = clean_key[2:]
 
                     # Try to decode as hex
@@ -1572,7 +1572,7 @@ class BluefinSDKService:
                 )
             except KeyError as e:
                 error_msg = f"Invalid network configuration '{self.network}'. Expected 'mainnet' or 'testnet'"
-                logger.error(
+                logger.exception(
                     "Network configuration failed",
                     extra={
                         "service_id": self.service_id,
@@ -1689,7 +1689,7 @@ class BluefinSDKService:
                             continue
                         else:
                             # Non-retryable error
-                            logger.error(
+                            logger.exception(
                                 f"Non-retryable initialization error: {e}",
                                 extra={
                                     "service_id": self.service_id,
@@ -1705,7 +1705,7 @@ class BluefinSDKService:
                     else:
                         # Final attempt failed
                         error_msg = f"Failed to initialize Bluefin client after {max_init_retries} attempts: {e!s}"
-                        logger.error(
+                        logger.exception(
                             "All initialization attempts failed",
                             extra={
                                 "service_id": self.service_id,
@@ -1734,7 +1734,7 @@ class BluefinSDKService:
             raise
         except Exception as e:
             error_msg = f"Unexpected error during Bluefin SDK initialization: {e!s}"
-            logger.error(
+            logger.exception(
                 "Unexpected initialization error",
                 extra={
                     "service_id": self.service_id,
@@ -1788,7 +1788,7 @@ class BluefinSDKService:
             self._cleanup_complete = True
             logger.info("Bluefin SDK service cleanup completed")
         except Exception as e:
-            logger.error(f"Error during Bluefin SDK service cleanup: {e}")
+            logger.exception(f"Error during Bluefin SDK service cleanup: {e}")
 
     async def get_account_data(self) -> dict[str, Any]:
         """
@@ -2009,7 +2009,7 @@ class BluefinSDKService:
                                         ),
                                     },
                                 )
-                                raise sdk_error
+                                raise
 
                     # Execute with retry logic
                     balance_response = await self._retry_balance_operation(
@@ -2118,7 +2118,7 @@ class BluefinSDKService:
                     },
                 )
 
-                logger.error(
+                logger.exception(
                     "Balance retrieval failed after all retries",
                     extra=error_context,
                 )
@@ -2219,7 +2219,7 @@ class BluefinSDKService:
                                     "operation": "get_margin_bank_balance",
                                 },
                             )
-                            raise sdk_error
+                            raise
 
                 # Execute with retry logic
                 margin_response = await self._retry_balance_operation(
@@ -2243,7 +2243,7 @@ class BluefinSDKService:
                 logger.info(f"Account margin info: {account_data['margin']}")
 
             except Exception as e:
-                logger.error(f"Failed to get margin info: {e}")
+                logger.exception(f"Failed to get margin info: {e}")
                 if account_data["error"]:
                     account_data["error"] += f", Margin fetch failed: {e!s}"
                 else:
@@ -2287,8 +2287,8 @@ class BluefinSDKService:
             return account_data
 
         except Exception as e:
-            logger.error(f"Error getting account data: {e}")
-            logger.error(f"Exception type: {type(e)}")
+            logger.exception(f"Error getting account data: {e}")
+            logger.exception(f"Exception type: {type(e)}")
 
             # Handle known Bluefin SDK data access issues
             error_msg = str(e)
@@ -2404,7 +2404,7 @@ class BluefinSDKService:
                 return []
 
         except Exception as e:
-            logger.error(f"Error getting positions: {e}")
+            logger.exception(f"Error getting positions: {e}")
             return []
 
     def _validate_and_normalize_symbol(self, symbol: str) -> str:
@@ -2497,7 +2497,7 @@ class BluefinSDKService:
             return {"status": "success", "order": response}
 
         except Exception as e:
-            logger.error(f"Error placing order: {e}")
+            logger.exception(f"Error placing order: {e}")
             return {"status": "error", "message": str(e)}
 
     async def cancel_order(self, order_id: str) -> bool:
@@ -2509,7 +2509,7 @@ class BluefinSDKService:
             await self.client.cancel_order(order_id)
             return True
         except Exception as e:
-            logger.error(f"Error canceling order: {e}")
+            logger.exception(f"Error canceling order: {e}")
             return False
 
     async def set_leverage(self, symbol: str, leverage: int) -> bool:
@@ -2527,7 +2527,7 @@ class BluefinSDKService:
             )
             return True
         except Exception as e:
-            logger.error(f"Error setting leverage for {symbol}: {e}")
+            logger.exception(f"Error setting leverage for {symbol}: {e}")
             return False
 
     async def get_candlestick_data(
@@ -2572,7 +2572,7 @@ class BluefinSDKService:
                     )
 
             except Exception as e:
-                logger.error(
+                logger.exception(
                     f"❌ {source_name} failed with error: {e}, trying next fallback"
                 )
 
@@ -2617,10 +2617,10 @@ class BluefinSDKService:
                     )
                     await asyncio.sleep(wait_time)
                 else:
-                    logger.error(
+                    logger.exception(
                         f"❌ REST API attempt {attempt + 1} failed (final): {e}"
                     )
-                    raise e
+                    raise
 
         # Should not reach here, but just in case
         return []
@@ -2707,8 +2707,8 @@ class BluefinSDKService:
                     )
                     await asyncio.sleep(wait_time)
                 else:
-                    logger.error(f"❌ SDK attempt {attempt + 1} failed (final): {e}")
-                    raise e
+                    logger.exception(f"❌ SDK attempt {attempt + 1} failed (final): {e}")
+                    raise
 
         # Should not reach here
         return []
@@ -3143,7 +3143,7 @@ class BluefinSDKService:
                 # For historical data, just use the original request
                 return await self._retry_request(_make_request)
         except Exception as e:
-            logger.error(f"Error in REST API call after retries: {e}")
+            logger.exception(f"Error in REST API call after retries: {e}")
             return []
 
     async def _make_symbol_request(
@@ -3395,7 +3395,7 @@ async def validate_endpoint_connectivity(
 
     except Exception as e:
         error_msg = f"Failed to test endpoint connectivity: {e!s}"
-        logger.error(error_msg)
+        logger.exception(error_msg)
         return False, error_msg
 
 
@@ -3445,7 +3445,7 @@ async def validate_network_endpoints(network: str) -> dict[str, tuple[bool, str]
         }
     except Exception as e:
         error_msg = f"Endpoint validation failed: {e!s}"
-        logger.error(error_msg)
+        logger.exception(error_msg)
         return {
             "rest_api": (False, error_msg),
             "websocket_api": (False, error_msg),
@@ -3493,7 +3493,7 @@ async def health_check(request):
         return web.json_response(health_data)
 
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
+        logger.exception(f"Health check failed: {e}")
         return web.json_response(
             {
                 "status": "unhealthy",
@@ -3627,7 +3627,7 @@ async def detailed_health_check(request):
         return web.json_response(health_data)
 
     except Exception as e:
-        logger.error(f"Detailed health check failed: {e}")
+        logger.exception(f"Detailed health check failed: {e}")
         return web.json_response(
             {
                 "status": "unhealthy",
@@ -3725,7 +3725,7 @@ async def connectivity_health_check(request):
         return web.json_response(connectivity_data)
 
     except Exception as e:
-        logger.error(f"Connectivity health check failed: {e}")
+        logger.exception(f"Connectivity health check failed: {e}")
         return web.json_response(
             {
                 "overall_status": "error",
@@ -3828,7 +3828,7 @@ async def performance_metrics(request):
         return web.json_response(metrics_data)
 
     except Exception as e:
-        logger.error(f"Performance metrics failed: {e}")
+        logger.exception(f"Performance metrics failed: {e}")
         return web.json_response({"error": str(e)}, status=500)
 
 
@@ -3898,7 +3898,7 @@ async def service_status(request):
         return web.json_response(status_data)
 
     except Exception as e:
-        logger.error(f"Service status failed: {e}")
+        logger.exception(f"Service status failed: {e}")
         return web.json_response({"error": str(e)}, status=500)
 
 
@@ -4062,7 +4062,7 @@ async def service_diagnostics(request):
         return web.json_response(diagnostics_data)
 
     except Exception as e:
-        logger.error(f"Service diagnostics failed: {e}")
+        logger.exception(f"Service diagnostics failed: {e}")
         return web.json_response(
             {
                 "overall_status": "error",
@@ -4079,7 +4079,7 @@ async def get_account(request):
         data = await service.get_account_data()
         return web.json_response(data)
     except Exception as e:
-        logger.error(f"Error in get_account: {e}")
+        logger.exception(f"Error in get_account: {e}")
         return web.json_response({"error": str(e)}, status=500)
 
 
@@ -4089,7 +4089,7 @@ async def get_positions(request):
         positions = await service.get_positions()
         return web.json_response({"positions": positions})
     except Exception as e:
-        logger.error(f"Error in get_positions: {e}")
+        logger.exception(f"Error in get_positions: {e}")
         return web.json_response({"error": str(e)}, status=500)
 
 
@@ -4100,7 +4100,7 @@ async def place_order(request):
         result = await service.place_order(order_data)
         return web.json_response(result)
     except Exception as e:
-        logger.error(f"Error in place_order: {e}")
+        logger.exception(f"Error in place_order: {e}")
         return web.json_response({"error": str(e)}, status=500)
 
 
@@ -4111,7 +4111,7 @@ async def cancel_order(request):
         success = await service.cancel_order(order_id)
         return web.json_response({"success": success})
     except Exception as e:
-        logger.error(f"Error in cancel_order: {e}")
+        logger.exception(f"Error in cancel_order: {e}")
         return web.json_response({"error": str(e)}, status=500)
 
 
@@ -4188,7 +4188,7 @@ async def get_ticker(request):
                 }
             )
         except Exception as orderbook_error:
-            logger.error(f"Orderbook error: {orderbook_error}")
+            logger.exception(f"Orderbook error: {orderbook_error}")
 
         # Final fallback: REST API for ticker
         try:
@@ -4249,7 +4249,7 @@ async def get_ticker(request):
                 finally:
                     logger.debug("HTTP session closed for ticker call")
         except Exception as api_error:
-            logger.error(f"REST API ticker error: {api_error}")
+            logger.exception(f"REST API ticker error: {api_error}")
 
         # Return default values if all methods fail
         logger.warning("All ticker methods failed, returning default")
@@ -4264,7 +4264,7 @@ async def get_ticker(request):
         )
 
     except Exception as e:
-        logger.error(f"Error in get_ticker: {e}")
+        logger.exception(f"Error in get_ticker: {e}")
         return web.json_response({"error": str(e)}, status=500)
 
 
@@ -4275,7 +4275,7 @@ async def set_leverage(request):
         success = await service.set_leverage(data["symbol"], data["leverage"])
         return web.json_response({"success": success})
     except Exception as e:
-        logger.error(f"Error in set_leverage: {e}")
+        logger.exception(f"Error in set_leverage: {e}")
         return web.json_response({"error": str(e)}, status=500)
 
 
@@ -4313,10 +4313,10 @@ async def get_market_candles(request):
         return web.json_response({"candles": candles})
 
     except ValueError as e:
-        logger.error(f"Invalid parameter in get_market_candles: {e}")
+        logger.exception(f"Invalid parameter in get_market_candles: {e}")
         return web.json_response({"error": f"Invalid parameter: {e}"}, status=400)
     except Exception as e:
-        logger.error(f"Error in get_market_candles: {e}")
+        logger.exception(f"Error in get_market_candles: {e}")
         return web.json_response({"error": str(e)}, status=500)
 
 
@@ -4361,7 +4361,7 @@ async def debug_symbols(request):
             }
         )
     except Exception as e:
-        logger.error(f"Error in debug_symbols: {e}")
+        logger.exception(f"Error in debug_symbols: {e}")
         return web.json_response({"error": str(e)}, status=500)
 
 
@@ -4405,7 +4405,7 @@ async def validate_endpoints(request):
             response_data["endpoints"][endpoint_type] = {
                 "status": "healthy" if is_valid else "unhealthy",
                 "error": error_msg if error_msg else None,
-                "validated": True if endpoint_type == "rest_api" else False,
+                "validated": endpoint_type == "rest_api",
             }
 
         # Add current endpoint URLs for reference
@@ -4439,7 +4439,7 @@ async def validate_endpoints(request):
         return web.json_response(response_data, status=status_code)
 
     except Exception as e:
-        logger.error(f"Error validating endpoints: {e}")
+        logger.exception(f"Error validating endpoints: {e}")
         return web.json_response(
             {
                 "error": "Endpoint validation failed",

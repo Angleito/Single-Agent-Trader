@@ -22,7 +22,7 @@ class BalanceValidationError(Exception):
     """Custom exception for balance validation failures."""
 
     def __init__(
-        self, message: str, error_code: str = None, validation_type: str = None
+        self, message: str, error_code: str | None = None, validation_type: str | None = None
     ):
         super().__init__(message)
         self.error_code = error_code
@@ -175,7 +175,7 @@ class BalanceValidator:
         old_balance: Decimal,
         new_balance: Decimal,
         operation_type: str = "unknown",
-        metadata: dict[str, Any] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Validate balance change is reasonable and not anomalous.
@@ -428,8 +428,8 @@ class BalanceValidator:
         self,
         balance: Decimal,
         used_margin: Decimal,
-        position_value: Decimal = None,
-        leverage: int = None,
+        position_value: Decimal | None = None,
+        leverage: int | None = None,
     ) -> dict[str, Any]:
         """
         Validate margin calculations for sanity.
@@ -623,9 +623,9 @@ class BalanceValidator:
     def comprehensive_balance_validation(
         self,
         balance: Decimal,
-        previous_balance: Decimal = None,
+        previous_balance: Decimal | None = None,
         operation_type: str = "update",
-        metadata: dict[str, Any] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Run comprehensive validation on a balance value.
@@ -673,7 +673,7 @@ class BalanceValidator:
             }
 
         except BalanceValidationError as e:
-            logger.error(f"❌ Comprehensive balance validation failed: {e}")
+            logger.exception(f"❌ Comprehensive balance validation failed: {e}")
             validation_results["error"] = {
                 "error_code": e.error_code,
                 "validation_type": e.validation_type,
@@ -748,7 +748,7 @@ class BalanceValidator:
 
     def _detect_rapid_changes(self) -> list[str]:
         """Detect rapid successive balance changes."""
-        anomalies = []
+        anomalies: list[str] = []
 
         if len(self.balance_history) < 3:
             return anomalies
@@ -780,7 +780,7 @@ class BalanceValidator:
 
     def _detect_unusual_patterns(self, current_balance: Decimal) -> list[str]:
         """Detect unusual balance patterns."""
-        anomalies = []
+        anomalies: list[str] = []
 
         if len(self.balance_history) < 5:
             return anomalies
@@ -821,14 +821,13 @@ class BalanceValidator:
                 directions.append("none")
 
         # Check for alternating pattern
-        if len(directions) >= 4:
-            if (
-                directions[0] != directions[1]
-                and directions[1] != directions[2]
-                and directions[2] != directions[3]
-                and directions[0] == directions[2]
-            ):
-                return "Balance oscillation detected (alternating up/down pattern)"
+        if len(directions) >= 4 and (
+            directions[0] != directions[1]
+            and directions[1] != directions[2]
+            and directions[2] != directions[3]
+            and directions[0] == directions[2]
+        ):
+            return "Balance oscillation detected (alternating up/down pattern)"
 
         return None
 

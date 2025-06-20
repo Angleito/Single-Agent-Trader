@@ -94,7 +94,7 @@ async def main():
     except KeyboardInterrupt:
         logger.info("Interrupted by user")
     except Exception as e:
-        logger.error(f"Error: {e}")
+        logger.exception(f"Error: {e}")
     finally:
         # Disconnect
         logger.info("Disconnecting from WebSocket...")

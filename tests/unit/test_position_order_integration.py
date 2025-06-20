@@ -49,12 +49,12 @@ class TestPositionOrderIntegration(unittest.TestCase):
         """Test position manager initializes correctly."""
         # Should start with no positions
         positions = self.position_manager.get_all_positions()
-        self.assertEqual(len(positions), 0)
+        assert len(positions) == 0
 
         # Should return flat position for any symbol
         position = self.position_manager.get_position("BTC-USD")
-        self.assertEqual(position.side, "FLAT")
-        self.assertEqual(position.size, Decimal("0"))
+        assert position.side == "FLAT"
+        assert position.size == Decimal("0")
 
     async def test_order_manager_initialization(self):
         """Test order manager initializes correctly."""
@@ -63,11 +63,11 @@ class TestPositionOrderIntegration(unittest.TestCase):
         try:
             # Should start with no orders
             orders = self.order_manager.get_active_orders()
-            self.assertEqual(len(orders), 0)
+            assert len(orders) == 0
 
             # Should have empty statistics
             stats = self.order_manager.get_order_statistics()
-            self.assertEqual(stats["total_orders"], 0)
+            assert stats["total_orders"] == 0
         finally:
             await self.asyncTearDown()
 
@@ -91,10 +91,10 @@ class TestPositionOrderIntegration(unittest.TestCase):
         position = self.position_manager.update_position_from_order(order, fill_price)
 
         # Should create long position
-        self.assertEqual(position.side, "LONG")
-        self.assertEqual(position.size, Decimal("0.1"))
-        self.assertEqual(position.entry_price, fill_price)
-        self.assertEqual(position.symbol, "BTC-USD")
+        assert position.side == "LONG"
+        assert position.size == Decimal("0.1")
+        assert position.entry_price == fill_price
+        assert position.symbol == "BTC-USD"
 
     def test_position_pnl_calculation(self):
         """Test P&L calculation for positions."""
@@ -120,7 +120,7 @@ class TestPositionOrderIntegration(unittest.TestCase):
         )
 
         expected_pnl = Decimal("0.1") * (current_price - entry_price)  # 100 USD profit
-        self.assertEqual(unrealized_pnl, expected_pnl)
+        assert unrealized_pnl == expected_pnl
 
     async def test_order_lifecycle(self):
         """Test complete order lifecycle."""
@@ -137,24 +137,24 @@ class TestPositionOrderIntegration(unittest.TestCase):
             )
 
             # Should be pending initially
-            self.assertEqual(order.status, OrderStatus.PENDING)
+            assert order.status == OrderStatus.PENDING
 
             # Update to open
             updated_order = self.order_manager.update_order_status(
                 order.id, OrderStatus.OPEN
             )
-            self.assertEqual(updated_order.status, OrderStatus.OPEN)
+            assert updated_order.status == OrderStatus.OPEN
 
             # Fill the order
             final_order = self.order_manager.update_order_status(
                 order.id, OrderStatus.FILLED, filled_quantity=Decimal("0.1")
             )
-            self.assertEqual(final_order.status, OrderStatus.FILLED)
-            self.assertEqual(final_order.filled_quantity, Decimal("0.1"))
+            assert final_order.status == OrderStatus.FILLED
+            assert final_order.filled_quantity == Decimal("0.1")
 
             # Should be moved to history
             active_orders = self.order_manager.get_active_orders()
-            self.assertEqual(len(active_orders), 0)
+            assert len(active_orders) == 0
 
         finally:
             await self.asyncTearDown()
@@ -179,10 +179,10 @@ class TestPositionOrderIntegration(unittest.TestCase):
         risk_metrics = self.risk_manager.get_risk_metrics()
 
         # Should show one active position
-        self.assertEqual(risk_metrics.current_positions, 1)
+        assert risk_metrics.current_positions == 1
 
         # Should have available margin
-        self.assertGreater(risk_metrics.available_margin, Decimal("0"))
+        assert risk_metrics.available_margin > Decimal("0")
 
     def test_risk_evaluation_with_positions(self):
         """Test risk evaluation considers existing positions."""
@@ -218,7 +218,7 @@ class TestPositionOrderIntegration(unittest.TestCase):
 
         # Should either be rejected or significantly reduced
         if approved:
-            self.assertLess(modified_action.size_pct, large_trade.size_pct)
+            assert modified_action.size_pct < large_trade.size_pct
 
     def test_position_close_scenario(self):
         """Test complete position open and close scenario."""
@@ -240,7 +240,7 @@ class TestPositionOrderIntegration(unittest.TestCase):
         position = self.position_manager.update_position_from_order(
             buy_order, entry_price
         )
-        self.assertEqual(position.side, "LONG")
+        assert position.side == "LONG"
 
         # Update P&L with price movement
         exit_price = Decimal("51000.00")
@@ -263,12 +263,12 @@ class TestPositionOrderIntegration(unittest.TestCase):
         )
 
         # Should be flat with realized P&L
-        self.assertEqual(closed_position.side, "FLAT")
-        self.assertEqual(closed_position.size, Decimal("0"))
+        assert closed_position.side == "FLAT"
+        assert closed_position.size == Decimal("0")
 
         # Should have positive realized P&L (100 USD profit)
         expected_pnl = Decimal("0.1") * (exit_price - entry_price)
-        self.assertEqual(closed_position.realized_pnl, expected_pnl)
+        assert closed_position.realized_pnl == expected_pnl
 
     def test_state_persistence(self):
         """Test that state is persisted and restored correctly."""
@@ -293,9 +293,9 @@ class TestPositionOrderIntegration(unittest.TestCase):
 
         # Should load the existing position
         restored_position = new_position_manager.get_position(symbol)
-        self.assertEqual(restored_position.side, "LONG")
-        self.assertEqual(restored_position.size, Decimal("0.1"))
-        self.assertEqual(restored_position.entry_price, Decimal("50000.00"))
+        assert restored_position.side == "LONG"
+        assert restored_position.size == Decimal("0.1")
+        assert restored_position.entry_price == Decimal("50000.00")
 
 
 class AsyncTestMixin:
@@ -345,7 +345,7 @@ class TestAsyncOrderManagerIntegration(unittest.TestCase, AsyncTestMixin):
                 updated_order = self.order_manager.get_order(order.id)
                 # Note: In real implementation, this would be cancelled
                 # For now we just check it exists
-                self.assertIsNotNone(updated_order)
+                assert updated_order is not None
 
             finally:
                 await self.order_manager.stop()

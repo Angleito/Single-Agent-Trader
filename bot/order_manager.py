@@ -550,7 +550,7 @@ class OrderManager:
                 try:
                     callback(order_id, event)
                 except Exception as e:
-                    logger.error(f"Order callback error for {order_id}: {e}")
+                    logger.exception(f"Order callback error for {order_id}: {e}")
 
             # Clean up callbacks for completed orders
             if event in [
@@ -610,7 +610,7 @@ class OrderManager:
             logger.debug("Order state saved successfully")
 
         except Exception as e:
-            logger.error(f"Failed to save order state: {e}")
+            logger.exception(f"Failed to save order state: {e}")
 
     def _load_state(self) -> None:
         """Load state from files."""
@@ -676,7 +676,7 @@ class OrderManager:
                 logger.info(f"Loaded {len(self._order_history)} historical orders")
 
         except Exception as e:
-            logger.error(f"Failed to load order state: {e}")
+            logger.exception(f"Failed to load order state: {e}")
             # Continue with empty state
 
     def clear_old_history(self, days_to_keep: int = 7) -> None:

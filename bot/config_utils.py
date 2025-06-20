@@ -493,7 +493,7 @@ class ConfigManager:
             logger.info(f"Loaded {profile.value} configuration from {file_path}")
             return settings
         except Exception as e:
-            logger.error(f"Failed to load configuration from {file_path}: {e}")
+            logger.exception(f"Failed to load configuration from {file_path}: {e}")
             return None
 
     def create_environment_configs(self) -> dict[Environment, Path]:
@@ -584,7 +584,7 @@ class ConfigManager:
             logger.info(f"Configuration restored from backup: {backup_path}")
             return settings
         except Exception as e:
-            logger.error(f"Failed to restore backup {backup_path}: {e}")
+            logger.exception(f"Failed to restore backup {backup_path}: {e}")
             return None
 
     def list_config_backups(self) -> list[dict[str, Any]]:
@@ -646,7 +646,7 @@ class ConfigManager:
             return settings
 
         except Exception as e:
-            logger.error(f"Failed to import configuration from {import_path}: {e}")
+            logger.exception(f"Failed to import configuration from {import_path}: {e}")
             return None
 
     def switch_profile(

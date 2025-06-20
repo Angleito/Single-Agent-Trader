@@ -16,13 +16,13 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 # Import actual classes from their modules
-from ..analysis.market_context import (
+from bot.analysis.market_context import (
     CorrelationAnalysis,
     MarketRegime,
     MomentumAlignment,
     RiskSentiment,
 )
-from ..services.financial_sentiment import SentimentResult
+from bot.services.financial_sentiment import SentimentResult
 
 logger = logging.getLogger(__name__)
 
@@ -212,11 +212,10 @@ class WebSearchFormatter:
             )
 
             # Format for LLM consumption
-            formatted_content = self._format_news_for_llm(
+            return self._format_news_for_llm(
                 sorted_items[:10]
             )  # Top 10 items
 
-            return formatted_content
 
         except Exception as e:
             logger.error(f"Error formatting news results: {e}", exc_info=True)
@@ -744,10 +743,9 @@ class WebSearchFormatter:
             ]
             crypto_bonus = 0.1 if any(term in text for term in crypto_terms) else 0.0
 
-            final_score = min(
+            return min(
                 total_score + crypto_bonus + max_category_score * 0.5, 1.0
             )
-            return final_score
 
         except Exception:
             return 0.1
@@ -850,10 +848,9 @@ class WebSearchFormatter:
                 0.1 if any(term in title.lower() for term in high_impact_terms) else 0.0
             )
 
-            total_score = min(
+            return min(
                 high_impact_score + price_score + event_score + title_bonus, 1.0
             )
-            return total_score
 
         except Exception:
             return 0.2

@@ -312,7 +312,7 @@ class MarketDataGenerator:
             )
 
         df = pd.DataFrame(data)
-        df.set_index("timestamp", inplace=True)
+        df = df.set_index("timestamp")
 
         # Validate OHLC relationships
         self._validate_ohlc_data(df)
@@ -371,7 +371,7 @@ class TestDataSuite:
 
         generated_files = {}
 
-        for scenario in self.scenarios.keys():
+        for scenario in self.scenarios:
             scenario_files = []
 
             for size in sizes:

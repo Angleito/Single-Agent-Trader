@@ -265,7 +265,7 @@ class TradingViewDataFeed:
             return response
 
         except Exception as e:
-            logger.error(f"Error getting history for {symbol}: {e}")
+            logger.exception(f"Error getting history for {symbol}: {e}")
             return {"s": "error", "errmsg": str(e)}
 
     def get_marks(
@@ -328,7 +328,7 @@ class TradingViewDataFeed:
             return marks
 
         except Exception as e:
-            logger.error(f"Error getting marks for {symbol}: {e}")
+            logger.exception(f"Error getting marks for {symbol}: {e}")
             return []
 
     def get_timescale_marks(
@@ -402,7 +402,7 @@ class TradingViewDataFeed:
             return study_data
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 f"Error getting indicator values for {symbol} {indicator_name}: {e}"
             )
             return []
@@ -432,7 +432,7 @@ class TradingViewDataFeed:
             }
 
         except Exception as e:
-            logger.error(f"Error getting real-time bar for {symbol}: {e}")
+            logger.exception(f"Error getting real-time bar for {symbol}: {e}")
             return None
 
     def update_real_time_bar(
@@ -464,7 +464,7 @@ class TradingViewDataFeed:
             logger.debug(f"Updated real-time bar for {symbol} {resolution}")
 
         except Exception as e:
-            logger.error(f"Error updating real-time bar for {symbol}: {e}")
+            logger.exception(f"Error updating real-time bar for {symbol}: {e}")
 
     def create_new_bar(self, symbol: str, resolution: str, bar_data: dict[str, Any]):
         """Create a new bar when timeframe completes"""
@@ -488,7 +488,7 @@ class TradingViewDataFeed:
             )
 
         except Exception as e:
-            logger.error(f"Error creating new bar for {symbol}: {e}")
+            logger.exception(f"Error creating new bar for {symbol}: {e}")
 
     @staticmethod
     def resolution_to_seconds(resolution: str) -> int:
@@ -517,7 +517,7 @@ class TradingViewDataFeed:
 
     def export_data_summary(self) -> dict[str, Any]:
         """Export summary of all data for debugging"""
-        summary = {
+        return {
             "symbols": list(self.symbols.keys()),
             "price_data": {
                 symbol: {
@@ -537,7 +537,6 @@ class TradingViewDataFeed:
             },
             "timestamp": datetime.now(UTC).isoformat(),
         }
-        return summary
 
 
 # Global instance for use in FastAPI endpoints
@@ -564,7 +563,7 @@ def convert_bot_trade_to_ai_decision(
             trade_data.get("action", "").lower(), DecisionType.HOLD
         )
 
-        marker = AIDecisionMarker(
+        return AIDecisionMarker(
             timestamp=int(trade_data.get("timestamp", time.time())),
             decision=decision_type,
             price=float(trade_data.get("price", 0)),
@@ -573,10 +572,9 @@ def convert_bot_trade_to_ai_decision(
             indicator_values=trade_data.get("indicators", {}),
         )
 
-        return marker
 
     except Exception as e:
-        logger.error(f"Error converting bot trade to AI decision: {e}")
+        logger.exception(f"Error converting bot trade to AI decision: {e}")
         return None
 
 
@@ -591,7 +589,7 @@ def convert_market_data_to_ohlcv(market_data: list[dict[str, Any]]) -> list[OHLC
         return sorted(bars, key=lambda x: x.timestamp)
 
     except Exception as e:
-        logger.error(f"Error converting market data to OHLCV: {e}")
+        logger.exception(f"Error converting market data to OHLCV: {e}")
         return []
 
 
@@ -600,17 +598,16 @@ def convert_indicator_data_to_technical_indicator(
 ) -> TechnicalIndicator | None:
     """Convert indicator data to technical indicator format"""
     try:
-        indicator = TechnicalIndicator(
+        return TechnicalIndicator(
             timestamp=int(indicator_data.get("timestamp", time.time())),
             name=indicator_name,
             value=indicator_data.get("value", 0),
             parameters=indicator_data.get("parameters", {}),
         )
 
-        return indicator
 
     except Exception as e:
-        logger.error(f"Error converting indicator data: {e}")
+        logger.exception(f"Error converting indicator data: {e}")
         return None
 
 

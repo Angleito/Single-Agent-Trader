@@ -50,6 +50,8 @@ else:
         """Dummy LLMResult for when LangChain is unavailable."""
 
 
+import contextlib
+
 from bot.config import settings
 
 
@@ -530,12 +532,10 @@ class LangChainCallbackHandler(BaseCallbackHandler):
 
             price_match = re.search(r"Current Price:\s*\$?([\d,.]+)", prompt)
             if price_match:
-                try:
+                with contextlib.suppress(ValueError):
                     context["current_price"] = float(
                         price_match.group(1).replace(",", "")
                     )
-                except ValueError:
-                    pass
 
             position_match = re.search(r"Current Position:\s*([^\n]+)", prompt)
             if position_match:
@@ -544,34 +544,26 @@ class LangChainCallbackHandler(BaseCallbackHandler):
             # Extract technical indicators
             rsi_match = re.search(r"RSI:\s*([\d.]+)", prompt)
             if rsi_match:
-                try:
+                with contextlib.suppress(ValueError):
                     context["rsi"] = float(rsi_match.group(1))
-                except ValueError:
-                    pass
 
             cipher_a_match = re.search(r"Cipher A Trend Dot:\s*([\d.-]+)", prompt)
             if cipher_a_match:
-                try:
+                with contextlib.suppress(ValueError):
                     context["cipher_a_dot"] = float(cipher_a_match.group(1))
-                except ValueError:
-                    pass
 
             cipher_b_wave_match = re.search(r"Cipher B Wave:\s*([\d.-]+)", prompt)
             if cipher_b_wave_match:
-                try:
+                with contextlib.suppress(ValueError):
                     context["cipher_b_wave"] = float(cipher_b_wave_match.group(1))
-                except ValueError:
-                    pass
 
             # Extract dominance data
             dominance_match = re.search(
                 r"Total Stablecoin Dominance:\s*([\d.]+)%", prompt
             )
             if dominance_match:
-                try:
+                with contextlib.suppress(ValueError):
                     context["stablecoin_dominance"] = float(dominance_match.group(1))
-                except ValueError:
-                    pass
 
             sentiment_match = re.search(r"Market Sentiment:\s*(\w+)", prompt)
             if sentiment_match:

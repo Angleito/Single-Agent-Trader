@@ -6,6 +6,7 @@ Validates message schemas and data integrity.
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 import sys
@@ -145,7 +146,7 @@ class MessageFlowValidator:
             logger.info(f"Connected to dashboard at {self.dashboard_url}")
             return True
         except Exception as e:
-            logger.error(f"Failed to connect: {e}")
+            logger.exception(f"Failed to connect: {e}")
             return False
 
     async def disconnect(self):
@@ -172,7 +173,7 @@ class MessageFlowValidator:
                         self.received_messages.append(data)
                         logger.debug(f"Received message: {data.get('type', 'unknown')}")
                     except json.JSONDecodeError as e:
-                        logger.error(f"Failed to parse message: {e}")
+                        logger.exception(f"Failed to parse message: {e}")
 
                 except TimeoutError:
                     # No message received, continue
@@ -182,7 +183,7 @@ class MessageFlowValidator:
                     break
 
         except Exception as e:
-            logger.error(f"Error in message listener: {e}")
+            logger.exception(f"Error in message listener: {e}")
 
     def validate_message_schema(
         self, message: dict[str, Any]
@@ -311,7 +312,7 @@ class MessageFlowValidator:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to send stimulus: {e}")
+            logger.exception(f"Failed to send stimulus: {e}")
             return False
 
     async def test_message_type(
@@ -357,10 +358,8 @@ class MessageFlowValidator:
 
         # Stop listening
         self.listening = False
-        try:
+        with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(listen_task, timeout=2.0)
-        except TimeoutError:
-            pass
 
         # Validate message if found
         if target_message:
@@ -417,10 +416,8 @@ class MessageFlowValidator:
 
         # Stop listening
         self.listening = False
-        try:
+        with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(listen_task, timeout=2.0)
-        except TimeoutError:
-            pass
 
         # Check ordering
         received_sequence = []

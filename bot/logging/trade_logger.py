@@ -12,7 +12,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from ..trading_types import MarketState, TradeAction
+from bot.trading_types import MarketState, TradeAction
 
 
 class TradeLogger:
@@ -320,4 +320,4 @@ class TradeLogger:
             with open(file_path, "a") as f:
                 f.write(json.dumps(data) + "\n")
         except Exception as e:
-            self.logger.error(f"Failed to write JSON log: {e}")
+            self.logger.exception(f"Failed to write JSON log: {e}")

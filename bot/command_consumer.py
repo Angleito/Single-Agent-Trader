@@ -58,7 +58,7 @@ class CommandConsumer:
     - Trading pause/resume functionality
     """
 
-    def __init__(self, dashboard_url: str = None, poll_interval: float = 2.0):
+    def __init__(self, dashboard_url: str | None = None, poll_interval: float = 2.0):
         """
         Initialize the command consumer.
 
@@ -154,7 +154,7 @@ class CommandConsumer:
                 logger.info("Command polling cancelled")
                 break
             except Exception as e:
-                logger.error(f"Error in command polling loop: {e}")
+                logger.exception(f"Error in command polling loop: {e}")
                 await asyncio.sleep(self.poll_interval * 2)  # Back off on errors
 
     async def stop_polling(self) -> None:
@@ -229,7 +229,7 @@ class CommandConsumer:
         except aiohttp.ClientError as e:
             logger.debug(f"Connection error polling for commands: {e}")
         except Exception as e:
-            logger.error(f"Unexpected error polling for commands: {e}")
+            logger.exception(f"Unexpected error polling for commands: {e}")
 
     async def _process_command(self, cmd_data: dict[str, Any]):
         """Process a single command."""
@@ -281,7 +281,7 @@ class CommandConsumer:
                 await self._remove_command_from_queue(command.id)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 f"Error processing command {cmd_data.get('id', 'unknown')}: {e}"
             )
             await self._report_command_status(
@@ -294,7 +294,7 @@ class CommandConsumer:
         try:
             CommandType(command.command_type)
         except ValueError:
-            logger.error(f"Unsupported command type: {command.command_type}")
+            logger.exception(f"Unsupported command type: {command.command_type}")
             return False
 
         # Check if emergency stopped (only allow resume commands)
@@ -377,7 +377,7 @@ class CommandConsumer:
             return result
 
         except Exception as e:
-            logger.error(f"Error executing command {command.id}: {e}")
+            logger.exception(f"Error executing command {command.id}: {e}")
             return False, str(e)
 
     async def _execute_emergency_stop(self, callback) -> tuple[bool, str]:

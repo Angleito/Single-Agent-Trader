@@ -57,11 +57,11 @@ class TradeValidator:
                 trade_action, current_position
             )
 
-            logger.info(f"Validated trade action: {validated_action.action}")
+            logger.info("Validated trade action: %s", validated_action.action)
             return validated_action
 
         except Exception as e:
-            logger.error(f"Validation failed: {e}")
+            logger.exception("Validation failed: %s", e)
             return self._get_default_hold_action(f"Validation error: {e!s}")
 
     def _parse_llm_output(
@@ -130,7 +130,7 @@ class TradeValidator:
                 original_action = normalized["action"]
                 normalized["action"] = action_mappings[action]
                 logger.info(
-                    f"Normalized action '{original_action}' to '{normalized['action']}'"
+                    "Normalized action '%s' to '%s'", original_action, normalized['action']
                 )
             else:
                 normalized["action"] = action
@@ -167,12 +167,12 @@ class TradeValidator:
         if validated.action in ["LONG", "SHORT"] and validated.size_pct == 0:
             validated.size_pct = 5  # Default 5% position size
             logger.info(
-                f"Set default position size: {validated.size_pct}% for {validated.action}"
+                "Set default position size: %s%% for %s", validated.size_pct, validated.action
             )
 
         if validated.size_pct > self.max_size_pct:
             logger.warning(
-                f"Size capped from {validated.size_pct}% to {self.max_size_pct}%"
+                "Size capped from %s%% to %s%%", validated.size_pct, self.max_size_pct
             )
             validated.size_pct = self.max_size_pct
 
@@ -184,7 +184,7 @@ class TradeValidator:
 
         if validated.take_profit_pct > self.max_tp_pct:
             logger.warning(
-                f"Take profit capped from {validated.take_profit_pct}% to {self.max_tp_pct}%"
+                "Take profit capped from %s%% to %s%%", validated.take_profit_pct, self.max_tp_pct
             )
             validated.take_profit_pct = self.max_tp_pct
 
@@ -196,18 +196,18 @@ class TradeValidator:
 
         if validated.stop_loss_pct > self.max_sl_pct:
             logger.warning(
-                f"Stop loss capped from {validated.stop_loss_pct}% to {self.max_sl_pct}%"
+                "Stop loss capped from %s%% to %s%%", validated.stop_loss_pct, self.max_sl_pct
             )
             validated.stop_loss_pct = self.max_sl_pct
 
         # Validate leverage for futures trading
         if validated.leverage < 1:
             logger.warning(
-                f"Invalid leverage {validated.leverage}, setting to default 1"
+                "Invalid leverage %s, setting to default 1", validated.leverage
             )
             validated.leverage = 1
         elif validated.leverage > 100:
-            logger.warning(f"Excessive leverage {validated.leverage}, capping to 100")
+            logger.warning("Excessive leverage %s, capping to 100", validated.leverage)
             validated.leverage = 100
 
         # Validate rationale
@@ -219,9 +219,8 @@ class TradeValidator:
             logger.warning("Rationale truncated to 500 characters")
 
         # Business rule validations
-        validated = self._apply_business_rules(validated, current_position)
+        return self._apply_business_rules(validated, current_position)
 
-        return validated
 
     def _apply_business_rules(
         self, action: TradeAction, current_position: Position | None = None
@@ -243,18 +242,17 @@ class TradeValidator:
             # We have an active position
             if validated.action in ["LONG", "SHORT"]:
                 logger.warning(
-                    f"Cannot open new {validated.action} position - "
-                    f"existing {current_position.side} position. Changing to HOLD."
+                    "Cannot open new %s position - existing %s position. Changing to HOLD.",
+                    validated.action, current_position.side
                 )
                 return self._get_default_hold_action(
                     f"Position exists ({current_position.side}) - only CLOSE or HOLD allowed"
                 )
 
         # If action is HOLD or CLOSE, size should be 0
-        if validated.action in ["HOLD", "CLOSE"]:
-            if validated.size_pct > 0:
-                logger.warning(f"Size reset to 0 for {validated.action} action")
-                validated.size_pct = 0
+        if validated.action in ["HOLD", "CLOSE"] and validated.size_pct > 0:
+            logger.warning("Size reset to 0 for %s action", validated.action)
+            validated.size_pct = 0
 
         # Ensure reasonable risk-reward ratios (skip for HOLD/CLOSE actions)
         if validated.action not in ["HOLD", "CLOSE"] and validated.stop_loss_pct > 0:

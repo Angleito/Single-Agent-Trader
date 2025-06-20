@@ -6,6 +6,7 @@ and comprehensive system resilience strategies.
 """
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -133,10 +134,8 @@ class SystemHealthMonitor:
 
         if self.monitoring_task:
             self.monitoring_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self.monitoring_task
-            except asyncio.CancelledError:
-                pass
 
         logger.info("Stopped system health monitoring")
 
@@ -159,7 +158,7 @@ class SystemHealthMonitor:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error in health monitoring loop: {e}")
+                logger.exception(f"Error in health monitoring loop: {e}")
                 await asyncio.sleep(self.check_interval)
 
     async def _collect_system_metrics(self) -> None:
@@ -223,7 +222,7 @@ class SystemHealthMonitor:
                 self.system_metrics = self.system_metrics[-1000:]
 
         except Exception as e:
-            logger.error(f"Failed to collect system metrics: {e}")
+            logger.exception(f"Failed to collect system metrics: {e}")
 
     async def _check_all_components(self) -> None:
         """Check health of all registered components."""
@@ -281,7 +280,7 @@ class SystemHealthMonitor:
             component_health.last_error = str(e)
             component_health.last_check = datetime.now(UTC)
 
-            logger.error(f"Health check failed for {component_name}: {e}")
+            logger.exception(f"Health check failed for {component_name}: {e}")
 
     async def _analyze_and_recover(self) -> None:
         """Analyze component health and trigger recovery actions."""
@@ -368,7 +367,7 @@ class SystemHealthMonitor:
                 recovery_action.last_attempt = current_time
                 recovery_action.attempt_count += 1
 
-                logger.error(f"Recovery action {recovery_action.name} failed: {e}")
+                logger.exception(f"Recovery action {recovery_action.name} failed: {e}")
 
     def _can_attempt_recovery(
         self, recovery_action: RecoveryAction, current_time: datetime
@@ -436,7 +435,7 @@ class SystemHealthMonitor:
         # For now, we'll return recent metrics
         cutoff_time = datetime.now(UTC) - timedelta(hours=hours)
 
-        relevant_metrics = [
+        return [
             {
                 "timestamp": metric.timestamp.isoformat(),
                 "cpu_percent": metric.cpu_percent,
@@ -448,7 +447,6 @@ class SystemHealthMonitor:
             if metric.timestamp >= cutoff_time
         ]
 
-        return relevant_metrics
 
 
 class ErrorRecoveryManager:
@@ -515,7 +513,7 @@ class ErrorRecoveryManager:
             return success
 
         except Exception as e:
-            logger.error(f"Recovery strategy failed for {error_type}: {e}")
+            logger.exception(f"Recovery strategy failed for {error_type}: {e}")
 
             # Record failed recovery attempt
             recovery_record = {
@@ -546,11 +544,10 @@ class ErrorRecoveryManager:
         try:
             async with aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=10)
-            ) as session:
-                async with session.get("https://httpbin.org/status/200") as response:
-                    if response.status == 200:
-                        logger.info("Network connectivity restored")
-                        return True
+            ) as session, session.get("https://httpbin.org/status/200") as response:
+                if response.status == 200:
+                    logger.info("Network connectivity restored")
+                    return True
         except Exception as e:
             logger.warning(f"Network connectivity test failed: {e}")
 

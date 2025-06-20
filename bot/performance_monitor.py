@@ -13,7 +13,7 @@ import threading
 import time
 from collections import defaultdict, deque
 from collections.abc import Callable
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
@@ -309,10 +309,8 @@ class ResourceMonitor:
         self._monitoring = False
         if self._monitor_task:
             self._monitor_task.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 await self._monitor_task
-            except asyncio.CancelledError:
-                pass
         logger.info("Stopped resource monitoring")
 
     async def _monitor_resources(self, interval: float):
@@ -548,7 +546,7 @@ class AlertManager:
             try:
                 callback(alert)
             except Exception as e:
-                logger.error(f"Alert callback failed: {e}")
+                logger.exception(f"Alert callback failed: {e}")
 
     def get_recent_alerts(
         self, duration: timedelta = timedelta(hours=1)

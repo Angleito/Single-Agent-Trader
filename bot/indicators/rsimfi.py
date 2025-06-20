@@ -298,7 +298,7 @@ class RSIMFIIndicator:
             return rsimfi_values.astype("float64")
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "RSI+MFI calculation failed with exception",
                 extra={
                     "indicator": "rsimfi",
@@ -383,7 +383,7 @@ class RSIMFIIndicator:
             return conditions
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "Failed to calculate RSI+MFI color conditions",
                 extra={
                     "indicator": "rsimfi",
@@ -527,7 +527,7 @@ class RSIMFIIndicator:
             return result
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "RSI+MFI comprehensive analysis failed",
                 extra={
                     "indicator": "rsimfi",

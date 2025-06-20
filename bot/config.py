@@ -8,6 +8,7 @@ import re
 import secrets
 import socket
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
@@ -24,7 +25,7 @@ except ImportError:
     AIOHTTP_AVAILABLE = False
 
     # Create a mock aiohttp for type hints
-    class aiohttp:
+    class MockAiohttp:
         class ClientSession:
             def __init__(self, *args, **kwargs):
                 pass
@@ -57,6 +58,9 @@ except ImportError:
 
         async def json(self):
             return {}
+
+    # Assign the mock class instance to aiohttp for type compatibility
+    aiohttp = MockAiohttp()  # type: ignore[assignment]
 
 
 from pydantic import (
@@ -130,7 +134,7 @@ class ConfigurationValidator:
 
     async def _validate_environment(self) -> dict[str, Any]:
         """Validate environment configuration consistency."""
-        results = {"status": "pass", "checks": []}
+        results: dict[str, Any] = {"status": "pass", "checks": []}
 
         # Environment-network consistency
         if self.settings.exchange.exchange_type == "bluefin":
@@ -163,7 +167,7 @@ class ConfigurationValidator:
 
     async def _validate_network_connectivity(self) -> dict[str, Any]:
         """Test network connectivity to required services."""
-        results = {"status": "pass", "checks": []}
+        results: dict[str, Any] = {"status": "pass", "checks": []}
 
         # Test basic internet connectivity
         internet_check = await self._test_internet_connectivity()
@@ -181,7 +185,7 @@ class ConfigurationValidator:
 
     async def _validate_exchange_configuration(self) -> dict[str, Any]:
         """Validate exchange-specific configuration."""
-        results = {"status": "pass", "checks": []}
+        results: dict[str, Any] = {"status": "pass", "checks": []}
 
         if self.settings.exchange.exchange_type == "bluefin":
             # Validate Bluefin service URL
@@ -206,7 +210,7 @@ class ConfigurationValidator:
 
     async def _validate_security_settings(self) -> dict[str, Any]:
         """Validate security-related configuration."""
-        results = {"status": "pass", "checks": []}
+        results: dict[str, Any] = {"status": "pass", "checks": []}
 
         # Check for secure private key handling
         if self.settings.exchange.exchange_type == "bluefin":
@@ -234,7 +238,7 @@ class ConfigurationValidator:
 
     async def _validate_trading_parameters(self) -> dict[str, Any]:
         """Validate trading parameter bounds and consistency."""
-        results = {"status": "pass", "checks": []}
+        results: dict[str, Any] = {"status": "pass", "checks": []}
 
         # Leverage validation
         if self.settings.trading.leverage > 20:
@@ -267,7 +271,7 @@ class ConfigurationValidator:
 
     async def _validate_llm_configuration(self) -> dict[str, Any]:
         """Validate LLM configuration and test connectivity."""
-        results = {"status": "pass", "checks": []}
+        results: dict[str, Any] = {"status": "pass", "checks": []}
 
         # Test LLM API connectivity if key is provided
         if self.settings.llm.openai_api_key:
@@ -287,7 +291,7 @@ class ConfigurationValidator:
 
     async def _validate_sui_network(self) -> dict[str, Any]:
         """Validate Sui network connectivity and configuration."""
-        results = {"status": "pass", "checks": []}
+        results: dict[str, Any] = {"status": "pass", "checks": []}
 
         # Test Sui RPC connectivity
         rpc_test = await self._test_sui_rpc_connectivity()
@@ -312,14 +316,13 @@ class ConfigurationValidator:
         try:
             async with aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=10)
-            ) as session:
-                async with session.get("https://8.8.8.8") as response:
-                    if response.status == 200:
-                        return {
-                            "name": "internet_connectivity",
-                            "status": "pass",
-                            "message": "Internet connectivity OK",
-                        }
+            ) as session, session.get("https://8.8.8.8") as response:
+                if response.status == 200:
+                    return {
+                        "name": "internet_connectivity",
+                        "status": "pass",
+                        "message": "Internet connectivity OK",
+                    }
         except Exception as e:
             self.errors.append(f"No internet connectivity: {e!s}")
             return {
@@ -480,23 +483,22 @@ class ConfigurationValidator:
 
             async with aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=10)
-            ) as session:
-                async with session.get(test_url) as response:
-                    if response.status == 200:
-                        return {
-                            "name": "bluefin_endpoints",
-                            "status": "pass",
-                            "message": f"Endpoints reachable ({network})",
-                        }
-                    else:
-                        self.warnings.append(
-                            f"Bluefin {network} endpoint returned status {response.status}"
-                        )
-                        return {
-                            "name": "bluefin_endpoints",
-                            "status": "warning",
-                            "message": f"Endpoint status: {response.status}",
-                        }
+            ) as session, session.get(test_url) as response:
+                if response.status == 200:
+                    return {
+                        "name": "bluefin_endpoints",
+                        "status": "pass",
+                        "message": f"Endpoints reachable ({network})",
+                    }
+                else:
+                    self.warnings.append(
+                        f"Bluefin {network} endpoint returned status {response.status}"
+                    )
+                    return {
+                        "name": "bluefin_endpoints",
+                        "status": "warning",
+                        "message": f"Endpoint status: {response.status}",
+                    }
         except Exception as e:
             self.errors.append(f"Cannot validate Bluefin endpoints: {e!s}")
             return {
@@ -523,32 +525,31 @@ class ConfigurationValidator:
             # Test with a minimal request to models endpoint
             async with aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=15)
-            ) as session:
-                async with session.get(
-                    "https://api.openai.com/v1/models", headers=headers
-                ) as response:
-                    if response.status == 200:
-                        return {
-                            "name": "openai_api",
-                            "status": "pass",
-                            "message": "OpenAI API accessible",
-                        }
-                    elif response.status == 401:
-                        self.errors.append("OpenAI API key is invalid")
-                        return {
-                            "name": "openai_api",
-                            "status": "error",
-                            "message": "Invalid API key",
-                        }
-                    else:
-                        self.warnings.append(
-                            f"OpenAI API returned status {response.status}"
-                        )
-                        return {
-                            "name": "openai_api",
-                            "status": "warning",
-                            "message": f"API status: {response.status}",
-                        }
+            ) as session, session.get(
+                "https://api.openai.com/v1/models", headers=headers
+            ) as response:
+                if response.status == 200:
+                    return {
+                        "name": "openai_api",
+                        "status": "pass",
+                        "message": "OpenAI API accessible",
+                    }
+                elif response.status == 401:
+                    self.errors.append("OpenAI API key is invalid")
+                    return {
+                        "name": "openai_api",
+                        "status": "error",
+                        "message": "Invalid API key",
+                    }
+                else:
+                    self.warnings.append(
+                        f"OpenAI API returned status {response.status}"
+                    )
+                    return {
+                        "name": "openai_api",
+                        "status": "warning",
+                        "message": f"API status: {response.status}",
+                    }
         except Exception as e:
             self.errors.append(f"Cannot reach OpenAI API: {e!s}")
             return {
@@ -580,32 +581,31 @@ class ConfigurationValidator:
 
             async with aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=15)
-            ) as session:
-                async with session.post(rpc_url, json=payload) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        if "result" in data:
-                            return {
-                                "name": "sui_rpc",
-                                "status": "pass",
-                                "message": f"Sui RPC accessible ({network})",
-                            }
-                        else:
-                            self.warnings.append(
-                                f"Sui RPC returned unexpected response: {data}"
-                            )
-                            return {
-                                "name": "sui_rpc",
-                                "status": "warning",
-                                "message": "Unexpected RPC response",
-                            }
-                    else:
-                        self.errors.append(f"Sui RPC returned status {response.status}")
+            ) as session, session.post(rpc_url, json=payload) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if "result" in data:
                         return {
                             "name": "sui_rpc",
-                            "status": "error",
-                            "message": f"RPC status: {response.status}",
+                            "status": "pass",
+                            "message": f"Sui RPC accessible ({network})",
                         }
+                    else:
+                        self.warnings.append(
+                            f"Sui RPC returned unexpected response: {data}"
+                        )
+                        return {
+                            "name": "sui_rpc",
+                            "status": "warning",
+                            "message": "Unexpected RPC response",
+                        }
+                else:
+                    self.errors.append(f"Sui RPC returned status {response.status}")
+                    return {
+                        "name": "sui_rpc",
+                        "status": "error",
+                        "message": f"RPC status: {response.status}",
+                    }
         except Exception as e:
             self.errors.append(f"Cannot reach Sui RPC at {rpc_url}: {e!s}")
             return {
@@ -627,32 +627,31 @@ class ConfigurationValidator:
 
             async with aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=15)
-            ) as session:
-                async with session.get(test_url) as response:
-                    if response.status == 200:
-                        return {
-                            "name": "bluefin_api",
-                            "status": "pass",
-                            "message": f"Bluefin API accessible ({network})",
-                        }
-                    elif response.status == 429:
-                        self.warnings.append(
-                            "Bluefin API rate limited - this is normal"
-                        )
-                        return {
-                            "name": "bluefin_api",
-                            "status": "warning",
-                            "message": "API rate limited",
-                        }
-                    else:
-                        self.warnings.append(
-                            f"Bluefin API returned status {response.status}"
-                        )
-                        return {
-                            "name": "bluefin_api",
-                            "status": "warning",
-                            "message": f"API status: {response.status}",
-                        }
+            ) as session, session.get(test_url) as response:
+                if response.status == 200:
+                    return {
+                        "name": "bluefin_api",
+                        "status": "pass",
+                        "message": f"Bluefin API accessible ({network})",
+                    }
+                elif response.status == 429:
+                    self.warnings.append(
+                        "Bluefin API rate limited - this is normal"
+                    )
+                    return {
+                        "name": "bluefin_api",
+                        "status": "warning",
+                        "message": "API rate limited",
+                    }
+                else:
+                    self.warnings.append(
+                        f"Bluefin API returned status {response.status}"
+                    )
+                    return {
+                        "name": "bluefin_api",
+                        "status": "warning",
+                        "message": f"API status: {response.status}",
+                    }
         except Exception as e:
             self.errors.append(f"Cannot reach Bluefin API: {e!s}")
             return {
@@ -1237,8 +1236,8 @@ class OmniSearchSettings(BaseModel):
         default=None, description="Legacy API key field for backward compatibility"
     )
 
-    @computed_field
     @property
+    @computed_field
     def has_any_api_key(self) -> bool:
         """Check if any API key is configured."""
         api_keys = [
@@ -2641,7 +2640,7 @@ class Settings(BaseSettings):
         if self.exchange.exchange_type != "bluefin":
             return {"status": "skipped", "reason": "Not using Bluefin exchange"}
 
-        results = {"status": "pass", "tests": []}
+        results: dict[str, Any] = {"status": "pass", "tests": []}
 
         # Test private key format
         try:
@@ -2697,7 +2696,7 @@ class Settings(BaseSettings):
 
     def get_configuration_summary(self) -> dict[str, Any]:
         """Get a comprehensive configuration summary."""
-        summary = {
+        summary: dict[str, Any] = {
             "basic_info": {
                 "environment": self.system.environment.value,
                 "exchange": self.exchange.exchange_type,
@@ -2765,7 +2764,7 @@ class Settings(BaseSettings):
 
     def create_backup_configuration(self) -> dict[str, Any]:
         """Create a backup of the current configuration without secrets."""
-        backup = {
+        return {
             "metadata": {
                 "created_at": datetime.now(UTC).isoformat(),
                 "config_hash": self.generate_config_hash(),
@@ -2791,7 +2790,6 @@ class Settings(BaseSettings):
             ),
         }
 
-        return backup
 
 
 class ConfigurationMonitor:
@@ -2801,11 +2799,11 @@ class ConfigurationMonitor:
         self.settings = settings
         self.initial_hash = settings.generate_config_hash()
         self.last_check = time.time()
-        self.change_callbacks: list[callable] = []
+        self.change_callbacks: list[Callable[[Any, str, str], None]] = []
         self.validation_cache: dict[str, Any] = {}
         self.cache_ttl = 300  # 5 minutes
 
-    def register_change_callback(self, callback: callable) -> None:
+    def register_change_callback(self, callback: Callable[[Any, str, str], None]) -> None:
         """Register a callback to be called when configuration changes."""
         self.change_callbacks.append(callback)
 
@@ -2823,7 +2821,7 @@ class ConfigurationMonitor:
                 try:
                     callback(self.settings, self.initial_hash, current_hash)
                 except Exception as e:
-                    logger.error(f"Error in configuration change callback: {e}")
+                    logger.exception(f"Error in configuration change callback: {e}")
 
             self.initial_hash = current_hash
             return True
@@ -2856,7 +2854,7 @@ class ConfigurationMonitor:
 
     def get_health_status(self) -> dict[str, Any]:
         """Get overall configuration health status."""
-        status = {
+        status: dict[str, Any] = {
             "overall_status": "healthy",
             "last_check": self.last_check,
             "config_hash": self.settings.generate_config_hash(),

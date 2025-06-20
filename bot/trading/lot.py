@@ -7,7 +7,7 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 @dataclass
@@ -60,6 +60,8 @@ class TradeLot:
 class LotSale(BaseModel):
     """Record of a sale from a specific lot."""
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     lot_id: str
     quantity_sold: Decimal
     sale_price: Decimal
@@ -67,25 +69,17 @@ class LotSale(BaseModel):
     cost_basis: Decimal
     realized_pnl: Decimal
 
-    class Config:
-        """Pydantic configuration."""
-
-        arbitrary_types_allowed = True
-
 
 class FIFOPosition(BaseModel):
     """Position tracking with FIFO lot accounting."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     symbol: str
     side: str = Field(pattern="^(LONG|SHORT|FLAT)$")
     lots: list[TradeLot] = Field(default_factory=list)
     sale_history: list[LotSale] = Field(default_factory=list)
     total_realized_pnl: Decimal = Decimal("0")
-
-    class Config:
-        """Pydantic configuration."""
-
-        arbitrary_types_allowed = True
 
     @property
     def total_quantity(self) -> Decimal:
@@ -200,7 +194,7 @@ class FIFOPosition(BaseModel):
 
         return sales
 
-    def get_tax_lots_report(self) -> dict:
+    def get_tax_lots_report(self) -> dict[str, Any]:
         """
         Generate a report of all tax lots.
 

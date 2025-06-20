@@ -552,7 +552,7 @@ class CipherBSignals:
             df_stoch = self.stoch_rsi.calculate(df.copy())
 
             # Calculate RSI
-            from ..utils import ta
+            from bot.utils import ta
 
             rsi = ta.rsi(df["close"], length=self.rsi_length)
 
@@ -1028,7 +1028,7 @@ class CipherBSignals:
             )
 
         except Exception as e:
-            logger.error(f"Error in Cipher B signals calculation: {e}")
+            logger.exception(f"Error in Cipher B signals calculation: {e}")
 
         return result
 

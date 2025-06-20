@@ -12,8 +12,8 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from ..config import settings
-from ..trading_types import MarketState, TradeAction
+from bot.config import settings
+from bot.trading_types import MarketState, TradeAction
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +122,7 @@ class MarketStateHasher:
             return cache_key
 
         except Exception as e:
-            logger.error(f"Error generating cache key: {e}")
+            logger.exception(f"Error generating cache key: {e}")
             # Return timestamp-based key as fallback
             return hashlib.md5(f"fallback_{time.time()}".encode()).hexdigest()
 
@@ -220,7 +220,7 @@ class LLMResponseCache:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error in cache cleanup: {e}")
+                logger.exception(f"Error in cache cleanup: {e}")
 
     def _cleanup_expired_entries(self):
         """Remove expired entries from cache."""

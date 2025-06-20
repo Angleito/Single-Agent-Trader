@@ -6,6 +6,7 @@ analysis to enhance trading decisions with real-time external information.
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 import time
@@ -17,7 +18,7 @@ from uuid import uuid4
 import aiohttp
 from pydantic import BaseModel, Field
 
-from ..config import settings
+from bot.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -217,7 +218,7 @@ class OmniSearchClient:
                     return False
 
         except Exception as e:
-            logger.error(f"Failed to connect to OmniSearch service: {e}")
+            logger.exception(f"Failed to connect to OmniSearch service: {e}")
             # Fall back to cached/local results only
             return False
 
@@ -311,7 +312,7 @@ class OmniSearchClient:
             return financial_results
 
         except Exception as e:
-            logger.error(f"Financial news search failed for '{query}': {e}")
+            logger.exception(f"Financial news search failed for '{query}': {e}")
             return await self._get_fallback_news(query, limit)
 
     async def search_crypto_sentiment(self, symbol: str) -> SentimentAnalysis:
@@ -378,7 +379,7 @@ class OmniSearchClient:
             return sentiment
 
         except Exception as e:
-            logger.error(f"Crypto sentiment search failed for {base_symbol}: {e}")
+            logger.exception(f"Crypto sentiment search failed for {base_symbol}: {e}")
             return await self._get_fallback_sentiment(base_symbol)
 
     async def search_nasdaq_sentiment(self) -> SentimentAnalysis:
@@ -437,7 +438,7 @@ class OmniSearchClient:
             return sentiment
 
         except Exception as e:
-            logger.error(f"NASDAQ sentiment search failed: {e}")
+            logger.exception(f"NASDAQ sentiment search failed: {e}")
             return await self._get_fallback_sentiment("NASDAQ")
 
     async def search_market_correlation(
@@ -505,10 +506,8 @@ class OmniSearchClient:
                     # Check if this might be a timeframe value (e.g., 30 from "30d")
                     timeframe_numeric = None
                     if timeframe and timeframe.endswith("d"):
-                        try:
+                        with contextlib.suppress(ValueError):
                             timeframe_numeric = int(timeframe[:-1])
-                        except ValueError:
-                            pass
 
                     if (
                         timeframe_numeric
@@ -540,7 +539,7 @@ class OmniSearchClient:
                     correlation_coeff = max(-1.0, min(1.0, correlation_coeff))
 
             except (ValueError, TypeError) as e:
-                logger.error(
+                logger.exception(
                     f"Invalid correlation coefficient type {type(raw_correlation_coeff)}: {raw_correlation_coeff} "
                     f"from API for {crypto_base}-{nasdaq_base}. Using fallback value 0.0. Error: {e}"
                 )
@@ -614,7 +613,7 @@ class OmniSearchClient:
             return correlation
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 f"Market correlation search failed for {crypto_base}-{nasdaq_base}: {e}"
             )
             return await self._get_fallback_correlation(

@@ -56,10 +56,7 @@ def normalize_symbol(symbol: str, suffix: str = "PERP") -> str:
         return symbol
 
     # Extract base currency
-    if "-" in symbol:
-        base = symbol.split("-")[0]
-    else:
-        base = symbol
+    base = symbol.split("-")[0] if "-" in symbol else symbol
 
     return f"{base}-{suffix}"
 
@@ -226,8 +223,7 @@ def get_testnet_symbol_fallback(symbol: str) -> str:
         "MATIC-PERP": "SOL-PERP",
     }
 
-    fallback = fallback_map.get(symbol, "BTC-PERP")  # Default to BTC-PERP
-    return fallback
+    return fallback_map.get(symbol, "BTC-PERP")  # Default to BTC-PERP
 
 
 class BluefinSymbolConverter:

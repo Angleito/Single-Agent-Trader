@@ -1,5 +1,9 @@
 """Technical indicators and analysis modules."""
 
+from typing import Any, Dict, List, Union
+
+import numpy as np
+
 from .ema_ribbon import EMAribbon
 from .rsimfi import RSIMFIIndicator
 from .schaff_trend_cycle import SchaffTrendCycle
@@ -18,10 +22,13 @@ __all__ = [
 
 
 # Utility functions for strategy manager
-def calculate_atr(highs, lows, closes, period=14):
+def calculate_atr(
+    highs: list[float] | np.ndarray,
+    lows: list[float] | np.ndarray,
+    closes: list[float] | np.ndarray,
+    period: int = 14
+) -> float:
     """Calculate Average True Range for volatility measurement."""
-    import numpy as np
-
     if len(highs) < period + 1:
         return 0.0
 
@@ -40,17 +47,19 @@ def calculate_atr(highs, lows, closes, period=14):
         return np.mean(true_ranges) if true_ranges else 0.0
 
 
-def calculate_support_resistance(highs, lows, window=20):
+def calculate_support_resistance(
+    highs: list[float] | np.ndarray,
+    lows: list[float] | np.ndarray,
+    window: int = 20
+) -> dict[str, float]:
     """Calculate basic support and resistance levels."""
-    import numpy as np
-
     if len(highs) < window or len(lows) < window:
         return {"support": 0.0, "resistance": 0.0}
 
     recent_highs = highs[-window:]
     recent_lows = lows[-window:]
 
-    resistance = np.max(recent_highs)
-    support = np.min(recent_lows)
+    resistance = float(np.max(recent_highs))
+    support = float(np.min(recent_lows))
 
     return {"support": support, "resistance": resistance}

@@ -83,7 +83,7 @@ class WebSocketLoadTester:
 
                 await asyncio.sleep(interval)
             except Exception as e:
-                logger.error(f"Resource monitoring error: {e}")
+                logger.exception(f"Resource monitoring error: {e}")
                 break
 
     async def send_burst_messages(
@@ -156,7 +156,7 @@ class WebSocketLoadTester:
                 self.metrics.messages_failed = failed
 
         except Exception as e:
-            logger.error(f"Connection error during sustained load: {e}")
+            logger.exception(f"Connection error during sustained load: {e}")
             self.metrics.connection_failures += 1
 
         # Stop monitoring
@@ -203,7 +203,7 @@ class WebSocketLoadTester:
                         await asyncio.sleep(burst_interval)
 
         except Exception as e:
-            logger.error(f"Connection error during burst load: {e}")
+            logger.exception(f"Connection error during burst load: {e}")
             self.metrics.connection_failures += 1
 
         # Stop monitoring
@@ -237,7 +237,7 @@ class WebSocketLoadTester:
                     )
                     return sent, failed
             except Exception as e:
-                logger.error(f"Connection {conn_id} failed: {e}")
+                logger.exception(f"Connection {conn_id} failed: {e}")
                 return 0, messages_per_connection
 
         # Run concurrent connections
@@ -290,7 +290,7 @@ class WebSocketLoadTester:
                 self.metrics.messages_queued = min(queue_size, sent)
 
         except Exception as e:
-            logger.error(f"Connection error during overflow test: {e}")
+            logger.exception(f"Connection error during overflow test: {e}")
             self.metrics.connection_failures += 1
 
         # Stop monitoring
@@ -536,8 +536,8 @@ if __name__ == "__main__":
     try:
         import numpy as np
     except ImportError:
-        logger.error("NumPy is required for load testing. Please install it:")
-        logger.error("  pip install numpy")
+        logger.exception("NumPy is required for load testing. Please install it:")
+        logger.exception("  pip install numpy")
         sys.exit(1)
 
     asyncio.run(main())

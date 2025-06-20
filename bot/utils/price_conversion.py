@@ -94,7 +94,7 @@ def convert_from_18_decimal(
         return converted_value
 
     except (ValueError, TypeError, ArithmeticError) as e:
-        logger.error(f"Error converting value {value}: {e}")
+        logger.exception(f"Error converting value {value}: {e}")
         raise ValueError(f"Invalid numeric value: {value}") from e
 
 
@@ -149,7 +149,7 @@ def convert_candle_data(candle: list, symbol: str | None = None) -> list:
         return converted_candle
 
     except (ValueError, TypeError, IndexError) as e:
-        logger.error(f"Error converting candle data: {e}")
+        logger.exception(f"Error converting candle data: {e}")
         raise ValueError(f"Failed to convert candle data: {candle}") from e
 
 
@@ -229,7 +229,7 @@ def get_current_real_price(symbol: str) -> float | None:
     """
     try:
         # Try to import and use the market data providers
-        from ..data.market import MarketDataProvider
+        from bot.data.market import MarketDataProvider
 
         # Create a temporary market data provider to get current price
         market_provider = MarketDataProvider(symbol)
@@ -246,7 +246,7 @@ def get_current_real_price(symbol: str) -> float | None:
 
     try:
         # Try Bluefin market data provider if available
-        from ..data.bluefin_market import BluefinMarketDataProvider
+        from bot.data.bluefin_market import BluefinMarketDataProvider
 
         bluefin_provider = BluefinMarketDataProvider(symbol)
         latest_data = bluefin_provider.get_latest_ohlcv(limit=1)

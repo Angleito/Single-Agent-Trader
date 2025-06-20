@@ -525,8 +525,7 @@ class TestCompleteTradingFlow:
             )
 
         df = pd.DataFrame(data)
-        df.set_index("timestamp", inplace=True)
-        return df
+        return df.set_index("timestamp")
 
     @pytest.mark.asyncio()
     async def test_multiple_trading_cycles_consistency(
@@ -787,7 +786,6 @@ class TestCompleteTradingFlow:
             # Verify balance changes after opening position
             post_trade_balance = engine.paper_account.current_balance
             post_trade_margin = engine.paper_account.margin_used
-            post_trade_equity = engine.paper_account.equity
 
             # Balance should decrease by fees
             assert post_trade_balance < initial_balance
@@ -911,7 +909,7 @@ class TestCompleteTradingFlow:
                 assert decimal_places <= 6, f"Excessive precision in {key}: {value}"
 
             # Test multiple operations maintain precision
-            for i in range(5):
+            for _i in range(5):
                 # Simulate small balance changes
                 engine.paper_account.current_balance += Decimal("0.123")
                 engine.paper_account.equity += Decimal("0.456")

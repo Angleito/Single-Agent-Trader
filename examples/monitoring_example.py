@@ -96,7 +96,7 @@ class ComprehensiveMonitoringSystem:
             await self._demonstrate_monitoring()
 
         except Exception as e:
-            logger.error(f"❌ Failed to start monitoring system: {e}")
+            logger.exception(f"❌ Failed to start monitoring system: {e}")
             await self.stop()
             raise
 
@@ -116,7 +116,7 @@ class ComprehensiveMonitoringSystem:
 
             logger.info("✅ All monitoring components stopped successfully")
         except Exception as e:
-            logger.error(f"❌ Error stopping monitoring system: {e}")
+            logger.exception(f"❌ Error stopping monitoring system: {e}")
 
     async def _run_initial_diagnostics(self) -> None:
         """Run initial diagnostic checks."""
@@ -143,7 +143,7 @@ class ComprehensiveMonitoringSystem:
                         logger.warning(f"  - {check.check_name}: {check.message}")
 
         except Exception as e:
-            logger.error(f"❌ Initial diagnostics failed: {e}")
+            logger.exception(f"❌ Initial diagnostics failed: {e}")
 
     async def _demonstrate_monitoring(self) -> None:
         """Demonstrate monitoring capabilities."""
@@ -187,7 +187,7 @@ class ComprehensiveMonitoringSystem:
             logger.info(f"✅ Enabled Rules: {recovery_status['enabled_rules']}")
 
         except Exception as e:
-            logger.error(f"❌ Error demonstrating monitoring: {e}")
+            logger.exception(f"❌ Error demonstrating monitoring: {e}")
 
     async def get_system_status(self) -> dict:
         """Get comprehensive system status."""
@@ -226,7 +226,7 @@ class ComprehensiveMonitoringSystem:
                 "dashboard": {"url": "http://localhost:9090", "active": True},
             }
         except Exception as e:
-            logger.error(f"Error getting system status: {e}")
+            logger.exception(f"Error getting system status: {e}")
             return {"error": str(e)}
 
     async def run_diagnostic_suite(self) -> dict:
@@ -259,7 +259,7 @@ class ComprehensiveMonitoringSystem:
             return report.__dict__
 
         except Exception as e:
-            logger.error(f"❌ Diagnostic suite failed: {e}")
+            logger.exception(f"❌ Diagnostic suite failed: {e}")
             return {"error": str(e)}
 
 
@@ -335,7 +335,7 @@ async def main():
     except KeyboardInterrupt:
         logger.info("🛑 Shutdown requested by user")
     except Exception as e:
-        logger.error(f"❌ Unexpected error: {e}")
+        logger.exception(f"❌ Unexpected error: {e}")
     finally:
         # Cleanup
         await monitoring_system.stop()

@@ -57,7 +57,7 @@ class RAGReader:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to load knowledge base: {e}")
+            logger.exception(f"Failed to load knowledge base: {e}")
             return False
 
     async def _load_trading_strategies(self) -> None:
@@ -312,7 +312,7 @@ class RAGReader:
         trend_direction = self._analyze_trend(market_conditions)
 
         # Get relevant strategy advice
-        if trend_direction == "uptrend" or trend_direction == "downtrend":
+        if trend_direction in ("uptrend", "downtrend"):
             strategies = self.search_knowledge("trend_following")
         else:
             strategies = self.search_knowledge("mean_reversion")

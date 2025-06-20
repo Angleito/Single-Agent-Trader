@@ -218,7 +218,7 @@ def main():
     ]
 
     all_passed = True
-    for step_name, step_func in steps:
+    for _step_name, step_func in steps:
         if not step_func():
             all_passed = False
             break

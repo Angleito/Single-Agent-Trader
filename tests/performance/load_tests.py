@@ -223,7 +223,7 @@ class LoadTestSuite:
                 results.append(result)
                 logger.info(f"Completed test: {result.test_name}")
             except Exception as e:
-                logger.error(f"Test failed: {test.__name__} - {e}")
+                logger.exception(f"Test failed: {test.__name__} - {e}")
                 # Create a failure result
                 failure_result = LoadTestResult(
                     test_name=test.__name__,
@@ -282,7 +282,7 @@ class LoadTestSuite:
                 )
 
             df = pd.DataFrame(df_data)
-            df.set_index("timestamp", inplace=True)
+            df = df.set_index("timestamp")
 
             # Time the indicator calculation
             op_start = time.perf_counter()
@@ -346,7 +346,7 @@ class LoadTestSuite:
                 )
 
             df = pd.DataFrame(df_data)
-            df.set_index("timestamp", inplace=True)
+            df = df.set_index("timestamp")
             test_data.append(df)
 
         response_times = []
@@ -510,7 +510,7 @@ class LoadTestSuite:
                 )
 
             df = pd.DataFrame(df_data)
-            df.set_index("timestamp", inplace=True)
+            df = df.set_index("timestamp")
 
             # Perform operation
             op_start = time.perf_counter()
@@ -599,7 +599,7 @@ class LoadTestSuite:
                 )
 
             df = pd.DataFrame(df_data)
-            df.set_index("timestamp", inplace=True)
+            df = df.set_index("timestamp")
 
             op_start = time.perf_counter()
             self.indicator_calc.calculate_all(df)
@@ -782,7 +782,7 @@ class LoadTestSuite:
                         )
 
                     df = pd.DataFrame(df_data)
-                    df.set_index("timestamp", inplace=True)
+                    df = df.set_index("timestamp")
                     self.indicator_calc.calculate_all(df)
 
                 op_end = time.perf_counter()
@@ -944,7 +944,7 @@ class LoadTestSuite:
             )
 
         df = pd.DataFrame(df_data)
-        df.set_index("timestamp", inplace=True)
+        df = df.set_index("timestamp")
 
         start_time = time.perf_counter()
         self.indicator_calc.calculate_all(df)
@@ -969,7 +969,7 @@ class LoadTestSuite:
             )
 
         df = pd.DataFrame(df_data)
-        df.set_index("timestamp", inplace=True)
+        df = df.set_index("timestamp")
 
         start_time = time.perf_counter()
 

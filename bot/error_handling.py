@@ -10,14 +10,16 @@ from __future__ import annotations
 import asyncio
 import logging
 import traceback
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
 from functools import wraps
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 import aiohttp
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -32,20 +34,20 @@ try:
         InsufficientBalanceError,
     )
 except ImportError:
-    # Fallback if imports fail
-    class BalanceRetrievalError(Exception):
+    # Fallback if imports fail - define exception classes directly
+    class BalanceRetrievalError(Exception):  # type: ignore[no-redef]
         pass
 
-    class BalanceServiceUnavailableError(BalanceRetrievalError):
+    class BalanceServiceUnavailableError(BalanceRetrievalError):  # type: ignore[no-redef]
         pass
 
-    class BalanceTimeoutError(BalanceRetrievalError):
+    class BalanceTimeoutError(BalanceRetrievalError):  # type: ignore[no-redef]
         pass
 
-    class BalanceValidationError(BalanceRetrievalError):
+    class BalanceValidationError(BalanceRetrievalError):  # type: ignore[no-redef]
         pass
 
-    class InsufficientBalanceError(BalanceRetrievalError):
+    class InsufficientBalanceError(BalanceRetrievalError):  # type: ignore[no-redef]
         pass
 
 
@@ -78,6 +80,7 @@ class ServiceStatus(Enum):
     UNHEALTHY = "unhealthy"
     RECOVERING = "recovering"
     ERROR = "error"
+    UNKNOWN = "unknown"
 
 
 @dataclass
@@ -187,7 +190,7 @@ class ErrorBoundary:
                 logger.info(f"Executing fallback behavior for {self.component_name}")
                 await self._execute_fallback(exception, error_context)
             except Exception as fallback_error:
-                logger.error(
+                logger.exception(
                     f"Fallback failed for {self.component_name}: {fallback_error}",
                     extra={"original_error": str(exception)},
                 )
@@ -276,7 +279,7 @@ class TradeSaga:
         except Exception as e:
             self.status = "failed"
             self.end_time = datetime.now(UTC)
-            logger.error(
+            logger.exception(
                 f"Saga {self.saga_id} failed at step {len(self.completed_steps)}: {e}"
             )
 
@@ -309,7 +312,7 @@ class TradeSaga:
                         logger.debug(f"Compensation for step {step_index} completed")
 
                     except Exception as comp_error:
-                        logger.error(
+                        logger.exception(
                             f"Compensation failed for step {step_index} ({step_name}): {comp_error}",
                             extra={"saga_id": self.saga_id, "original_result": result},
                         )
@@ -351,7 +354,7 @@ class GracefulDegradation:
     primary services become unavailable or unreliable.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.degraded_services: set[str] = set()
         self.fallback_strategies: dict[str, Callable[..., Any]] = {}
         self.service_health: dict[str, ServiceHealth] = {}
@@ -416,7 +419,7 @@ class GracefulDegradation:
             else:
                 return fallback_strategy(*args, **kwargs)
         except Exception as fallback_error:
-            logger.error(
+            logger.exception(
                 f"Fallback strategy failed for {service_name}: {fallback_error}"
             )
             raise
@@ -474,9 +477,9 @@ class EnhancedExceptionHandler:
     Provides comprehensive exception tracking, analysis, and intelligent retry strategies.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.exception_history: list[ErrorContext] = []
-        self.retry_strategies: dict[type, int] = {
+        self.retry_strategies: dict[type[Exception], int] = {
             ConnectionError: 3,
             TimeoutError: 5,
             aiohttp.ClientError: 3,
@@ -487,7 +490,7 @@ class EnhancedExceptionHandler:
             BalanceRetrievalError: 2,  # Generic balance errors get limited retries
             InsufficientBalanceError: 0,  # Insufficient funds won't resolve with retry
         }
-        self.retry_delays: dict[type, float] = {
+        self.retry_delays: dict[type[Exception], float] = {
             ConnectionError: 2.0,
             TimeoutError: 1.0,
             aiohttp.ClientError: 1.5,
@@ -649,7 +652,7 @@ class BalanceErrorHandler:
     including intelligent retry logic and fallback behaviors.
     """
 
-    def __init__(self, exception_handler: EnhancedExceptionHandler):
+    def __init__(self, exception_handler: EnhancedExceptionHandler) -> None:
         self.exception_handler = exception_handler
         self.balance_error_counts: dict[str, int] = {}
         self.consecutive_insufficient_balance_errors = 0
@@ -732,7 +735,7 @@ class BalanceErrorHandler:
                 {
                     "action": "check_balance",
                     "retry_strategy": "none",
-                    "user_action_required": True,
+                    "user_action_required": "true",
                     "message": "Insufficient balance detected. Please check account funding.",
                 }
             )
@@ -742,8 +745,8 @@ class BalanceErrorHandler:
                 {
                     "action": "retry_with_backoff",
                     "retry_strategy": "exponential_backoff",
-                    "max_retries": 4,
-                    "initial_delay": 3.0,
+                    "max_retries": "4",
+                    "initial_delay": "3.0",
                     "message": "Balance service temporarily unavailable. Will retry with backoff.",
                 }
             )
@@ -753,8 +756,8 @@ class BalanceErrorHandler:
                 {
                     "action": "retry_with_reduced_timeout",
                     "retry_strategy": "linear_backoff",
-                    "max_retries": 5,
-                    "initial_delay": 1.5,
+                    "max_retries": "5",
+                    "initial_delay": "1.5",
                     "message": "Balance request timed out. Will retry with adjusted timeout.",
                 }
             )
@@ -764,10 +767,10 @@ class BalanceErrorHandler:
                 {
                     "action": "log_and_fallback",
                     "retry_strategy": "single_retry",
-                    "max_retries": 1,
-                    "initial_delay": 0.5,
+                    "max_retries": "1",
+                    "initial_delay": "0.5",
                     "message": "Balance data validation failed. May indicate API changes.",
-                    "escalation_required": True,
+                    "escalation_required": "true",
                 }
             )
 
@@ -776,8 +779,8 @@ class BalanceErrorHandler:
                 {
                     "action": "retry_with_fallback",
                     "retry_strategy": "exponential_backoff",
-                    "max_retries": 2,
-                    "initial_delay": 2.0,
+                    "max_retries": "2",
+                    "initial_delay": "2.0",
                     "message": "General balance retrieval error. Will retry with fallback.",
                 }
             )
@@ -794,7 +797,7 @@ class BalanceErrorHandler:
             >= 3,
         }
 
-    def reset_error_counts(self):
+    def reset_error_counts(self) -> None:
         """Reset error counters (useful for new trading sessions)."""
         self.balance_error_counts.clear()
         self.consecutive_insufficient_balance_errors = 0
@@ -806,13 +809,13 @@ def retry_with_backoff(
     base_delay: float = 1.0,
     max_delay: float = 60.0,
     exponential_base: float = 2.0,
-    exceptions: tuple = (Exception,),
-):
+    exceptions: tuple[type[Exception], ...] = (Exception,),
+) -> Callable[..., Any]:
     """Decorator for automatic retry with exponential backoff."""
 
-    def decorator(func):
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        async def async_wrapper(*args, **kwargs):
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
             last_exception = None
 
             for attempt in range(max_retries + 1):
@@ -826,7 +829,7 @@ def retry_with_backoff(
                     last_exception = e
 
                     if attempt == max_retries:
-                        logger.error(
+                        logger.exception(
                             f"Function {func.__name__} failed after {max_retries} retries: {e}"
                         )
                         raise
@@ -844,9 +847,10 @@ def retry_with_backoff(
             # This should never be reached, but just in case
             if last_exception:
                 raise last_exception
+            return None
 
         @wraps(func)
-        def sync_wrapper(*args, **kwargs):
+        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
             # For synchronous functions, we can't use async sleep
             last_exception = None
 
@@ -858,7 +862,7 @@ def retry_with_backoff(
                     last_exception = e
 
                     if attempt == max_retries:
-                        logger.error(
+                        logger.exception(
                             f"Function {func.__name__} failed after {max_retries} retries: {e}"
                         )
                         raise
@@ -878,6 +882,7 @@ def retry_with_backoff(
             # This should never be reached, but just in case
             if last_exception:
                 raise last_exception
+            return None
 
         # Return appropriate wrapper based on function type
         if asyncio.iscoroutinefunction(func):

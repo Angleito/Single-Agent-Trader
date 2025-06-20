@@ -13,16 +13,17 @@ import time
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 from uuid import uuid4
 
 import aiohttp
 import numpy as np
+import numpy.typing as npt
 from pydantic import BaseModel, Field
 
-from ..config import settings
-from ..logging.trade_logger import TradeLogger
-from ..trading_types import MarketState, TradeAction
+from bot.config import settings
+from bot.logging.trade_logger import TradeLogger
+from bot.trading_types import MarketState, TradeAction
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +139,7 @@ class MCPMemoryServer:
                     return False
 
         except Exception as e:
-            logger.error(f"Failed to connect to MCP memory server: {e}")
+            logger.exception(f"Failed to connect to MCP memory server: {e}")
             # Fall back to local-only mode
             await self._load_local_cache()
             return False
@@ -205,7 +206,7 @@ class MCPMemoryServer:
             try:
                 await self._store_remote(experience)
             except Exception as e:
-                logger.error(f"Failed to store experience remotely: {e}")
+                logger.exception(f"Failed to store experience remotely: {e}")
 
         # Persist locally
         await self._save_experience_local(experience)
@@ -562,7 +563,7 @@ class MCPMemoryServer:
 
     def _extract_features(
         self, market_state: MarketState
-    ) -> np.ndarray[Any, np.dtype[np.float64]]:
+    ) -> npt.NDArray[np.float64]:
         """Extract feature vector from market state for similarity comparison."""
         features = []
 
@@ -614,7 +615,7 @@ class MCPMemoryServer:
 
     def _extract_features_from_experience(
         self, experience: TradingExperience
-    ) -> np.ndarray[Any, np.dtype[np.float64]]:
+    ) -> npt.NDArray[np.float64]:
         """Extract feature vector from stored experience."""
         features = []
 
@@ -649,8 +650,8 @@ class MCPMemoryServer:
 
     def _calculate_similarity(
         self,
-        features1: np.ndarray[Any, np.dtype[np.float64]],
-        features2: np.ndarray[Any, np.dtype[np.float64]],
+        features1: npt.NDArray[np.float64],
+        features2: npt.NDArray[np.float64],
         time_weight: float = 0.2,
     ) -> float:
         """Calculate similarity score between two feature vectors."""
@@ -658,10 +659,7 @@ class MCPMemoryServer:
         dot_product = np.dot(features1, features2)
         norm_product = np.linalg.norm(features1) * np.linalg.norm(features2)
 
-        if norm_product == 0:
-            feature_similarity = 0.0
-        else:
-            feature_similarity = dot_product / norm_product
+        feature_similarity = 0.0 if norm_product == 0 else dot_product / norm_product
 
         # Normalize to 0-1 range
         feature_similarity = (feature_similarity + 1) / 2
@@ -671,11 +669,10 @@ class MCPMemoryServer:
         time_similarity = 0.8  # Placeholder
 
         # Weighted combination
-        total_similarity = (
+        return (
             1 - time_weight
         ) * feature_similarity + time_weight * time_similarity
 
-        return total_similarity
 
     async def _generate_insights(self, experience: TradingExperience) -> str:
         """Generate learning insights from completed trade."""
@@ -701,14 +698,13 @@ class MCPMemoryServer:
                 insights.append("Overbought RSI entry worked well")
 
             # Dominance correlation
-            if experience.dominance_data:
-                if (
-                    experience.dominance_data.get("dominance_24h_change", 0) < 0
-                    and experience.decision["action"] == "LONG"
-                ):
-                    insights.append(
-                        "Falling dominance correctly predicted crypto strength"
-                    )
+            if experience.dominance_data and (
+                experience.dominance_data.get("dominance_24h_change", 0) < 0
+                and experience.decision["action"] == "LONG"
+            ):
+                insights.append(
+                    "Falling dominance correctly predicted crypto strength"
+                )
         else:
             insights.append(f"Failed {experience.decision['action']} trade")
 
@@ -773,7 +769,7 @@ class MCPMemoryServer:
                 if response.status != 201:
                     logger.warning(f"Failed to store remotely: {response.status}")
         except Exception as e:
-            logger.error(f"Remote storage error: {e}")
+            logger.exception(f"Remote storage error: {e}")
 
     async def _update_remote(self, experience: TradingExperience) -> None:
         """Update experience on remote MCP server."""
@@ -807,7 +803,7 @@ class MCPMemoryServer:
         except aiohttp.ClientError as e:
             logger.warning(f"Remote update network error: {e}")
         except Exception as e:
-            logger.error(f"Remote update error: {e}")
+            logger.exception(f"Remote update error: {e}")
 
     async def __aenter__(self) -> "MCPMemoryServer":
         """Async context manager entry."""
@@ -841,7 +837,7 @@ class MCPMemoryServer:
                 None, lambda: file_path.write_text(experience.json(indent=2))
             )
         except Exception as e:
-            logger.error(f"Failed to save experience locally: {e}")
+            logger.exception(f"Failed to save experience locally: {e}")
 
     async def _load_local_cache(self) -> None:
         """Load experiences from local storage into cache."""
@@ -861,7 +857,7 @@ class MCPMemoryServer:
             logger.info(f"Loaded {len(self.memory_cache)} experiences from local cache")
 
         except Exception as e:
-            logger.error(f"Failed to load local cache: {e}")
+            logger.exception(f"Failed to load local cache: {e}")
 
     async def _save_local_cache(self) -> None:
         """Save current cache to local storage."""
@@ -951,7 +947,7 @@ async def main() -> None:
             from datetime import UTC, datetime
             from decimal import Decimal
 
-            from ..trading_types import (
+            from bot.trading_types import (
                 IndicatorData,
                 MarketData,
                 MarketState,
@@ -1028,8 +1024,6 @@ async def main() -> None:
             if action_value not in ["LONG", "SHORT", "CLOSE", "HOLD"]:
                 action_value = "HOLD"
 
-            from typing import Literal
-
             trade_action_obj = TradeAction(
                 action=cast(Literal["LONG", "SHORT", "CLOSE", "HOLD"], action_value),
                 size_pct=float(trade_action.get("size_pct", 0)),
@@ -1071,7 +1065,12 @@ async def main() -> None:
             from datetime import UTC, datetime
             from decimal import Decimal
 
-            from ..trading_types import IndicatorData, MarketData, MarketState, Position
+            from bot.trading_types import (
+                IndicatorData,
+                MarketData,
+                MarketState,
+                Position,
+            )
 
             market_state_obj = MarketState(
                 symbol=market_state.get("symbol", "BTC-USD"),

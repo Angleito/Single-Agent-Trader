@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from ..utils import ta
+from bot.utils import ta
 
 logger = logging.getLogger(__name__)
 
@@ -291,7 +291,7 @@ class EMAribbon:
             return result
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "EMA ribbon calculation failed with exception",
                 extra={
                     "indicator": "ema_ribbon",
@@ -435,7 +435,7 @@ class EMAribbon:
             return result
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "Ribbon direction calculation failed",
                 extra={
                     "indicator": "ema_ribbon",
@@ -550,7 +550,7 @@ class EMAribbon:
             return result
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "EMA crossover signal calculation failed",
                 extra={
                     "indicator": "ema_ribbon",
@@ -727,7 +727,7 @@ class EMAribbon:
             return result
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "Comprehensive EMA ribbon analysis failed",
                 extra={
                     "indicator": "ema_ribbon",

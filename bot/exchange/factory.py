@@ -8,7 +8,8 @@ exchange client based on the configuration settings.
 import logging
 from typing import Any
 
-from ..config import Settings, settings
+from bot.config import Settings, settings
+
 from .base import BaseExchange
 from .bluefin import BluefinClient
 from .coinbase import CoinbaseClient

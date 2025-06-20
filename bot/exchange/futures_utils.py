@@ -144,7 +144,7 @@ class FuturesContractManager:
             return selected_contract["symbol"]
 
         except Exception as e:
-            logger.error(f"Failed to get active futures contract: {e}")
+            logger.exception(f"Failed to get active futures contract: {e}")
             return None
 
     def get_cached_contract(self) -> str | None:

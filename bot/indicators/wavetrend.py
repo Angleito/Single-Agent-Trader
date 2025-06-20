@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from ..utils import ta
+from bot.utils import ta
 
 logger = logging.getLogger(__name__)
 
@@ -176,7 +176,7 @@ class WaveTrend:
             alpha = 2.0 / (length + 1.0)
             return series.ewm(alpha=alpha, adjust=False).mean()
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "EMA fallback calculation failed",
                 extra={
                     "indicator": "wavetrend",
@@ -201,7 +201,7 @@ class WaveTrend:
         try:
             return series.rolling(window=length, min_periods=1).mean()
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "SMA fallback calculation failed",
                 extra={
                     "indicator": "wavetrend",
@@ -374,7 +374,7 @@ class WaveTrend:
             try:
                 esa = ta.ema(src_clean, length=ch_len)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "ESA calculation failed with exception",
                     extra={
                         "indicator": "wavetrend",
@@ -444,7 +444,7 @@ class WaveTrend:
             try:
                 de = ta.ema(deviation, length=ch_len)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "DE calculation failed with exception",
                     extra={
                         "indicator": "wavetrend",
@@ -626,7 +626,7 @@ class WaveTrend:
             try:
                 tci = ta.ema(ci_clean, length=avg_len)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "TCI calculation failed with exception",
                     extra={
                         "indicator": "wavetrend",
@@ -718,7 +718,7 @@ class WaveTrend:
             try:
                 wt2 = ta.sma(wt1_clean, length=ma_length)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "WT2 calculation failed with exception",
                     extra={
                         "indicator": "wavetrend",
@@ -824,7 +824,7 @@ class WaveTrend:
             return wt1, wt2
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "WaveTrend calculation failed with exception",
                 extra={
                     "indicator": "wavetrend",
@@ -842,7 +842,7 @@ class WaveTrend:
             # Print the full traceback for debugging
             import traceback
 
-            logger.error(f"Full traceback: {traceback.format_exc()}")
+            logger.exception(f"Full traceback: {traceback.format_exc()}")
             return pd.Series(dtype="float64", index=src.index), pd.Series(
                 dtype="float64", index=src.index
             )
@@ -940,7 +940,7 @@ class WaveTrend:
             }
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "Failed to calculate OB/OS conditions",
                 extra={
                     "indicator": "wavetrend",
@@ -1069,7 +1069,7 @@ class WaveTrend:
             }
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "Failed to calculate cross conditions",
                 extra={
                     "indicator": "wavetrend",
@@ -1230,7 +1230,7 @@ class WaveTrend:
             return result
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "WaveTrend DataFrame calculation failed",
                 extra={
                     "indicator": "wavetrend",

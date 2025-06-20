@@ -11,13 +11,12 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-from ..config import settings
-from ..logging.trade_logger import TradeLogger
-from ..mcp.memory_server import MCPMemoryServer, MemoryQuery, TradingExperience
-from ..mcp.omnisearch_client import (
-    OmniSearchClient,
-)
-from ..trading_types import MarketState, TradeAction
+from bot.config import settings
+from bot.logging.trade_logger import TradeLogger
+from bot.mcp.memory_server import MCPMemoryServer, MemoryQuery, TradingExperience
+from bot.mcp.omnisearch_client import OmniSearchClient
+from bot.trading_types import MarketState, TradeAction
+
 from .llm_agent import LLMAgent
 
 logger = logging.getLogger(__name__)
@@ -117,7 +116,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             return result
 
         except Exception as e:
-            logger.error(f"Error in memory-enhanced analysis: {e}")
+            logger.exception(f"Error in memory-enhanced analysis: {e}")
             # Fall back to base implementation
             return await super().analyze_market(market_state)
 
@@ -317,14 +316,13 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             )
 
             # Query memory server
-            experiences = await self.memory_server.query_similar_experiences(
+            return await self.memory_server.query_similar_experiences(
                 market_state, query
             )
 
-            return experiences
 
         except Exception as e:
-            logger.error(f"Failed to retrieve memories: {e}")
+            logger.exception(f"Failed to retrieve memories: {e}")
             return []
 
     def _format_memory_context(self, experiences: list[TradingExperience]) -> str:
@@ -421,7 +419,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
             )
 
         except Exception as e:
-            logger.error(f"Failed to get pattern insights: {e}")
+            logger.exception(f"Failed to get pattern insights: {e}")
             return "Pattern analysis temporarily unavailable."
 
     def _enhance_with_memory(
@@ -589,7 +587,7 @@ IMPORTANT: Consider these past experiences and sentiment correlations when makin
                 return "No sentiment-enhanced context available"
 
         except Exception as e:
-            logger.error(f"Error generating sentiment-enhanced context: {e}")
+            logger.exception(f"Error generating sentiment-enhanced context: {e}")
             return f"Error generating sentiment context: {e!s}"
 
     async def _get_financial_sentiment_context(self, market_state: MarketState) -> str:

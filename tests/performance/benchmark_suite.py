@@ -177,8 +177,7 @@ class PerformanceBenchmarks:
             )
 
         df = pd.DataFrame(data)
-        df.set_index("timestamp", inplace=True)
-        return df
+        return df.set_index("timestamp")
 
     def run_all_benchmarks(self) -> BenchmarkSuite:
         """
@@ -221,7 +220,7 @@ class PerformanceBenchmarks:
             logger.info(f"Completed {len(suite.results)} benchmarks successfully")
 
         except Exception as e:
-            logger.error(f"Benchmark suite failed: {e}")
+            logger.exception(f"Benchmark suite failed: {e}")
             raise
         finally:
             suite.end_time = datetime.utcnow()
@@ -268,14 +267,13 @@ class PerformanceBenchmarks:
                 results[f"size_{size}"] = (end_time - start_time) * 1000
             return results
 
-        result = self._run_benchmark(
+        return self._run_benchmark(
             name="Indicator Scaling",
             description="Indicator calculation performance across different data sizes",
             func=scaling_test,
             iterations=10,
         )
 
-        return result
 
     def benchmark_llm_initialization(self) -> BenchmarkResult:
         """Benchmark LLM agent initialization time."""
@@ -441,14 +439,13 @@ class PerformanceBenchmarks:
 
             return results
 
-        result = self._run_benchmark(
+        return self._run_benchmark(
             name="Memory Scaling",
             description="Memory usage scaling across different data sizes",
             func=memory_scaling_test,
             iterations=3,
         )
 
-        return result
 
     def benchmark_data_serialization(self) -> BenchmarkResult:
         """Benchmark data serialization performance."""
@@ -471,7 +468,7 @@ class PerformanceBenchmarks:
 
         def deserialize_data():
             df = pd.DataFrame(serialized_data)
-            df.set_index("timestamp", inplace=True)
+            df = df.set_index("timestamp")
             return len(df)
 
         return self._run_benchmark(

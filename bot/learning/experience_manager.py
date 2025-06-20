@@ -6,16 +6,17 @@ and stores experiences for learning.
 """
 
 import asyncio
+import contextlib
 import logging
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
-from ..config import settings
-from ..logging.trade_logger import TradeLogger
-from ..mcp.memory_server import MCPMemoryServer
-from ..trading_types import MarketState, Order, Position, TradeAction
+from bot.config import settings
+from bot.logging.trade_logger import TradeLogger
+from bot.mcp.memory_server import MCPMemoryServer
+from bot.trading_types import MarketState, Order, Position, TradeAction
 
 logger = logging.getLogger(__name__)
 
@@ -102,19 +103,15 @@ class ExperienceManager:
         # Cancel monitoring task
         if self._monitor_task:
             self._monitor_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._monitor_task
-            except asyncio.CancelledError:
-                pass
 
         # Cancel reflection tasks
         for task in self._reflection_tasks:
             if not task.done():
                 task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await task
-                except asyncio.CancelledError:
-                    pass
 
         self._reflection_tasks.clear()
 
@@ -450,7 +447,7 @@ class ExperienceManager:
                 await asyncio.sleep(300)  # Check every 5 minutes
 
             except Exception as e:
-                logger.error(f"Error in trade monitoring: {e}")
+                logger.exception(f"Error in trade monitoring: {e}")
                 await asyncio.sleep(60)
 
     async def _schedule_trade_reflection(
@@ -481,7 +478,7 @@ class ExperienceManager:
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            logger.error(f"Error in trade reflection: {e}")
+            logger.exception(f"Error in trade reflection: {e}")
 
     def _generate_trade_reflection(self, trade: ActiveTrade) -> str:
         """Generate reflection insights from completed trade."""
@@ -513,11 +510,12 @@ class ExperienceManager:
                 )
 
         # Analyze hold duration
-        duration_hours = (trade.exit_time - trade.entry_time).total_seconds() / 3600
-        if duration_hours < 1 and trade.realized_pnl and trade.realized_pnl > 0:
-            insights.append("Quick profitable scalp - good timing")
-        elif duration_hours > 12:
-            insights.append("Extended hold period - consider position management")
+        if trade.exit_time is not None:
+            duration_hours = (trade.exit_time - trade.entry_time).total_seconds() / 3600
+            if duration_hours < 1 and trade.realized_pnl and trade.realized_pnl > 0:
+                insights.append("Quick profitable scalp - good timing")
+            elif duration_hours > 12:
+                insights.append("Extended hold period - consider position management")
 
         return "; ".join(insights) if insights else "Standard trade execution"
 

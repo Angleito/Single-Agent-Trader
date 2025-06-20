@@ -1,6 +1,7 @@
 """Bluefin WebSocket client for real-time market data streaming."""
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -8,20 +9,20 @@ from collections import deque
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import websockets
-from websockets.client import WebSocketClientProtocol
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
-from ..error_handling import (
-    exception_handler,
-)
-from ..trading_types import MarketData
+from bot.error_handling import exception_handler
+from bot.trading_types import MarketData
+
+if TYPE_CHECKING:
+    from websockets.client import WebSocketClientProtocol
 
 # Import centralized endpoint configuration with fallback
 try:
-    from ..exchange.bluefin_endpoints import get_notifications_url, get_websocket_url
+    from bot.exchange.bluefin_endpoints import get_notifications_url, get_websocket_url
 except ImportError:
     # Fallback endpoint resolver if centralized config is not available
     def get_websocket_url(network: str = "mainnet") -> str:
@@ -175,10 +176,8 @@ class BluefinWebSocketClient:
         for task in tasks:
             if task and not task.done():
                 task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await task
-                except asyncio.CancelledError:
-                    pass
 
         # Close WebSocket connection
         if self._ws:
@@ -1066,7 +1065,7 @@ class BluefinWebSocketClient:
                     )
 
                     if ping_failures >= 3:
-                        logger.error("Multiple ping failures, connection appears dead")
+                        logger.exception("Multiple ping failures, connection appears dead")
                         self._connected = False
                         break
 
@@ -1085,7 +1084,7 @@ class BluefinWebSocketClient:
                     )
 
                     if ping_failures >= 3:
-                        logger.error(
+                        logger.exception(
                             "Multiple ping failures, marking connection as dead"
                         )
                         self._connected = False
@@ -1105,7 +1104,7 @@ class BluefinWebSocketClient:
                     )
 
                     if ping_failures >= 3:
-                        logger.error(
+                        logger.exception(
                             "Multiple ping failures, marking connection as dead"
                         )
                         self._connected = False

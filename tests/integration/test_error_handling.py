@@ -584,8 +584,7 @@ class TestErrorHandlingIntegration:
             )
 
         df = pd.DataFrame(data)
-        df.set_index("timestamp", inplace=True)
-        return df
+        return df.set_index("timestamp")
 
     @pytest.mark.asyncio()
     async def test_shutdown_during_active_operations(self, mock_market_data):

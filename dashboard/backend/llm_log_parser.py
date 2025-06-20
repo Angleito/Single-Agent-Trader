@@ -262,7 +262,7 @@ class LLMLogParser:
             }
 
         except Exception as e:
-            logger.error(f"Error parsing log file: {e}")
+            logger.exception(f"Error parsing log file: {e}")
             return {"requests": 0, "responses": 0, "decisions": 0, "metrics": 0}
 
     def _parse_line(self, line: str) -> dict[str, Any] | None:
@@ -295,7 +295,7 @@ class LLMLogParser:
             return None
 
         except Exception as e:
-            logger.error(f"Error parsing line '{line[:100]}...': {e}")
+            logger.exception(f"Error parsing line '{line[:100]}...': {e}")
             return None
 
     def _create_typed_entry(self, event_type: EventType, data: dict[str, Any]):
@@ -361,7 +361,7 @@ class LLMLogParser:
             return None
 
         except Exception as e:
-            logger.error(f"Error creating typed entry for {event_type}: {e}")
+            logger.exception(f"Error creating typed entry for {event_type}: {e}")
             return None
 
     def _store_entry(self, event_type: EventType, entry):
@@ -475,7 +475,7 @@ class LLMLogParser:
             try:
                 callback(data)
             except Exception as e:
-                logger.error(f"Error in callback: {e}")
+                logger.exception(f"Error in callback: {e}")
 
     def add_callback(self, callback: Callable[[dict[str, Any]], None]):
         """Add callback for real-time notifications."""
@@ -534,14 +534,14 @@ class LLMLogParser:
                                     self._parse_line(line)
 
                     except Exception as e:
-                        logger.error(f"Error reading log file: {e}")
+                        logger.exception(f"Error reading log file: {e}")
                 else:
                     logger.debug(f"Log file not found: {self.log_file}")
 
                 time.sleep(poll_interval)
 
         except Exception as e:
-            logger.error(f"Error in log monitoring: {e}")
+            logger.exception(f"Error in log monitoring: {e}")
 
     def get_aggregated_metrics(
         self, time_window: timedelta | None = None

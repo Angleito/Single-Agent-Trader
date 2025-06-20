@@ -17,9 +17,7 @@ from typing import Any
 import aiohttp
 from aiohttp import ClientError, ClientTimeout, TCPConnector
 
-from ..error_handling import (
-    exception_handler,
-)
+from bot.error_handling import exception_handler
 
 logger = logging.getLogger(__name__)
 
@@ -242,11 +240,11 @@ class BluefinServiceClient:
         correlation_id: str,
         operation: str,
         status: str,
-        balance_amount: str = None,
-        error: str = None,
-        duration_ms: float = None,
-        response_size: int = None,
-        metadata: dict = None,
+        balance_amount: str | None = None,
+        error: str | None = None,
+        duration_ms: float | None = None,
+        response_size: int | None = None,
+        metadata: dict | None = None,
     ) -> None:
         """
         Record balance operation in client audit trail.
@@ -297,7 +295,7 @@ class BluefinServiceClient:
         )
 
     def _update_balance_performance_metrics(
-        self, status: str, duration_ms: float = None, error: str = None
+        self, status: str, duration_ms: float | None = None, error: str | None = None
     ) -> None:
         """Update balance operation performance metrics."""
         self.balance_performance_metrics["total_balance_requests"] += 1
@@ -352,9 +350,9 @@ class BluefinServiceClient:
         correlation_id: str,
         operation: str,
         error: Exception,
-        duration_ms: float = None,
-        endpoint: str = None,
-        additional_context: dict = None,
+        duration_ms: float | None = None,
+        endpoint: str | None = None,
+        additional_context: dict | None = None,
     ) -> dict:
         """
         Generate comprehensive error context for balance operations.
@@ -418,7 +416,7 @@ class BluefinServiceClient:
     def _get_actionable_balance_error_message(self, error: Exception) -> str:
         """Generate actionable error message for balance operations."""
         error_str = str(error).lower()
-        error_type = type(error).__name__.lower()
+        type(error).__name__.lower()
 
         if "balance" in error_str:
             return (
@@ -442,7 +440,7 @@ class BluefinServiceClient:
     def _should_retry_balance_error(self, error: Exception) -> bool:
         """Determine if balance error should be retried."""
         error_str = str(error).lower()
-        error_type = type(error).__name__.lower()
+        type(error).__name__.lower()
 
         # Don't retry authentication or validation errors
         if "authentication" in error_str or "auth" in error_str:
@@ -687,7 +685,7 @@ class BluefinServiceClient:
                     )
                     await asyncio.sleep(delay)
                 else:
-                    logger.error(
+                    logger.exception(
                         f"Request failed after {self._max_retries} attempts: {e}",
                         extra={
                             "client_id": self.client_id,
@@ -1329,7 +1327,7 @@ class BluefinServiceClient:
                 },
             )
 
-            logger.error(
+            logger.exception(
                 "Account data request failed with exception",
                 extra=error_context,
             )
@@ -1385,7 +1383,7 @@ class BluefinServiceClient:
             BluefinServiceRateLimitError,
             BluefinServiceConnectionError,
         ) as e:
-            logger.error(
+            logger.exception(
                 "Service error getting positions",
                 extra={
                     "client_id": self.client_id,
@@ -1428,14 +1426,14 @@ class BluefinServiceClient:
             return {"status": "success", "order": result}
 
         except BluefinServiceAuthError as e:
-            logger.error(
+            logger.exception(
                 f"Authentication failed placing order: {e}",
                 extra={"client_id": self.client_id, "operation": "place_order"},
             )
             return {"status": "error", "message": "Authentication failed"}
 
         except BluefinServiceRateLimitError as e:
-            logger.error(
+            logger.exception(
                 f"Rate limited placing order: {e}",
                 extra={"client_id": self.client_id, "operation": "place_order"},
             )
@@ -1446,7 +1444,7 @@ class BluefinServiceClient:
             }
 
         except BluefinServiceConnectionError as e:
-            logger.error(
+            logger.exception(
                 f"Connection error placing order: {e}",
                 extra={"client_id": self.client_id, "operation": "place_order"},
             )
@@ -1489,7 +1487,7 @@ class BluefinServiceClient:
             BluefinServiceRateLimitError,
             BluefinServiceConnectionError,
         ) as e:
-            logger.error(
+            logger.exception(
                 f"Service error canceling order {order_id}: {e}",
                 extra={
                     "client_id": self.client_id,
@@ -1525,20 +1523,19 @@ class BluefinServiceClient:
             Ticker data dictionary
         """
         try:
-            result = await self._make_request_with_retry(
+            return await self._make_request_with_retry(
                 method="GET",
                 endpoint="/market/ticker",
                 operation="get_market_ticker",
                 params={"symbol": symbol},
             )
-            return result
 
         except (
             BluefinServiceAuthError,
             BluefinServiceRateLimitError,
             BluefinServiceConnectionError,
         ) as e:
-            logger.error(
+            logger.exception(
                 f"Service error getting ticker for {symbol}: {e}",
                 extra={
                     "client_id": self.client_id,
@@ -1588,7 +1585,7 @@ class BluefinServiceClient:
             BluefinServiceRateLimitError,
             BluefinServiceConnectionError,
         ) as e:
-            logger.error(
+            logger.exception(
                 f"Service error setting leverage for {symbol}: {e}",
                 extra={
                     "client_id": self.client_id,
@@ -1664,7 +1661,7 @@ class BluefinServiceClient:
                 return []
 
         except (BluefinServiceAuthError, BluefinServiceRateLimitError) as e:
-            logger.error(
+            logger.exception(
                 f"Service error getting candlestick data: {e}",
                 extra={
                     "client_id": self.client_id,
@@ -1674,7 +1671,7 @@ class BluefinServiceClient:
             )
             return []
         except BluefinServiceConnectionError as e:
-            logger.error(
+            logger.exception(
                 f"Connection error getting candlestick data: {e}",
                 extra={
                     "client_id": self.client_id,
@@ -1915,7 +1912,7 @@ class BluefinServiceClient:
                     error_msg = (
                         f"Network error after {self._max_retries} retries: {e!s}"
                     )
-                    logger.error(
+                    logger.exception(
                         "Network error - all retries exhausted",
                         extra={
                             "client_id": self.client_id,
@@ -2197,7 +2194,7 @@ class BluefinServiceClient:
     # Comprehensive Connectivity Monitoring Methods
 
     def _record_request_metrics(
-        self, success: bool, response_time: float = 0.0, error_type: str = None
+        self, success: bool, response_time: float = 0.0, error_type: str | None = None
     ) -> None:
         """Record metrics for a request."""
         from datetime import UTC, datetime
@@ -2224,7 +2221,7 @@ class BluefinServiceClient:
                 self.connection_metrics["error_counts_by_type"][error_type] += 1
 
     def _record_health_check_result(
-        self, success: bool, response_time: float = 0.0, status_code: int = None
+        self, success: bool, response_time: float = 0.0, status_code: int | None = None
     ) -> None:
         """Record health check result for monitoring."""
         from datetime import UTC, datetime
@@ -2493,7 +2490,7 @@ class BluefinServiceClient:
                 response_times = []
                 success_count = 0
 
-                for i in range(5):  # 5 quick requests
+                for _i in range(5):  # 5 quick requests
                     req_start = time.time()
                     try:
                         async with self._session.get(

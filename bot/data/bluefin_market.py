@@ -1,6 +1,7 @@
 """Bluefin market data provider for perpetual futures on Sui network."""
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -8,15 +9,17 @@ from collections import deque
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import aiohttp
 import pandas as pd
 import websockets
-from websockets.client import WebSocketClientProtocol
 
-from ..config import settings
-from ..trading_types import MarketData
+from bot.config import settings
+from bot.trading_types import MarketData
+
+if TYPE_CHECKING:
+    from websockets.client import WebSocketClientProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +116,7 @@ class BluefinMarketDataProvider:
 
         # Use centralized endpoint configuration for consistency
         try:
-            from ..exchange.bluefin_endpoints import (
+            from bot.exchange.bluefin_endpoints import (
                 get_notifications_url,
                 get_rest_api_url,
                 get_websocket_url,
@@ -218,7 +221,7 @@ class BluefinMarketDataProvider:
                     )
                 except Exception as e:
                     error_msg = f"Failed to initialize HTTP session: {e!s}"
-                    logger.error(
+                    logger.exception(
                         "HTTP session initialization failed",
                         extra={
                             "provider_id": self.provider_id,
@@ -227,7 +230,9 @@ class BluefinMarketDataProvider:
                             "timeout": timeout_value,
                         },
                     )
-                    from ..exchange.bluefin_client import BluefinServiceConnectionError
+                    from bot.exchange.bluefin_client import (
+                        BluefinServiceConnectionError,
+                    )
 
                     raise BluefinServiceConnectionError(error_msg) from e
 
@@ -277,7 +282,7 @@ class BluefinMarketDataProvider:
                                 )
 
                         except Exception as e:
-                            logger.error(f"❌ Failed to fetch {hours}-hour data: {e}")
+                            logger.exception(f"❌ Failed to fetch {hours}-hour data: {e}")
                             continue
 
                     # If still insufficient data, generate fallback data
@@ -291,7 +296,7 @@ class BluefinMarketDataProvider:
                         )
 
                 except Exception as e:
-                    logger.error(f"❌ Critical error in historical data fetching: {e}")
+                    logger.exception(f"❌ Critical error in historical data fetching: {e}")
                     # Generate fallback data to ensure bot can start
                     logger.info("🎭 Generating fallback data to ensure bot startup")
                     historical_data = await self._generate_fallback_historical_data()
@@ -338,7 +343,7 @@ class BluefinMarketDataProvider:
                 )
 
         except Exception as e:
-            logger.error(f"💥 Failed to connect to Bluefin market data: {e}")
+            logger.exception(f"💥 Failed to connect to Bluefin market data: {e}")
             self._is_connected = False
             raise
 
@@ -350,34 +355,26 @@ class BluefinMarketDataProvider:
         # Stop message processing task
         if self._processing_task and not self._processing_task.done():
             self._processing_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._processing_task
-            except asyncio.CancelledError:
-                pass
 
         # All market data is real - no mock tasks to clean up
 
         # Stop WebSocket tasks
         if self._ws_task and not self._ws_task.done():
             self._ws_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._ws_task
-            except asyncio.CancelledError:
-                pass
 
         if self._reconnect_task and not self._reconnect_task.done():
             self._reconnect_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._reconnect_task
-            except asyncio.CancelledError:
-                pass
 
         if self._candle_builder_task and not self._candle_builder_task.done():
             self._candle_builder_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._candle_builder_task
-            except asyncio.CancelledError:
-                pass
 
         # Close WebSocket connection
         if hasattr(self, "_ws_client") and self._ws_client:
@@ -543,7 +540,7 @@ class BluefinMarketDataProvider:
             return historical_data
 
         except Exception as e:
-            logger.error(f"💥 Failed to fetch historical data: {e}")
+            logger.exception(f"💥 Failed to fetch historical data: {e}")
             if self._ohlcv_cache and len(self._ohlcv_cache) >= 50:
                 logger.info("✅ Using existing cached historical data")
                 return self._ohlcv_cache
@@ -553,10 +550,9 @@ class BluefinMarketDataProvider:
                     "⚠️ Critical data failure - generating synthetic fallback data"
                 )
                 try:
-                    fallback_data = await self._generate_fallback_historical_data()
-                    return fallback_data
+                    return await self._generate_fallback_historical_data()
                 except Exception as fallback_error:
-                    logger.error(
+                    logger.exception(
                         f"💥 Even fallback data generation failed: {fallback_error}"
                     )
                     raise BluefinDataError(
@@ -579,7 +575,7 @@ class BluefinMarketDataProvider:
             return await self._fetch_bluefin_ticker_price()
 
         except Exception as e:
-            logger.error(f"Error fetching latest price: {e}")
+            logger.exception(f"Error fetching latest price: {e}")
 
         # Fall back to cached OHLCV data
         return self.get_latest_price()
@@ -606,7 +602,7 @@ class BluefinMarketDataProvider:
             return None
 
         except Exception as e:
-            logger.error(f"Error fetching orderbook: {e}")
+            logger.exception(f"Error fetching orderbook: {e}")
             return None
 
     def get_latest_ohlcv(self, limit: int | None = None) -> list[MarketData]:
@@ -670,9 +666,8 @@ class BluefinMarketDataProvider:
             )
 
         df = pd.DataFrame(df_data)
-        df.set_index("timestamp", inplace=True)
+        return df.set_index("timestamp")
 
-        return df
 
     def subscribe_to_updates(self, callback: Callable[[MarketData], None]) -> None:
         """
@@ -712,7 +707,7 @@ class BluefinMarketDataProvider:
                     # Create task for sync callback
                     asyncio.create_task(self._safe_callback_sync(callback, data))
             except Exception as e:
-                logger.error(
+                logger.exception(
                     f"Error creating subscriber task for {callback.__name__}: {e}"
                 )
 
@@ -723,7 +718,7 @@ class BluefinMarketDataProvider:
         try:
             await callback(data)
         except Exception as e:
-            logger.error(f"Error in async subscriber callback {callback.__name__}: {e}")
+            logger.exception(f"Error in async subscriber callback {callback.__name__}: {e}")
 
     async def _safe_callback_sync(self, callback: Callable, data: MarketData) -> None:
         """Safely execute sync callback in thread pool."""
@@ -737,7 +732,7 @@ class BluefinMarketDataProvider:
                 return
             await loop.run_in_executor(None, callback, data)
         except Exception as e:
-            logger.error(f"Error in sync subscriber callback {callback.__name__}: {e}")
+            logger.exception(f"Error in sync subscriber callback {callback.__name__}: {e}")
 
     async def _process_websocket_messages(self) -> None:
         """
@@ -757,7 +752,7 @@ class BluefinMarketDataProvider:
                 # No message available, continue loop
                 continue
             except Exception as e:
-                logger.error(f"Error in message processor: {e}")
+                logger.exception(f"Error in message processor: {e}")
                 await asyncio.sleep(0.1)
 
     async def _handle_websocket_message_async(self, message: dict[str, Any]) -> None:
@@ -770,7 +765,7 @@ class BluefinMarketDataProvider:
         try:
             await self._process_websocket_message(message)
         except Exception as e:
-            logger.error(f"Error in async message handler: {e}")
+            logger.exception(f"Error in async message handler: {e}")
 
     def is_connected(self) -> bool:
         """
@@ -809,7 +804,7 @@ class BluefinMarketDataProvider:
             "subscribers": len(self._subscribers),
             "extended_history_mode": self._extended_history_mode,
             "cache_status": {
-                key: self._is_cache_valid(key) for key in self._cache_timestamps.keys()
+                key: self._is_cache_valid(key) for key in self._cache_timestamps
             },
         }
 
@@ -964,7 +959,7 @@ class BluefinMarketDataProvider:
         """
         try:
             # Use Bluefin service for ticker data with proper session management
-            from ..exchange.bluefin_client import BluefinServiceClient
+            from bot.exchange.bluefin_client import BluefinServiceClient
 
             # Get the correct service URL and API key for connection
             service_url = os.getenv(
@@ -989,7 +984,7 @@ class BluefinMarketDataProvider:
                     return None
 
         except Exception as e:
-            logger.error(f"Error fetching Bluefin ticker price via service: {e}")
+            logger.exception(f"Error fetching Bluefin ticker price via service: {e}")
             # Fall back to direct API call if service fails
             return await self._fetch_bluefin_ticker_price_direct()
 
@@ -1030,7 +1025,7 @@ class BluefinMarketDataProvider:
                 return None
 
         except Exception as e:
-            logger.error(f"Error fetching Bluefin ticker price directly: {e}")
+            logger.exception(f"Error fetching Bluefin ticker price directly: {e}")
             return None
 
     async def _fetch_bluefin_candles(
@@ -1061,7 +1056,7 @@ class BluefinMarketDataProvider:
 
         try:
             # Use Bluefin service for candle data with proper session management
-            from ..exchange.bluefin_client import BluefinServiceClient
+            from bot.exchange.bluefin_client import BluefinServiceClient
 
             # Get the correct service URL and API key for connection
             service_url = os.getenv(
@@ -1189,7 +1184,7 @@ class BluefinMarketDataProvider:
                 return candles
 
         except Exception as e:
-            logger.error(f"❌ Error fetching Bluefin candles via service: {e}")
+            logger.exception(f"❌ Error fetching Bluefin candles via service: {e}")
             logger.info("🔄 Falling back to direct API call")
             # Fall back to direct API call
             return await self._fetch_bluefin_candles_direct(
@@ -1301,10 +1296,10 @@ class BluefinMarketDataProvider:
                 return candles
 
         except aiohttp.ClientError as e:
-            logger.error(f"Network error fetching Bluefin candles: {e}")
+            logger.exception(f"Network error fetching Bluefin candles: {e}")
             return []
         except Exception as e:
-            logger.error(f"Unexpected error fetching Bluefin candles: {e}")
+            logger.exception(f"Unexpected error fetching Bluefin candles: {e}")
             return []
 
     def _validate_data_sufficiency(self, candle_count: int) -> None:
@@ -1445,7 +1440,7 @@ class BluefinMarketDataProvider:
             return candles
 
         except Exception as e:
-            logger.error(f"💥 Failed to generate fallback data: {e}")
+            logger.exception(f"💥 Failed to generate fallback data: {e}")
             # Return minimal data to prevent complete failure
             current_time = datetime.now(UTC)
             minimal_price = Decimal("100.0")
@@ -1558,7 +1553,7 @@ class BluefinMarketDataProvider:
             return synthetic_candles
 
         except Exception as e:
-            logger.error(f"💥 Failed to generate synthetic padding: {e}")
+            logger.exception(f"💥 Failed to generate synthetic padding: {e}")
             # Return minimal padding if generation fails
             return [real_data[0]] * needed_candles
 
@@ -1609,7 +1604,7 @@ class BluefinMarketDataProvider:
             logger.info("Successfully connected to Bluefin WebSocket")
 
         except Exception as e:
-            logger.error(f"Failed to connect to Bluefin WebSocket: {e}")
+            logger.exception(f"Failed to connect to Bluefin WebSocket: {e}")
             self._ws_connected = False
             await self._schedule_reconnect()
 
@@ -1649,16 +1644,16 @@ class BluefinMarketDataProvider:
                             pass
 
                 except json.JSONDecodeError:
-                    logger.error(f"Invalid JSON in WebSocket message: {message!r}")
+                    logger.exception(f"Invalid JSON in WebSocket message: {message!r}")
                 except Exception as e:
-                    logger.error(f"Error handling WebSocket message: {e}")
+                    logger.exception(f"Error handling WebSocket message: {e}")
 
         except websockets.ConnectionClosed:
             logger.warning("WebSocket connection closed")
             self._ws_connected = False
             await self._schedule_reconnect()
         except Exception as e:
-            logger.error(f"WebSocket error: {e}")
+            logger.exception(f"WebSocket error: {e}")
             self._ws_connected = False
             await self._schedule_reconnect()
 
@@ -1700,7 +1695,7 @@ class BluefinMarketDataProvider:
                 logger.debug(f"Market data update: {self.symbol} @ {price}")
 
         except Exception as e:
-            logger.error(f"Error processing market data update: {e}")
+            logger.exception(f"Error processing market data update: {e}")
 
     async def _process_recent_trades(self, data: dict[str, Any]) -> None:
         """Process recent trades event."""
@@ -1724,7 +1719,7 @@ class BluefinMarketDataProvider:
                     self._cache_timestamps["price"] = datetime.now(UTC)
 
         except Exception as e:
-            logger.error(f"Error processing recent trades: {e}")
+            logger.exception(f"Error processing recent trades: {e}")
 
     async def _process_orderbook_update(self, data: dict[str, Any]) -> None:
         """Process orderbook update event."""
@@ -1738,7 +1733,7 @@ class BluefinMarketDataProvider:
             self._cache_timestamps["orderbook_l2"] = datetime.now(UTC)
 
         except Exception as e:
-            logger.error(f"Error processing orderbook update: {e}")
+            logger.exception(f"Error processing orderbook update: {e}")
 
     async def _process_market_health(self, data: dict[str, Any]) -> None:
         """Process market health event."""
@@ -1796,7 +1791,7 @@ class BluefinMarketDataProvider:
                     self._update_current_candle()
 
             except Exception as e:
-                logger.error(f"Error building candles from ticks: {e}")
+                logger.exception(f"Error building candles from ticks: {e}")
 
     def _get_candle_timestamp(self, time: datetime, interval_seconds: int) -> datetime:
         """Get the candle timestamp for a given time."""
@@ -2053,15 +2048,14 @@ class BluefinMarketDataClient:
             )
 
         df = pd.DataFrame(df_data)
-        df.set_index("timestamp", inplace=True)
-        df.sort_index(inplace=True)
+        df = df.set_index("timestamp")
+        return df.sort_index()
 
-        return df
 
 
 # Factory function for easy client creation
 def create_bluefin_market_data_client(
-    symbol: str = None, interval: str = None
+    symbol: str | None = None, interval: str | None = None
 ) -> BluefinMarketDataClient:
     """
     Factory function to create a BluefinMarketDataClient instance.

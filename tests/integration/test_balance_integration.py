@@ -503,7 +503,7 @@ class TestBalanceIntegration:
 
         # Test state load performance
         start_time = time.perf_counter()
-        new_account = PaperTradingAccount(data_dir=temp_data_dir)
+        PaperTradingAccount(data_dir=temp_data_dir)
         load_time = (time.perf_counter() - start_time) * 1000
         performance_metrics["state_load"] = load_time
 
@@ -596,5 +596,4 @@ class TestBalanceIntegration:
             )
 
         df = pd.DataFrame(data)
-        df.set_index("timestamp", inplace=True)
-        return df
+        return df.set_index("timestamp")

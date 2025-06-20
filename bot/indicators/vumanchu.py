@@ -29,7 +29,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from ..utils import ta
+from bot.utils import ta
+
 from .cipher_a_signals import CipherASignals
 from .cipher_b_signals import CipherBSignals
 from .divergence_detector import DivergenceDetector
@@ -261,7 +262,7 @@ class CipherA:
             return result
 
         except Exception as e:
-            logger.error(f"Parallel indicator calculation failed: {e}")
+            logger.exception(f"Parallel indicator calculation failed: {e}")
             # Fallback to sequential calculation
             return await self.calculate_async(df)
 
@@ -517,13 +518,7 @@ class CipherA:
 
         # Check for sufficient data
         min_length = (
-            max(
-                self.wt_channel_length,
-                self.wt_average_length,
-                max(self.ema_ribbon.lengths),
-                self.rsimfi_period,
-                self.rsi_length,
-            )
+            max(self.wt_channel_length, self.wt_average_length, *self.ema_ribbon.lengths, self.rsimfi_period, self.rsi_length)
             + 20
         )  # Buffer for lookbacks
 
@@ -718,7 +713,7 @@ class CipherA:
             logger.debug("Cipher A calculation completed successfully")
 
         except Exception as e:
-            logger.error(f"Error in Cipher A calculation: {e!s}")
+            logger.exception(f"Error in Cipher A calculation: {e!s}")
             # Add error indicators
             result["cipher_a_error"] = True
             result["cipher_a_signal"] = 0
@@ -841,7 +836,7 @@ class CipherA:
             )
 
         except Exception as e:
-            logger.error(f"Error generating enhanced signals: {e!s}")
+            logger.exception(f"Error generating enhanced signals: {e!s}")
             signals = pd.Series(0, index=df.index, dtype="int64")
 
         return signals
@@ -967,7 +962,7 @@ class CipherA:
         }
 
         # Combine all values
-        result = {
+        return {
             "timestamp": latest.name if hasattr(latest, "name") else None,
             **core_signals,
             **wavetrend_values,
@@ -980,7 +975,6 @@ class CipherA:
             **legacy_values,
         }
 
-        return result
 
     def get_all_signals(self, df: pd.DataFrame) -> dict[str, Any]:
         """
@@ -1129,7 +1123,7 @@ class CipherA:
             return interpretation
 
         except Exception as e:
-            logger.error(f"Error interpreting signals: {e!s}")
+            logger.exception(f"Error interpreting signals: {e!s}")
             return "Error interpreting signals."
 
 
@@ -1318,12 +1312,7 @@ class CipherB:
         """
         # Validate input data
         min_length = (
-            max(
-                self.wt_channel_length,
-                self.wt_average_length,
-                max(self.ema_ribbon.lengths),
-                self.rsi_length,
-            )
+            max(self.wt_channel_length, self.wt_average_length, *self.ema_ribbon.lengths, self.rsi_length)
             + 20
         )  # Buffer for lookbacks
 
@@ -1485,7 +1474,7 @@ class CipherB:
             logger.debug("Cipher B calculation completed successfully")
 
         except Exception as e:
-            logger.error(f"Error in Cipher B calculation: {e!s}")
+            logger.exception(f"Error in Cipher B calculation: {e!s}")
             # Add error indicators
             result["cipher_b_error"] = True
             result["cipher_b_signal"] = 0
@@ -1713,7 +1702,7 @@ class CipherB:
             )
 
         except Exception as e:
-            logger.error(f"Error generating enhanced Cipher B signals: {e!s}")
+            logger.exception(f"Error generating enhanced Cipher B signals: {e!s}")
             signals = pd.Series(0, index=df.index, dtype="int64")
 
         return signals
@@ -1806,7 +1795,7 @@ class CipherB:
 
             return wave.astype("float64")
         except Exception as e:
-            logger.error(f"Error calculating wave indicator: {e!s}")
+            logger.exception(f"Error calculating wave indicator: {e!s}")
             return pd.Series(dtype="float64", index=df.index)
 
     def get_latest_values(self, df: pd.DataFrame) -> dict[str, Any]:
@@ -1897,7 +1886,7 @@ class CipherB:
         }
 
         # Combine all values
-        result = {
+        return {
             "timestamp": latest.name if hasattr(latest, "name") else None,
             **core_signals,
             **wavetrend_values,
@@ -1909,7 +1898,6 @@ class CipherB:
             **legacy_values,
         }
 
-        return result
 
     def get_all_signals(self, df: pd.DataFrame) -> dict[str, Any]:
         """
@@ -2052,7 +2040,7 @@ class CipherB:
             return interpretation
 
         except Exception as e:
-            logger.error(f"Error interpreting Cipher B signals: {e!s}")
+            logger.exception(f"Error interpreting Cipher B signals: {e!s}")
             return "Error interpreting signals."
 
 
@@ -2136,7 +2124,7 @@ class VuManChuIndicators:
             try:
                 result = self.cipher_a.calculate(result)
             except Exception as e:
-                logger.error(f"Cipher A calculation failed: {e}")
+                logger.exception(f"Cipher A calculation failed: {e}")
                 # Add fallback values for Cipher A
                 result = self._add_cipher_a_fallbacks(result)
 
@@ -2145,7 +2133,7 @@ class VuManChuIndicators:
             try:
                 result = self.cipher_b.calculate(result)
             except Exception as e:
-                logger.error(f"Cipher B calculation failed: {e}")
+                logger.exception(f"Cipher B calculation failed: {e}")
                 # Add fallback values for Cipher B
                 result = self._add_cipher_b_fallbacks(result)
 
@@ -2165,7 +2153,7 @@ class VuManChuIndicators:
             logger.debug("VuManChu Cipher calculation completed successfully")
 
         except Exception as e:
-            logger.error(f"Error in comprehensive indicator calculation: {e!s}")
+            logger.exception(f"Error in comprehensive indicator calculation: {e!s}")
             # Add error indicators
             result["calculation_error"] = True
 
@@ -2368,7 +2356,7 @@ class VuManChuIndicators:
                 return result
 
             dominance_df = pd.DataFrame(dominance_data)
-            dominance_df.set_index("timestamp", inplace=True)
+            dominance_df = dominance_df.set_index("timestamp")
 
             # Apply VuManChu-style analysis to dominance data
             logger.debug("Applying Cipher A indicators to dominance candles")
@@ -2484,7 +2472,7 @@ class VuManChuIndicators:
                 )
 
         except Exception as e:
-            logger.error(f"Error in dominance analysis: {e!s}")
+            logger.exception(f"Error in dominance analysis: {e!s}")
             # Ensure basic dominance columns exist even on error
             default_dominance_cols = {
                 "dominance_cipher_a_signal": 0,
@@ -2870,7 +2858,7 @@ class VuManChuIndicators:
             return interpretation
 
         except Exception as e:
-            logger.error(f"Error generating combined interpretation: {e!s}")
+            logger.exception(f"Error generating combined interpretation: {e!s}")
             return "Error generating signal interpretation."
 
     def _add_cipher_a_fallbacks(self, df: pd.DataFrame) -> pd.DataFrame:

@@ -112,6 +112,8 @@ if TYPE_CHECKING:
     MarketDataProviderType = MarketDataProvider | BluefinMarketDataProvider | None
 else:
     MarketDataProviderType = MarketDataProvider | None
+import contextlib
+
 from .exchange.factory import ExchangeFactory
 from .indicators.vumanchu import VuManChuIndicators
 from .learning.experience_manager import ExperienceManager
@@ -218,7 +220,7 @@ class TradingEngine:
                 )
                 self.logger.info("Successfully initialized OmniSearch client")
             except Exception as e:
-                self.logger.error(f"Failed to initialize OmniSearch client: {e}")
+                self.logger.exception(f"Failed to initialize OmniSearch client: {e}")
                 self.logger.warning("Continuing without OmniSearch integration")
                 self.omnisearch_client = None
 
@@ -230,7 +232,7 @@ class TradingEngine:
                 self.websocket_publisher = WebSocketPublisher(self.settings)
                 self.logger.info("WebSocketPublisher initialized successfully")
             except Exception as e:
-                self.logger.error(f"Failed to initialize WebSocket publisher: {e}")
+                self.logger.exception(f"Failed to initialize WebSocket publisher: {e}")
                 self.logger.warning("Continuing without WebSocket publishing")
                 self.websocket_publisher = None
 
@@ -245,7 +247,7 @@ class TradingEngine:
                 self._register_command_callbacks()
                 self.logger.info("Successfully initialized command consumer")
             except Exception as e:
-                self.logger.error(f"Failed to initialize command consumer: {e}")
+                self.logger.exception(f"Failed to initialize command consumer: {e}")
                 self.logger.warning("Continuing without dashboard control")
                 self.command_consumer = None
 
@@ -275,7 +277,7 @@ class TradingEngine:
                 self.logger.info("Successfully initialized memory-enhanced agent")
                 self._memory_available = True
             except Exception as e:
-                self.logger.error(f"Failed to initialize MCP components: {e}")
+                self.logger.exception(f"Failed to initialize MCP components: {e}")
                 self.logger.warning("Falling back to standard LLM agent")
                 self.llm_agent = LLMAgent(
                     model_provider=self.settings.llm.provider,
@@ -430,7 +432,7 @@ class TradingEngine:
                 self.logger.info("Emergency stop: Closing all positions")
                 await self._close_all_positions()
         except Exception as e:
-            self.logger.error(f"Error closing positions during emergency stop: {e}")
+            self.logger.exception(f"Error closing positions during emergency stop: {e}")
 
         # Publish emergency stop status
         if self.websocket_publisher:
@@ -492,7 +494,7 @@ class TradingEngine:
                 )
 
         except Exception as e:
-            self.logger.error(f"Error updating risk limits: {e}")
+            self.logger.exception(f"Error updating risk limits: {e}")
             raise
 
     async def _handle_manual_trade(self, parameters: dict) -> bool:
@@ -532,7 +534,7 @@ class TradingEngine:
             return success
 
         except Exception as e:
-            self.logger.error(f"Error executing manual trade: {e}")
+            self.logger.exception(f"Error executing manual trade: {e}")
             return False
 
     async def _close_all_positions(self) -> None:
@@ -548,7 +550,7 @@ class TradingEngine:
                 )
                 await self._execute_trade_action(close_action)
         except Exception as e:
-            self.logger.error(f"Error closing positions: {e}")
+            self.logger.exception(f"Error closing positions: {e}")
 
     def _handle_performance_alert(self, alert) -> None:
         """
@@ -595,7 +597,7 @@ class TradingEngine:
                     self._background_tasks.append(alert_task)
 
         except Exception as e:
-            self.logger.error(f"Error handling performance alert: {e}")
+            self.logger.exception(f"Error handling performance alert: {e}")
 
     def _ensure_market_data_available(self) -> bool:
         """
@@ -817,7 +819,7 @@ class TradingEngine:
                 "\n[yellow]Received interrupt signal, shutting down...[/yellow]"
             )
         except Exception as e:
-            self.logger.error(f"Critical error in trading engine: {e}")
+            self.logger.exception(f"Critical error in trading engine: {e}")
             console.print(f"[red]Critical error: {e}[/red]")
             raise
         finally:
@@ -827,7 +829,7 @@ class TradingEngine:
                 try:
                     await self._shutdown()
                 except Exception as e:
-                    self.logger.error(f"Error in shutdown: {e}")
+                    self.logger.exception(f"Error in shutdown: {e}")
                     # Force cleanup of dominance provider session as last resort
                     if hasattr(self, "dominance_provider") and self.dominance_provider:
                         if hasattr(self.dominance_provider, "_session"):
@@ -2056,7 +2058,7 @@ class TradingEngine:
                     await asyncio.sleep(sleep_time)
 
             except Exception as e:
-                self.logger.error(f"Error in trading loop: {e}")
+                self.logger.exception(f"Error in trading loop: {e}")
                 console.print(f"[red]Loop error: {e}[/red]")
 
                 # Implement exponential backoff for error recovery
@@ -2096,7 +2098,7 @@ class TradingEngine:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error executing trade action: {e}")
+            self.logger.exception(f"Error executing trade action: {e}")
             return False
 
     async def _execute_trade(
@@ -2310,7 +2312,7 @@ class TradingEngine:
                 console.print("[red]✗ Trade execution failed[/red]")
 
         except Exception as e:
-            self.logger.error(f"Trade execution error: {e}")
+            self.logger.exception(f"Trade execution error: {e}")
             console.print(f"[red]Trade execution error: {e}[/red]")
 
     def _get_interval_seconds(self, interval: str) -> int:
@@ -2669,7 +2671,7 @@ class TradingEngine:
             return summary
 
         except Exception as e:
-            self.logger.error(f"Failed to get performance summary: {e}")
+            self.logger.exception(f"Failed to get performance summary: {e}")
             return {
                 "error": str(e),
                 "timestamp": datetime.now(UTC).isoformat(),
@@ -2812,10 +2814,8 @@ class TradingEngine:
                 # Cancel any tasks that didn't complete in time
                 for task in pending:
                     task.cancel()
-                    try:
+                    with contextlib.suppress(asyncio.CancelledError):
                         await task
-                    except asyncio.CancelledError:
-                        pass
 
             # Display final summary
             self._display_final_summary()
@@ -2823,7 +2823,7 @@ class TradingEngine:
             console.print("[green]✓ Shutdown complete[/green]")
 
         except Exception as e:
-            self.logger.error(f"Error during shutdown: {e}")
+            self.logger.exception(f"Error during shutdown: {e}")
             console.print(f"[red]Shutdown error: {e}[/red]")
         finally:
             # Final cleanup - ensure all async sessions are closed
@@ -2832,18 +2832,17 @@ class TradingEngine:
                 if (
                     hasattr(self.dominance_provider, "_session")
                     and self.dominance_provider._session
-                ):
-                    if not self.dominance_provider._session.closed:
-                        try:
-                            # Force close without await since we might be in cleanup
-                            if (
-                                hasattr(self.dominance_provider._session, "_connector")
-                                and self.dominance_provider._session._connector
-                                is not None
-                            ):
-                                self.dominance_provider._session._connector.close()
-                        except Exception:
-                            pass
+                ) and not self.dominance_provider._session.closed:
+                    try:
+                        # Force close without await since we might be in cleanup
+                        if (
+                            hasattr(self.dominance_provider._session, "_connector")
+                            and self.dominance_provider._session._connector
+                            is not None
+                        ):
+                            self.dominance_provider._session._connector.close()
+                    except Exception:
+                        pass
 
     async def _reconcile_positions(self) -> None:
         """
@@ -2937,7 +2936,7 @@ class TradingEngine:
             console.print("    [green]✓ No existing positions detected[/green]")
 
         except Exception as e:
-            self.logger.error(f"Failed to reconcile positions: {e}")
+            self.logger.exception(f"Failed to reconcile positions: {e}")
             console.print(f"    [red]✗ Position reconciliation failed: {e}[/red]")
             # Continue with FLAT position assumption on error
 
@@ -3156,7 +3155,7 @@ class TradingEngine:
             return trade_action
 
         except Exception as e:
-            self.logger.error(f"Error in Cipher B filtering: {e}")
+            self.logger.exception(f"Error in Cipher B filtering: {e}")
             # On error, allow the original trade action to prevent system failure
             return trade_action
 
@@ -3408,12 +3407,11 @@ def performance(days: int) -> None:
 @click.option("--confirm", is_flag=True, help="Confirm reset without prompt")
 def reset_paper(balance: float, confirm: bool) -> None:
     """Reset paper trading account."""
-    if not confirm:
-        if not click.confirm(
-            f"Are you sure you want to reset the paper trading account to ${balance:,.2f}?"
-        ):
-            console.print("Reset cancelled.")
-            return
+    if not confirm and not click.confirm(
+        f"Are you sure you want to reset the paper trading account to ${balance:,.2f}?"
+    ):
+        console.print("Reset cancelled.")
+        return
 
     try:
         paper_account = PaperTradingAccount()

@@ -246,15 +246,14 @@ class PositionManager:
             self._positions[symbol] = new_position
 
             # Update FIFO manager if enabled
-            if self.use_fifo:
-                if side in ["LONG", "SHORT"]:
-                    side_literal: Literal["LONG", "SHORT"] = side  # type: ignore
-                    self.fifo_manager.reconcile_position_from_exchange(
-                        symbol=symbol,
-                        side=side_literal,
-                        size=size,
-                        entry_price=entry_price,
-                    )
+            if self.use_fifo and side in ["LONG", "SHORT"]:
+                side_literal: Literal["LONG", "SHORT"] = side  # type: ignore
+                self.fifo_manager.reconcile_position_from_exchange(
+                    symbol=symbol,
+                    side=side_literal,
+                    size=size,
+                    entry_price=entry_price,
+                )
 
             # Persist state
             self._save_state()
@@ -294,7 +293,7 @@ class PositionManager:
 
             # Update position
             position.unrealized_pnl = unrealized_pnl
-            position.timestamp = datetime.utcnow()
+            position.timestamp = datetime.now(UTC)
 
             return unrealized_pnl
 
@@ -368,7 +367,7 @@ class PositionManager:
                 )
 
             # Calculate time in position
-            time_diff = datetime.utcnow() - position.timestamp
+            time_diff = datetime.now(UTC) - position.timestamp
             time_in_position_hours = time_diff.total_seconds() / 3600
 
             # Calculate exposure risk (position value as % of account)
@@ -408,7 +407,7 @@ class PositionManager:
             self.update_unrealized_pnl(symbol, current_price)
 
             # Check maximum hold time
-            time_diff = datetime.utcnow() - position.timestamp
+            time_diff = datetime.now(UTC) - position.timestamp
             max_hold_hours = settings.risk.max_position_hold_hours
 
             if time_diff.total_seconds() / 3600 > max_hold_hours:
@@ -441,7 +440,7 @@ class PositionManager:
             Dictionary with daily P&L metrics
         """
         if target_date is None:
-            target_date = datetime.utcnow()
+            target_date = datetime.now(UTC)
 
         target_date_start = target_date.replace(
             hour=0, minute=0, second=0, microsecond=0
@@ -498,7 +497,7 @@ class PositionManager:
                     [
                         p
                         for p in self._position_history
-                        if p.timestamp.date() == datetime.utcnow().date()
+                        if p.timestamp.date() == datetime.now(UTC).date()
                     ]
                 ),
             }
@@ -653,7 +652,7 @@ class PositionManager:
                 component="PositionManager",
                 operation="_save_state_async",
             )
-        except (json.JSONEncodeError, ValueError) as e:
+        except (json.JSONDecodeError, ValueError) as e:
             exception_handler.log_exception_with_context(
                 e,
                 {
@@ -728,7 +727,7 @@ class PositionManager:
                 component="PositionManager",
                 operation="_save_state_sync",
             )
-        except (json.JSONEncodeError, ValueError) as e:
+        except (json.JSONDecodeError, ValueError) as e:
             exception_handler.log_exception_with_context(
                 e,
                 {
@@ -972,7 +971,7 @@ class PositionManager:
 
         return performance
 
-    def generate_daily_report(self, date: str = None) -> str:
+    def generate_daily_report(self, date: str | None = None) -> str:
         """
         Generate a comprehensive daily trading report.
 
@@ -988,13 +987,13 @@ class PositionManager:
 
         return self.paper_account.generate_daily_report(date)
 
-    def _generate_basic_daily_report(self, date: str = None) -> str:
+    def _generate_basic_daily_report(self, date: str | None = None) -> str:
         """Generate basic daily report without paper trading."""
-        target_date = date or datetime.utcnow().date().isoformat()
+        target_date = date or datetime.now(UTC).date().isoformat()
         daily_pnl = self.get_daily_pnl()
         summary = self.get_position_summary()
 
-        report = f"""
+        return f"""
 🗓️  Daily Trading Report - {target_date}
 {'=' * 50}
 
@@ -1010,7 +1009,6 @@ class PositionManager:
    Daily P&L:        ${daily_pnl['total_pnl']:,.2f}
    Trades Count:     {daily_pnl['trades_count']}
 """
-        return report
 
     def get_weekly_performance_summary(self) -> dict[str, Any]:
         """Get weekly performance summary."""
@@ -1018,7 +1016,7 @@ class PositionManager:
             return self.paper_account.get_performance_summary(days=7)
 
         # Fallback for basic position tracking
-        week_ago = datetime.utcnow() - timedelta(days=7)
+        week_ago = datetime.now(UTC) - timedelta(days=7)
         weekly_positions = [
             pos for pos in self._position_history if pos.timestamp >= week_ago
         ]
@@ -1037,7 +1035,7 @@ class PositionManager:
             "active_positions": len(self._positions),
         }
 
-    def get_tax_lots_report(self, symbol: str) -> dict | None:
+    def get_tax_lots_report(self, symbol: str) -> dict[str, Any] | None:
         """
         Get FIFO tax lots report for a symbol.
 
@@ -1067,7 +1065,7 @@ class PositionManager:
             trade_history = self.paper_account.get_trade_history(days=days)
         else:
             # Fallback to basic position history
-            cutoff_date = datetime.utcnow() - timedelta(days=days)
+            cutoff_date = datetime.now(UTC) - timedelta(days=days)
             recent_positions = [
                 pos for pos in self._position_history if pos.timestamp >= cutoff_date
             ]
@@ -1109,7 +1107,7 @@ class PositionManager:
             days_to_keep: Number of days to keep in history
         """
         with self._lock:
-            cutoff_date = datetime.utcnow() - timedelta(days=days_to_keep)
+            cutoff_date = datetime.now(UTC) - timedelta(days=days_to_keep)
 
             original_count = len(self._position_history)
             self._position_history = [
@@ -1150,7 +1148,7 @@ class PositionManager:
             "valid": True,
             "errors": [],
             "warnings": [],
-            "timestamp": datetime.now(),
+            "timestamp": datetime.now(UTC),
         }
 
         try:
@@ -1200,14 +1198,14 @@ class PositionManager:
                 self._position_consistency_errors.append(validation_result.copy())
 
                 # Keep only recent errors
-                cutoff_time = datetime.now() - timedelta(hours=24)
+                cutoff_time = datetime.now(UTC) - timedelta(hours=24)
                 self._position_consistency_errors = [
                     err
                     for err in self._position_consistency_errors
                     if err["timestamp"] >= cutoff_time
                 ]
 
-            self._last_validation_check = datetime.now()
+            self._last_validation_check = datetime.now(UTC)
 
             return validation_result
 
@@ -1291,7 +1289,7 @@ class PositionManager:
             # Deduct for stale validation checks
             if self._last_validation_check:
                 hours_since_check = (
-                    datetime.now() - self._last_validation_check
+                    datetime.now(UTC) - self._last_validation_check
                 ).total_seconds() / 3600
                 if hours_since_check > 1:
                     score -= min(20, hours_since_check * 2)
@@ -1336,7 +1334,7 @@ class PositionManager:
             Comprehensive validation report
         """
         validation_report: dict[str, Any] = {
-            "timestamp": datetime.now(),
+            "timestamp": datetime.now(UTC),
             "positions_checked": 0,
             "positions_valid": 0,
             "total_errors": 0,

@@ -239,7 +239,7 @@ class APIFailureProtection:
                     )
                     await asyncio.sleep(delay)
                 else:
-                    logger.error(
+                    logger.exception(
                         f"API call failed after {self.max_retries} attempts: {e}"
                     )
 
@@ -667,7 +667,7 @@ class RiskManager:
             return True, modified_action, "Advanced risk checks passed"
 
         except Exception as e:
-            logger.error(f"Risk evaluation error: {e}")
+            logger.exception(f"Risk evaluation error: {e}")
             self.circuit_breaker.record_failure("risk_evaluation_error", str(e), "high")
             return False, self._get_hold_action("Risk evaluation error"), "Error"
 
@@ -698,7 +698,7 @@ class RiskManager:
             )
             leveraged_value = position_value * Decimal(str(self.leverage))
             required_margin = leveraged_value / Decimal(str(self.leverage))
-            total_required = required_margin + estimated_fees
+            required_margin + estimated_fees
 
             # Validate current balance can support this trade
             validation_result = self.balance_validator.validate_balance_range(
@@ -760,7 +760,7 @@ class RiskManager:
             return True, "Balance validation successful"
 
         except Exception as e:
-            logger.error(f"Error in balance validation for trade: {e}")
+            logger.exception(f"Error in balance validation for trade: {e}")
             return False, f"Balance validation error: {e}"
 
     def _calculate_current_margin_usage(self) -> Decimal:
@@ -1067,7 +1067,7 @@ class RiskManager:
             }
 
         except Exception as e:
-            logger.error(f"Position validation error: {e}")
+            logger.exception(f"Position validation error: {e}")
             return {
                 "valid": False,
                 "reason": f"Validation error: {e}",
@@ -1109,15 +1109,14 @@ class RiskManager:
             # Log risk metrics if any are concerning
             concerning_metrics = {}
             for k, v in metrics.items():
-                if isinstance(v, int | float):
-                    if (
-                        (k == "rapid_loss" and v >= 0.03)  # 3% rapid loss
-                        or (k == "api_failures" and v >= 5)
-                        or (k == "position_errors" and v >= 2)
-                        or (k == "margin_critical" and v >= 0.8)  # 80% margin usage
-                        or (k == "consecutive_losses" and v >= 3)
-                    ):
-                        concerning_metrics[k] = v
+                if isinstance(v, int | float) and (
+                    (k == "rapid_loss" and v >= 0.03)  # 3% rapid loss
+                    or (k == "api_failures" and v >= 5)
+                    or (k == "position_errors" and v >= 2)
+                    or (k == "margin_critical" and v >= 0.8)  # 80% margin usage
+                    or (k == "consecutive_losses" and v >= 3)
+                ):
+                    concerning_metrics[k] = v
 
             if concerning_metrics:
                 logger.warning(
@@ -1140,7 +1139,7 @@ class RiskManager:
             return metrics
 
         except Exception as e:
-            logger.error(f"Risk metrics monitoring error: {e}")
+            logger.exception(f"Risk metrics monitoring error: {e}")
             return {}
 
     def _count_consecutive_losses(self) -> int:
@@ -1171,8 +1170,7 @@ class RiskManager:
         if initial_balance <= 0:
             return 0.0
 
-        loss_pct = max(0, (initial_balance - current_balance) / initial_balance)
-        return loss_pct
+        return max(0, (initial_balance - current_balance) / initial_balance)
 
     def _calculate_margin_usage(self) -> float:
         """Calculate current margin usage percentage."""
@@ -1425,14 +1423,14 @@ class RiskManager:
                 )
 
         except BalanceValidationError as e:
-            logger.error(f"❌ Balance validation error during update: {e}")
+            logger.exception(f"❌ Balance validation error during update: {e}")
             # Still update the balance but log the issue
             self._account_balance = new_balance
             logger.warning(
                 f"⚠️ Balance updated despite validation error: {old_balance} -> {new_balance}"
             )
         except Exception as e:
-            logger.error(f"❌ Unexpected error during balance validation: {e}")
+            logger.exception(f"❌ Unexpected error during balance validation: {e}")
             # Still update the balance but log the issue
             self._account_balance = new_balance
             logger.warning(

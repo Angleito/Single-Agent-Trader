@@ -349,7 +349,6 @@ class TestBalanceValidation:
     def test_validation_counter_tracking(self, validator):
         """Test validation counter and failure tracking."""
         initial_count = validator.response_count
-        initial_failures = validator.validation_failures
 
         # Valid response
         validator.validate_balance_response({"balance": "1000.00"})

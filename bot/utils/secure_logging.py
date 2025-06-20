@@ -5,6 +5,7 @@ Secure logging utilities to prevent sensitive data exposure.
 import logging
 import re
 from re import Pattern
+from typing import Any
 
 
 class SensitiveDataFilter(logging.Filter):
@@ -327,12 +328,12 @@ class BalanceOperationFormatter(logging.Formatter):
 def get_balance_operation_context(
     correlation_id: str,
     operation: str,
-    balance_amount: str = None,
-    duration_ms: float = None,
-    success: bool = None,
-    error_category: str = None,
-    additional_context: dict = None,
-) -> dict:
+    balance_amount: str | None = None,
+    duration_ms: float | None = None,
+    success: bool | None = None,
+    error_category: str | None = None,
+    additional_context: dict | None = None,
+) -> dict[str, Any]:
     """
     Create standardized context for balance operation logging.
 
@@ -350,7 +351,7 @@ def get_balance_operation_context(
     """
     from datetime import datetime
 
-    context = {
+    context: dict[str, Any] = {
         "correlation_id": correlation_id,
         "operation": operation,
         "operation_type": "balance_operation",

@@ -22,9 +22,9 @@ class HealthCheckEndpoints:
         """Initialize health check endpoints."""
         self.settings = settings
         self.health_monitor = HealthMonitor(settings)
-        self.startup_time = datetime.now(UTC)
-        self._cache = {}
-        self._cache_ttl = 30  # seconds
+        self.startup_time: datetime = datetime.now(UTC)
+        self._cache: dict[str, dict[str, Any]] = {}
+        self._cache_ttl: int = 30  # seconds
 
     def get_health(self) -> dict[str, Any]:
         """Get basic health status (lightweight endpoint)."""
