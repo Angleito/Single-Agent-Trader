@@ -265,7 +265,7 @@ class SystemHealthMonitor:
                 component_health.last_error = "Health check returned unhealthy status"
 
                 logger.warning(
-                    "Component %s is unhealthy " "(consecutive failures: %s)",
+                    "Component %s is unhealthy (consecutive failures: %s)",
                     component_name,
                     component_health.consecutive_failures,
                 )
@@ -576,7 +576,7 @@ class ErrorRecoveryManager:
         return True
 
     async def _recover_data_integrity(
-        self, _error_context: dict[str, Any], component: str
+        self, error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from data integrity errors."""
         logger.info("Attempting data integrity recovery for component %s", component)
@@ -598,7 +598,7 @@ class ErrorRecoveryManager:
         return True
 
     async def _recover_position_state(
-        self, _error_context: dict[str, Any], component: str
+        self, error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from position state inconsistencies."""
         logger.info("Attempting position state recovery for component %s", component)
@@ -618,7 +618,7 @@ class ErrorRecoveryManager:
         return True
 
     async def _recover_rate_limit(
-        self, _error_context: dict[str, Any], component: str
+        self, error_context: dict[str, Any], component: str
     ) -> bool:
         """Recover from API rate limit errors."""
         logger.info("Attempting rate limit recovery for component %s", component)

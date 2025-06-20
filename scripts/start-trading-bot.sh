@@ -29,10 +29,19 @@ echo "========================="
 EXCHANGE_TYPE=${EXCHANGE_TYPE:-coinbase}
 COMPOSE_FILE=""
 
-# Set host user ID and group ID for proper volume permissions
-export HOST_UID=$(id -u)
-export HOST_GID=$(id -g)
-print_status "INFO" "Setting container user to $HOST_UID:$HOST_GID ($(whoami):$(id -gn))"
+# Check if volume permissions are set up correctly
+if [ ! -d "./logs" ] || [ ! -d "./data" ]; then
+    print_status "INFO" "Setting up volume permissions..."
+    if [ -x "./scripts/setup-permissions.sh" ]; then
+        if ./scripts/setup-permissions.sh 2>/dev/null; then
+            print_status "SUCCESS" "Volume permissions set up"
+        else
+            print_status "WARNING" "Permission setup may require sudo. Run: sudo ./scripts/setup-permissions.sh"
+        fi
+    else
+        print_status "WARNING" "Volume directories don't exist. Run: ./scripts/setup-permissions.sh"
+    fi
+fi
 
 case $EXCHANGE_TYPE in
     "coinbase")

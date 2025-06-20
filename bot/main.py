@@ -805,7 +805,7 @@ class TradingEngine:
         # List of paths to try in order of preference
         fallback_paths = [
             self.settings.system.log_file_path,  # Original path
-            Path("/tmp") / "bot.log",  # Container fallback
+            Path("/tmp") / "bot.log",  # Container fallback  # nosec B108
             Path.home() / "bot.log",  # User home fallback
             Path.cwd() / "bot.log",  # Current directory fallback
         ]

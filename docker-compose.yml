@@ -6,10 +6,10 @@
 # - Runtime platform specifications prevent architecture conflicts
 #
 # USER PERMISSIONS:
-# - Uses HOST_UID and HOST_GID environment variables for volume permissions
-# - Containers run as the host user to avoid permission issues with mounted volumes
-# - Default to 1000:1000 if environment variables are not set (Ubuntu VPS compatibility)
-# - Run: ./scripts/start-trading-bot.sh to automatically set correct user permissions
+# - Each service uses its built-in non-root user from Dockerfile (bluefin, botuser, memoryserver, mcp)
+# - Volume permissions are handled by the container users to avoid host user conflicts
+# - If volume permission errors occur, run: sudo chown -R 1000:1000 ./logs ./data
+# - Bluefin service specifically uses UID 1001, so: sudo chown -R 1001:1001 ./logs/bluefin
 #
 # DEPLOYMENT NOTES:
 # - Use: DOCKER_DEFAULT_PLATFORM=linux/amd64 docker-compose up
@@ -25,12 +25,16 @@ services:
       dockerfile: Dockerfile.bluefin
       platforms:
         - linux/amd64
+      args:
+        USER_ID: ${HOST_UID:-1000}
+        GROUP_ID: ${HOST_GID:-1000}
+        USERNAME: bluefin
     image: bluefin-sdk-service:latest
     platform: linux/amd64
     container_name: bluefin-service
     restart: unless-stopped
 
-    # SECURITY HARDENING - VPS-optimized Container Security
+    # SECURITY HARDENING - VPS-optimized Container Security (Balanced for functionality)
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"  # Run as host user for volume permissions
     read_only: true     # Read-only root filesystem
     security_opt:
@@ -40,11 +44,16 @@ services:
     cap_drop:
       - ALL             # Drop all capabilities
     cap_add:
-      - NET_BIND_SERVICE  # Only add required capabilities
+      - NET_BIND_SERVICE  # Network binding capability
       - SYS_ADMIN       # Required for Ubuntu container operations
+      - CHOWN           # File ownership operations
+      - FOWNER          # File ownership checks
+      - FSETID          # File permission setting
     tmpfs:
       - /tmp:noexec,nosuid,size=50m  # Secure temporary filesystem
       - /var/tmp:noexec,nosuid,size=25m  # Ubuntu additional temp space
+      - /app/data:exec,suid,size=100m    # Writable data directory in tmpfs
+      - /app/tmp:exec,suid,size=50m      # Writable temp directory in tmpfs
 
     environment:
       - PYTHONUNBUFFERED=1
@@ -57,11 +66,13 @@ services:
       - HOST=0.0.0.0
       - PORT=8080
       - LOG_LEVEL=info
+      - EXPECTED_USER=bluefin
+      - EXPECTED_GROUP=bluefin
 
     ports:
       - "127.0.0.1:8081:8080"  # SECURITY: Bind to localhost only for debugging
 
-    # Volume mounts for logs
+    # Volume mounts for persistent data
     volumes:
       - ./logs/bluefin:/app/logs
 
@@ -110,7 +121,7 @@ services:
     restart: unless-stopped
 
     # SECURITY HARDENING - VPS-optimized Container Security
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"  # Run as host user for volume permissions
+    # Note: Using built-in 'botuser' user from Dockerfile instead of host user override
     read_only: true     # Read-only root filesystem
     security_opt:
       - no-new-privileges:false  # Allow privilege operations for VPS compatibility
@@ -241,7 +252,7 @@ services:
     restart: unless-stopped
 
     # SECURITY HARDENING - VPS-optimized Container Security
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"  # Run as host user for volume permissions
+    # Note: Using built-in 'mcp' user from Dockerfile instead of host user override
     read_only: true     # Read-only root filesystem
     security_opt:
       - no-new-privileges:false  # Allow privilege operations for VPS compatibility
@@ -316,7 +327,7 @@ services:
     restart: unless-stopped
 
     # SECURITY HARDENING - VPS-optimized Container Security
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"  # Run as host user for volume permissions
+    # Note: Using built-in 'memoryserver' user from Dockerfile instead of host user override
     read_only: true     # Read-only root filesystem
     security_opt:
       - no-new-privileges:false  # Allow privilege operations for VPS compatibility
@@ -382,7 +393,7 @@ services:
       - "8000:8000"  # Allow external access for frontend connectivity
 
     # SECURITY HARDENING - Container Security
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"  # Run as host user for volume permissions
+    # Note: Using built-in user from Dockerfile instead of host user override
     read_only: true     # Read-only root filesystem
     security_opt:
       - no-new-privileges:true  # Prevent privilege escalation
@@ -517,7 +528,7 @@ services:
       - "3001:8080"  # Allow external access for frontend
 
     # SECURITY HARDENING - VPS-optimized Container Security
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"  # Run as host user for volume permissions
+    # Note: Using built-in user from Dockerfile instead of host user override
     read_only: true     # Read-only root filesystem
     security_opt:
       - no-new-privileges:false  # Allow privilege operations for VPS compatibility

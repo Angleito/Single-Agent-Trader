@@ -62,7 +62,7 @@ class DecimalEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, Decimal):
             return float(obj)
-        elif isinstance(obj, datetime):
+        if isinstance(obj, datetime):
             return obj.isoformat()
         return super().default(obj)
 
@@ -405,13 +405,13 @@ class LangChainCallbackHandler(BaseCallbackHandler):
     def on_chain_start(
         self,
         serialized: dict[str, Any],
-        inputs: dict[str, Any],
+        inputs: dict[str, Any],  # noqa: ARG002
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
-        tags: list[str] | None = None,
+        parent_run_id: UUID | None = None,  # noqa: ARG002
+        tags: list[str] | None = None,  # noqa: ARG002
         metadata: dict[str, Any] | None = None,
-        **kwargs: Any,
+        **kwargs: Any,  # noqa: ARG002
     ) -> Any:
         """Called when a chain starts running."""
         self._chain_starts[str(run_id)] = time.time()
@@ -422,11 +422,11 @@ class LangChainCallbackHandler(BaseCallbackHandler):
 
     def on_chain_end(
         self,
-        outputs: dict[str, Any],
+        outputs: dict[str, Any],  # noqa: ARG002
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
-        **kwargs: Any,
+        parent_run_id: UUID | None = None,  # noqa: ARG002
+        **kwargs: Any,  # noqa: ARG002
     ) -> Any:
         """Called when a chain finishes running."""
         run_id_str = str(run_id)

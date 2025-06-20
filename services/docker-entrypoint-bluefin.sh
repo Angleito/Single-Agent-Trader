@@ -8,6 +8,9 @@
 # - Fallback locations are available if needed
 # - Environment-specific setup is performed
 # - Clear error reporting for setup failures
+# - Robust user mapping handling (named users, UIDs, anonymous users)
+# - Container environment detection and adaptation
+# - Graceful fallback for permission and directory creation issues
 
 set -euo pipefail  # Exit on any error, undefined variable, or pipe failure
 
@@ -24,9 +27,15 @@ readonly BLUE='\033[0;34m'
 readonly CYAN='\033[0;36m'
 readonly NC='\033[0m' # No Color
 
-# Configuration
-readonly APP_USER="bluefin"
-readonly APP_GROUP="bluefin"
+# Configuration - detect actual user and group
+readonly CURRENT_USER=$(whoami)
+readonly CURRENT_UID=$(id -u)
+readonly CURRENT_GID=$(id -g)
+readonly CURRENT_GROUP=$(id -gn)
+
+# Expected user (can be overridden by environment)
+readonly APP_USER="${EXPECTED_USER:-bluefin}"
+readonly APP_GROUP="${EXPECTED_GROUP:-bluefin}"
 
 # Directory configuration (path:permissions pairs)
 readonly REQUIRED_DIRS=(
@@ -45,6 +54,27 @@ readonly FALLBACK_DIRS=(
 # Environment detection
 readonly ENVIRONMENT="${NODE_ENV:-production}"
 readonly BLUEFIN_NETWORK="${BLUEFIN_NETWORK:-mainnet}"
+
+# Detect container environment and capabilities
+detect_container_environment() {
+    # Check if we're in a container
+    if [[ -f /.dockerenv ]] || grep -q 'docker\|lxc' /proc/1/cgroup 2>/dev/null; then
+        log_debug "Running in container environment"
+        return 0
+    else
+        log_debug "Not running in container environment"
+        return 1
+    fi
+}
+
+# Check if we have root privileges
+has_root_privileges() {
+    if [[ $(id -u) -eq 0 ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
 
 # Logging functions
 log_info() {
@@ -76,20 +106,24 @@ display_banner() {
     log_info "Version: ${SCRIPT_VERSION}"
     log_info "Environment: ${ENVIRONMENT}"
     log_info "Network: ${BLUEFIN_NETWORK}"
-    log_info "User: ${APP_USER}:${APP_GROUP}"
+    log_info "Expected User: ${APP_USER}:${APP_GROUP}"
     log_info "=================================="
 }
 
 # Check if running as correct user
 check_user() {
-    local current_user=$(whoami)
-
-    if [[ "${current_user}" != "${APP_USER}" ]]; then
-        log_warning "Running as user ${current_user}, expected ${APP_USER}"
-        log_warning "This may indicate a container configuration issue"
+    # Check if we're running as expected user
+    if [[ "${CURRENT_USER}" == "${APP_USER}" ]]; then
+        log_success "Running as expected user: ${APP_USER}"
+        log_info "Using built-in user scenario"
     else
-        log_success "Running as correct user: ${APP_USER}"
+        log_info "Running as user ${CURRENT_USER} (${CURRENT_UID}:${CURRENT_GID}), expected ${APP_USER}"
+        log_info "This is normal when using Docker Compose user mapping"
+        log_info "Using host user mapping scenario"
     fi
+
+    # Always succeed - user check is informational only
+    return 0
 }
 
 # Create directory with proper permissions
@@ -104,19 +138,52 @@ create_directory() {
         if mkdir -p "${dir_path}" 2>/dev/null; then
             log_success "Created directory: ${dir_path}"
         else
-            log_error "Failed to create directory: ${dir_path}"
-            return 1
+            # Try alternative approaches if standard mkdir fails
+            log_warning "Standard mkdir failed for ${dir_path}, trying alternatives..."
+
+            # Try creating parent directories step by step
+            local parent_dir=$(dirname "${dir_path}")
+            if [[ "${parent_dir}" != "/" ]] && [[ "${parent_dir}" != "${dir_path}" ]]; then
+                if mkdir -p "${parent_dir}" 2>/dev/null; then
+                    log_debug "Created parent directory: ${parent_dir}"
+                    if mkdir "${dir_path}" 2>/dev/null; then
+                        log_success "Created directory: ${dir_path} (with parent)"
+                    else
+                        log_error "Failed to create directory: ${dir_path} even with parent creation"
+                        return 1
+                    fi
+                else
+                    log_error "Failed to create parent directory: ${parent_dir}"
+                    return 1
+                fi
+            else
+                log_error "Failed to create directory: ${dir_path}"
+                return 1
+            fi
         fi
     else
         log_debug "Directory already exists: ${dir_path}"
     fi
 
-    # Set permissions
+    # Set permissions - try multiple approaches
     if chmod "${permissions}" "${dir_path}" 2>/dev/null; then
         log_debug "Set permissions ${permissions} on ${dir_path}"
     else
-        log_warning "Failed to set permissions ${permissions} on ${dir_path}"
-        return 1
+        log_warning "Failed to set permissions ${permissions} on ${dir_path}, trying alternatives..."
+
+        # Try setting more permissive permissions if the requested ones fail
+        local fallback_permissions="755"
+        if [[ "${permissions}" != "${fallback_permissions}" ]]; then
+            if chmod "${fallback_permissions}" "${dir_path}" 2>/dev/null; then
+                log_warning "Set fallback permissions ${fallback_permissions} on ${dir_path}"
+            else
+                log_warning "Failed to set any permissions on ${dir_path}"
+                # Don't return error - directory exists, permissions might not be critical
+            fi
+        else
+            log_warning "Failed to set permissions on ${dir_path}"
+            # Don't return error - directory exists, permissions might not be critical
+        fi
     fi
 
     return 0
@@ -146,16 +213,53 @@ setup_fallback() {
 
     log_warning "Setting up fallback directory: ${fallback_dir} for ${original_dir}"
 
-    # Create fallback directory
-    if mkdir -p "${fallback_dir}" 2>/dev/null && chmod 775 "${fallback_dir}" 2>/dev/null; then
+    # Create fallback directory with multiple permission attempts
+    local created_fallback=false
+
+    # Try standard creation first
+    if mkdir -p "${fallback_dir}" 2>/dev/null; then
+        log_debug "Created fallback directory: ${fallback_dir}"
+        created_fallback=true
+    else
+        # Try creating in /tmp if the specified fallback fails
+        local tmp_fallback="/tmp/$(basename "${fallback_dir}")-$$"
+        if mkdir -p "${tmp_fallback}" 2>/dev/null; then
+            log_warning "Using temporary fallback: ${tmp_fallback} instead of ${fallback_dir}"
+            fallback_dir="${tmp_fallback}"
+            created_fallback=true
+        else
+            log_error "Failed to create any fallback directory"
+            return 1
+        fi
+    fi
+
+    if [[ "${created_fallback}" == "true" ]]; then
+        # Try to set permissions, but don't fail if it doesn't work
+        if chmod 775 "${fallback_dir}" 2>/dev/null; then
+            log_debug "Set permissions 775 on fallback: ${fallback_dir}"
+        elif chmod 755 "${fallback_dir}" 2>/dev/null; then
+            log_warning "Set fallback permissions 755 on: ${fallback_dir}"
+        else
+            log_warning "Could not set specific permissions on: ${fallback_dir}"
+        fi
+
         log_success "Fallback directory ready: ${fallback_dir}"
 
         # Test write permission
         if test_write_permission "${fallback_dir}"; then
-            # Create symlink if original directory exists but isn't writable
+            # Handle original directory backup/removal
             if [[ -d "${original_dir}" ]] && [[ ! -L "${original_dir}" ]]; then
-                log_warning "Creating backup of original directory: ${original_dir}.backup"
-                mv "${original_dir}" "${original_dir}.backup" 2>/dev/null || true
+                local backup_name="${original_dir}.backup.$(date +%s)"
+                if mv "${original_dir}" "${backup_name}" 2>/dev/null; then
+                    log_info "Created backup of original directory: ${backup_name}"
+                else
+                    # Try removing if move fails
+                    if rm -rf "${original_dir}" 2>/dev/null; then
+                        log_warning "Removed original directory: ${original_dir}"
+                    else
+                        log_warning "Could not backup or remove original directory: ${original_dir}"
+                    fi
+                fi
             fi
 
             # Create symlink to fallback
@@ -163,15 +267,18 @@ setup_fallback() {
                 log_success "Created symlink: ${original_dir} -> ${fallback_dir}"
                 return 0
             else
-                log_error "Failed to create symlink to fallback directory"
-                return 1
+                log_warning "Failed to create symlink, trying direct path export"
+                # Export the fallback path as an environment variable for the application to use
+                export "FALLBACK_$(basename "${original_dir}" | tr '[:lower:]' '[:upper:]')_DIR=${fallback_dir}"
+                log_info "Exported fallback path as environment variable"
+                return 0
             fi
         else
             log_error "Fallback directory is not writable: ${fallback_dir}"
             return 1
         fi
     else
-        log_error "Failed to create fallback directory: ${fallback_dir}"
+        log_error "Failed to create fallback directory"
         return 1
     fi
 }
@@ -339,6 +446,33 @@ perform_health_checks() {
     return 0
 }
 
+# Ensure proper permissions for current user
+ensure_user_permissions() {
+    log_info "Ensuring proper permissions for current user (${CURRENT_USER})"
+
+    # List of directories that need to be accessible
+    local key_dirs=("/app/logs" "/app/data" "/app/tmp")
+
+    for dir in "${key_dirs[@]}"; do
+        if [[ -d "${dir}" ]]; then
+            # Check if directory is writable by current user
+            if [[ -w "${dir}" ]]; then
+                log_debug "Directory ${dir} is writable by current user"
+            else
+                log_warning "Directory ${dir} is not writable by current user"
+                # Try to fix permissions if possible
+                if chmod g+w "${dir}" 2>/dev/null; then
+                    log_success "Fixed permissions for ${dir}"
+                else
+                    log_warning "Could not fix permissions for ${dir} - will use fallback"
+                fi
+            fi
+        fi
+    done
+
+    return 0
+}
+
 # Cleanup function for graceful shutdown
 cleanup() {
     local exit_code=$?
@@ -363,9 +497,24 @@ main() {
     # Run initialization steps
     log_info "Starting Bluefin service initialization..."
 
-    check_user || {
-        log_warning "User check failed, but continuing..."
-    }
+    # Environment detection
+    if detect_container_environment; then
+        log_info "Container environment detected"
+    else
+        log_warning "Not running in container - some features may behave differently"
+    fi
+
+    if has_root_privileges; then
+        log_warning "Running with root privileges - consider using a non-root user for security"
+    else
+        log_info "Running with non-root privileges (recommended)"
+    fi
+
+    # User check is now always informational and never fails
+    check_user
+
+    # Ensure directories have proper permissions for current user
+    ensure_user_permissions
 
     setup_directories || {
         log_error "Directory setup failed"

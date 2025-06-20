@@ -47,8 +47,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /tmp/* /var/tmp/*
 
-# Create non-root user for security
-RUN groupadd -r bluefin && useradd -r -g bluefin bluefin
+# Create flexible user setup for both named users and UID/GID mapping
+# Support both built-in bluefin user and host user mapping via docker-compose
+ARG USER_ID=1001
+ARG GROUP_ID=1001
+ARG USERNAME=bluefin
+
+# Create group and user with configurable IDs
+RUN groupadd -g ${GROUP_ID} ${USERNAME} && \
+    useradd -r -u ${USER_ID} -g ${USERNAME} -m -s /bin/bash ${USERNAME}
 
 # Set working directory
 WORKDIR /app
@@ -85,13 +92,21 @@ COPY scripts/validate_env.py /app/
 
 # Copy Docker entrypoint script
 COPY docker-entrypoint-bluefin.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh && chown bluefin:bluefin /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
 
-# Create necessary directories with Ubuntu-optimized permissions
+# Create necessary directories with flexible permissions that work with both approaches
+# Approach 1: Built-in user (default when no user mapping)
+# Approach 2: Host user mapping (via docker-compose user directive)
 RUN mkdir -p /app/logs /app/data /app/tmp && \
     chmod 755 /app && \
     chmod 775 /app/logs /app/data /app/tmp && \
-    chown -R bluefin:bluefin /app
+    # Set ownership to the configured user for default case
+    chown -R ${USERNAME}:${USERNAME} /app && \
+    # Also ensure group write permissions for flexibility
+    chmod g+w /app /app/logs /app/data /app/tmp && \
+    # Create fallback tmp directories that any user can write to
+    mkdir -p /tmp/bluefin-logs /tmp/bluefin-data /tmp/bluefin-tmp && \
+    chmod 777 /tmp/bluefin-logs /tmp/bluefin-data /tmp/bluefin-tmp
 
 # Expose port
 EXPOSE 8080
@@ -128,7 +143,7 @@ fi
 echo "Health check passed"
 EOF
 
-RUN chmod +x /app/healthcheck.sh && chown bluefin:bluefin /app/healthcheck.sh
+RUN chmod +x /app/healthcheck.sh && chown ${USERNAME}:${USERNAME} /app/healthcheck.sh
 
 # Ubuntu-optimized extended health check endpoint
 COPY <<EOF /app/ubuntu-healthcheck.sh
@@ -172,7 +187,7 @@ fi
 echo "Ubuntu health check passed"
 EOF
 
-RUN chmod +x /app/ubuntu-healthcheck.sh && chown bluefin:bluefin /app/ubuntu-healthcheck.sh
+RUN chmod +x /app/ubuntu-healthcheck.sh && chown ${USERNAME}:${USERNAME} /app/ubuntu-healthcheck.sh
 
 # Ubuntu-optimized environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -190,8 +205,8 @@ ENV PYTHONUNBUFFERED=1 \
     RETRY_BACKOFF=2 \
     PROXY_ENABLED=false
 
-# Switch to non-root user
-USER bluefin
+# Switch to non-root user - use the configured username
+USER $USERNAME
 
 # Ubuntu-optimized health check configuration
 HEALTHCHECK --interval=30s --timeout=15s --start-period=45s --retries=5 \

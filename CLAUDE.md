@@ -88,8 +88,23 @@ poetry run pytest --cov=bot
 poetry run pytest tests/unit/test_indicators.py
 ```
 
+### Docker Permissions Setup (IMPORTANT - Run First!)
+```bash
+# Fix Docker volume permission issues (run once)
+./setup-docker-permissions.sh
+
+# This script:
+# - Creates required directories (logs/, data/, etc.)
+# - Sets proper permissions for your OS
+# - Updates .env with correct UID/GID settings
+# - Prevents "permission denied" errors
+```
+
 ### Docker Operations (Simplified for macOS)
 ```bash
+# FIRST TIME: Set up permissions (prevents permission errors)
+./setup-docker-permissions.sh
+
 # Quick start (recommended)
 docker-compose up
 
@@ -109,7 +124,7 @@ docker-compose down
 ### Core Components
 - **Data Layer** (`bot/data/market.py`): Real-time market data from exchange WebSocket/REST
 - **Indicators** (`bot/indicators/vumanchu.py`): VuManChu Cipher A & B indicators
-- **LLM Agent** (`bot/strategy/llm_agent.py`): LangChain-powered trading decisions  
+- **LLM Agent** (`bot/strategy/llm_agent.py`): LangChain-powered trading decisions
 - **Memory-Enhanced Agent** (`bot/strategy/memory_enhanced_agent.py`): LLM with learning from past trades
 - **MCP Memory Server** (`bot/mcp/memory_server.py`): Persistent memory storage for experiences
 - **Experience Manager** (`bot/learning/experience_manager.py`): Trade lifecycle tracking
@@ -211,7 +226,7 @@ Required environment variables:
 
 ### Coinbase Configuration
 - `EXCHANGE__CDP_API_KEY_NAME` - Coinbase CDP API key name
-- `EXCHANGE__CDP_PRIVATE_KEY` - Coinbase CDP private key (PEM format)  
+- `EXCHANGE__CDP_PRIVATE_KEY` - Coinbase CDP private key (PEM format)
 
 ### Bluefin Configuration
 - `EXCHANGE__BLUEFIN_PRIVATE_KEY` - Sui wallet private key (hex format)
@@ -230,7 +245,7 @@ All trading modes use live market data:
 
 The trading system will:
 - ✅ Use real-time market prices from your configured exchange for all operations
-- ✅ Fetch historical data from live exchange APIs  
+- ✅ Fetch historical data from live exchange APIs
 - ✅ Process real WebSocket feeds for live price updates
 - ✅ Calculate accurate fees, slippage, and margin requirements
 - ✅ Provide realistic backtesting and paper trading simulation

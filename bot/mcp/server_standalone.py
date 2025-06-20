@@ -65,7 +65,7 @@ class MemoryStore:
         """List all memories."""
         return list(self.memories.values())
 
-    def query(self, criteria: dict[str, Any]) -> list[dict[str, Any]]:
+    def query(self, _criteria: dict[str, Any]) -> list[dict[str, Any]]:
         """Query memories based on criteria."""
         # Simple implementation - return all for now
         # In production, implement similarity search

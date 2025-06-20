@@ -11,12 +11,11 @@ to analyze market state and generate trading actions.
 import logging
 import time
 from pathlib import Path
-from typing import Any, Literal, Type, cast
+from typing import Any, Literal, cast
 
 try:
     from langchain_core.output_parsers import JsonOutputParser
     from langchain_core.prompts import PromptTemplate
-    from langchain_core.runnables import RunnablePassthrough
     from langchain_openai import ChatOpenAI
 except ImportError:
     # Graceful degradation if LangChain not installed
@@ -635,7 +634,7 @@ FINANCIAL INTELLIGENCE INTEGRATION:
                 time_str = (
                     candle.timestamp.strftime("%H:%M")
                     if hasattr(candle, "timestamp")
-                    else f"T-{len(recent_candles)-i}"
+                    else f"T-{len(recent_candles) - i}"
                 )
 
                 # Create candle summary
