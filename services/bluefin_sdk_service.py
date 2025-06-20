@@ -1527,10 +1527,15 @@ class BluefinSDKService:
                     )
 
             # Check for common patterns that indicate invalid keys (only for hex keys)
-            if len(words) not in [12, 24]:  # Only validate hex patterns if not a mnemonic
+            if len(words) not in [
+                12,
+                24,
+            ]:  # Only validate hex patterns if not a mnemonic
                 if self.private_key.count("0") == len(self.private_key):
                     key_validation_errors.append("All zeros - invalid private key")
-                elif self.private_key.count("f") == len(self.private_key.replace("F", "f")):
+                elif self.private_key.count("f") == len(
+                    self.private_key.replace("F", "f")
+                ):
                     key_validation_errors.append(
                         "All 0xf values - likely invalid private key"
                     )

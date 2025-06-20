@@ -10,7 +10,7 @@ import decimal
 import logging
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Literal, cast
+from typing import Any, Literal, Optional, cast
 
 from ..config import settings
 from ..trading_types import (
