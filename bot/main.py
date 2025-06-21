@@ -2324,40 +2324,96 @@ class TradingEngine:
 
     async def _main_trading_loop(self) -> None:
         """
-        Main trading loop that runs continuously.
+        Main trading loop that runs continuously with enhanced error handling.
 
         Processes market data, calculates indicators, gets LLM decisions,
         validates trades, applies risk management, and executes orders.
+
+        Features:
+        - Comprehensive error recovery
+        - Component health monitoring
+        - Circuit breaker integration
+        - Graceful degradation
         """
-        self.logger.info("Starting main trading loop...")
+        self.logger.info("Starting enhanced main trading loop...")
         self._running = True
 
         loop_count = 0
         last_status_log = datetime.now(UTC)
+        consecutive_errors = 0
+        max_consecutive_errors = 10
+        component_health_cache = {}
+        last_health_check = datetime.now(UTC)
+        health_check_interval = 60  # seconds
+
+        # Enhanced error tracking
+        error_categories = {
+            "market_data": 0,
+            "indicators": 0,
+            "llm_decision": 0,
+            "trade_execution": 0,
+            "risk_management": 0,
+            "connectivity": 0,
+            "unknown": 0,
+        }
 
         # Initialize loop with performance metrics
-        await self._initialize_trading_loop()
+        try:
+            await self._initialize_trading_loop()
+        except Exception as e:
+            self.logger.error("Failed to initialize trading loop: %s", e)
+            return
 
-        # Setup trading environment
-        loop_context = await self._setup_trading_environment()
+        # Setup trading environment with validation
+        try:
+            loop_context = await self._setup_trading_environment()
+            self.logger.info(
+                "✅ Trading loop initialized successfully with enhanced error handling"
+            )
+        except Exception as e:
+            self.logger.error("Failed to setup trading environment: %s", e)
+            return
 
         while self._running and not self._shutdown_requested:
+            loop_start = datetime.now(UTC)
+            loop_count += 1
+            iteration_success = False
+
             try:
-                loop_start = datetime.now(UTC)
-                loop_count += 1
+                # Pre-iteration health checks
+                if (
+                    datetime.now(UTC) - last_health_check
+                ).total_seconds() > health_check_interval:
+                    component_health_cache = await self._perform_basic_health_check()
+                    last_health_check = datetime.now(UTC)
+
+                # Check circuit breaker state before processing
+                if not self._check_circuit_breaker_basic():
+                    await asyncio.sleep(5)
+                    continue
 
                 # Process market data and get trading decision
                 trade_result = await self._process_trading_iteration(
                     loop_context, loop_count, loop_start
                 )
 
-                if not trade_result:
-                    continue
+                if trade_result:
+                    iteration_success = True
+                    consecutive_errors = 0  # Reset on successful iteration
 
-                # Handle periodic maintenance tasks
-                await self._handle_periodic_tasks(
-                    loop_count, last_status_log, loop_context
-                )
+                    # Handle periodic maintenance tasks
+                    try:
+                        await self._handle_periodic_tasks(
+                            loop_count, last_status_log, loop_context
+                        )
+                    except Exception as maintenance_error:
+                        self.logger.warning(
+                            "Periodic tasks failed: %s", maintenance_error
+                        )
+                        # Don't let maintenance failures stop the main loop
+                else:
+                    # Iteration was skipped but not an error
+                    pass
 
                 # Calculate and apply sleep timing
                 await self._handle_loop_timing(
@@ -2365,10 +2421,43 @@ class TradingEngine:
                 )
 
             except Exception as e:
-                await self._handle_loop_error(e, loop_count, loop_context)
+                consecutive_errors += 1
+                iteration_success = False
+
+                # Categorize and handle error
+                error_category = self._categorize_error_basic(e)
+                error_categories[error_category] += 1
+
+                await self._handle_loop_error_enhanced(
+                    e, loop_count, loop_context, error_category, consecutive_errors
+                )
+
+                # Check if we've hit consecutive error threshold
+                if consecutive_errors >= max_consecutive_errors:
+                    self.logger.error(
+                        "🚨 Maximum consecutive errors reached (%d). Entering emergency pause.",
+                        max_consecutive_errors,
+                    )
+                    await self._handle_emergency_situation(error_categories)
+                    # Reset counter after emergency handling
+                    consecutive_errors = 0
+
                 continue
 
-        self.logger.info("Trading loop stopped")
+            # Log periodic health summary
+            if loop_count % 100 == 0:
+                total_errors = sum(error_categories.values())
+                error_rate = (total_errors / loop_count) * 100 if loop_count > 0 else 0
+                self.logger.info(
+                    "📊 Trading Loop Health (Iteration %d): %.2f%% error rate (%d total errors)",
+                    loop_count,
+                    error_rate,
+                    total_errors,
+                )
+
+        self.logger.info(
+            "🛑 Trading loop stopped - Final error summary: %s", error_categories
+        )
 
     async def _setup_trading_environment(self) -> dict:
         """Setup trading environment and return context."""
@@ -3188,6 +3277,217 @@ class TradingEngine:
 
         self.logger.info("Waiting %.1fs before retry...", error_sleep)
         await asyncio.sleep(error_sleep)
+
+    def _categorize_error_basic(self, error: Exception) -> str:
+        """Categorize error for targeted recovery strategies."""
+        error_str = str(error).lower()
+
+        if "market" in error_str or "data" in error_str or "websocket" in error_str:
+            return "market_data"
+        if (
+            "indicator" in error_str
+            or "calculation" in error_str
+            or "cipher" in error_str
+        ):
+            return "indicators"
+        if (
+            "llm" in error_str
+            or "openai" in error_str
+            or "agent" in error_str
+            or "decision" in error_str
+        ):
+            return "llm_decision"
+        if "trade" in error_str or "order" in error_str or "execution" in error_str:
+            return "trade_execution"
+        if "risk" in error_str or "position" in error_str or "balance" in error_str:
+            return "risk_management"
+        if (
+            "connection" in error_str
+            or "timeout" in error_str
+            or "network" in error_str
+            or "http" in error_str
+        ):
+            return "connectivity"
+        return "unknown"
+
+    async def _handle_loop_error_enhanced(
+        self,
+        error: Exception,
+        loop_count: int,
+        loop_context: dict,
+        error_category: str,
+        consecutive_errors: int,
+    ):
+        """Enhanced loop error handling with categorization and recovery strategies."""
+        self.logger.exception(f"Error in trading loop (category: {error_category})")
+        from rich.console import Console
+
+        console = Console()
+        console.print(f"[red]Loop error ({error_category}): {error}[/red]")
+
+        # Record failure in circuit breaker if it's a critical error
+        if self._is_critical_error_basic(error, error_category):
+            if (
+                hasattr(self, "risk_manager")
+                and self.risk_manager
+                and hasattr(self.risk_manager, "circuit_breaker")
+            ):
+                self.risk_manager.circuit_breaker.record_failure(
+                    failure_type=error_category,
+                    error_message=str(error),
+                    severity="high" if consecutive_errors > 5 else "medium",
+                )
+
+        # Category-specific recovery delay
+        recovery_delay = await self._get_recovery_delay_basic(
+            error_category, consecutive_errors, loop_context
+        )
+
+        self.logger.info(
+            "Waiting %.1fs before retry (consecutive errors: %d)...",
+            recovery_delay,
+            consecutive_errors,
+        )
+        await asyncio.sleep(recovery_delay)
+
+    def _is_critical_error_basic(self, error: Exception, error_category: str) -> bool:
+        """Determine if an error is critical and should trigger circuit breaker."""
+        critical_categories = {"trade_execution", "risk_management", "connectivity"}
+        critical_exceptions = {"RuntimeError", "ConnectionError", "TimeoutError"}
+
+        return (
+            error_category in critical_categories
+            or type(error).__name__ in critical_exceptions
+            or "critical" in str(error).lower()
+        )
+
+    async def _get_recovery_delay_basic(
+        self, error_category: str, consecutive_errors: int, loop_context: dict
+    ) -> float:
+        """Get recovery delay based on error category and context."""
+        base_delays = {
+            "market_data": 2.0,
+            "indicators": 1.0,
+            "llm_decision": 3.0,
+            "trade_execution": 5.0,
+            "risk_management": 10.0,
+            "connectivity": 15.0,
+            "unknown": 5.0,
+        }
+
+        base_delay = base_delays.get(error_category, 5.0)
+
+        # Exponential backoff for consecutive errors
+        backoff_multiplier = min(2 ** (consecutive_errors - 1), 8)
+
+        # Adjust for high frequency trading
+        if loop_context.get("is_high_frequency", False):
+            base_delay = min(base_delay, 5.0)  # Cap at 5s for high frequency
+
+        return min(base_delay * backoff_multiplier, 60.0)  # Cap at 1 minute
+
+    async def _perform_basic_health_check(self) -> dict:
+        """Perform basic component health check."""
+        health_status = {
+            "exchange_client": False,
+            "market_data": False,
+            "llm_agent": False,
+            "risk_manager": False,
+            "circuit_breaker": False,
+            "timestamp": datetime.now(UTC),
+        }
+
+        try:
+            # Check exchange client
+            if self.exchange_client:
+                health_status["exchange_client"] = True
+
+            # Check market data
+            if self.market_data:
+                try:
+                    current_price = await self.market_data.get_current_price()
+                    health_status["market_data"] = current_price is not None
+                except Exception:
+                    pass
+
+            # Check LLM agent
+            if self.llm_agent:
+                health_status["llm_agent"] = hasattr(self.llm_agent, "analyze_market")
+
+            # Check risk manager and circuit breaker
+            if self.risk_manager:
+                health_status["risk_manager"] = True
+
+                if hasattr(self.risk_manager, "circuit_breaker"):
+                    try:
+                        cb_status = self.risk_manager.circuit_breaker.get_status()
+                        health_status["circuit_breaker"] = cb_status["state"] != "OPEN"
+                    except Exception:
+                        pass
+
+        except Exception as e:
+            self.logger.warning("Health check failed: %s", e)
+
+        return health_status
+
+    def _check_circuit_breaker_basic(self) -> bool:
+        """Check if circuit breaker allows trading."""
+        if not self.risk_manager or not hasattr(self.risk_manager, "circuit_breaker"):
+            return True  # No circuit breaker, allow trading
+
+        try:
+            can_trade = self.risk_manager.circuit_breaker.can_execute_trade()
+
+            if not can_trade:
+                cb_status = self.risk_manager.circuit_breaker.get_status()
+                self.logger.warning(
+                    "🚫 Circuit breaker is OPEN - trading suspended. State: %s, Failures: %d",
+                    cb_status["state"],
+                    cb_status["failure_count"],
+                )
+
+            return can_trade
+        except Exception as e:
+            self.logger.warning("Circuit breaker check failed: %s", e)
+            return True  # Fail open to allow trading
+
+    async def _handle_emergency_situation(self, error_categories: dict):
+        """Handle emergency situation when too many consecutive errors occur."""
+        self.logger.error("🚨 ENTERING EMERGENCY MODE")
+
+        from rich.console import Console
+
+        console = Console()
+        console.print("[red bold]🚨 EMERGENCY MODE ACTIVATED[/red bold]")
+        console.print("Error breakdown:")
+        for category, count in error_categories.items():
+            if count > 0:
+                console.print(f"  • {category}: {count} errors")
+
+        # Close any open positions if possible
+        try:
+            if (
+                hasattr(self, "current_position")
+                and self.current_position.side != "FLAT"
+            ):
+                console.print("[yellow]Attempting to close open positions...[/yellow]")
+                await self._emergency_close_positions()
+        except Exception as e:
+            self.logger.error("Emergency position closure failed: %s", e)
+
+        # Extended pause before attempting to continue
+        emergency_pause = min(
+            300, 30 * sum(error_categories.values())
+        )  # Up to 5 minutes
+        console.print(f"[yellow]Emergency pause: {emergency_pause} seconds[/yellow]")
+
+        await asyncio.sleep(emergency_pause)
+
+        # Reset error categories for fresh start
+        for category in error_categories:
+            error_categories[category] = 0
+
+        console.print("[green]Attempting to resume normal operation...[/green]")
 
     async def _execute_trade_action(self, trade_action: TradeAction) -> bool:
         """

@@ -19,6 +19,8 @@ import websockets
 from bot.config import settings
 from bot.trading_types import MarketData
 from bot.utils.price_conversion import (
+    _sanitize_price_input,
+    _validate_price_before_conversion,
     convert_candle_data,
     convert_from_18_decimal,
     convert_ticker_price,
@@ -348,27 +350,84 @@ class BluefinMarketDataProvider:
                 raise BluefinServiceConnectionError(error_msg) from e
 
     async def _fetch_initial_historical_data(self) -> None:
-        """Fetch initial historical data with fallback strategies."""
-        try:
-            logger.info(
-                "🔄 Fetching historical data BEFORE WebSocket connection to ensure data sufficiency"
-            )
+        """Fetch initial historical data with enhanced resilience and validation."""
+        max_retries = 3
+        retry_count = 0
+        historical_data = None
 
-            historical_data = await self._try_multiple_time_ranges()
+        while retry_count < max_retries and not historical_data:
+            try:
+                logger.info(
+                    "🔄 Fetching historical data BEFORE WebSocket connection to ensure data sufficiency (attempt %d/%d)",
+                    retry_count + 1,
+                    max_retries,
+                )
 
-            # If still insufficient data, generate fallback data
-            if not historical_data or len(historical_data) < 100:
-                logger.warning(
-                    "⚠️ Historical data insufficient (%s candles). Generating synthetic data for indicator initialization.",
-                    len(historical_data) if historical_data else 0,
+                # Validate API connectivity before attempting data fetch
+                if not await self._validate_api_connectivity():
+                    logger.warning(
+                        "⚠️ API connectivity validation failed on attempt %d",
+                        retry_count + 1,
+                    )
+                    retry_count += 1
+                    await asyncio.sleep(min(2**retry_count, 10))  # Exponential backoff
+                    continue
+
+                historical_data = await self._try_multiple_time_ranges()
+
+                # Enhanced data validation after fetch
+                if historical_data and len(historical_data) > 0:
+                    validated_data = await self._validate_historical_data_integrity(
+                        historical_data
+                    )
+                    if validated_data:
+                        historical_data = validated_data
+                        logger.info(
+                            "✅ Historical data validated and ready (%d candles)",
+                            len(historical_data),
+                        )
+                        break
+                    logger.warning(
+                        "⚠️ Historical data failed integrity validation on attempt %d",
+                        retry_count + 1,
+                    )
+                    historical_data = None
+
+                # If still insufficient data, try next attempt or generate fallback
+                if not historical_data or len(historical_data) < 100:
+                    if retry_count < max_retries - 1:
+                        logger.warning(
+                            "⚠️ Historical data insufficient (%s candles) on attempt %d. Retrying...",
+                            len(historical_data) if historical_data else 0,
+                            retry_count + 1,
+                        )
+                        retry_count += 1
+                        await asyncio.sleep(min(2**retry_count, 10))
+                        continue
+                    logger.warning(
+                        "⚠️ Historical data insufficient (%s candles) after %d attempts. Generating synthetic data for indicator initialization.",
+                        len(historical_data) if historical_data else 0,
+                        max_retries,
+                    )
+                    historical_data = await self._generate_fallback_historical_data()
+                    break
+
+            except Exception as e:
+                logger.exception(
+                    "❌ Error in historical data fetching attempt %d: %s",
+                    retry_count + 1,
+                    e,
+                )
+                retry_count += 1
+                if retry_count < max_retries:
+                    await asyncio.sleep(min(2**retry_count, 10))
+                    continue
+                # Generate fallback data to ensure bot can start
+                logger.error(
+                    "❌ All historical data fetch attempts failed. Generating fallback data to ensure bot startup"
                 )
                 historical_data = await self._generate_fallback_historical_data()
-
-        except Exception:
-            logger.exception("❌ Critical error in historical data fetching")
-            # Generate fallback data to ensure bot can start
-            logger.info("🎭 Generating fallback data to ensure bot startup")
-            historical_data = await self._generate_fallback_historical_data()
+                break
 
     async def _try_multiple_time_ranges(self) -> list[MarketData] | None:
         """Try multiple time ranges to get sufficient historical data."""
@@ -1300,12 +1359,39 @@ class BluefinMarketDataProvider:
             async with BluefinServiceClient(service_url, api_key) as service_client:
                 ticker_data = await service_client.get_market_ticker(self.symbol)
 
+                # Enhanced response validation
+                if not self._validate_api_response_structure(ticker_data, "ticker"):
+                    logger.warning(
+                        "Invalid ticker response structure from Bluefin service"
+                    )
+                    return None
+
                 if ticker_data and "price" in ticker_data:
-                    # Apply price conversion from 18-decimal format
+                    # Enhanced pre-processing validation before price conversion
                     try:
                         raw_price = ticker_data["price"]
+
+                        # Sanitize price input before conversion
+                        sanitized_price = _sanitize_price_input(raw_price)
+                        if sanitized_price is None:
+                            logger.warning(
+                                "Failed to sanitize ticker price input: %s", raw_price
+                            )
+                            return None
+
+                        # Validate before conversion
+                        if not _validate_price_before_conversion(
+                            sanitized_price, self.symbol, "ticker_price"
+                        ):
+                            logger.warning(
+                                "Ticker price validation failed for %s: %s",
+                                self.symbol,
+                                sanitized_price,
+                            )
+                            return None
+
                         price = convert_from_18_decimal(
-                            raw_price, self.symbol, "ticker_price"
+                            sanitized_price, self.symbol, "ticker_price"
                         )
 
                         # Log if astronomical price was detected and converted
@@ -1372,9 +1458,34 @@ class BluefinMarketDataProvider:
 
                 data = await response.json()
 
-                # Extract last price from ticker data with conversion
+                # Validate API response structure
+                if not self._validate_api_response_structure(data, "ticker"):
+                    logger.error("Invalid ticker response structure from direct API")
+                    return None
+
+                # Extract last price from ticker data with enhanced conversion
                 if isinstance(data, dict) and "price" in data:
                     try:
+                        # Enhanced pre-processing validation before price conversion
+                        raw_price = data["price"]
+                        sanitized_price = _sanitize_price_input(raw_price)
+                        if sanitized_price is None:
+                            logger.warning(
+                                "Failed to sanitize direct ticker price input: %s",
+                                raw_price,
+                            )
+                            return None
+
+                        if not _validate_price_before_conversion(
+                            sanitized_price, self.symbol, "ticker_price"
+                        ):
+                            logger.warning(
+                                "Direct ticker price validation failed for %s: %s",
+                                self.symbol,
+                                sanitized_price,
+                            )
+                            return None
+
                         # Apply price conversion for ticker data
                         converted_data = convert_ticker_price(data, self.symbol)
                         price = Decimal(converted_data["price"])
@@ -1499,29 +1610,74 @@ class BluefinMarketDataProvider:
                 for i, candle in enumerate(candle_data):
                     try:
                         if isinstance(candle, list) and len(candle) >= 6:
-                            # Apply price conversion from 18-decimal format
+                            # Enhanced pre-processing validation before price conversion
+                            if not self._validate_raw_candle_data(candle, i, symbol):
+                                logger.debug(
+                                    "⚠️ Skipping invalid raw candle %s for %s", i, symbol
+                                )
+                                invalid_candles += 1
+                                continue
+
+                            # Apply price conversion from 18-decimal format with enhanced error handling
                             try:
                                 converted_candle = convert_candle_data(candle, symbol)
+                                # Validate converted data before creating Decimal objects
+                                if not self._validate_converted_candle_data(
+                                    converted_candle, i, symbol
+                                ):
+                                    logger.debug(
+                                        "⚠️ Skipping candle %s with invalid converted data",
+                                        i,
+                                    )
+                                    invalid_candles += 1
+                                    continue
+
                                 timestamp_val = converted_candle[0]
                                 open_val = Decimal(str(converted_candle[1]))
                                 high_val = Decimal(str(converted_candle[2]))
                                 low_val = Decimal(str(converted_candle[3]))
                                 close_val = Decimal(str(converted_candle[4]))
                                 volume_val = Decimal(str(converted_candle[5]))
-                            except ValueError as conv_error:
+                            except (
+                                ValueError,
+                                TypeError,
+                                ArithmeticError,
+                            ) as conv_error:
                                 logger.warning(
-                                    "Failed to convert candle %s for %s: %s. Using raw values.",
+                                    "Failed to convert candle %s for %s: %s. Attempting fallback processing.",
                                     i,
                                     symbol,
                                     conv_error,
                                 )
-                                # Fallback to raw values if conversion fails
-                                timestamp_val = candle[0]
-                                open_val = Decimal(str(candle[1]))
-                                high_val = Decimal(str(candle[2]))
-                                low_val = Decimal(str(candle[3]))
-                                close_val = Decimal(str(candle[4]))
-                                volume_val = Decimal(str(candle[5]))
+                                # Enhanced fallback processing with validation
+                                try:
+                                    fallback_result = self._process_candle_fallback(
+                                        candle, i, symbol
+                                    )
+                                    if fallback_result:
+                                        (
+                                            timestamp_val,
+                                            open_val,
+                                            high_val,
+                                            low_val,
+                                            close_val,
+                                            volume_val,
+                                        ) = fallback_result
+                                    else:
+                                        logger.debug(
+                                            "⚠️ Fallback processing failed for candle %s, skipping",
+                                            i,
+                                        )
+                                        invalid_candles += 1
+                                        continue
+                                except Exception as fallback_error:
+                                    logger.warning(
+                                        "Fallback processing failed for candle %s: %s. Skipping candle.",
+                                        i,
+                                        fallback_error,
+                                    )
+                                    invalid_candles += 1
+                                    continue
 
                             # Basic validation
                             if (
@@ -1661,27 +1817,77 @@ class BluefinMarketDataProvider:
 
                 data = await response.json()
 
-                # Parse Bluefin candle data with price conversion
+                # Validate API response structure before processing
+                if not self._validate_api_response_structure(data, "candlestickData"):
+                    logger.error(
+                        "Invalid API response structure from candlestickData endpoint"
+                    )
+                    return []
+
+                # Parse Bluefin candle data with enhanced validation and price conversion
                 candles = []
                 for candle in data:
                     # Expected format: [timestamp, open, high, low, close, volume]
                     if isinstance(candle, list) and len(candle) >= 6:
                         try:
-                            # Apply price conversion from 18-decimal format
+                            # Enhanced pre-processing validation before price conversion
+                            if not self._validate_raw_candle_data(
+                                candle, len(candles), symbol
+                            ):
+                                logger.debug(
+                                    "⚠️ Skipping invalid raw API candle data for %s",
+                                    symbol,
+                                )
+                                continue
+
+                            # Apply price conversion from 18-decimal format with enhanced validation
                             converted_candle = convert_candle_data(candle, symbol)
-                            market_data = MarketData(
-                                symbol=symbol,
-                                timestamp=datetime.fromtimestamp(
-                                    converted_candle[0] / 1000, UTC
-                                ),
-                                open=Decimal(str(converted_candle[1])),
-                                high=Decimal(str(converted_candle[2])),
-                                low=Decimal(str(converted_candle[3])),
-                                close=Decimal(str(converted_candle[4])),
-                                volume=Decimal(str(converted_candle[5])),
-                            )
-                            candles.append(market_data)
-                        except ValueError as conv_error:
+
+                            # Validate converted data integrity
+                            if not self._validate_converted_candle_data(
+                                converted_candle, len(candles), symbol
+                            ):
+                                logger.debug(
+                                    "⚠️ Skipping candle with invalid converted data for %s",
+                                    symbol,
+                                )
+                                continue
+
+                            # Create MarketData with additional bounds checking
+                            try:
+                                market_data = MarketData(
+                                    symbol=symbol,
+                                    timestamp=datetime.fromtimestamp(
+                                        converted_candle[0] / 1000, UTC
+                                    ),
+                                    open=Decimal(str(converted_candle[1])),
+                                    high=Decimal(str(converted_candle[2])),
+                                    low=Decimal(str(converted_candle[3])),
+                                    close=Decimal(str(converted_candle[4])),
+                                    volume=Decimal(str(converted_candle[5])),
+                                )
+
+                                # Final validation of created MarketData object
+                                if self._validate_market_data_object(market_data):
+                                    candles.append(market_data)
+                                else:
+                                    logger.debug(
+                                        "⚠️ MarketData object validation failed, skipping candle"
+                                    )
+
+                            except (
+                                ValueError,
+                                OSError,
+                                OverflowError,
+                            ) as creation_error:
+                                logger.warning(
+                                    "Failed to create MarketData object for %s: %s. Skipping.",
+                                    symbol,
+                                    creation_error,
+                                )
+                                continue
+
+                        except (ValueError, TypeError, ArithmeticError) as conv_error:
                             logger.warning(
                                 "Failed to convert candle data for %s: %s. Skipping.",
                                 symbol,
@@ -2142,18 +2348,33 @@ class BluefinMarketDataProvider:
                 logger.debug("Unhandled WebSocket event type: %s", event_type)
 
     async def _process_market_data_update(self, data: dict[str, Any]) -> None:
-        """Process market data update event."""
+        """Process market data update event with enhanced data sanitization."""
         try:
+            # Enhanced data sanitization before processing
+            sanitized_data = self._sanitize_websocket_data(data)
+            if not sanitized_data:
+                logger.warning("Failed to sanitize market data update, skipping")
+                return
+
             # Extract price and volume data with conversion
-            if "lastPrice" in data:
+            if "lastPrice" in sanitized_data:
                 try:
                     # Apply price conversion for WebSocket price updates
                     price = convert_from_18_decimal(
-                        data["lastPrice"], self.symbol, "lastPrice"
+                        sanitized_data["lastPrice"], self.symbol, "lastPrice"
                     )
 
+                    # Validate price continuity
+                    if not self._validate_price_continuity(price):
+                        logger.warning(
+                            "Price continuity check failed for %s: %s. Using circuit breaker fallback.",
+                            self.symbol,
+                            price,
+                        )
+                        return
+
                     # Log if astronomical price was detected
-                    original_price = Decimal(str(data["lastPrice"]))
+                    original_price = Decimal(str(sanitized_data["lastPrice"]))
                     if original_price > 1e15:
                         logger.info(
                             "Converted astronomical WebSocket price for %s: %s -> %s",
@@ -2169,28 +2390,19 @@ class BluefinMarketDataProvider:
                     tick_data = {
                         "timestamp": datetime.now(UTC),
                         "price": price,
-                        "volume": Decimal(str(data.get("volume", "0"))),
+                        "volume": Decimal(str(sanitized_data.get("volume", "0"))),
                         "symbol": self.symbol,
                     }
                     self._tick_buffer.append(tick_data)
                 except ValueError as conv_error:
                     logger.warning(
-                        "Failed to convert WebSocket price for %s: %s. Using raw value.",
+                        "Failed to convert WebSocket price for %s: %s. Circuit breaker may be active.",
                         self.symbol,
                         conv_error,
                     )
-                    # Fallback to raw value
-                    price = Decimal(str(data["lastPrice"]))
-                    self._price_cache["price"] = price
-                    self._cache_timestamps["price"] = datetime.now(UTC)
-
-                    tick_data = {
-                        "timestamp": datetime.now(UTC),
-                        "price": price,
-                        "volume": Decimal(str(data.get("volume", "0"))),
-                        "symbol": self.symbol,
-                    }
-                    self._tick_buffer.append(tick_data)
+                    # Don't use raw value anymore - rely on circuit breaker fallback
+                    # This prevents corrupted data from propagating through the system
+                    return
 
                 logger.debug("Market data update: %s @ %s", self.symbol, price)
 
@@ -2198,15 +2410,29 @@ class BluefinMarketDataProvider:
             logger.exception("Error processing market data update")
 
     async def _process_recent_trades(self, data: dict[str, Any]) -> None:
-        """Process recent trades event."""
+        """Process recent trades event with enhanced data sanitization."""
         try:
-            trades = data.get("trades", [])
+            # Enhanced data sanitization before processing
+            sanitized_data = self._sanitize_websocket_data(data)
+            if not sanitized_data:
+                logger.warning("Failed to sanitize recent trades data, skipping")
+                return
+
+            trades = sanitized_data.get("trades", [])
             for trade in trades:
                 if isinstance(trade, dict):
+                    # Sanitize individual trade data
+                    sanitized_trade = self._sanitize_trade_data(trade)
+                    if not sanitized_trade:
+                        logger.debug("Skipping invalid trade data")
+                        continue
+
                     try:
                         # Apply price conversion for trade data
                         trade_price = convert_from_18_decimal(
-                            trade.get("price", "0"), self.symbol, "trade_price"
+                            sanitized_trade.get("price", "0"),
+                            self.symbol,
+                            "trade_price",
                         )
 
                         # Log if astronomical price was detected
@@ -2406,6 +2632,541 @@ class BluefinMarketDataProvider:
         """Reconnect after a delay."""
         await asyncio.sleep(delay)
         await self._connect_websocket()
+
+    # === ENHANCED VALIDATION HELPER METHODS ===
+
+    async def _validate_api_connectivity(self) -> bool:
+        """
+        Validate API connectivity before attempting data operations.
+
+        Returns:
+            True if API is responsive and accessible
+        """
+        try:
+            if not self._session or self._session.closed:
+                logger.warning("HTTP session not available for connectivity check")
+                return False
+
+            # Quick connectivity test with minimal data request
+            test_url = f"{self._api_base_url}/time"
+            async with self._session.get(
+                test_url, timeout=aiohttp.ClientTimeout(total=5)
+            ) as response:
+                if response.status == 200:
+                    logger.debug("✅ API connectivity validated")
+                    return True
+                logger.warning(
+                    "❌ API connectivity test failed with status: %d", response.status
+                )
+                return False
+
+        except Exception as e:
+            logger.warning("❌ API connectivity validation failed: %s", e)
+            return False
+
+    async def _validate_historical_data_integrity(
+        self, historical_data: list[MarketData]
+    ) -> list[MarketData] | None:
+        """
+        Validate integrity of fetched historical data.
+
+        Args:
+            historical_data: List of MarketData objects to validate
+
+        Returns:
+            Validated and cleaned data or None if integrity check fails
+        """
+        if not historical_data:
+            logger.warning("No historical data to validate")
+            return None
+
+        try:
+            validated_data = []
+            consecutive_invalid = 0
+            max_consecutive_invalid = 10
+
+            for i, data in enumerate(historical_data):
+                # Validate individual data point
+                if self._validate_market_data_object(data):
+                    validated_data.append(data)
+                    consecutive_invalid = 0
+                else:
+                    consecutive_invalid += 1
+                    logger.debug("Invalid market data at index %d", i)
+
+                    # Fail if too many consecutive invalid entries
+                    if consecutive_invalid >= max_consecutive_invalid:
+                        logger.error(
+                            "Too many consecutive invalid entries (%d). Data integrity compromised.",
+                            consecutive_invalid,
+                        )
+                        return None
+
+            # Check if we have sufficient validated data
+            validity_ratio = len(validated_data) / len(historical_data)
+            if validity_ratio < 0.8:  # Require at least 80% valid data
+                logger.error(
+                    "Data integrity check failed. Only %.1f%% of data is valid",
+                    validity_ratio * 100,
+                )
+                return None
+
+            # Check for temporal consistency
+            if not self._validate_temporal_consistency(validated_data):
+                logger.error("Temporal consistency check failed")
+                return None
+
+            logger.info(
+                "✅ Historical data integrity validated: %d/%d candles valid (%.1f%%)",
+                len(validated_data),
+                len(historical_data),
+                validity_ratio * 100,
+            )
+            return validated_data
+
+        except Exception as e:
+            logger.error("Error during historical data integrity validation: %s", e)
+            return None
+
+    def _validate_temporal_consistency(self, data: list[MarketData]) -> bool:
+        """
+        Validate temporal consistency of market data.
+
+        Args:
+            data: List of MarketData objects to check
+
+        Returns:
+            True if timestamps are consistent and properly ordered
+        """
+        if len(data) < 2:
+            return True
+
+        try:
+            # Sort by timestamp
+            sorted_data = sorted(data, key=lambda x: x.timestamp)
+
+            # Check for duplicates and reasonable intervals
+            for i in range(1, len(sorted_data)):
+                prev_time = sorted_data[i - 1].timestamp
+                curr_time = sorted_data[i].timestamp
+
+                # Check for duplicate timestamps
+                if prev_time == curr_time:
+                    logger.warning("Duplicate timestamp detected: %s", curr_time)
+                    continue
+
+                # Check for reasonable time intervals (should be close to expected interval)
+                time_diff = (curr_time - prev_time).total_seconds()
+                expected_interval = self._interval_to_seconds(self.interval)
+
+                # Allow some tolerance (up to 50% deviation)
+                min_interval = expected_interval * 0.5
+                max_interval = expected_interval * 1.5
+
+                if time_diff < min_interval or time_diff > max_interval:
+                    logger.debug(
+                        "Irregular time interval: %ds (expected ~%ds)",
+                        time_diff,
+                        expected_interval,
+                    )
+
+            return True
+
+        except Exception as e:
+            logger.error("Error validating temporal consistency: %s", e)
+            return False
+
+    def _validate_api_response_structure(
+        self, response_data: Any, endpoint_type: str
+    ) -> bool:
+        """
+        Validate the structure of API response data.
+
+        Args:
+            response_data: Raw response data from API
+            endpoint_type: Type of endpoint (e.g., 'candlestickData', 'ticker')
+
+        Returns:
+            True if response structure is valid
+        """
+        try:
+            if not response_data:
+                logger.warning("Empty response data for %s endpoint", endpoint_type)
+                return False
+
+            if endpoint_type == "candlestickData":
+                # Expect list of candle data
+                if not isinstance(response_data, list):
+                    logger.error(
+                        "Invalid candlestickData response: expected list, got %s",
+                        type(response_data),
+                    )
+                    return False
+
+                if len(response_data) == 0:
+                    logger.warning("Empty candlestick data array")
+                    return True  # Empty is valid, just no data available
+
+                # Check first few entries for structure
+                sample_size = min(3, len(response_data))
+                for i in range(sample_size):
+                    candle = response_data[i]
+                    if isinstance(candle, list):
+                        if len(candle) < 6:
+                            logger.error(
+                                "Invalid candle array structure at index %d: expected 6+ elements, got %d",
+                                i,
+                                len(candle),
+                            )
+                            return False
+                    elif isinstance(candle, dict):
+                        required_keys = [
+                            "timestamp",
+                            "open",
+                            "high",
+                            "low",
+                            "close",
+                            "volume",
+                        ]
+                        if not all(key in candle for key in required_keys):
+                            logger.error(
+                                "Invalid candle dict structure at index %d: missing required keys",
+                                i,
+                            )
+                            return False
+                    else:
+                        logger.error(
+                            "Invalid candle data type at index %d: expected list or dict, got %s",
+                            i,
+                            type(candle),
+                        )
+                        return False
+
+            elif endpoint_type == "ticker":
+                # Expect dict with price information
+                if not isinstance(response_data, dict):
+                    logger.error(
+                        "Invalid ticker response: expected dict, got %s",
+                        type(response_data),
+                    )
+                    return False
+
+                # Check for essential price fields
+                if not any(
+                    key in response_data
+                    for key in ["price", "last", "close", "lastPrice"]
+                ):
+                    logger.error("Invalid ticker response: missing price information")
+                    return False
+
+            return True
+
+        except Exception as e:
+            logger.error(
+                "Error validating API response structure for %s: %s", endpoint_type, e
+            )
+            return False
+
+    def _validate_raw_candle_data(
+        self, candle_data: Any, index: int, symbol: str
+    ) -> bool:
+        """
+        Validate raw candle data before processing.
+
+        Args:
+            candle_data: Raw candle data (list or dict)
+            index: Index of the candle for logging
+            symbol: Trading symbol for context
+
+        Returns:
+            True if raw data appears valid
+        """
+        try:
+            if candle_data is None:
+                logger.debug("Null candle data at index %d for %s", index, symbol)
+                return False
+
+            if isinstance(candle_data, list):
+                if len(candle_data) < 6:
+                    logger.debug(
+                        "Insufficient candle array elements at index %d for %s: %d",
+                        index,
+                        symbol,
+                        len(candle_data),
+                    )
+                    return False
+
+                # Check for null/undefined values in critical positions
+                critical_positions = [0, 1, 2, 3, 4, 5]  # timestamp, OHLCV
+                for pos in critical_positions:
+                    if pos < len(candle_data) and candle_data[pos] is None:
+                        logger.debug(
+                            "Null value at position %d in candle %d for %s",
+                            pos,
+                            index,
+                            symbol,
+                        )
+                        return False
+
+            elif isinstance(candle_data, dict):
+                required_fields = [
+                    "timestamp",
+                    "open",
+                    "high",
+                    "low",
+                    "close",
+                    "volume",
+                ]
+                for field in required_fields:
+                    if field not in candle_data or candle_data[field] is None:
+                        logger.debug(
+                            "Missing or null field '%s' in candle %d for %s",
+                            field,
+                            index,
+                            symbol,
+                        )
+                        return False
+            else:
+                logger.debug(
+                    "Invalid candle data type at index %d for %s: %s",
+                    index,
+                    symbol,
+                    type(candle_data),
+                )
+                return False
+
+            return True
+
+        except Exception as e:
+            logger.debug(
+                "Error validating raw candle data at index %d for %s: %s",
+                index,
+                symbol,
+                e,
+            )
+            return False
+
+    def _validate_converted_candle_data(
+        self, converted_data: Any, index: int, symbol: str
+    ) -> bool:
+        """
+        Validate converted candle data after price conversion.
+
+        Args:
+            converted_data: Converted candle data (should be list)
+            index: Index of the candle for logging
+            symbol: Trading symbol for context
+
+        Returns:
+            True if converted data appears valid
+        """
+        try:
+            if not isinstance(converted_data, list) or len(converted_data) < 6:
+                logger.debug(
+                    "Invalid converted candle structure at index %d for %s",
+                    index,
+                    symbol,
+                )
+                return False
+
+            # Validate each field using the enhanced validation from price_conversion
+            field_names = ["timestamp", "open", "high", "low", "close", "volume"]
+            for i, (value, field_name) in enumerate(
+                zip(converted_data[:6], field_names, strict=False)
+            ):
+                # Use enhanced sanitization and validation
+                sanitized_value = _sanitize_price_input(value)
+                if sanitized_value is None:
+                    logger.debug(
+                        "Failed to sanitize %s at index %d for %s",
+                        field_name,
+                        index,
+                        symbol,
+                    )
+                    return False
+
+                if field_name != "timestamp" and not _validate_price_before_conversion(
+                    sanitized_value, symbol, field_name
+                ):
+                    logger.debug(
+                        "Pre-conversion validation failed for %s at index %d for %s",
+                        field_name,
+                        index,
+                        symbol,
+                    )
+                    return False
+
+            return True
+
+        except Exception as e:
+            logger.debug(
+                "Error validating converted candle data at index %d for %s: %s",
+                index,
+                symbol,
+                e,
+            )
+            return False
+
+    def _validate_market_data_object(self, market_data: MarketData) -> bool:
+        """
+        Validate a complete MarketData object.
+
+        Args:
+            market_data: MarketData object to validate
+
+        Returns:
+            True if the object is valid
+        """
+        try:
+            # Basic null checks
+            if not market_data or not market_data.symbol:
+                return False
+
+            # Validate prices are positive and finite
+            prices = [
+                market_data.open,
+                market_data.high,
+                market_data.low,
+                market_data.close,
+            ]
+            for price in prices:
+                if price <= 0 or not isinstance(price, Decimal):
+                    return False
+
+                # Check for extremely large values that might indicate conversion issues
+                if price > Decimal(1000000):  # $1M seems like a reasonable upper bound
+                    logger.debug("Suspiciously high price in market data: %s", price)
+                    return False
+
+            # Validate OHLC relationships
+            if not (
+                market_data.low <= min(market_data.open, market_data.close)
+                and market_data.high >= max(market_data.open, market_data.close)
+            ):
+                logger.debug("Invalid OHLC relationships in market data")
+                return False
+
+            # Validate volume is non-negative
+            if market_data.volume < 0:
+                return False
+
+            # Validate timestamp is reasonable
+            now = datetime.now(UTC)
+            if market_data.timestamp > now + timedelta(minutes=5):
+                logger.debug(
+                    "Future timestamp in market data: %s", market_data.timestamp
+                )
+                return False
+
+            return True
+
+        except Exception as e:
+            logger.debug("Error validating market data object: %s", e)
+            return False
+
+    def _process_candle_fallback(
+        self, raw_candle: Any, index: int, symbol: str
+    ) -> tuple[int, Decimal, Decimal, Decimal, Decimal, Decimal] | None:
+        """
+        Process candle data using fallback methods when normal conversion fails.
+
+        Args:
+            raw_candle: Raw candle data
+            index: Index for logging
+            symbol: Trading symbol
+
+        Returns:
+            Tuple of (timestamp, open, high, low, close, volume) or None if processing fails
+        """
+        try:
+            logger.debug(
+                "Attempting fallback processing for candle %d of %s", index, symbol
+            )
+
+            if isinstance(raw_candle, list) and len(raw_candle) >= 6:
+                # Try processing with minimal validation
+                timestamp_val = int(raw_candle[0]) if raw_candle[0] is not None else 0
+
+                # For price values, try direct conversion with bounds checking
+                price_values = []
+                for i, raw_value in enumerate(raw_candle[1:5]):  # OHLC
+                    if raw_value is None:
+                        logger.debug(
+                            "Null price value at position %d in fallback processing",
+                            i + 1,
+                        )
+                        return None
+
+                    try:
+                        # Sanitize and validate the raw value
+                        sanitized = _sanitize_price_input(raw_value)
+                        if sanitized is None:
+                            return None
+
+                        price_decimal = Decimal(str(sanitized))
+
+                        # Basic bounds checking
+                        if price_decimal <= 0:
+                            logger.debug(
+                                "Non-positive price in fallback processing: %s",
+                                price_decimal,
+                            )
+                            return None
+
+                        if price_decimal > Decimal(1000000):
+                            logger.debug(
+                                "Extremely high price in fallback processing: %s",
+                                price_decimal,
+                            )
+                            return None
+
+                        price_values.append(price_decimal)
+
+                    except (ValueError, TypeError, ArithmeticError) as e:
+                        logger.debug("Failed to process price value in fallback: %s", e)
+                        return None
+
+                # Volume processing
+                try:
+                    volume_sanitized = _sanitize_price_input(raw_candle[5])
+                    volume_val = (
+                        Decimal(str(volume_sanitized))
+                        if volume_sanitized is not None
+                        else Decimal(0)
+                    )
+                    if volume_val < 0:
+                        volume_val = Decimal(0)
+                except (ValueError, TypeError, ArithmeticError):
+                    volume_val = Decimal(0)
+
+                if len(price_values) == 4:
+                    open_val, high_val, low_val, close_val = price_values
+
+                    # Fix OHLC relationships if needed
+                    high_val = max(open_val, high_val, low_val, close_val)
+                    low_val = min(open_val, high_val, low_val, close_val)
+
+                    logger.debug(
+                        "Fallback processing successful for candle %d of %s",
+                        index,
+                        symbol,
+                    )
+                    return (
+                        timestamp_val,
+                        open_val,
+                        high_val,
+                        low_val,
+                        close_val,
+                        volume_val,
+                    )
+
+            return None
+
+        except Exception as e:
+            logger.debug(
+                "Fallback processing failed for candle %d of %s: %s", index, symbol, e
+            )
+            return None
 
 
 class BluefinMarketDataClient:

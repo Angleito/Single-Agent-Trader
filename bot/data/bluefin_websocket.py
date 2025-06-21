@@ -146,6 +146,16 @@ class BluefinWebSocketClient:
         self._astronomical_log_counter: dict[str, int] = {}
         self._log_every_n_instances = 25
 
+        # Price continuity checking
+        self._last_valid_price: Decimal | None = None
+        self._price_jump_threshold = Decimal("0.20")  # 20% price jump threshold
+        self._price_continuity_violations = 0
+        self._max_price_violations = 5
+
+        # Message validation tracking
+        self._invalid_message_counter: dict[str, int] = {}
+        self._rate_limit_invalid_messages = 10
+
         logger.info(
             "Initialized BluefinWebSocketClient for %s with %s candles on %s network",
             symbol,
@@ -159,6 +169,223 @@ class BluefinWebSocketClient:
                 "dapi_ws_url": self.DAPI_WS_URL,
             },
         )
+
+    def _validate_websocket_message(self, data: dict[str, Any]) -> bool:
+        """
+        Validate WebSocket message structure before processing.
+
+        Args:
+            data: Parsed message data
+
+        Returns:
+            True if message is valid, False otherwise
+        """
+        try:
+            # Basic structure validation
+            if not isinstance(data, dict):
+                self._log_invalid_message(
+                    "non_dict_data", "Message is not a dictionary"
+                )
+                return False
+
+            # Check for required fields based on message type
+            if "eventName" in data:
+                # Event-based message validation
+                event_name = data.get("eventName")
+                if not isinstance(event_name, str) or not event_name.strip():
+                    self._log_invalid_message(
+                        "invalid_event_name", f"Invalid eventName: {event_name}"
+                    )
+                    return False
+
+                # Validate data field exists for data events
+                if (
+                    event_name in ["TickerUpdate", "MarketDataUpdate", "RecentTrades"]
+                    and "data" not in data
+                ):
+                    self._log_invalid_message(
+                        "missing_data_field",
+                        f"Missing data field for event: {event_name}",
+                    )
+                    return False
+
+            elif "id" in data:
+                # JSON-RPC response validation
+                if not isinstance(data.get("id"), (int, str)):
+                    self._log_invalid_message(
+                        "invalid_id_field", f"Invalid ID field: {data.get('id')}"
+                    )
+                    return False
+
+            # Symbol validation for market data events
+            if self._contains_market_data(data):
+                if not self._validate_market_data_symbol(data):
+                    return False
+
+            return True
+
+        except Exception as e:
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "symbol": self.symbol,
+                    "message_validation_error": True,
+                    "data_keys": list(data.keys()) if isinstance(data, dict) else [],
+                },
+                component="BluefinWebSocketClient",
+                operation="validate_websocket_message",
+            )
+            return False
+
+    def _contains_market_data(self, data: dict[str, Any]) -> bool:
+        """Check if message contains market data that should be validated."""
+        event_name = data.get("eventName", "")
+        channel = data.get("channel", data.get("ch", ""))
+
+        market_events = ["TickerUpdate", "MarketDataUpdate", "RecentTrades"]
+        market_channels = ["trade", "ticker", "kline"]
+
+        return (
+            event_name in market_events
+            or any(market_ch in str(channel) for market_ch in market_channels)
+            or f"{self.symbol}@kline@{self.interval}" in str(event_name)
+        )
+
+    def _validate_market_data_symbol(self, data: dict[str, Any]) -> bool:
+        """Validate that market data is for the correct symbol."""
+        try:
+            # Check data array for symbol matching
+            data_array = data.get("data", [])
+            if isinstance(data_array, list):
+                for item in data_array:
+                    if isinstance(item, dict) and "symbol" in item:
+                        if item["symbol"] != self.symbol:
+                            # Wrong symbol - silently ignore (not an error)
+                            return False
+            elif isinstance(data_array, dict) and "symbol" in data_array:
+                if data_array["symbol"] != self.symbol:
+                    return False
+
+            return True
+
+        except Exception:
+            # If validation fails, err on the side of processing
+            return True
+
+    def _log_invalid_message(self, error_type: str, message: str) -> None:
+        """Log invalid message with rate limiting."""
+        if error_type not in self._invalid_message_counter:
+            self._invalid_message_counter[error_type] = 0
+
+        self._invalid_message_counter[error_type] += 1
+
+        # Rate limit logging
+        if (
+            self._invalid_message_counter[error_type]
+            % self._rate_limit_invalid_messages
+            == 1
+        ):
+            logger.warning(
+                "🚨 INVALID WEBSOCKET MESSAGE: %s - %s [Instance #%d]",
+                error_type,
+                message,
+                self._invalid_message_counter[error_type],
+                extra={
+                    "symbol": self.symbol,
+                    "error_type": error_type,
+                    "instance_count": self._invalid_message_counter[error_type],
+                    "rate_limit_interval": self._rate_limit_invalid_messages,
+                    "invalid_message_detected": True,
+                },
+            )
+
+    def _validate_price_continuity(self, price: Decimal, source: str) -> bool:
+        """
+        Check price continuity to detect bad data or sudden jumps.
+
+        Args:
+            price: Current price to validate
+            source: Source of the price data
+
+        Returns:
+            True if price passes continuity check, False otherwise
+        """
+        try:
+            if price <= 0:
+                return False
+
+            # First price is always valid
+            if self._last_valid_price is None:
+                self._last_valid_price = price
+                return True
+
+            # Calculate price change percentage
+            price_change = abs(price - self._last_valid_price) / self._last_valid_price
+
+            # Check if price jump exceeds threshold
+            if price_change > self._price_jump_threshold:
+                self._price_continuity_violations += 1
+
+                # Rate limited logging for price jumps
+                if self._price_continuity_violations % 5 == 1:
+                    logger.warning(
+                        "🚨 PRICE CONTINUITY VIOLATION: %s price jumped %.2f%% from $%s to $%s (source: %s, symbol: %s) [Instance #%d]",
+                        source,
+                        float(price_change * 100),
+                        self._last_valid_price,
+                        price,
+                        source,
+                        self.symbol,
+                        self._price_continuity_violations,
+                        extra={
+                            "symbol": self.symbol,
+                            "source": source,
+                            "old_price": float(self._last_valid_price),
+                            "new_price": float(price),
+                            "price_change_percent": float(price_change * 100),
+                            "threshold_percent": float(
+                                self._price_jump_threshold * 100
+                            ),
+                            "price_continuity_violation": True,
+                            "violation_count": self._price_continuity_violations,
+                        },
+                    )
+
+                # If too many violations, something is seriously wrong
+                if self._price_continuity_violations >= self._max_price_violations:
+                    logger.error(
+                        "🚨 TOO MANY PRICE CONTINUITY VIOLATIONS (%d), treating as bad data source",
+                        self._price_continuity_violations,
+                        extra={
+                            "symbol": self.symbol,
+                            "violation_count": self._price_continuity_violations,
+                            "max_violations": self._max_price_violations,
+                            "critical_price_data_error": True,
+                        },
+                    )
+                    return False
+
+                # For moderate violations, reject this price but don't update last_valid_price
+                return False
+
+            # Price is within acceptable range, update last valid price
+            self._last_valid_price = price
+            return True
+
+        except Exception as e:
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "symbol": self.symbol,
+                    "price": float(price),
+                    "source": source,
+                    "price_continuity_check_error": True,
+                },
+                component="BluefinWebSocketClient",
+                operation="validate_price_continuity",
+            )
+            # On error, err on the side of accepting the price
+            return True
 
     def _log_astronomical_price_detection(
         self, value: str | float | Decimal, field_name: str, source: str
@@ -193,7 +420,7 @@ class BluefinWebSocketClient:
                     value,
                     source,
                     self.symbol,
-                    self._astronomical_log_counter[log_key],
+                    int(self._astronomical_log_counter[log_key]),
                     extra={
                         "symbol": self.symbol,
                         "field_name": field_name,
@@ -654,6 +881,10 @@ class BluefinWebSocketClient:
         Args:
             data: Parsed message data
         """
+        # Pre-processing validation
+        if not self._validate_websocket_message(data):
+            return
+
         # Handle subscription responses first
         if await self._handle_subscription_response(data):
             return
@@ -788,7 +1019,12 @@ class BluefinWebSocketClient:
                     trade.get("timestamp", trade.get("ts"))
                 )
 
-                if price > 0 and size > 0:
+                # Validate price continuity before processing
+                if (
+                    price > 0
+                    and size > 0
+                    and self._validate_price_continuity(price, "trade")
+                ):
                     trade_data = {
                         "price": price,
                         "size": size,
@@ -860,7 +1096,8 @@ class BluefinWebSocketClient:
             )
             self._parse_timestamp(ticker.get("timestamp", ticker.get("ts")))
 
-            if last_price > 0:
+            # Validate price continuity before processing
+            if last_price > 0 and self._validate_price_continuity(last_price, "ticker"):
                 # Update current candle close price
                 if self._current_candle:
                     self._current_candle = MarketData(
@@ -945,7 +1182,10 @@ class BluefinWebSocketClient:
                     # Use the most recent price
                     current_price = price if price > 0 else last_price
 
-                    if current_price > 0:
+                    # Validate price continuity before processing
+                    if current_price > 0 and self._validate_price_continuity(
+                        current_price, "bluefin_ticker"
+                    ):
                         # Create a tick from ticker data
                         trade_data = {
                             "price": current_price,
@@ -1038,7 +1278,12 @@ class BluefinWebSocketClient:
                     )
                     size = convert_from_18_decimal(size_str, self.symbol, "trade_size")
 
-                    if price > 0 and size > 0:
+                    # Validate price continuity before processing
+                    if (
+                        price > 0
+                        and size > 0
+                        and self._validate_price_continuity(price, "bluefin_trades")
+                    ):
                         trade_data = {
                             "price": price,
                             "size": size,
@@ -1149,7 +1394,12 @@ class BluefinWebSocketClient:
                     )
                     return
 
-                if open_val > 0 and close_val > 0:
+                # Validate price continuity for kline data (use close price as representative)
+                if (
+                    open_val > 0
+                    and close_val > 0
+                    and self._validate_price_continuity(close_val, "kline")
+                ):
                     # Create MarketData object directly from kline
                     timestamp = (
                         datetime.fromtimestamp(open_time / 1000, UTC)
@@ -1778,6 +2028,14 @@ class BluefinWebSocketClient:
             "error_count": self._error_count,
             "last_message_time": self._last_message_time,
             "latest_price": self.get_latest_price(),
+            # Enhanced validation metrics
+            "last_valid_price": (
+                float(self._last_valid_price) if self._last_valid_price else None
+            ),
+            "price_continuity_violations": self._price_continuity_violations,
+            "price_jump_threshold_percent": float(self._price_jump_threshold * 100),
+            "invalid_message_counts": dict(self._invalid_message_counter),
+            "astronomical_price_counts": dict(self._astronomical_log_counter),
         }
 
     def _get_next_subscription_id(self) -> int:
