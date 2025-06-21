@@ -102,14 +102,14 @@ class BalanceValidator:
             "  • Max change: %s%% or $%s\n"
             "  • Precision: %s decimal places\n"
             "  • Anomaly threshold: %s%%\n"
-            "  • Max margin ratio: %.1f%%",
+            "  • Max margin ratio: %s%%",
             self.thresholds.min_balance,
             self.thresholds.max_balance,
             self.thresholds.max_balance_change_pct,
             self.thresholds.max_absolute_change,
             self.thresholds.decimal_places,
             self.thresholds.anomaly_threshold_pct,
-            self.thresholds.max_margin_ratio * 100,
+            f"{self.thresholds.max_margin_ratio * 100:.1f}",
         )
 
     def validate_balance_range(

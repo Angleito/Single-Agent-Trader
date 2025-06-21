@@ -2700,7 +2700,7 @@ class TradingEngine:
         dominance_candles,
     ):
         """Create market state for LLM analysis."""
-        from .models import IndicatorData, MarketState
+        from .trading_types import IndicatorData, MarketState
 
         # Calculate historical data window
         interval_seconds = self._get_interval_seconds(self.interval)

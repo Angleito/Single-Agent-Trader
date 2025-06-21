@@ -352,7 +352,7 @@ class WebSocketPublisher:
             delay = min(delay * 1.5, 120)  # Extended delay for persistent issues
 
         logger.warning(
-            "Reconnecting in %.1fs (attempt %s/%s, failures: %s)",
+            "Reconnecting in %.1fs (attempt %d/%d, failures: %d)",
             delay,
             self._retry_count,
             self.max_retries,
