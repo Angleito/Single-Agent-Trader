@@ -63,11 +63,15 @@ services:
       - EXCHANGE__BLUEFIN_NETWORK=${EXCHANGE__BLUEFIN_NETWORK:-mainnet}
       - BLUEFIN_SERVICE_API_KEY=${BLUEFIN_SERVICE_API_KEY:-}
       - BLUEFIN_SERVICE_RATE_LIMIT=${BLUEFIN_SERVICE_RATE_LIMIT:-100}
+      # DOCKER NETWORKING FIX: Ensure service binds to all interfaces
       - HOST=0.0.0.0
       - PORT=8080
       - LOG_LEVEL=info
       - EXPECTED_USER=bluefin
       - EXPECTED_GROUP=bluefin
+      # Additional networking diagnostics
+      - DOCKER_CONTAINER_NAME=bluefin-service
+      - DOCKER_NETWORK_MODE=bridge
 
     ports:
       - "127.0.0.1:8081:8080"  # SECURITY: Bind to localhost only for debugging

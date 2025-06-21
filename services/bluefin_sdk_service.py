@@ -4657,7 +4657,8 @@ def create_app():
 
 if __name__ == "__main__":
     # Get host and port from environment
-    host = os.getenv("HOST", "127.0.0.1")
+    # DOCKER FIX: Default to 0.0.0.0 for Docker container networking
+    host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8080"))
 
     # Check if API key is configured
@@ -4672,8 +4673,21 @@ if __name__ == "__main__":
 
     # Create and run app
     app = create_app()
-    logger.info("Starting Bluefin SDK service on %s:%s", host, port)
+    logger.info("🚀 Starting Bluefin SDK service on %s:%s", host, port)
+    logger.info("🔧 Docker container networking: HOST=%s, PORT=%s", host, port)
     logger.info(
-        "Rate limit: %s requests per %s seconds", RATE_LIMIT_REQUESTS, RATE_LIMIT_WINDOW
+        "📊 Rate limit: %s requests per %s seconds",
+        RATE_LIMIT_REQUESTS,
+        RATE_LIMIT_WINDOW,
     )
-    web.run_app(app, host=host, port=port)
+    logger.info("🌐 Service will be accessible at: http://%s:%s/health", host, port)
+    logger.info("🔗 Docker internal URL: http://bluefin-service:8080/health")
+
+    try:
+        web.run_app(app, host=host, port=port)
+    except Exception as e:
+        logger.error("❌ Failed to start Bluefin SDK service: %s", e)
+        logger.error(
+            "🔍 Check if port %s is already in use or host %s is accessible", port, host
+        )
+        raise
