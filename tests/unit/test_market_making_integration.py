@@ -207,17 +207,17 @@ class TestMarketMakingIntegrationStatus:
 class TestMarketMakingIntegrator:
     """Test the MarketMakingIntegrator class."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_exchange_client(self):
         """Create a mock Bluefin exchange client."""
         return MockBluefinClient()
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_llm_agent(self):
         """Create a mock LLM agent."""
         return MockLLMAgent()
 
-    @pytest.fixture
+    @pytest.fixture()
     def integrator(self, mock_exchange_client):
         """Create a MarketMakingIntegrator instance for testing."""
         return MarketMakingIntegrator(
@@ -237,7 +237,7 @@ class TestMarketMakingIntegrator:
         assert integrator.market_making_engine is None
         assert integrator.llm_agent is None
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_initialize_with_market_making(self, integrator, mock_llm_agent):
         """Test initialization with market making enabled."""
         # Mock the factory to return our mock engine
@@ -259,7 +259,7 @@ class TestMarketMakingIntegrator:
             assert mock_engine.is_initialized
             assert integrator.status.symbol_strategy_map["SUI-PERP"] == "market_making"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_initialize_without_market_making(self, mock_llm_agent):
         """Test initialization without market making for non-SUI-PERP symbols."""
         integrator = MarketMakingIntegrator(
@@ -276,7 +276,7 @@ class TestMarketMakingIntegrator:
         assert integrator.llm_agent is mock_llm_agent
         assert integrator.market_making_engine is None
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_analyze_market_with_market_making(self, integrator, mock_llm_agent):
         """Test market analysis using market making engine."""
         mock_engine = MockMarketMakingEngine()
@@ -299,7 +299,7 @@ class TestMarketMakingIntegrator:
             assert len(mock_engine.analyze_calls) == 1
             assert len(mock_llm_agent.analyze_market_calls) == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_analyze_market_with_llm_agent(self, mock_llm_agent):
         """Test market analysis using LLM agent."""
         integrator = MarketMakingIntegrator(
@@ -319,7 +319,7 @@ class TestMarketMakingIntegrator:
         assert action.rationale == "Mock LLM decision"
         assert len(mock_llm_agent.analyze_market_calls) == 1
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_analyze_market_error_handling(self, integrator, mock_llm_agent):
         """Test error handling during market analysis."""
         mock_engine = MockMarketMakingEngine()
@@ -346,7 +346,7 @@ class TestMarketMakingIntegrator:
             assert integrator.status.error_count == 1
             assert integrator.status.last_error_message == "Analysis failed"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_start_and_stop(self, integrator, mock_llm_agent):
         """Test starting and stopping the integrator."""
         mock_engine = MockMarketMakingEngine()
@@ -370,7 +370,7 @@ class TestMarketMakingIntegrator:
             assert not integrator.status.is_running
             assert not mock_engine.is_running
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_status(self, integrator, mock_llm_agent):
         """Test status reporting."""
         mock_engine = MockMarketMakingEngine()
@@ -397,7 +397,7 @@ class TestMarketMakingIntegrator:
             assert status["error_count"] == 0
             assert status["engine_status"] is not None
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_health_check(self, integrator, mock_llm_agent):
         """Test health check functionality."""
         mock_engine = MockMarketMakingEngine()
@@ -420,7 +420,7 @@ class TestMarketMakingIntegrator:
             assert health["checks"]["no_errors"]
             assert health["checks"]["engine_healthy"]
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_health_check_unhealthy(self, integrator, mock_llm_agent):
         """Test health check with unhealthy state."""
         mock_engine = MockMarketMakingEngine()
@@ -462,7 +462,7 @@ class TestMarketMakingIntegrator:
         assert integrator.get_strategy_for_symbol("BTC-USD") == "llm"
         assert integrator.get_strategy_for_symbol("ETH-USD") == "llm"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_managed_lifecycle(self, integrator, mock_llm_agent):
         """Test managed lifecycle context manager."""
         mock_engine = MockMarketMakingEngine()
@@ -484,7 +484,7 @@ class TestMarketMakingIntegrator:
             assert not integrator.status.is_running
             assert not mock_engine.is_running
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_emergency_stop(self, integrator, mock_llm_agent):
         """Test emergency stop functionality."""
         mock_engine = MockMarketMakingEngine()
@@ -562,7 +562,7 @@ class TestMarketMakingIntegratorFactory:
 class TestIntegrationScenarios:
     """Test complex integration scenarios."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_multiple_symbol_routing(self):
         """Test routing decisions for multiple symbols."""
         mock_client = MockBluefinClient()
@@ -605,7 +605,7 @@ class TestIntegrationScenarios:
             assert len(mock_engine.analyze_calls) == 2  # SUI-PERP and ETH-PERP
             assert len(mock_llm.analyze_market_calls) == 1  # BTC-USD
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_fallback_to_llm_on_engine_failure(self):
         """Test fallback to LLM when market making engine fails."""
         mock_client = MockBluefinClient()
@@ -635,7 +635,7 @@ class TestIntegrationScenarios:
                 assert "Engine creation failed" in str(e)
                 assert integrator.status.error_count > 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_concurrent_operations(self):
         """Test concurrent operations on the integrator."""
         mock_client = MockBluefinClient()
@@ -681,7 +681,7 @@ class TestIntegrationScenarios:
             assert results[3]["is_running"]
             assert results[4]["healthy"]
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_paper_trading_mode_compatibility(self):
         """Test compatibility with paper trading mode."""
         mock_client = MockBluefinClient()
@@ -715,7 +715,7 @@ class TestIntegrationScenarios:
             assert action.action == "LONG"
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_full_integration_lifecycle():
     """Test the complete integration lifecycle from creation to shutdown."""
     # Create all components

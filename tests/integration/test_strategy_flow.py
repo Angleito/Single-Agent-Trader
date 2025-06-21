@@ -17,7 +17,7 @@ from bot.validator import TradeValidator
 class TestStrategyFlow:
     """Integration tests for the complete strategy decision flow."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def sample_market_data(self):
         """Create sample market data for testing."""
         dates = pd.date_range("2024-01-01", periods=100, freq="1h")
@@ -33,7 +33,7 @@ class TestStrategyFlow:
             index=dates,
         )
 
-    @pytest.fixture
+    @pytest.fixture()
     def strategy_components(self):
         """Create strategy components for testing."""
         return {

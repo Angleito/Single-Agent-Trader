@@ -318,6 +318,7 @@ class MarketMakingOrderManager:
                         # Register callback for fill monitoring
                         def create_callback(order_id_ref: str):
                             def callback(oid: str, event: OrderEvent) -> None:
+                                # Use order_id_ref for context if needed
                                 asyncio.create_task(
                                     self._handle_order_event(oid, event)
                                 )

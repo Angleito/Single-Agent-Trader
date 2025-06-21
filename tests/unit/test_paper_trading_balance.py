@@ -20,20 +20,20 @@ from bot.trading_types import OrderStatus, TradeAction
 class TestPaperTradingBalance:
     """Test cases for paper trading balance calculations."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def temp_data_dir(self):
         """Create temporary directory for test data."""
         with tempfile.TemporaryDirectory() as temp_dir:
             yield Path(temp_dir)
 
-    @pytest.fixture
+    @pytest.fixture()
     def account(self, temp_data_dir):
         """Create paper trading account for testing."""
         return PaperTradingAccount(
             starting_balance=Decimal(10000), data_dir=temp_data_dir
         )
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_fee_calculator(self):
         """Mock fee calculator for consistent testing."""
         with patch("bot.paper_trading.fee_calculator") as mock_calc:

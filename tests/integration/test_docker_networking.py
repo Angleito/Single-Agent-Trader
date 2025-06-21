@@ -17,7 +17,7 @@ from bot.exchange.bluefin_client import BluefinServiceClient
 class TestDockerNetworking:
     """Test Docker Compose networking and service discovery."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def docker_compose_services(self):
         """Configuration for Docker Compose services."""
         return {
@@ -80,7 +80,7 @@ class TestDockerNetworking:
             assert parsed.hostname is not None
             assert parsed.port is not None
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_docker_service_health_check(self):
         """Test Docker service health check endpoints."""
         # Mock service health check responses
@@ -105,7 +105,7 @@ class TestDockerNetworking:
             assert expected_response["status"] == "healthy"
             assert "service" in expected_response
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_service_communication_flow(self):
         """Test communication flow between Docker services."""
         # Mock service communication
@@ -140,7 +140,7 @@ class TestDockerNetworking:
         assert "default" in network_config["networks"]
         assert "driver" in network_config["networks"]["default"]
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_service_startup_dependencies(self):
         """Test service startup dependency order."""
         # Mock service dependency chain
@@ -155,7 +155,7 @@ class TestDockerNetworking:
         assert startup_times["bluefin-sdk-service"] < startup_times["ai-trading-bot"]
         assert startup_times["dashboard-backend"] < startup_times["ai-trading-bot"]
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_port_binding_and_exposure(self):
         """Test Docker port binding and exposure."""
         # Test port configuration
@@ -191,7 +191,7 @@ class TestDockerNetworking:
 class TestServiceDiscovery:
     """Test service discovery mechanisms."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_service_registry_discovery(self):
         """Test service registry-based discovery."""
         # Mock service registry
@@ -215,7 +215,7 @@ class TestServiceDiscovery:
             assert "endpoints" in config
             assert isinstance(config["endpoints"], list)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_dns_based_service_discovery(self):
         """Test DNS-based service discovery."""
         # Test service name resolution
@@ -227,7 +227,7 @@ class TestServiceDiscovery:
             assert not service_name.startswith("-")
             assert not service_name.endswith("-")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_environment_based_discovery(self):
         """Test environment variable-based service discovery."""
         env_discovery_patterns = {
@@ -249,7 +249,7 @@ class TestServiceDiscovery:
             else:
                 assert len(expected_value) > 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_load_balancer_service_discovery(self):
         """Test load balancer-based service discovery."""
         # Mock load balancer configuration
@@ -271,7 +271,7 @@ class TestServiceDiscovery:
 class TestNetworkResilience:
     """Test network resilience and fault tolerance."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_connection_retry_logic(self):
         """Test connection retry logic for network failures."""
         retry_config = {"max_retries": 3, "backoff_factor": 2, "initial_delay": 1}
@@ -289,7 +289,7 @@ class TestNetworkResilience:
 
         assert attempt == max_attempts
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_circuit_breaker_pattern(self):
         """Test circuit breaker pattern for service failures."""
         circuit_breaker_config = {
@@ -305,7 +305,7 @@ class TestNetworkResilience:
         assert circuit_breaker_config["timeout"] > 0
         assert len(circuit_breaker_config["states"]) == 3
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_health_check_monitoring(self):
         """Test continuous health check monitoring."""
         health_check_config = {
@@ -327,7 +327,7 @@ class TestNetworkResilience:
             assert endpoint.startswith("http")
             assert "/health" in endpoint
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_graceful_degradation(self):
         """Test graceful degradation when services are unavailable."""
         # Mock service degradation scenarios
@@ -382,7 +382,7 @@ class TestDockerComposeIntegration:
         assert "depends_on" in bot_service
         assert "bluefin-sdk-service" in bot_service["depends_on"]
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_service_scaling_configuration(self):
         """Test service scaling configuration."""
         scaling_config = {
@@ -412,7 +412,7 @@ class TestDockerComposeIntegration:
             if "${" in value and ":-" in value:
                 assert value.endswith("}")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_container_lifecycle_management(self):
         """Test container lifecycle management."""
         lifecycle_config = {
@@ -438,7 +438,7 @@ class TestDockerComposeIntegration:
 class TestServiceCommunicationPatterns:
     """Test service communication patterns and protocols."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_http_rest_communication(self):
         """Test HTTP REST communication between services."""
         # Mock HTTP communication patterns
@@ -457,7 +457,7 @@ class TestServiceCommunicationPatterns:
                 async with session.get(url) as response:
                     assert response.status == 200
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_websocket_communication(self):
         """Test WebSocket communication between services."""
         # Mock WebSocket communication
@@ -473,7 +473,7 @@ class TestServiceCommunicationPatterns:
         assert websocket_config["ping_interval"] > 0
         assert websocket_config["ping_timeout"] > 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_message_queue_communication(self):
         """Test message queue communication patterns."""
         # Mock message queue configuration
@@ -489,7 +489,7 @@ class TestServiceCommunicationPatterns:
         assert "queues" in queue_config
         assert len(queue_config["queues"]) > 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_service_mesh_communication(self):
         """Test service mesh communication patterns."""
         # Mock service mesh configuration

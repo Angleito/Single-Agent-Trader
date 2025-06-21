@@ -19,7 +19,7 @@ from bot.exchange.bluefin_client import BluefinServiceClient
 class TestBluefinClientConnection:
     """Test Bluefin client connection establishment and management."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_service_client(self):
         """Mock BluefinServiceClient for testing."""
         mock_client = AsyncMock(spec=BluefinServiceClient)
@@ -34,7 +34,7 @@ class TestBluefinClientConnection:
         }
         return mock_client
 
-    @pytest.fixture
+    @pytest.fixture()
     def bluefin_client(self, mock_service_client):
         """Create BluefinClient instance with mocked service client."""
         with patch(
@@ -50,7 +50,7 @@ class TestBluefinClientConnection:
             client._service_client = mock_service_client
             return client
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_bluefin_client_initialization(self, mock_service_client):
         """Test Bluefin client initialization with service connection."""
         with patch(
@@ -70,7 +70,7 @@ class TestBluefinClientConnection:
             assert hasattr(client, "_service_client")
             mock_service_client.connect.assert_called_once()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_bluefin_client_connection_success(
         self, bluefin_client, mock_service_client
     ):
@@ -82,7 +82,7 @@ class TestBluefinClientConnection:
         assert bluefin_client.is_connected()
         mock_service_client.connect.assert_called()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_bluefin_client_connection_failure(self, mock_service_client):
         """Test connection failure handling."""
         # Mock connection failure
@@ -105,7 +105,7 @@ class TestBluefinClientConnection:
             assert result is False
             assert not client.is_connected()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_bluefin_client_connection_retry(self, mock_service_client):
         """Test connection retry logic."""
         # Mock connection failure then success
@@ -128,7 +128,7 @@ class TestBluefinClientConnection:
             assert result is True
             assert mock_service_client.connect.call_count == 3
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_bluefin_client_authentication(
         self, bluefin_client, mock_service_client
     ):
@@ -146,7 +146,7 @@ class TestBluefinClientConnection:
         assert auth_result is True
         mock_service_client.authenticate.assert_called_once()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_bluefin_client_authentication_failure(
         self, bluefin_client, mock_service_client
     ):
@@ -160,7 +160,7 @@ class TestBluefinClientConnection:
         with pytest.raises(ExchangeAuthError):
             await bluefin_client.authenticate()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_bluefin_client_service_health_check(
         self, bluefin_client, mock_service_client
     ):
@@ -173,7 +173,7 @@ class TestBluefinClientConnection:
         assert health_info["network"] == "testnet"
         mock_service_client.get_service_info.assert_called_once()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_bluefin_client_network_configuration(self, mock_service_client):
         """Test network configuration (testnet vs mainnet)."""
         # Test testnet configuration
@@ -194,7 +194,7 @@ class TestBluefinClientConnection:
 
         assert mainnet_client.network == "mainnet"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_bluefin_client_private_key_validation(self):
         """Test private key validation."""
         # Test invalid private key format
@@ -205,7 +205,7 @@ class TestBluefinClientConnection:
         with pytest.raises(ValueError, match="Private key is required"):
             BluefinClient(private_key=None, network="testnet", dry_run=True)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_bluefin_client_service_url_configuration(self, mock_service_client):
         """Test service URL configuration."""
         custom_url = "http://custom-service:9090"
@@ -234,7 +234,7 @@ class TestBluefinClientConnection:
 class TestBluefinServiceClient:
     """Test BluefinServiceClient functionality."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_aiohttp_session(self):
         """Mock aiohttp session for HTTP requests."""
         mock_session = AsyncMock()
@@ -249,7 +249,7 @@ class TestBluefinServiceClient:
         mock_session.post.return_value.__aenter__.return_value = mock_response
         return mock_session
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_service_client_connection(self, mock_aiohttp_session):
         """Test BluefinServiceClient connection."""
         with patch("aiohttp.ClientSession", return_value=mock_aiohttp_session):
@@ -262,7 +262,7 @@ class TestBluefinServiceClient:
             assert result is True
             mock_aiohttp_session.get.assert_called()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_service_client_get_service_info(self, mock_aiohttp_session):
         """Test getting service information."""
         with patch("aiohttp.ClientSession", return_value=mock_aiohttp_session):
@@ -276,7 +276,7 @@ class TestBluefinServiceClient:
             assert info["status"] == "healthy"
             assert info["network"] == "testnet"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_service_client_http_error_handling(self, mock_aiohttp_session):
         """Test HTTP error handling."""
         # Mock HTTP error
@@ -293,7 +293,7 @@ class TestBluefinServiceClient:
             with pytest.raises(ExchangeConnectionError):
                 await client.connect()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_service_client_timeout_handling(self, mock_aiohttp_session):
         """Test timeout handling."""
         # Mock timeout
@@ -307,7 +307,7 @@ class TestBluefinServiceClient:
             with pytest.raises(ExchangeConnectionError):
                 await client.connect()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_service_client_rate_limiting(self, mock_aiohttp_session):
         """Test rate limiting functionality."""
         with patch("aiohttp.ClientSession", return_value=mock_aiohttp_session):
@@ -331,14 +331,14 @@ class TestBluefinServiceClient:
 class TestBluefinAPIAuthentication:
     """Test Bluefin API authentication mechanisms."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_crypto_operations(self):
         """Mock cryptographic operations for testing."""
         with patch("bot.exchange.bluefin_client.sign_message") as mock_sign:
             mock_sign.return_value = "mocked_signature"
             yield mock_sign
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_api_authentication_flow(self, mock_crypto_operations):
         """Test complete API authentication flow."""
         mock_service_client = AsyncMock()
@@ -364,7 +364,7 @@ class TestBluefinAPIAuthentication:
             assert result is True
             mock_service_client.authenticate.assert_called_once()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_api_signature_validation(self, mock_crypto_operations):
         """Test API signature validation."""
         mock_service_client = AsyncMock()
@@ -386,7 +386,7 @@ class TestBluefinAPIAuthentication:
             assert is_valid is True
             mock_service_client.validate_signature.assert_called_once()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_api_authentication_refresh(self, mock_crypto_operations):
         """Test authentication token refresh."""
         mock_service_client = AsyncMock()
@@ -412,7 +412,7 @@ class TestBluefinAPIAuthentication:
             assert result is True
             mock_service_client.refresh_authentication.assert_called_once()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_api_authentication_failure_recovery(self, mock_crypto_operations):
         """Test authentication failure recovery."""
         mock_service_client = AsyncMock()
@@ -445,7 +445,7 @@ class TestBluefinAPIAuthentication:
 class TestBluefinConnectionResilience:
     """Test connection resilience and recovery mechanisms."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_connection_auto_recovery(self):
         """Test automatic connection recovery."""
         mock_service_client = AsyncMock()
@@ -475,7 +475,7 @@ class TestBluefinConnectionResilience:
             recovered_status = client.is_connected()
             assert recovered_status is True
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_connection_heartbeat(self):
         """Test connection heartbeat mechanism."""
         mock_service_client = AsyncMock()
@@ -497,7 +497,7 @@ class TestBluefinConnectionResilience:
             assert result is True
             mock_service_client.ping.assert_called_once()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_connection_timeout_handling(self):
         """Test connection timeout handling."""
         mock_service_client = AsyncMock()
@@ -517,7 +517,7 @@ class TestBluefinConnectionResilience:
             with pytest.raises(ExchangeConnectionError):
                 await client.connect()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_connection_error_propagation(self):
         """Test proper error propagation from service client."""
         mock_service_client = AsyncMock()

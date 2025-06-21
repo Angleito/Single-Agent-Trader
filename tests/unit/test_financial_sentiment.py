@@ -162,7 +162,7 @@ class TestFinancialSentimentService:
         assert service._crypto_price_pattern is not None
         assert len(service._technical_indicators) > 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_analyze_news_sentiment_empty(self):
         """Test sentiment analysis with empty news list."""
         service = FinancialSentimentService()
@@ -173,7 +173,7 @@ class TestFinancialSentimentService:
         assert result.confidence == 0.0
         assert "No news data available" in result.key_themes
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_analyze_news_sentiment_bullish(self):
         """Test sentiment analysis with bullish news."""
         service = FinancialSentimentService()
@@ -195,7 +195,7 @@ class TestFinancialSentimentService:
         assert result.confidence > 0.0
         assert len(result.key_themes) > 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_analyze_news_sentiment_bearish(self):
         """Test sentiment analysis with bearish news."""
         service = FinancialSentimentService()
@@ -217,7 +217,7 @@ class TestFinancialSentimentService:
         assert result.confidence > 0.0
         assert len(result.bullish_indicators) < len(result.bearish_indicators)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_analyze_news_sentiment_mixed(self):
         """Test sentiment analysis with mixed news."""
         service = FinancialSentimentService()
@@ -238,7 +238,7 @@ class TestFinancialSentimentService:
         assert abs(result.sentiment_score) < 0.5  # Should be relatively neutral
         assert result.confidence > 0.0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_analyze_news_sentiment_volatility(self):
         """Test sentiment analysis with volatility keywords."""
         service = FinancialSentimentService()
@@ -256,7 +256,7 @@ class TestFinancialSentimentService:
         # Volatility should reduce confidence
         assert result.confidence < 1.0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_analyze_news_sentiment_exception_handling(self):
         """Test sentiment analysis error handling."""
         service = FinancialSentimentService()
@@ -701,7 +701,7 @@ class TestFinancialSentimentService:
         assert "low confidence" in implications.lower()
         assert "waiting" in implications.lower() or "clearer" in implications.lower()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_concurrent_sentiment_analysis(self):
         """Test concurrent processing of sentiment analysis."""
         service = FinancialSentimentService()
@@ -760,7 +760,7 @@ class TestFinancialSentimentService:
 
 
 # Fixtures for testing
-@pytest.fixture
+@pytest.fixture()
 def sample_bullish_news():
     """Sample bullish news items for testing."""
     return [
@@ -784,7 +784,7 @@ def sample_bullish_news():
     ]
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_bearish_news():
     """Sample bearish news items for testing."""
     return [
@@ -808,7 +808,7 @@ def sample_bearish_news():
     ]
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_mixed_news():
     """Sample mixed sentiment news items for testing."""
     return [
@@ -834,7 +834,7 @@ def sample_mixed_news():
 class TestFinancialSentimentServiceIntegration:
     """Integration tests for FinancialSentimentService with sample data."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_full_analysis_workflow_bullish(self, sample_bullish_news):
         """Test complete analysis workflow with bullish news."""
         service = FinancialSentimentService()
@@ -873,7 +873,7 @@ class TestFinancialSentimentServiceIntegration:
         assert "BULLISH" in formatted
         assert "institutional" in formatted.lower()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_full_analysis_workflow_bearish(self, sample_bearish_news):
         """Test complete analysis workflow with bearish news."""
         service = FinancialSentimentService()
@@ -907,7 +907,7 @@ class TestFinancialSentimentServiceIntegration:
         assert "BEARISH" in formatted
         assert "regulatory" in formatted.lower() or "fear" in formatted.lower()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_full_analysis_workflow_mixed(self, sample_mixed_news):
         """Test complete analysis workflow with mixed sentiment news."""
         service = FinancialSentimentService()
