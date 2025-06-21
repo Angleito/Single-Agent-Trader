@@ -53,9 +53,12 @@ WORKDIR /app
 # Copy poetry files
 COPY pyproject.toml poetry.lock* ./
 
-# Install main dependencies with Poetry (bypass lock file validation for VPS deployment)
+# Install main dependencies with Poetry (regenerate lock file if needed for VPS deployment)
 RUN poetry config virtualenvs.in-project true \
-    && poetry install --only=main --no-root --no-check \
+    && (poetry install --only=main --no-root || \
+        (echo "Lock file out of sync, regenerating..." && \
+         poetry lock --no-update && \
+         poetry install --only=main --no-root)) \
     && rm -rf $POETRY_CACHE_DIR
 
 # Note: bluefin-v2-client can be installed at runtime if live trading is needed
