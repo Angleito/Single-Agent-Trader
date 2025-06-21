@@ -128,14 +128,14 @@ class BluefinEndpointConfig:
         Check if an endpoint path requires authentication.
 
         Args:
-            endpoint_path: API endpoint path (e.g., "/ticker24hr", "/candlestickData")
+            endpoint_path: API endpoint path (e.g., "/ticker", "/candlestickData")
 
         Returns:
             True if endpoint is public (no auth required)
         """
         # Public market data endpoints that don't require authentication
         public_endpoints = {
-            "/ticker24hr",
+            "/ticker",
             "/candlestickData",
             "/trades",
             "/orderbook",

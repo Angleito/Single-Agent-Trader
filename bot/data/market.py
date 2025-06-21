@@ -1187,7 +1187,7 @@ class MarketDataProvider:
         logger.debug("WebSocket subscriptions: %s", json.dumps(subscriptions, indent=2))
 
         async with websockets.connect(
-            self.COINBASE_WS_URL, timeout=settings.exchange.websocket_timeout
+            self.COINBASE_WS_URL, open_timeout=settings.exchange.websocket_timeout
         ) as websocket:
             self._ws_connection = websocket  # type: ignore[assignment]
 

@@ -5,6 +5,7 @@ import contextlib
 import json
 import logging
 import os
+import time
 from collections import deque
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
@@ -582,7 +583,7 @@ class BluefinWebSocketClient:
 
             # Enhanced exponential backoff with jitter
             base_delay = self._reconnect_delay * (2 ** (self._reconnect_attempts - 1))
-            jitter = base_delay * 0.1 * (0.5 - (asyncio.get_event_loop().time() % 1))
+            jitter = base_delay * 0.1 * (0.5 - (time.time() % 1))
             delay = min(base_delay + jitter, 60)
 
             # Additional delay for consecutive failures
@@ -613,17 +614,15 @@ class BluefinWebSocketClient:
             )
 
             # Enhanced connection parameters for better stability
-            # Note: extra_headers removed due to compatibility issues with some asyncio implementations
-            self._ws = await asyncio.wait_for(
-                websockets.connect(
-                    self.NOTIFICATION_WS_URL,
-                    ping_interval=15,  # More frequent pings
-                    ping_timeout=8,  # Shorter timeout to detect issues faster
-                    close_timeout=5,  # Quick close timeout
-                    max_size=2**20,  # 1MB max message size
-                    compression=None,  # Disable compression for performance
-                ),
-                timeout=30.0,  # Connection timeout
+            # Note: additional_headers removed due to compatibility issues with some asyncio implementations
+            self._ws = await websockets.connect(
+                self.NOTIFICATION_WS_URL,
+                open_timeout=30.0,  # Updated for websockets >= 15.0
+                ping_interval=15,  # More frequent pings
+                ping_timeout=8,  # Shorter timeout to detect issues faster
+                close_timeout=5,  # Quick close timeout
+                max_size=2**20,  # 1MB max message size
+                compression=None,  # Disable compression for performance
             )
 
             self._connected = True
@@ -1840,7 +1839,7 @@ class BluefinWebSocketClient:
                 ping_message = {
                     "id": self._get_next_subscription_id(),
                     "method": "ping",
-                    "timestamp": asyncio.get_event_loop().time(),
+                    "timestamp": time.time(),
                 }
 
                 await self._send_message(ping_message)

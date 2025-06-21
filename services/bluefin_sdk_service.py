@@ -4373,7 +4373,7 @@ async def get_ticker(request):
                 logger.debug("HTTP session created for ticker call")
                 try:
                     async with session.get(
-                        f"{api_url}/ticker24hr", params={"symbol": symbol_str}
+                        f"{api_url}/ticker", params={"symbol": symbol_str}
                     ) as response:
                         if response.status == HTTP_OK:
                             data = await response.json()

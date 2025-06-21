@@ -1753,13 +1753,13 @@ class BluefinClient(BaseExchange):
                         order_level["quantity"],
                         bluefin_symbol,
                         order_level["price"],
-                        order_level.get("level", 0),
+                        int(order_level.get("level", 0)),
                     )
                 else:
                     logger.warning(
                         "Failed to place %s order at level %d",
                         order_level["side"],
-                        order_level.get("level", 0),
+                        int(order_level.get("level", 0)),
                     )
 
                 # Small delay between orders to avoid rate limiting
@@ -1769,7 +1769,7 @@ class BluefinClient(BaseExchange):
                 logger.exception(
                     "Error placing %s order at level %d: %s",
                     order_level["side"],
-                    order_level.get("level", 0),
+                    int(order_level.get("level", 0)),
                     e,
                 )
                 continue
@@ -1797,13 +1797,13 @@ class BluefinClient(BaseExchange):
                         order_level["quantity"],
                         bluefin_symbol,
                         order_level["price"],
-                        order_level.get("level", 0),
+                        int(order_level.get("level", 0)),
                     )
                 else:
                     logger.warning(
                         "Failed to place %s order at level %d",
                         order_level["side"],
-                        order_level.get("level", 0),
+                        int(order_level.get("level", 0)),
                     )
 
                 # Small delay between orders to avoid rate limiting
@@ -1813,7 +1813,7 @@ class BluefinClient(BaseExchange):
                 logger.exception(
                     "Error placing %s order at level %d: %s",
                     order_level["side"],
-                    order_level.get("level", 0),
+                    int(order_level.get("level", 0)),
                     e,
                 )
                 continue

@@ -1445,7 +1445,7 @@ class BluefinMarketDataProvider:
 
         try:
             # Make API request for ticker data
-            url = f"{self._api_base_url}/ticker24hr"
+            url = f"{self._api_base_url}/ticker"
             params = {"symbol": self.symbol}
 
             async with self._session.get(url, params=params) as response:

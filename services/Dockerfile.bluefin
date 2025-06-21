@@ -85,10 +85,11 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     && pip cache purge
 
 # Ubuntu-optimized dependency installation with better error handling
+# Install compatible aiohttp version first to avoid compilation issues
 RUN pip install --no-cache-dir aiohttp==3.9.5 || \
     (echo "aiohttp installation failed, trying alternative..." && pip install --no-cache-dir httpx[http2])
 
-# Install Bluefin client with multiple fallback options
+# Install Bluefin client with precompiled wheels preferred
 RUN pip install --no-cache-dir bluefin-v2-client || \
     pip install --no-cache-dir --force-reinstall bluefin-v2-client || \
     pip install --no-cache-dir git+https://github.com/fireflyprotocol/bluefin-v2-client-python.git || \

@@ -395,14 +395,14 @@ class WebSocketPublisher:
             # Enhanced connection parameters for better stability
             self._ws = await websockets.connect(
                 url,
-                timeout=timeout,
+                open_timeout=timeout,  # Updated for websockets >= 15.0
                 ping_interval=self.ping_interval,  # Configurable ping interval
                 ping_timeout=self.ping_timeout,  # Configurable ping timeout
                 close_timeout=5,  # Quick close timeout
                 max_size=2**20,  # 1MB max message size
                 compression=None,  # Disable compression to reduce CPU overhead
                 # Additional headers for better compatibility
-                extra_headers={
+                additional_headers={
                     "User-Agent": "AI-Trading-Bot-WebSocket-Publisher/1.0",
                     "Accept": "*/*",
                     "Connection": "Upgrade",
@@ -459,7 +459,7 @@ class WebSocketPublisher:
 
         # Enhanced exponential backoff with jitter to prevent thundering herd
         base_delay = self.retry_delay * (2 ** (self._retry_count - 1))
-        jitter = base_delay * 0.1 * (0.5 - asyncio.get_event_loop().time() % 1)
+        jitter = base_delay * 0.1 * (0.5 - time.time() % 1)
         delay = min(base_delay + jitter, 60)  # Cap at 60 seconds
 
         # Additional delay for consecutive failures

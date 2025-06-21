@@ -914,3 +914,283 @@ def retry_with_backoff(
 exception_handler = EnhancedExceptionHandler()
 graceful_degradation = GracefulDegradation()
 balance_error_handler = BalanceErrorHandler(exception_handler)
+
+
+class CriticalOperationManager:
+    """
+    Manager for critical operations that require enhanced error handling.
+
+    Provides operation-specific error boundaries, fallback behaviors,
+    and recovery strategies for mission-critical trading operations.
+    """
+
+    def __init__(self):
+        self.operation_boundaries: dict[str, ErrorBoundary] = {}
+        self.operation_sagas: dict[str, TradeSaga] = {}
+        self.operation_metrics: dict[str, dict[str, Any]] = {}
+
+    async def execute_critical_operation(
+        self,
+        operation_name: str,
+        operation_func: Callable[..., Any],
+        fallback_func: Callable[..., Any] | None = None,
+        max_retries: int = 3,
+        retry_delay: float = 1.0,
+        *args,
+        **kwargs,
+    ) -> Any:
+        """
+        Execute a critical operation with comprehensive error handling.
+
+        Args:
+            operation_name: Name of the operation for tracking
+            operation_func: Function to execute
+            fallback_func: Optional fallback function
+            max_retries: Maximum retry attempts
+            retry_delay: Delay between retries
+            *args, **kwargs: Arguments for the operation function
+
+        Returns:
+            Result of the operation or fallback
+        """
+        # Create or get operation boundary
+        if operation_name not in self.operation_boundaries:
+            self.operation_boundaries[operation_name] = ErrorBoundary(
+                component_name=operation_name,
+                fallback_behavior=fallback_func,
+                max_retries=max_retries,
+                retry_delay=retry_delay,
+                severity=ErrorSeverity.HIGH,
+            )
+
+        boundary = self.operation_boundaries[operation_name]
+
+        # Initialize metrics tracking
+        if operation_name not in self.operation_metrics:
+            self.operation_metrics[operation_name] = {
+                "total_executions": 0,
+                "successful_executions": 0,
+                "failed_executions": 0,
+                "average_execution_time": 0.0,
+                "last_execution_time": None,
+            }
+
+        metrics = self.operation_metrics[operation_name]
+        start_time = datetime.now(UTC)
+
+        try:
+            async with boundary:
+                metrics["total_executions"] += 1
+
+                if asyncio.iscoroutinefunction(operation_func):
+                    result = await operation_func(*args, **kwargs)
+                else:
+                    result = operation_func(*args, **kwargs)
+
+                # Update success metrics
+                metrics["successful_executions"] += 1
+                execution_time = (datetime.now(UTC) - start_time).total_seconds()
+                metrics["average_execution_time"] = (
+                    metrics["average_execution_time"]
+                    * (metrics["successful_executions"] - 1)
+                    + execution_time
+                ) / metrics["successful_executions"]
+                metrics["last_execution_time"] = datetime.now(UTC)
+
+                return result
+
+        except Exception as e:
+            metrics["failed_executions"] += 1
+
+            # Log critical operation failure
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "operation_name": operation_name,
+                    "total_executions": metrics["total_executions"],
+                    "success_rate": metrics["successful_executions"]
+                    / metrics["total_executions"],
+                    "args": str(args),
+                    "kwargs": str(kwargs),
+                },
+                component="CriticalOperationManager",
+                operation="execute_critical_operation",
+            )
+
+            raise
+
+    def get_operation_health(self, operation_name: str) -> dict[str, Any]:
+        """Get health metrics for an operation."""
+        if operation_name not in self.operation_metrics:
+            return {"status": "unknown", "message": "Operation not tracked"}
+
+        metrics = self.operation_metrics[operation_name]
+        boundary = self.operation_boundaries.get(operation_name)
+
+        success_rate = (
+            metrics["successful_executions"] / metrics["total_executions"]
+            if metrics["total_executions"] > 0
+            else 0.0
+        )
+
+        status = "healthy"
+        if success_rate < 0.5:
+            status = "critical"
+        elif success_rate < 0.8 or (boundary and boundary.is_degraded()):
+            status = "degraded"
+
+        return {
+            "status": status,
+            "success_rate": success_rate,
+            "total_executions": metrics["total_executions"],
+            "successful_executions": metrics["successful_executions"],
+            "failed_executions": metrics["failed_executions"],
+            "average_execution_time": metrics["average_execution_time"],
+            "last_execution_time": (
+                metrics["last_execution_time"].isoformat()
+                if metrics["last_execution_time"]
+                else None
+            ),
+            "is_degraded": boundary.is_degraded() if boundary else False,
+            "error_count": boundary.error_count if boundary else 0,
+        }
+
+    def reset_operation_metrics(self, operation_name: str) -> None:
+        """Reset metrics and error state for an operation."""
+        if operation_name in self.operation_boundaries:
+            self.operation_boundaries[operation_name].reset()
+
+        if operation_name in self.operation_metrics:
+            self.operation_metrics[operation_name] = {
+                "total_executions": 0,
+                "successful_executions": 0,
+                "failed_executions": 0,
+                "average_execution_time": 0.0,
+                "last_execution_time": None,
+            }
+
+        logger.info("Reset metrics for operation: %s", operation_name)
+
+
+class ErrorAggregator:
+    """
+    Aggregates and analyzes error patterns across the system.
+
+    Provides insights into system reliability, identifies trending
+    errors, and suggests areas for improvement.
+    """
+
+    def __init__(self, max_errors_to_track: int = 1000):
+        self.max_errors_to_track = max_errors_to_track
+        self.error_history: list[ErrorContext] = []
+        self.error_patterns: dict[str, int] = {}
+        self.component_error_rates: dict[str, float] = {}
+
+    def add_error(self, error_context: ErrorContext) -> None:
+        """Add an error to the aggregation system."""
+        self.error_history.append(error_context)
+
+        # Maintain size limit
+        if len(self.error_history) > self.max_errors_to_track:
+            self.error_history = self.error_history[-self.max_errors_to_track :]
+
+        # Update patterns
+        error_key = f"{error_context.component}:{error_context.error_type}"
+        self.error_patterns[error_key] = self.error_patterns.get(error_key, 0) + 1
+
+    def get_error_trends(self, time_window_hours: int = 24) -> dict[str, Any]:
+        """Get error trends within a time window."""
+        cutoff_time = datetime.now(UTC) - timedelta(hours=time_window_hours)
+        recent_errors = [
+            err for err in self.error_history if err.timestamp >= cutoff_time
+        ]
+
+        if not recent_errors:
+            return {"total_errors": 0, "trends": {}, "top_errors": []}
+
+        # Count errors by type
+        error_counts: dict[str, int] = {}
+        component_counts: dict[str, int] = {}
+        severity_counts: dict[str, int] = {}
+
+        for error in recent_errors:
+            error_type = error.error_type
+            component = error.component
+            severity = error.severity.value
+
+            error_counts[error_type] = error_counts.get(error_type, 0) + 1
+            component_counts[component] = component_counts.get(component, 0) + 1
+            severity_counts[severity] = severity_counts.get(severity, 0) + 1
+
+        # Find top errors
+        top_errors = sorted(error_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+        top_components = sorted(
+            component_counts.items(), key=lambda x: x[1], reverse=True
+        )[:5]
+
+        return {
+            "total_errors": len(recent_errors),
+            "time_window_hours": time_window_hours,
+            "top_errors": top_errors,
+            "top_error_components": top_components,
+            "severity_distribution": severity_counts,
+            "error_rate_per_hour": len(recent_errors) / time_window_hours,
+        }
+
+    def identify_critical_patterns(self) -> list[dict[str, Any]]:
+        """Identify critical error patterns that need attention."""
+        trends = self.get_error_trends(24)
+        critical_patterns = []
+
+        # High error rate
+        if trends["error_rate_per_hour"] > 10:
+            critical_patterns.append(
+                {
+                    "type": "high_error_rate",
+                    "severity": "critical",
+                    "description": f"Error rate of {trends['error_rate_per_hour']:.1f}/hour exceeds threshold",
+                    "recommendation": "Investigate system stability and implement circuit breakers",
+                }
+            )
+
+        # High concentration of errors in single component
+        for component, count in trends["top_error_components"]:
+            if count > trends["total_errors"] * 0.5:
+                critical_patterns.append(
+                    {
+                        "type": "component_hotspot",
+                        "severity": "high",
+                        "description": f"Component '{component}' accounts for {count} of {trends['total_errors']} errors",
+                        "recommendation": f"Focus error handling improvements on {component}",
+                    }
+                )
+
+        # High severity error concentration
+        critical_errors = trends["severity_distribution"].get("critical", 0)
+        if critical_errors > 5:
+            critical_patterns.append(
+                {
+                    "type": "critical_error_spike",
+                    "severity": "critical",
+                    "description": f"{critical_errors} critical errors in last 24h",
+                    "recommendation": "Immediate investigation required for critical errors",
+                }
+            )
+
+        return critical_patterns
+
+
+# Enhanced global instances
+critical_operation_manager = CriticalOperationManager()
+error_aggregator = ErrorAggregator()
+
+
+# Connect error aggregator to exception handler
+def _aggregate_errors_callback(error_context: ErrorContext) -> None:
+    """Callback to aggregate errors from exception handler."""
+    error_aggregator.add_error(error_context)
+
+
+# Add callback to exception handler if it supports it
+if hasattr(exception_handler, "add_callback"):
+    exception_handler.add_callback(_aggregate_errors_callback)

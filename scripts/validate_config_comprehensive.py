@@ -1,521 +1,666 @@
 #!/usr/bin/env python3
 """
-Comprehensive Configuration Validation Script
+Comprehensive Configuration Validation Report for AI Trading Bot
 
-This script performs deep analysis of all configuration files, validates
-consistency, checks for security issues, and provides recommendations.
+This script validates all configuration files, settings, and environment variables
+without requiring a valid .env file, providing a complete validation report.
 """
 
 import json
 import logging
 import re
-
-# Add bot to path for imports
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import click
-from pydantic import ValidationError
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from bot.config import Settings
-
-# Configure logging
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-logger = logging.getLogger(__name__)
+# Suppress warnings during validation
+logging.disable(logging.WARNING)
 
 
-class ConfigurationValidator:
-    """Comprehensive configuration validation and analysis."""
+@dataclass
+class ValidationResult:
+    category: str
+    item: str
+    status: str  # "pass", "fail", "warning", "skip"
+    message: str
+    details: str = ""
 
-    def __init__(self, base_path: Path):
-        self.base_path = base_path
-        self.config_dir = base_path / "config"
-        self.errors: list[str] = []
-        self.warnings: list[str] = []
-        self.recommendations: list[str] = []
+
+class ComprehensiveConfigValidator:
+    """Comprehensive configuration validator that doesn't require valid .env"""
+
+    def __init__(self):
+        self.project_root = Path.cwd()
+        self.config_dir = self.project_root / "config"
+        self.results: list[ValidationResult] = []
 
     def validate_all(self) -> dict[str, Any]:
-        """Run comprehensive validation of all configurations."""
-        results = {
-            "security_analysis": self._analyze_security(),
-            "schema_validation": self._validate_schemas(),
-            "consistency_check": self._check_consistency(),
-            "field_analysis": self._analyze_fields(),
-            "environment_validation": self._validate_environment(),
-            "risk_analysis": self._analyze_risk_parameters(),
-            "summary": self._generate_summary(),
-        }
+        """Run all validation checks"""
+        print("🔍 Running Comprehensive Configuration Validation")
+        print("=" * 60)
 
-        return results
+        # Validate JSON configuration files
+        self._validate_json_configs()
 
-    def _analyze_security(self) -> dict[str, Any]:
-        """Analyze security configuration and potential exposures."""
-        logger.info("🔒 Analyzing security configuration...")
+        # Validate .env.example completeness
+        self._validate_env_example()
 
-        security_issues = []
-        env_files = []
+        # Validate Docker configuration
+        self._validate_docker_config()
 
-        # Check for .env files
-        for env_file in self.base_path.glob(".env*"):
-            if env_file.name != ".env.example":
-                env_files.append(str(env_file))
+        # Validate schema consistency
+        self._validate_schema_consistency()
 
-                # Check if contains real API keys
-                if env_file.exists():
-                    try:
-                        content = env_file.read_text()
-                        # Look for patterns that suggest real API keys
-                        api_key_patterns = [
-                            r"API_KEY=(?!your_|sk-proj-|your-).{20,}",
-                            r"PRIVATE_KEY=(?!your_|0x123).{20,}",
-                            r"SECRET=(?!your_|secret).{10,}",
-                        ]
+        # Validate configuration structure
+        self._validate_config_structure()
 
-                        for pattern in api_key_patterns:
-                            if re.search(pattern, content):
-                                security_issues.append(
-                                    f"Potential real API key found in {env_file.name}"
-                                )
-                    except Exception as e:
-                        logger.warning("Could not read %s: %s", env_file, e)
+        # Generate report
+        return self._generate_report()
 
-        # Check gitignore effectiveness
-        gitignore_path = self.base_path / ".gitignore"
-        gitignore_effective = False
-        if gitignore_path.exists():
-            gitignore_content = gitignore_path.read_text()
-            if ".env" in gitignore_content and ".env.*" in gitignore_content:
-                gitignore_effective = True
+    def _validate_json_configs(self):
+        """Validate all JSON configuration files"""
+        print("\n📋 Validating JSON Configuration Files")
+        print("-" * 40)
 
-        return {
-            "env_files_found": env_files,
-            "security_issues": security_issues,
-            "gitignore_effective": gitignore_effective,
-            "status": "warning" if security_issues else "pass",
-        }
+        json_files = list(self.config_dir.glob("**/*.json"))
 
-    def _validate_schemas(self) -> dict[str, Any]:
-        """Validate all JSON config files against Pydantic schemas."""
-        logger.info("📋 Validating configuration schemas...")
-
-        validation_results = {}
-        json_files = list(self.config_dir.glob("*.json"))
-        json_files.extend(self.config_dir.glob("profiles/*.json"))
-
-        for config_file in json_files:
+        for json_file in json_files:
             try:
-                with open(config_file) as f:
+                with open(json_file) as f:
                     config_data = json.load(f)
 
-                # Try to validate with main Settings schema
-                try:
-                    Settings(**config_data)
-                    validation_results[str(config_file.relative_to(self.base_path))] = {
-                        "status": "valid",
-                        "errors": [],
-                    }
-                except ValidationError as e:
-                    validation_results[str(config_file.relative_to(self.base_path))] = {
-                        "status": "invalid",
-                        "errors": [str(error) for error in e.errors()],
-                    }
+                # Basic structure validation
+                self._validate_json_structure(json_file, config_data)
+
+                self.results.append(
+                    ValidationResult(
+                        category="json_validation",
+                        item=str(json_file.relative_to(self.config_dir)),
+                        status="pass",
+                        message="Valid JSON syntax and structure",
+                    )
+                )
+                print(f"✅ {json_file.relative_to(self.config_dir)}")
 
             except json.JSONDecodeError as e:
-                validation_results[str(config_file.relative_to(self.base_path))] = {
-                    "status": "json_error",
-                    "errors": [f"JSON decode error: {e}"],
-                }
-            except Exception as e:
-                validation_results[str(config_file.relative_to(self.base_path))] = {
-                    "status": "error",
-                    "errors": [f"Validation error: {e}"],
-                }
-
-        return validation_results
-
-    def _check_consistency(self) -> dict[str, Any]:
-        """Check consistency across configuration files."""
-        logger.info("🔍 Checking configuration consistency...")
-
-        configs = {}
-        inconsistencies = []
-
-        # Load all configs
-        for config_file in self.config_dir.glob("*.json"):
-            try:
-                with open(config_file) as f:
-                    configs[config_file.name] = json.load(f)
-            except Exception as e:
-                logger.warning("Could not load %s: %s", config_file, e)
-
-        # Check field naming consistency
-        field_variations = self._find_field_variations(configs)
-        for field_purpose, variations in field_variations.items():
-            if len(variations) > 1:
-                inconsistencies.append(
-                    {
-                        "type": "field_naming",
-                        "purpose": field_purpose,
-                        "variations": list(variations),
-                        "recommendation": f"Standardize to: {self._recommend_field_name(variations)}",
-                    }
+                self.results.append(
+                    ValidationResult(
+                        category="json_validation",
+                        item=str(json_file.relative_to(self.config_dir)),
+                        status="fail",
+                        message=f"JSON syntax error: {e}",
+                        details=f"Line {e.lineno}, Column {e.colno}: {e.msg}",
+                    )
                 )
+                print(f"❌ {json_file.relative_to(self.config_dir)}: {e}")
 
-        # Check value ranges
-        value_ranges = self._analyze_value_ranges(configs)
-        for field, range_info in value_ranges.items():
-            if range_info["range"] > range_info["max"] * 0.5:  # High variation
-                inconsistencies.append(
-                    {
-                        "type": "value_range",
-                        "field": field,
-                        "min": range_info["min"],
-                        "max": range_info["max"],
-                        "range": range_info["range"],
-                        "recommendation": f"Consider standardizing range for {field}",
-                    }
+            except Exception as e:
+                self.results.append(
+                    ValidationResult(
+                        category="json_validation",
+                        item=str(json_file.relative_to(self.config_dir)),
+                        status="fail",
+                        message=f"File error: {e}",
+                    )
                 )
+                print(f"❌ {json_file.relative_to(self.config_dir)}: {e}")
 
-        return {
-            "inconsistencies": inconsistencies,
-            "status": "warning" if inconsistencies else "pass",
+    def _validate_json_structure(self, json_file: Path, config_data: dict):
+        """Validate the structure of individual JSON configs"""
+        filename = json_file.name
+
+        # Common required sections
+        common_sections = {
+            "trading": ["symbol", "interval", "leverage"],
+            "llm": ["provider", "model_name"],
+            "system": ["dry_run", "environment"],
+            "risk": ["max_daily_loss_pct", "default_stop_loss_pct"],
         }
 
-    def _analyze_fields(self) -> dict[str, Any]:
-        """Analyze field coverage and missing requirements."""
-        logger.info("📊 Analyzing field coverage...")
+        # Skip schema.json and monitoring configs
+        if filename in ["schema.json", "monitoring_config.json"]:
+            return
 
-        required_sections = [
-            "trading",
-            "llm",
-            "exchange",
-            "risk",
-            "data",
-            "system",
-            "paper_trading",
-            "mcp",
-            "omnisearch",
-            "monitoring",
+        # Check for required sections
+        for section, required_fields in common_sections.items():
+            if section in config_data:
+                section_data = config_data[section]
+                for field in required_fields:
+                    if field not in section_data:
+                        self.results.append(
+                            ValidationResult(
+                                category="json_structure",
+                                item=f"{filename}:{section}.{field}",
+                                status="warning",
+                                message=f"Missing recommended field: {section}.{field}",
+                            )
+                        )
+
+    def _validate_env_example(self):
+        """Validate .env.example completeness"""
+        print("\n🔧 Validating .env.example Completeness")
+        print("-" * 40)
+
+        env_example_path = self.project_root / ".env.example"
+
+        if not env_example_path.exists():
+            self.results.append(
+                ValidationResult(
+                    category="env_validation",
+                    item=".env.example",
+                    status="fail",
+                    message="Missing .env.example file",
+                )
+            )
+            print("❌ .env.example file not found")
+            return
+
+        try:
+            with open(env_example_path) as f:
+                env_content = f.read()
+
+            # Required environment variables
+            required_vars = [
+                "EXCHANGE__EXCHANGE_TYPE",
+                "EXCHANGE__BLUEFIN_PRIVATE_KEY",
+                "EXCHANGE__BLUEFIN_NETWORK",
+                "LLM__OPENAI_API_KEY",
+                "TRADING__SYMBOL",
+                "TRADING__LEVERAGE",
+                "SYSTEM__DRY_RUN",
+                "SYSTEM__ENVIRONMENT",
+                "RISK__MAX_DAILY_LOSS_PCT",
+                "RISK__DEFAULT_STOP_LOSS_PCT",
+                "BLUEFIN_SERVICE_API_KEY",
+            ]
+
+            missing_vars = []
+            for var in required_vars:
+                if var not in env_content:
+                    missing_vars.append(var)
+
+            if missing_vars:
+                self.results.append(
+                    ValidationResult(
+                        category="env_validation",
+                        item=".env.example completeness",
+                        status="warning",
+                        message=f"Missing {len(missing_vars)} environment variables",
+                        details=f"Missing: {', '.join(missing_vars)}",
+                    )
+                )
+                print(f"⚠️  Missing environment variables: {', '.join(missing_vars)}")
+            else:
+                self.results.append(
+                    ValidationResult(
+                        category="env_validation",
+                        item=".env.example completeness",
+                        status="pass",
+                        message="All required environment variables documented",
+                    )
+                )
+                print("✅ All required environment variables documented")
+
+            # Check for security best practices
+            self._validate_env_security(env_content)
+
+        except Exception as e:
+            self.results.append(
+                ValidationResult(
+                    category="env_validation",
+                    item=".env.example",
+                    status="fail",
+                    message=f"Error reading .env.example: {e}",
+                )
+            )
+            print(f"❌ Error reading .env.example: {e}")
+
+    def _validate_env_security(self, env_content: str):
+        """Validate environment security practices"""
+        security_checks = [
+            {
+                "pattern": r"(?i)password\s*=\s*[^#\n]+",
+                "message": "Hardcoded password found",
+                "severity": "fail",
+            },
+            {
+                "pattern": r"(?i)secret\s*=\s*[^#\n]+",
+                "message": "Hardcoded secret found",
+                "severity": "warning",
+            },
+            {
+                "pattern": r"sk-[a-zA-Z0-9]{48}",
+                "message": "Actual OpenAI API key found",
+                "severity": "fail",
+            },
+            {
+                "pattern": r"0x[a-fA-F0-9]{64}",
+                "message": "Actual private key found",
+                "severity": "fail",
+            },
         ]
 
-        configs = {}
-        coverage_analysis = {}
-
-        # Load all configs
-        for config_file in self.config_dir.glob("*.json"):
-            try:
-                with open(config_file) as f:
-                    config_data = json.load(f)
-                    configs[config_file.name] = config_data
-
-                    # Analyze section coverage
-                    present_sections = set(config_data.keys())
-                    missing_sections = set(required_sections) - present_sections
-                    coverage_analysis[config_file.name] = {
-                        "present": list(present_sections),
-                        "missing": list(missing_sections),
-                        "coverage_pct": len(present_sections)
-                        / len(required_sections)
-                        * 100,
-                    }
-            except Exception as e:
-                logger.warning("Could not analyze %s: %s", config_file, e)
-
-        return {
-            "coverage_analysis": coverage_analysis,
-            "required_sections": required_sections,
-            "status": "pass",
-        }
-
-    def _validate_environment(self) -> dict[str, Any]:
-        """Validate environment variable configuration."""
-        logger.info("🌍 Validating environment configuration...")
-
-        env_example_path = self.base_path / ".env.example"
-        env_vars_documented = set()
-        env_vars_used = set()
-
-        # Parse .env.example
-        if env_example_path.exists():
-            content = env_example_path.read_text()
-            for line in content.split("\n"):
-                if "=" in line and not line.strip().startswith("#"):
-                    var_name = line.split("=")[0].strip()
-                    env_vars_documented.add(var_name)
-
-        # Find environment variables used in Pydantic models
-        # This is a simplified check - in reality, we'd need to parse the models
-        config_py_path = self.base_path / "bot" / "config.py"
-        if config_py_path.exists():
-            content = config_py_path.read_text()
-            # Look for environment variable patterns
-            env_patterns = re.findall(r"[A-Z_]+__[A-Z_]+", content)
-            env_vars_used.update(env_patterns)
-
-        undocumented = env_vars_used - env_vars_documented
-        unused = env_vars_documented - env_vars_used
-
-        return {
-            "documented_vars": list(env_vars_documented),
-            "used_vars": list(env_vars_used),
-            "undocumented": list(undocumented),
-            "unused": list(unused),
-            "status": "warning" if undocumented or unused else "pass",
-        }
-
-    def _analyze_risk_parameters(self) -> dict[str, Any]:
-        """Analyze risk parameter consistency and safety."""
-        logger.info("⚠️ Analyzing risk parameters...")
-
-        risk_fields = [
-            "max_daily_loss_pct",
-            "max_weekly_loss_pct",
-            "max_monthly_loss_pct",
-            "leverage",
-            "max_position_hold_hours",
-            "default_stop_loss_pct",
-            "default_take_profit_pct",
-            "emergency_stop_loss_pct",
-        ]
-
-        configs = {}
-        risk_analysis = {}
-
-        for config_file in self.config_dir.glob("*.json"):
-            try:
-                with open(config_file) as f:
-                    config_data = json.load(f)
-                    configs[config_file.name] = config_data
-
-                    # Extract risk parameters
-                    risk_params = {}
-                    for section in ["risk", "trading"]:
-                        if section in config_data:
-                            for field in risk_fields:
-                                if field in config_data[section]:
-                                    risk_params[field] = config_data[section][field]
-
-                    risk_analysis[config_file.name] = risk_params
-            except Exception as e:
-                logger.warning(
-                    "Could not analyze risk params in %s: %s", config_file, e
+        for check in security_checks:
+            if re.search(check["pattern"], env_content):
+                self.results.append(
+                    ValidationResult(
+                        category="env_security",
+                        item=".env.example security",
+                        status=check["severity"],
+                        message=check["message"],
+                    )
                 )
+                if check["severity"] == "fail":
+                    print(f"❌ Security issue: {check['message']}")
+                else:
+                    print(f"⚠️  Security warning: {check['message']}")
 
-        # Analyze parameter ranges and safety
-        safety_issues = []
-        for config_name, params in risk_analysis.items():
-            # Check for dangerous combinations
-            leverage = params.get("leverage", 1)
-            daily_loss = params.get("max_daily_loss_pct", 0)
+    def _validate_docker_config(self):
+        """Validate Docker configuration"""
+        print("\n🐳 Validating Docker Configuration")
+        print("-" * 40)
 
-            if leverage > 10 and daily_loss > 5:
-                safety_issues.append(
+        docker_compose_path = self.project_root / "docker-compose.yml"
+
+        if not docker_compose_path.exists():
+            self.results.append(
+                ValidationResult(
+                    category="docker_validation",
+                    item="docker-compose.yml",
+                    status="fail",
+                    message="Missing docker-compose.yml file",
+                )
+            )
+            print("❌ docker-compose.yml not found")
+            return
+
+        try:
+            with open(docker_compose_path) as f:
+                docker_content = f.read()
+
+            # Check for required services
+            required_services = ["ai-trading-bot", "bluefin-service"]
+
+            for service in required_services:
+                if service in docker_content:
+                    self.results.append(
+                        ValidationResult(
+                            category="docker_validation",
+                            item=f"service_{service}",
+                            status="pass",
+                            message=f"Service {service} configured",
+                        )
+                    )
+                    print(f"✅ Service {service} found")
+                else:
+                    self.results.append(
+                        ValidationResult(
+                            category="docker_validation",
+                            item=f"service_{service}",
+                            status="warning",
+                            message=f"Service {service} not found",
+                        )
+                    )
+                    print(f"⚠️  Service {service} not found")
+
+            # Check for environment variable mapping
+            if "${HOST_UID" in docker_content and "${HOST_GID" in docker_content:
+                self.results.append(
+                    ValidationResult(
+                        category="docker_validation",
+                        item="user_permissions",
+                        status="pass",
+                        message="User permission mapping configured",
+                    )
+                )
+                print("✅ User permission mapping configured")
+            else:
+                self.results.append(
+                    ValidationResult(
+                        category="docker_validation",
+                        item="user_permissions",
+                        status="warning",
+                        message="User permission mapping not configured",
+                    )
+                )
+                print("⚠️  User permission mapping not configured")
+
+        except Exception as e:
+            self.results.append(
+                ValidationResult(
+                    category="docker_validation",
+                    item="docker-compose.yml",
+                    status="fail",
+                    message=f"Error reading Docker config: {e}",
+                )
+            )
+            print(f"❌ Error reading Docker config: {e}")
+
+    def _validate_schema_consistency(self):
+        """Validate schema consistency with JSON configs"""
+        print("\n📐 Validating Schema Consistency")
+        print("-" * 40)
+
+        schema_path = self.config_dir / "schema.json"
+
+        if not schema_path.exists():
+            self.results.append(
+                ValidationResult(
+                    category="schema_validation",
+                    item="schema.json",
+                    status="warning",
+                    message="Schema file not found",
+                )
+            )
+            print("⚠️  schema.json not found")
+            return
+
+        try:
+            with open(schema_path) as f:
+                schema = json.load(f)
+
+            # Validate schema structure
+            if "$schema" in schema and "properties" in schema:
+                self.results.append(
+                    ValidationResult(
+                        category="schema_validation",
+                        item="schema_structure",
+                        status="pass",
+                        message="Schema has valid JSON Schema structure",
+                    )
+                )
+                print("✅ Schema structure valid")
+            else:
+                self.results.append(
+                    ValidationResult(
+                        category="schema_validation",
+                        item="schema_structure",
+                        status="fail",
+                        message="Invalid JSON Schema structure",
+                    )
+                )
+                print("❌ Invalid JSON Schema structure")
+
+            # Check required fields match common configs
+            schema_required = set()
+            if "required" in schema:
+                schema_required.update(schema["required"])
+
+            # Sample a few config files to check consistency
+            sample_configs = [
+                "development.json",
+                "production.json",
+                "paper_trading.json",
+            ]
+
+            for config_name in sample_configs:
+                config_path = self.config_dir / config_name
+                if config_path.exists():
+                    with open(config_path) as f:
+                        config_data = json.load(f)
+
+                    config_sections = set(config_data.keys())
+                    missing_in_config = schema_required - config_sections
+
+                    if missing_in_config:
+                        self.results.append(
+                            ValidationResult(
+                                category="schema_validation",
+                                item=f"{config_name}_consistency",
+                                status="warning",
+                                message=f"Config missing schema-required sections: {', '.join(missing_in_config)}",
+                            )
+                        )
+                        print(
+                            f"⚠️  {config_name} missing sections: {', '.join(missing_in_config)}"
+                        )
+                    else:
+                        self.results.append(
+                            ValidationResult(
+                                category="schema_validation",
+                                item=f"{config_name}_consistency",
+                                status="pass",
+                                message="Config matches schema requirements",
+                            )
+                        )
+                        print(f"✅ {config_name} matches schema")
+
+        except Exception as e:
+            self.results.append(
+                ValidationResult(
+                    category="schema_validation",
+                    item="schema.json",
+                    status="fail",
+                    message=f"Error validating schema: {e}",
+                )
+            )
+            print(f"❌ Error validating schema: {e}")
+
+    def _validate_config_structure(self):
+        """Validate overall configuration structure"""
+        print("\n🏗️  Validating Configuration Structure")
+        print("-" * 40)
+
+        # Check for required directories
+        required_dirs = ["config", "config/profiles", "logs", "data"]
+
+        for dir_path in required_dirs:
+            full_path = self.project_root / dir_path
+            if full_path.exists():
+                self.results.append(
+                    ValidationResult(
+                        category="structure_validation",
+                        item=f"directory_{dir_path}",
+                        status="pass",
+                        message=f"Directory {dir_path} exists",
+                    )
+                )
+                print(f"✅ Directory {dir_path} exists")
+            else:
+                self.results.append(
+                    ValidationResult(
+                        category="structure_validation",
+                        item=f"directory_{dir_path}",
+                        status="warning",
+                        message=f"Directory {dir_path} missing",
+                    )
+                )
+                print(f"⚠️  Directory {dir_path} missing")
+
+        # Check configuration profiles
+        profiles_dir = self.config_dir / "profiles"
+        if profiles_dir.exists():
+            profile_files = list(profiles_dir.glob("*.json"))
+            if profile_files:
+                self.results.append(
+                    ValidationResult(
+                        category="structure_validation",
+                        item="configuration_profiles",
+                        status="pass",
+                        message=f"Found {len(profile_files)} configuration profiles",
+                    )
+                )
+                print(f"✅ Found {len(profile_files)} configuration profiles")
+            else:
+                self.results.append(
+                    ValidationResult(
+                        category="structure_validation",
+                        item="configuration_profiles",
+                        status="warning",
+                        message="No configuration profiles found",
+                    )
+                )
+                print("⚠️  No configuration profiles found")
+
+    def _generate_report(self) -> dict[str, Any]:
+        """Generate comprehensive validation report"""
+        print("\n📊 Generating Validation Report")
+        print("-" * 40)
+
+        # Categorize results
+        categories = {}
+        total_pass = 0
+        total_fail = 0
+        total_warning = 0
+
+        for result in self.results:
+            if result.category not in categories:
+                categories[result.category] = []
+            categories[result.category].append(result)
+
+            if result.status == "pass":
+                total_pass += 1
+            elif result.status == "fail":
+                total_fail += 1
+            elif result.status == "warning":
+                total_warning += 1
+
+        # Generate summary
+        overall_status = (
+            "pass" if total_fail == 0 else "fail" if total_fail > 0 else "warning"
+        )
+
+        report = {
+            "summary": {
+                "overall_status": overall_status,
+                "total_checks": len(self.results),
+                "passed": total_pass,
+                "failed": total_fail,
+                "warnings": total_warning,
+                "success_rate": (
+                    f"{(total_pass / len(self.results) * 100):.1f}%"
+                    if self.results
+                    else "0%"
+                ),
+            },
+            "categories": {},
+        }
+
+        # Add category details
+        for category, results in categories.items():
+            category_pass = sum(1 for r in results if r.status == "pass")
+            category_fail = sum(1 for r in results if r.status == "fail")
+            category_warning = sum(1 for r in results if r.status == "warning")
+
+            report["categories"][category] = {
+                "status": "pass" if category_fail == 0 else "fail",
+                "total": len(results),
+                "passed": category_pass,
+                "failed": category_fail,
+                "warnings": category_warning,
+                "results": [
                     {
-                        "config": config_name,
-                        "issue": f"High leverage ({leverage}x) with high daily loss limit ({daily_loss}%)",
-                        "severity": "high",
+                        "item": r.item,
+                        "status": r.status,
+                        "message": r.message,
+                        "details": r.details,
                     }
-                )
+                    for r in results
+                ],
+            }
 
-            stop_loss = params.get("default_stop_loss_pct", 0)
-            take_profit = params.get("default_take_profit_pct", 0)
+        return report
 
-            if stop_loss >= take_profit and stop_loss > 0 and take_profit > 0:
-                safety_issues.append(
-                    {
-                        "config": config_name,
-                        "issue": f"Stop loss ({stop_loss}%) >= take profit ({take_profit}%)",
-                        "severity": "medium",
-                    }
-                )
+    def print_report(self, report: dict[str, Any]):
+        """Print formatted validation report"""
+        print("\n" + "=" * 60)
+        print("📋 CONFIGURATION VALIDATION REPORT")
+        print("=" * 60)
 
-        return {
-            "risk_analysis": risk_analysis,
-            "safety_issues": safety_issues,
-            "status": (
-                "error"
-                if any(issue["severity"] == "high" for issue in safety_issues)
-                else "warning" if safety_issues else "pass"
-            ),
-        }
+        summary = report["summary"]
 
-    def _find_field_variations(self, configs: dict[str, Any]) -> dict[str, set[str]]:
-        """Find field naming variations across configs."""
-        field_variations = {}
-
-        # Define semantic field groups
-        semantic_groups = {
-            "log_file": ["log_file", "log_file_path", "completion_log_file"],
-            "timeout": ["timeout", "request_timeout", "api_timeout"],
-            "max_tokens": ["max_tokens", "max_response_tokens"],
-            "retry_delay": ["retry_delay", "retry_delay_seconds"],
-        }
-
-        for group_name, field_names in semantic_groups.items():
-            found_variations = set()
-            for config_name, config_data in configs.items():
-                for field_name in field_names:
-                    if self._field_exists_in_config(config_data, field_name):
-                        found_variations.add(field_name)
-
-            if found_variations:
-                field_variations[group_name] = found_variations
-
-        return field_variations
-
-    def _field_exists_in_config(self, config: dict[str, Any], field_name: str) -> bool:
-        """Check if a field exists anywhere in the config."""
-
-        def search_dict(d, target):
-            if isinstance(d, dict):
-                if target in d:
-                    return True
-                for v in d.values():
-                    if search_dict(v, target):
-                        return True
-            return False
-
-        return search_dict(config, field_name)
-
-    def _recommend_field_name(self, variations: set[str]) -> str:
-        """Recommend the best field name from variations."""
-        # Prefer more descriptive names
-        priority_order = ["_path", "_file", "_seconds", "_timeout"]
-
-        for priority in priority_order:
-            for variation in variations:
-                if priority in variation:
-                    return variation
-
-        # Return the longest name as default
-        return max(variations, key=len)
-
-    def _analyze_value_ranges(
-        self, configs: dict[str, Any]
-    ) -> dict[str, dict[str, float]]:
-        """Analyze value ranges for numeric fields."""
-        numeric_fields = {}
-
-        for config_name, config_data in configs.items():
-            self._extract_numeric_fields(config_data, numeric_fields, prefix="")
-
-        # Calculate ranges
-        ranges = {}
-        for field, values in numeric_fields.items():
-            if len(values) > 1:
-                min_val, max_val = min(values), max(values)
-                ranges[field] = {
-                    "min": min_val,
-                    "max": max_val,
-                    "range": max_val - min_val,
-                    "values": values,
-                }
-
-        return ranges
-
-    def _extract_numeric_fields(
-        self, config: Any, numeric_fields: dict[str, list[float]], prefix: str
-    ):
-        """Recursively extract numeric fields from config."""
-        if isinstance(config, dict):
-            for key, value in config.items():
-                new_prefix = f"{prefix}.{key}" if prefix else key
-                self._extract_numeric_fields(value, numeric_fields, new_prefix)
-        elif isinstance(config, (int, float)) and not isinstance(config, bool):
-            if prefix not in numeric_fields:
-                numeric_fields[prefix] = []
-            numeric_fields[prefix].append(float(config))
-
-    def _generate_summary(self) -> dict[str, Any]:
-        """Generate validation summary."""
-        return {
-            "total_errors": len(self.errors),
-            "total_warnings": len(self.warnings),
-            "total_recommendations": len(self.recommendations),
-            "is_valid": len(self.errors) == 0,
-            "errors": self.errors,
-            "warnings": self.warnings,
-            "recommendations": self.recommendations,
-        }
-
-    def generate_report(self, results: dict[str, Any]) -> str:
-        """Generate comprehensive validation report."""
-        report_lines = [
-            "# COMPREHENSIVE CONFIGURATION VALIDATION REPORT",
-            f"Generated: {Path.cwd()}",
-            "",
-            "## EXECUTIVE SUMMARY",
+        # Overall status
+        status_icon = {"pass": "✅", "fail": "❌", "warning": "⚠️"}[
+            summary["overall_status"]
         ]
+        print(f"\n{status_icon} Overall Status: {summary['overall_status'].upper()}")
+        print(f"📊 Success Rate: {summary['success_rate']}")
+        print(f"✅ Passed: {summary['passed']}")
+        print(f"❌ Failed: {summary['failed']}")
+        print(f"⚠️  Warnings: {summary['warnings']}")
+        print(f"📝 Total Checks: {summary['total_checks']}")
 
-        # Add sections based on results
-        for section, data in results.items():
-            if section == "summary":
-                continue
+        # Category breakdown
+        print("\n📋 Category Breakdown:")
+        print("-" * 40)
 
-            report_lines.extend(
-                [
-                    "",
-                    f"## {section.replace('_', ' ').upper()}",
-                    f"Status: {data.get('status', 'unknown').upper()}",
-                    "",
-                ]
+        for category, data in report["categories"].items():
+            category_icon = {"pass": "✅", "fail": "❌"}[data["status"]]
+            category_name = category.replace("_", " ").title()
+            print(
+                f"{category_icon} {category_name}: {data['passed']}/{data['total']} passed"
             )
 
-            # Add section-specific details
-            if section == "security_analysis":
-                if data.get("security_issues"):
-                    report_lines.append("### Security Issues Found:")
-                    for issue in data["security_issues"]:
-                        report_lines.append(f"- ⚠️ {issue}")
+            # Show failures and warnings
+            failures = [r for r in data["results"] if r["status"] == "fail"]
+            warnings = [r for r in data["results"] if r["status"] == "warning"]
 
-            elif section == "consistency_check":
-                if data.get("inconsistencies"):
-                    report_lines.append("### Inconsistencies Found:")
-                    for issue in data["inconsistencies"]:
-                        report_lines.append(
-                            f"- {issue['type']}: {issue.get('purpose', issue.get('field', 'unknown'))}"
-                        )
-                        report_lines.append(
-                            f"  Recommendation: {issue['recommendation']}"
-                        )
+            for failure in failures:
+                print(f"    ❌ {failure['item']}: {failure['message']}")
+                if failure["details"]:
+                    print(f"       Details: {failure['details']}")
 
-        return "\n".join(report_lines)
+            for warning in warnings:
+                print(f"    ⚠️  {warning['item']}: {warning['message']}")
+                if warning["details"]:
+                    print(f"       Details: {warning['details']}")
+
+        print("\n" + "=" * 60)
+
+        # Recommendations
+        if summary["failed"] > 0 or summary["warnings"] > 0:
+            print("\n🔧 RECOMMENDATIONS:")
+            print("-" * 40)
+
+            if summary["failed"] > 0:
+                print("❌ CRITICAL ISSUES (must fix):")
+                for category, data in report["categories"].items():
+                    failures = [r for r in data["results"] if r["status"] == "fail"]
+                    for failure in failures:
+                        print(f"   • Fix {failure['item']}: {failure['message']}")
+
+            if summary["warnings"] > 0:
+                print("\n⚠️  WARNINGS (recommended to fix):")
+                for category, data in report["categories"].items():
+                    warnings = [r for r in data["results"] if r["status"] == "warning"]
+                    for warning in warnings:
+                        print(f"   • Check {warning['item']}: {warning['message']}")
+
+            print("\n💡 NEXT STEPS:")
+            print("   1. Fix all critical issues marked with ❌")
+            print("   2. Address warnings marked with ⚠️")
+            print(
+                "   3. Re-run validation: python3 scripts/validate_config_comprehensive.py"
+            )
+            print("   4. Test with: python3 -m bot.main --validate-only")
+        else:
+            print("\n🎉 EXCELLENT! All validations passed.")
+            print("   Your configuration is ready for use.")
+
+        print("\n" + "=" * 60)
 
 
-@click.command()
-@click.option("--config-path", default=".", help="Path to configuration directory")
-@click.option("--output", "-o", help="Output file for validation report")
-@click.option("--verbose", "-v", is_flag=True, help="Verbose output")
-def main(config_path: str, output: str, verbose: bool):
-    """Run comprehensive configuration validation."""
-    if verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+def main():
+    """Main entry point"""
+    validator = ComprehensiveConfigValidator()
+    report = validator.validate_all()
+    validator.print_report(report)
 
-    base_path = Path(config_path).resolve()
-    validator = ConfigurationValidator(base_path)
+    # Save report to file
+    report_path = Path("logs/config_validation_report.json")
+    report_path.parent.mkdir(exist_ok=True)
 
-    click.echo("🔍 Running comprehensive configuration validation...")
-    results = validator.validate_all()
+    with open(report_path, "w") as f:
+        json.dump(report, f, indent=2, default=str)
 
-    # Generate report
-    report = validator.generate_report(results)
-
-    if output:
-        with open(output, "w") as f:
-            f.write(report)
-        click.echo(f"📊 Report saved to: {output}")
-    else:
-        click.echo(report)
+    print(f"\n📄 Detailed report saved to: {report_path}")
 
     # Exit with error code if validation failed
-    if not results["summary"]["is_valid"]:
-        click.echo("❌ Configuration validation failed!")
-        exit(1)
+    if report["summary"]["failed"] > 0:
+        sys.exit(1)
     else:
-        click.echo("✅ Configuration validation passed!")
+        sys.exit(0)
 
 
 if __name__ == "__main__":
