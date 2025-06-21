@@ -53,10 +53,17 @@ ARG USER_ID=1001
 ARG GROUP_ID=1001
 ARG USERNAME=bluefin
 
-# Create group and user with configurable IDs
-# Handle case where GID already exists (e.g., macOS staff group = 20)
-RUN (groupadd -g ${GROUP_ID} ${USERNAME} || true) && \
-    useradd -r -u ${USER_ID} -g ${GROUP_ID} -m -s /bin/bash ${USERNAME}
+# Create group and user with configurable IDs - Handle UID conflicts gracefully
+# Skip user creation if USER_ID is 0 (root) to avoid conflicts
+RUN if [ "${USER_ID}" != "0" ]; then \
+        # Create group if it doesn't already exist
+        (groupadd -g ${GROUP_ID} ${USERNAME} || true) && \
+        # Create user if it doesn't already exist
+        (useradd -r -u ${USER_ID} -g ${GROUP_ID} -m -s /bin/bash ${USERNAME} || \
+         echo "User with UID ${USER_ID} already exists, skipping creation"); \
+    else \
+        echo "Using root user (UID=0) - skipping user creation"; \
+    fi
 
 # Set working directory
 WORKDIR /app
@@ -101,8 +108,12 @@ RUN chmod +x /app/docker-entrypoint.sh
 RUN mkdir -p /app/logs /app/data /app/tmp && \
     chmod 755 /app && \
     chmod 775 /app/logs /app/data /app/tmp && \
-    # Set ownership to the configured user for default case
-    chown -R ${USERNAME}:${USERNAME} /app && \
+    # Set ownership conditionally - only if not running as root
+    if [ "${USER_ID}" != "0" ]; then \
+        chown -R ${USER_ID}:${GROUP_ID} /app; \
+    else \
+        echo "Running as root - skipping ownership change"; \
+    fi && \
     # Also ensure group write permissions for flexibility
     chmod g+w /app /app/logs /app/data /app/tmp && \
     # Create fallback tmp directories that any user can write to
@@ -144,7 +155,10 @@ fi
 echo "Health check passed"
 EOF
 
-RUN chmod +x /app/healthcheck.sh && chown ${USERNAME}:${USERNAME} /app/healthcheck.sh
+RUN chmod +x /app/healthcheck.sh && \
+    if [ "${USER_ID}" != "0" ]; then \
+        chown ${USER_ID}:${GROUP_ID} /app/healthcheck.sh; \
+    fi
 
 # Ubuntu-optimized extended health check endpoint
 COPY <<EOF /app/ubuntu-healthcheck.sh
@@ -188,7 +202,10 @@ fi
 echo "Ubuntu health check passed"
 EOF
 
-RUN chmod +x /app/ubuntu-healthcheck.sh && chown ${USERNAME}:${USERNAME} /app/ubuntu-healthcheck.sh
+RUN chmod +x /app/ubuntu-healthcheck.sh && \
+    if [ "${USER_ID}" != "0" ]; then \
+        chown ${USER_ID}:${GROUP_ID} /app/ubuntu-healthcheck.sh; \
+    fi
 
 # Ubuntu-optimized environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -206,8 +223,15 @@ ENV PYTHONUNBUFFERED=1 \
     RETRY_BACKOFF=2 \
     PROXY_ENABLED=false
 
-# Switch to non-root user - use the configured username
-USER $USERNAME
+# Switch to appropriate user - stay as root if USER_ID=0, otherwise use created user
+RUN if [ "${USER_ID}" != "0" ]; then \
+        echo "Switching to user: ${USERNAME} (${USER_ID}:${GROUP_ID})"; \
+    else \
+        echo "Staying as root user for container execution"; \
+    fi
+
+# Use conditional USER directive - stay as root if USER_ID=0
+USER ${USER_ID}:${GROUP_ID}
 
 # Ubuntu-optimized health check configuration
 HEALTHCHECK --interval=30s --timeout=15s --start-period=45s --retries=5 \
