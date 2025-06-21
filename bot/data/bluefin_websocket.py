@@ -142,6 +142,10 @@ class BluefinWebSocketClient:
         self._message_count = 0
         self._error_count = 0
 
+        # Rate limiting for astronomical price logging
+        self._astronomical_log_counter: dict[str, int] = {}
+        self._log_every_n_instances = 25
+
         logger.info(
             "Initialized BluefinWebSocketClient for %s with %s candles on %s network",
             symbol,
@@ -160,7 +164,7 @@ class BluefinWebSocketClient:
         self, value: str | float | Decimal, field_name: str, source: str
     ) -> None:
         """
-        Log when astronomical price values are detected for debugging.
+        Log when astronomical price values are detected for debugging with rate limiting.
 
         Args:
             value: The raw value received
@@ -168,20 +172,38 @@ class BluefinWebSocketClient:
             source: Source of the data (e.g., 'ticker', 'trade', 'kline')
         """
         if is_likely_18_decimal(value):
-            logger.warning(
-                "🚨 ASTRONOMICAL PRICE DETECTED: %s=%s from %s (symbol: %s) - Converting from 18-decimal format",
-                field_name,
-                value,
-                source,
-                self.symbol,
-                extra={
-                    "symbol": self.symbol,
-                    "field_name": field_name,
-                    "raw_value": str(value),
-                    "source": source,
-                    "astronomical_price_detected": True,
-                },
-            )
+            # Create unique key for this source+field combination
+            log_key = f"{source}:{field_name}"
+
+            # Initialize counter if not exists
+            if log_key not in self._astronomical_log_counter:
+                self._astronomical_log_counter[log_key] = 0
+
+            # Increment counter
+            self._astronomical_log_counter[log_key] += 1
+
+            # Only log every Nth instance to prevent spam
+            if (
+                self._astronomical_log_counter[log_key] % self._log_every_n_instances
+                == 1
+            ):
+                logger.warning(
+                    "🚨 ASTRONOMICAL PRICE DETECTED: %s=%s from %s (symbol: %s) - Converting from 18-decimal format [Instance #%d]",
+                    field_name,
+                    value,
+                    source,
+                    self.symbol,
+                    self._astronomical_log_counter[log_key],
+                    extra={
+                        "symbol": self.symbol,
+                        "field_name": field_name,
+                        "raw_value": str(value),
+                        "source": source,
+                        "astronomical_price_detected": True,
+                        "instance_count": self._astronomical_log_counter[log_key],
+                        "log_interval": self._log_every_n_instances,
+                    },
+                )
 
     async def connect(self) -> None:
         """Establish WebSocket connection and start data streaming."""

@@ -11,6 +11,10 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# Counter for rate-limiting astronomical value logging
+_ASTRONOMICAL_LOG_COUNTER = {}
+_LOG_EVERY_N_INSTANCES = 25
+
 # Price validation ranges for different symbols
 PRICE_RANGES = {
     "SUI-PERP": {"min": 0.5, "max": 20.0},
@@ -99,15 +103,28 @@ def convert_from_18_decimal(
         if is_likely_18_decimal(decimal_value):
             converted_value = decimal_value / Decimal("1e18")
 
-            # Log astronomical value detection for debugging
+            # Rate-limited logging for astronomical value detection
             if decimal_value > 1e18:
-                logger.info(
-                    "Astronomical value detected for %s: %s -> %s (symbol: %s)",
-                    field_name or "value",
-                    decimal_value,
-                    converted_value,
-                    symbol,
+                # Create unique key for this symbol+field combination
+                log_key = f"{symbol or 'unknown'}_{field_name or 'value'}"
+
+                # Increment counter for this combination
+                _ASTRONOMICAL_LOG_COUNTER[log_key] = (
+                    _ASTRONOMICAL_LOG_COUNTER.get(log_key, 0) + 1
                 )
+                current_count = _ASTRONOMICAL_LOG_COUNTER[log_key]
+
+                # Only log every N instances
+                if current_count % _LOG_EVERY_N_INSTANCES == 1:
+                    logger.info(
+                        "Astronomical value detected for %s (instance %d/%d): %s -> %s (symbol: %s)",
+                        field_name or "value",
+                        current_count,
+                        current_count + _LOG_EVERY_N_INSTANCES - 1,
+                        decimal_value,
+                        converted_value,
+                        symbol,
+                    )
             else:
                 logger.debug(
                     "Converted %s from 18-decimal: %s -> %s (symbol: %s)",

@@ -161,7 +161,7 @@ services:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONWARNINGS=ignore::UserWarning,ignore::DeprecationWarning,ignore::SyntaxWarning,ignore::FutureWarning
-      - CONFIG_FILE=${CONFIG_FILE:-/app/config/spot_trading_config.json}
+      - CONFIG_FILE=${CONFIG_FILE:-}
       # System Configuration
       - SYSTEM__DRY_RUN=${SYSTEM__DRY_RUN:-true}   # PAPER TRADING MODE - SAFE (MAINNET DATA)
       - SYSTEM__ENVIRONMENT=${SYSTEM__ENVIRONMENT:-development}  # Development environment for paper trading

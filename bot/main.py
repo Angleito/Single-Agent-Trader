@@ -95,12 +95,13 @@ from typing import TYPE_CHECKING, Any, Literal
 # Third-party imports with error handling
 try:
     import click
+    from dotenv import load_dotenv
     from rich.console import Console
     from rich.panel import Panel
     from rich.table import Table
 except ImportError as e:
     print(f"❌ Critical dependency missing: {e}")
-    print("Install with: pip install click rich")
+    print("Install with: pip install click rich python-dotenv")
     sys.exit(1)
 
 # Initialize console early for error reporting
@@ -1202,10 +1203,30 @@ class TradingEngine:
     def _load_configuration(
         self, config_file: str | None, dry_run: bool | None
     ) -> Settings:
-        """Load and validate configuration."""
-        if config_file:
+        """Load and validate configuration with enhanced dotenv support."""
+        # Always load .env file first to ensure environment variables are available
+        load_dotenv()
+
+        # Check for CONFIG_FILE environment variable if no config_file provided
+        if not config_file:
+            config_file = os.getenv("CONFIG_FILE")
+
+        # Check if key environment variables are present
+        exchange_type = os.getenv("EXCHANGE__EXCHANGE_TYPE")
+        trading_symbol = os.getenv("TRADING__SYMBOL")
+
+        # Determine configuration source
+        if exchange_type and trading_symbol and not config_file:
+            # Use environment variables when they're present and no config file specified
+            console.print("[green]Using environment configuration (.env file)[/green]")
+            settings = create_settings()
+        elif config_file:
+            # Use config file when explicitly specified
+            console.print(f"[blue]Using configuration file: {config_file}[/blue]")
             settings = Settings.load_from_file(config_file)
         else:
+            # Fallback to default settings
+            console.print("[yellow]Using default configuration[/yellow]")
             settings = create_settings()
 
         # Override dry_run mode if explicitly specified
