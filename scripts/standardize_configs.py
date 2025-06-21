@@ -98,7 +98,7 @@ class ConfigurationStandardizer:
 
         for config_file in config_files:
             try:
-                logger.info(f"Processing {config_file.name}...")
+                logger.info("Processing %s...", config_file.name)
 
                 # Load config
                 with open(config_file) as f:
@@ -116,14 +116,14 @@ class ConfigurationStandardizer:
                         with open(config_file, "w") as f:
                             json.dump(config_data, f, indent=2, sort_keys=False)
 
-                        logger.info(f"✅ Updated {config_file.name}")
+                        logger.info("✅ Updated %s", config_file.name)
                     else:
-                        logger.info(f"🔍 Would update {config_file.name}")
+                        logger.info("🔍 Would update %s", config_file.name)
 
                     results["changes_made"].extend(self.changes_made)
                     self.changes_made = []  # Reset for next file
                 else:
-                    logger.info(f"📋 No changes needed for {config_file.name}")
+                    logger.info("📋 No changes needed for %s", config_file.name)
 
                 results["files_processed"].append(
                     str(config_file.relative_to(self.base_path))

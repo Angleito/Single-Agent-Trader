@@ -7,7 +7,7 @@ import logging
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, NoReturn
 
 import aiohttp
 import pandas as pd
@@ -544,26 +544,13 @@ class MarketDataProvider:
             )
 
             # Use SDK's built-in JWT generator for WebSocket authentication
-            logger.debug(
-                "Generating JWT with API key: %s... (length: %s)",
-                cdp_api_key[:50],
-                len(cdp_api_key),
-            )
-            logger.debug(
-                "Private key length: %s, starts with: %s...",
-                len(cdp_private_key),
-                cdp_private_key[:20],
-            )
+            logger.debug("Generating JWT for WebSocket authentication")
 
             try:
                 jwt_token = jwt_generator.build_ws_jwt(cdp_api_key, cdp_private_key)
 
                 if jwt_token:
-                    logger.info(
-                        "Successfully generated WebSocket JWT token using SDK (length: %s)",
-                        len(jwt_token),
-                    )
-                    logger.debug("JWT preview: %s...", jwt_token[:50])
+                    logger.info("Successfully generated WebSocket JWT token using SDK")
                     return jwt_token
                 logger.warning(
                     "SDK jwt_generator returned None - this should not happen with valid credentials"
@@ -820,10 +807,10 @@ class MarketDataProvider:
     ) -> list[MarketData]:
         """Fetch a single batch of historical data."""
 
-        def _raise_session_error() -> None:
+        def _raise_session_error() -> NoReturn:
             raise RuntimeError("HTTP session not initialized")
 
-        def _raise_api_error(status: int, text: str) -> None:
+        def _raise_api_error(status: int, text: str) -> NoReturn:
             raise MarketDataAPIError(f"API request failed with status {status}: {text}")
 
         try:
@@ -963,10 +950,10 @@ class MarketDataProvider:
                 min_required_for_indicators,
             )
 
-        def _raise_session_error() -> None:
+        def _raise_session_error() -> NoReturn:
             raise RuntimeError("HTTP session not initialized")
 
-        def _raise_api_error(status: int, text: str) -> None:
+        def _raise_api_error(status: int, text: str) -> NoReturn:
             raise MarketDataAPIError(f"API request failed with status {status}: {text}")
 
         try:
@@ -1030,7 +1017,7 @@ class MarketDataProvider:
             Latest price as Decimal or None if unavailable
         """
 
-        def _raise_session_error() -> None:
+        def _raise_session_error() -> NoReturn:
             raise RuntimeError("HTTP session not initialized")
 
         # Check cache first
@@ -1078,7 +1065,7 @@ class MarketDataProvider:
         if self._is_cache_valid(cache_key):
             return self._orderbook_cache.get(cache_key)
 
-        def _raise_session_error() -> None:
+        def _raise_session_error() -> NoReturn:
             raise RuntimeError("HTTP session not initialized")
 
         try:

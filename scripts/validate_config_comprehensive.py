@@ -80,7 +80,7 @@ class ConfigurationValidator:
                                     f"Potential real API key found in {env_file.name}"
                                 )
                     except Exception as e:
-                        logger.warning(f"Could not read {env_file}: {e}")
+                        logger.warning("Could not read %s: %s", env_file, e)
 
         # Check gitignore effectiveness
         gitignore_path = self.base_path / ".gitignore"
@@ -149,7 +149,7 @@ class ConfigurationValidator:
                 with open(config_file) as f:
                     configs[config_file.name] = json.load(f)
             except Exception as e:
-                logger.warning(f"Could not load {config_file}: {e}")
+                logger.warning("Could not load %s: %s", config_file, e)
 
         # Check field naming consistency
         field_variations = self._find_field_variations(configs)
@@ -222,7 +222,7 @@ class ConfigurationValidator:
                         * 100,
                     }
             except Exception as e:
-                logger.warning(f"Could not analyze {config_file}: {e}")
+                logger.warning("Could not analyze %s: %s", config_file, e)
 
         return {
             "coverage_analysis": coverage_analysis,
@@ -300,7 +300,9 @@ class ConfigurationValidator:
 
                     risk_analysis[config_file.name] = risk_params
             except Exception as e:
-                logger.warning(f"Could not analyze risk params in {config_file}: {e}")
+                logger.warning(
+                    "Could not analyze risk params in %s: %s", config_file, e
+                )
 
         # Analyze parameter ranges and safety
         safety_issues = []

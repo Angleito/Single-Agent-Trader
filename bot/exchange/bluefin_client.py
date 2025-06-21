@@ -170,14 +170,13 @@ class BluefinServiceClient:
 
         # Validate API key format
         if len(self.api_key) < 16:
-            error_msg = f"BLUEFIN_SERVICE_API_KEY appears too short (got {len(self.api_key)} chars, expected 16+)"
+            error_msg = "BLUEFIN_SERVICE_API_KEY appears to be invalid or missing"
             logger.error(
                 "API key validation failed",
                 extra={
                     "client_id": self.client_id,
                     "service_url": self.service_url,
-                    "api_key_length": len(self.api_key),
-                    "minimum_length": 16,
+                    "auth_configured": False,
                 },
             )
             raise BluefinServiceAuthError(error_msg)
@@ -188,7 +187,6 @@ class BluefinServiceClient:
                 "client_id": self.client_id,
                 "service_url": self.service_url,
                 "auth_configured": True,
-                "api_key_length": len(self.api_key),
             },
         )
 

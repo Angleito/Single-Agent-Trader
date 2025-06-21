@@ -166,7 +166,7 @@ class FeeCalculator:
             return fees
 
     def _create_zero_fee_result(
-        self, trade_action: TradeAction, size_pct: int | None = None
+        self, trade_action: TradeAction, size_pct: float | None = None
     ) -> tuple[TradeAction, TradeFees]:
         """Helper method to create a zero fee result with adjusted trade action."""
         adjusted_action = trade_action.copy()

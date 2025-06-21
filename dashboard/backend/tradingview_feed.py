@@ -667,7 +667,7 @@ def generate_sample_data():
             confidence=random.uniform(0.6, 0.95),  # noqa: S311
             reasoning=f"AI decision based on market analysis #{i + 1}",
             indicator_values={
-                "rsi": random.uniform(30, 70),
+                "rsi": random.uniform(30, 70),  # noqa: S311
                 "ema": base_price,
             },
         )

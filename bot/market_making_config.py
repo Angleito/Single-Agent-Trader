@@ -397,8 +397,9 @@ class MarketMakingConfig(BaseModel):
         # Ensure order timing is reasonable
         if self.orders.order_update_interval_seconds >= self.cycle_interval_seconds:
             logger.warning(
-                f"Order update interval ({self.orders.order_update_interval_seconds}s) "
-                f"is >= cycle interval ({self.cycle_interval_seconds}s)"
+                "Order update interval (%ss) is >= cycle interval (%ss)",
+                self.orders.order_update_interval_seconds,
+                self.cycle_interval_seconds,
             )
 
         return self
@@ -475,7 +476,7 @@ class MarketMakingConfig(BaseModel):
         }
 
         if profile not in profile_configs:
-            logger.warning(f"Unknown profile '{profile}', using moderate defaults")
+            logger.warning("Unknown profile '%s', using moderate defaults", profile)
             profile = "moderate"
 
         config_updates = profile_configs[profile]
@@ -525,5 +526,5 @@ def validate_config(config: dict[str, Any]) -> MarketMakingConfig:
     try:
         return MarketMakingConfig.model_validate(config)
     except Exception as e:
-        logger.exception(f"Configuration validation failed: {e}")
+        logger.exception("Configuration validation failed: %s", e)
         raise ValueError(f"Invalid market making configuration: {e}")

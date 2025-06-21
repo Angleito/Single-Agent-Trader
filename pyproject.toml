@@ -23,11 +23,6 @@ classifiers = [
 ai-trading-bot = "bot.main:cli"
 
 [tool.poetry]
-name = "ai-trading-bot"
-version = "0.1.0"
-description = "AI-assisted crypto futures trading bot for Coinbase with VuManChu Cipher indicators"
-authors = ["Your Name <your.email@example.com>"]
-readme = "README.md"
 packages = [{include = "bot"}]
 
 [tool.poetry.dependencies]
@@ -66,6 +61,7 @@ python-json-logger = ">=3.0.0"
 # Bluefin DEX Support (optional - install manually if needed)
 # bluefin-v2-client = "^4.2.13"  # Commented out due to build complexity - install separately in Docker
 anyio = ">=4.0.0"
+langchain-community = "^0.2.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"

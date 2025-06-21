@@ -6,7 +6,7 @@ including maker/taker fees, round-trip costs, and minimum profitable spreads.
 """
 
 import logging
-from decimal import ROUND_HALF_EVEN, Decimal
+from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
 from typing import NamedTuple
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ class BluefinFeeCalculator:
     - Maker Fee: 0.010% (0.0001 as decimal)
     - Taker Fee: 0.035% (0.00035 as decimal)
 
-    All fees are calculated on notional value (position_size × price).
+    All fees are calculated on notional value (position_size x price).
     """
 
     # Bluefin DEX fee rates (as decimals)
@@ -42,14 +42,44 @@ class BluefinFeeCalculator:
 
     def __init__(self):
         """Initialize the Bluefin fee calculator."""
-        self.maker_fee_rate = self.MAKER_FEE_RATE
-        self.taker_fee_rate = self.TAKER_FEE_RATE
+        # Ensure fee rates are Decimal objects
+        self.maker_fee_rate = self._ensure_decimal(
+            self.MAKER_FEE_RATE, Decimal("0.0001")
+        )
+        self.taker_fee_rate = self._ensure_decimal(
+            self.TAKER_FEE_RATE, Decimal("0.00035")
+        )
+
+        # Convert to percentages for logging
+        try:
+            maker_rate_pct = float(self.maker_fee_rate * 100)
+            taker_rate_pct = float(self.taker_fee_rate * 100)
+        except (TypeError, ValueError) as e:
+            # Handle edge cases where rates might be strings or None
+            logger.warning("Fee rate conversion error: %s. Using defaults.", e)
+            maker_rate_pct = 0.01  # Default 0.01%
+            taker_rate_pct = 0.035  # Default 0.035%
 
         logger.info(
             "Initialized BluefinFeeCalculator - Maker: %.4f%%, Taker: %.4f%%",
-            float(self.maker_fee_rate * 100),
-            float(self.taker_fee_rate * 100),
+            maker_rate_pct,
+            taker_rate_pct,
         )
+
+    def _ensure_decimal(self, value, default: Decimal) -> Decimal:
+        """Ensure a value is a Decimal object."""
+        if isinstance(value, Decimal):
+            return value
+        try:
+            return Decimal(str(value))
+        except (TypeError, ValueError, InvalidOperation):
+            logger.warning(
+                "Invalid fee rate value: %s (type: %s). Using default: %s",
+                value,
+                type(value),
+                default,
+            )
+            return default
 
     def _normalize_decimal(self, value: Decimal, decimal_places: int = 8) -> Decimal:
         """
@@ -94,7 +124,7 @@ class BluefinFeeCalculator:
         Calculate maker fee for a limit order.
 
         Args:
-            notional_value: The notional value of the trade (position_size × price)
+            notional_value: The notional value of the trade (position_size x price)
 
         Returns:
             Maker fee in USDC
@@ -134,7 +164,7 @@ class BluefinFeeCalculator:
         Calculate taker fee for a market order.
 
         Args:
-            notional_value: The notional value of the trade (position_size × price)
+            notional_value: The notional value of the trade (position_size x price)
 
         Returns:
             Taker fee in USDC
@@ -176,7 +206,7 @@ class BluefinFeeCalculator:
         Calculate the total cost of a round-trip trade (entry + exit).
 
         Args:
-            notional_value: The notional value of the trade (position_size × price)
+            notional_value: The notional value of the trade (position_size x price)
             use_limit_orders: Whether to use limit orders (maker fees) or market orders (taker fees)
 
         Returns:
@@ -237,11 +267,11 @@ class BluefinFeeCalculator:
         """
         try:
             if use_limit_orders:
-                # For limit orders: 2 × maker fee + safety margin
+                # For limit orders: 2 x maker fee + safety margin
                 base_cost = self.maker_fee_rate * 2
                 fee_type = "maker"
             else:
-                # For market orders: 2 × taker fee + safety margin
+                # For market orders: 2 x taker fee + safety margin
                 base_cost = self.taker_fee_rate * 2
                 fee_type = "taker"
 
@@ -270,7 +300,7 @@ class BluefinFeeCalculator:
         Calculate a complete fee breakdown for a trade.
 
         Args:
-            notional_value: The notional value of the trade (position_size × price)
+            notional_value: The notional value of the trade (position_size x price)
             use_limit_orders: Whether to use limit orders (maker fees) or market orders (taker fees)
 
         Returns:

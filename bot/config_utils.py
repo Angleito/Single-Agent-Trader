@@ -3,10 +3,16 @@
 import logging
 import os
 import sys
+import tempfile
 import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+try:
+    import psutil
+except ImportError:
+    psutil = None  # type: ignore[assignment]
 
 try:
     import requests
@@ -14,6 +20,7 @@ except ImportError:
     requests = None  # type: ignore[assignment]
 
 from .config import Environment, Settings, TradingProfile, create_settings
+from .utils.path_utils import get_config_directory
 
 logger = logging.getLogger(__name__)
 
@@ -138,8 +145,6 @@ class StartupValidator:
             issues.append(f"Cannot write to logs directory: {log_path}")
 
         # Check config directory
-        from .utils.path_utils import get_config_directory
-
         try:
             config_path = get_config_directory()
             if not self._check_directory_permissions(config_path):
@@ -323,9 +328,11 @@ class StartupValidator:
 
     def _check_system_resources(self) -> str | None:
         """Check system resources like memory and disk space."""
-        try:
-            import psutil
+        if psutil is None:
+            logger.warning("psutil not available for system resource checking")
+            return None
 
+        try:
             # Check available memory
             memory = psutil.virtual_memory()
             if memory.available < 512 * 1024 * 1024:  # 512MB
@@ -481,14 +488,10 @@ class ConfigManager:
         if config_dir:
             self.config_dir = config_dir
         else:
-            from .utils.path_utils import get_config_directory
-
             try:
                 self.config_dir = get_config_directory()
             except OSError:
                 # Fallback to a secure temporary directory
-                import tempfile
-
                 temp_config_dir = Path(tempfile.mkdtemp(prefix="config_"))
                 logger.warning("Using temporary config directory: %s", temp_config_dir)
                 self.config_dir = temp_config_dir
@@ -870,9 +873,10 @@ class HealthMonitor:
 
     def _check_system_health(self) -> dict[str, Any]:
         """Check system resource health."""
-        try:
-            import psutil
+        if psutil is None:
+            return {"error": "psutil not available"}
 
+        try:
             # Get system metrics
             cpu_percent = psutil.cpu_percent(interval=1)
             memory = psutil.virtual_memory()
@@ -983,9 +987,10 @@ class HealthMonitor:
             "checks_performed": 1,  # This would be incremented in real implementation
         }
 
-        try:
-            import psutil
+        if psutil is None:
+            return {"error": "psutil not available"}
 
+        try:
             process = psutil.Process()
             metrics.update(
                 {

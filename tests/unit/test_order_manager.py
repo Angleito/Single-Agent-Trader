@@ -70,7 +70,7 @@ class TestOrderManager(unittest.TestCase):
         assert isinstance(order, Order)
         assert order.symbol == "BTC-USD"
         assert order.side == "BUY"
-        assert order.order_type == "LIMIT"
+        assert order.type == "LIMIT"
         assert order.quantity == Decimal("0.1")
         assert order.price == Decimal("50000.00")
         assert order.status == OrderStatus.PENDING

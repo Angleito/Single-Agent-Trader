@@ -576,11 +576,13 @@ class TradingEngine:
             )
 
             self.logger.info(
-                f"Market making integrator initialized for symbols: {market_making_symbols}"
+                "Market making integrator initialized for symbols: %s",
+                market_making_symbols,
             )
             if self._market_making_profile_override:
                 self.logger.info(
-                    f"Using CLI override profile: {self._market_making_profile_override}"
+                    "Using CLI override profile: %s",
+                    self._market_making_profile_override,
                 )
 
         except Exception as e:
@@ -1173,7 +1175,9 @@ class TradingEngine:
             min_interval = self.settings.trading.min_trading_interval_seconds
             if not isinstance(min_interval, int | float):
                 self.logger.warning(
-                    f"Invalid min_interval type: {type(min_interval)}, value: {min_interval}"
+                    "Invalid min_interval type: %s, value: %s",
+                    type(min_interval),
+                    min_interval,
                 )
                 min_interval = 15  # Default fallback
             min_interval = int(min_interval)  # Ensure it's an integer
@@ -1773,7 +1777,7 @@ class TradingEngine:
         while True:
             elapsed_time = (datetime.now(UTC) - wait_start).total_seconds()
             if not isinstance(elapsed_time, int | float) or elapsed_time < 0:
-                self.logger.warning(f"Invalid elapsed_time: {elapsed_time}")
+                self.logger.warning("Invalid elapsed_time: %s", elapsed_time)
                 elapsed_time = 0
 
             # Check timeout

@@ -670,7 +670,7 @@ class BluefinSDKService:
 
                 # Success - record metrics
                 self.last_successful_balance_fetch = time.time()
-                self._record_success()
+                self._record_api_success()
 
                 logger.debug(
                     "Balance operation %s succeeded",
@@ -736,7 +736,7 @@ class BluefinSDKService:
                 await asyncio.sleep(delay)
 
         # All retries exhausted
-        self._record_failure("balance_operation")
+        self._record_api_failure("balance_operation")
 
         if last_exception:
             raise last_exception

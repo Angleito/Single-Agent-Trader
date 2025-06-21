@@ -259,7 +259,7 @@ class RealTimePerformanceMonitor:
 
             # Log critical alerts
             if alert["severity"] == "CRITICAL":
-                logger.warning(f"CRITICAL ALERT: {alert['message']}")
+                logger.warning("CRITICAL ALERT: %s", alert["message"])
 
     def _create_dashboard(self) -> Table:
         """Create real-time performance dashboard."""
@@ -465,7 +465,7 @@ class PerformanceAnalyzer:
             return analysis
 
         except Exception as e:
-            logger.exception(f"Error analyzing historical data: {e}")
+            logger.exception("Error analyzing historical data: %s", e)
             return {}
 
     def _analyze_summary_stats(self, data: list[dict[str, Any]]) -> dict[str, Any]:

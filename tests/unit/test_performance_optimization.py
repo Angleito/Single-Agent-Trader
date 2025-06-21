@@ -8,6 +8,8 @@ reduces latency from 2-8 seconds to sub-2 seconds while maintaining decision qua
 import asyncio
 import logging
 import time
+from datetime import UTC, datetime
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -34,9 +36,17 @@ class TestLLMPerformanceOptimization:
         return MarketState(
             symbol="BTC-USD",
             interval="5m",
-            current_price=50000.0,
-            current_position=Position(side="FLAT", size=0.0, entry_price=0.0),
+            timestamp=datetime.now(UTC),
+            current_price=Decimal("50000.0"),
+            current_position=Position(
+                symbol="BTC-USD",
+                side="FLAT",
+                size=Decimal(0),
+                entry_price=Decimal(0),
+                timestamp=datetime.now(UTC),
+            ),
             indicators=IndicatorData(
+                timestamp=datetime.now(UTC),
                 rsi=55.0,
                 cipher_a_dot=10.0,
                 cipher_b_wave=15.0,
@@ -72,7 +82,7 @@ class TestLLMPerformanceOptimization:
         key1 = hasher.get_cache_key(mock_market_state)
 
         # Slightly different market state (within tolerance)
-        mock_market_state.current_price = 50050.0  # 0.1% difference
+        mock_market_state.current_price = Decimal("50050.0")  # 0.1% difference
         mock_market_state.indicators.rsi = 56.0  # Small RSI change
         key2 = hasher.get_cache_key(mock_market_state)
 
@@ -80,7 +90,7 @@ class TestLLMPerformanceOptimization:
         assert key1 == key2, "Similar market states should generate same cache key"
 
         # Significantly different market state
-        mock_market_state.current_price = 52000.0  # 4% difference
+        mock_market_state.current_price = Decimal("52000.0")  # 4% difference
         mock_market_state.indicators.rsi = 70.0  # Significant RSI change
         key3 = hasher.get_cache_key(mock_market_state)
 

@@ -3,6 +3,11 @@ FROM python:3.12-slim
 # Set working directory
 WORKDIR /app
 
+# Create a non-root user with UID 1000 (matching docker-compose)
+# This prevents permission conflicts when docker-compose overrides the user
+RUN groupadd -g 1000 backend && \
+    useradd -u 1000 -g backend -m -s /bin/bash backend
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     docker.io \
@@ -25,6 +30,13 @@ COPY start.sh .
 
 # Make startup script executable
 RUN chmod +x start.sh
+
+# Change ownership of the entire /app directory to the non-root user
+# This ensures all files are accessible when running as UID 1000
+RUN chown -R backend:backend /app
+
+# Switch to the non-root user
+USER backend
 
 # Expose port
 EXPOSE 8000

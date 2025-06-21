@@ -7,6 +7,7 @@ connection failures, and graceful degradation when optional services are unavail
 
 import asyncio
 import logging
+from typing import Any
 
 from bot.config import Settings
 from bot.exchange.bluefin_service_client import (
@@ -72,7 +73,7 @@ class ServiceStartupManager:
 
     async def startup_all_services(
         self,
-    ) -> tuple[dict[str, any], dict[str, ServiceStatus]]:
+    ) -> tuple[dict[str, Any], dict[str, ServiceStatus]]:
         """
         Start all configured services in the correct order.
 
@@ -125,7 +126,7 @@ class ServiceStartupManager:
 
     async def _start_service(
         self, service_name: str, status: ServiceStatus, max_wait: float
-    ) -> any | None:
+    ) -> Any | None:
         """Start a specific service with timeout and error handling."""
         import time
 
@@ -212,7 +213,7 @@ class ServiceStartupManager:
             logger.warning("Bluefin service connection error: %s", str(e))
             raise
 
-    async def _start_mcp_memory(self, timeout: float) -> any | None:
+    async def _start_mcp_memory(self, timeout: float) -> Any | None:
         """Start MCP memory service with timeout."""
         try:
             # MCP memory is handled by the memory-enhanced agent
@@ -261,7 +262,7 @@ class ServiceStartupManager:
 
     def _print_startup_summary(self):
         """Print summary of service startup results."""
-        logger.info("\n" + "=" * 60)
+        logger.info("\n%s", "=" * 60)
         logger.info("SERVICE STARTUP SUMMARY")
         logger.info("=" * 60)
 
@@ -300,9 +301,9 @@ class ServiceStartupManager:
         else:
             logger.info("All required services started successfully")
 
-        logger.info("=" * 60 + "\n")
+        logger.info("%s\n", "=" * 60)
 
-    async def shutdown_all_services(self, service_instances: dict[str, any]):
+    async def shutdown_all_services(self, service_instances: dict[str, Any]):
         """Shutdown all services gracefully."""
         logger.info("Shutting down services...")
 
@@ -331,7 +332,7 @@ class ServiceStartupManager:
 
 async def startup_services_with_retry(
     settings: Settings, max_retries: int = 3
-) -> tuple[dict[str, any], dict[str, ServiceStatus]]:
+) -> tuple[dict[str, Any], dict[str, ServiceStatus]]:
     """
     Start services with retry logic for transient failures.
 

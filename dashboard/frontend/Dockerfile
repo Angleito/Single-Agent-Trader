@@ -32,9 +32,11 @@ RUN rm -rf node_modules src tsconfig.json vite.config.ts
 # Production stage - Force x64 platform for consistent deployment
 FROM nginx:alpine AS production
 
-# Create non-root user for security
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nextjs -u 1001
+# Update nginx user to UID 1000 to match docker-compose expectations
+# The nginx:alpine image already has nginx user, but we need to change its UID
+RUN deluser nginx && \
+    addgroup -g 1000 -S nginx && \
+    adduser -S nginx -u 1000 -G nginx -h /var/cache/nginx -s /sbin/nologin
 
 # Copy built assets from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
@@ -46,16 +48,21 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY inject-env.sh /docker-entrypoint.d/inject-env.sh
 RUN chmod +x /docker-entrypoint.d/inject-env.sh
 
-# Set proper permissions
+# Set proper permissions for web content
 RUN chown -R nginx:nginx /usr/share/nginx/html && \
     chmod -R 755 /usr/share/nginx/html
 
-# Create directories for nginx with proper subdirectory structure
+# Create and configure nginx directories with proper ownership
 RUN mkdir -p /var/cache/nginx/client_temp /var/cache/nginx/proxy_temp \
              /var/cache/nginx/fastcgi_temp /var/cache/nginx/uwsgi_temp \
-             /var/cache/nginx/scgi_temp /var/log/nginx /var/run/nginx && \
-    chown -R 1001:1001 /var/cache/nginx /var/log/nginx /var/run/nginx && \
-    chmod -R 755 /var/cache/nginx /var/log/nginx /var/run/nginx
+             /var/cache/nginx/scgi_temp /var/log/nginx /var/run && \
+    chown -R nginx:nginx /var/cache/nginx /var/log/nginx /var/run && \
+    chmod -R 755 /var/cache/nginx /var/log/nginx /var/run && \
+    chown -R nginx:nginx /etc/nginx && \
+    chmod -R 755 /etc/nginx
+
+# Switch to non-root user
+USER 1000
 
 # Expose port
 EXPOSE 8080
@@ -64,5 +71,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
 
-# Start nginx (running as root for now to fix connectivity issues)
+# Start nginx as non-root user
 CMD ["nginx", "-g", "daemon off;"]

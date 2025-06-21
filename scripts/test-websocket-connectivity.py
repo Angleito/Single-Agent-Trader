@@ -71,7 +71,7 @@ async def test_websocket_publisher():
 
 async def test_bluefin_websocket():
     """Test Bluefin WebSocket connection."""
-    logger.info("\n" + "=" * 60)
+    logger.info("\n%s", "=" * 60)
     logger.info("Testing Bluefin WebSocket Connection")
     logger.info("=" * 60)
 
@@ -133,7 +133,7 @@ async def main():
         logger.error("Bluefin WebSocket test failed: %s", str(e))
 
     # Summary
-    logger.info("\n" + "=" * 60)
+    logger.info("\n%s", "=" * 60)
     logger.info("CONNECTIVITY TEST SUMMARY")
     logger.info("=" * 60)
 

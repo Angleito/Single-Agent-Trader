@@ -320,7 +320,8 @@ class CustomProfileCreator:
         validation_result = self.validate_profile(optimized)
         if not validation_result["valid"]:
             logger.warning(
-                f"Optimization resulted in invalid profile: {validation_result['errors']}"
+                "Optimization resulted in invalid profile: %s",
+                validation_result["errors"],
             )
             return base_profile
 

@@ -16,12 +16,25 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlparse
 
+from dotenv import load_dotenv
+
 from bot.market_making_config import MarketMakingConfig
 from bot.utils.path_utils import (
+    ensure_directory_exists,
+    get_config_directory,
     get_data_directory,
     get_data_file_path,
     get_logs_file_path,
 )
+
+# Try to import Bluefin endpoints, but don't fail if it's not available
+try:
+    from bot.exchange.bluefin_endpoints import BluefinEndpointConfig
+
+    BLUEFIN_ENDPOINTS_AVAILABLE = True
+except ImportError:
+    BluefinEndpointConfig = None
+    BLUEFIN_ENDPOINTS_AVAILABLE = False
 
 # Optional dependency for network testing
 try:
@@ -488,9 +501,14 @@ class ConfigurationValidator:
 
     async def _validate_bluefin_endpoints(self) -> dict[str, Any]:
         """Validate Bluefin API endpoints."""
-        try:
-            from .exchange.bluefin_endpoints import BluefinEndpointConfig
+        if not BLUEFIN_ENDPOINTS_AVAILABLE:
+            return {
+                "name": "bluefin_endpoints",
+                "status": "skip",
+                "message": "Bluefin endpoints module not available",
+            }
 
+        try:
             network = self.settings.exchange.bluefin_network
             endpoints = BluefinEndpointConfig.get_endpoints(network)
 
@@ -635,9 +653,14 @@ class ConfigurationValidator:
 
     async def _test_bluefin_api_connectivity(self) -> dict[str, Any]:
         """Test Bluefin API connectivity."""
-        try:
-            from .exchange.bluefin_endpoints import BluefinEndpointConfig
+        if not BLUEFIN_ENDPOINTS_AVAILABLE:
+            return {
+                "name": "bluefin_api_connectivity",
+                "status": "skip",
+                "message": "Bluefin endpoints module not available",
+            }
 
+        try:
             network = self.settings.exchange.bluefin_network
             endpoints = BluefinEndpointConfig.get_endpoints(network)
 
@@ -1642,8 +1665,6 @@ class ExchangeSettings(BaseModel):
     def _validate_url_format(self, url: str) -> bool:
         """Validate URL format."""
         try:
-            from urllib.parse import urlparse
-
             result = urlparse(url)
             return all([result.scheme, result.netloc])
         except Exception:
@@ -1656,11 +1677,10 @@ class ExchangeSettings(BaseModel):
         if self.exchange_type == "bluefin":
             try:
                 # Try to import and use the endpoint config
-                from bot.exchange.bluefin_endpoints import BluefinEndpointConfig
-
-                bluefin_endpoints = BluefinEndpointConfig.get_endpoints(
-                    self.bluefin_network
-                )
+                if BLUEFIN_ENDPOINTS_AVAILABLE:
+                    bluefin_endpoints = BluefinEndpointConfig.get_endpoints(
+                        self.bluefin_network
+                    )
                 endpoints.update(
                     {
                         "rest_api": bluefin_endpoints.rest_api,
@@ -2095,8 +2115,6 @@ class MonitoringSettings(BaseModel):
     @classmethod
     def validate_email_addresses(cls, v: list[str]) -> list[str]:
         """Validate email addresses format."""
-        import re
-
         email_pattern = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
 
         for email in v:
@@ -2530,7 +2548,6 @@ class Settings(BaseSettings):
         self, file_path: str | Path, include_secrets: bool = False
     ) -> None:
         """Save configuration to JSON file with fallback directory support."""
-        from bot.utils.path_utils import ensure_directory_exists
 
         path = Path(file_path)
         # Use fallback-aware directory creation
@@ -2577,7 +2594,6 @@ class Settings(BaseSettings):
     @classmethod
     def load_from_file(cls, file_path: str | Path) -> "Settings":
         """Load configuration from JSON file with fallback directory support."""
-        from bot.utils.path_utils import get_config_directory
 
         path = Path(file_path)
 
@@ -3041,8 +3057,6 @@ def create_settings(
     """Factory function to create settings with optional overrides."""
     # Ensure .env file is loaded
     try:
-        from dotenv import load_dotenv
-
         env_path = env_file or ".env"
         if Path(env_path).exists():
             load_dotenv(env_path)

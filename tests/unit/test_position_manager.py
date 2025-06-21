@@ -54,6 +54,17 @@ class TestPositionManager(unittest.TestCase):
 
         # Mock dependencies
         self.mock_paper_trading = Mock()
+        # Configure mock to return proper account status dictionary
+        self.mock_paper_trading.get_account_status.return_value = {
+            "equity": 10000.0,
+            "balance": 10000.0,
+            "open_positions": 0,
+            "current_balance": 10000.0,
+            "margin_used": 0.0,
+            "margin_available": 10000.0,
+            "unrealized_pnl": 0.0,
+            "total_pnl": 0.0,
+        }
 
         with patch(
             "bot.position_manager.PaperTradingAccount",
@@ -460,9 +471,22 @@ class TestPositionManager(unittest.TestCase):
         self.position_manager.save_state()
 
         # Create new position manager
+        # Create a new mock for the new position manager instance
+        new_mock_paper_trading = Mock()
+        new_mock_paper_trading.get_account_status.return_value = {
+            "equity": 10000.0,
+            "balance": 10000.0,
+            "open_positions": 0,
+            "current_balance": 10000.0,
+            "margin_used": 0.0,
+            "margin_available": 10000.0,
+            "unrealized_pnl": 0.0,
+            "total_pnl": 0.0,
+        }
+
         with patch(
             "bot.position_manager.PaperTradingAccount",
-            return_value=self.mock_paper_trading,
+            return_value=new_mock_paper_trading,
         ):
             new_position_manager = PositionManager(data_dir=self.temp_dir)
             new_position_manager.load_state()

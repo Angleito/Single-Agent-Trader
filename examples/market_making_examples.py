@@ -79,9 +79,9 @@ class MarketMakingExampleRunner:
             try:
                 if engine.is_running():
                     await engine.stop()
-                    logger.info(f"Stopped engine for {engine.symbol}")
+                    logger.info("Stopped engine for %s", engine.symbol)
             except Exception as e:
-                logger.exception(f"Error stopping engine: {e}")
+                logger.exception("Error stopping engine: %s", e)
 
         self.engines.clear()
 
@@ -193,7 +193,7 @@ class ConservativeTradingExample:
             self._display_conservative_results(engine)
 
         except Exception as e:
-            logger.exception(f"Error in conservative trading example: {e}")
+            logger.exception("Error in conservative trading example: %s", e)
             console.print(f"[red]Error: {e}[/red]")
 
     def _create_mock_exchange_client(self) -> Any:
@@ -417,7 +417,7 @@ class AggressiveHighFrequencyExample:
             self._display_hft_results(engine, cycle_count)
 
         except Exception as e:
-            logger.exception(f"Error in aggressive HFT example: {e}")
+            logger.exception("Error in aggressive HFT example: %s", e)
             console.print(f"[red]Error: {e}[/red]")
 
     def _create_hft_mock_client(self) -> Any:
@@ -824,7 +824,7 @@ class MultiSymbolExample:
             self._display_multi_symbol_results()
 
         except Exception as e:
-            logger.exception(f"Error in multi-symbol example: {e}")
+            logger.exception("Error in multi-symbol example: %s", e)
             console.print(f"[red]Error: {e}[/red]")
 
     async def _create_symbol_engine(self, symbol: str) -> MarketMakingEngine:
@@ -1124,7 +1124,7 @@ class PaperTradingSimulation:
             self._display_paper_results(paper_tracker, engine)
 
         except Exception as e:
-            logger.exception(f"Error in paper trading simulation: {e}")
+            logger.exception("Error in paper trading simulation: %s", e)
             console.print(f"[red]Paper Trading Error: {e}[/red]")
 
     def _create_paper_trading_client(self):
