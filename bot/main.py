@@ -1171,6 +1171,12 @@ class TradingEngine:
         # Check minimum interval between actual trades
         if self.last_trade_time is not None:
             min_interval = self.settings.trading.min_trading_interval_seconds
+            if not isinstance(min_interval, (int, float)):
+                self.logger.warning(
+                    f"Invalid min_interval type: {type(min_interval)}, value: {min_interval}"
+                )
+                min_interval = 15  # Default fallback
+            min_interval = int(min_interval)  # Ensure it's an integer
 
             # Ensure both timestamps have timezone info for comparison
             last_trade_time = self.last_trade_time
@@ -1740,6 +1746,9 @@ class TradingEngine:
 
         while True:
             elapsed_time = (datetime.now(UTC) - wait_start).total_seconds()
+            if not isinstance(elapsed_time, (int, float)) or elapsed_time < 0:
+                self.logger.warning(f"Invalid elapsed_time: {elapsed_time}")
+                elapsed_time = 0
 
             # Check timeout
             if elapsed_time > max_wait_time:
@@ -1951,7 +1960,13 @@ class TradingEngine:
 
     async def _log_data_wait_progress(self, elapsed_time: float, data: list):
         """Log progress every 10 seconds."""
-        if int(elapsed_time) % 10 != 0 or elapsed_time <= 0:
+        # Ensure elapsed_time is valid before using in modulo operation
+        safe_elapsed_time = (
+            int(elapsed_time)
+            if isinstance(elapsed_time, (int, float)) and elapsed_time >= 0
+            else 0
+        )
+        if safe_elapsed_time % 10 != 0 or elapsed_time <= 0:
             return
 
         try:
@@ -1972,9 +1987,15 @@ class TradingEngine:
             tick_rate = status.get("tick_rate_per_second", 0)
             current_price = status.get("current_price", "N/A")
 
+            # Ensure elapsed_time is valid for logging
+            safe_elapsed_time = (
+                int(elapsed_time)
+                if isinstance(elapsed_time, (int, float)) and elapsed_time >= 0
+                else 0
+            )
             self.logger.info(
                 "⏳ Waiting for real-time data... Elapsed: %ds\n   📊 Current candles: %s available\n   🌐 WebSocket connected: %s\n   📈 Tick rate: %.1f ticks/sec\n   💰 Current price: $%s\n   ⚡ Trading enabled: %s",
-                int(elapsed_time),
+                safe_elapsed_time,
                 len(data),
                 status.get("websocket_connected", False),
                 tick_rate,
@@ -1995,9 +2016,15 @@ class TradingEngine:
         candles_per_24h = (24 * 60 * 60) // interval_seconds
         hours_available = (len(data) * interval_seconds) / 3600 if data else 0
 
+        # Ensure elapsed_time is valid for logging
+        safe_elapsed_time = (
+            int(elapsed_time)
+            if isinstance(elapsed_time, (int, float)) and elapsed_time >= 0
+            else 0
+        )
         self.logger.info(
             "⏳ Waiting for data... Elapsed: %ds\n   📊 Historical: %s/%s candles (%.1f/24 hours)\n   🌐 WebSocket connected: %s\n   📈 WebSocket data: %s\n   💰 Latest price: $%s\n   ⚡ Trading enabled: %s",
-            int(elapsed_time),
+            safe_elapsed_time,
             len(data),
             candles_per_24h,
             hours_available,
@@ -2009,9 +2036,15 @@ class TradingEngine:
 
     async def _log_basic_provider_status(self, elapsed_time: float, data: list):
         """Log basic status when RealtimeMarketDataProvider not available."""
+        # Ensure elapsed_time is valid for logging
+        safe_elapsed_time = (
+            int(elapsed_time)
+            if isinstance(elapsed_time, (int, float)) and elapsed_time >= 0
+            else 0
+        )
         self.logger.info(
             "⏳ Waiting for data... Elapsed: %ds\n   📊 Current candles: %s available\n   ⚡ Trading enabled: %s",
-            int(elapsed_time),
+            safe_elapsed_time,
             len(data),
             self.trading_enabled,
         )

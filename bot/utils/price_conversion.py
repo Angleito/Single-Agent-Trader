@@ -26,8 +26,8 @@ def is_likely_18_decimal(value: float | int | str | Decimal) -> bool:
     """
     Determine if a numeric value is likely in 18-decimal format.
 
-    18-decimal format values are typically very large numbers (>1e10).
-    Using 1e10 as threshold instead of 1e15 to catch more edge cases.
+    18-decimal format values are typically very large numbers (>1e15).
+    Using 1e15 as a more conservative threshold to avoid false positives.
 
     Args:
         value: The numeric value to check
@@ -37,12 +37,12 @@ def is_likely_18_decimal(value: float | int | str | Decimal) -> bool:
     """
     try:
         numeric_value = float(value)
-        # Values larger than 1e10 are likely in 18-decimal format
-        # This catches values like 3.45e12 which should be ~3.45 after conversion
     except (ValueError, TypeError):
         return False
     else:
-        return numeric_value > 1e10
+        # More conservative threshold to avoid false conversions
+        # Values larger than 1e15 are likely in 18-decimal format
+        return numeric_value > 1e15
 
 
 def convert_from_18_decimal(
@@ -71,16 +71,43 @@ def convert_from_18_decimal(
         # Convert to Decimal for precision
         decimal_value = Decimal(str(value))
 
+        # Edge case handling for zero or negative values
+        if decimal_value <= 0:
+            if field_name in ["volume", "quantity"]:
+                # Volume can be zero, that's valid
+                return decimal_value
+            if decimal_value < 0:
+                logger.warning(
+                    "Negative %s value detected: %s (symbol: %s)",
+                    field_name or "value",
+                    decimal_value,
+                    symbol,
+                )
+                # For prices, negative values are invalid, but we'll return absolute value
+                if field_name in ["price", "open", "high", "low", "close"]:
+                    raise ValueError(f"Invalid negative price: {value}")
+
         # Check if conversion is needed
         if is_likely_18_decimal(decimal_value):
             converted_value = decimal_value / Decimal("1e18")
-            logger.debug(
-                "Converted %s from 18-decimal: %s -> %s (symbol: %s)",
-                field_name or "value",
-                decimal_value,
-                converted_value,
-                symbol,
-            )
+
+            # Log astronomical value detection for debugging
+            if decimal_value > 1e18:
+                logger.info(
+                    "Astronomical value detected for %s: %s -> %s (symbol: %s)",
+                    field_name or "value",
+                    decimal_value,
+                    converted_value,
+                    symbol,
+                )
+            else:
+                logger.debug(
+                    "Converted %s from 18-decimal: %s -> %s (symbol: %s)",
+                    field_name or "value",
+                    decimal_value,
+                    converted_value,
+                    symbol,
+                )
         else:
             converted_value = decimal_value
             logger.debug(
@@ -90,8 +117,12 @@ def convert_from_18_decimal(
                 symbol,
             )
 
-        # Validate the result
-        if symbol and not is_price_valid(converted_value, symbol):
+        # Validate the result if it's a price field
+        if (
+            symbol
+            and field_name in ["price", "open", "high", "low", "close"]
+            and not is_price_valid(converted_value, symbol)
+        ):
             logger.warning(
                 "Price %s for %s is outside expected range. Original value: %s, Field: %s",
                 converted_value,
@@ -99,10 +130,18 @@ def convert_from_18_decimal(
                 value,
                 field_name,
             )
+            # Don't raise an error, but log the issue for investigation
 
     except (ValueError, TypeError, ArithmeticError) as e:
-        logger.exception("Error converting value %s", value)
-        raise ValueError(f"Invalid numeric value: {value}") from e
+        logger.exception(
+            "Error converting value %s for field %s (symbol: %s)",
+            value,
+            field_name,
+            symbol,
+        )
+        raise ValueError(
+            f"Invalid numeric value: {value} for field {field_name}"
+        ) from e
     else:
         return converted_value
 
@@ -120,14 +159,17 @@ def is_price_valid(price: float | Decimal, symbol: str) -> bool:
     """
     try:
         price_float = float(price)
+    except (ValueError, TypeError):
+        return False
+    else:
+        # Basic bounds checking for all prices
+        if price_float <= 0 or price_float > 1e6:
+            return False
 
         # Get price range for symbol
         price_range = PRICE_RANGES.get(symbol, PRICE_RANGES["default"])
 
         return price_range["min"] <= price_float <= price_range["max"]
-
-    except (ValueError, TypeError):
-        return False
 
 
 def convert_candle_data(candle: list, symbol: str | None = None) -> list:

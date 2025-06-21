@@ -18,6 +18,11 @@ import websockets
 
 from bot.config import settings
 from bot.trading_types import MarketData
+from bot.utils.price_conversion import (
+    convert_candle_data,
+    convert_from_18_decimal,
+    convert_ticker_price,
+)
 
 if TYPE_CHECKING:
     from websockets.client import WebSocketClientProtocol
@@ -1338,12 +1343,37 @@ class BluefinMarketDataProvider:
 
                 data = await response.json()
 
-                # Extract last price from ticker data
+                # Extract last price from ticker data with conversion
                 if isinstance(data, dict) and "price" in data:
-                    price = Decimal(str(data["price"]))
-                    self._price_cache["price"] = price
-                    self._cache_timestamps["price"] = datetime.now(UTC)
-                    return price
+                    try:
+                        # Apply price conversion for ticker data
+                        converted_data = convert_ticker_price(data, self.symbol)
+                        price = Decimal(converted_data["price"])
+
+                        # Log if astronomical price was detected and converted
+                        original_price = Decimal(str(data["price"]))
+                        if original_price > 1e15:
+                            logger.info(
+                                "Converted astronomical ticker price for %s: %s -> %s",
+                                self.symbol,
+                                original_price,
+                                price,
+                            )
+
+                        self._price_cache["price"] = price
+                        self._cache_timestamps["price"] = datetime.now(UTC)
+                        return price
+                    except ValueError as conv_error:
+                        logger.warning(
+                            "Failed to convert ticker price for %s: %s. Using raw value.",
+                            self.symbol,
+                            conv_error,
+                        )
+                        # Fallback to raw value
+                        price = Decimal(str(data["price"]))
+                        self._price_cache["price"] = price
+                        self._cache_timestamps["price"] = datetime.now(UTC)
+                        return price
 
                 logger.warning("No price data found in ticker response: %s", data)
                 return None
@@ -1440,13 +1470,29 @@ class BluefinMarketDataProvider:
                 for i, candle in enumerate(candle_data):
                     try:
                         if isinstance(candle, list) and len(candle) >= 6:
-                            # Validate price data
-                            timestamp_val = candle[0]
-                            open_val = Decimal(str(candle[1]))
-                            high_val = Decimal(str(candle[2]))
-                            low_val = Decimal(str(candle[3]))
-                            close_val = Decimal(str(candle[4]))
-                            volume_val = Decimal(str(candle[5]))
+                            # Apply price conversion from 18-decimal format
+                            try:
+                                converted_candle = convert_candle_data(candle, symbol)
+                                timestamp_val = converted_candle[0]
+                                open_val = Decimal(str(converted_candle[1]))
+                                high_val = Decimal(str(converted_candle[2]))
+                                low_val = Decimal(str(converted_candle[3]))
+                                close_val = Decimal(str(converted_candle[4]))
+                                volume_val = Decimal(str(converted_candle[5]))
+                            except ValueError as conv_error:
+                                logger.warning(
+                                    "Failed to convert candle %s for %s: %s. Using raw values.",
+                                    i,
+                                    symbol,
+                                    conv_error,
+                                )
+                                # Fallback to raw values if conversion fails
+                                timestamp_val = candle[0]
+                                open_val = Decimal(str(candle[1]))
+                                high_val = Decimal(str(candle[2]))
+                                low_val = Decimal(str(candle[3]))
+                                close_val = Decimal(str(candle[4]))
+                                volume_val = Decimal(str(candle[5]))
 
                             # Basic validation
                             if (
@@ -1586,39 +1632,62 @@ class BluefinMarketDataProvider:
 
                 data = await response.json()
 
-                # Parse Bluefin candle data
+                # Parse Bluefin candle data with price conversion
                 candles = []
                 for candle in data:
                     # Expected format: [timestamp, open, high, low, close, volume]
                     if isinstance(candle, list) and len(candle) >= 6:
-                        market_data = MarketData(
-                            symbol=symbol,
-                            timestamp=datetime.fromtimestamp(candle[0] / 1000, UTC),
-                            open=Decimal(str(candle[1])),
-                            high=Decimal(str(candle[2])),
-                            low=Decimal(str(candle[3])),
-                            close=Decimal(str(candle[4])),
-                            volume=Decimal(str(candle[5])),
-                        )
-                        candles.append(market_data)
+                        try:
+                            # Apply price conversion from 18-decimal format
+                            converted_candle = convert_candle_data(candle, symbol)
+                            market_data = MarketData(
+                                symbol=symbol,
+                                timestamp=datetime.fromtimestamp(
+                                    converted_candle[0] / 1000, UTC
+                                ),
+                                open=Decimal(str(converted_candle[1])),
+                                high=Decimal(str(converted_candle[2])),
+                                low=Decimal(str(converted_candle[3])),
+                                close=Decimal(str(converted_candle[4])),
+                                volume=Decimal(str(converted_candle[5])),
+                            )
+                            candles.append(market_data)
+                        except ValueError as conv_error:
+                            logger.warning(
+                                "Failed to convert candle data for %s: %s. Skipping.",
+                                symbol,
+                                conv_error,
+                            )
+                            continue
                     elif isinstance(candle, dict):
-                        # Alternative format with keys
-                        timestamp_val = (
-                            candle.get("timestamp") or candle.get("time") or 0
-                        )
-                        market_data = MarketData(
-                            symbol=symbol,
-                            timestamp=datetime.fromtimestamp(
-                                timestamp_val / 1000,
-                                UTC,
-                            ),
-                            open=Decimal(str(candle.get("open", 0))),
-                            high=Decimal(str(candle.get("high", 0))),
-                            low=Decimal(str(candle.get("low", 0))),
-                            close=Decimal(str(candle.get("close", 0))),
-                            volume=Decimal(str(candle.get("volume", 0))),
-                        )
-                        candles.append(market_data)
+                        # Alternative format with keys - apply price conversion
+                        try:
+                            converted_data = convert_ticker_price(candle, symbol)
+                            timestamp_val = (
+                                candle.get("timestamp") or candle.get("time") or 0
+                            )
+                            market_data = MarketData(
+                                symbol=symbol,
+                                timestamp=datetime.fromtimestamp(
+                                    timestamp_val / 1000,
+                                    UTC,
+                                ),
+                                open=Decimal(converted_data.get("open", "0")),
+                                high=Decimal(converted_data.get("high", "0")),
+                                low=Decimal(converted_data.get("low", "0")),
+                                close=Decimal(converted_data.get("close", "0")),
+                                volume=Decimal(
+                                    str(candle.get("volume", 0))
+                                ),  # Volume may not need conversion
+                            )
+                            candles.append(market_data)
+                        except ValueError as conv_error:
+                            logger.warning(
+                                "Failed to convert dict candle data for %s: %s. Skipping.",
+                                symbol,
+                                conv_error,
+                            )
+                            continue
 
                 logger.info(
                     "Successfully fetched %s candles from Bluefin directly",
@@ -2046,20 +2115,53 @@ class BluefinMarketDataProvider:
     async def _process_market_data_update(self, data: dict[str, Any]) -> None:
         """Process market data update event."""
         try:
-            # Extract price and volume data
+            # Extract price and volume data with conversion
             if "lastPrice" in data:
-                price = Decimal(str(data["lastPrice"]))
-                self._price_cache["price"] = price
-                self._cache_timestamps["price"] = datetime.now(UTC)
+                try:
+                    # Apply price conversion for WebSocket price updates
+                    price = convert_from_18_decimal(
+                        data["lastPrice"], self.symbol, "lastPrice"
+                    )
 
-                # Add to tick buffer for candle building
-                tick_data = {
-                    "timestamp": datetime.now(UTC),
-                    "price": price,
-                    "volume": Decimal(str(data.get("volume", "0"))),
-                    "symbol": self.symbol,
-                }
-                self._tick_buffer.append(tick_data)
+                    # Log if astronomical price was detected
+                    original_price = Decimal(str(data["lastPrice"]))
+                    if original_price > 1e15:
+                        logger.info(
+                            "Converted astronomical WebSocket price for %s: %s -> %s",
+                            self.symbol,
+                            original_price,
+                            price,
+                        )
+
+                    self._price_cache["price"] = price
+                    self._cache_timestamps["price"] = datetime.now(UTC)
+
+                    # Add to tick buffer for candle building
+                    tick_data = {
+                        "timestamp": datetime.now(UTC),
+                        "price": price,
+                        "volume": Decimal(str(data.get("volume", "0"))),
+                        "symbol": self.symbol,
+                    }
+                    self._tick_buffer.append(tick_data)
+                except ValueError as conv_error:
+                    logger.warning(
+                        "Failed to convert WebSocket price for %s: %s. Using raw value.",
+                        self.symbol,
+                        conv_error,
+                    )
+                    # Fallback to raw value
+                    price = Decimal(str(data["lastPrice"]))
+                    self._price_cache["price"] = price
+                    self._cache_timestamps["price"] = datetime.now(UTC)
+
+                    tick_data = {
+                        "timestamp": datetime.now(UTC),
+                        "price": price,
+                        "volume": Decimal(str(data.get("volume", "0"))),
+                        "symbol": self.symbol,
+                    }
+                    self._tick_buffer.append(tick_data)
 
                 logger.debug("Market data update: %s @ %s", self.symbol, price)
 
@@ -2072,20 +2174,44 @@ class BluefinMarketDataProvider:
             trades = data.get("trades", [])
             for trade in trades:
                 if isinstance(trade, dict):
-                    tick_data = {
-                        "timestamp": datetime.fromtimestamp(
-                            trade.get("timestamp", datetime.now(UTC).timestamp()), UTC
-                        ),
-                        "price": Decimal(str(trade.get("price", "0"))),
-                        "volume": Decimal(str(trade.get("size", "0"))),
-                        "side": trade.get("side", ""),
-                        "symbol": self.symbol,
-                    }
-                    self._tick_buffer.append(tick_data)
+                    try:
+                        # Apply price conversion for trade data
+                        trade_price = convert_from_18_decimal(
+                            trade.get("price", "0"), self.symbol, "trade_price"
+                        )
 
-                    # Update latest price
-                    self._price_cache["price"] = tick_data["price"]
-                    self._cache_timestamps["price"] = datetime.now(UTC)
+                        # Log if astronomical price was detected
+                        original_price = Decimal(str(trade.get("price", "0")))
+                        if original_price > 1e15:
+                            logger.debug(
+                                "Converted astronomical trade price for %s: %s -> %s",
+                                self.symbol,
+                                original_price,
+                                trade_price,
+                            )
+
+                        tick_data = {
+                            "timestamp": datetime.fromtimestamp(
+                                trade.get("timestamp", datetime.now(UTC).timestamp()),
+                                UTC,
+                            ),
+                            "price": trade_price,
+                            "volume": Decimal(str(trade.get("size", "0"))),
+                            "side": trade.get("side", ""),
+                            "symbol": self.symbol,
+                        }
+                        self._tick_buffer.append(tick_data)
+
+                        # Update latest price
+                        self._price_cache["price"] = tick_data["price"]
+                        self._cache_timestamps["price"] = datetime.now(UTC)
+                    except ValueError as conv_error:
+                        logger.warning(
+                            "Failed to convert trade price for %s: %s. Skipping trade.",
+                            self.symbol,
+                            conv_error,
+                        )
+                        continue
 
         except Exception:
             logger.exception("Error processing recent trades")
@@ -2438,3 +2564,61 @@ def create_bluefin_market_data_client(
         BluefinMarketDataClient instance
     """
     return BluefinMarketDataClient(symbol, interval)
+
+
+def validate_and_log_price_conversion(
+    original_value: float | int | str | Decimal,
+    converted_value: Decimal,
+    symbol: str,
+    field_name: str,
+) -> None:
+    """Validate and log price conversion for debugging astronomical values."""
+    try:
+        original_numeric = float(original_value)
+        converted_numeric = float(converted_value)
+
+        # Check if astronomical value was detected and converted
+        if original_numeric > 1e15:
+            conversion_ratio = (
+                original_numeric / converted_numeric if converted_numeric != 0 else 0
+            )
+            logger.info(
+                "🔍 ASTRONOMICAL PRICE CONVERSION DETECTED:\n"
+                "  Symbol: %s\n"
+                "  Field: %s\n"
+                "  Original: %s\n"
+                "  Converted: %s\n"
+                "  Conversion Ratio: %.2e\n"
+                "  Likely 18-decimal format: %s",
+                symbol,
+                field_name,
+                original_value,
+                converted_value,
+                conversion_ratio,
+                "Yes" if original_numeric > 1e15 else "No",
+            )
+
+        # Validate if the converted price is reasonable
+        from bot.utils.price_conversion import is_price_valid
+
+        if field_name in [
+            "price",
+            "open",
+            "high",
+            "low",
+            "close",
+        ] and not is_price_valid(converted_value, symbol):
+            logger.warning(
+                "⚠️ CONVERTED PRICE OUT OF RANGE:\n"
+                "  Symbol: %s\n"
+                "  Field: %s\n"
+                "  Converted Price: %s\n"
+                "  Expected range for %s: Check price_conversion.py",
+                symbol,
+                field_name,
+                converted_value,
+                symbol,
+            )
+
+    except Exception as e:
+        logger.debug("Error in price conversion validation: %s", e)

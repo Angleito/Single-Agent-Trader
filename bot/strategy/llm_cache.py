@@ -176,9 +176,12 @@ class LLMResponseCache:
             max_entries: Maximum number of cache entries
             cleanup_interval: Cleanup interval in seconds
         """
-        self.ttl_seconds = ttl_seconds
-        self.max_entries = max_entries
-        self.cleanup_interval = cleanup_interval
+        # Add type checking for constructor parameters
+        self.ttl_seconds = int(ttl_seconds) if ttl_seconds is not None else 90
+        self.max_entries = int(max_entries) if max_entries is not None else 1000
+        self.cleanup_interval = (
+            int(cleanup_interval) if cleanup_interval is not None else 300
+        )
 
         self.cache: dict[str, CacheEntry] = {}
         self.hasher = MarketStateHasher()
@@ -288,6 +291,10 @@ class LLMResponseCache:
 
             # Log cache hit for performance monitoring
             age_seconds = time.time() - cached_entry.timestamp
+            # Add validation for age_seconds
+            if not isinstance(age_seconds, (int, float)) or age_seconds < 0:
+                age_seconds = 0.0
+                logger.warning("Invalid age_seconds calculated, using 0.0")
             logger.info(
                 "🎯 LLM Cache HIT: %s (age: %.1fs, hits: %s)",
                 cached_entry.response.action,
@@ -303,6 +310,10 @@ class LLMResponseCache:
         start_time = time.time()
         response = await compute_func(*args, **kwargs)
         compute_time = time.time() - start_time
+        # Add validation for compute_time
+        if not isinstance(compute_time, (int, float)) or compute_time < 0:
+            compute_time = 0.0
+            logger.warning("Invalid compute_time calculated, using 0.0")
 
         # Cache the response
         self._store_response(cache_key, response, market_state)

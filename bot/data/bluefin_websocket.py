@@ -16,6 +16,7 @@ from websockets.exceptions import ConnectionClosed, WebSocketException
 
 from bot.error_handling import exception_handler
 from bot.trading_types import MarketData
+from bot.utils.price_conversion import convert_from_18_decimal, is_likely_18_decimal
 
 if TYPE_CHECKING:
     from websockets.client import WebSocketClientProtocol
@@ -154,6 +155,33 @@ class BluefinWebSocketClient:
                 "dapi_ws_url": self.DAPI_WS_URL,
             },
         )
+
+    def _log_astronomical_price_detection(
+        self, value: str | float | Decimal, field_name: str, source: str
+    ) -> None:
+        """
+        Log when astronomical price values are detected for debugging.
+
+        Args:
+            value: The raw value received
+            field_name: Name of the field containing the value
+            source: Source of the data (e.g., 'ticker', 'trade', 'kline')
+        """
+        if is_likely_18_decimal(value):
+            logger.warning(
+                "🚨 ASTRONOMICAL PRICE DETECTED: %s=%s from %s (symbol: %s) - Converting from 18-decimal format",
+                field_name,
+                value,
+                source,
+                self.symbol,
+                extra={
+                    "symbol": self.symbol,
+                    "field_name": field_name,
+                    "raw_value": str(value),
+                    "source": source,
+                    "astronomical_price_detected": True,
+                },
+            )
 
     async def connect(self) -> None:
         """Establish WebSocket connection and start data streaming."""
@@ -675,9 +703,17 @@ class BluefinWebSocketClient:
                 trades = [trades]
 
             for trade in trades:
-                # Parse trade fields
-                price = Decimal(str(trade.get("price", 0)))
-                size = Decimal(str(trade.get("size", trade.get("amount", 0))))
+                # Parse trade fields with price conversion
+                price_str = trade.get("price", "0")
+                size_str = trade.get("size", trade.get("amount", "0"))
+
+                # Log astronomical price detection
+                self._log_astronomical_price_detection(price_str, "price", "trade")
+                self._log_astronomical_price_detection(size_str, "size", "trade")
+
+                # Convert from 18-decimal format if needed
+                price = convert_from_18_decimal(price_str, self.symbol, "trade_price")
+                size = convert_from_18_decimal(size_str, self.symbol, "trade_size")
                 side = trade.get("side", "")
                 timestamp = self._parse_timestamp(
                     trade.get("timestamp", trade.get("ts"))
@@ -742,7 +778,17 @@ class BluefinWebSocketClient:
             if isinstance(ticker, list) and ticker:
                 ticker = ticker[0]
 
-            last_price = Decimal(str(ticker.get("last", ticker.get("lastPrice", 0))))
+            # Convert ticker price from 18-decimal format if needed
+            last_price_str = ticker.get("last", ticker.get("lastPrice", "0"))
+
+            # Log astronomical price detection
+            self._log_astronomical_price_detection(
+                last_price_str, "lastPrice", "ticker"
+            )
+
+            last_price = convert_from_18_decimal(
+                last_price_str, self.symbol, "ticker_last_price"
+            )
             self._parse_timestamp(ticker.get("timestamp", ticker.get("ts")))
 
             if last_price > 0:
@@ -811,8 +857,13 @@ class BluefinWebSocketClient:
                     price_str = ticker.get("price", "0")
                     last_price_str = ticker.get("lastPrice", "0")
 
-                    # Import price conversion utility
-                    from bot.utils.price_conversion import convert_from_18_decimal
+                    # Log astronomical price detection
+                    self._log_astronomical_price_detection(
+                        price_str, "price", "bluefin_ticker"
+                    )
+                    self._log_astronomical_price_detection(
+                        last_price_str, "lastPrice", "bluefin_ticker"
+                    )
 
                     # Use smart conversion that detects 18-decimal format
                     price = convert_from_18_decimal(
@@ -904,8 +955,13 @@ class BluefinWebSocketClient:
                     price_str = trade.get("price", "0")
                     size_str = trade.get("quantity", trade.get("size", "0"))
 
-                    # Import price conversion utility
-                    from bot.utils.price_conversion import convert_from_18_decimal
+                    # Log astronomical price detection
+                    self._log_astronomical_price_detection(
+                        price_str, "price", "bluefin_trades"
+                    )
+                    self._log_astronomical_price_detection(
+                        size_str, "quantity", "bluefin_trades"
+                    )
 
                     # Use smart conversion that detects 18-decimal format
                     price = convert_from_18_decimal(
@@ -985,10 +1041,17 @@ class BluefinWebSocketClient:
                 close_price = kline_data.get("closePrice", "0")
                 volume = kline_data.get("volume", "0")
 
+                # Log astronomical price detection for all OHLCV values
+                self._log_astronomical_price_detection(open_price, "openPrice", "kline")
+                self._log_astronomical_price_detection(high_price, "highPrice", "kline")
+                self._log_astronomical_price_detection(low_price, "lowPrice", "kline")
+                self._log_astronomical_price_detection(
+                    close_price, "closePrice", "kline"
+                )
+                self._log_astronomical_price_detection(volume, "volume", "kline")
+
                 # Convert from 18-decimal format if needed using utility function
                 try:
-                    from bot.utils.price_conversion import convert_from_18_decimal
-
                     open_val = convert_from_18_decimal(
                         open_price, self.symbol, "kline_open"
                     )
@@ -1301,6 +1364,8 @@ class BluefinWebSocketClient:
                 size = trade.get("size")
 
                 if price and size:
+                    # Note: price and size are already converted Decimal values from trade data
+                    # They don't need additional conversion here as they come from converted trade data
                     prices.append(Decimal(str(price)))
                     total_volume += Decimal(str(size))
 
