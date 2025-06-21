@@ -103,23 +103,30 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /tmp/* /var/tmp/*
 
-# Create non-root user with dynamic UID/GID
-# Handle case where GID already exists (e.g., macOS staff group = 20)
-RUN (groupadd --gid ${GROUP_ID} botuser || true) \
-    && useradd --uid ${USER_ID} --gid ${GROUP_ID} --create-home --shell /bin/bash botuser
+# Create non-root user with dynamic UID/GID - Handle UID conflicts gracefully
+# Skip user creation if USER_ID is 0 (root) to avoid conflicts
+RUN if [ "${USER_ID}" != "0" ]; then \
+        # Create group if it doesn't already exist
+        (groupadd --gid ${GROUP_ID} botuser || true) && \
+        # Create user if it doesn't already exist
+        (useradd --uid ${USER_ID} --gid ${GROUP_ID} --create-home --shell /bin/bash botuser || \
+         echo "User with UID ${USER_ID} already exists, skipping creation"); \
+    else \
+        echo "Using root user (UID=0) - skipping user creation"; \
+    fi
 
 # Set work directory
 WORKDIR /app
 
-# Copy virtual environment from builder
-COPY --from=builder --chown=botuser:botuser /app/.venv /app/.venv
+# Copy virtual environment from builder with conditional ownership
+COPY --from=builder /app/.venv /app/.venv
 
 # Note: Bluefin dependencies are not installed in the main image due to conflicts
 # Use Dockerfile.bluefin for Bluefin-specific builds
 
 # Copy application code
-COPY --chown=botuser:botuser bot/ ./bot/
-COPY --chown=botuser:botuser pyproject.toml ./
+COPY bot/ ./bot/
+COPY pyproject.toml ./
 
 # Create required directories with proper Ubuntu permissions
 # This comprehensive directory setup reduces the burden on the entrypoint script
@@ -133,9 +140,13 @@ RUN echo "Creating application directories..." \
     && mkdir -p /app/logs/bluefin /app/logs/trades \
     # Trading data directories
     && mkdir -p /app/data/orders /app/data/paper_trading /app/data/positions /app/data/bluefin /app/data/omnisearch_cache \
-    # Set ownership to botuser:botuser (${USER_ID}:${GROUP_ID}) for all application directories
-    && echo "Setting directory ownership to botuser:botuser (${USER_ID}:${GROUP_ID})..." \
-    && chown -R botuser:botuser /app \
+    # Set ownership conditionally - only if not running as root
+    && echo "Setting directory ownership to (${USER_ID}:${GROUP_ID})..." \
+    && if [ "${USER_ID}" != "0" ]; then \
+        chown -R ${USER_ID}:${GROUP_ID} /app; \
+    else \
+        echo "Running as root - skipping ownership change"; \
+    fi \
     # Set base directory permissions (755 - read/execute for all, write for owner)
     && echo "Setting directory permissions..." \
     && chmod 755 /app \
@@ -150,21 +161,34 @@ RUN echo "Creating application directories..." \
     && ls -la /app/ \
     && ls -la /app/data/ \
     && ls -la /app/logs/ \
-    && echo "Directory setup complete - all required directories created with proper ownership (botuser:botuser ${USER_ID}:${GROUP_ID})"
+    && echo "Directory setup complete - all required directories created with proper ownership (${USER_ID}:${GROUP_ID})"
 
 # Copy prompt files
-COPY --chown=botuser:botuser prompts/*.txt ./prompts/
+COPY prompts/*.txt ./prompts/
 
 # Copy health check script
-COPY --chown=botuser:botuser healthcheck.sh /app/healthcheck.sh
-RUN chmod +x /app/healthcheck.sh
+COPY healthcheck.sh /app/healthcheck.sh
+RUN chmod +x /app/healthcheck.sh && \
+    if [ "${USER_ID}" != "0" ]; then \
+        chown ${USER_ID}:${GROUP_ID} /app/healthcheck.sh; \
+    fi
 
 # Copy Docker entrypoint script
-COPY --chown=botuser:botuser scripts/docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh
+COPY scripts/docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh && \
+    if [ "${USER_ID}" != "0" ]; then \
+        chown ${USER_ID}:${GROUP_ID} /app/docker-entrypoint.sh; \
+    fi
 
-# Switch to non-root user
-USER botuser
+# Switch to appropriate user - stay as root if USER_ID=0, otherwise use created user
+RUN if [ "${USER_ID}" != "0" ]; then \
+        echo "Switching to user: botuser (${USER_ID}:${GROUP_ID})"; \
+    else \
+        echo "Staying as root user for container execution"; \
+    fi
+
+# Use conditional USER directive - stay as root if USER_ID=0
+USER ${USER_ID}:${GROUP_ID}
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
