@@ -20,7 +20,7 @@ from bot.trading_types import (
 )
 
 
-@pytest.fixture()
+@pytest.fixture
 async def memory_server():
     """Create a memory server instance."""
     server = MCPMemoryServer()
@@ -29,7 +29,7 @@ async def memory_server():
     await server.disconnect()
 
 
-@pytest.fixture()
+@pytest.fixture
 async def experience_manager(memory_server):
     """Create an experience manager instance."""
     manager = ExperienceManager(memory_server)
@@ -38,29 +38,29 @@ async def experience_manager(memory_server):
     await manager.stop()
 
 
-@pytest.fixture()
+@pytest.fixture
 def self_improvement_engine(memory_server):
     """Create a self-improvement engine instance."""
     return SelfImprovementEngine(memory_server)
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_market_state():
     """Create a sample market state for testing."""
     return MarketState(
         symbol="BTC-USD",
         interval="3m",
         timestamp=datetime.now(UTC),
-        current_price=Decimal("50000"),
+        current_price=Decimal(50000),
         ohlcv_data=[
             MarketData(
                 symbol="BTC-USD",
                 timestamp=datetime.now(UTC) - timedelta(minutes=3),
-                open=Decimal("49800"),
-                high=Decimal("50100"),
-                low=Decimal("49700"),
-                close=Decimal("50000"),
-                volume=Decimal("100"),
+                open=Decimal(49800),
+                high=Decimal(50100),
+                low=Decimal(49700),
+                close=Decimal(50000),
+                volume=Decimal(100),
             )
         ],
         indicators=IndicatorData(
@@ -84,13 +84,13 @@ def sample_market_state():
         current_position=Position(
             symbol="BTC-USD",
             side="FLAT",
-            size=Decimal("0"),
+            size=Decimal(0),
             timestamp=datetime.now(UTC),
         ),
     )
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_memory_server_store_and_retrieve(memory_server, sample_market_state):
     """Test storing and retrieving experiences."""
     # Store an experience
@@ -117,8 +117,8 @@ async def test_memory_server_store_and_retrieve(memory_server, sample_market_sta
     # Update with outcome
     await memory_server.update_experience_outcome(
         experience_id,
-        pnl=Decimal("100"),
-        exit_price=Decimal("51000"),
+        pnl=Decimal(100),
+        exit_price=Decimal(51000),
         duration_minutes=30.0,
     )
 
@@ -128,7 +128,7 @@ async def test_memory_server_store_and_retrieve(memory_server, sample_market_sta
     assert similar[0].experience_id == experience_id
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_experience_manager_lifecycle(
     experience_manager, memory_server, sample_market_state
 ):
@@ -158,7 +158,7 @@ async def test_experience_manager_lifecycle(
     assert summary["active_count"] == 0  # No active trades yet
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_self_improvement_analysis(
     self_improvement_engine, memory_server, sample_market_state
 ):
@@ -179,8 +179,8 @@ async def test_self_improvement_analysis(
         # Update with outcome
         await memory_server.update_experience_outcome(
             exp_id,
-            pnl=Decimal("50") if i % 2 == 0 else Decimal("-30"),
-            exit_price=Decimal("51000") if i % 2 == 0 else Decimal("49000"),
+            pnl=Decimal(50) if i % 2 == 0 else Decimal(-30),
+            exit_price=Decimal(51000) if i % 2 == 0 else Decimal(49000),
             duration_minutes=30.0 + i * 10,
         )
 
@@ -206,7 +206,7 @@ async def test_self_improvement_analysis(
     assert "confidence_factors" in recommendations
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_memory_enhanced_agent(memory_server, sample_market_state):
     """Test memory-enhanced LLM agent."""
     # Skip if no LLM configured
@@ -231,8 +231,8 @@ async def test_memory_enhanced_agent(memory_server, sample_market_state):
 
         await memory_server.update_experience_outcome(
             exp_id,
-            pnl=Decimal("100"),
-            exit_price=Decimal("51000"),
+            pnl=Decimal(100),
+            exit_price=Decimal(51000),
             duration_minutes=45.0,
         )
 
@@ -245,7 +245,7 @@ async def test_memory_enhanced_agent(memory_server, sample_market_state):
     # In production tests, you'd mock the LLM responses
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_pattern_statistics(memory_server, sample_market_state):
     """Test pattern statistics generation."""
     # Store experiences with different patterns
@@ -270,11 +270,11 @@ async def test_pattern_statistics(memory_server, sample_market_state):
         exp_id = await memory_server.store_experience(sample_market_state, trade_action)
 
         # Make half successful
-        pnl = Decimal("50") if i % 2 == 0 else Decimal("-30")
+        pnl = Decimal(50) if i % 2 == 0 else Decimal(-30)
         await memory_server.update_experience_outcome(
             exp_id,
             pnl=pnl,
-            exit_price=Decimal("51000") if pnl > 0 else Decimal("49000"),
+            exit_price=Decimal(51000) if pnl > 0 else Decimal(49000),
             duration_minutes=30.0,
         )
 

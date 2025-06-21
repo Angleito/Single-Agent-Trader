@@ -5,4 +5,4 @@ from .bluefin import BluefinClient
 from .coinbase import CoinbaseClient
 from .factory import ExchangeFactory
 
-__all__ = ["BaseExchange", "CoinbaseClient", "BluefinClient", "ExchangeFactory"]
+__all__ = ["BaseExchange", "BluefinClient", "CoinbaseClient", "ExchangeFactory"]

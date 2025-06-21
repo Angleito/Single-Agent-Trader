@@ -137,7 +137,6 @@ class BluefinEndpointConfig:
         public_endpoints = {
             "/ticker24hr",
             "/candlestickData",
-            "/klines",
             "/trades",
             "/orderbook",
             "/exchangeInfo",

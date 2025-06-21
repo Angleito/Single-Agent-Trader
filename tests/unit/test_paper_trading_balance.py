@@ -20,20 +20,20 @@ from bot.trading_types import OrderStatus, TradeAction
 class TestPaperTradingBalance:
     """Test cases for paper trading balance calculations."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def temp_data_dir(self):
         """Create temporary directory for test data."""
         with tempfile.TemporaryDirectory() as temp_dir:
             yield Path(temp_dir)
 
-    @pytest.fixture()
+    @pytest.fixture
     def account(self, temp_data_dir):
         """Create paper trading account for testing."""
         return PaperTradingAccount(
-            starting_balance=Decimal("10000"), data_dir=temp_data_dir
+            starting_balance=Decimal(10000), data_dir=temp_data_dir
         )
 
-    @pytest.fixture()
+    @pytest.fixture
     def mock_fee_calculator(self):
         """Mock fee calculator for consistent testing."""
         with patch("bot.paper_trading.fee_calculator") as mock_calc:
@@ -63,7 +63,7 @@ class TestPaperTradingBalance:
             rationale="Test long trade",
         )
 
-        current_price = Decimal("50000")
+        current_price = Decimal(50000)
 
         # Execute trade
         order = account.execute_trade_action(action, "BTC-USD", current_price)
@@ -93,7 +93,7 @@ class TestPaperTradingBalance:
             rationale="Test short trade",
         )
 
-        current_price = Decimal("50000")
+        current_price = Decimal(50000)
 
         # Execute trade
         order = account.execute_trade_action(action, "BTC-USD", current_price)
@@ -118,7 +118,7 @@ class TestPaperTradingBalance:
             rationale="Oversized trade",
         )
 
-        current_price = Decimal("100000")  # High price to require more margin
+        current_price = Decimal(100000)  # High price to require more margin
 
         # This should fail due to insufficient funds
         order = account.execute_trade_action(action, "BTC-USD", current_price)
@@ -139,7 +139,7 @@ class TestPaperTradingBalance:
             rationale="Margin test",
         )
 
-        current_price = Decimal("50000")
+        current_price = Decimal(50000)
 
         # Mock settings for leverage
         with patch("bot.paper_trading.settings") as mock_settings:
@@ -180,7 +180,7 @@ class TestPaperTradingBalance:
                 net_position_value=Decimal("4990.00"),
             )
 
-            order = account.execute_trade_action(action, "BTC-USD", Decimal("50000"))
+            order = account.execute_trade_action(action, "BTC-USD", Decimal(50000))
 
             if order and order.status == OrderStatus.FILLED:
                 # Balance should be reduced by exactly the entry fee
@@ -197,7 +197,7 @@ class TestPaperTradingBalance:
             rationale="Slippage test",
         )
 
-        market_price = Decimal("50000")
+        market_price = Decimal(50000)
 
         order = account.execute_trade_action(action, "BTC-USD", market_price)
 
@@ -222,7 +222,7 @@ class TestPaperTradingBalance:
             rationale="Open position",
         )
 
-        entry_price = Decimal("50000")
+        entry_price = Decimal(50000)
         account.execute_trade_action(open_action, "BTC-USD", entry_price)
 
         initial_equity = account.equity
@@ -237,7 +237,7 @@ class TestPaperTradingBalance:
             rationale="Close position",
         )
 
-        exit_price = Decimal("51000")  # 2% profit
+        exit_price = Decimal(51000)  # 2% profit
         order = account.execute_trade_action(close_action, "BTC-USD", exit_price)
 
         if order and order.status == OrderStatus.FILLED:
@@ -258,18 +258,18 @@ class TestPaperTradingBalance:
             rationale="P&L test",
         )
 
-        entry_price = Decimal("50000")
+        entry_price = Decimal(50000)
         account.execute_trade_action(action, "BTC-USD", entry_price)
 
         # Test unrealized P&L with price increase
-        current_prices = {"BTC-USD": Decimal("52000")}  # 4% increase
+        current_prices = {"BTC-USD": Decimal(52000)}  # 4% increase
         status = account.get_account_status(current_prices)
 
         # Should show positive unrealized P&L
         assert status["unrealized_pnl"] > 0
 
         # Test with price decrease
-        current_prices = {"BTC-USD": Decimal("48000")}  # 4% decrease
+        current_prices = {"BTC-USD": Decimal(48000)}  # 4% decrease
         status = account.get_account_status(current_prices)
 
         # Should show negative unrealized P&L
@@ -285,7 +285,7 @@ class TestPaperTradingBalance:
             stop_loss_pct=1.0,
             rationale="Position 1",
         )
-        account.execute_trade_action(action1, "BTC-USD", Decimal("50000"))
+        account.execute_trade_action(action1, "BTC-USD", Decimal(50000))
 
         # Open second position
         action2 = TradeAction(
@@ -295,7 +295,7 @@ class TestPaperTradingBalance:
             stop_loss_pct=1.0,
             rationale="Position 2",
         )
-        account.execute_trade_action(action2, "ETH-USD", Decimal("3000"))
+        account.execute_trade_action(action2, "ETH-USD", Decimal(3000))
 
         status = account.get_account_status()
 
@@ -316,7 +316,7 @@ class TestPaperTradingBalance:
             rationale="Initial position",
         )
 
-        account.execute_trade_action(action, "BTC-USD", Decimal("50000"))
+        account.execute_trade_action(action, "BTC-USD", Decimal(50000))
         initial_margin = account.margin_used
 
         # Increase position size
@@ -328,7 +328,7 @@ class TestPaperTradingBalance:
             rationale="Increase position",
         )
 
-        account.execute_trade_action(increase_action, "BTC-USD", Decimal("50500"))
+        account.execute_trade_action(increase_action, "BTC-USD", Decimal(50500))
 
         # Margin should increase
         assert account.margin_used > initial_margin
@@ -348,7 +348,7 @@ class TestPaperTradingBalance:
             rationale="Long position",
         )
 
-        account.execute_trade_action(long_action, "BTC-USD", Decimal("50000"))
+        account.execute_trade_action(long_action, "BTC-USD", Decimal(50000))
         initial_balance = account.current_balance
 
         # Reverse to short position
@@ -360,7 +360,7 @@ class TestPaperTradingBalance:
             rationale="Reverse to short",
         )
 
-        account.execute_trade_action(short_action, "BTC-USD", Decimal("51000"))
+        account.execute_trade_action(short_action, "BTC-USD", Decimal(51000))
 
         # Should still have 1 position but now short
         status = account.get_account_status()
@@ -412,7 +412,7 @@ class TestPaperTradingBalance:
             mock_settings.trading.leverage = 5
             mock_settings.trading.fixed_contract_size = None
 
-            order = account.execute_trade_action(action, "ETH-USD", Decimal("3000"))
+            order = account.execute_trade_action(action, "ETH-USD", Decimal(3000))
 
             if order and order.status == OrderStatus.FILLED:
                 # Verify contract-based quantity calculation
@@ -425,8 +425,8 @@ class TestPaperTradingBalance:
     def test_balance_error_recovery(self, account, mock_fee_calculator):
         """Test balance error recovery and data integrity."""
         # Simulate corrupted balance state
-        account.current_balance = Decimal("-100")  # Invalid negative balance
-        account.margin_used = Decimal("999999999")  # Impossibly high margin
+        account.current_balance = Decimal(-100)  # Invalid negative balance
+        account.margin_used = Decimal(999999999)  # Impossibly high margin
 
         # System should handle and recover
         status = account.get_account_status()
@@ -439,8 +439,8 @@ class TestPaperTradingBalance:
         """Test accuracy of performance metrics calculation."""
         # Execute several trades
         trades = [
-            (TradeAction("LONG", 10, 2.0, 1.0, "Trade 1"), "BTC-USD", Decimal("50000")),
-            (TradeAction("SHORT", 5, 1.5, 1.0, "Trade 2"), "ETH-USD", Decimal("3000")),
+            (TradeAction("LONG", 10, 2.0, 1.0, "Trade 1"), "BTC-USD", Decimal(50000)),
+            (TradeAction("SHORT", 5, 1.5, 1.0, "Trade 2"), "ETH-USD", Decimal(3000)),
         ]
 
         for action, symbol, price in trades:
@@ -468,7 +468,7 @@ class TestPaperTradingBalance:
 
         # Open position
         open_action = TradeAction("LONG", 15, 3.0, 1.5, "Lifecycle test")
-        account.execute_trade_action(open_action, "BTC-USD", Decimal("50000"))
+        account.execute_trade_action(open_action, "BTC-USD", Decimal(50000))
 
         after_open_balance = account.current_balance
         margin_used = account.margin_used
@@ -479,7 +479,7 @@ class TestPaperTradingBalance:
 
         # Close position at profit
         close_action = TradeAction("CLOSE", 0, 0, 0, "Close position")
-        account.execute_trade_action(close_action, "BTC-USD", Decimal("52000"))
+        account.execute_trade_action(close_action, "BTC-USD", Decimal(52000))
 
         final_balance = account.current_balance
         final_margin = account.margin_used
@@ -492,7 +492,7 @@ class TestPaperTradingBalance:
         """Test edge case balance scenarios."""
         # Test with very small position
         small_action = TradeAction("LONG", 0.1, 1.0, 0.5, "Tiny position")
-        order = account.execute_trade_action(small_action, "BTC-USD", Decimal("50000"))
+        order = account.execute_trade_action(small_action, "BTC-USD", Decimal(50000))
 
         if order:
             assert order.quantity > 0
@@ -501,7 +501,7 @@ class TestPaperTradingBalance:
         max_action = TradeAction(
             "LONG", 20, 2.0, 1.0, "Max position"
         )  # 20% is typical max
-        account.execute_trade_action(max_action, "BTC-USD", Decimal("50000"))
+        account.execute_trade_action(max_action, "BTC-USD", Decimal(50000))
 
         status = account.get_account_status()
         assert (
@@ -514,7 +514,7 @@ class TestPaperTradingBalance:
 
         def execute_trade():
             action = TradeAction("LONG", 1, 1.0, 0.5, "Concurrent test")
-            account.execute_trade_action(action, "BTC-USD", Decimal("50000"))
+            account.execute_trade_action(action, "BTC-USD", Decimal(50000))
 
         # Execute multiple trades concurrently
         threads = []

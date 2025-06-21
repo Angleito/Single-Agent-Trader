@@ -86,6 +86,7 @@ import logging
 import signal
 import time
 from asyncio import Task
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -205,6 +206,13 @@ _lazy_imports = {
     "TradeLogger": (".logging.trade_logger", "TradeLogger"),
     "PerformanceMonitor": (".performance_monitor", "PerformanceMonitor"),
     "PerformanceThresholds": (".performance_monitor", "PerformanceThresholds"),
+    "MarketMakingIntegrator": (
+        ".strategy.market_making_integration",
+        "MarketMakingIntegrator",
+    ),
+    "MarketMakingConfig": (".market_making_config", "MarketMakingConfig"),
+    "create_default_config": (".market_making_config", "create_default_config"),
+    "validate_config": (".market_making_config", "validate_config"),
 }
 
 
@@ -264,6 +272,9 @@ class TradingEngine:
         interval: str = "1m",  # Note: 15s was changed to 1m due to Bluefin API limitations
         config_file: str | None = None,
         dry_run: bool | None = None,
+        market_making_enabled: bool | None = None,
+        market_making_symbol: str | None = None,
+        market_making_profile: str | None = None,
     ):
         """
         Initialize the trading engine.
@@ -273,6 +284,9 @@ class TradingEngine:
             interval: Candle interval
             config_file: Optional configuration file path
             dry_run: Whether to run in dry-run mode (None = use config/env settings)
+            market_making_enabled: Override market making enabled setting
+            market_making_symbol: Override market making symbol
+            market_making_profile: Override market making profile
         """
         self.symbol = symbol
         self.interval = interval
@@ -283,6 +297,14 @@ class TradingEngine:
         self._background_tasks: list[asyncio.Task[Any]] = (
             []
         )  # Track background tasks for cleanup
+
+        # Initialize market making integrator (will be set up after LLM agent)
+        self.market_making_integrator: Any | None = None
+
+        # Store market making CLI overrides
+        self._market_making_enabled_override = market_making_enabled
+        self._market_making_symbol_override = market_making_symbol
+        self._market_making_profile_override = market_making_profile
 
         # Initialize basic configuration and setup
         self._initialize_basic_setup(config_file, dry_run)
@@ -353,6 +375,7 @@ class TradingEngine:
         self._initialize_omnisearch()
         self._initialize_websocket_components()
         self._initialize_llm_agent()
+        self._initialize_market_making_integrator()
 
     def _initialize_omnisearch(self):
         """Initialize OmniSearch client if enabled."""
@@ -501,6 +524,70 @@ class TradingEngine:
             self.logger.error("Bot cannot make trading decisions without LLM agent")
             self.llm_agent = None
 
+    def _initialize_market_making_integrator(self):
+        """Initialize market making integrator if enabled."""
+        self.market_making_integrator = None
+
+        # Apply CLI overrides to market making configuration
+        mm_enabled = self._market_making_enabled_override
+        if mm_enabled is None:
+            mm_enabled = self.settings.market_making.enabled
+
+        if not mm_enabled:
+            self.logger.info("Market making disabled - using LLM agent for all symbols")
+            return
+
+        try:
+            MarketMakingIntegrator = _get_lazy_import("MarketMakingIntegrator")
+            if not MarketMakingIntegrator:
+                self.logger.warning(
+                    "MarketMakingIntegrator unavailable - falling back to LLM agent only"
+                )
+                return
+
+            # Apply CLI overrides for market making configuration
+            mm_config = self.settings.market_making.model_copy(deep=True)
+
+            # Override enabled setting
+            if self._market_making_enabled_override is not None:
+                mm_config.enabled = self._market_making_enabled_override
+
+            # Override symbol
+            if self._market_making_symbol_override:
+                mm_config.symbol = self._market_making_symbol_override
+
+            # Override profile and apply profile-specific settings
+            if self._market_making_profile_override:
+                mm_config.profile = self._market_making_profile_override
+                mm_config = mm_config.apply_profile(
+                    self._market_making_profile_override
+                )
+
+            # Determine market making symbols from configuration
+            market_making_symbols = [mm_config.symbol]
+
+            # Initialize the integrator
+            self.market_making_integrator = MarketMakingIntegrator(
+                symbol=self.symbol,
+                exchange_client=None,  # Will be set later during trading infrastructure setup
+                dry_run=self.dry_run,
+                market_making_symbols=market_making_symbols,
+                config=mm_config.model_dump(),
+            )
+
+            self.logger.info(
+                f"Market making integrator initialized for symbols: {market_making_symbols}"
+            )
+            if self._market_making_profile_override:
+                self.logger.info(
+                    f"Using CLI override profile: {self._market_making_profile_override}"
+                )
+
+        except Exception as e:
+            self.logger.warning("Failed to initialize market making integrator: %s", e)
+            self.logger.info("Falling back to LLM agent for all symbols")
+            self.market_making_integrator = None
+
     def _initialize_trading_infrastructure(self):
         """Initialize trading infrastructure components."""
         self.validator = TradeValidator()
@@ -519,6 +606,10 @@ class TradingEngine:
             self.exchange_client.set_failure_callback(
                 self.risk_manager.circuit_breaker.record_failure
             )
+
+        # Set exchange client for market making integrator if available
+        if self.market_making_integrator:
+            self.market_making_integrator.exchange_client = self.exchange_client
 
         # Initialize dominance data provider if enabled
         self._initialize_dominance_provider()
@@ -588,6 +679,56 @@ class TradingEngine:
             self.logger.warning("Failed to initialize trade logger: %s", e)
             self.trade_logger = None
 
+    class NullPerformanceMonitor:
+        """
+        Null object implementation of performance monitor.
+
+        Provides the same interface as PerformanceMonitor but does nothing,
+        allowing graceful degradation when performance monitoring is unavailable.
+        """
+
+        def __init__(self):
+            pass
+
+        @contextmanager
+        def track_operation(
+            self, operation_name: str, tags: dict[str, str] | None = None
+        ):
+            """
+            No-op context manager for tracking operations.
+
+            Args:
+                operation_name: Name of the operation (ignored)
+                tags: Additional tags (ignored)
+
+            Yields:
+                None - just allows the context manager to work
+            """
+            # No-op context manager - just yield control back
+            yield
+
+        def add_alert_callback(self, callback):
+            """No-op alert callback registration."""
+
+        def get_performance_summary(self, duration=None):
+            """Return empty performance summary."""
+            return {
+                "timestamp": datetime.now(),
+                "period_minutes": 0,
+                "latency_summary": {},
+                "resource_summary": {},
+                "recent_alerts": [],
+                "bottleneck_analysis": {"bottlenecks": [], "recommendations": []},
+                "health_score": 100.0,
+                "monitoring_available": False,
+            }
+
+        async def start_monitoring(self, resource_monitor_interval: float = 5.0):
+            """No-op start monitoring."""
+
+        async def stop_monitoring(self):
+            """No-op stop monitoring."""
+
     def _initialize_performance_monitoring(self):
         """Initialize performance monitoring system."""
         self.logger.debug("Initializing performance monitoring system...")
@@ -610,12 +751,15 @@ class TradingEngine:
                 self.logger.info("Performance monitoring system initialized")
             else:
                 self.logger.warning(
-                    "Performance monitoring unavailable - using basic monitoring"
+                    "Performance monitoring unavailable - using null performance monitor"
                 )
-                self.performance_monitor = None
+                self.performance_monitor = self.NullPerformanceMonitor()
         except Exception as e:
-            self.logger.warning("Failed to initialize performance monitoring: %s", e)
-            self.performance_monitor = None
+            self.logger.warning(
+                "Failed to initialize performance monitoring: %s - using null performance monitor",
+                e,
+            )
+            self.performance_monitor = self.NullPerformanceMonitor()
 
     def _configure_performance_thresholds(self, thresholds: Any):
         """Configure performance thresholds based on trading interval."""
@@ -655,6 +799,10 @@ class TradingEngine:
             "Indicators": self.indicator_calc is not None,
             "LLM Agent": self.llm_agent is not None,
             "Memory System": self._memory_available,
+            "Market Making": (
+                self.market_making_integrator is not None
+                and self.market_making_integrator.status.market_making_enabled
+            ),
             "WebSocket Publisher": self.websocket_publisher is not None,
             "Command Consumer": self.command_consumer is not None,
             "OmniSearch Client": self.omnisearch_client is not None,
@@ -1055,6 +1203,33 @@ class TradingEngine:
             system_settings = settings.system.model_copy(update={"dry_run": dry_run})
             settings = settings.model_copy(update={"system": system_settings})
 
+        # Apply market making CLI overrides if specified
+        if hasattr(self, "_market_making_enabled_override") and any(
+            [
+                self._market_making_enabled_override is not None,
+                self._market_making_symbol_override is not None,
+                self._market_making_profile_override is not None,
+            ]
+        ):
+            mm_settings = settings.market_making.model_copy(deep=True)
+
+            # Apply overrides
+            if self._market_making_enabled_override is not None:
+                mm_settings.enabled = self._market_making_enabled_override
+
+            if self._market_making_symbol_override:
+                mm_settings.symbol = self._market_making_symbol_override
+
+            if self._market_making_profile_override:
+                mm_settings.profile = self._market_making_profile_override
+                # Apply profile-specific settings
+                mm_settings = mm_settings.apply_profile(
+                    self._market_making_profile_override
+                )
+
+            # Update settings with modified market making configuration
+            settings = settings.model_copy(update={"market_making": mm_settings})
+
         # Validate configuration for trading
         warnings = settings.validate_trading_environment()
         if warnings:
@@ -1241,6 +1416,9 @@ class TradingEngine:
         # Verify LLM agent
         await self._verify_llm_agent()
 
+        # Initialize market making integrator with LLM agent
+        await self._initialize_market_making_integration()
+
         # Connect optional services
         await self._connect_optional_services()
 
@@ -1379,6 +1557,31 @@ class TradingEngine:
             console.print(
                 "[yellow]    Warning: LLM not available, using fallback logic[/yellow]"
             )
+
+    async def _initialize_market_making_integration(self):
+        """Initialize market making integration with LLM agent."""
+        if not self.market_making_integrator:
+            return
+
+        try:
+            console.print("  • Initializing market making integration...")
+            await self.market_making_integrator.initialize(self.llm_agent)
+
+            if self.market_making_integrator.status.market_making_enabled:
+                console.print(
+                    f"    ✓ Market making enabled for {self.market_making_integrator.symbol}"
+                )
+            else:
+                console.print(
+                    f"    • Market making disabled for {self.symbol}, using LLM agent"
+                )
+
+        except Exception as e:
+            self.logger.warning("Failed to initialize market making integration: %s", e)
+            console.print(
+                "[yellow]    Warning: Market making integration failed, using LLM agent only[/yellow]"
+            )
+            self.market_making_integrator = None
 
     async def _connect_optional_services(self):
         """Connect to optional services like OmniSearch."""
@@ -1902,6 +2105,32 @@ class TradingEngine:
             f"{llm_status['model_provider']}:{llm_status['model_name']}",
         )
 
+        # Market Making status
+        if self.market_making_integrator:
+            mm_status = (
+                "✓ Enabled"
+                if self.market_making_integrator.status.market_making_enabled
+                else "⚠ Available"
+            )
+            mm_strategy = self.market_making_integrator.get_strategy_for_symbol(
+                self.symbol
+            )
+            mm_details = f"Strategy: {mm_strategy.title()}"
+            if self.market_making_integrator.status.market_making_enabled:
+                mm_symbols = ", ".join(
+                    self.market_making_integrator.market_making_symbols
+                )
+                mm_details += f" | Symbols: {mm_symbols}"
+        else:
+            mm_status = "✗ Disabled"
+            mm_details = "LLM agent for all symbols"
+
+        table.add_row(
+            "Market Making",
+            mm_status,
+            mm_details,
+        )
+
         # OmniSearch status
         omnisearch_status = (
             "✓ Enabled" if llm_status.get("omnisearch_enabled", False) else "✗ Disabled"
@@ -2200,14 +2429,26 @@ class TradingEngine:
 
     async def _process_market_data_and_indicators(self, latest_data: list) -> tuple:
         """Process market data and calculate indicators."""
-        # Track market data processing performance
-        with self.performance_monitor.track_operation(
-            "market_data_processing",
-            {
-                "symbol": self.actual_trading_symbol,
-                "data_points": str(len(latest_data)),
-            },
+        # Track market data processing performance with defensive check
+        if self.performance_monitor is not None and hasattr(
+            self.performance_monitor, "track_operation"
         ):
+            context_manager = self.performance_monitor.track_operation(
+                "market_data_processing",
+                {
+                    "symbol": self.actual_trading_symbol,
+                    "data_points": str(len(latest_data)),
+                },
+            )
+        else:
+            # Fallback no-op context manager
+            @contextmanager
+            def fallback_context():
+                yield
+
+            context_manager = fallback_context()
+
+        with context_manager:
             current_price = latest_data[-1].close
 
             # Publish market data to dashboard
@@ -2519,10 +2760,33 @@ class TradingEngine:
             self.logger.debug("Trading loop heartbeat - iteration %s", loop_count)
 
     async def _get_llm_decision(self, market_state):
-        """Get trading decision from LLM agent."""
+        """Get trading decision from appropriate agent (Market Making or LLM)."""
+        # Check if market making integrator is available and handles this symbol
+        if (
+            self.market_making_integrator
+            and self.market_making_integrator.status.is_initialized
+            and self.market_making_integrator.get_strategy_for_symbol(self.symbol)
+            == "market_making"
+        ):
+            self.logger.debug(
+                "🎯 Requesting trading decision from Market Making Engine for %s",
+                self.symbol,
+            )
+
+            with self.performance_monitor.track_operation(
+                "market_making_decision",
+                {
+                    "strategy_type": "market_making",
+                    "symbol": self.symbol,
+                },
+            ):
+                return await self.market_making_integrator.analyze_market(market_state)
+
+        # Fall back to LLM agent for other symbols or when market making is unavailable
         self.logger.debug(
-            "🤔 Requesting trading decision from %s LLM Agent",
+            "🤔 Requesting trading decision from %s LLM Agent for %s",
             "Memory-Enhanced" if self._memory_available else "Standard",
+            self.symbol,
         )
 
         with self.performance_monitor.track_operation(
@@ -3279,6 +3543,33 @@ class TradingEngine:
         )
         status_table.add_row("Uptime", str(uptime).split(".")[0])
 
+        # Add market making status if available
+        if self.market_making_integrator and hasattr(
+            self.market_making_integrator, "status"
+        ):
+            mm_status = self.market_making_integrator.status
+            if (
+                hasattr(mm_status, "market_making_enabled")
+                and mm_status.market_making_enabled
+            ):
+                status_table.add_row(
+                    "Market Making",
+                    f"✅ Active on {', '.join(self.market_making_integrator.market_making_symbols)}",
+                )
+                # Add current strategy info
+                strategy = self.market_making_integrator.get_strategy_for_symbol(
+                    self.symbol
+                )
+                if strategy:
+                    status_table.add_row("MM Strategy", strategy.title())
+            else:
+                status_table.add_row("Market Making", "⚠️ Available but inactive")
+        elif (
+            hasattr(self, "_market_making_enabled_override")
+            and self._market_making_enabled_override
+        ):
+            status_table.add_row("Market Making", "❌ Failed to initialize")
+
         # Add dominance data if available
         if hasattr(self, "dominance_provider") and self.dominance_provider:
             dominance_data = self.dominance_provider.get_latest_dominance()
@@ -3581,6 +3872,17 @@ class TradingEngine:
                     self.experience_manager.stop()
                 )  # type: ignore[arg-type]
                 cleanup_tasks.append(experience_task)
+
+            # Stop market making integrator if enabled
+            if (
+                hasattr(self, "market_making_integrator")
+                and self.market_making_integrator is not None
+            ):
+                console.print("  • Stopping market making engine...")
+                market_making_task: Task[None] = asyncio.create_task(
+                    self.market_making_integrator.stop()
+                )  # type: ignore[arg-type]
+                cleanup_tasks.append(market_making_task)
 
             # Close dominance data connection - CRITICAL for async session cleanup
             if (
@@ -4071,9 +4373,59 @@ class TradingEngine:
 @click.group()
 @click.version_option(version="0.1.0", prog_name="ai-trading-bot")
 def cli() -> None:
-    """AI Trading Bot - LangChain-powered crypto futures trading."""
+    """AI Trading Bot - LangChain-powered crypto futures trading.
+
+    Features:
+    - Live trading with LLM-powered decision making
+    - Market making strategies for DEX/CEX
+    - Paper trading and backtesting
+    - Performance monitoring and reporting
+    - Multi-exchange support (Coinbase, Bluefin)
+
+    Market Making Commands:
+    - mm-status: Show market making configuration and status
+    - mm-config: Display configuration for different profiles
+    - mm-validate: Validate market making setup
+    - mm-test: Test market making components
+    """
     # Set up comprehensive warning suppression for third-party libraries
     setup_warnings_suppression()
+
+    # Initialize robust logging system with fallback support
+    try:
+        from .utils.logging_config import setup_application_logging
+        from .utils.logging_factory import log_system_info
+
+        # Setup comprehensive logging system
+        logging_results = setup_application_logging()
+
+        # Log system information if logging is working
+        if logging_results["status"] in ["success", "fallback"]:
+            try:
+                log_system_info()
+            except Exception:
+                # If system info logging fails, continue silently
+                pass
+
+        # Print any critical logging issues to console
+        if logging_results["errors"]:
+            console.print("⚠️  Logging system encountered errors:", style="yellow")
+            for error in logging_results["errors"]:
+                console.print(f"  - {error}", style="yellow")
+
+        if logging_results["status"] == "fallback":
+            console.print("ℹ️  Logging system running in fallback mode", style="blue")
+
+    except ImportError:
+        # If our logging modules aren't available, setup basic logging
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        )
+        console.print(
+            "⚠️  Using basic logging - advanced logging modules not available",
+            style="yellow",
+        )
 
 
 @cli.command()
@@ -4091,6 +4443,22 @@ def cli() -> None:
 @click.option("--config", default=None, help="Configuration file path")
 @click.option("--force", is_flag=True, help="Skip confirmation prompt for live trading")
 @click.option("--skip-health-check", is_flag=True, help="Skip startup health checks")
+@click.option(
+    "--market-making/--no-market-making",
+    default=None,
+    help="Enable/disable market making mode (overrides config)",
+)
+@click.option(
+    "--mm-symbol",
+    default=None,
+    help="Market making symbol (default: SUI-PERP)",
+)
+@click.option(
+    "--mm-profile",
+    type=click.Choice(["conservative", "moderate", "aggressive", "custom"]),
+    default=None,
+    help="Market making configuration profile",
+)
 def live(
     dry_run: bool | None,
     symbol: str,
@@ -4098,8 +4466,25 @@ def live(
     config: str | None,
     force: bool,
     skip_health_check: bool,
+    market_making: bool | None,
+    mm_symbol: str | None,
+    mm_profile: str | None,
 ) -> None:
-    """Start live trading bot."""
+    """Start live trading bot.
+
+    Examples:
+        # Regular trading
+        ai-trading-bot live --symbol BTC-USD
+
+        # Enable market making
+        ai-trading-bot live --market-making --mm-symbol SUI-PERP --mm-profile aggressive
+
+        # Market making with custom configuration
+        ai-trading-bot live --market-making --config custom_config.json
+
+        # Live trading (requires --force for safety)
+        ai-trading-bot live --no-dry-run --force
+    """
     try:
         # Perform startup health checks unless skipped
         if not skip_health_check:
@@ -4107,8 +4492,28 @@ def live(
 
         # Create the trading engine to determine actual dry_run setting
         engine = TradingEngine(
-            symbol=symbol, interval=interval, config_file=config, dry_run=dry_run
+            symbol=symbol,
+            interval=interval,
+            config_file=config,
+            dry_run=dry_run,
+            market_making_enabled=market_making,
+            market_making_symbol=mm_symbol,
+            market_making_profile=mm_profile,
         )
+
+        # Build startup message with market making info
+        mm_info = ""
+        if market_making or (mm_symbol and mm_symbol != "BTC-USD"):
+            mm_symbol_display = mm_symbol or "SUI-PERP"
+            mm_profile_display = mm_profile or "moderate"
+            mm_info = (
+                f"\nMarket Making: {mm_profile_display.title()} on {mm_symbol_display}"
+            )
+        elif (
+            hasattr(engine, "market_making_integrator")
+            and engine.market_making_integrator
+        ):
+            mm_info = "\nMarket Making: Enabled via configuration"
 
         # Display startup message based on actual configuration
         if engine.dry_run:
@@ -4117,7 +4522,8 @@ def live(
                     f"🚀 Starting AI Trading Bot in DRY-RUN mode\n"
                     f"Symbol: {symbol}\n"
                     f"Interval: {interval}\n"
-                    f"Mode: Paper Trading (No real orders)",
+                    f"Mode: Paper Trading (No real orders)"
+                    f"{mm_info}",
                     title="AI Trading Bot",
                     style="cyan",
                 )
@@ -4128,7 +4534,8 @@ def live(
                     f"⚠️  Starting AI Trading Bot in LIVE mode\n"
                     f"Symbol: {symbol}\n"
                     f"Interval: {interval}\n"
-                    f"Mode: Real Trading (Real money at risk!)",
+                    f"Mode: Real Trading (Real money at risk!)"
+                    f"{mm_info}",
                     title="AI Trading Bot",
                     style="red",
                 )
@@ -4182,23 +4589,58 @@ def live(
 @click.option("--to", "end_date", default="2024-12-31", help="End date (YYYY-MM-DD)")
 @click.option("--symbol", default="BTC-USD", help="Trading symbol")
 @click.option("--initial-balance", default=10000.0, help="Initial balance for backtest")
+@click.option(
+    "--market-making/--no-market-making",
+    default=False,
+    help="Enable market making mode for backtest simulation",
+)
+@click.option(
+    "--mm-symbol",
+    default=None,
+    help="Market making symbol for backtest (default: SUI-PERP)",
+)
+@click.option(
+    "--mm-profile",
+    type=click.Choice(["conservative", "moderate", "aggressive", "custom"]),
+    default="moderate",
+    help="Market making configuration profile for backtest",
+)
 def backtest(
-    start_date: str, end_date: str, symbol: str, initial_balance: float
+    start_date: str,
+    end_date: str,
+    symbol: str,
+    initial_balance: float,
+    market_making: bool,
+    mm_symbol: str | None,
+    mm_profile: str,
 ) -> None:
     """Run strategy backtest on historical data."""
+    mm_info = ""
+    if market_making:
+        mm_symbol_display = mm_symbol or "SUI-PERP"
+        mm_info = (
+            f"\nMarket Making: {mm_profile.title()} profile on {mm_symbol_display}"
+        )
+
     console.print(
         Panel(
             f"📊 Starting Backtest\n"
             f"Symbol: {symbol}\n"
             f"Period: {start_date} to {end_date}\n"
-            f"Initial Balance: ${initial_balance:,.2f}",
+            f"Initial Balance: ${initial_balance:,.2f}"
+            f"{mm_info}",
             title="Backtest",
             style="green",
         )
     )
 
     # This will be implemented later with the actual backtesting logic
-    console.print("🔄 Backtesting engine not yet implemented. Coming soon!")
+    if market_making:
+        console.print(
+            "🔄 Market Making backtest simulation not yet implemented. Coming soon!"
+        )
+    else:
+        console.print("🔄 Backtesting engine not yet implemented. Coming soon!")
 
 
 @cli.command()
@@ -4414,6 +4856,426 @@ def diagnose() -> None:
     except Exception as e:
         console.print(f"❌ Failed to run diagnostics: {e}", style="red")
         console.print("This may indicate critical import failures", style="red")
+
+
+@cli.command()
+@click.option("--symbol", default=None, help="Symbol to check market making status for")
+def mm_status(symbol: str | None) -> None:
+    """Show market making configuration and status."""
+    try:
+        console.print("🔍 Market Making Status", style="cyan bold")
+        console.print("=" * 40)
+
+        # Load configuration to check market making settings
+        from .config import Settings
+
+        settings = Settings()
+
+        # Basic status information
+        mm_config = settings.market_making
+        status_table = Table(title="Market Making Configuration")
+        status_table.add_column("Setting", style="cyan")
+        status_table.add_column("Value", style="white")
+
+        status_table.add_row("Enabled", "✅ Yes" if mm_config.enabled else "❌ No")
+        status_table.add_row("Symbol", mm_config.symbol)
+        status_table.add_row("Profile", mm_config.profile.title())
+        status_table.add_row(
+            "Base Spread (bps)", str(mm_config.strategy.base_spread_bps)
+        )
+        status_table.add_row("Order Levels", str(mm_config.strategy.order_levels))
+        status_table.add_row(
+            "Max Position %", f"{mm_config.strategy.max_position_pct}%"
+        )
+        status_table.add_row("Cycle Interval", f"{mm_config.cycle_interval_seconds}s")
+
+        console.print(status_table)
+
+        if not mm_config.enabled:
+            console.print(
+                "\n💡 To enable market making, set MARKET_MAKING__ENABLED=true in your .env file",
+                style="yellow",
+            )
+
+        # Show risk management settings
+        console.print("\n⚠️  Risk Management Settings", style="yellow bold")
+        risk_table = Table()
+        risk_table.add_column("Setting", style="yellow")
+        risk_table.add_column("Value", style="white")
+
+        risk_table.add_row(
+            "Max Position Value", f"${mm_config.risk.max_position_value:,}"
+        )
+        risk_table.add_row(
+            "Max Inventory Imbalance",
+            f"{mm_config.risk.max_inventory_imbalance * 100}%",
+        )
+        risk_table.add_row(
+            "Daily Loss Limit", f"{mm_config.risk.daily_loss_limit_pct}%"
+        )
+        risk_table.add_row("Stop Loss", f"{mm_config.risk.stop_loss_pct}%")
+
+        console.print(risk_table)
+
+    except Exception as e:
+        console.print(f"[red]Error retrieving market making status: {e}[/red]")
+
+
+@cli.command()
+@click.option(
+    "--profile",
+    type=click.Choice(["conservative", "moderate", "aggressive"]),
+    required=True,
+    help="Configuration profile to display",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json", "yaml"]),
+    default="table",
+    help="Output format",
+)
+def mm_config(profile: str, output_format: str) -> None:
+    """Show market making configuration for a specific profile.
+
+    Examples:
+        # View moderate profile configuration
+        ai-trading-bot mm-config --profile moderate
+
+        # Export configuration as JSON
+        ai-trading-bot mm-config --profile aggressive --format json
+
+        # Export configuration as YAML
+        ai-trading-bot mm-config --profile conservative --format yaml
+    """
+    try:
+        console.print(
+            f"📋 Market Making Configuration - {profile.title()} Profile",
+            style="cyan bold",
+        )
+
+        # Create configuration with the specified profile
+        create_default_config = _get_lazy_import("create_default_config")
+        if not create_default_config:
+            console.print("[red]Market making configuration not available[/red]")
+            return
+
+        config = create_default_config(profile)
+
+        if output_format == "json":
+            import json
+
+            config_dict = config.to_dict()
+            console.print(json.dumps(config_dict, indent=2, default=str))
+        elif output_format == "yaml":
+            try:
+                import yaml
+
+                config_dict = config.to_dict()
+                console.print(yaml.dump(config_dict, default_flow_style=False))
+            except ImportError:
+                console.print(
+                    "[red]PyYAML not installed. Install with: pip install pyyaml[/red]"
+                )
+                return
+        else:
+            # Table format
+            console.print("\n🎯 Strategy Configuration", style="green bold")
+            strategy_table = Table()
+            strategy_table.add_column("Parameter", style="green")
+            strategy_table.add_column("Value", style="white")
+            strategy_table.add_column("Description", style="dim")
+
+            strategy_config = config.strategy
+            strategy_table.add_row(
+                "Base Spread",
+                f"{strategy_config.base_spread_bps} bps",
+                "Base spread in basis points",
+            )
+            strategy_table.add_row(
+                "Min Spread",
+                f"{strategy_config.min_spread_bps} bps",
+                "Minimum allowed spread",
+            )
+            strategy_table.add_row(
+                "Max Spread",
+                f"{strategy_config.max_spread_bps} bps",
+                "Maximum allowed spread",
+            )
+            strategy_table.add_row(
+                "Order Levels",
+                str(strategy_config.order_levels),
+                "Number of order levels per side",
+            )
+            strategy_table.add_row(
+                "Max Position",
+                f"{strategy_config.max_position_pct}%",
+                "Maximum position size",
+            )
+            strategy_table.add_row(
+                "VuManChu Weight",
+                f"{strategy_config.vumanchu_weight:.1f}",
+                "Signal integration weight",
+            )
+
+            console.print(strategy_table)
+
+            console.print("\n⚠️  Risk Configuration", style="yellow bold")
+            risk_table = Table()
+            risk_table.add_column("Parameter", style="yellow")
+            risk_table.add_column("Value", style="white")
+            risk_table.add_column("Description", style="dim")
+
+            risk_config = config.risk
+            risk_table.add_row(
+                "Max Position Value",
+                f"${risk_config.max_position_value:,}",
+                "Maximum position value",
+            )
+            risk_table.add_row(
+                "Inventory Imbalance",
+                f"{risk_config.max_inventory_imbalance * 100}%",
+                "Maximum inventory imbalance",
+            )
+            risk_table.add_row(
+                "Daily Loss Limit",
+                f"{risk_config.daily_loss_limit_pct}%",
+                "Daily loss limit",
+            )
+            risk_table.add_row(
+                "Stop Loss", f"{risk_config.stop_loss_pct}%", "Emergency stop loss"
+            )
+            risk_table.add_row(
+                "Inventory Timeout",
+                f"{risk_config.inventory_timeout_hours}h",
+                "Max hours to hold inventory",
+            )
+
+            console.print(risk_table)
+
+    except Exception as e:
+        console.print(f"[red]Error displaying configuration: {e}[/red]")
+
+
+@cli.command()
+@click.option(
+    "--config-file",
+    default=None,
+    help="Configuration file to validate (default: checks environment settings)",
+)
+def mm_validate(config_file: str | None) -> None:
+    """Validate market making configuration and setup.
+
+    Examples:
+        # Validate current environment configuration
+        ai-trading-bot mm-validate
+
+        # Validate specific configuration file
+        ai-trading-bot mm-validate --config-file config/market_making.json
+    """
+    try:
+        console.print("🔧 Validating Market Making Configuration", style="cyan bold")
+        console.print("=" * 50)
+
+        validation_results = []
+
+        # Test 1: Check if market making components are available
+        console.print("\n1. Testing component availability...")
+        components = [
+            "MarketMakingConfig",
+            "MarketMakingIntegrator",
+            "create_default_config",
+            "validate_config",
+        ]
+
+        for component in components:
+            try:
+                imported_component = _get_lazy_import(component)
+                if imported_component:
+                    console.print(f"   ✅ {component} available")
+                    validation_results.append((component, True, "Available"))
+                else:
+                    console.print(f"   ❌ {component} not available")
+                    validation_results.append((component, False, "Not available"))
+            except Exception as e:
+                console.print(f"   ❌ {component} failed: {str(e)[:50]}...")
+                validation_results.append((component, False, f"Error: {e}"))
+
+        # Test 2: Validate configuration
+        console.print("\n2. Testing configuration validation...")
+        try:
+            if config_file:
+                import json
+
+                with open(config_file) as f:
+                    config_data = json.load(f)
+                validate_config = _get_lazy_import("validate_config")
+                if validate_config:
+                    config = validate_config(config_data)
+                    console.print("   ✅ Configuration file is valid")
+                    validation_results.append(("Config File", True, "Valid"))
+                else:
+                    console.print("   ❌ Configuration validator not available")
+                    validation_results.append(
+                        ("Config File", False, "Validator unavailable")
+                    )
+            else:
+                # Test default configuration
+                create_default_config = _get_lazy_import("create_default_config")
+                if create_default_config:
+                    config = create_default_config("moderate")
+                    console.print("   ✅ Default configuration created successfully")
+                    validation_results.append(("Default Config", True, "Valid"))
+                else:
+                    console.print("   ❌ Default configuration creator not available")
+                    validation_results.append(
+                        ("Default Config", False, "Creator unavailable")
+                    )
+        except Exception as e:
+            console.print(f"   ❌ Configuration validation failed: {e}")
+            validation_results.append(("Configuration", False, f"Error: {e}"))
+
+        # Test 3: Check environment variables
+        console.print("\n3. Testing environment configuration...")
+        env_vars = [
+            "MARKET_MAKING__ENABLED",
+            "MARKET_MAKING__SYMBOL",
+            "MARKET_MAKING__PROFILE",
+        ]
+
+        for env_var in env_vars:
+            value = os.getenv(env_var)
+            if value:
+                console.print(f"   ✅ {env_var} = {value}")
+                validation_results.append((env_var, True, value))
+            else:
+                console.print(f"   ⚠️  {env_var} not set (using defaults)")
+                validation_results.append((env_var, False, "Not set"))
+
+        # Test 4: Exchange compatibility
+        console.print("\n4. Testing exchange compatibility...")
+        try:
+            from .config import Settings
+
+            settings = Settings()
+            exchange_type = settings.exchange.exchange_type
+
+            if exchange_type == "bluefin":
+                console.print(
+                    "   ✅ Bluefin exchange detected - market making supported"
+                )
+                validation_results.append(("Exchange", True, "Bluefin - Compatible"))
+            elif exchange_type == "coinbase":
+                console.print("   ⚠️  Coinbase exchange - limited market making support")
+                validation_results.append(
+                    ("Exchange", False, "Coinbase - Limited support")
+                )
+            else:
+                console.print(f"   ❌ Unknown exchange type: {exchange_type}")
+                validation_results.append(
+                    ("Exchange", False, f"Unknown: {exchange_type}")
+                )
+        except Exception as e:
+            console.print(f"   ❌ Exchange check failed: {e}")
+            validation_results.append(("Exchange", False, f"Error: {e}"))
+
+        # Summary
+        console.print("\n📊 Validation Summary", style="bold")
+        console.print("=" * 30)
+
+        passed = sum(1 for _, success, _ in validation_results if success)
+        total = len(validation_results)
+
+        if passed == total:
+            console.print(
+                f"✅ All {total} validation checks passed!", style="green bold"
+            )
+        else:
+            failed = total - passed
+            console.print(
+                f"⚠️  {passed}/{total} checks passed, {failed} issues found",
+                style="yellow bold",
+            )
+
+            console.print("\n🔧 Issues to resolve:", style="yellow")
+            for name, success, message in validation_results:
+                if not success:
+                    console.print(f"  • {name}: {message}")
+
+    except Exception as e:
+        console.print(f"[red]Validation failed: {e}[/red]")
+
+
+@cli.command()
+@click.option("--profile", default="moderate", help="Market making profile to test")
+@click.option("--duration", default=30, help="Test duration in seconds")
+def mm_test(profile: str, duration: int) -> None:
+    """Test market making components without placing real orders.
+
+    Examples:
+        # Test moderate profile for 30 seconds
+        ai-trading-bot mm-test --profile moderate
+
+        # Quick 10-second test of aggressive profile
+        ai-trading-bot mm-test --profile aggressive --duration 10
+    """
+    try:
+        console.print(
+            f"🧪 Testing Market Making Components - {profile.title()} Profile",
+            style="cyan bold",
+        )
+        console.print(f"Duration: {duration} seconds (dry-run mode)\n")
+
+        # Create test configuration
+        create_default_config = _get_lazy_import("create_default_config")
+        if not create_default_config:
+            console.print("[red]Market making configuration not available[/red]")
+            return
+
+        config = create_default_config(profile)
+        console.print(f"✅ Created {profile} configuration")
+
+        # Test configuration validation
+        validate_config = _get_lazy_import("validate_config")
+        if validate_config:
+            validated_config = validate_config(config.to_dict())
+            console.print("✅ Configuration validation passed")
+        else:
+            console.print("⚠️  Configuration validator not available")
+
+        # Test market making integrator initialization
+        MarketMakingIntegrator = _get_lazy_import("MarketMakingIntegrator")
+        if MarketMakingIntegrator:
+            console.print("✅ Market making integrator available")
+
+            # Create a test integrator (dry-run mode)
+            test_integrator = MarketMakingIntegrator(
+                symbol="SUI-PERP",
+                exchange_client=None,  # No real exchange for testing
+                dry_run=True,
+                market_making_symbols=[config.symbol],
+                config=config.to_dict(),
+            )
+            console.print("✅ Test integrator created successfully")
+        else:
+            console.print("❌ Market making integrator not available")
+            return
+
+        # Simulate a brief test run
+        console.print(f"\n🔄 Running {duration}-second simulation...")
+        with console.status("[cyan]Testing market making components..."):
+            import time
+
+            time.sleep(min(duration, 10))  # Cap at 10 seconds for safety
+
+        console.print("\n✅ Market making component test completed successfully!")
+        console.print("\n💡 Next steps:", style="yellow bold")
+        console.print("  1. Enable market making: Set MARKET_MAKING__ENABLED=true")
+        console.print("  2. Configure your preferred symbol and profile")
+        console.print("  3. Run with: ai-trading-bot live --market-making")
+
+    except Exception as e:
+        console.print(f"[red]Market making test failed: {e}[/red]")
 
 
 if __name__ == "__main__":

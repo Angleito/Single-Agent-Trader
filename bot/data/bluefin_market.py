@@ -1218,27 +1218,30 @@ class BluefinMarketDataProvider:
         Returns:
             The interval to use with direct API calls
         """
-        # Direct API interval mapping (different format than service)
+        # Direct API interval mapping - Bluefin API uses standard interval format
         direct_interval_map = {
-            "1m": "1",
-            "3m": "3",
-            "5m": "5",
-            "15m": "15",
-            "30m": "30",
-            "1h": "60",
-            "2h": "120",
-            "4h": "240",
-            "1d": "1D",
-            "1w": "1W",
+            "1m": "1m",
+            "3m": "3m",
+            "5m": "5m",
+            "15m": "15m",
+            "30m": "30m",
+            "1h": "1h",
+            "2h": "2h",
+            "4h": "4h",
+            "6h": "6h",
+            "8h": "8h",
+            "12h": "12h",
+            "1d": "1d",
+            "1w": "1w",
         }
 
         # If trade aggregation is enabled and this is a sub-minute interval,
-        # fall back to 1m for the API call since sub-minute klines aren't supported
+        # fall back to 1m for the API call since sub-minute candlestick data isn't supported
         if self._should_use_trade_aggregation(interval):
-            return "1"  # Use 1-minute as base interval for trade aggregation
+            return "1m"  # Use 1-minute as base interval for trade aggregation
 
         # For standard intervals, use the mapping or default to 5-minute
-        return direct_interval_map.get(interval, "5")
+        return direct_interval_map.get(interval, "5m")
 
     def _convert_interval_to_direct_format(self, interval: str) -> str:
         """
@@ -1251,23 +1254,26 @@ class BluefinMarketDataProvider:
             Direct API format equivalent
         """
         direct_format_map = {
-            "1m": "1",
-            "3m": "3",
-            "5m": "5",
-            "15m": "15",
-            "30m": "30",
-            "1h": "60",
-            "2h": "120",
-            "4h": "240",
-            "1d": "1D",
-            "1w": "1W",
+            "1m": "1m",
+            "3m": "3m",
+            "5m": "5m",
+            "15m": "15m",
+            "30m": "30m",
+            "1h": "1h",
+            "2h": "2h",
+            "4h": "4h",
+            "6h": "6h",
+            "8h": "8h",
+            "12h": "12h",
+            "1d": "1d",
+            "1w": "1w",
             # Sub-minute intervals would map to their equivalent if supported
             "1s": "1s",
             "5s": "5s",
             "15s": "15s",
             "30s": "30s",
         }
-        return direct_format_map.get(interval, "5")
+        return direct_format_map.get(interval, "5m")
 
     async def _fetch_bluefin_ticker_price(self) -> Decimal | None:
         """
@@ -1564,8 +1570,8 @@ class BluefinMarketDataProvider:
                 "endTime": str(int(end_time.timestamp() * 1000)),
             }
 
-            # Make API request to klines endpoint
-            url = f"{self._api_base_url}/klines"
+            # Make API request to candlestickData endpoint
+            url = f"{self._api_base_url}/candlestickData"
             logger.info(
                 "Fetching candles from Bluefin API: %s with params: %s", url, params
             )

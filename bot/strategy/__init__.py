@@ -2,6 +2,7 @@
 
 from .core import CoreStrategy
 from .llm_agent import LLMAgent
+from .market_making_strategy import MarketMakingStrategy
 
 # Optional imports for memory-enhanced features
 try:
@@ -10,8 +11,9 @@ except ImportError:
     MemoryEnhancedLLMAgent = None  # type: ignore[assignment]
 
 __all__ = [
-    "LLMAgent",
     "CoreStrategy",
+    "LLMAgent",
+    "MarketMakingStrategy",
 ]
 
 # Add MemoryEnhancedLLMAgent to __all__ if available

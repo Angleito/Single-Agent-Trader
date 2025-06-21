@@ -1,0 +1,113 @@
+{
+  "name": "conservative_example",
+  "description": "Conservative market making profile for low-risk trading",
+  "created_at": "2025-01-21T10:00:00Z",
+  "base_template": "conservative",
+  "enabled": true,
+  "symbol": "SUI-PERP",
+  "cycle_interval_seconds": 2.0,
+  "max_errors_per_hour": 20,
+
+  "strategy": {
+    "base_spread_bps": 25,
+    "min_spread_bps": 15,
+    "max_spread_bps": 100,
+    "order_levels": 2,
+    "level_multiplier": 2.0,
+    "max_position_pct": 10.0,
+    "position_size_per_level": 5.0,
+    "vumanchu_weight": 0.3,
+    "signal_adjustment_factor": 0.2,
+    "confidence_threshold": 0.7,
+    "bias_adjustment_factor": 0.2
+  },
+
+  "risk": {
+    "max_position_value": "2500",
+    "max_inventory_imbalance": 0.15,
+    "rebalancing_threshold": 3.0,
+    "emergency_threshold": 10.0,
+    "inventory_timeout_hours": 2.0,
+    "max_order_age_minutes": 15,
+    "stop_loss_pct": 1.5,
+    "daily_loss_limit_pct": 2.0,
+    "volatility_threshold": 0.2,
+    "volatility_multiplier": 1.5
+  },
+
+  "orders": {
+    "order_update_interval_seconds": 2.0,
+    "order_timeout_seconds": 60,
+    "price_update_threshold_bps": 3,
+    "spread_update_threshold_bps": 5,
+    "volume_adjustment_factor": 0.2,
+    "liquidity_adjustment_factor": 0.3,
+    "max_slippage_bps": 8,
+    "fee_buffer_bps": 3,
+    "max_orders_per_side": 3,
+    "order_refresh_threshold": 1.0,
+    "min_order_size": 25
+  },
+
+  "performance": {
+    "min_fill_rate": 0.2,
+    "min_spread_capture_rate": 0.5,
+    "max_fee_ratio": 0.4,
+    "min_turnover_rate": 1.0,
+    "min_signal_effectiveness": 0.3,
+    "max_negative_pnl_streak": 3,
+    "max_drawdown_pct": 2.0,
+    "performance_report_interval_minutes": 30,
+    "alert_cooldown_minutes": 10,
+    "tracking_window_hours": 12,
+    "alert_thresholds": {
+      "max_drawdown": 0.02,
+      "min_profit_margin": 0.002
+    }
+  },
+
+  "spread_calculator": {
+    "volatility_lookback": 30,
+    "liquidity_factor": 0.2,
+    "market_impact_factor": 0.08
+  },
+
+  "inventory": {
+    "max_position_limit": 500,
+    "rebalancing_threshold": 0.4,
+    "target_inventory": 0.0
+  },
+
+  "bluefin": {
+    "network": "mainnet",
+    "maker_fee_rate": 0.0002,
+    "taker_fee_rate": 0.0005,
+    "gas_buffer_multiplier": 1.5,
+    "max_gas_price_gwei": 15,
+    "orderbook_depth_levels": 5,
+    "min_liquidity_threshold": "2000"
+  },
+
+  "use_cases": [
+    "Risk-averse traders",
+    "New to market making",
+    "Testing strategies",
+    "Stable market conditions",
+    "Capital preservation focus"
+  ],
+
+  "expected_performance": {
+    "win_rate": "40-60%",
+    "daily_return": "0.1-0.5%",
+    "max_drawdown": "< 2%",
+    "sharpe_ratio": "0.8-1.2"
+  },
+
+  "notes": [
+    "Wide spreads provide safety margins",
+    "Low position limits reduce risk",
+    "Conservative rebalancing thresholds",
+    "Suitable for beginners",
+    "Focus on capital preservation over profits"
+  ]
+}

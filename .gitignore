@@ -87,7 +87,7 @@ ipython_config.py
 Pipfile.lock
 
 # poetry
-poetry.lock
+# poetry.lock  # Keep lock file for reproducible builds
 
 # pdm
 .pdm.toml
@@ -398,3 +398,23 @@ data/mcp_memory/
 mcp_data/
 trading_experiences/
 memory_*.json
+
+# Market Making Specific Files
+data/inventory/
+data/order_book_data/
+inventory_*.json
+order_book_*.json
+market_making_*.json
+spread_*.json
+liquidity_*.json
+position_*.json
+
+# Development Summary and Report Files
+*_SUMMARY.md
+*_REPORT.md
+*_IMPLEMENTATION*.md
+*_INTEGRATION*.md
+*_USAGE.md
+DOCKERFILE_IMPROVEMENTS_SUMMARY.md
+INVENTORY_MANAGER_IMPLEMENTATION_SUMMARY.md
+MARKET_MAKING_*.md

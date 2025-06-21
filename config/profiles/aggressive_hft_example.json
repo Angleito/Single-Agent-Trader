@@ -1,0 +1,122 @@
+{
+  "name": "aggressive_hft_example",
+  "description": "Aggressive high-frequency trading profile for maximum capture",
+  "created_at": "2025-01-21T10:00:00Z",
+  "base_template": "aggressive",
+  "enabled": true,
+  "symbol": "SUI-PERP",
+  "cycle_interval_seconds": 0.2,
+  "max_errors_per_hour": 100,
+
+  "strategy": {
+    "base_spread_bps": 3,
+    "min_spread_bps": 1,
+    "max_spread_bps": 20,
+    "order_levels": 5,
+    "level_multiplier": 1.2,
+    "max_position_pct": 40.0,
+    "position_size_per_level": 8.0,
+    "vumanchu_weight": 0.9,
+    "signal_adjustment_factor": 0.8,
+    "confidence_threshold": 0.4,
+    "bias_adjustment_factor": 0.8
+  },
+
+  "risk": {
+    "max_position_value": "25000",
+    "max_inventory_imbalance": 0.3,
+    "rebalancing_threshold": 8.0,
+    "emergency_threshold": 20.0,
+    "inventory_timeout_hours": 6.0,
+    "max_order_age_minutes": 60,
+    "stop_loss_pct": 3.0,
+    "daily_loss_limit_pct": 8.0,
+    "volatility_threshold": 0.5,
+    "volatility_multiplier": 2.5
+  },
+
+  "orders": {
+    "order_update_interval_seconds": 0.2,
+    "order_timeout_seconds": 15,
+    "price_update_threshold_bps": 1,
+    "spread_update_threshold_bps": 2,
+    "volume_adjustment_factor": 0.5,
+    "liquidity_adjustment_factor": 0.6,
+    "max_slippage_bps": 3,
+    "fee_buffer_bps": 1,
+    "max_orders_per_side": 8,
+    "order_refresh_threshold": 0.1,
+    "min_order_size": 5
+  },
+
+  "performance": {
+    "min_fill_rate": 0.4,
+    "min_spread_capture_rate": 0.7,
+    "max_fee_ratio": 0.6,
+    "min_turnover_rate": 5.0,
+    "min_signal_effectiveness": 0.5,
+    "max_negative_pnl_streak": 8,
+    "max_drawdown_pct": 5.0,
+    "performance_report_interval_minutes": 5,
+    "alert_cooldown_minutes": 2,
+    "tracking_window_hours": 6,
+    "alert_thresholds": {
+      "max_drawdown": 0.08,
+      "min_profit_margin": 0.0005
+    }
+  },
+
+  "spread_calculator": {
+    "volatility_lookback": 10,
+    "liquidity_factor": 0.05,
+    "market_impact_factor": 0.02
+  },
+
+  "inventory": {
+    "max_position_limit": 2000,
+    "rebalancing_threshold": 0.8,
+    "target_inventory": 0.0
+  },
+
+  "bluefin": {
+    "network": "mainnet",
+    "maker_fee_rate": 0.0002,
+    "taker_fee_rate": 0.0005,
+    "gas_buffer_multiplier": 1.1,
+    "max_gas_price_gwei": 30,
+    "orderbook_depth_levels": 15,
+    "min_liquidity_threshold": "500"
+  },
+
+  "use_cases": [
+    "Experienced traders",
+    "High-frequency strategies",
+    "Maximum profit extraction",
+    "Volatile market conditions",
+    "Professional trading operations"
+  ],
+
+  "expected_performance": {
+    "win_rate": "55-75%",
+    "daily_return": "1.0-5.0%",
+    "max_drawdown": "< 5%",
+    "sharpe_ratio": "1.5-3.0"
+  },
+
+  "notes": [
+    "Ultra-tight spreads for maximum capture",
+    "Fast cycle times require low latency",
+    "High position limits for scalability",
+    "Aggressive risk parameters",
+    "Requires careful monitoring",
+    "Best for experienced operators"
+  ],
+
+  "requirements": {
+    "latency": "< 5ms to exchange",
+    "hardware": "High-performance server",
+    "monitoring": "24/7 supervision recommended",
+    "capital": "Minimum $10,000",
+    "experience": "Advanced market making knowledge"
+  }
+}

@@ -7,4 +7,4 @@ anomaly detection, and sanity testing to ensure robust trading operations.
 
 from .balance_validator import BalanceValidationError, BalanceValidator
 
-__all__ = ["BalanceValidator", "BalanceValidationError"]
+__all__ = ["BalanceValidationError", "BalanceValidator"]

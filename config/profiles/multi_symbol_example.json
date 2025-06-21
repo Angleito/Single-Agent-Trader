@@ -1,0 +1,154 @@
+{
+  "name": "multi_symbol_example",
+  "description": "Multi-symbol market making configuration with symbol-specific settings",
+  "created_at": "2025-01-21T10:00:00Z",
+  "base_template": "moderate",
+  "enabled": true,
+  "multi_symbol": true,
+  "portfolio_level_risk": true,
+
+  "global_settings": {
+    "cycle_interval_seconds": 1.0,
+    "max_errors_per_hour": 60,
+    "emergency_stop_threshold": 15,
+    "portfolio_max_position_value": "50000",
+    "correlation_monitoring": true,
+    "cross_symbol_rebalancing": true
+  },
+
+  "symbols": {
+    "SUI-PERP": {
+      "description": "High-volume altcoin with tight spreads",
+      "weight": 0.4,
+      "strategy": {
+        "base_spread_bps": 8,
+        "min_spread_bps": 4,
+        "max_spread_bps": 30,
+        "order_levels": 4,
+        "max_position_pct": 30.0,
+        "vumanchu_weight": 0.7
+      },
+      "risk": {
+        "max_position_value": "15000",
+        "daily_loss_limit_pct": 4.0,
+        "volatility_threshold": 0.3
+      },
+      "orders": {
+        "order_update_interval_seconds": 0.8,
+        "max_orders_per_side": 5,
+        "min_order_size": 10
+      }
+    },
+
+    "BTC-PERP": {
+      "description": "Premium pair with maximum liquidity provision",
+      "weight": 0.4,
+      "strategy": {
+        "base_spread_bps": 5,
+        "min_spread_bps": 2,
+        "max_spread_bps": 25,
+        "order_levels": 5,
+        "max_position_pct": 25.0,
+        "vumanchu_weight": 0.6
+      },
+      "risk": {
+        "max_position_value": "25000",
+        "daily_loss_limit_pct": 5.0,
+        "volatility_threshold": 0.25
+      },
+      "orders": {
+        "order_update_interval_seconds": 0.5,
+        "max_orders_per_side": 6,
+        "min_order_size": 0.001
+      }
+    },
+
+    "ETH-PERP": {
+      "description": "Balanced approach for ETH perpetuals",
+      "weight": 0.2,
+      "strategy": {
+        "base_spread_bps": 6,
+        "min_spread_bps": 3,
+        "max_spread_bps": 35,
+        "order_levels": 3,
+        "max_position_pct": 20.0,
+        "vumanchu_weight": 0.5
+      },
+      "risk": {
+        "max_position_value": "10000",
+        "daily_loss_limit_pct": 3.0,
+        "volatility_threshold": 0.28
+      },
+      "orders": {
+        "order_update_interval_seconds": 1.0,
+        "max_orders_per_side": 4,
+        "min_order_size": 0.01
+      }
+    }
+  },
+
+  "portfolio_risk": {
+    "max_correlation_threshold": 0.8,
+    "portfolio_var_limit": 0.05,
+    "cross_symbol_exposure_limit": 0.6,
+    "concentration_limit": 0.5,
+    "total_daily_loss_limit_pct": 6.0,
+    "emergency_rebalance_threshold": 0.15
+  },
+
+  "performance_monitoring": {
+    "individual_symbol_tracking": true,
+    "portfolio_level_metrics": true,
+    "correlation_monitoring": true,
+    "cross_symbol_arbitrage_detection": true,
+    "portfolio_sharpe_calculation": true,
+    "risk_attribution_analysis": true
+  },
+
+  "rebalancing": {
+    "cross_symbol_rebalancing": true,
+    "rebalancing_frequency_minutes": 15,
+    "max_rebalance_size_pct": 10.0,
+    "correlation_based_adjustments": true,
+    "volatility_based_sizing": true
+  },
+
+  "alerts": {
+    "portfolio_level_alerts": true,
+    "cross_symbol_correlation_alerts": true,
+    "concentration_risk_alerts": true,
+    "performance_divergence_alerts": true,
+    "liquidity_imbalance_alerts": true
+  },
+
+  "use_cases": [
+    "Diversified market making",
+    "Portfolio-level risk management",
+    "Cross-symbol arbitrage opportunities",
+    "Large-scale operations",
+    "Professional trading firms"
+  ],
+
+  "expected_performance": {
+    "portfolio_win_rate": "50-70%",
+    "daily_return": "0.5-2.0%",
+    "max_drawdown": "< 4%",
+    "sharpe_ratio": "1.2-2.0",
+    "correlation_benefits": "10-20% risk reduction"
+  },
+
+  "notes": [
+    "Symbol weights determine capital allocation",
+    "Portfolio-level risk limits override individual symbols",
+    "Cross-symbol correlations monitored continuously",
+    "Rebalancing helps maintain target allocations",
+    "Diversification reduces overall portfolio risk"
+  ],
+
+  "requirements": {
+    "minimum_capital": "$25,000",
+    "monitoring_complexity": "High",
+    "technical_expertise": "Advanced",
+    "operational_overhead": "Significant"
+  }
+}

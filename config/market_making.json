@@ -1,0 +1,219 @@
+{
+  "enabled": false,
+  "symbol": "SUI-PERP",
+  "cycle_interval_seconds": 1.0,
+  "max_errors_per_hour": 50,
+  "profile": "moderate",
+
+  "strategy": {
+    "base_spread_bps": 10,
+    "min_spread_bps": 5,
+    "max_spread_bps": 100,
+    "order_levels": 3,
+    "level_multiplier": 1.5,
+    "max_position_pct": 25.0,
+    "position_size_per_level": 5.0,
+    "vumanchu_weight": 0.6,
+    "signal_adjustment_factor": 0.5,
+    "confidence_threshold": 0.6
+  },
+
+  "risk": {
+    "max_position_value": "10000",
+    "max_inventory_imbalance": 0.2,
+    "rebalancing_threshold": 5.0,
+    "emergency_threshold": 15.0,
+    "inventory_timeout_hours": 4.0,
+    "max_order_age_minutes": 30,
+    "stop_loss_pct": 2.0,
+    "daily_loss_limit_pct": 5.0,
+    "volatility_threshold": 0.3,
+    "volatility_multiplier": 2.0
+  },
+
+  "orders": {
+    "order_update_interval_seconds": 1.0,
+    "order_timeout_seconds": 30,
+    "price_update_threshold_bps": 2,
+    "spread_update_threshold_bps": 3,
+    "volume_adjustment_factor": 0.3,
+    "liquidity_adjustment_factor": 0.4,
+    "max_slippage_bps": 5,
+    "fee_buffer_bps": 2
+  },
+
+  "performance": {
+    "min_fill_rate": 0.3,
+    "min_spread_capture_rate": 0.6,
+    "max_fee_ratio": 0.5,
+    "min_turnover_rate": 2.0,
+    "min_signal_effectiveness": 0.4,
+    "max_negative_pnl_streak": 5,
+    "max_drawdown_pct": 3.0,
+    "performance_report_interval_minutes": 15,
+    "alert_cooldown_minutes": 5
+  },
+
+  "bluefin": {
+    "network": "mainnet",
+    "maker_fee_rate": 0.0002,
+    "taker_fee_rate": 0.0005,
+    "gas_buffer_multiplier": 1.2,
+    "max_gas_price_gwei": 20,
+    "orderbook_depth_levels": 10,
+    "min_liquidity_threshold": "1000"
+  },
+
+  "_profiles": {
+    "_description": "Configuration profiles for different risk levels",
+
+    "conservative": {
+      "strategy": {
+        "base_spread_bps": 15,
+        "min_spread_bps": 8,
+        "max_spread_bps": 50,
+        "max_position_pct": 15.0,
+        "order_levels": 2,
+        "vumanchu_weight": 0.3
+      },
+      "risk": {
+        "max_inventory_imbalance": 0.15,
+        "rebalancing_threshold": 3.0,
+        "emergency_threshold": 10.0,
+        "stop_loss_pct": 1.5,
+        "daily_loss_limit_pct": 2.0
+      },
+      "performance": {
+        "min_fill_rate": 0.2,
+        "max_negative_pnl_streak": 3,
+        "max_drawdown_pct": 2.0
+      }
+    },
+
+    "moderate": {
+      "strategy": {
+        "base_spread_bps": 10,
+        "min_spread_bps": 5,
+        "max_spread_bps": 100,
+        "max_position_pct": 25.0,
+        "order_levels": 3,
+        "vumanchu_weight": 0.6
+      },
+      "risk": {
+        "max_inventory_imbalance": 0.2,
+        "rebalancing_threshold": 5.0,
+        "emergency_threshold": 15.0,
+        "stop_loss_pct": 2.0,
+        "daily_loss_limit_pct": 5.0
+      },
+      "performance": {
+        "min_fill_rate": 0.3,
+        "max_negative_pnl_streak": 5,
+        "max_drawdown_pct": 3.0
+      }
+    },
+
+    "aggressive": {
+      "strategy": {
+        "base_spread_bps": 8,
+        "min_spread_bps": 3,
+        "max_spread_bps": 150,
+        "max_position_pct": 40.0,
+        "order_levels": 5,
+        "vumanchu_weight": 0.8
+      },
+      "risk": {
+        "max_inventory_imbalance": 0.3,
+        "rebalancing_threshold": 8.0,
+        "emergency_threshold": 20.0,
+        "stop_loss_pct": 3.0,
+        "daily_loss_limit_pct": 8.0
+      },
+      "performance": {
+        "min_fill_rate": 0.4,
+        "max_negative_pnl_streak": 8,
+        "max_drawdown_pct": 5.0
+      }
+    }
+  },
+
+  "_environment_variables": {
+    "_description": "Environment variable mappings for configuration overrides",
+    "_format": "MARKET_MAKING__{SECTION}__{PARAMETER}",
+    "_examples": [
+      "MARKET_MAKING__ENABLED=true",
+      "MARKET_MAKING__SYMBOL=BTC-PERP",
+      "MARKET_MAKING__STRATEGY__BASE_SPREAD_BPS=15",
+      "MARKET_MAKING__RISK__MAX_POSITION_VALUE=5000",
+      "MARKET_MAKING__ORDERS__ORDER_TIMEOUT_SECONDS=60",
+      "MARKET_MAKING__PERFORMANCE__MIN_FILL_RATE=0.4",
+      "MARKET_MAKING__BLUEFIN__NETWORK=testnet"
+    ],
+    "_usage_examples": {
+      "safe_testnet": "Conservative settings for testnet trading",
+      "production_moderate": "Moderate settings for production mainnet",
+      "high_frequency": "Aggressive settings for high-frequency trading"
+    }
+  },
+
+  "_quick_start": {
+    "_description": "Quick start configurations for common use cases",
+
+    "safe_testnet": {
+      "enabled": true,
+      "symbol": "SUI-PERP",
+      "profile": "conservative",
+      "bluefin": {
+        "network": "testnet"
+      },
+      "strategy": {
+        "base_spread_bps": 20,
+        "order_levels": 2,
+        "max_position_pct": 10.0
+      },
+      "risk": {
+        "daily_loss_limit_pct": 1.0,
+        "emergency_threshold": 8.0
+      }
+    },
+
+    "production_moderate": {
+      "enabled": true,
+      "symbol": "SUI-PERP",
+      "profile": "moderate",
+      "bluefin": {
+        "network": "mainnet"
+      },
+      "strategy": {
+        "base_spread_bps": 12,
+        "order_levels": 3,
+        "max_position_pct": 20.0
+      },
+      "risk": {
+        "daily_loss_limit_pct": 3.0,
+        "max_position_value": "5000"
+      }
+    },
+
+    "high_frequency": {
+      "enabled": true,
+      "symbol": "SUI-PERP",
+      "profile": "aggressive",
+      "cycle_interval_seconds": 0.5,
+      "strategy": {
+        "base_spread_bps": 6,
+        "order_levels": 5,
+        "max_position_pct": 35.0,
+        "vumanchu_weight": 0.9
+      },
+      "orders": {
+        "order_update_interval_seconds": 0.3,
+        "price_update_threshold_bps": 1
+      },
+      "risk": {
+        "daily_loss_limit_pct": 6.0,
+        "max_position_value": "15000"
+      }
+    }
+  }
+}

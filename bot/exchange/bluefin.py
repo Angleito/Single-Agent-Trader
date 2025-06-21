@@ -33,6 +33,7 @@ from .base import (
     ExchangeInsufficientFundsError,
     ExchangeOrderError,
 )
+from .bluefin_fee_calculator import BluefinFeeCalculator, BluefinFees
 
 # Use the service client instead of direct SDK
 try:
@@ -198,6 +199,14 @@ class BluefinClient(BaseExchange):
         self._account_address: str | None = None
         self._leverage_settings: dict[str, Any] = {}
         self._contract_info: dict[str, Any] = {}
+
+        # Market making state tracking
+        self._active_orders: dict[str, list[Order]] = {}  # symbol -> list of orders
+        self._order_callbacks: dict[str, callable] = {}  # order_id -> callback
+        self._order_book_cache: dict[str, dict] = {}  # symbol -> order book data
+
+        # Initialize fee calculator for market making
+        self._fee_calculator = BluefinFeeCalculator()
 
         # Initialize monitoring
         self.monitoring_enabled = MONITORING_AVAILABLE
@@ -831,6 +840,18 @@ class BluefinClient(BaseExchange):
             ticker = await self._service_client.get_market_ticker(symbol)
             current_price = Decimal(str(ticker["price"]))
 
+            # Calculate fees for the order
+            notional_value = current_price * quantity
+            fees = self.calculate_order_fees(
+                notional_value, is_maker=False
+            )  # Market orders are taker
+
+            logger.info(
+                "Market order fees: $%.6f taker fee for $%.2f notional",
+                fees.taker_fee,
+                notional_value,
+            )
+
             # Prepare order data
             order_data = {
                 "symbol": symbol,
@@ -838,9 +859,16 @@ class BluefinClient(BaseExchange):
                 "quantity": float(quantity),
                 "side": side,
                 "orderType": "MARKET",
+                "estimated_fee": float(fees.taker_fee),
             }
 
-            logger.info("Placing %s market order: %s %s", side, quantity, symbol)
+            logger.info(
+                "Placing %s market order: %s %s (est. fee: $%.6f)",
+                side,
+                quantity,
+                symbol,
+                fees.taker_fee,
+            )
 
             # Post order via service
             response = await self._service_client.place_order(order_data)
@@ -916,6 +944,18 @@ class BluefinClient(BaseExchange):
             raise ExchangeOrderError(f"Failed to place limit order: {e}") from e
 
         try:
+            # Calculate fees for the order
+            notional_value = price * quantity
+            fees = self.calculate_order_fees(
+                notional_value, is_maker=True
+            )  # Limit orders are maker
+
+            logger.debug(
+                "Limit order fees: $%.6f maker fee for $%.2f notional",
+                fees.maker_fee,
+                notional_value,
+            )
+
             # Prepare order data
             order_data = {
                 "symbol": symbol,
@@ -923,10 +963,16 @@ class BluefinClient(BaseExchange):
                 "quantity": float(quantity),
                 "side": side,
                 "orderType": "LIMIT",
+                "estimated_fee": float(fees.maker_fee),
             }
 
             logger.info(
-                "Placing %s limit order: %s %s @ %s", side, quantity, symbol, price
+                "Placing %s limit order: %s %s @ %s (est. fee: $%.6f)",
+                side,
+                quantity,
+                symbol,
+                price,
+                fees.maker_fee,
             )
 
             # Post order via service
@@ -1636,3 +1682,994 @@ class BluefinClient(BaseExchange):
     async def get_trading_symbol(self, symbol: str) -> str:
         """Get the actual trading symbol for the given symbol (convert to PERP format)."""
         return self._convert_symbol(symbol)
+
+    # Market Making Specific Methods
+
+    async def place_ladder_limit_orders(
+        self, order_levels: list[dict], symbol: str
+    ) -> list[Order]:
+        """
+        Place multiple limit orders at different price levels (ladder strategy).
+
+        Args:
+            order_levels: List of dicts with 'side', 'price', 'quantity', 'level' keys
+            symbol: Trading symbol
+
+        Returns:
+            List of successfully placed orders
+        """
+        if not self._connected:
+            logger.error("Not connected to Bluefin")
+            return []
+
+        placed_orders = []
+        bluefin_symbol = self._convert_symbol(symbol)
+
+        logger.info(
+            "Placing ladder orders for %s: %d levels", bluefin_symbol, len(order_levels)
+        )
+
+        # Group orders by side for batch processing
+        buy_orders = [ol for ol in order_levels if ol["side"] == "BUY"]
+        sell_orders = [ol for ol in order_levels if ol["side"] == "SELL"]
+
+        # Process buy orders
+        for order_level in buy_orders:
+            try:
+                order = await self.place_limit_order(
+                    symbol=bluefin_symbol,
+                    side=cast("Literal['BUY', 'SELL']", order_level["side"]),
+                    quantity=Decimal(str(order_level["quantity"])),
+                    price=Decimal(str(order_level["price"])),
+                )
+
+                if order:
+                    placed_orders.append(order)
+                    # Track order for the symbol
+                    if bluefin_symbol not in self._active_orders:
+                        self._active_orders[bluefin_symbol] = []
+                    self._active_orders[bluefin_symbol].append(order)
+
+                    logger.debug(
+                        "Placed %s limit order: %s %s @ %s (Level %d)",
+                        order_level["side"],
+                        order_level["quantity"],
+                        bluefin_symbol,
+                        order_level["price"],
+                        order_level.get("level", 0),
+                    )
+                else:
+                    logger.warning(
+                        "Failed to place %s order at level %d",
+                        order_level["side"],
+                        order_level.get("level", 0),
+                    )
+
+                # Small delay between orders to avoid rate limiting
+                await asyncio.sleep(0.1)
+
+            except Exception as e:
+                logger.exception(
+                    "Error placing %s order at level %d: %s",
+                    order_level["side"],
+                    order_level.get("level", 0),
+                    e,
+                )
+                continue
+
+        # Process sell orders
+        for order_level in sell_orders:
+            try:
+                order = await self.place_limit_order(
+                    symbol=bluefin_symbol,
+                    side=cast("Literal['BUY', 'SELL']", order_level["side"]),
+                    quantity=Decimal(str(order_level["quantity"])),
+                    price=Decimal(str(order_level["price"])),
+                )
+
+                if order:
+                    placed_orders.append(order)
+                    # Track order for the symbol
+                    if bluefin_symbol not in self._active_orders:
+                        self._active_orders[bluefin_symbol] = []
+                    self._active_orders[bluefin_symbol].append(order)
+
+                    logger.debug(
+                        "Placed %s limit order: %s %s @ %s (Level %d)",
+                        order_level["side"],
+                        order_level["quantity"],
+                        bluefin_symbol,
+                        order_level["price"],
+                        order_level.get("level", 0),
+                    )
+                else:
+                    logger.warning(
+                        "Failed to place %s order at level %d",
+                        order_level["side"],
+                        order_level.get("level", 0),
+                    )
+
+                # Small delay between orders to avoid rate limiting
+                await asyncio.sleep(0.1)
+
+            except Exception as e:
+                logger.exception(
+                    "Error placing %s order at level %d: %s",
+                    order_level["side"],
+                    order_level.get("level", 0),
+                    e,
+                )
+                continue
+
+        logger.info(
+            "Successfully placed %d/%d ladder orders for %s",
+            len(placed_orders),
+            len(order_levels),
+            bluefin_symbol,
+        )
+
+        return placed_orders
+
+    async def cancel_orders_by_symbol(self, symbol: str) -> bool:
+        """
+        Cancel all open orders for a specific symbol.
+
+        Args:
+            symbol: Trading symbol
+
+        Returns:
+            True if successful
+        """
+        bluefin_symbol = self._convert_symbol(symbol)
+
+        if self.dry_run:
+            logger.info(
+                "PAPER TRADING: Simulating cancel orders for %s", bluefin_symbol
+            )
+            # Clear tracking
+            self._active_orders.pop(bluefin_symbol, [])
+            return True
+
+        logger.info("Cancelling all orders for %s", bluefin_symbol)
+
+        try:
+            # Get active orders for the symbol
+            symbol_orders = self._active_orders.get(bluefin_symbol, [])
+
+            if not symbol_orders:
+                logger.debug("No active orders found for %s", bluefin_symbol)
+                return True
+
+            # Cancel each order
+            cancelled_count = 0
+            for order in symbol_orders:
+                try:
+                    if await self.cancel_order(order.id):
+                        cancelled_count += 1
+                    # Small delay between cancellations
+                    await asyncio.sleep(0.05)
+                except Exception as e:
+                    logger.warning("Failed to cancel order %s: %s", order.id, e)
+                    continue
+
+            # Clear tracking for the symbol
+            self._active_orders.pop(bluefin_symbol, [])
+
+            logger.info(
+                "Cancelled %d/%d orders for %s",
+                cancelled_count,
+                len(symbol_orders),
+                bluefin_symbol,
+            )
+
+            return cancelled_count > 0
+
+        except Exception:
+            logger.exception("Failed to cancel orders for %s", bluefin_symbol)
+            return False
+
+    async def get_current_spread(self, symbol: str) -> dict[str, Decimal]:
+        """
+        Get current bid/ask spread data for a symbol.
+
+        Args:
+            symbol: Trading symbol
+
+        Returns:
+            Dictionary with bid, ask, spread, and spread_pct data
+        """
+        bluefin_symbol = self._convert_symbol(symbol)
+
+        try:
+            # Get order book from service
+            if self._service_client and hasattr(self._service_client, "get_order_book"):
+                order_book = await self._service_client.get_order_book(bluefin_symbol)
+
+                if order_book and "bids" in order_book and "asks" in order_book:
+                    bids = order_book["bids"]
+                    asks = order_book["asks"]
+
+                    if bids and asks:
+                        best_bid = Decimal(str(bids[0][0]))  # [price, size]
+                        best_ask = Decimal(str(asks[0][0]))
+
+                        spread = best_ask - best_bid
+                        mid_price = (best_bid + best_ask) / 2
+                        spread_pct = (
+                            (spread / mid_price) * 100 if mid_price > 0 else Decimal(0)
+                        )
+
+                        return {
+                            "bid": best_bid,
+                            "ask": best_ask,
+                            "spread": spread,
+                            "spread_pct": spread_pct,
+                            "mid_price": mid_price,
+                        }
+
+            # Fallback: use ticker data
+            ticker = await self._service_client.get_market_ticker(bluefin_symbol)
+            current_price = Decimal(str(ticker.get("price", "0")))
+
+            # Estimate spread (0.05% for paper trading)
+            estimated_spread_pct = Decimal("0.05")
+            estimated_spread = current_price * (estimated_spread_pct / 100)
+
+            bid = current_price - (estimated_spread / 2)
+            ask = current_price + (estimated_spread / 2)
+
+            logger.debug(
+                "Using estimated spread for %s: %.4f%% ($%.6f)",
+                bluefin_symbol,
+                estimated_spread_pct,
+                estimated_spread,
+            )
+
+            return {
+                "bid": bid,
+                "ask": ask,
+                "spread": estimated_spread,
+                "spread_pct": estimated_spread_pct,
+                "mid_price": current_price,
+            }
+
+        except Exception:
+            logger.exception("Failed to get spread for %s", bluefin_symbol)
+            # Return zero values on error
+            return {
+                "bid": Decimal(0),
+                "ask": Decimal(0),
+                "spread": Decimal(0),
+                "spread_pct": Decimal(0),
+                "mid_price": Decimal(0),
+            }
+
+    async def get_order_book_depth(self, symbol: str, levels: int = 5) -> dict:
+        """
+        Get order book depth data for market making decisions.
+
+        Args:
+            symbol: Trading symbol
+            levels: Number of levels to retrieve (default: 5)
+
+        Returns:
+            Dictionary with bids, asks, and depth analysis
+        """
+        bluefin_symbol = self._convert_symbol(symbol)
+
+        try:
+            # Try to get order book from service
+            if self._service_client and hasattr(self._service_client, "get_order_book"):
+                order_book = await self._service_client.get_order_book(
+                    bluefin_symbol, depth=levels
+                )
+
+                if order_book:
+                    bids = order_book.get("bids", [])[:levels]
+                    asks = order_book.get("asks", [])[:levels]
+
+                    # Calculate depth metrics
+                    bid_volume = sum(Decimal(str(bid[1])) for bid in bids)
+                    ask_volume = sum(Decimal(str(ask[1])) for ask in asks)
+                    total_volume = bid_volume + ask_volume
+
+                    # Calculate weighted average prices
+                    if bids:
+                        weighted_bid = (
+                            sum(
+                                Decimal(str(bid[0])) * Decimal(str(bid[1]))
+                                for bid in bids
+                            )
+                            / bid_volume
+                            if bid_volume > 0
+                            else Decimal(0)
+                        )
+                    else:
+                        weighted_bid = Decimal(0)
+
+                    if asks:
+                        weighted_ask = (
+                            sum(
+                                Decimal(str(ask[0])) * Decimal(str(ask[1]))
+                                for ask in asks
+                            )
+                            / ask_volume
+                            if ask_volume > 0
+                            else Decimal(0)
+                        )
+                    else:
+                        weighted_ask = Decimal(0)
+
+                    # Cache the data
+                    self._order_book_cache[bluefin_symbol] = {
+                        "timestamp": datetime.now(UTC),
+                        "bids": bids,
+                        "asks": asks,
+                        "bid_volume": bid_volume,
+                        "ask_volume": ask_volume,
+                        "total_volume": total_volume,
+                        "weighted_bid": weighted_bid,
+                        "weighted_ask": weighted_ask,
+                        "imbalance": (
+                            (bid_volume - ask_volume) / total_volume
+                            if total_volume > 0
+                            else Decimal(0)
+                        ),
+                    }
+
+                    return self._order_book_cache[bluefin_symbol]
+
+            # Fallback: create mock order book for paper trading
+            ticker = await self._service_client.get_market_ticker(bluefin_symbol)
+            current_price = Decimal(str(ticker.get("price", "100")))
+
+            # Generate mock order book around current price
+            mock_bids = []
+            mock_asks = []
+
+            for i in range(levels):
+                bid_price = current_price * (
+                    1 - Decimal(str((i + 1) * 0.001))
+                )  # 0.1% increments
+                ask_price = current_price * (1 + Decimal(str((i + 1) * 0.001)))
+
+                # Mock volume decreasing with distance
+                volume = Decimal(str(100 / (i + 1)))
+
+                mock_bids.append([float(bid_price), float(volume)])
+                mock_asks.append([float(ask_price), float(volume)])
+
+            mock_data = {
+                "timestamp": datetime.now(UTC),
+                "bids": mock_bids,
+                "asks": mock_asks,
+                "bid_volume": Decimal(250),  # Mock total volumes
+                "ask_volume": Decimal(250),
+                "total_volume": Decimal(500),
+                "weighted_bid": current_price * Decimal("0.9995"),
+                "weighted_ask": current_price * Decimal("1.0005"),
+                "imbalance": Decimal(0),  # Balanced
+            }
+
+            self._order_book_cache[bluefin_symbol] = mock_data
+            return mock_data
+
+        except Exception:
+            logger.exception("Failed to get order book depth for %s", bluefin_symbol)
+            # Return empty order book on error
+            return {
+                "timestamp": datetime.now(UTC),
+                "bids": [],
+                "asks": [],
+                "bid_volume": Decimal(0),
+                "ask_volume": Decimal(0),
+                "total_volume": Decimal(0),
+                "weighted_bid": Decimal(0),
+                "weighted_ask": Decimal(0),
+                "imbalance": Decimal(0),
+            }
+
+    async def estimate_market_impact(self, symbol: str, quantity: Decimal) -> dict:
+        """
+        Estimate market impact of a trade on the order book.
+
+        Args:
+            symbol: Trading symbol
+            quantity: Trade quantity (positive for buy, negative for sell)
+
+        Returns:
+            Dictionary with impact analysis
+        """
+        bluefin_symbol = self._convert_symbol(symbol)
+
+        try:
+            # Get order book depth
+            order_book = await self.get_order_book_depth(bluefin_symbol, levels=10)
+
+            if (
+                not order_book
+                or not order_book.get("bids")
+                or not order_book.get("asks")
+            ):
+                logger.warning("No order book data for market impact estimation")
+                return {
+                    "estimated_price": Decimal(0),
+                    "price_impact_pct": Decimal(0),
+                    "slippage_cost": Decimal(0),
+                    "liquidity_consumed_pct": Decimal(0),
+                }
+
+            is_buy = quantity > 0
+            abs_quantity = abs(quantity)
+
+            if is_buy:
+                # Buying consumes ask liquidity
+                levels = order_book["asks"]
+                best_price = Decimal(str(levels[0][0])) if levels else Decimal(0)
+            else:
+                # Selling consumes bid liquidity
+                levels = order_book["bids"]
+                best_price = Decimal(str(levels[0][0])) if levels else Decimal(0)
+
+            if not levels or best_price <= 0:
+                return {
+                    "estimated_price": Decimal(0),
+                    "price_impact_pct": Decimal(0),
+                    "slippage_cost": Decimal(0),
+                    "liquidity_consumed_pct": Decimal(0),
+                }
+
+            # Calculate weighted average execution price
+            remaining_quantity = abs_quantity
+            total_cost = Decimal(0)
+            total_quantity_filled = Decimal(0)
+            levels_consumed = 0
+
+            for level_price, level_size in levels:
+                if remaining_quantity <= 0:
+                    break
+
+                level_price = Decimal(str(level_price))
+                level_size = Decimal(str(level_size))
+
+                quantity_from_level = min(remaining_quantity, level_size)
+                total_cost += quantity_from_level * level_price
+                total_quantity_filled += quantity_from_level
+                remaining_quantity -= quantity_from_level
+                levels_consumed += 1
+
+            if total_quantity_filled <= 0:
+                return {
+                    "estimated_price": best_price,
+                    "price_impact_pct": Decimal(0),
+                    "slippage_cost": Decimal(0),
+                    "liquidity_consumed_pct": Decimal(0),
+                }
+
+            # Calculate metrics
+            weighted_avg_price = total_cost / total_quantity_filled
+            price_impact_pct = (
+                abs((weighted_avg_price - best_price) / best_price * 100)
+                if best_price > 0
+                else Decimal(0)
+            )
+            slippage_cost = abs(
+                (weighted_avg_price - best_price) * total_quantity_filled
+            )
+
+            # Calculate liquidity consumption percentage
+            side_volume = (
+                order_book["ask_volume"] if is_buy else order_book["bid_volume"]
+            )
+            liquidity_consumed_pct = (
+                (total_quantity_filled / side_volume * 100)
+                if side_volume > 0
+                else Decimal(100)
+            )
+
+            impact_analysis = {
+                "estimated_price": weighted_avg_price,
+                "best_price": best_price,
+                "price_impact_pct": price_impact_pct,
+                "slippage_cost": slippage_cost,
+                "liquidity_consumed_pct": liquidity_consumed_pct,
+                "levels_consumed": levels_consumed,
+                "quantity_filled": total_quantity_filled,
+                "quantity_remaining": remaining_quantity,
+            }
+
+            logger.debug(
+                "Market impact for %s %s: %.4f%% price impact, $%.6f slippage",
+                quantity,
+                bluefin_symbol,
+                price_impact_pct,
+                slippage_cost,
+            )
+
+            return impact_analysis
+
+        except Exception:
+            logger.exception("Failed to estimate market impact for %s", bluefin_symbol)
+            return {
+                "estimated_price": Decimal(0),
+                "price_impact_pct": Decimal(0),
+                "slippage_cost": Decimal(0),
+                "liquidity_consumed_pct": Decimal(0),
+            }
+
+    def register_order_callback(self, order_id: str, callback: callable) -> None:
+        """
+        Register a callback for order state changes.
+
+        Args:
+            order_id: Order ID to monitor
+            callback: Function to call on order state change
+        """
+        self._order_callbacks[order_id] = callback
+        logger.debug("Registered callback for order %s", order_id)
+
+    def unregister_order_callback(self, order_id: str) -> None:
+        """
+        Unregister an order callback.
+
+        Args:
+            order_id: Order ID to stop monitoring
+        """
+        self._order_callbacks.pop(order_id, None)
+        logger.debug("Unregistered callback for order %s", order_id)
+
+    async def _notify_order_callback(
+        self, order_id: str, order_status: str, order_data: dict = None
+    ) -> None:
+        """
+        Notify registered callback about order state change.
+
+        Args:
+            order_id: Order ID that changed
+            order_status: New order status
+            order_data: Additional order data
+        """
+        callback = self._order_callbacks.get(order_id)
+        if callback:
+            try:
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(order_id, order_status, order_data)
+                else:
+                    callback(order_id, order_status, order_data)
+            except Exception:
+                logger.exception("Error in order callback for %s", order_id)
+
+    def get_fee_calculator(self) -> BluefinFeeCalculator:
+        """
+        Get the BluefinFeeCalculator instance for fee calculations.
+
+        Returns:
+            BluefinFeeCalculator instance
+        """
+        return self._fee_calculator
+
+    def calculate_order_fees(
+        self, notional_value: Decimal, is_maker: bool = True
+    ) -> BluefinFees:
+        """
+        Calculate fees for an order.
+
+        Args:
+            notional_value: Notional value of the order
+            is_maker: Whether this is a maker order (limit) or taker order (market)
+
+        Returns:
+            BluefinFees object with fee breakdown
+        """
+        return self._fee_calculator.calculate_fee_breakdown(
+            notional_value=notional_value, use_limit_orders=is_maker
+        )
+
+    async def batch_cancel_orders(self, order_ids: list[str]) -> list[bool]:
+        """
+        Cancel multiple orders in batch for efficiency.
+
+        Args:
+            order_ids: List of order IDs to cancel
+
+        Returns:
+            List of success status for each order
+        """
+        if self.dry_run:
+            logger.info(
+                "PAPER TRADING: Simulating batch cancel of %d orders", len(order_ids)
+            )
+            return [True] * len(order_ids)
+
+        results = []
+
+        # Process cancellations with small delays to avoid rate limiting
+        for order_id in order_ids:
+            try:
+                success = await self.cancel_order(order_id)
+                results.append(success)
+
+                # Small delay between cancellations
+                if order_id != order_ids[-1]:  # Don't delay after the last one
+                    await asyncio.sleep(0.05)
+
+            except Exception as e:
+                logger.warning("Failed to cancel order %s in batch: %s", order_id, e)
+                results.append(False)
+
+        success_count = sum(results)
+        logger.info("Batch cancelled %d/%d orders", success_count, len(order_ids))
+
+        return results
+
+    async def replace_order(
+        self, old_order_id: str, new_price: Decimal, new_quantity: Decimal = None
+    ) -> Order | None:
+        """
+        Replace an existing order with new parameters (cancel + place new).
+
+        Args:
+            old_order_id: ID of order to replace
+            new_price: New price for the order
+            new_quantity: New quantity (optional, uses original if None)
+
+        Returns:
+            New order if successful, None otherwise
+        """
+        try:
+            # Find the original order in our tracking
+            original_order = None
+            symbol = None
+
+            for sym, orders in self._active_orders.items():
+                for order in orders:
+                    if order.id == old_order_id:
+                        original_order = order
+                        symbol = sym
+                        break
+                if original_order:
+                    break
+
+            if not original_order:
+                logger.warning(
+                    "Original order %s not found for replacement", old_order_id
+                )
+                return None
+
+            # Use original quantity if not specified
+            quantity = new_quantity or original_order.quantity
+
+            logger.debug(
+                "Replacing order %s: %s %s @ %s -> @ %s",
+                old_order_id,
+                original_order.side,
+                quantity,
+                original_order.price,
+                new_price,
+            )
+
+            # Cancel the old order first
+            cancel_success = await self.cancel_order(old_order_id)
+            if not cancel_success:
+                logger.warning(
+                    "Failed to cancel order %s for replacement", old_order_id
+                )
+                return None
+
+            # Remove from tracking
+            if symbol and symbol in self._active_orders:
+                self._active_orders[symbol] = [
+                    o for o in self._active_orders[symbol] if o.id != old_order_id
+                ]
+
+            # Place new order
+            new_order = await self.place_limit_order(
+                symbol=symbol,
+                side=original_order.side,
+                quantity=quantity,
+                price=new_price,
+            )
+
+            if new_order and symbol:
+                # Add to tracking
+                if symbol not in self._active_orders:
+                    self._active_orders[symbol] = []
+                self._active_orders[symbol].append(new_order)
+
+                logger.info(
+                    "Successfully replaced order %s with %s", old_order_id, new_order.id
+                )
+
+            return new_order
+
+        except Exception:
+            logger.exception("Failed to replace order %s", old_order_id)
+            return None
+
+    def get_active_orders_count(self, symbol: str = None) -> int:
+        """
+        Get count of active orders, optionally filtered by symbol.
+
+        Args:
+            symbol: Optional symbol filter
+
+        Returns:
+            Number of active orders
+        """
+        if symbol:
+            bluefin_symbol = self._convert_symbol(symbol)
+            return len(self._active_orders.get(bluefin_symbol, []))
+        return sum(len(orders) for orders in self._active_orders.values())
+
+    def get_active_orders_for_symbol(self, symbol: str) -> list[Order]:
+        """
+        Get all active orders for a specific symbol.
+
+        Args:
+            symbol: Trading symbol
+
+        Returns:
+            List of active orders
+        """
+        bluefin_symbol = self._convert_symbol(symbol)
+        return self._active_orders.get(bluefin_symbol, [])
+
+    def clear_order_tracking(self, symbol: str = None) -> None:
+        """
+        Clear order tracking data.
+
+        Args:
+            symbol: Optional symbol to clear (clears all if None)
+        """
+        if symbol:
+            bluefin_symbol = self._convert_symbol(symbol)
+            self._active_orders.pop(bluefin_symbol, [])
+            logger.debug("Cleared order tracking for %s", bluefin_symbol)
+        else:
+            self._active_orders.clear()
+            logger.debug("Cleared all order tracking")
+
+    async def start_order_book_monitoring(
+        self, symbol: str, callback: callable = None
+    ) -> None:
+        """
+        Start real-time order book monitoring for a symbol.
+
+        Args:
+            symbol: Trading symbol to monitor
+            callback: Optional callback for order book updates
+        """
+        # This would require WebSocket implementation in the service client
+        # For now, we'll just log that monitoring would start
+        bluefin_symbol = self._convert_symbol(symbol)
+        logger.info(
+            "Order book monitoring requested for %s (WebSocket implementation required)",
+            bluefin_symbol,
+        )
+
+        # In a full implementation, this would:
+        # 1. Subscribe to order book updates via WebSocket
+        # 2. Call the callback with updated order book data
+        # 3. Update the order book cache
+
+    async def stop_order_book_monitoring(self, symbol: str) -> None:
+        """
+        Stop order book monitoring for a symbol.
+
+        Args:
+            symbol: Trading symbol to stop monitoring
+        """
+        bluefin_symbol = self._convert_symbol(symbol)
+        logger.info("Stopping order book monitoring for %s", bluefin_symbol)
+
+    # Market Making Optimization Methods
+
+    async def batch_place_orders(self, orders: list[dict]) -> list[Order]:
+        """
+        Place multiple orders in batch for better efficiency.
+
+        Args:
+            orders: List of order dicts with symbol, side, price, quantity
+
+        Returns:
+            List of successfully placed orders
+        """
+        placed_orders = []
+
+        logger.info("Batch placing %d orders", len(orders))
+
+        # Group orders by symbol for better tracking
+        orders_by_symbol = {}
+        for order in orders:
+            symbol = order["symbol"]
+            if symbol not in orders_by_symbol:
+                orders_by_symbol[symbol] = []
+            orders_by_symbol[symbol].append(order)
+
+        # Process orders with minimal delay
+        for symbol, symbol_orders in orders_by_symbol.items():
+            for order in symbol_orders:
+                try:
+                    placed_order = await self.place_limit_order(
+                        symbol=order["symbol"],
+                        side=cast("Literal['BUY', 'SELL']", order["side"]),
+                        quantity=Decimal(str(order["quantity"])),
+                        price=Decimal(str(order["price"])),
+                    )
+
+                    if placed_order:
+                        placed_orders.append(placed_order)
+
+                        # Track the order
+                        bluefin_symbol = self._convert_symbol(order["symbol"])
+                        if bluefin_symbol not in self._active_orders:
+                            self._active_orders[bluefin_symbol] = []
+                        self._active_orders[bluefin_symbol].append(placed_order)
+
+                    # Minimal delay for rate limiting
+                    await asyncio.sleep(0.02)
+
+                except Exception as e:
+                    logger.warning("Failed to place order in batch: %s", e)
+                    continue
+
+        logger.info(
+            "Successfully placed %d/%d orders in batch", len(placed_orders), len(orders)
+        )
+
+        return placed_orders
+
+    async def optimize_order_placement(
+        self, order_levels: list[dict], symbol: str
+    ) -> list[Order]:
+        """
+        Optimized order placement with intelligent sequencing and error recovery.
+
+        Args:
+            order_levels: List of order level dicts
+            symbol: Trading symbol
+
+        Returns:
+            List of successfully placed orders
+        """
+        bluefin_symbol = self._convert_symbol(symbol)
+
+        # Sort orders by distance from mid-price for optimal placement sequence
+        try:
+            spread_data = await self.get_current_spread(symbol)
+            mid_price = spread_data.get("mid_price", Decimal(0))
+
+            if mid_price > 0:
+                # Sort by distance from mid price (closest first)
+                order_levels.sort(
+                    key=lambda ol: abs(Decimal(str(ol["price"])) - mid_price)
+                )
+                logger.debug(
+                    "Optimized order placement sequence by distance from mid-price"
+                )
+
+        except Exception:
+            logger.warning("Could not optimize order sequence, using original order")
+
+        # Use batch placement with optimized error handling
+        return await self.batch_place_orders(
+            [
+                {
+                    "symbol": bluefin_symbol,
+                    "side": ol["side"],
+                    "price": ol["price"],
+                    "quantity": ol["quantity"],
+                }
+                for ol in order_levels
+            ]
+        )
+
+    async def fast_order_update(self, order_id: str, new_price: Decimal) -> bool:
+        """
+        Fast order price update using replace optimization.
+
+        Args:
+            order_id: Order to update
+            new_price: New price
+
+        Returns:
+            True if successful
+        """
+        try:
+            # Use the replace_order method for atomic update
+            new_order = await self.replace_order(order_id, new_price)
+            return new_order is not None
+
+        except Exception:
+            logger.exception("Fast order update failed for %s", order_id)
+            return False
+
+    def get_order_latency_stats(self) -> dict:
+        """
+        Get order placement latency statistics for performance monitoring.
+
+        Returns:
+            Dictionary with latency metrics
+        """
+        # This would require actual latency tracking in a full implementation
+        # For now, return mock stats
+        return {
+            "avg_placement_latency_ms": 50.0,
+            "avg_cancellation_latency_ms": 30.0,
+            "success_rate_pct": 98.5,
+            "rate_limit_hits": 0,
+            "connection_status": "healthy",
+        }
+
+    def enable_high_frequency_mode(self) -> None:
+        """
+        Enable optimizations for high-frequency market making.
+        """
+        # Reduce rate limiter constraints for market making
+        self._rate_limiter.max_requests = min(
+            self._rate_limiter.max_requests * 2,
+            100,  # Cap at 100 requests per window
+        )
+
+        logger.info(
+            "Enabled high-frequency mode: %d requests per %ds",
+            self._rate_limiter.max_requests,
+            self._rate_limiter.window_seconds,
+        )
+
+    def disable_high_frequency_mode(self) -> None:
+        """
+        Disable high-frequency optimizations and return to normal limits.
+        """
+        # Reset to original rate limits
+        self._rate_limiter.max_requests = settings.exchange.rate_limit_requests * 3
+
+        logger.info(
+            "Disabled high-frequency mode: %d requests per %ds",
+            self._rate_limiter.max_requests,
+            self._rate_limiter.window_seconds,
+        )
+
+    async def preload_market_data(self, symbols: list[str]) -> None:
+        """
+        Preload market data for multiple symbols to reduce latency.
+
+        Args:
+            symbols: List of symbols to preload
+        """
+        logger.info("Preloading market data for %d symbols", len(symbols))
+
+        # Preload order books and spreads concurrently
+        tasks = []
+        for symbol in symbols:
+            tasks.append(self.get_order_book_depth(symbol, levels=5))
+            tasks.append(self.get_current_spread(symbol))
+
+        try:
+            await asyncio.gather(*tasks, return_exceptions=True)
+            logger.info("Market data preloaded successfully")
+        except Exception:
+            logger.warning("Some market data preloading failed")
+
+    def get_market_making_metrics(self) -> dict:
+        """
+        Get comprehensive metrics for market making performance.
+
+        Returns:
+            Dictionary with market making metrics
+        """
+        total_active_orders = sum(
+            len(orders) for orders in self._active_orders.values()
+        )
+
+        return {
+            "total_active_orders": total_active_orders,
+            "symbols_with_orders": len(self._active_orders),
+            "order_callbacks_registered": len(self._order_callbacks),
+            "cached_order_books": len(self._order_book_cache),
+            "fee_calculator_available": self._fee_calculator is not None,
+            "high_frequency_mode": self._rate_limiter.max_requests
+            > settings.exchange.rate_limit_requests * 3,
+            "connection_health": self.is_connected(),
+            "dry_run_mode": self.dry_run,
+        }

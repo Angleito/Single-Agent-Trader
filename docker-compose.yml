@@ -238,11 +238,14 @@ services:
           - trading-bot
 
     # Service dependencies with health check conditions for robust startup
+    # Optional dependencies - services will start even if MCP services are unavailable
     depends_on:
       mcp-omnisearch:
-        condition: service_healthy
+        condition: service_started
+        required: false
       mcp-memory:
-        condition: service_healthy
+        condition: service_started
+        required: false
 
   # MCP OmniSearch Server for Enhanced Market Intelligence
   mcp-omnisearch:
@@ -441,8 +444,9 @@ services:
       - EXCHANGE__EXCHANGE_TYPE=${EXCHANGE__EXCHANGE_TYPE:-coinbase}
     restart: unless-stopped
     depends_on:
-      - ai-trading-bot
-      - bluefin-service
+      bluefin-service:
+        condition: service_started
+        required: false
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

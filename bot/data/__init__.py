@@ -3,4 +3,4 @@
 from .dominance import DominanceData, DominanceDataProvider
 from .market import MarketDataProvider
 
-__all__ = ["MarketDataProvider", "DominanceData", "DominanceDataProvider"]
+__all__ = ["DominanceData", "DominanceDataProvider", "MarketDataProvider"]

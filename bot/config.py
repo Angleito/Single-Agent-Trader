@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlparse
 
+from bot.market_making_config import MarketMakingConfig
 from bot.utils.path_utils import (
     get_data_directory,
     get_data_file_path,
@@ -2301,6 +2302,7 @@ class Settings(BaseSettings):
     mcp: MCPSettings = Field(default_factory=MCPSettings)
     omnisearch: OmniSearchSettings = Field(default_factory=OmniSearchSettings)
     monitoring: MonitoringSettings = Field(default_factory=MonitoringSettings)
+    market_making: MarketMakingConfig = Field(default_factory=MarketMakingConfig)
 
     # Profile Configuration
     profile: TradingProfile = Field(
@@ -2419,6 +2421,38 @@ class Settings(BaseSettings):
                 f"Please set EXCHANGE__USE_TRADE_AGGREGATION=true in your environment configuration "
                 f"or switch to a standard interval (1m, 5m, 15m, 30m, 1h, 4h, 1d)."
             )
+
+        return self
+
+    @model_validator(mode="after")
+    def validate_market_making_config(self) -> "Settings":
+        """Validate market making configuration consistency."""
+        if self.market_making.enabled:
+            # Ensure market making is compatible with current exchange
+            if self.exchange.exchange_type != "bluefin":
+                logger.warning(
+                    f"Market making is optimized for Bluefin but exchange is set to {self.exchange.exchange_type}"
+                )
+
+            # Ensure market making symbol is compatible
+            if not self.market_making.symbol.endswith("-PERP"):
+                logger.warning(
+                    f"Market making symbol {self.market_making.symbol} may not be optimal for perpetual futures"
+                )
+
+            # Validate position size compatibility
+            if self.market_making.strategy.max_position_pct > self.trading.max_size_pct:
+                logger.warning(
+                    f"Market making max position ({self.market_making.strategy.max_position_pct}%) "
+                    f"exceeds trading max size ({self.trading.max_size_pct}%)"
+                )
+
+            # Ensure reasonable cycle intervals
+            if self.market_making.cycle_interval_seconds < 0.5:
+                logger.warning(
+                    f"Market making cycle interval ({self.market_making.cycle_interval_seconds}s) "
+                    f"may be too aggressive for stable operation"
+                )
 
         return self
 
