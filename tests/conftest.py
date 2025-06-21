@@ -56,30 +56,22 @@ def pytest_collection_modifyitems(
             item.add_marker(pytest.mark.omnisearch)
 
 
-# Event loop fixtures
-@pytest.fixture(scope="session")
-def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
-    """Create an instance of the default event loop for the test session."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest.fixture()
+# Event loop policy fixture (let pytest-asyncio handle event_loop automatically)
+@pytest.fixture
 def event_loop_policy() -> asyncio.AbstractEventLoopPolicy:
     """Get the event loop policy."""
     return asyncio.get_event_loop_policy()
 
 
 # Mock data fixtures
-@pytest.fixture()
+@pytest.fixture
 def sample_timestamps() -> list[datetime]:
     """Generate sample timestamps for testing."""
     base_time = datetime.now(UTC)
     return [base_time - timedelta(hours=i) for i in range(24)]
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_price_data() -> dict[str, Any]:
     """Generate realistic sample price data."""
     rng = np.random.default_rng(42)
@@ -106,7 +98,7 @@ def sample_price_data() -> dict[str, Any]:
     }
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_nasdaq_data() -> dict[str, Any]:
     """Generate realistic NASDAQ sample data."""
     rng = np.random.default_rng(24)
@@ -133,7 +125,7 @@ def sample_nasdaq_data() -> dict[str, Any]:
     }
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_financial_news() -> list[dict[str, Any]]:
     """Sample financial news items for testing."""
     return [
@@ -213,7 +205,7 @@ def sample_financial_news() -> list[dict[str, Any]]:
     ]
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_bullish_sentiment() -> Any:
     """Sample bullish sentiment data."""
     try:
@@ -252,7 +244,7 @@ def sample_bullish_sentiment() -> Any:
         )()
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_bearish_sentiment() -> Any:
     """Sample bearish sentiment data."""
     try:
@@ -291,7 +283,7 @@ def sample_bearish_sentiment() -> Any:
         )()
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_correlation_data() -> Any:
     """Sample correlation analysis data."""
     try:
@@ -333,7 +325,7 @@ def sample_correlation_data() -> Any:
         )()
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_market_regime() -> Any:
     """Sample market regime data."""
     try:
@@ -375,7 +367,7 @@ def sample_market_regime() -> Any:
 
 
 # Mock service fixtures
-@pytest.fixture()
+@pytest.fixture
 def mock_omnisearch_client() -> Mock:
     """Mock OmniSearch client for testing."""
     client = Mock()
@@ -398,7 +390,7 @@ def mock_omnisearch_client() -> Mock:
     return client
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_sentiment_service() -> Mock:
     """Mock financial sentiment service for testing."""
     service = Mock()
@@ -410,7 +402,7 @@ def mock_sentiment_service() -> Mock:
     return service
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_context_analyzer() -> Mock:
     """Mock market context analyzer for testing."""
     analyzer = Mock()
@@ -422,7 +414,7 @@ def mock_context_analyzer() -> Mock:
     return analyzer
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_search_formatter() -> Mock:
     """Mock web search formatter for testing."""
     formatter = Mock()
@@ -441,7 +433,7 @@ def mock_search_formatter() -> Mock:
     return formatter
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_aiohttp_session() -> AsyncMock:
     """Mock aiohttp session for testing."""
     session = AsyncMock()
@@ -460,14 +452,14 @@ def mock_aiohttp_session() -> AsyncMock:
 
 
 # File system fixtures
-@pytest.fixture()
+@pytest.fixture
 def temp_directory() -> Generator[Path, None, None]:
     """Create a temporary directory for testing."""
     with tempfile.TemporaryDirectory() as temp_dir:
         yield Path(temp_dir)
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_cache_directory(temp_directory: Path) -> Path:
     """Create a mock cache directory structure."""
     cache_dir = temp_directory / "omnisearch_cache"
@@ -491,7 +483,7 @@ def mock_cache_directory(temp_directory: Path) -> Path:
 
 
 # API response fixtures
-@pytest.fixture()
+@pytest.fixture
 def sample_omnisearch_news_response() -> dict[str, Any]:
     """Sample OmniSearch news API response."""
     return {
@@ -526,7 +518,7 @@ def sample_omnisearch_news_response() -> dict[str, Any]:
     }
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_omnisearch_sentiment_response() -> dict[str, Any]:
     """Sample OmniSearch sentiment API response."""
     return {
@@ -553,7 +545,7 @@ def sample_omnisearch_sentiment_response() -> dict[str, Any]:
     }
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_omnisearch_correlation_response() -> dict[str, Any]:
     """Sample OmniSearch correlation API response."""
     return {
@@ -571,7 +563,7 @@ def sample_omnisearch_correlation_response() -> dict[str, Any]:
 
 
 # Environment fixtures
-@pytest.fixture()
+@pytest.fixture
 def mock_environment_variables() -> Generator[dict[str, str], None, None]:
     """Mock environment variables for testing."""
     env_vars = {
@@ -587,7 +579,7 @@ def mock_environment_variables() -> Generator[dict[str, str], None, None]:
 
 
 # Performance fixtures
-@pytest.fixture()
+@pytest.fixture
 def performance_timer():
     """Timer for performance testing."""
 
@@ -612,7 +604,7 @@ def performance_timer():
 
 
 # Async fixtures for testing
-@pytest.fixture()
+@pytest.fixture
 async def async_context_manager():
     """Async context manager for testing."""
 
@@ -632,7 +624,7 @@ async def async_context_manager():
 
 
 # Error simulation fixtures
-@pytest.fixture()
+@pytest.fixture
 def network_error_responses() -> dict[str, Any]:
     """Mock network error responses for testing error handling."""
     return {
@@ -652,7 +644,7 @@ def network_error_responses() -> dict[str, Any]:
 
 
 # Configuration fixtures
-@pytest.fixture()
+@pytest.fixture
 def test_config() -> dict[str, Any]:
     """Test configuration settings."""
     return {
@@ -685,7 +677,7 @@ def test_config() -> dict[str, Any]:
 
 
 # Integration test data fixtures
-@pytest.fixture()
+@pytest.fixture
 def comprehensive_test_scenario() -> dict[str, Any]:
     """Comprehensive test scenario with realistic market data."""
     return {
@@ -820,7 +812,7 @@ def validate_sentiment_result(sentiment_result: Any) -> None:
 
 
 # Performance testing utilities
-@pytest.fixture()
+@pytest.fixture
 def benchmark_timer() -> Any:
     """Benchmarking timer for performance tests."""
     import time

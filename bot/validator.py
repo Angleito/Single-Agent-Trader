@@ -214,7 +214,9 @@ class TradeValidator:
             )
             validated.leverage = 1
         elif validated.leverage > 100:
-            logger.warning("Excessive leverage %s, capping to 100", validated.leverage)
+            logger.warning(
+                "Excessive leverage %d, capping to 100", int(validated.leverage)
+            )
             validated.leverage = 100
 
         # Validate rationale

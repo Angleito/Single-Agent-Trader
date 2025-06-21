@@ -9,6 +9,7 @@ import asyncio
 import decimal
 import logging
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, Literal, NoReturn, cast
@@ -461,7 +462,7 @@ class BluefinClient(BaseExchange):
                     "min_notional": Decimal(10),
                 }
 
-            logger.debug("Loaded %s perpetual contracts", len(self._contract_info))
+            logger.debug("Loaded %d perpetual contracts", len(self._contract_info))
 
         except Exception as e:
             logger.warning("Failed to load contract info: %s", e)
@@ -1051,7 +1052,7 @@ class BluefinClient(BaseExchange):
                     )
                     positions.append(position)
 
-            logger.debug("Retrieved %s positions from Bluefin", len(positions))
+            logger.debug("Retrieved %d positions from Bluefin", len(positions))
 
         except Exception:
             logger.exception("Failed to get positions")
@@ -1182,7 +1183,23 @@ class BluefinClient(BaseExchange):
         balance_value = account_data.get("balance", "0")
 
         try:
-            raw_balance = Decimal(str(balance_value))
+            # Import price conversion utility
+            from bot.utils.price_conversion import (
+                convert_from_18_decimal,
+                is_likely_18_decimal,
+            )
+
+            # Check if balance needs conversion from 18-decimal format
+            if is_likely_18_decimal(balance_value):
+                raw_balance = convert_from_18_decimal(balance_value, "USDC", "balance")
+                logger.info(
+                    "Converted astronomical balance from 18-decimal: %s -> %s",
+                    balance_value,
+                    raw_balance,
+                )
+            else:
+                raw_balance = Decimal(str(balance_value))
+
         except (ValueError, TypeError, decimal.InvalidOperation) as decimal_err:
             raise BalanceValidationError(
                 f"Invalid balance value format: {balance_value}",
@@ -2219,7 +2236,7 @@ class BluefinClient(BaseExchange):
         logger.debug("Unregistered callback for order %s", order_id)
 
     async def _notify_order_callback(
-        self, order_id: str, order_status: str, order_data: dict = None
+        self, order_id: str, order_status: str, order_data: dict | None = None
     ) -> None:
         """
         Notify registered callback about order state change.
@@ -2303,7 +2320,7 @@ class BluefinClient(BaseExchange):
         return results
 
     async def replace_order(
-        self, old_order_id: str, new_price: Decimal, new_quantity: Decimal = None
+        self, old_order_id: str, new_price: Decimal, new_quantity: Decimal | None = None
     ) -> Order | None:
         """
         Replace an existing order with new parameters (cancel + place new).
@@ -2386,7 +2403,7 @@ class BluefinClient(BaseExchange):
             logger.exception("Failed to replace order %s", old_order_id)
             return None
 
-    def get_active_orders_count(self, symbol: str = None) -> int:
+    def get_active_orders_count(self, symbol: str | None = None) -> int:
         """
         Get count of active orders, optionally filtered by symbol.
 
@@ -2414,7 +2431,7 @@ class BluefinClient(BaseExchange):
         bluefin_symbol = self._convert_symbol(symbol)
         return self._active_orders.get(bluefin_symbol, [])
 
-    def clear_order_tracking(self, symbol: str = None) -> None:
+    def clear_order_tracking(self, symbol: str | None = None) -> None:
         """
         Clear order tracking data.
 
@@ -2430,7 +2447,7 @@ class BluefinClient(BaseExchange):
             logger.debug("Cleared all order tracking")
 
     async def start_order_book_monitoring(
-        self, symbol: str, callback: callable = None
+        self, symbol: str, callback: Callable | None = None
     ) -> None:
         """
         Start real-time order book monitoring for a symbol.

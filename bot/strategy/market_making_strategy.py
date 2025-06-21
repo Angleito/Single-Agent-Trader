@@ -16,9 +16,10 @@ import logging
 from decimal import Decimal
 from typing import Any, NamedTuple
 
-from ..exchange.bluefin_fee_calculator import BluefinFeeCalculator
-from ..indicators.vumanchu import CipherA, CipherB
-from ..trading_types import IndicatorData, MarketState, TradeAction
+from bot.exchange.bluefin_fee_calculator import BluefinFeeCalculator
+from bot.indicators.vumanchu import CipherA, CipherB
+from bot.trading_types import IndicatorData, MarketState, TradeAction
+
 from .core import CoreStrategy
 
 logger = logging.getLogger(__name__)
@@ -129,7 +130,7 @@ class MarketMakingStrategy:
                 )
                 logger.info("Initialized VuManChu Cipher A for market making")
             except Exception as e:
-                logger.error("Failed to initialize Cipher A: %s", e)
+                logger.exception("Failed to initialize Cipher A: %s", e)
 
         if self._cipher_b is None:
             try:
@@ -137,7 +138,7 @@ class MarketMakingStrategy:
                 self._cipher_b = CipherB()
                 logger.info("Initialized VuManChu Cipher B for market making")
             except Exception as e:
-                logger.error("Failed to initialize Cipher B: %s", e)
+                logger.exception("Failed to initialize Cipher B: %s", e)
 
     def calculate_optimal_spread(
         self, market_state: MarketState, vumanchu_signals: IndicatorData | None = None
@@ -239,7 +240,7 @@ class MarketMakingStrategy:
             return result
 
         except Exception as e:
-            logger.error("Error calculating optimal spread: %s", e)
+            logger.exception("Error calculating optimal spread: %s", e)
             # Return safe default spread
             safe_spread = (
                 Decimal(str(current_price))
@@ -377,7 +378,7 @@ class MarketMakingStrategy:
             return bias
 
         except Exception as e:
-            logger.error("Error determining directional bias: %s", e)
+            logger.exception("Error determining directional bias: %s", e)
             # Return neutral bias on error
             return DirectionalBias(
                 direction="neutral", strength=0.0, confidence=0.0, signals={}
@@ -420,7 +421,6 @@ class MarketMakingStrategy:
                 ask_price = current_price + ask_offset
 
                 # Adjust size based on bias and level
-                size_adjustment = 1.0
                 if bias.direction == "bullish":
                     # More aggressive on bid side
                     bid_size_adjustment = 1.0 + (bias.strength * 0.3)
@@ -456,7 +456,7 @@ class MarketMakingStrategy:
             return order_levels
 
         except Exception as e:
-            logger.error("Error generating order levels: %s", e)
+            logger.exception("Error generating order levels: %s", e)
             return []
 
     def analyze_market_making_opportunity(
@@ -539,7 +539,7 @@ class MarketMakingStrategy:
             return trade_action
 
         except Exception as e:
-            logger.error("Error in market making analysis: %s", e)
+            logger.exception("Error in market making analysis: %s", e)
             # Fallback to core strategy
             return self.core_strategy.analyze_market(market_state)
 
@@ -620,5 +620,5 @@ class MarketMakingStrategy:
             return True
 
         except Exception as e:
-            logger.error("Error validating market conditions: %s", e)
+            logger.exception("Error validating market conditions: %s", e)
             return False

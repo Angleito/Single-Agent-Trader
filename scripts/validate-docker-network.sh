@@ -34,17 +34,17 @@ print_status "SUCCESS" "Docker is running"
 # Check if trading-network exists
 if docker network ls | grep -q "trading-network"; then
     print_status "SUCCESS" "trading-network exists"
-    
+
     # Get network details
     echo ""
     echo "🔍 Network Details:"
     docker network inspect trading-network --format '{{.Name}}: {{.Driver}} ({{range .IPAM.Config}}{{.Subnet}}{{end}})'
-    
+
     # List services on the network
     echo ""
     echo "📡 Services on trading-network:"
     docker network inspect trading-network --format '{{range $key, $value := .Containers}}{{.Name}}: {{.IPv4Address}}{{"\n"}}{{end}}' | sort
-    
+
 else
     print_status "WARNING" "trading-network does not exist - will be created when services start"
 fi
@@ -56,7 +56,7 @@ echo "==================="
 # Check bluefin-service
 if docker ps --filter "name=bluefin-service" --filter "status=running" | grep -q bluefin-service; then
     print_status "SUCCESS" "bluefin-service is running"
-    
+
     # Test bluefin-service health endpoint
     if docker exec bluefin-service curl -f http://localhost:8080/health >/dev/null 2>&1; then
         print_status "SUCCESS" "bluefin-service health check passed"
@@ -85,7 +85,7 @@ if docker ps --filter "name=ai-trading-bot" --filter "status=running" | grep -q 
     else
         print_status "ERROR" "ai-trading-bot cannot ping bluefin-service"
     fi
-    
+
     # Test HTTP connectivity
     if docker exec ai-trading-bot curl -f http://bluefin-service:8080/health >/dev/null 2>&1; then
         print_status "SUCCESS" "ai-trading-bot can reach bluefin-service HTTP endpoint"
@@ -114,7 +114,7 @@ if [ -f docker-compose.bluefin.yml ]; then
     else
         print_status "ERROR" "docker-compose.bluefin.yml does not use trading-network"
     fi
-    
+
     if grep -q "external: true" docker-compose.bluefin.yml; then
         print_status "SUCCESS" "docker-compose.bluefin.yml uses external network"
     else

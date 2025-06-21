@@ -20,7 +20,7 @@ env:
   # Mock API keys for testing (non-functional)
   OPENAI_API_KEY: sk-test-key-for-ci-cd-only
   COINBASE_API_KEY: test-coinbase-key
-  COINBASE_API_SECRET: test-coinbase-secret  
+  COINBASE_API_SECRET: test-coinbase-secret
   COINBASE_PASSPHRASE: test-passphrase
   BLUEFIN_PRIVATE_KEY: test-private-key
   BLUEFIN_NETWORK: testnet
@@ -28,14 +28,14 @@ env:
 jobs:
   docker-compose-test:
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
-      
+
     - name: Create CI environment file
       run: |
         # Create .env file for CI/CD with safe defaults
@@ -50,7 +50,7 @@ jobs:
         OPENAI_MODEL=${OPENAI_MODEL}
         OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE}
         OPENAI_MAX_TOKENS=${OPENAI_MAX_TOKENS}
-        
+
         # Mock credentials for testing (non-functional)
         OPENAI_API_KEY=${OPENAI_API_KEY}
         COINBASE_API_KEY=${COINBASE_API_KEY}
@@ -58,7 +58,7 @@ jobs:
         COINBASE_PASSPHRASE=${COINBASE_PASSPHRASE}
         BLUEFIN_PRIVATE_KEY=${BLUEFIN_PRIVATE_KEY}
         BLUEFIN_NETWORK=${BLUEFIN_NETWORK}
-        
+
         # Additional CI settings
         ENABLE_BACKTESTING=false
         ENABLE_PAPER_TRADING=true
@@ -67,26 +67,26 @@ jobs:
         DEBUG=false
         CONFIG_FILE=./config/development.json
         EOF
-        
+
     - name: Validate docker-compose configuration
       run: |
         echo "Testing docker-compose configuration..."
         docker-compose -f docker-compose.yml config --quiet
         echo "✅ Docker Compose configuration is valid"
-        
+
     - name: Test docker-compose config output
       run: |
         echo "Generating docker-compose configuration..."
         docker-compose -f docker-compose.yml config > docker-compose-resolved.yml
         echo "✅ Configuration generated successfully"
-        
+
     - name: Validate all service definitions
       run: |
         echo "Validating individual services..."
-        
+
         # Test each service configuration
         services=("ai-trading-bot" "bluefin-service" "mcp-omnisearch" "mcp-memory" "dashboard-backend" "dashboard-frontend")
-        
+
         for service in "${services[@]}"; do
           echo "Validating $service..."
           docker-compose -f docker-compose.yml config --services | grep -q "$service"
@@ -97,14 +97,14 @@ jobs:
             exit 1
           fi
         done
-        
+
     - name: Test environment variable substitution
       run: |
         echo "Testing environment variable substitution..."
-        
+
         # Check if key environment variables are properly substituted
         config_output=$(docker-compose -f docker-compose.yml config)
-        
+
         # Verify critical environment variables are set
         if echo "$config_output" | grep -q "DRY_RUN.*true"; then
           echo "✅ DRY_RUN environment variable properly set"
@@ -112,32 +112,32 @@ jobs:
           echo "❌ DRY_RUN environment variable not found or incorrect"
           exit 1
         fi
-        
+
         if echo "$config_output" | grep -q "LOG_LEVEL.*INFO"; then
           echo "✅ LOG_LEVEL environment variable properly set"
         else
           echo "❌ LOG_LEVEL environment variable not found or incorrect"
           exit 1
         fi
-        
+
     - name: Test without .env file (CI/CD scenario)
       run: |
         echo "Testing configuration without .env file..."
-        
+
         # Remove .env file to simulate CI/CD environment
         rm -f .env
-        
+
         # Should still work with env_file.required=false
         docker-compose -f docker-compose.yml config --quiet
         echo "✅ Docker Compose works without .env file"
-        
+
     - name: Test build contexts exist
       run: |
         echo "Verifying build contexts exist..."
-        
+
         # Check if all build contexts exist
         contexts=("." "./services" "./bot/mcp/omnisearch-server" "./bot/mcp" "./dashboard/backend" "./dashboard/frontend")
-        
+
         for context in "${contexts[@]}"; do
           if [ -d "$context" ]; then
             echo "✅ Build context $context exists"
@@ -146,20 +146,20 @@ jobs:
             exit 1
           fi
         done
-        
+
     - name: Verify Dockerfile existence
       run: |
         echo "Verifying Dockerfiles exist..."
-        
+
         dockerfiles=(
           "./Dockerfile"
-          "./services/Dockerfile.bluefin" 
+          "./services/Dockerfile.bluefin"
           "./bot/mcp/omnisearch-server/Dockerfile"
           "./bot/mcp/Dockerfile"
           "./dashboard/backend/Dockerfile"
           "./dashboard/frontend/Dockerfile"
         )
-        
+
         for dockerfile in "${dockerfiles[@]}"; do
           if [ -f "$dockerfile" ]; then
             echo "✅ $dockerfile exists"
@@ -168,31 +168,31 @@ jobs:
             exit 1
           fi
         done
-        
+
     - name: Test network configuration
       run: |
         echo "Testing network configuration..."
         config_output=$(docker-compose -f docker-compose.yml config)
-        
+
         if echo "$config_output" | grep -q "trading-network"; then
           echo "✅ Trading network is properly configured"
         else
           echo "❌ Trading network configuration is missing"
           exit 1
         fi
-        
+
     - name: Validate health checks
       run: |
         echo "Validating health check configurations..."
         config_output=$(docker-compose -f docker-compose.yml config)
-        
+
         # Check for health check definitions
         if echo "$config_output" | grep -q "healthcheck"; then
           echo "✅ Health checks are configured"
         else
           echo "⚠️ No health checks found (optional but recommended)"
         fi
-        
+
     - name: Summary
       run: |
         echo ""
@@ -200,7 +200,7 @@ jobs:
         echo ""
         echo "✅ Configuration is valid"
         echo "✅ Environment variables are properly handled"
-        echo "✅ Missing .env file is handled gracefully" 
+        echo "✅ Missing .env file is handled gracefully"
         echo "✅ All build contexts exist"
         echo "✅ All Dockerfiles exist"
         echo "✅ Network configuration is valid"

@@ -56,7 +56,7 @@ _delayed_startup_task = asyncio.create_task(start_log_streaming_delayed())
 # Proper async cleanup in stop() method
 async def stop(self):
     self.running = False
-    
+
     # Cancel all tracked tasks
     if self._stream_logs_task and not self._stream_logs_task.done():
         self._stream_logs_task.cancel()
@@ -64,7 +64,7 @@ async def stop(self):
             await self._stream_logs_task
         except asyncio.CancelledError:
             pass
-    
+
     for task in self._file_watcher_tasks:
         if not task.done():
             task.cancel()
@@ -148,10 +148,10 @@ class MyService:
     def __init__(self):
         self._background_task: asyncio.Task | None = None
         self._worker_tasks: list[asyncio.Task] = []
-    
+
     async def start(self):
         self._background_task = asyncio.create_task(self._background_worker())
-    
+
     async def stop(self):
         # Cancel single task
         if self._background_task and not self._background_task.done():
@@ -160,7 +160,7 @@ class MyService:
                 await self._background_task
             except asyncio.CancelledError:
                 pass
-        
+
         # Cancel task list
         for task in self._worker_tasks:
             if not task.done():
@@ -206,11 +206,11 @@ When writing tests for classes with background tasks:
 async def test_service_cleanup():
     service = MyService()
     await service.start()
-    
+
     # Test that tasks are running
     assert service._background_task is not None
     assert not service._background_task.done()
-    
+
     # Test proper cleanup
     await service.stop()
     assert service._background_task.done()
@@ -228,10 +228,10 @@ async def test_multiple_tasks():
         # Create tracked tasks
         tasks.append(asyncio.create_task(long_running_operation()))
         tasks.append(asyncio.create_task(another_operation()))
-        
+
         # Test logic here
         results = await asyncio.gather(*tasks[:2])  # Wait for first 2 tasks
-        
+
     finally:
         # Clean up all tasks
         for task in tasks:

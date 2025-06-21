@@ -42,7 +42,15 @@ def is_likely_18_decimal(value: float | int | str | Decimal) -> bool:
     else:
         # More conservative threshold to avoid false conversions
         # Values larger than 1e15 are likely in 18-decimal format
-        return numeric_value > 1e15
+        is_18_decimal = numeric_value > 1e15
+
+        # Log detection for debugging
+        if is_18_decimal:
+            logger.debug(
+                "Detected likely 18-decimal value: %s (%.2e)", value, numeric_value
+            )
+
+        return is_18_decimal
 
 
 def convert_from_18_decimal(
@@ -271,6 +279,50 @@ def log_price_conversion_stats(
         ),
         is_price_valid(converted_value, symbol),
     )
+
+
+def format_price_for_display(
+    price: float | Decimal | str | None, symbol: str | None = None, decimals: int = 2
+) -> str:
+    """
+    Format a price value for display in logs or UI.
+
+    This function ensures prices are displayed in human-readable format,
+    automatically detecting and converting 18-decimal values.
+
+    Args:
+        price: The price value to format
+        symbol: Optional trading symbol for context
+        decimals: Number of decimal places to display
+
+    Returns:
+        Formatted price string with $ prefix
+    """
+    if price is None:
+        return "$N/A"
+
+    try:
+        # Convert to Decimal for precision
+        price_decimal = Decimal(str(price))
+
+        # Check if conversion from 18-decimal is needed
+        if is_likely_18_decimal(price_decimal):
+            price_decimal = convert_from_18_decimal(
+                price_decimal, symbol, "display_price"
+            )
+
+        # Format with specified decimals
+        formatted = f"${float(price_decimal):,.{decimals}f}"
+
+        # Add symbol context if provided
+        if symbol:
+            formatted = f"{formatted} ({symbol})"
+
+        return formatted
+
+    except Exception as e:
+        logger.warning("Failed to format price %s: %s", price, e)
+        return f"${price}"
 
 
 def get_current_real_price(symbol: str) -> float | None:

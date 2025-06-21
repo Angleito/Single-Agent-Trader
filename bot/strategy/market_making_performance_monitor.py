@@ -26,15 +26,16 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any, NamedTuple
 
-from ..exchange.bluefin_fee_calculator import BluefinFeeCalculator
-from ..performance_monitor import (
+from bot.exchange.bluefin_fee_calculator import BluefinFeeCalculator
+from bot.performance_monitor import (
     AlertLevel,
     PerformanceAlert,
     PerformanceMetric,
     PerformanceMonitor,
     PerformanceThresholds,
 )
-from ..trading_types import IndicatorData
+from bot.trading_types import IndicatorData
+
 from .inventory_manager import InventoryMetrics
 from .market_making_order_manager import ManagedOrder
 from .market_making_strategy import DirectionalBias, SpreadCalculation
@@ -789,7 +790,7 @@ class MarketMakingPerformanceMonitor:
                     current_time - self.session_start
                 ).total_seconds() / 3600
 
-                dashboard_data = {
+                return {
                     "timestamp": current_time.isoformat(),
                     "symbol": self.symbol,
                     "session_duration_hours": session_duration,
@@ -839,8 +840,6 @@ class MarketMakingPerformanceMonitor:
                     # Health score
                     "health_score": self._calculate_health_score(metrics_1h),
                 }
-
-                return dashboard_data
 
             except Exception as e:
                 logger.exception("Error generating dashboard data: %s", e)
@@ -989,7 +988,7 @@ class MarketMakingPerformanceMonitor:
                     "alert_summary": {
                         "total_alerts": len(self.recent_alerts),
                         "alert_types": list(
-                            set(alert.metric_name for alert in self.recent_alerts)
+                            {alert.metric_name for alert in self.recent_alerts}
                         ),
                         "recent_alerts": [
                             {

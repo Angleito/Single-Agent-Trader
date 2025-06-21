@@ -178,7 +178,7 @@ class MockExchange:
         return list(reversed(data))
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_exchange():
     """Create mock exchange for testing."""
     return MockExchange()
@@ -187,7 +187,7 @@ def mock_exchange():
 class TestMarketMakingE2E:
     """Comprehensive end-to-end market making integration tests."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def mock_llm_agent(self):
         """Create mock LLM agent for non-MM symbols."""
         agent = Mock()
@@ -211,7 +211,7 @@ class TestMarketMakingE2E:
         )
         return agent
 
-    @pytest.fixture()
+    @pytest.fixture
     def test_config(self):
         """Create test configuration."""
         return {
@@ -260,7 +260,7 @@ class TestMarketMakingE2E:
             ),
         )
 
-    @pytest.fixture()
+    @pytest.fixture
     def config_profiles(self):
         """Configuration profiles for testing."""
         return {
@@ -299,8 +299,8 @@ class TestMarketMakingE2E:
             },
         }
 
-    @pytest.mark.integration()
-    @pytest.mark.asyncio()
+    @pytest.mark.integration
+    @pytest.mark.asyncio
     async def test_complete_market_making_cycle(self, mock_exchange, test_config):
         """Test complete market making cycle from initialization to execution."""
 
@@ -386,8 +386,8 @@ class TestMarketMakingE2E:
             await integrator.stop()
             assert not integrator.status.is_running
 
-    @pytest.mark.integration()
-    @pytest.mark.asyncio()
+    @pytest.mark.integration
+    @pytest.mark.asyncio
     async def test_multi_symbol_routing(
         self, mock_exchange, mock_llm_agent, test_config
     ):
@@ -446,8 +446,8 @@ class TestMarketMakingE2E:
 
             await integrator.stop()
 
-    @pytest.mark.integration()
-    @pytest.mark.asyncio()
+    @pytest.mark.integration
+    @pytest.mark.asyncio
     async def test_configuration_profiles(self, mock_exchange, config_profiles):
         """Test different configuration profiles (conservative/moderate/aggressive)."""
 
@@ -508,7 +508,7 @@ class TestMarketMakingE2E:
 
             await integrator.stop()
 
-    @pytest.mark.integration()
+    @pytest.mark.integration
     def test_cli_command_integration(self, test_config):
         """Test CLI command integration with market making."""
 
@@ -553,8 +553,8 @@ class TestMarketMakingE2E:
                         result.output
                     )
 
-    @pytest.mark.integration()
-    @pytest.mark.asyncio()
+    @pytest.mark.integration
+    @pytest.mark.asyncio
     async def test_paper_trading_validation(self, mock_exchange, test_config):
         """Test paper trading mode with market making integration."""
 
@@ -616,8 +616,8 @@ class TestMarketMakingE2E:
 
         await integrator.stop()
 
-    @pytest.mark.integration()
-    @pytest.mark.asyncio()
+    @pytest.mark.integration
+    @pytest.mark.asyncio
     async def test_error_handling_and_recovery(self, mock_exchange, test_config):
         """Test error handling and recovery mechanisms."""
 
@@ -688,8 +688,8 @@ class TestMarketMakingE2E:
 
         await integrator.stop()
 
-    @pytest.mark.integration()
-    @pytest.mark.asyncio()
+    @pytest.mark.integration
+    @pytest.mark.asyncio
     async def test_performance_benchmarks(self, mock_exchange, test_config):
         """Test performance benchmarks for market making system."""
 
@@ -782,8 +782,8 @@ class TestMarketMakingE2E:
 
         await integrator.stop()
 
-    @pytest.mark.integration()
-    @pytest.mark.asyncio()
+    @pytest.mark.integration
+    @pytest.mark.asyncio
     async def test_full_integration_scenario(
         self, mock_exchange, mock_llm_agent, test_config
     ):
@@ -907,7 +907,7 @@ class TestMarketMakingE2E:
 class TestMarketMakingCLIIntegration:
     """Test CLI integration with market making system."""
 
-    @pytest.mark.integration()
+    @pytest.mark.integration
     def test_cli_market_making_commands(self):
         """Test CLI commands specific to market making."""
         runner = CliRunner()
@@ -924,7 +924,7 @@ class TestMarketMakingCLIIntegration:
             result = runner.invoke(cli, ["validate-config"])
             assert result.exit_code == 0
 
-    @pytest.mark.integration()
+    @pytest.mark.integration
     def test_cli_with_different_profiles(self):
         """Test CLI with different market making profiles."""
         runner = CliRunner()
@@ -947,8 +947,8 @@ class TestMarketMakingCLIIntegration:
 class TestMarketMakingErrorRecovery:
     """Test error recovery and resilience mechanisms."""
 
-    @pytest.mark.integration()
-    @pytest.mark.asyncio()
+    @pytest.mark.integration
+    @pytest.mark.asyncio
     async def test_network_error_recovery(self, mock_exchange):
         """Test recovery from network errors."""
 
@@ -980,8 +980,8 @@ class TestMarketMakingErrorRecovery:
 
         await integrator.stop()
 
-    @pytest.mark.integration()
-    @pytest.mark.asyncio()
+    @pytest.mark.integration
+    @pytest.mark.asyncio
     async def test_configuration_error_handling(self):
         """Test handling of configuration errors."""
 

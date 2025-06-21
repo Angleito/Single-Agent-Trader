@@ -617,9 +617,7 @@ class CipherA:
 
         # Calculate advanced Cipher A signal patterns
         logger.debug("Calculating advanced Cipher A signal patterns")
-        result = self.cipher_a_signals.get_all_cipher_a_signals(result)
-
-        return result
+        return self.cipher_a_signals.get_all_cipher_a_signals(result)
 
     def _calculate_ema_ribbon(self, result: pd.DataFrame) -> pd.DataFrame:
         """Calculate EMA ribbon and map column names."""
@@ -659,9 +657,7 @@ class CipherA:
 
         # Calculate Schaff Trend Cycle
         logger.debug("Calculating Schaff Trend Cycle")
-        result = self.schaff_trend_cycle.calculate(result)
-
-        return result
+        return self.schaff_trend_cycle.calculate(result)
 
     def _calculate_divergence_signals(self, result: pd.DataFrame) -> pd.DataFrame:
         """Calculate divergence signals for WT and RSI."""
@@ -2418,12 +2414,47 @@ class VuManChuIndicators:
             dominance_df = pd.DataFrame(dominance_data)
             dominance_df = dominance_df.set_index("timestamp")
 
-            # Apply VuManChu-style analysis to dominance data
-            logger.debug("Applying Cipher A indicators to dominance candles")
-            dominance_with_cipher_a = self.cipher_a.calculate(dominance_df.copy())
+            # Check if we have enough data for analysis
+            min_required_periods = 54  # Minimum required for EMA calculations
+            if len(dominance_df) < min_required_periods:
+                logger.warning(
+                    "Insufficient dominance data for full analysis: %d candles (need %d)",
+                    len(dominance_df),
+                    min_required_periods,
+                )
+                # Return early with default dominance columns
+                default_dominance_cols = {
+                    "dominance_cipher_a_signal": 0,
+                    "dominance_cipher_b_signal": 0,
+                    "dominance_sentiment": "NEUTRAL",
+                    "dominance_trend": 0,
+                    "dominance_price_divergence": "INSUFFICIENT_DATA",
+                }
+                for col, default_val in default_dominance_cols.items():
+                    if col not in result.columns:
+                        result[col] = pd.Series(default_val, index=result.index)
+                return result
 
-            logger.debug("Applying Cipher B indicators to dominance candles")
-            dominance_with_cipher_b = self.cipher_b.calculate(dominance_df.copy())
+            # Apply VuManChu-style analysis to dominance data with error handling
+            try:
+                logger.debug("Applying Cipher A indicators to dominance candles")
+                dominance_with_cipher_a = self.cipher_a.calculate(dominance_df.copy())
+            except Exception as e:
+                logger.warning(
+                    "Failed to calculate Cipher A for dominance data (possibly insufficient data): %s",
+                    str(e),
+                )
+                dominance_with_cipher_a = pd.DataFrame()
+
+            try:
+                logger.debug("Applying Cipher B indicators to dominance candles")
+                dominance_with_cipher_b = self.cipher_b.calculate(dominance_df.copy())
+            except Exception as e:
+                logger.warning(
+                    "Failed to calculate Cipher B for dominance data (possibly insufficient data): %s",
+                    str(e),
+                )
+                dominance_with_cipher_b = pd.DataFrame()
 
             # Extract latest dominance indicator values
             if not dominance_with_cipher_a.empty and not dominance_with_cipher_b.empty:
@@ -2517,7 +2548,7 @@ class VuManChuIndicators:
                                     dtype="object", index=result.index
                                 )
 
-                # Set the latest values
+                # Set the latest values with proper handling for iterables
                 for col, val in {
                     **dominance_indicators,
                     **dominance_patterns,
@@ -2525,12 +2556,71 @@ class VuManChuIndicators:
                     **dominance_sentiment,
                 }.items():
                     if not result.empty:
-                        result.loc[result.index[-1], col] = val
+                        try:
+                            # Handle different value types appropriately
+                            if isinstance(val, (list, tuple, set)):
+                                # For iterables, we need to use at[] for object columns
+                                # or convert to a string representation
+                                if (
+                                    col in result.columns
+                                    and result[col].dtype == "object"
+                                ):
+                                    # Store the list/tuple/set directly in object column
+                                    result.at[result.index[-1], col] = val
+                                else:
+                                    # For non-object columns, convert to string
+                                    result.loc[result.index[-1], col] = str(val)
+                            elif pd.isna(val):
+                                # Handle NaN values properly
+                                result.loc[result.index[-1], col] = np.nan
+                            else:
+                                # Scalar values can be assigned directly
+                                result.loc[result.index[-1], col] = val
+                        except Exception as e:
+                            logger.warning(
+                                "Failed to set value for column '%s': %s. Value type: %s, Value: %s",
+                                col,
+                                str(e),
+                                type(val).__name__,
+                                repr(val),
+                            )
+                            # Set a safe default based on column type
+                            if col in result.columns:
+                                if result[col].dtype == "object":
+                                    result.loc[result.index[-1], col] = (
+                                        str(val) if val is not None else None
+                                    )
+                                elif result[col].dtype in ["float64", "float32"]:
+                                    result.loc[result.index[-1], col] = 0.0
+                                elif result[col].dtype in ["int64", "int32"]:
+                                    result.loc[result.index[-1], col] = 0
+                                elif result[col].dtype == "bool":
+                                    result.loc[result.index[-1], col] = False
+                                else:
+                                    result.loc[result.index[-1], col] = None
 
                 logger.debug(
                     "Added dominance analysis with %s indicators",
                     len(dominance_indicators) + len(dominance_patterns),
                 )
+            else:
+                # Handle case when cipher calculations are empty
+                logger.warning(
+                    "Dominance cipher calculations returned empty DataFrames"
+                )
+                # Ensure basic dominance columns exist with default values
+                default_dominance_cols = {
+                    "dominance_cipher_a_signal": 0,
+                    "dominance_cipher_b_signal": 0,
+                    "dominance_sentiment": "NEUTRAL",
+                    "dominance_trend": 0,
+                    "dominance_price_divergence": "NO_DATA",
+                    "dominance_sentiment_score": 0.0,
+                    "dominance_divergence_strength": 0.0,
+                }
+                for col, default_val in default_dominance_cols.items():
+                    if col not in result.columns:
+                        result[col] = pd.Series(default_val, index=result.index)
 
         except Exception:
             logger.exception("Error in dominance analysis")

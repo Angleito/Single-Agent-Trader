@@ -39,7 +39,7 @@ info() {
 # Basic system checks
 check_system_resources() {
     info "Checking system resources..."
-    
+
     # Check disk space
     local disk_usage=$(df /app 2>/dev/null | tail -1 | awk '{print $5}' | sed 's/%//' || echo "0")
     if [ "$disk_usage" -gt 90 ]; then
@@ -47,7 +47,7 @@ check_system_resources() {
     elif [ "$disk_usage" -gt 80 ]; then
         warn "Disk usage high: ${disk_usage}%"
     fi
-    
+
     # Check memory usage (if available)
     if command -v free >/dev/null 2>&1; then
         local mem_usage=$(free | grep Mem | awk '{printf("%.0f", $3/$2 * 100.0)}' 2>/dev/null || echo "0")
@@ -57,7 +57,7 @@ check_system_resources() {
             warn "Memory usage high: ${mem_usage}%"
         fi
     fi
-    
+
     # Check if required directories are writable
     local required_dirs=("/app/logs" "/app/data")
     for dir in "${required_dirs[@]}"; do
@@ -65,35 +65,35 @@ check_system_resources() {
             error "Directory not writable: $dir"
         fi
     done
-    
+
     log "System resources check passed"
 }
 
 # Network connectivity checks
 check_network_connectivity() {
     info "Checking network connectivity..."
-    
+
     # Check basic DNS resolution
     if command -v nslookup >/dev/null 2>&1; then
         if ! nslookup google.com >/dev/null 2>&1; then
             warn "DNS resolution may be impaired"
         fi
     fi
-    
+
     # Check external connectivity
     if command -v curl >/dev/null 2>&1; then
         # Test basic HTTP connectivity
         if ! curl -f --connect-timeout 10 --max-time 30 -s https://httpbin.org/status/200 >/dev/null 2>&1; then
             warn "External HTTP connectivity may be impaired"
         fi
-        
+
         # Test Bluefin API connectivity (if this is Bluefin service)
         if [ "$SERVICE_NAME" = "bluefin-service" ] || [ "$SERVICE_NAME" = "ai-trading-bot" ]; then
             if ! curl -f --connect-timeout 10 --max-time 30 -s https://api.bluefin.io >/dev/null 2>&1; then
                 warn "Bluefin API connectivity may be impaired"
             fi
         fi
-        
+
         # Test OpenAI API connectivity (if this is trading bot)
         if [ "$SERVICE_NAME" = "ai-trading-bot" ]; then
             if [ -n "${LLM__OPENAI_API_KEY:-}" ]; then
@@ -103,14 +103,14 @@ check_network_connectivity() {
             fi
         fi
     fi
-    
+
     log "Network connectivity check completed"
 }
 
 # Service-specific health checks
 check_service_health() {
     info "Checking service-specific health..."
-    
+
     case "$SERVICE_NAME" in
         "bluefin-service")
             check_bluefin_service_health
@@ -130,7 +130,7 @@ check_service_health() {
 # Bluefin service specific checks
 check_bluefin_service_health() {
     info "Checking Bluefin service health..."
-    
+
     # Check if service is listening on expected port
     local port="${PORT:-8080}"
     if command -v netstat >/dev/null 2>&1; then
@@ -138,14 +138,14 @@ check_bluefin_service_health() {
             error "Service not listening on port $port"
         fi
     fi
-    
+
     # Check health endpoint
     if command -v curl >/dev/null 2>&1; then
         if ! curl -f --connect-timeout 10 --max-time 30 http://localhost:$port/health >/dev/null 2>&1; then
             error "Health endpoint not responding"
         fi
     fi
-    
+
     # Check environment variables
     local required_vars=("BLUEFIN_PRIVATE_KEY" "BLUEFIN_SERVICE_API_KEY")
     for var in "${required_vars[@]}"; do
@@ -153,19 +153,19 @@ check_bluefin_service_health() {
             error "Required environment variable $var is not set"
         fi
     done
-    
+
     # Validate private key format
     if [[ ! "${BLUEFIN_PRIVATE_KEY:-}" =~ ^0x[a-fA-F0-9]{64}$ ]]; then
         error "Invalid Bluefin private key format"
     fi
-    
+
     log "Bluefin service health check passed"
 }
 
 # Trading bot specific checks
 check_trading_bot_health() {
     info "Checking trading bot health..."
-    
+
     # Check required environment variables
     local required_vars=("LLM__OPENAI_API_KEY" "EXCHANGE__BLUEFIN_PRIVATE_KEY")
     for var in "${required_vars[@]}"; do
@@ -173,13 +173,13 @@ check_trading_bot_health() {
             error "Required environment variable $var is not set"
         fi
     done
-    
+
     # Check if configuration file exists
     local config_file="${CONFIG_FILE:-/app/config/vps_production.json}"
     if [ ! -f "$config_file" ]; then
         error "Configuration file not found: $config_file"
     fi
-    
+
     # Check log files are being created
     if [ -d "/app/logs" ]; then
         local log_count=$(find /app/logs -name "*.log" -type f 2>/dev/null | wc -l)
@@ -187,7 +187,7 @@ check_trading_bot_health() {
             warn "No log files found in /app/logs"
         fi
     fi
-    
+
     # Check Bluefin service connectivity
     if [ -n "${BLUEFIN_SERVICE_URL:-}" ]; then
         if command -v curl >/dev/null 2>&1; then
@@ -196,14 +196,14 @@ check_trading_bot_health() {
             fi
         fi
     fi
-    
+
     log "Trading bot health check passed"
 }
 
 # MCP memory service specific checks
 check_mcp_memory_health() {
     info "Checking MCP memory service health..."
-    
+
     # Check if service is listening on expected port
     local port="${MCP_SERVER_PORT:-8765}"
     if command -v netstat >/dev/null 2>&1; then
@@ -211,26 +211,26 @@ check_mcp_memory_health() {
             error "MCP memory service not listening on port $port"
         fi
     fi
-    
+
     # Check health endpoint
     if command -v curl >/dev/null 2>&1; then
         if ! curl -f --connect-timeout 10 --max-time 30 http://localhost:$port/health >/dev/null 2>&1; then
             error "MCP memory health endpoint not responding"
         fi
     fi
-    
+
     # Check data directory
     if [ ! -d "/app/data" ] || [ ! -w "/app/data" ]; then
         error "MCP memory data directory not accessible"
     fi
-    
+
     log "MCP memory service health check passed"
 }
 
 # Process checks
 check_processes() {
     info "Checking processes..."
-    
+
     # Check if Python processes are running
     if command -v pgrep >/dev/null 2>&1; then
         local python_procs=$(pgrep -f python | wc -l)
@@ -238,7 +238,7 @@ check_processes() {
             error "No Python processes found"
         fi
     fi
-    
+
     # Check for zombie processes
     if command -v ps >/dev/null 2>&1; then
         local zombie_count=$(ps aux | awk '$8 ~ /^Z/ { count++ } END { print count+0 }')
@@ -246,14 +246,14 @@ check_processes() {
             warn "$zombie_count zombie processes detected"
         fi
     fi
-    
+
     log "Process check completed"
 }
 
 # File system checks
 check_filesystem() {
     info "Checking filesystem..."
-    
+
     # Check critical directories exist
     local critical_dirs=("/app" "/app/logs")
     for dir in "${critical_dirs[@]}"; do
@@ -261,7 +261,7 @@ check_filesystem() {
             error "Critical directory missing: $dir"
         fi
     done
-    
+
     # Check log rotation is working
     if [ -d "/app/logs" ]; then
         local old_logs=$(find /app/logs -name "*.log.*" -type f 2>/dev/null | wc -l)
@@ -269,13 +269,13 @@ check_filesystem() {
             warn "Many old log files detected ($old_logs), log rotation may not be working"
         fi
     fi
-    
+
     # Check for core dumps
     local core_dumps=$(find /app -name "core.*" -type f 2>/dev/null | wc -l)
     if [ "$core_dumps" -gt 0 ]; then
         warn "$core_dumps core dump files detected"
     fi
-    
+
     log "Filesystem check completed"
 }
 
@@ -284,13 +284,13 @@ check_vps_specific() {
     if [ "$VPS_DEPLOYMENT" != "true" ]; then
         return 0
     fi
-    
+
     info "Performing VPS-specific checks..."
-    
+
     # Check geographic region if set
     if [ -n "${GEOGRAPHIC_REGION:-}" ]; then
         info "Configured for geographic region: $GEOGRAPHIC_REGION"
-        
+
         # Test IP geolocation if curl is available
         if command -v curl >/dev/null 2>&1; then
             local detected_region=$(curl -s --connect-timeout 10 --max-time 30 https://ipapi.co/country_code/ 2>/dev/null || echo "UNKNOWN")
@@ -299,15 +299,15 @@ check_vps_specific() {
             fi
         fi
     fi
-    
+
     # Check proxy configuration if enabled
     if [ "${PROXY_ENABLED:-false}" = "true" ]; then
         info "Proxy is enabled, checking configuration..."
-        
+
         if [ -z "${PROXY_HOST:-}" ] || [ -z "${PROXY_PORT:-}" ]; then
             error "Proxy enabled but host/port not configured"
         fi
-        
+
         # Test proxy connectivity if curl supports it
         if command -v curl >/dev/null 2>&1; then
             if ! curl -f --connect-timeout 10 --proxy "${PROXY_HOST}:${PROXY_PORT}" -s https://httpbin.org/ip >/dev/null 2>&1; then
@@ -315,11 +315,11 @@ check_vps_specific() {
             fi
         fi
     fi
-    
+
     # Check monitoring configuration
     if [ "${MONITORING__ENABLED:-false}" = "true" ]; then
         info "Monitoring is enabled"
-        
+
         # Check if monitoring dashboard is accessible
         if [ -n "${ALERT_WEBHOOK_URL:-}" ]; then
             if command -v curl >/dev/null 2>&1; then
@@ -329,16 +329,16 @@ check_vps_specific() {
             fi
         fi
     fi
-    
+
     log "VPS-specific checks completed"
 }
 
 # Generate health report
 generate_health_report() {
     info "Generating health report..."
-    
+
     local report_file="/app/logs/health-report-$(date +%Y%m%d_%H%M%S).json"
-    
+
     cat > "$report_file" <<EOF
 {
     "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
@@ -347,7 +347,7 @@ generate_health_report() {
     "health_status": "healthy",
     "checks_performed": [
         "system_resources",
-        "network_connectivity", 
+        "network_connectivity",
         "service_health",
         "processes",
         "filesystem",
@@ -367,14 +367,14 @@ generate_health_report() {
     }
 }
 EOF
-    
+
     info "Health report generated: $report_file"
 }
 
 # Main health check function
 main() {
     log "Starting comprehensive health check for $SERVICE_NAME..."
-    
+
     # Perform all health checks
     check_system_resources
     check_network_connectivity
@@ -382,12 +382,12 @@ main() {
     check_processes
     check_filesystem
     check_vps_specific
-    
+
     # Generate report
     generate_health_report
-    
+
     log "All health checks completed successfully!"
-    
+
     # Return success
     exit 0
 }

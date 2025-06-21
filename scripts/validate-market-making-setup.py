@@ -658,7 +658,7 @@ class MarketMakingValidator:
             self.exchange = await create_exchange(self.settings)
             if self.exchange:
                 # Test basic exchange functionality
-                account_info = await self.exchange.get_account_info()
+                await self.exchange.get_account_info()
                 return (
                     "pass",
                     "Exchange connection healthy",
@@ -705,8 +705,8 @@ class MarketMakingValidator:
             test_data = self._create_test_market_data()
 
             # Test Cipher A calculation
-            cipher_a_result = await self.cipher_a.calculate(test_data)
-            cipher_b_result = await self.cipher_b.calculate(test_data)
+            await self.cipher_a.calculate(test_data)
+            await self.cipher_b.calculate(test_data)
 
             return (
                 "pass",
@@ -1049,7 +1049,7 @@ class MarketMakingValidator:
     async def _test_cipher_b_init(self) -> tuple[str, str, dict[str, Any]]:
         """Test Cipher B initialization."""
         try:
-            cipher_b = CipherB()
+            CipherB()
             return "pass", "Cipher B initialization successful", {"initialized": True}
         except Exception as e:
             return "fail", f"Cipher B initialization failed: {e}", {}
@@ -1340,7 +1340,7 @@ class MarketMakingValidator:
         # Generate recommendations
         recommendations = self._generate_recommendations()
 
-        report = {
+        return {
             "validation_summary": {
                 "overall_status": overall_status,
                 "total_tests": total_tests,
@@ -1363,8 +1363,6 @@ class MarketMakingValidator:
                 "environment": self.settings.system.environment.value,
             },
         }
-
-        return report
 
     def _generate_recommendations(self) -> list[dict[str, Any]]:
         """Generate recommendations based on validation results."""
@@ -1659,7 +1657,7 @@ Examples:
             try:
                 while True:
                     await asyncio.sleep(60)  # Monitor every minute
-                    health_report = await validator.run_health_checks()
+                    await validator.run_health_checks()
                     # Print health status
                     failed_checks = len(
                         [r for r in validator.results if r.status == "fail"]

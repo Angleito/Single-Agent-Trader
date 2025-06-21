@@ -55,12 +55,12 @@ class TestTaskManagementPatterns:
             async def _background_worker(self):
                 """Mock background worker."""
                 while self._running:
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(0.001)
 
             async def _worker(self, worker_id: int):
                 """Mock worker task."""
                 while self._running:
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(0.001)
 
         # Test the lifecycle
         service = MockService()
@@ -94,7 +94,7 @@ class TestTaskManagementPatterns:
 
         async def long_background_worker():
             """Simulate long background work (should be tracked)."""
-            await asyncio.sleep(1.0)  # Longer running
+            await asyncio.sleep(0.01)  # Longer running
             return "background_complete"
 
         # Fire-and-forget for short message processing (acceptable)
@@ -164,7 +164,7 @@ class TestTaskManagementPatterns:
         await manager.start_with_errors()
 
         # Let tasks run briefly
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.001)
 
         # Cleanup should handle exceptions gracefully
         await manager.cleanup()

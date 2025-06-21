@@ -465,7 +465,7 @@ class PerformanceAnalyzer:
             return analysis
 
         except Exception as e:
-            logger.error(f"Error analyzing historical data: {e}")
+            logger.exception(f"Error analyzing historical data: {e}")
             return {}
 
     def _analyze_summary_stats(self, data: list[dict[str, Any]]) -> dict[str, Any]:

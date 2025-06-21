@@ -231,7 +231,7 @@ class StartupValidator:
         if results["valid"]:
             logger.info("Startup validation completed successfully")
             if warning_issues:
-                logger.warning("Found %s warnings", len(warning_issues))
+                logger.warning("Found %d warnings", len(warning_issues))
                 for warning in warning_issues:
                     logger.warning("  - %s", warning)
         else:

@@ -20,9 +20,9 @@ from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, NamedTuple
 
-from ..exchange.bluefin_fee_calculator import BluefinFeeCalculator
-from ..indicators.vumanchu import CipherA, CipherB
-from ..trading_types import IndicatorData
+from bot.exchange.bluefin_fee_calculator import BluefinFeeCalculator
+from bot.indicators.vumanchu import CipherA, CipherB
+from bot.trading_types import IndicatorData
 
 logger = logging.getLogger(__name__)
 
@@ -217,7 +217,7 @@ class DynamicSpreadCalculator:
             return base_spread
 
         except Exception as e:
-            logger.error("Error calculating base spread: %s", e)
+            logger.exception("Error calculating base spread: %s", e)
             return self.base_spread_bps
 
     def adjust_for_vumanchu_bias(
@@ -281,7 +281,7 @@ class DynamicSpreadCalculator:
             return adjusted_spread, bid_adjustment, ask_adjustment
 
         except Exception as e:
-            logger.error("Error adjusting spread for VuManChu bias: %s", e)
+            logger.exception("Error adjusting spread for VuManChu bias: %s", e)
             return base_spread, Decimal(0), Decimal(0)
 
     def adjust_for_market_conditions(
@@ -328,7 +328,7 @@ class DynamicSpreadCalculator:
             return adjusted_spread
 
         except Exception as e:
-            logger.error("Error adjusting spread for market conditions: %s", e)
+            logger.exception("Error adjusting spread for market conditions: %s", e)
             return spread
 
     def calculate_level_spreads(
@@ -396,7 +396,7 @@ class DynamicSpreadCalculator:
             return levels
 
         except Exception as e:
-            logger.error("Error calculating level spreads: %s", e)
+            logger.exception("Error calculating level spreads: %s", e)
             return []
 
     def get_minimum_profitable_spread(self, notional_value: Decimal) -> Decimal:
@@ -435,7 +435,7 @@ class DynamicSpreadCalculator:
             return min_profitable_spread
 
         except Exception as e:
-            logger.error("Error calculating minimum profitable spread: %s", e)
+            logger.exception("Error calculating minimum profitable spread: %s", e)
             return self.min_spread_bps
 
     def extract_vumanchu_signals(
@@ -508,7 +508,7 @@ class DynamicSpreadCalculator:
             )
 
         except Exception as e:
-            logger.error("Error extracting VuManChu signals: %s", e)
+            logger.exception("Error extracting VuManChu signals: %s", e)
             return VuManChuSignals(
                 cipher_a_bullish=False,
                 cipher_a_bearish=False,
@@ -557,10 +557,7 @@ class DynamicSpreadCalculator:
             # Determine market session
             hour = current_time.hour
             if 8 <= hour <= 16:  # Active trading hours
-                if volatility > 0.4:
-                    market_session = "volatile"
-                else:
-                    market_session = "active"
+                market_session = "volatile" if volatility > 0.4 else "active"
             else:  # Off-hours
                 market_session = "quiet"
 
@@ -581,7 +578,7 @@ class DynamicSpreadCalculator:
             )
 
         except Exception as e:
-            logger.error("Error analyzing market conditions: %s", e)
+            logger.exception("Error analyzing market conditions: %s", e)
             return MarketConditions(
                 volatility=0.2,
                 volume_ratio=1.0,
@@ -701,7 +698,7 @@ class DynamicSpreadCalculator:
             return recommendation
 
         except Exception as e:
-            logger.error("Error generating spread recommendations: %s", e)
+            logger.exception("Error generating spread recommendations: %s", e)
             # Return conservative fallback recommendation
             return SpreadRecommendation(
                 base_spread_bps=self.base_spread_bps,

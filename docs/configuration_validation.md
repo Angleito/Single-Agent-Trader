@@ -201,7 +201,7 @@ REST API: https://dapi.api.sui-prod.bluefin.io
 WebSocket: wss://dapi.api.sui-prod.bluefin.io
 Notifications: wss://notifications.api.sui-prod.bluefin.io
 
-# Testnet endpoints  
+# Testnet endpoints
 REST API: https://dapi.api.sui-staging.bluefin.io
 WebSocket: wss://dapi.api.sui-staging.bluefin.io
 Notifications: wss://notifications.api.sui-staging.bluefin.io
@@ -357,14 +357,14 @@ async def startup_validation():
                 if test["status"] == "fail":
                     logger.error(f"❌ {test['name']}: {test.get('error', 'Unknown error')}")
             sys.exit(1)
-        
+
         # Comprehensive validation (optional)
         if os.getenv("VALIDATE_CONFIG_ON_STARTUP", "false").lower() == "true":
             validator_results = await settings.validate_configuration_comprehensive()
             if not validator_results["summary"]["is_valid"]:
                 logger.warning("Comprehensive validation found issues")
                 # Log warnings but don't exit unless critical errors
-        
+
     except Exception as e:
         logger.error(f"Startup validation failed: {e}")
         sys.exit(1)

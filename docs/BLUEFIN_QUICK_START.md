@@ -20,7 +20,7 @@ Bluefin is a decentralized perpetual futures exchange built on Sui blockchain of
 
 ## Step 1: Get a Sui Wallet
 
-1. **Install Sui Wallet**: 
+1. **Install Sui Wallet**:
    - Chrome/Brave: [Sui Wallet Extension](https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil)
    - Alternative: [Suiet Wallet](https://suiet.app/)
 
@@ -129,7 +129,7 @@ TRADING__LEVERAGE=2  # Conservative leverage
 ## Next Steps
 
 - Read the [Comprehensive Setup Guide](BLUEFIN_SETUP_GUIDE.md)
-- Learn about [Security Best Practices](BLUEFIN_SECURITY_GUIDE.md) 
+- Learn about [Security Best Practices](BLUEFIN_SECURITY_GUIDE.md)
 - Check [Troubleshooting Guide](BLUEFIN_TROUBLESHOOTING.md) if issues arise
 - Optimize with [Performance Tuning](BLUEFIN_PERFORMANCE_OPTIMIZATION.md)
 

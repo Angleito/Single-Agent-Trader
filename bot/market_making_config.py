@@ -525,5 +525,5 @@ def validate_config(config: dict[str, Any]) -> MarketMakingConfig:
     try:
         return MarketMakingConfig.model_validate(config)
     except Exception as e:
-        logger.error(f"Configuration validation failed: {e}")
+        logger.exception(f"Configuration validation failed: {e}")
         raise ValueError(f"Invalid market making configuration: {e}")

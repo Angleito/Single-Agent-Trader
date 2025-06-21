@@ -127,9 +127,9 @@ class BluefinWebSocketClient:
         # Subscription tracking
         self._subscribed_channels: set[str] = set()
         self._subscription_id = 1
-        self._pending_subscriptions: dict[
-            int, str
-        ] = {}  # Track pending subscription requests
+        self._pending_subscriptions: dict[int, str] = (
+            {}
+        )  # Track pending subscription requests
 
         # Tasks
         self._connection_task: asyncio.Task | None = None
@@ -192,7 +192,7 @@ class BluefinWebSocketClient:
         logger.info(
             "Initializing Bluefin WebSocket client for %s on %s network",
             self.symbol,
-            self.network
+            self.network,
         )
 
         # Start connection task
@@ -217,7 +217,7 @@ class BluefinWebSocketClient:
             logger.warning(
                 "Error during initial Bluefin WebSocket connection: %s. "
                 "Service will continue attempting to connect in background.",
-                str(e)
+                str(e),
             )
 
     async def disconnect(self) -> None:
@@ -263,7 +263,7 @@ class BluefinWebSocketClient:
                 if consecutive_failures >= max_consecutive_failures:
                     logger.error(
                         "Bluefin WebSocket: %d consecutive failures, disabling connection",
-                        consecutive_failures
+                        consecutive_failures,
                     )
                     self._connected = False
                     break
@@ -280,7 +280,7 @@ class BluefinWebSocketClient:
                 if connection_healthy:
                     logger.warning(
                         "Bluefin WebSocket connection closed after being healthy: %s",
-                        str(e)
+                        str(e),
                     )
                 else:
                     logger.debug("Bluefin WebSocket connection closed: %s", str(e))
@@ -297,7 +297,7 @@ class BluefinWebSocketClient:
                     "Bluefin WebSocket network error (attempt %d/%d): %s",
                     self._reconnect_attempts + 1,
                     self._max_reconnect_attempts,
-                    str(e)
+                    str(e),
                 )
                 self._connected = False
                 self._ws = None
@@ -311,7 +311,7 @@ class BluefinWebSocketClient:
                 logger.exception(
                     "Unexpected error in Bluefin WebSocket (attempt %d/%d)",
                     self._reconnect_attempts + 1,
-                    self._max_reconnect_attempts
+                    self._max_reconnect_attempts,
                 )
                 self._connected = False
                 self._ws = None
@@ -325,7 +325,7 @@ class BluefinWebSocketClient:
             if self._reconnect_attempts >= self._max_reconnect_attempts:
                 logger.error(
                     "Bluefin WebSocket: Max reconnection attempts (%d) reached, stopping",
-                    self._max_reconnect_attempts
+                    self._max_reconnect_attempts,
                 )
                 break
 
@@ -342,7 +342,7 @@ class BluefinWebSocketClient:
                 logger.warning(
                     "Bluefin WebSocket: Multiple consecutive failures (%s), extending delay to %.1fs",
                     consecutive_failures,
-                    delay
+                    delay,
                 )
 
             logger.info(
@@ -360,7 +360,7 @@ class BluefinWebSocketClient:
             logger.info(
                 "Connecting to Bluefin WebSocket at %s (network: %s)",
                 self.NOTIFICATION_WS_URL,
-                self.network
+                self.network,
             )
 
             # Enhanced connection parameters for better stability
@@ -374,13 +374,13 @@ class BluefinWebSocketClient:
                     max_size=2**20,  # 1MB max message size
                     compression=None,  # Disable compression for performance
                 ),
-                timeout=30.0  # Connection timeout
+                timeout=30.0,  # Connection timeout
             )
 
             self._connected = True
             logger.info(
                 "Bluefin WebSocket connection established to %s",
-                self.NOTIFICATION_WS_URL
+                self.NOTIFICATION_WS_URL,
             )
 
             # Start heartbeat task
@@ -395,16 +395,16 @@ class BluefinWebSocketClient:
             await self._subscribe_to_market_data()
 
         except TimeoutError:
-            logger.error(
+            logger.exception(
                 "Timeout connecting to Bluefin WebSocket at %s after 30s",
-                self.NOTIFICATION_WS_URL
+                self.NOTIFICATION_WS_URL,
             )
             raise
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "Failed to connect to Bluefin WebSocket at %s: %s",
                 self.NOTIFICATION_WS_URL,
-                str(e)
+                str(e),
             )
             raise
 

@@ -81,7 +81,7 @@ class MarketMakingExampleRunner:
                     await engine.stop()
                     logger.info(f"Stopped engine for {engine.symbol}")
             except Exception as e:
-                logger.error(f"Error stopping engine: {e}")
+                logger.exception(f"Error stopping engine: {e}")
 
         self.engines.clear()
 
@@ -178,7 +178,7 @@ class ConservativeTradingExample:
                     market_state = self._generate_conservative_market_state()
 
                     # Run market making cycle
-                    success = await engine.run_single_cycle(market_state)
+                    await engine.run_single_cycle(market_state)
 
                     # Update display
                     live.update(self._create_status_table(engine, market_state))
@@ -193,7 +193,7 @@ class ConservativeTradingExample:
             self._display_conservative_results(engine)
 
         except Exception as e:
-            logger.error(f"Error in conservative trading example: {e}")
+            logger.exception(f"Error in conservative trading example: {e}")
             console.print(f"[red]Error: {e}[/red]")
 
     def _create_mock_exchange_client(self) -> Any:
@@ -399,7 +399,7 @@ class AggressiveHighFrequencyExample:
                     market_state = self._generate_hft_market_state()
 
                     # Run fast market making cycle
-                    success = await engine.run_single_cycle(market_state)
+                    await engine.run_single_cycle(market_state)
                     cycle_count += 1
 
                     # Update high-frequency display
@@ -417,7 +417,7 @@ class AggressiveHighFrequencyExample:
             self._display_hft_results(engine, cycle_count)
 
         except Exception as e:
-            logger.error(f"Error in aggressive HFT example: {e}")
+            logger.exception(f"Error in aggressive HFT example: {e}")
             console.print(f"[red]Error: {e}[/red]")
 
     def _create_hft_mock_client(self) -> Any:
@@ -621,16 +621,6 @@ class RiskManagementExample:
         console.print("\n[bold cyan]1. Position Limit Controls[/bold cyan]")
 
         # Create configuration with strict position limits
-        config = {
-            "max_position_value": 1000,  # Low limit for demonstration
-            "strategy": {
-                "max_position_pct": 5,  # Very low position size
-            },
-            "inventory": {
-                "max_position_limit": 100,
-                "rebalancing_threshold": 0.3,  # Early rebalancing
-            },
-        }
 
         console.print("✅ Configuration: Max position $1,000, 5% max size")
         console.print("✅ Early rebalancing at 30% threshold")
@@ -665,7 +655,7 @@ class RiskManagementExample:
 
         # Create inventory manager for demonstration
         mock_client = self._create_mock_client()
-        inventory_manager = InventoryManager(
+        InventoryManager(
             symbol="SUI-PERP",
             exchange_client=mock_client,
             config={"rebalancing_threshold": 0.5},
@@ -818,7 +808,7 @@ class MultiSymbolExample:
                         tasks.append(engine.run_single_cycle(market_state))
 
                     # Execute all cycles concurrently
-                    results = await asyncio.gather(*tasks, return_exceptions=True)
+                    await asyncio.gather(*tasks, return_exceptions=True)
 
                     # Update dashboard
                     live.update(self._create_multi_symbol_dashboard())
@@ -834,7 +824,7 @@ class MultiSymbolExample:
             self._display_multi_symbol_results()
 
         except Exception as e:
-            logger.error(f"Error in multi-symbol example: {e}")
+            logger.exception(f"Error in multi-symbol example: {e}")
             console.print(f"[red]Error: {e}[/red]")
 
     async def _create_symbol_engine(self, symbol: str) -> MarketMakingEngine:
@@ -1134,7 +1124,7 @@ class PaperTradingSimulation:
             self._display_paper_results(paper_tracker, engine)
 
         except Exception as e:
-            logger.error(f"Error in paper trading simulation: {e}")
+            logger.exception(f"Error in paper trading simulation: {e}")
             console.print(f"[red]Paper Trading Error: {e}[/red]")
 
     def _create_paper_trading_client(self):

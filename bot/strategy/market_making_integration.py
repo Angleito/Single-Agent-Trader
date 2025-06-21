@@ -20,10 +20,10 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 
-from ..config import settings
-from ..exchange.bluefin import BluefinClient
-from ..exchange.factory import ExchangeFactory
-from ..trading_types import MarketState, TradeAction
+from bot.config import settings
+from bot.exchange.bluefin import BluefinClient
+from bot.exchange.factory import ExchangeFactory
+from bot.trading_types import MarketState, TradeAction
 
 
 # Use lazy import for market making engine to avoid decorator issues
@@ -34,7 +34,7 @@ def _get_market_making_engine_factory():
 
         return MarketMakingEngineFactory
     except ImportError as e:
-        logger.error(f"Failed to import MarketMakingEngineFactory: {e}")
+        logger.exception(f"Failed to import MarketMakingEngineFactory: {e}")
         return None
 
 
@@ -155,7 +155,7 @@ class MarketMakingIntegrator:
                 logger.info("Market making integration initialized successfully")
 
             except Exception as e:
-                logger.error(f"Failed to initialize market making integration: {e}")
+                logger.exception(f"Failed to initialize market making integration: {e}")
                 self.status.error_count += 1
                 self.status.last_error_time = datetime.now(UTC)
                 self.status.last_error_message = str(e)
@@ -202,7 +202,7 @@ class MarketMakingIntegrator:
             logger.info("Market making engine initialized successfully")
 
         except Exception as e:
-            logger.error(f"Failed to initialize market making engine: {e}")
+            logger.exception(f"Failed to initialize market making engine: {e}")
             raise
 
     async def analyze_market(self, market_state: MarketState) -> TradeAction:
@@ -238,7 +238,7 @@ class MarketMakingIntegrator:
             return action
 
         except Exception as e:
-            logger.error(f"Failed to analyze market for {symbol}: {e}")
+            logger.exception(f"Failed to analyze market for {symbol}: {e}")
             self.status.error_count += 1
             self.status.last_error_time = datetime.now(UTC)
             self.status.last_error_message = str(e)
@@ -289,7 +289,7 @@ class MarketMakingIntegrator:
                 logger.info("Market making integration started successfully")
 
             except Exception as e:
-                logger.error(f"Failed to start market making integration: {e}")
+                logger.exception(f"Failed to start market making integration: {e}")
                 self.status.error_count += 1
                 self.status.last_error_time = datetime.now(UTC)
                 self.status.last_error_message = str(e)
@@ -315,7 +315,9 @@ class MarketMakingIntegrator:
                 logger.info("Market making integration stopped successfully")
 
             except Exception as e:
-                logger.error(f"Error during market making integration shutdown: {e}")
+                logger.exception(
+                    f"Error during market making integration shutdown: {e}"
+                )
                 self.status.error_count += 1
                 self.status.last_error_time = datetime.now(UTC)
                 self.status.last_error_message = str(e)
@@ -400,7 +402,7 @@ class MarketMakingIntegrator:
             }
 
         except Exception as e:
-            logger.error(f"Health check failed: {e}")
+            logger.exception(f"Health check failed: {e}")
             return {
                 "healthy": False,
                 "error": str(e),
@@ -466,7 +468,7 @@ class MarketMakingIntegrator:
             try:
                 await self.market_making_engine.emergency_stop()
             except Exception as e:
-                logger.error(f"Error during emergency stop: {e}")
+                logger.exception(f"Error during emergency stop: {e}")
 
         await self.stop()
 

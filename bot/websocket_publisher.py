@@ -245,17 +245,40 @@ class WebSocketPublisher:
 
     async def _auto_reconnect_manager(self) -> None:
         """Background task to manage automatic reconnections."""
+        consecutive_reconnect_failures = 0
+        max_consecutive_failures = 5
+
         while self._publish_enabled:
             try:
                 if not self._connected:
-                    logger.info("Connection lost, attempting to reconnect...")
+                    consecutive_reconnect_failures += 1
+
+                    if consecutive_reconnect_failures > max_consecutive_failures:
+                        logger.warning(
+                            "WebSocket reconnection disabled after %d consecutive failures. "
+                            "Service will continue without dashboard publishing.",
+                            max_consecutive_failures,
+                        )
+                        # Disable publishing to prevent continuous failures
+                        self._publish_enabled = False
+                        break
+
+                    logger.info(
+                        "Connection lost, attempting to reconnect (attempt %d/%d)...",
+                        consecutive_reconnect_failures,
+                        max_consecutive_failures,
+                    )
                     try:
                         await self._reconnect()
-                    except Exception:
-                        logger.exception("Auto-reconnect failed")
+                        consecutive_reconnect_failures = 0  # Reset on success
+                    except Exception as e:
+                        logger.warning("Auto-reconnect failed: %s", str(e))
                         # Reset URL index to try primary URL again after failures
                         self._url_index = 0
                         self._current_url = self.dashboard_url
+                else:
+                    # Connection is healthy, reset failure counter
+                    consecutive_reconnect_failures = 0
 
                 # Check connection status every 10 seconds
                 await asyncio.sleep(10)
@@ -418,11 +441,19 @@ class WebSocketPublisher:
     async def _reconnect(self) -> None:
         """Attempt to reconnect with enhanced exponential backoff."""
         if self._retry_count >= self.max_retries:
-            logger.error("Max retries (%s) reached, giving up", self.max_retries)
+            logger.error(
+                "Max retries (%s) reached, disabling WebSocket publishing",
+                self.max_retries,
+            )
+            self._publish_enabled = False
             return
 
         # Clean up existing connection
         await self._cleanup_connection()
+
+        # Clear queues to prevent memory buildup during disconnection
+        if self._retry_count > 3:
+            await self._clear_queues(keep_priority=True)
 
         self._retry_count += 1
 
@@ -448,7 +479,7 @@ class WebSocketPublisher:
         try:
             await self._connect_with_fallback()
         except Exception:
-            logger.exception("Reconnection attempt %s failed", self._retry_count)
+            logger.warning("Reconnection attempt %s failed", self._retry_count)
             # If we've failed multiple times, check if URL is reachable
             if self._retry_count > 2:
                 await self._check_endpoint_health()
@@ -457,6 +488,13 @@ class WebSocketPublisher:
         """Send message to dashboard with queue-based delivery and prioritization."""
         if not self._publish_enabled:
             return
+
+        # Check if we're connected before queuing messages
+        if not self._connected and self._consecutive_failures > 3:
+            # Skip non-priority messages if we've been disconnected for a while
+            message_type = message.get("type", "unknown")
+            if message_type not in self._priority_message_types:
+                return
 
         try:
             # Add timestamp if not present
@@ -467,6 +505,20 @@ class WebSocketPublisher:
 
             # Update queue statistics
             current_queue_size = self._message_queue.qsize()
+            priority_queue_size = self._priority_queue.qsize()
+
+            # Implement backpressure - if queues are too full, start dropping non-critical messages early
+            total_queue_usage = (current_queue_size + priority_queue_size) / (
+                self.queue_size + self._priority_queue.maxsize
+            )
+            if (
+                total_queue_usage > 0.8
+                and message_type not in self._priority_message_types
+            ):
+                # Drop non-critical messages when queues are 80% full
+                self._queue_stats["messages_dropped"] += 1
+                return
+
             self._queue_stats["max_queue_size_seen"] = max(
                 self._queue_stats["max_queue_size_seen"], current_queue_size
             )
@@ -575,6 +627,9 @@ class WebSocketPublisher:
 
     async def _queue_worker(self) -> None:
         """Background worker to process message queue with priority handling."""
+        backoff_delay = 0.1
+        max_backoff = 5.0
+
         while self._publish_enabled:
             try:
                 # Get next message from appropriate queue
@@ -585,7 +640,13 @@ class WebSocketPublisher:
                 # Check connection and handle disconnection
                 if not self._is_ready_to_send():
                     self._handle_message_when_disconnected(message)
+                    # Apply exponential backoff when disconnected
+                    await asyncio.sleep(min(backoff_delay, max_backoff))
+                    backoff_delay = min(backoff_delay * 2, max_backoff)
                     continue
+
+                # Reset backoff on successful connection
+                backoff_delay = 0.1
 
                 # Send the message
                 await self._send_message_with_error_handling(message)
@@ -606,14 +667,13 @@ class WebSocketPublisher:
 
         # No priority messages, check regular queue
         try:
-            message = await asyncio.wait_for(self._message_queue.get(), timeout=5.0)
-            return message
+            return await asyncio.wait_for(self._message_queue.get(), timeout=5.0)
         except TimeoutError:
             return None
 
     def _is_ready_to_send(self) -> bool:
         """Check if WebSocket is ready to send messages."""
-        return self._connected and self._ws
+        return bool(self._connected and self._ws)
 
     def _handle_message_when_disconnected(self, message):
         """Handle message when WebSocket is disconnected."""
@@ -954,6 +1014,39 @@ class WebSocketPublisher:
         """Disconnect WebSocket and cleanup resources - alias for close()."""
         await self.close()
 
+    async def _clear_queues(self, keep_priority: bool = False) -> None:
+        """Clear message queues to prevent memory buildup.
+
+        Args:
+            keep_priority: If True, keeps priority messages
+        """
+        cleared_regular = 0
+        cleared_priority = 0
+
+        # Clear regular queue
+        while not self._message_queue.empty():
+            try:
+                self._message_queue.get_nowait()
+                cleared_regular += 1
+            except asyncio.QueueEmpty:
+                break
+
+        # Clear priority queue if requested
+        if not keep_priority:
+            while not self._priority_queue.empty():
+                try:
+                    self._priority_queue.get_nowait()
+                    cleared_priority += 1
+                except asyncio.QueueEmpty:
+                    break
+
+        if cleared_regular > 0 or cleared_priority > 0:
+            logger.info(
+                "Cleared message queues: regular=%d, priority=%d",
+                cleared_regular,
+                cleared_priority,
+            )
+
     async def close(self) -> None:
         """Close WebSocket connection and cleanup resources."""
         logger.info("Closing WebSocket publisher")
@@ -980,12 +1073,8 @@ class WebSocketPublisher:
         # Cleanup connection
         await self._cleanup_connection()
 
-        # Clear message queue
-        while not self._message_queue.empty():
-            try:
-                self._message_queue.get_nowait()
-            except asyncio.QueueEmpty:
-                break
+        # Clear all message queues
+        await self._clear_queues(keep_priority=False)
 
         logger.info("WebSocket publisher closed")
 

@@ -1174,7 +1174,7 @@ class CoinbaseClient(BaseExchange):
                         self._futures_portfolio_id = portfolio_id
                         logger.debug("Found futures portfolio: %s", portfolio_id)
 
-                logger.info("Loaded %s portfolios", len(self._portfolios))
+                logger.info("Loaded %d portfolios", len(self._portfolios))
                 if self._futures_portfolio_id:
                     logger.info("Futures portfolio ID: %s", self._futures_portfolio_id)
             else:
@@ -3026,7 +3026,7 @@ class CoinbaseClient(BaseExchange):
                     )
                     positions.append(position)
 
-            logger.debug("Retrieved %s futures positions", len(positions))
+            logger.debug("Retrieved %d futures positions", len(positions))
         except Exception:
             logger.exception("Failed to get futures positions")
             # Fallback to regular positions API
@@ -3082,7 +3082,7 @@ class CoinbaseClient(BaseExchange):
                     )
                     positions.append(position)
 
-            logger.debug("Retrieved %s positions", len(positions))
+            logger.debug("Retrieved %d positions", len(positions))
         except Exception as e:
             logger.exception("Failed to get positions")
             raise ExchangeConnectionError(f"Failed to get positions: {e}") from e

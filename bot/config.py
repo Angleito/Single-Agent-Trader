@@ -2431,27 +2431,30 @@ class Settings(BaseSettings):
             # Ensure market making is compatible with current exchange
             if self.exchange.exchange_type != "bluefin":
                 logger.warning(
-                    f"Market making is optimized for Bluefin but exchange is set to {self.exchange.exchange_type}"
+                    "Market making is optimized for Bluefin but exchange is set to %s",
+                    self.exchange.exchange_type,
                 )
 
             # Ensure market making symbol is compatible
             if not self.market_making.symbol.endswith("-PERP"):
                 logger.warning(
-                    f"Market making symbol {self.market_making.symbol} may not be optimal for perpetual futures"
+                    "Market making symbol %s may not be optimal for perpetual futures",
+                    self.market_making.symbol,
                 )
 
             # Validate position size compatibility
             if self.market_making.strategy.max_position_pct > self.trading.max_size_pct:
                 logger.warning(
-                    f"Market making max position ({self.market_making.strategy.max_position_pct}%) "
-                    f"exceeds trading max size ({self.trading.max_size_pct}%)"
+                    "Market making max position (%s%%) exceeds trading max size (%s%%)",
+                    self.market_making.strategy.max_position_pct,
+                    self.trading.max_size_pct,
                 )
 
             # Ensure reasonable cycle intervals
             if self.market_making.cycle_interval_seconds < 0.5:
                 logger.warning(
-                    f"Market making cycle interval ({self.market_making.cycle_interval_seconds}s) "
-                    f"may be too aggressive for stable operation"
+                    "Market making cycle interval (%ss) may be too aggressive for stable operation",
+                    self.market_making.cycle_interval_seconds,
                 )
 
         return self

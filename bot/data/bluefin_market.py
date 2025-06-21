@@ -1301,14 +1301,43 @@ class BluefinMarketDataProvider:
                 ticker_data = await service_client.get_market_ticker(self.symbol)
 
                 if ticker_data and "price" in ticker_data:
-                    price = Decimal(str(ticker_data["price"]))
-                    # Update cache
-                    self._price_cache["price"] = price
-                    self._cache_timestamps["price"] = datetime.now(UTC)
-                    logger.info(
-                        "Fetched Bluefin ticker price: %s for %s", price, self.symbol
-                    )
-                    return price
+                    # Apply price conversion from 18-decimal format
+                    try:
+                        raw_price = ticker_data["price"]
+                        price = convert_from_18_decimal(
+                            raw_price, self.symbol, "ticker_price"
+                        )
+
+                        # Log if astronomical price was detected and converted
+                        original_price = Decimal(str(raw_price))
+                        if original_price > 1e15:
+                            logger.info(
+                                "Converted astronomical ticker price for %s: %s -> %s",
+                                self.symbol,
+                                original_price,
+                                price,
+                            )
+
+                        # Update cache
+                        self._price_cache["price"] = price
+                        self._cache_timestamps["price"] = datetime.now(UTC)
+                        logger.info(
+                            "Fetched Bluefin ticker price: %s for %s",
+                            price,
+                            self.symbol,
+                        )
+                        return price
+                    except ValueError as conv_error:
+                        logger.warning(
+                            "Failed to convert ticker price for %s: %s. Using raw value.",
+                            self.symbol,
+                            conv_error,
+                        )
+                        # Fallback to raw value
+                        price = Decimal(str(ticker_data["price"]))
+                        self._price_cache["price"] = price
+                        self._cache_timestamps["price"] = datetime.now(UTC)
+                        return price
                 logger.warning("No price data in ticker response: %s", ticker_data)
                 return None
 

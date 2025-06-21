@@ -224,11 +224,10 @@ class CustomProfileCreator:
                 errors.extend([f"{section}.{error}" for error in section_errors])
 
         # Validate top-level parameters
-        if "cycle_interval" in profile:
-            if not self._validate_parameter(
-                profile["cycle_interval"], self.validation_rules["cycle_interval"]
-            ):
-                errors.append("cycle_interval: Invalid value")
+        if "cycle_interval" in profile and not self._validate_parameter(
+            profile["cycle_interval"], self.validation_rules["cycle_interval"]
+        ):
+            errors.append("cycle_interval: Invalid value")
 
         # Business logic validations
         strategy = profile.get("strategy", {})

@@ -54,7 +54,7 @@ class TestPositionOrderIntegration(unittest.TestCase):
         # Should return flat position for any symbol
         position = self.position_manager.get_position("BTC-USD")
         assert position.side == "FLAT"
-        assert position.size == Decimal("0")
+        assert position.size == Decimal(0)
 
     async def test_order_manager_initialization(self):
         """Test order manager initializes correctly."""
@@ -182,7 +182,7 @@ class TestPositionOrderIntegration(unittest.TestCase):
         assert risk_metrics.current_positions == 1
 
         # Should have available margin
-        assert risk_metrics.available_margin > Decimal("0")
+        assert risk_metrics.available_margin > Decimal(0)
 
     def test_risk_evaluation_with_positions(self):
         """Test risk evaluation considers existing positions."""
@@ -264,7 +264,7 @@ class TestPositionOrderIntegration(unittest.TestCase):
 
         # Should be flat with realized P&L
         assert closed_position.side == "FLAT"
-        assert closed_position.size == Decimal("0")
+        assert closed_position.size == Decimal(0)
 
         # Should have positive realized P&L (100 USD profit)
         expected_pnl = Decimal("0.1") * (exit_price - entry_price)
@@ -335,11 +335,11 @@ class TestAsyncOrderManagerIntegration(unittest.TestCase, AsyncTestMixin):
                     order_type="LIMIT",
                     quantity=Decimal("0.1"),
                     price=Decimal("49000.00"),
-                    timeout_seconds=1,
+                    timeout_seconds=0.1,
                 )
 
                 # Wait for timeout
-                await asyncio.sleep(2)
+                await asyncio.sleep(0.2)
 
                 # Order should be cancelled due to timeout
                 updated_order = self.order_manager.get_order(order.id)

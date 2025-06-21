@@ -27,9 +27,9 @@ with warnings.catch_warnings():
     # Core components - these are required and will raise if missing
     try:
         from .config import settings
-    except ImportError as e:
-        logger.error("Failed to import core configuration: %s", e)
-        logger.error("This is a critical dependency - bot cannot start without it")
+    except ImportError:
+        logger.exception("Failed to import core configuration")
+        logger.exception("This is a critical dependency - bot cannot start without it")
         raise
 
 # Feature availability flags
@@ -124,8 +124,8 @@ except ImportError as e:
 try:
     from .risk import RiskManager
     from .strategy.core import CoreStrategy
-except ImportError as e:
-    logger.error("Failed to import critical trading components: %s", e)
+except ImportError:
+    logger.exception("Failed to import critical trading components")
     RiskManager = _create_import_fallback("RiskManager", ["decimal"])  # type: ignore[assignment]
     CoreStrategy = _create_import_fallback("CoreStrategy", ["abc"])  # type: ignore[assignment]
 
@@ -142,8 +142,8 @@ except ImportError as e:
 # Trading types (core data structures)
 try:
     from .trading_types import MarketData, MarketState, Position, TradeAction
-except ImportError as e:
-    logger.error("Failed to import core trading types: %s", e)
+except ImportError:
+    logger.exception("Failed to import core trading types")
     raise  # These are critical
 
 # Training and RAG (optional for enhanced features)
@@ -156,10 +156,8 @@ except ImportError as e:
 # Validator (critical for safe trading)
 try:
     from .validator import TradeValidator
-except ImportError as e:
-    logger.error(
-        "Failed to import trade validator - this is critical for safety: %s", e
-    )
+except ImportError:
+    logger.exception("Failed to import trade validator - this is critical for safety")
     raise
 
 

@@ -671,7 +671,7 @@ class OrderManager:
                         filled_quantity=Decimal(order_data["filled_quantity"]),
                     )
 
-                logger.info("Loaded %s active orders", len(self._active_orders))
+                logger.info("Loaded %d active orders", len(self._active_orders))
 
             # Load order history
             if self.history_file.exists():
@@ -702,7 +702,7 @@ class OrderManager:
                         )
                     )
 
-                logger.info("Loaded %s historical orders", len(self._order_history))
+                logger.info("Loaded %d historical orders", len(self._order_history))
 
         except Exception:
             logger.exception("Failed to load order state")
@@ -725,7 +725,7 @@ class OrderManager:
 
             removed_count = original_count - len(self._order_history)
             if removed_count > 0:
-                logger.info("Removed %s old order records", removed_count)
+                logger.info("Removed %d old order records", removed_count)
                 self._save_state()
 
     def reset_orders(self) -> None:

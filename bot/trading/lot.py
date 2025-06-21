@@ -17,14 +17,14 @@ class TradeLot:
 
     lot_id: str = field(default_factory=lambda: str(uuid4()))
     symbol: str = ""
-    quantity: Decimal = Decimal("0")
-    purchase_price: Decimal = Decimal("0")
+    quantity: Decimal = Decimal(0)
+    purchase_price: Decimal = Decimal(0)
     purchase_date: datetime = field(default_factory=datetime.now)
-    remaining_quantity: Decimal = field(default_factory=lambda: Decimal("0"))
+    remaining_quantity: Decimal = field(default_factory=lambda: Decimal(0))
 
     def __post_init__(self):
         """Initialize remaining quantity to match quantity if not set."""
-        if self.remaining_quantity == Decimal("0") and self.quantity > Decimal("0"):
+        if self.remaining_quantity == Decimal(0) and self.quantity > Decimal(0):
             self.remaining_quantity = self.quantity
 
     @property
@@ -40,7 +40,7 @@ class TradeLot:
     @property
     def is_fully_sold(self) -> bool:
         """Check if this lot has been completely sold."""
-        return self.remaining_quantity <= Decimal("0")
+        return self.remaining_quantity <= Decimal(0)
 
     def sell_from_lot(self, quantity: Decimal) -> tuple[Decimal, Decimal]:
         """
@@ -80,18 +80,18 @@ class FIFOPosition(BaseModel):
     side: str = Field(pattern="^(LONG|SHORT|FLAT)$")
     lots: list[TradeLot] = Field(default_factory=list)
     sale_history: list[LotSale] = Field(default_factory=list)
-    total_realized_pnl: Decimal = Decimal("0")
+    total_realized_pnl: Decimal = Decimal(0)
 
     @property
     def total_quantity(self) -> Decimal:
         """Total remaining quantity across all lots."""
-        return sum(lot.remaining_quantity for lot in self.lots) or Decimal("0")
+        return sum(lot.remaining_quantity for lot in self.lots) or Decimal(0)
 
     @property
     def average_price(self) -> Decimal:
         """Weighted average price of remaining shares."""
-        if self.total_quantity == Decimal("0"):
-            return Decimal("0")
+        if self.total_quantity == Decimal(0):
+            return Decimal(0)
 
         total_cost = sum(lot.remaining_cost_basis for lot in self.lots)
         return total_cost / self.total_quantity
@@ -99,7 +99,7 @@ class FIFOPosition(BaseModel):
     @property
     def total_cost_basis(self) -> Decimal:
         """Total cost basis of remaining shares."""
-        return sum(lot.remaining_cost_basis for lot in self.lots) or Decimal("0")
+        return sum(lot.remaining_cost_basis for lot in self.lots) or Decimal(0)
 
     def add_lot(
         self,
@@ -190,7 +190,7 @@ class FIFOPosition(BaseModel):
         self.lots = [lot for lot in self.lots if not lot.is_fully_sold]
 
         # Update side if position is closed
-        if self.total_quantity == Decimal("0"):
+        if self.total_quantity == Decimal(0):
             self.side = "FLAT"
 
         return sales

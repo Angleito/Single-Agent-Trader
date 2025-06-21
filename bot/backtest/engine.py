@@ -188,7 +188,7 @@ class BacktestEngine:
         # Sort by timestamp
         filtered_data = filtered_data.sort_index()
 
-        logger.info("Prepared %s candles for backtesting", len(filtered_data))
+        logger.info("Prepared %d candles for backtesting", len(filtered_data))
         return filtered_data
 
     def _reset_state(self) -> None:

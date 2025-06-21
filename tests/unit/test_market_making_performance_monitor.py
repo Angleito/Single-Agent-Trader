@@ -38,23 +38,23 @@ class TestMarketMakingPerformanceMonitor(unittest.TestCase):
 
     def test_initialization(self):
         """Test monitor initialization."""
-        self.assertEqual(self.monitor.symbol, self.symbol)
-        self.assertEqual(self.monitor.fee_calculator, self.fee_calculator)
-        self.assertEqual(self.monitor.thresholds, self.thresholds)
-        self.assertEqual(len(self.monitor.completed_trades), 0)
-        self.assertEqual(len(self.monitor.fill_events), 0)
-        self.assertIsNotNone(self.monitor.session_start)
+        assert self.monitor.symbol == self.symbol
+        assert self.monitor.fee_calculator == self.fee_calculator
+        assert self.monitor.thresholds == self.thresholds
+        assert len(self.monitor.completed_trades) == 0
+        assert len(self.monitor.fill_events) == 0
+        assert self.monitor.session_start is not None
 
     def test_thresholds_configuration(self):
         """Test market making specific thresholds."""
-        self.assertEqual(self.thresholds.min_fill_rate, 0.3)
-        self.assertEqual(self.thresholds.min_spread_capture_rate, 0.6)
-        self.assertEqual(self.thresholds.max_fee_ratio, 0.5)
-        self.assertEqual(self.thresholds.max_inventory_imbalance, 0.2)
-        self.assertEqual(self.thresholds.min_turnover_rate, 2.0)
-        self.assertEqual(self.thresholds.max_negative_pnl_streak, 5)
-        self.assertEqual(self.thresholds.min_signal_effectiveness, 0.4)
-        self.assertEqual(self.thresholds.max_slippage_bps, 5)
+        assert self.thresholds.min_fill_rate == 0.3
+        assert self.thresholds.min_spread_capture_rate == 0.6
+        assert self.thresholds.max_fee_ratio == 0.5
+        assert self.thresholds.max_inventory_imbalance == 0.2
+        assert self.thresholds.min_turnover_rate == 2.0
+        assert self.thresholds.max_negative_pnl_streak == 5
+        assert self.thresholds.min_signal_effectiveness == 0.4
+        assert self.thresholds.max_slippage_bps == 5
 
     def test_record_order_fill(self):
         """Test recording order fill events."""
@@ -86,22 +86,22 @@ class TestMarketMakingPerformanceMonitor(unittest.TestCase):
         )
 
         # Verify fill was recorded
-        self.assertEqual(len(self.monitor.fill_events), 1)
+        assert len(self.monitor.fill_events) == 1
         fill_event = self.monitor.fill_events[0]
-        self.assertEqual(fill_event["order_id"], "test_order_1")
-        self.assertEqual(fill_event["side"], "BUY")
-        self.assertEqual(fill_event["quantity"], Decimal("1.0"))
-        self.assertEqual(fill_event["price"], Decimal("50000.0"))
-        self.assertEqual(fill_event["fees"], Decimal("5.0"))
+        assert fill_event["order_id"] == "test_order_1"
+        assert fill_event["side"] == "BUY"
+        assert fill_event["quantity"] == Decimal("1.0")
+        assert fill_event["price"] == Decimal("50000.0")
+        assert fill_event["fees"] == Decimal("5.0")
 
         # Verify active position was created
         position_key = f"{self.symbol}_0"
-        self.assertIn(position_key, self.monitor.active_positions)
+        assert position_key in self.monitor.active_positions
         position = self.monitor.active_positions[position_key]
-        self.assertEqual(position["side"], "BUY")
-        self.assertEqual(position["entry_price"], Decimal("50000.0"))
-        self.assertEqual(position["quantity"], Decimal("1.0"))
-        self.assertEqual(position["fees_paid"], Decimal("5.0"))
+        assert position["side"] == "BUY"
+        assert position["entry_price"] == Decimal("50000.0")
+        assert position["quantity"] == Decimal("1.0")
+        assert position["fees_paid"] == Decimal("5.0")
 
     def test_record_spread_target(self):
         """Test recording spread targets."""
@@ -131,9 +131,9 @@ class TestMarketMakingPerformanceMonitor(unittest.TestCase):
         )
 
         # Verify spread target was recorded
-        self.assertEqual(len(self.monitor.spread_targets), 1)
+        assert len(self.monitor.spread_targets) == 1
         recorded_spread = self.monitor.spread_targets[0]
-        self.assertEqual(recorded_spread.adjusted_spread, Decimal("60.0"))
+        assert recorded_spread.adjusted_spread == Decimal("60.0")
 
     def test_record_vumanchu_signal(self):
         """Test recording VuManChu signals."""
@@ -163,16 +163,16 @@ class TestMarketMakingPerformanceMonitor(unittest.TestCase):
         )
 
         # Verify signal was recorded
-        self.assertTrue(signal_id.startswith("signal_"))
-        self.assertEqual(len(self.monitor.signal_events), 1)
+        assert signal_id.startswith("signal_")
+        assert len(self.monitor.signal_events) == 1
 
         signal_event = self.monitor.signal_events[0]
-        self.assertEqual(signal_event["signal_id"], signal_id)
-        self.assertEqual(signal_event["bias_direction"], "bullish")
-        self.assertEqual(signal_event["bias_strength"], 0.7)
-        self.assertEqual(signal_event["bias_confidence"], 0.8)
-        self.assertEqual(signal_event["cipher_a_dot"], 0.5)
-        self.assertFalse(signal_event["outcome_recorded"])
+        assert signal_event["signal_id"] == signal_id
+        assert signal_event["bias_direction"] == "bullish"
+        assert signal_event["bias_strength"] == 0.7
+        assert signal_event["bias_confidence"] == 0.8
+        assert signal_event["cipher_a_dot"] == 0.5
+        assert not signal_event["outcome_recorded"]
 
     def test_record_signal_outcome(self):
         """Test recording signal outcomes."""
@@ -209,16 +209,16 @@ class TestMarketMakingPerformanceMonitor(unittest.TestCase):
         )
 
         # Verify outcome was recorded
-        self.assertEqual(len(self.monitor.signal_outcomes), 1)
+        assert len(self.monitor.signal_outcomes) == 1
         outcome = self.monitor.signal_outcomes[0]
-        self.assertEqual(outcome["signal_id"], signal_id)
-        self.assertEqual(outcome["pnl_result"], pnl_result)
-        self.assertTrue(outcome["success"])
-        self.assertEqual(outcome["bias_direction"], "bullish")
+        assert outcome["signal_id"] == signal_id
+        assert outcome["pnl_result"] == pnl_result
+        assert outcome["success"]
+        assert outcome["bias_direction"] == "bullish"
 
         # Verify signal event was marked as outcome recorded
         signal_event = self.monitor.signal_events[0]
-        self.assertTrue(signal_event["outcome_recorded"])
+        assert signal_event["outcome_recorded"]
 
     def test_get_real_time_pnl(self):
         """Test real-time P&L calculation."""
@@ -267,13 +267,13 @@ class TestMarketMakingPerformanceMonitor(unittest.TestCase):
         pnl_breakdown = self.monitor.get_real_time_pnl(current_prices)
 
         # Verify calculations
-        self.assertEqual(pnl_breakdown["realized_pnl"], Decimal("160.0"))  # 90 + 70
-        self.assertEqual(
-            pnl_breakdown["unrealized_pnl"], Decimal("75.0")
+        assert pnl_breakdown["realized_pnl"] == Decimal("160.0")  # 90 + 70
+        assert pnl_breakdown["unrealized_pnl"] == Decimal(
+            "75.0"
         )  # (50150 - 50000) * 0.5
-        self.assertEqual(pnl_breakdown["gross_pnl"], Decimal("235.0"))  # 160 + 75
-        self.assertEqual(pnl_breakdown["total_fees"], Decimal("17.5"))  # 10 + 5 + 2.5
-        self.assertEqual(pnl_breakdown["net_pnl"], Decimal("217.5"))  # 235 - 17.5
+        assert pnl_breakdown["gross_pnl"] == Decimal("235.0")  # 160 + 75
+        assert pnl_breakdown["total_fees"] == Decimal("17.5")  # 10 + 5 + 2.5
+        assert pnl_breakdown["net_pnl"] == Decimal("217.5")  # 235 - 17.5
 
     def test_get_performance_metrics(self):
         """Test performance metrics calculation."""
@@ -314,44 +314,44 @@ class TestMarketMakingPerformanceMonitor(unittest.TestCase):
         metrics = self.monitor.get_performance_metrics(timedelta(hours=1))
 
         # Verify basic metrics
-        self.assertEqual(metrics["total_trades"], 5)
-        self.assertEqual(metrics["total_fills"], 8)
-        self.assertEqual(metrics["winning_trades"], 3)
-        self.assertEqual(metrics["losing_trades"], 2)
-        self.assertEqual(metrics["win_rate"], 0.6)  # 3/5
+        assert metrics["total_trades"] == 5
+        assert metrics["total_fills"] == 8
+        assert metrics["winning_trades"] == 3
+        assert metrics["losing_trades"] == 2
+        assert metrics["win_rate"] == 0.6  # 3/5
         self.assertAlmostEqual(metrics["gross_pnl"], 200.0)  # 3*100 + 2*(-50)
         self.assertAlmostEqual(metrics["net_pnl"], 150.0)  # 3*90 + 2*(-60)
         self.assertAlmostEqual(metrics["total_fees"], 50.0)  # 5*10
-        self.assertEqual(metrics["buy_fills"], 4)
-        self.assertEqual(metrics["sell_fills"], 4)
+        assert metrics["buy_fills"] == 4
+        assert metrics["sell_fills"] == 4
 
     def test_get_dashboard_data(self):
         """Test dashboard data generation."""
         dashboard_data = self.monitor.get_dashboard_data()
 
         # Verify structure
-        self.assertIn("timestamp", dashboard_data)
-        self.assertIn("symbol", dashboard_data)
-        self.assertIn("session_duration_hours", dashboard_data)
-        self.assertIn("current_performance", dashboard_data)
-        self.assertIn("active_positions", dashboard_data)
-        self.assertIn("inventory_imbalance", dashboard_data)
-        self.assertIn("recent_alerts", dashboard_data)
-        self.assertIn("health_score", dashboard_data)
+        assert "timestamp" in dashboard_data
+        assert "symbol" in dashboard_data
+        assert "session_duration_hours" in dashboard_data
+        assert "current_performance" in dashboard_data
+        assert "active_positions" in dashboard_data
+        assert "inventory_imbalance" in dashboard_data
+        assert "recent_alerts" in dashboard_data
+        assert "health_score" in dashboard_data
 
         # Verify performance windows
         performance = dashboard_data["current_performance"]
-        self.assertIn("1h", performance)
-        self.assertIn("24h", performance)
-        self.assertIn("7d", performance)
+        assert "1h" in performance
+        assert "24h" in performance
+        assert "7d" in performance
 
         # Verify 1h metrics structure
         h1_metrics = performance["1h"]
-        self.assertIn("net_pnl", h1_metrics)
-        self.assertIn("trades", h1_metrics)
-        self.assertIn("win_rate", h1_metrics)
-        self.assertIn("fill_efficiency", h1_metrics)
-        self.assertIn("spread_capture", h1_metrics)
+        assert "net_pnl" in h1_metrics
+        assert "trades" in h1_metrics
+        assert "win_rate" in h1_metrics
+        assert "fill_efficiency" in h1_metrics
+        assert "spread_capture" in h1_metrics
 
     def test_check_performance_alerts(self):
         """Test performance alert generation."""
@@ -369,14 +369,14 @@ class TestMarketMakingPerformanceMonitor(unittest.TestCase):
             alerts = self.monitor.check_performance_alerts()
 
             # Should generate multiple alerts
-            self.assertGreater(len(alerts), 0)
+            assert len(alerts) > 0
 
             # Check specific alert types
             alert_types = [alert.metric_name for alert in alerts]
-            self.assertIn("fill_efficiency", alert_types)
-            self.assertIn("spread_capture_rate", alert_types)
-            self.assertIn("fee_efficiency_ratio", alert_types)
-            self.assertIn("inventory_imbalance", alert_types)
+            assert "fill_efficiency" in alert_types
+            assert "spread_capture_rate" in alert_types
+            assert "fee_efficiency_ratio" in alert_types
+            assert "inventory_imbalance" in alert_types
 
     def test_export_performance_data(self):
         """Test performance data export."""
@@ -403,13 +403,13 @@ class TestMarketMakingPerformanceMonitor(unittest.TestCase):
         )
 
         # Verify structure
-        self.assertIn("export_timestamp", export_data)
-        self.assertIn("symbol", export_data)
-        self.assertIn("performance_metrics", export_data)
-        self.assertIn("dashboard_data", export_data)
-        self.assertIn("alert_summary", export_data)
-        self.assertIn("thresholds", export_data)
-        self.assertNotIn("raw_data", export_data)
+        assert "export_timestamp" in export_data
+        assert "symbol" in export_data
+        assert "performance_metrics" in export_data
+        assert "dashboard_data" in export_data
+        assert "alert_summary" in export_data
+        assert "thresholds" in export_data
+        assert "raw_data" not in export_data
 
         # Export with raw data
         export_data_raw = self.monitor.export_performance_data(
@@ -418,22 +418,21 @@ class TestMarketMakingPerformanceMonitor(unittest.TestCase):
         )
 
         # Verify raw data included
-        self.assertIn("raw_data", export_data_raw)
+        assert "raw_data" in export_data_raw
         raw_data = export_data_raw["raw_data"]
-        self.assertIn("completed_trades", raw_data)
-        self.assertIn("fill_events", raw_data)
-        self.assertIn("signal_outcomes", raw_data)
+        assert "completed_trades" in raw_data
+        assert "fill_events" in raw_data
+        assert "signal_outcomes" in raw_data
 
         # Verify trade data
-        self.assertEqual(len(raw_data["completed_trades"]), 1)
+        assert len(raw_data["completed_trades"]) == 1
         trade_data = raw_data["completed_trades"][0]
-        self.assertEqual(trade_data["trade_id"], "test_trade")
-        self.assertEqual(trade_data["side"], "BUY")
+        assert trade_data["trade_id"] == "test_trade"
+        assert trade_data["side"] == "BUY"
 
     def test_thread_safety(self):
         """Test thread safety of concurrent operations."""
         import threading
-        import time
 
         def record_fills():
             for i in range(50):
@@ -457,12 +456,12 @@ class TestMarketMakingPerformanceMonitor(unittest.TestCase):
                     fill_timestamp=datetime.now(UTC),
                     fees_paid=Decimal("5.0"),
                 )
-                time.sleep(0.001)  # Small delay
+                # Remove unnecessary delay
 
         def get_metrics():
             for _ in range(20):
                 self.monitor.get_performance_metrics()
-                time.sleep(0.005)
+                # Remove unnecessary delay
 
         # Run concurrent operations
         threads = []
@@ -480,10 +479,8 @@ class TestMarketMakingPerformanceMonitor(unittest.TestCase):
             thread.join()
 
         # Verify no data corruption
-        self.assertGreater(len(self.monitor.fill_events), 0)
-        self.assertLessEqual(
-            len(self.monitor.fill_events), 150
-        )  # 3 threads * 50 fills each
+        assert len(self.monitor.fill_events) > 0
+        assert len(self.monitor.fill_events) <= 150  # 3 threads * 50 fills each
 
     def test_completed_trade_detection(self):
         """Test automatic detection of completed round-trip trades."""
@@ -511,8 +508,8 @@ class TestMarketMakingPerformanceMonitor(unittest.TestCase):
         )
 
         # Verify position created, no completed trades yet
-        self.assertEqual(len(self.monitor.active_positions), 1)
-        self.assertEqual(len(self.monitor.completed_trades), 0)
+        assert len(self.monitor.active_positions) == 1
+        assert len(self.monitor.completed_trades) == 0
 
         # Create sell order and fill (opposite side)
         sell_order = Order(
@@ -538,18 +535,16 @@ class TestMarketMakingPerformanceMonitor(unittest.TestCase):
         )
 
         # Should now have a completed trade
-        self.assertEqual(len(self.monitor.completed_trades), 1)
+        assert len(self.monitor.completed_trades) == 1
 
         completed_trade = self.monitor.completed_trades[0]
-        self.assertEqual(completed_trade.side, "BUY")  # Original position side
-        self.assertEqual(completed_trade.entry_price, Decimal("50000.0"))
-        self.assertEqual(completed_trade.exit_price, Decimal("50100.0"))
-        self.assertEqual(
-            completed_trade.gross_pnl, Decimal("100.0")
-        )  # (50100 - 50000) * 1
-        self.assertEqual(completed_trade.fees_paid, Decimal("10.0"))  # 5 + 5
-        self.assertEqual(completed_trade.net_pnl, Decimal("90.0"))  # 100 - 10
-        self.assertEqual(completed_trade.holding_time_seconds, 60.0)
+        assert completed_trade.side == "BUY"  # Original position side
+        assert completed_trade.entry_price == Decimal("50000.0")
+        assert completed_trade.exit_price == Decimal("50100.0")
+        assert completed_trade.gross_pnl == Decimal("100.0")  # (50100 - 50000) * 1
+        assert completed_trade.fees_paid == Decimal("10.0")  # 5 + 5
+        assert completed_trade.net_pnl == Decimal("90.0")  # 100 - 10
+        assert completed_trade.holding_time_seconds == 60.0
 
 
 if __name__ == "__main__":

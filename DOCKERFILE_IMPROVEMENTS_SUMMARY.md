@@ -12,7 +12,7 @@ The Dockerfile now creates all directories that the application needs:
 **Core Application Directories:**
 - `/app/config` - Configuration files (755 - read-only)
 - `/app/logs` - Main logging directory (775 - writable)
-- `/app/data` - Main data directory (775 - writable)  
+- `/app/data` - Main data directory (775 - writable)
 - `/app/prompts` - LLM prompt templates (755 - read-only)
 - `/app/tmp` - Temporary files (775 - writable)
 
@@ -74,7 +74,7 @@ volumes:
 - **Scope**: Host filesystem preparation
 - **When to use**: Before running docker-compose up
 
-### Dockerfile Directory Creation  
+### Dockerfile Directory Creation
 - **Purpose**: Creates directories **inside the container** as a foundation
 - **Scope**: Container filesystem preparation
 - **When**: During container build time
@@ -116,7 +116,7 @@ This confirms that all directories are created successfully during the build pro
 ## Deployment Workflow
 
 1. **Development Setup**: Run `./setup-docker-permissions.sh` to prepare host directories
-2. **Container Build**: Dockerfile creates internal directory structure  
+2. **Container Build**: Dockerfile creates internal directory structure
 3. **Container Start**: docker-entrypoint.sh validates setup and starts application
 4. **Volume Mounting**: Docker Compose maps host directories to container directories
 

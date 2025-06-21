@@ -72,7 +72,9 @@ class BluefinFeeCalculator:
             try:
                 value = Decimal(str(value))
             except (ValueError, TypeError) as e:
-                logger.error("Invalid decimal value: %s (type: %s)", value, type(value))
+                logger.exception(
+                    "Invalid decimal value (value: %s, type: %s)", value, type(value)
+                )
                 raise ValueError(f"Cannot convert to Decimal: {value}") from e
 
         if value.is_nan():
@@ -342,7 +344,7 @@ class BluefinFeeCalculator:
             "taker_fee_percentage": self.taker_fee_rate * 100,
         }
 
-    def get_fee_summary(self) -> dict[str, float]:
+    def get_fee_summary(self) -> dict[str, float | str]:
         """
         Get a human-readable summary of fee information.
 
@@ -370,7 +372,7 @@ class BluefinFeeCalculator:
         entry_price: Decimal,
         exit_price: Decimal | None = None,
         use_limit_orders: bool = True,
-    ) -> dict[str, Decimal]:
+    ) -> dict[str, Decimal | str]:
         """
         Estimate total trading costs for a complete trade scenario.
 

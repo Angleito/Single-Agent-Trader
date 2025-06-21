@@ -56,16 +56,16 @@ class TestInventoryManager(unittest.TestCase):
 
     def test_initialization(self):
         """Test InventoryManager initialization."""
-        self.assertEqual(self.inventory_manager.symbol, self.symbol)
-        self.assertEqual(self.inventory_manager.max_position_pct, 10.0)
-        self.assertEqual(self.inventory_manager.rebalancing_threshold, 5.0)
-        self.assertEqual(self.inventory_manager.emergency_threshold, 15.0)
-        self.assertEqual(self.inventory_manager.inventory_timeout_hours, 2.0)
+        assert self.inventory_manager.symbol == self.symbol
+        assert self.inventory_manager.max_position_pct == 10.0
+        assert self.inventory_manager.rebalancing_threshold == 5.0
+        assert self.inventory_manager.emergency_threshold == 15.0
+        assert self.inventory_manager.inventory_timeout_hours == 2.0
 
         # Check initial state
-        self.assertEqual(self.inventory_manager._current_position, Decimal(0))
-        self.assertIsNone(self.inventory_manager._average_entry_price)
-        self.assertIsNone(self.inventory_manager._position_start_time)
+        assert self.inventory_manager._current_position == Decimal(0)
+        assert self.inventory_manager._average_entry_price is None
+        assert self.inventory_manager._position_start_time is None
 
     def test_track_position_changes_with_fills(self):
         """Test tracking position changes from order fills."""
@@ -109,20 +109,20 @@ class TestInventoryManager(unittest.TestCase):
         )
 
         # Verify position tracking
-        self.assertEqual(self.inventory_manager._current_position, Decimal("0.5"))
-        self.assertIsNotNone(metrics)
-        self.assertIsInstance(metrics, InventoryMetrics)
+        assert self.inventory_manager._current_position == Decimal("0.5")
+        assert metrics is not None
+        assert isinstance(metrics, InventoryMetrics)
 
         # Verify metrics calculation
-        self.assertEqual(metrics.symbol, self.symbol)
-        self.assertEqual(metrics.net_position, Decimal("0.5"))
-        self.assertGreater(metrics.position_value, 0)
+        assert metrics.symbol == self.symbol
+        assert metrics.net_position == Decimal("0.5")
+        assert metrics.position_value > 0
 
     def test_calculate_inventory_imbalance(self):
         """Test inventory imbalance calculation."""
         # Test with no position
         imbalance = self.inventory_manager.calculate_inventory_imbalance()
-        self.assertEqual(imbalance, 0.0)
+        assert imbalance == 0.0
 
         # Set a long position
         self.inventory_manager._current_position = Decimal("1.0")
@@ -132,14 +132,14 @@ class TestInventoryManager(unittest.TestCase):
         imbalance = self.inventory_manager.calculate_inventory_imbalance()
 
         # Should be positive for long position
-        self.assertGreater(imbalance, 0)
+        assert imbalance > 0
 
         # Test with short position
         self.inventory_manager._current_position = Decimal("-1.0")
         imbalance = self.inventory_manager.calculate_inventory_imbalance()
 
         # Should be negative for short position
-        self.assertLess(imbalance, 0)
+        assert imbalance < 0
 
     def test_vumanchu_bias_integration(self):
         """Test VuManChu bias integration in rebalancing decisions."""
@@ -174,9 +174,9 @@ class TestInventoryManager(unittest.TestCase):
         )
 
         # Should be conservative or hold due to supporting bias
-        self.assertIn(action.action_type, ["HOLD", "SELL"])
+        assert action.action_type in ["HOLD", "SELL"]
         if action.action_type == "SELL":
-            self.assertEqual(action.urgency, "LOW")
+            assert action.urgency == "LOW"
 
         # Test with long position and bearish bias (conflicting)
         action = self.inventory_manager.suggest_rebalancing_action(
@@ -184,8 +184,8 @@ class TestInventoryManager(unittest.TestCase):
         )
 
         # Should be more aggressive due to conflicting bias
-        self.assertEqual(action.action_type, "SELL")
-        self.assertIn(action.urgency, ["MEDIUM", "HIGH"])
+        assert action.action_type == "SELL"
+        assert action.urgency in ["MEDIUM", "HIGH"]
 
     def test_emergency_conditions(self):
         """Test emergency condition detection and response."""
@@ -209,9 +209,9 @@ class TestInventoryManager(unittest.TestCase):
         )
 
         # Should trigger emergency action
-        self.assertEqual(action.urgency, "EMERGENCY")
-        self.assertEqual(action.action_type, "SELL")  # Flatten long position
-        self.assertEqual(action.quantity, Decimal("2.0"))
+        assert action.urgency == "EMERGENCY"
+        assert action.action_type == "SELL"  # Flatten long position
+        assert action.quantity == Decimal("2.0")
 
     def test_timeout_conditions(self):
         """Test position timeout detection and handling."""
@@ -238,9 +238,9 @@ class TestInventoryManager(unittest.TestCase):
         )
 
         # Should trigger timeout action
-        self.assertEqual(action.urgency, "HIGH")
-        self.assertEqual(action.action_type, "SELL")
-        self.assertIn("timeout", action.reason.lower())
+        assert action.urgency == "HIGH"
+        assert action.action_type == "SELL"
+        assert "timeout" in action.reason.lower()
 
     def test_rebalancing_execution(self):
         """Test rebalancing trade execution."""
@@ -262,17 +262,17 @@ class TestInventoryManager(unittest.TestCase):
         success = self.inventory_manager.execute_rebalancing_trade(action, market_price)
 
         # Verify execution
-        self.assertTrue(success)
+        assert success
 
         # Verify position was updated
         expected_position = initial_position - action.quantity
-        self.assertEqual(self.inventory_manager._current_position, expected_position)
+        assert self.inventory_manager._current_position == expected_position
 
         # Verify rebalancing history was recorded
-        self.assertGreater(len(self.inventory_manager._rebalancing_history), 0)
+        assert len(self.inventory_manager._rebalancing_history) > 0
 
         latest_record = self.inventory_manager._rebalancing_history[-1]
-        self.assertTrue(latest_record["executed"])
+        assert latest_record["executed"]
 
     def test_inventory_metrics_calculation(self):
         """Test comprehensive inventory metrics calculation."""
@@ -287,12 +287,12 @@ class TestInventoryManager(unittest.TestCase):
         metrics = self.inventory_manager.get_inventory_metrics()
 
         # Verify metrics
-        self.assertIsInstance(metrics, InventoryMetrics)
-        self.assertEqual(metrics.symbol, self.symbol)
-        self.assertEqual(metrics.net_position, Decimal("1.5"))
-        self.assertGreater(metrics.position_value, 0)
-        self.assertGreater(metrics.imbalance_percentage, 0)
-        self.assertGreater(metrics.risk_score, 0)
+        assert isinstance(metrics, InventoryMetrics)
+        assert metrics.symbol == self.symbol
+        assert metrics.net_position == Decimal("1.5")
+        assert metrics.position_value > 0
+        assert metrics.imbalance_percentage > 0
+        assert metrics.risk_score > 0
         self.assertAlmostEqual(metrics.inventory_duration_hours, 1.0, places=1)
 
     def test_position_summary(self):
@@ -307,17 +307,17 @@ class TestInventoryManager(unittest.TestCase):
         summary = self.inventory_manager.get_position_summary()
 
         # Verify summary structure
-        self.assertIn("symbol", summary)
-        self.assertIn("current_position", summary)
-        self.assertIn("position_value", summary)
-        self.assertIn("imbalance_percentage", summary)
-        self.assertIn("risk_score", summary)
-        self.assertIn("rebalancing_stats", summary)
+        assert "symbol" in summary
+        assert "current_position" in summary
+        assert "position_value" in summary
+        assert "imbalance_percentage" in summary
+        assert "risk_score" in summary
+        assert "rebalancing_stats" in summary
 
         # Verify rebalancing stats
         rebal_stats = summary["rebalancing_stats"]
-        self.assertEqual(rebal_stats["total_success"], 5)
-        self.assertEqual(rebal_stats["total_failure"], 1)
+        assert rebal_stats["total_success"] == 5
+        assert rebal_stats["total_failure"] == 1
 
     def test_state_persistence(self):
         """Test state saving and loading."""
@@ -331,7 +331,7 @@ class TestInventoryManager(unittest.TestCase):
         self.inventory_manager._save_state()
 
         # Verify state file exists
-        self.assertTrue(self.inventory_manager.state_file.exists())
+        assert self.inventory_manager.state_file.exists()
 
         # Create new manager and load state
         new_manager = InventoryManager(
@@ -340,10 +340,10 @@ class TestInventoryManager(unittest.TestCase):
         )
 
         # Verify state was loaded
-        self.assertEqual(new_manager._current_position, Decimal("1.5"))
-        self.assertEqual(new_manager._average_entry_price, Decimal(50000))
-        self.assertEqual(new_manager._total_realized_pnl, Decimal(100))
-        self.assertEqual(new_manager._rebalancing_success_count, 3)
+        assert new_manager._current_position == Decimal("1.5")
+        assert new_manager._average_entry_price == Decimal(50000)
+        assert new_manager._total_realized_pnl == Decimal(100)
+        assert new_manager._rebalancing_success_count == 3
 
     def test_error_handling(self):
         """Test error handling in various scenarios."""
@@ -373,7 +373,7 @@ class TestInventoryManager(unittest.TestCase):
         )
 
         # Should return valid metrics despite invalid order
-        self.assertIsInstance(metrics, InventoryMetrics)
+        assert isinstance(metrics, InventoryMetrics)
 
     def test_risk_score_calculation(self):
         """Test risk score calculation logic."""
@@ -382,15 +382,15 @@ class TestInventoryManager(unittest.TestCase):
         risk_score = self.inventory_manager._calculate_risk_score(imbalance_pct)
 
         # Should return reasonable risk score
-        self.assertGreaterEqual(risk_score, 0)
-        self.assertLessEqual(risk_score, 100)
+        assert risk_score >= 0
+        assert risk_score <= 100
 
         # Test with high imbalance
         high_imbalance = 20.0
         high_risk_score = self.inventory_manager._calculate_risk_score(high_imbalance)
 
         # Higher imbalance should result in higher risk score
-        self.assertGreater(high_risk_score, risk_score)
+        assert high_risk_score > risk_score
 
     def test_multiple_position_changes(self):
         """Test handling multiple position changes over time."""
@@ -442,14 +442,14 @@ class TestInventoryManager(unittest.TestCase):
             metrics = self.inventory_manager.track_position_changes([order], position)
 
             # Verify metrics are valid
-            self.assertIsInstance(metrics, InventoryMetrics)
-            self.assertEqual(metrics.symbol, self.symbol)
+            assert isinstance(metrics, InventoryMetrics)
+            assert metrics.symbol == self.symbol
 
         # Verify final state
         final_position = sum(
             o.filled_quantity if o.side == "BUY" else -o.filled_quantity for o in orders
         )
-        self.assertEqual(self.inventory_manager._current_position, final_position)
+        assert self.inventory_manager._current_position == final_position
 
     def test_account_equity_update(self):
         """Test account equity updates and impact on position limits."""
@@ -470,7 +470,7 @@ class TestInventoryManager(unittest.TestCase):
         updated_limit = updated_metrics.max_position_limit
 
         # Position limit should have doubled
-        self.assertEqual(updated_limit, initial_limit * 2)
+        assert updated_limit == initial_limit * 2
 
     def test_reset_inventory(self):
         """Test inventory reset functionality."""
@@ -484,10 +484,10 @@ class TestInventoryManager(unittest.TestCase):
         self.inventory_manager.reset_inventory()
 
         # Verify everything is cleared
-        self.assertEqual(self.inventory_manager._current_position, Decimal(0))
-        self.assertIsNone(self.inventory_manager._average_entry_price)
-        self.assertEqual(self.inventory_manager._total_realized_pnl, Decimal(0))
-        self.assertEqual(len(self.inventory_manager._position_history), 0)
+        assert self.inventory_manager._current_position == Decimal(0)
+        assert self.inventory_manager._average_entry_price is None
+        assert self.inventory_manager._total_realized_pnl == Decimal(0)
+        assert len(self.inventory_manager._position_history) == 0
 
 
 class TestVuManChuBias(unittest.TestCase):
@@ -505,18 +505,18 @@ class TestVuManChuBias(unittest.TestCase):
         )
 
         # Verify properties
-        self.assertEqual(bias.overall_bias, "BULLISH")
-        self.assertEqual(bias.cipher_a_signal, "GREEN_DIAMOND")
-        self.assertEqual(bias.cipher_b_signal, "BUY_CIRCLE")
-        self.assertEqual(bias.wave_trend_direction, "UP")
-        self.assertEqual(bias.signal_strength, 0.8)
-        self.assertEqual(bias.confidence, 0.9)
+        assert bias.overall_bias == "BULLISH"
+        assert bias.cipher_a_signal == "GREEN_DIAMOND"
+        assert bias.cipher_b_signal == "BUY_CIRCLE"
+        assert bias.wave_trend_direction == "UP"
+        assert bias.signal_strength == 0.8
+        assert bias.confidence == 0.9
 
         # Test serialization
         bias_dict = bias.to_dict()
-        self.assertIn("overall_bias", bias_dict)
-        self.assertIn("cipher_a_signal", bias_dict)
-        self.assertIn("timestamp", bias_dict)
+        assert "overall_bias" in bias_dict
+        assert "cipher_a_signal" in bias_dict
+        assert "timestamp" in bias_dict
 
 
 class TestRebalancingAction(unittest.TestCase):
@@ -535,19 +535,19 @@ class TestRebalancingAction(unittest.TestCase):
         )
 
         # Verify properties
-        self.assertEqual(action.action_type, "SELL")
-        self.assertEqual(action.quantity, Decimal("1.5"))
-        self.assertEqual(action.urgency, "HIGH")
-        self.assertEqual(action.reason, "Emergency rebalancing")
-        self.assertEqual(action.target_price, Decimal(51000))
-        self.assertEqual(action.vumanchu_bias, "BEARISH")
-        self.assertEqual(action.confidence, 0.8)
+        assert action.action_type == "SELL"
+        assert action.quantity == Decimal("1.5")
+        assert action.urgency == "HIGH"
+        assert action.reason == "Emergency rebalancing"
+        assert action.target_price == Decimal(51000)
+        assert action.vumanchu_bias == "BEARISH"
+        assert action.confidence == 0.8
 
         # Test serialization
         action_dict = action.to_dict()
-        self.assertIn("action_type", action_dict)
-        self.assertIn("quantity", action_dict)
-        self.assertIn("timestamp", action_dict)
+        assert "action_type" in action_dict
+        assert "quantity" in action_dict
+        assert "timestamp" in action_dict
 
 
 class TestInventoryMetrics(unittest.TestCase):
@@ -568,17 +568,17 @@ class TestInventoryMetrics(unittest.TestCase):
         )
 
         # Verify properties
-        self.assertEqual(metrics.symbol, "BTC-USD")
-        self.assertEqual(metrics.net_position, Decimal("1.5"))
-        self.assertEqual(metrics.position_value, Decimal(75000))
-        self.assertEqual(metrics.imbalance_percentage, 7.5)
-        self.assertEqual(metrics.risk_score, 25.0)
+        assert metrics.symbol == "BTC-USD"
+        assert metrics.net_position == Decimal("1.5")
+        assert metrics.position_value == Decimal(75000)
+        assert metrics.imbalance_percentage == 7.5
+        assert metrics.risk_score == 25.0
 
         # Test serialization
         metrics_dict = metrics.to_dict()
-        self.assertIn("symbol", metrics_dict)
-        self.assertIn("net_position", metrics_dict)
-        self.assertIn("timestamp", metrics_dict)
+        assert "symbol" in metrics_dict
+        assert "net_position" in metrics_dict
+        assert "timestamp" in metrics_dict
 
 
 if __name__ == "__main__":

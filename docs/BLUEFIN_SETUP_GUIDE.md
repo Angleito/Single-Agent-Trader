@@ -276,7 +276,7 @@ EXCHANGE__BLUEFIN_RPC_URL=https://sui-mainnet.nodeinfra.com
 
 # Alternative RPC endpoints:
 # https://fullnode.mainnet.sui.io
-# https://sui-rpc.publicnode.com  
+# https://sui-rpc.publicnode.com
 # https://mainnet.suiet.app
 ```
 

@@ -20,10 +20,11 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
-from ..exchange.bluefin import BluefinClient
-from ..exchange.bluefin_fee_calculator import BluefinFeeCalculator
-from ..indicators.vumanchu import VuManChuIndicators
-from ..trading_types import MarketState, TradeAction
+from bot.exchange.bluefin import BluefinClient
+from bot.exchange.bluefin_fee_calculator import BluefinFeeCalculator
+from bot.indicators.vumanchu import VuManChuIndicators
+from bot.trading_types import MarketState, TradeAction
+
 from .inventory_manager import InventoryManager, RebalancingAction
 from .market_making_order_manager import MarketMakingOrderManager
 from .market_making_performance_monitor import MarketMakingPerformanceMonitor
@@ -186,7 +187,7 @@ class MarketMakingEngine:
             logger.info("Successfully initialized all market making components")
 
         except Exception as e:
-            logger.error("Failed to initialize market making components: %s", e)
+            logger.exception("Failed to initialize market making components: %s", e)
             raise
 
     async def analyze_market_state(self, market_state: MarketState) -> DirectionalBias:
@@ -222,7 +223,7 @@ class MarketMakingEngine:
             return bias
 
         except Exception as e:
-            logger.error("Error analyzing market state: %s", e)
+            logger.exception("Error analyzing market state: %s", e)
             # Return neutral bias on error
             return DirectionalBias(
                 direction="neutral", strength=0.0, confidence=0.0, signals={}
@@ -282,7 +283,7 @@ class MarketMakingEngine:
             return order_levels, rebalancing_action
 
         except Exception as e:
-            logger.error("Error calculating optimal actions: %s", e)
+            logger.exception("Error calculating optimal actions: %s", e)
             return [], None
 
     async def execute_market_making_cycle(
@@ -336,7 +337,7 @@ class MarketMakingEngine:
             return True
 
         except Exception as e:
-            logger.error("Error executing market making cycle: %s", e)
+            logger.exception("Error executing market making cycle: %s", e)
             self.state.error_count += 1
             self.state.last_error_time = datetime.now(UTC)
             return False
@@ -371,7 +372,7 @@ class MarketMakingEngine:
                     await self._emergency_rebalance()
 
         except Exception as e:
-            logger.error("Error in monitoring and adjustment: %s", e)
+            logger.exception("Error in monitoring and adjustment: %s", e)
 
     async def _execute_rebalancing(self, action: RebalancingAction) -> bool:
         """Execute inventory rebalancing action."""
@@ -384,7 +385,7 @@ class MarketMakingEngine:
             )
 
             # Create trade action for rebalancing
-            trade_action = TradeAction(
+            TradeAction(
                 action="LONG" if action.action_type == "BUY" else "SHORT",
                 size_pct=float(
                     min(action.quantity / self.max_position_value * 100, 25)
@@ -412,21 +413,20 @@ class MarketMakingEngine:
             return success
 
         except Exception as e:
-            logger.error("Error executing rebalancing: %s", e)
+            logger.exception("Error executing rebalancing: %s", e)
             return False
 
     async def _check_emergency_conditions(self) -> bool:
         """Check for emergency conditions that require immediate action."""
         try:
             # Check error rate
-            if self.state.error_count >= self.emergency_stop_threshold:
-                if (
-                    self.state.last_error_time
-                    and (datetime.now(UTC) - self.state.last_error_time).total_seconds()
-                    < 3600
-                ):
-                    logger.error("Emergency stop triggered: too many errors")
-                    return True
+            if self.state.error_count >= self.emergency_stop_threshold and (
+                self.state.last_error_time
+                and (datetime.now(UTC) - self.state.last_error_time).total_seconds()
+                < 3600
+            ):
+                logger.error("Emergency stop triggered: too many errors")
+                return True
 
             # Check position size
             inventory_metrics = self.inventory_manager.get_inventory_metrics()
@@ -447,7 +447,7 @@ class MarketMakingEngine:
             return False
 
         except Exception as e:
-            logger.error("Error checking emergency conditions: %s", e)
+            logger.exception("Error checking emergency conditions: %s", e)
             return True  # Err on the side of caution
 
     async def _emergency_rebalance(self) -> None:
@@ -470,7 +470,7 @@ class MarketMakingEngine:
             await self._execute_rebalancing(action)
 
         except Exception as e:
-            logger.error("Error in emergency rebalancing: %s", e)
+            logger.exception("Error in emergency rebalancing: %s", e)
 
     async def _log_performance_summary(self, performance_metrics: Any) -> None:
         """Log performance summary for monitoring."""
@@ -488,7 +488,7 @@ class MarketMakingEngine:
             )
 
         except Exception as e:
-            logger.error("Error logging performance summary: %s", e)
+            logger.exception("Error logging performance summary: %s", e)
 
     async def emergency_stop_trading(self) -> None:
         """
@@ -516,7 +516,7 @@ class MarketMakingEngine:
             )
 
         except Exception as e:
-            logger.error("Error during emergency stop: %s", e)
+            logger.exception("Error during emergency stop: %s", e)
 
     async def initialize(self) -> None:
         """Initialize the market making engine (alias for start)."""
@@ -545,7 +545,7 @@ class MarketMakingEngine:
             logger.info("Market making engine started successfully")
 
         except Exception as e:
-            logger.error("Error starting market making engine: %s", e)
+            logger.exception("Error starting market making engine: %s", e)
             raise
 
     async def stop(self) -> None:
@@ -567,7 +567,7 @@ class MarketMakingEngine:
             logger.info("Market making engine stopped successfully")
 
         except Exception as e:
-            logger.error("Error stopping market making engine: %s", e)
+            logger.exception("Error stopping market making engine: %s", e)
 
     @asynccontextmanager
     async def run_context(self):
@@ -633,7 +633,7 @@ class MarketMakingEngine:
             return success
 
         except Exception as e:
-            logger.error("Error in market making cycle: %s", e)
+            logger.exception("Error in market making cycle: %s", e)
             self.state.error_count += 1
             self.state.last_error_time = datetime.now(UTC)
             return False
@@ -695,7 +695,7 @@ class MarketMakingEngine:
             )
 
         except Exception as e:
-            logger.error("Error in market making analysis: %s", e)
+            logger.exception("Error in market making analysis: %s", e)
             return TradeAction(
                 action="HOLD",
                 size_pct=0.0,

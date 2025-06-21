@@ -54,7 +54,7 @@ def __ensure_mcp_running():
     # Optionally stop container after tests (comment out to keep running)
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_mcp_health_check(__ensure_mcp_running):
     """Test MCP server health check endpoint."""
     async with httpx.AsyncClient() as client:
@@ -67,7 +67,7 @@ async def test_mcp_health_check(__ensure_mcp_running):
         assert "memory_count" in data
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_mcp_connection(_ensure_mcp_running):
     """Test connecting to MCP memory server."""
     server = MCPMemoryServer(server_url=MCP_SERVER_URL)
@@ -78,7 +78,7 @@ async def test_mcp_connection(_ensure_mcp_running):
     await server.disconnect()
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_store_and_retrieve_experience(_ensure_mcp_running):
     """Test storing and retrieving trading experiences."""
     server = MCPMemoryServer(server_url=MCP_SERVER_URL)
@@ -165,7 +165,7 @@ async def test_store_and_retrieve_experience(_ensure_mcp_running):
     await server.disconnect()
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_memory_persistence_across_connections(_ensure_mcp_running):
     """Test that memories persist across different connections."""
     # First connection - store data
@@ -229,7 +229,7 @@ async def test_memory_persistence_across_connections(_ensure_mcp_running):
     await server2.disconnect()
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_pattern_indexing(_ensure_mcp_running):
     """Test pattern-based retrieval."""
     server = MCPMemoryServer(server_url=MCP_SERVER_URL)
@@ -288,7 +288,7 @@ async def test_pattern_indexing(_ensure_mcp_running):
     await server.disconnect()
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_container_resource_usage(_ensure_mcp_running):
     """Test container resource usage is within limits."""
     # Get container stats

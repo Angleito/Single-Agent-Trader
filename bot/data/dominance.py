@@ -17,7 +17,7 @@ from typing import Any, ClassVar
 import aiohttp
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from bot.config import settings
 
@@ -46,8 +46,7 @@ class DominanceData(BaseModel):
     dominance_sma_20: float | None = None  # 20-period SMA of dominance
     dominance_rsi: float | None = None  # RSI of dominance changes
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class DominanceDataProvider:
@@ -721,8 +720,7 @@ class DominanceCandleData(BaseModel):
         None, description="Trend signal: BULLISH, BEARISH, or NEUTRAL"
     )
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class DominanceCandleBuilder:

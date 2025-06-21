@@ -95,7 +95,7 @@
 - Price validation prevents out-of-range values
 - Mixed format data handled correctly
 
-### 2. Paper Trading Balance Behavior ✅  
+### 2. Paper Trading Balance Behavior ✅
 - Starting balances remain at configured amounts ($10,000)
 - Account growth is proportional to market movements
 - No unrealistic balance inflation to millions

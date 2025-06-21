@@ -150,7 +150,7 @@ docker-compose config --quiet
 
 The workflow automatically tests:
 - Configuration validation
-- Environment variable substitution  
+- Environment variable substitution
 - Service definitions
 - Build contexts
 - Network configuration

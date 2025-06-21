@@ -26,7 +26,7 @@ services=$(docker-compose config --services)
 for service in $services; do
     # Check if service has platform specification
     platform=$(docker-compose config | grep -A 50 "^  $service:" | grep -m 1 "platform:" | awk '{print $2}' || echo "")
-    
+
     if [ "$platform" = "linux/amd64" ]; then
         echo "✅ $service: platform correctly set to linux/amd64"
     else

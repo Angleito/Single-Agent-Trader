@@ -47,7 +47,7 @@ check() {
 # Validate required files exist
 validate_files() {
     info "Validating required files..."
-    
+
     local required_files=(
         "docker-compose.vps.yml"
         "scripts/vps-deploy.sh"
@@ -58,7 +58,7 @@ validate_files() {
         "docs/VPS_DEPLOYMENT_GUIDE.md"
         "docs/VPS_TROUBLESHOOTING.md"
     )
-    
+
     for file in "${required_files[@]}"; do
         check
         if [ -f "$PROJECT_ROOT/$file" ]; then
@@ -67,13 +67,13 @@ validate_files() {
             error "Required file missing: $file"
         fi
     done
-    
+
     # Check if scripts are executable
     local executable_scripts=(
         "scripts/vps-deploy.sh"
         "scripts/vps-healthcheck.sh"
     )
-    
+
     for script in "${executable_scripts[@]}"; do
         check
         if [ -x "$PROJECT_ROOT/$script" ]; then
@@ -87,9 +87,9 @@ validate_files() {
 # Validate Docker Compose configuration
 validate_docker_compose() {
     info "Validating Docker Compose configuration..."
-    
+
     cd "$PROJECT_ROOT"
-    
+
     # Check if docker-compose.vps.yml is valid
     check
     if docker-compose -f docker-compose.vps.yml config >/dev/null 2>&1; then
@@ -98,7 +98,7 @@ validate_docker_compose() {
         error "docker-compose.vps.yml syntax is invalid"
         docker-compose -f docker-compose.vps.yml config
     fi
-    
+
     # Check for required services
     local required_services=(
         "bluefin-service"
@@ -107,7 +107,7 @@ validate_docker_compose() {
         "monitoring-dashboard"
         "log-aggregator"
     )
-    
+
     for service in "${required_services[@]}"; do
         check
         if docker-compose -f docker-compose.vps.yml config | grep -q "^  $service:"; then
@@ -116,7 +116,7 @@ validate_docker_compose() {
             error "Required service missing: $service"
         fi
     done
-    
+
     # Check for VPS-specific configurations
     check
     if docker-compose -f docker-compose.vps.yml config | grep -q "VPS_DEPLOYMENT=true"; then
@@ -124,7 +124,7 @@ validate_docker_compose() {
     else
         warn "VPS deployment flag may not be set correctly"
     fi
-    
+
     # Check for security configurations
     check
     if docker-compose -f docker-compose.vps.yml config | grep -q "read_only: true"; then
@@ -132,7 +132,7 @@ validate_docker_compose() {
     else
         warn "Read-only filesystem security may not be configured"
     fi
-    
+
     # Check for resource limits
     check
     if docker-compose -f docker-compose.vps.yml config | grep -q "resources:"; then
@@ -145,11 +145,11 @@ validate_docker_compose() {
 # Validate environment template
 validate_env_template() {
     info "Validating environment template..."
-    
+
     check
     if [ -f "$PROJECT_ROOT/.env.vps.template" ]; then
         log "Environment template exists"
-        
+
         # Check for required environment variables
         local required_vars=(
             "EXCHANGE__BLUEFIN_PRIVATE_KEY"
@@ -159,7 +159,7 @@ validate_env_template() {
             "GEOGRAPHIC_REGION"
             "MONITORING__ENABLED"
         )
-        
+
         for var in "${required_vars[@]}"; do
             check
             if grep -q "^$var=" "$PROJECT_ROOT/.env.vps.template"; then
@@ -168,7 +168,7 @@ validate_env_template() {
                 error "Required environment variable missing from template: $var"
             fi
         done
-        
+
         # Check for security-related variables
         local security_vars=(
             "PROXY_ENABLED"
@@ -176,7 +176,7 @@ validate_env_template() {
             "BACKUP_ENABLED"
             "RATE_LIMIT_ENABLED"
         )
-        
+
         for var in "${security_vars[@]}"; do
             check
             if grep -q "^$var=" "$PROJECT_ROOT/.env.vps.template"; then
@@ -185,7 +185,7 @@ validate_env_template() {
                 warn "Security environment variable missing from template: $var"
             fi
         done
-        
+
     else
         error "Environment template does not exist"
     fi
@@ -194,12 +194,12 @@ validate_env_template() {
 # Validate configuration files
 validate_config_files() {
     info "Validating configuration files..."
-    
+
     # Check VPS production config
     check
     if [ -f "$PROJECT_ROOT/config/vps_production.json" ]; then
         log "VPS production config exists"
-        
+
         # Validate JSON syntax
         check
         if jq empty "$PROJECT_ROOT/config/vps_production.json" >/dev/null 2>&1; then
@@ -207,7 +207,7 @@ validate_config_files() {
         else
             error "VPS production config has invalid JSON syntax"
         fi
-        
+
         # Check for required sections
         local required_sections=(
             "system"
@@ -219,7 +219,7 @@ validate_config_files() {
             "network"
             "security"
         )
-        
+
         for section in "${required_sections[@]}"; do
             check
             if jq -e ".$section" "$PROJECT_ROOT/config/vps_production.json" >/dev/null 2>&1; then
@@ -228,7 +228,7 @@ validate_config_files() {
                 error "Required config section missing: $section"
             fi
         done
-        
+
     else
         error "VPS production config does not exist"
     fi
@@ -237,11 +237,11 @@ validate_config_files() {
 # Validate Dockerfile modifications
 validate_dockerfile() {
     info "Validating Dockerfile modifications..."
-    
+
     check
     if [ -f "$PROJECT_ROOT/services/Dockerfile.bluefin" ]; then
         log "Bluefin Dockerfile exists"
-        
+
         # Check for VPS-specific additions
         local vps_features=(
             "VPS_DEPLOYMENT"
@@ -250,7 +250,7 @@ validate_dockerfile() {
             "prometheus-client"
             "structlog"
         )
-        
+
         for feature in "${vps_features[@]}"; do
             check
             if grep -q "$feature" "$PROJECT_ROOT/services/Dockerfile.bluefin"; then
@@ -259,7 +259,7 @@ validate_dockerfile() {
                 warn "VPS feature may be missing from Dockerfile: $feature"
             fi
         done
-        
+
         # Check for security enhancements
         check
         if grep -q "USER bluefin" "$PROJECT_ROOT/services/Dockerfile.bluefin"; then
@@ -267,7 +267,7 @@ validate_dockerfile() {
         else
             error "Non-root user not configured in Dockerfile"
         fi
-        
+
     else
         error "Bluefin Dockerfile does not exist"
     fi
@@ -276,12 +276,12 @@ validate_dockerfile() {
 # Validate scripts
 validate_scripts() {
     info "Validating deployment scripts..."
-    
+
     # Check deployment script
     check
     if [ -f "$PROJECT_ROOT/scripts/vps-deploy.sh" ]; then
         log "VPS deployment script exists"
-        
+
         # Check for required functions
         local required_functions=(
             "check_system_requirements"
@@ -290,7 +290,7 @@ validate_scripts() {
             "deploy_services"
             "verify_deployment"
         )
-        
+
         for func in "${required_functions[@]}"; do
             check
             if grep -q "^$func()" "$PROJECT_ROOT/scripts/vps-deploy.sh"; then
@@ -299,23 +299,23 @@ validate_scripts() {
                 error "Required function missing from deployment script: $func"
             fi
         done
-        
+
     else
         error "VPS deployment script does not exist"
     fi
-    
+
     # Check health check script
     check
     if [ -f "$PROJECT_ROOT/scripts/vps-healthcheck.sh" ]; then
         log "VPS health check script exists"
-        
+
         # Check for service-specific checks
         local service_checks=(
             "check_bluefin_service_health"
             "check_trading_bot_health"
             "check_mcp_memory_health"
         )
-        
+
         for check_func in "${service_checks[@]}"; do
             check
             if grep -q "$check_func" "$PROJECT_ROOT/scripts/vps-healthcheck.sh"; then
@@ -324,7 +324,7 @@ validate_scripts() {
                 warn "Service health check function missing: $check_func"
             fi
         done
-        
+
     else
         error "VPS health check script does not exist"
     fi
@@ -333,12 +333,12 @@ validate_scripts() {
 # Validate documentation
 validate_documentation() {
     info "Validating documentation..."
-    
+
     # Check deployment guide
     check
     if [ -f "$PROJECT_ROOT/docs/VPS_DEPLOYMENT_GUIDE.md" ]; then
         log "VPS deployment guide exists"
-        
+
         # Check for required sections
         local required_sections=(
             "Prerequisites"
@@ -347,7 +347,7 @@ validate_documentation() {
             "Monitoring"
             "Troubleshooting"
         )
-        
+
         for section in "${required_sections[@]}"; do
             check
             if grep -q "## $section" "$PROJECT_ROOT/docs/VPS_DEPLOYMENT_GUIDE.md"; then
@@ -356,11 +356,11 @@ validate_documentation() {
                 warn "Required documentation section missing: $section"
             fi
         done
-        
+
     else
         error "VPS deployment guide does not exist"
     fi
-    
+
     # Check troubleshooting guide
     check
     if [ -f "$PROJECT_ROOT/docs/VPS_TROUBLESHOOTING.md" ]; then
@@ -373,7 +373,7 @@ validate_documentation() {
 # Validate directory structure
 validate_directory_structure() {
     info "Validating directory structure..."
-    
+
     # Check if we're in the right directory
     check
     if [ -f "$PROJECT_ROOT/docker-compose.yml" ] && [ -f "$PROJECT_ROOT/pyproject.toml" ]; then
@@ -381,7 +381,7 @@ validate_directory_structure() {
     else
         error "Not in correct project root directory"
     fi
-    
+
     # Check for required directories
     local required_dirs=(
         "scripts"
@@ -390,7 +390,7 @@ validate_directory_structure() {
         "docs"
         "bot"
     )
-    
+
     for dir in "${required_dirs[@]}"; do
         check
         if [ -d "$PROJECT_ROOT/$dir" ]; then
@@ -416,7 +416,7 @@ generate_report() {
     echo "  Warnings: $WARNINGS"
     echo "  Success Rate: $(( (CHECKS - ERRORS) * 100 / CHECKS ))%"
     echo ""
-    
+
     if [ $ERRORS -eq 0 ]; then
         echo -e "${GREEN}✓ VALIDATION PASSED${NC}"
         echo "VPS deployment configuration is ready for deployment."
@@ -429,12 +429,12 @@ generate_report() {
     else
         echo -e "${RED}✗ VALIDATION FAILED${NC}"
         echo "Please fix the $ERRORS error(s) before proceeding with deployment."
-        
+
         if [ $WARNINGS -gt 0 ]; then
             echo ""
             echo -e "${YELLOW}Note: $WARNINGS warning(s) found. These are not critical but should be reviewed.${NC}"
         fi
-        
+
         return 1
     fi
 }
@@ -443,7 +443,7 @@ generate_report() {
 main() {
     echo "Starting VPS configuration validation..."
     echo ""
-    
+
     validate_directory_structure
     validate_files
     validate_docker_compose
@@ -452,7 +452,7 @@ main() {
     validate_dockerfile
     validate_scripts
     validate_documentation
-    
+
     generate_report
 }
 

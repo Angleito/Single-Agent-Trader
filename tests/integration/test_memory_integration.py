@@ -20,7 +20,7 @@ from bot.trading_types import (
 )
 
 
-@pytest.fixture()
+@pytest.fixture
 async def memory_server():
     """Create a memory server instance."""
     server = MCPMemoryServer()
@@ -29,7 +29,7 @@ async def memory_server():
     await server.disconnect()
 
 
-@pytest.fixture()
+@pytest.fixture
 async def experience_manager(memory_server):
     """Create an experience manager instance."""
     manager = ExperienceManager(memory_server)
@@ -38,13 +38,13 @@ async def experience_manager(memory_server):
     await manager.stop()
 
 
-@pytest.fixture()
+@pytest.fixture
 def self_improvement_engine(memory_server):
     """Create a self-improvement engine instance."""
     return SelfImprovementEngine(memory_server)
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_market_state():
     """Create a sample market state for testing."""
     return MarketState(
@@ -90,7 +90,7 @@ def sample_market_state():
     )
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_memory_server_store_and_retrieve(memory_server, sample_market_state):
     """Test storing and retrieving experiences."""
     # Store an experience
@@ -128,7 +128,7 @@ async def test_memory_server_store_and_retrieve(memory_server, sample_market_sta
     assert similar[0].experience_id == experience_id
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_experience_manager_lifecycle(
     experience_manager, memory_server, sample_market_state
 ):
@@ -158,7 +158,7 @@ async def test_experience_manager_lifecycle(
     assert summary["active_count"] == 0  # No active trades yet
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_self_improvement_analysis(
     self_improvement_engine, memory_server, sample_market_state
 ):
@@ -206,7 +206,7 @@ async def test_self_improvement_analysis(
     assert "confidence_factors" in recommendations
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_memory_enhanced_agent(memory_server, sample_market_state):
     """Test memory-enhanced LLM agent."""
     # Skip if no LLM configured
@@ -245,7 +245,7 @@ async def test_memory_enhanced_agent(memory_server, sample_market_state):
     # In production tests, you'd mock the LLM responses
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_pattern_statistics(memory_server, sample_market_state):
     """Test pattern statistics generation."""
     # Store experiences with different patterns

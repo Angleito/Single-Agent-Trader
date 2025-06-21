@@ -16,6 +16,7 @@ Key Features:
 """
 
 import asyncio
+import contextlib
 import logging
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
@@ -23,9 +24,10 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any
 
-from ..exchange.bluefin import BluefinClient
-from ..order_manager import OrderEvent, OrderManager
-from ..trading_types import Order
+from bot.exchange.bluefin import BluefinClient
+from bot.order_manager import OrderEvent, OrderManager
+from bot.trading_types import Order
+
 from .market_making_strategy import OrderLevel
 
 logger = logging.getLogger(__name__)
@@ -208,10 +210,8 @@ class MarketMakingOrderManager:
         # Cancel monitoring task
         if self._monitor_task:
             self._monitor_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._monitor_task
-            except asyncio.CancelledError:
-                pass
 
         # Cancel all active orders
         await self.cancel_all_orders(self.symbol)
@@ -316,9 +316,9 @@ class MarketMakingOrderManager:
                         self.reference_prices[level.level] = current_price
 
                         # Register callback for fill monitoring
-                        def create_callback(order_id_ref: str):
+                        def create_callback():
                             def callback(oid: str, event: OrderEvent) -> None:
-                                # Use order_id_ref for context if needed
+                                # Create async task to handle order event
                                 asyncio.create_task(
                                     self._handle_order_event(oid, event)
                                 )
@@ -326,7 +326,7 @@ class MarketMakingOrderManager:
                             return callback
 
                         self.order_manager.register_callback(
-                            order.id, create_callback(order.id)
+                            order.id, create_callback()
                         )
 
                         placed_orders[f"{level.side}_{level.level}"] = order
@@ -416,7 +416,7 @@ class MarketMakingOrderManager:
                         logger.warning("Failed to cancel order %s", order_id)
 
                 except Exception as e:
-                    logger.error("Error cancelling order %s: %s", order_id, e)
+                    logger.exception("Error cancelling order %s: %s", order_id, e)
 
             # Clean up tracking
             self._cleanup_cancelled_orders()
@@ -788,9 +788,7 @@ class MarketMakingOrderManager:
 
         # Simplified calculation - would use mark price in production
         position_value = self.inventory.total_base_qty * self.last_price
-        unrealized_pnl = position_value + self.inventory.total_quote_value
-
-        return unrealized_pnl
+        return position_value + self.inventory.total_quote_value
 
     async def _handle_order_event(self, order_id: str, event: OrderEvent) -> None:
         """Handle order lifecycle events."""
@@ -867,9 +865,8 @@ class MarketMakingOrderManager:
                 if (
                     level in self.orders_by_level
                     and side in self.orders_by_level[level]
-                ):
-                    if self.orders_by_level[level][side] == managed_order:
-                        del self.orders_by_level[level][side]
+                ) and self.orders_by_level[level][side] == managed_order:
+                    del self.orders_by_level[level][side]
 
         if orders_to_remove:
             logger.debug("Cleaned up %d completed orders", len(orders_to_remove))
@@ -905,10 +902,7 @@ class MarketMakingOrderManager:
                 return
 
             # Determine side for closing
-            if self.inventory.total_base_qty > 0:
-                close_side = "SELL"
-            else:
-                close_side = "BUY"
+            close_side = "SELL" if self.inventory.total_base_qty > 0 else "BUY"
 
             close_quantity = abs(self.inventory.total_base_qty)
 
@@ -949,10 +943,7 @@ class MarketMakingOrderManager:
             )
 
             # Place market order to reduce imbalance
-            if position_to_close > 0:
-                side = "SELL"
-            else:
-                side = "BUY"
+            side = "SELL" if position_to_close > 0 else "BUY"
 
             emergency_order = await self.exchange_client.place_market_order(
                 symbol=self.symbol,

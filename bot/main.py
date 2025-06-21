@@ -294,9 +294,9 @@ class TradingEngine:
         self._shutdown_requested = False
         self._memory_available = False  # Initialize early to prevent AttributeError
         self._last_position_log_time: datetime | None = None
-        self._background_tasks: list[
-            asyncio.Task[Any]
-        ] = []  # Track background tasks for cleanup
+        self._background_tasks: list[asyncio.Task[Any]] = (
+            []
+        )  # Track background tasks for cleanup
 
         # Initialize market making integrator (will be set up after LLM agent)
         self.market_making_integrator: Any | None = None
@@ -1612,10 +1612,15 @@ class TradingEngine:
                 if status.available:
                     self.logger.info("Service %s: Available", name)
                 else:
-                    self.logger.warning("Service %s: %s", name, status.error or "Unavailable")
+                    self.logger.warning(
+                        "Service %s: %s", name, status.error or "Unavailable"
+                    )
 
         except Exception as e:
-            self.logger.warning("Service initialization error: %s. Continuing with available services.", str(e))
+            self.logger.warning(
+                "Service initialization error: %s. Continuing with available services.",
+                str(e),
+            )
             console.print("    [yellow]⚠ Some optional services unavailable[/yellow]")
 
         # Connect OmniSearch if available (legacy path)
@@ -2786,7 +2791,10 @@ class TradingEngine:
 
         # Convert price for display if it's in 18-decimal format
         from bot.utils.price_conversion import convert_from_18_decimal
-        display_price = convert_from_18_decimal(current_price, self.symbol, "current_price")
+
+        display_price = convert_from_18_decimal(
+            current_price, self.symbol, "current_price"
+        )
 
         self.logger.info(
             "⚡ Scalping analysis: %s candle at %s - Price: $%s",
@@ -2968,7 +2976,10 @@ class TradingEngine:
 
         # Convert price for display if it's in 18-decimal format
         from bot.utils.price_conversion import convert_from_18_decimal
-        display_price = convert_from_18_decimal(current_price, self.symbol, "current_price")
+
+        display_price = convert_from_18_decimal(
+            current_price, self.symbol, "current_price"
+        )
 
         self.logger.info(
             "Loop %s: Price=$%s | LLM=%s | Action=%s (%s%%) | Risk=%s",
@@ -3048,7 +3059,10 @@ class TradingEngine:
                 latest_price = data_status.get("latest_price", "N/A")
                 if latest_price != "N/A":
                     from bot.utils.price_conversion import convert_from_18_decimal
-                    latest_price = convert_from_18_decimal(latest_price, self.symbol, "latest_price")
+
+                    latest_price = convert_from_18_decimal(
+                        latest_price, self.symbol, "latest_price"
+                    )
 
                 self.logger.info(
                     "🔄 Trading Status: Loop #%s | WebSocket: %s | Latest Price: $%s | OmniSearch: %s",
@@ -4057,6 +4071,7 @@ class TradingEngine:
                 from bot.exchange.bluefin_service_client import (
                     close_bluefin_service_client,
                 )
+
                 await asyncio.wait_for(close_bluefin_service_client(), timeout=2.0)
             except Exception:
                 pass

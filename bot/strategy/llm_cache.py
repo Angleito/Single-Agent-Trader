@@ -200,8 +200,8 @@ class LLMResponseCache:
 
         logger.info(
             "🚀 LLM Cache initialized: TTL=%ss, Max=%s entries",
-            ttl_seconds,
-            max_entries,
+            self.ttl_seconds,
+            self.max_entries,
         )
 
     def _start_cleanup_task(self):
@@ -246,7 +246,7 @@ class LLMResponseCache:
 
         if expired_keys:
             self.stats["cleanups"] += 1
-            logger.debug("Cache cleanup: removed %s expired entries", len(expired_keys))
+            logger.debug("Cache cleanup: removed %d expired entries", len(expired_keys))
 
         # Enforce max entries limit
         if len(self.cache) > self.max_entries:
@@ -258,7 +258,7 @@ class LLMResponseCache:
                 del self.cache[key]
                 self.stats["evictions"] += 1
 
-            logger.debug("Cache size limit: removed %s oldest entries", excess_count)
+            logger.debug("Cache size limit: removed %d oldest entries", excess_count)
 
     async def get_or_compute(
         self, market_state: MarketState, compute_func, *args, **kwargs
@@ -292,14 +292,14 @@ class LLMResponseCache:
             # Log cache hit for performance monitoring
             age_seconds = time.time() - cached_entry.timestamp
             # Add validation for age_seconds
-            if not isinstance(age_seconds, (int, float)) or age_seconds < 0:
+            if not isinstance(age_seconds, int | float) or age_seconds < 0:
                 age_seconds = 0.0
                 logger.warning("Invalid age_seconds calculated, using 0.0")
             logger.info(
-                "🎯 LLM Cache HIT: %s (age: %.1fs, hits: %s)",
+                "🎯 LLM Cache HIT: %s (age: %.1fs, hits: %d)",
                 cached_entry.response.action,
-                age_seconds,
-                cached_entry.hit_count,
+                float(age_seconds),
+                int(cached_entry.hit_count),
             )
 
             return cached_entry.response
@@ -311,7 +311,7 @@ class LLMResponseCache:
         response = await compute_func(*args, **kwargs)
         compute_time = time.time() - start_time
         # Add validation for compute_time
-        if not isinstance(compute_time, (int, float)) or compute_time < 0:
+        if not isinstance(compute_time, int | float) or compute_time < 0:
             compute_time = 0.0
             logger.warning("Invalid compute_time calculated, using 0.0")
 
@@ -319,7 +319,9 @@ class LLMResponseCache:
         self._store_response(cache_key, response, market_state)
 
         logger.info(
-            "🔄 LLM Cache MISS: %s (compute_time: %.2fs)", response.action, compute_time
+            "🔄 LLM Cache MISS: %s (compute_time: %.2fs)",
+            response.action,
+            float(compute_time),
         )
 
         return response
@@ -452,7 +454,7 @@ class LLMResponseCache:
             "cleanups": 0,
         }
 
-        logger.info("Cache cleared: removed %s entries", cleared_count)
+        logger.info("Cache cleared: removed %d entries", cleared_count)
 
     def __del__(self):
         """Cleanup on deletion."""

@@ -40,79 +40,79 @@ info() {
 # System requirements check
 check_system_requirements() {
     log "Checking system requirements..."
-    
+
     # Check if running as root for system setup
     if [[ $EUID -eq 0 ]]; then
         warn "Running as root. This is acceptable for initial VPS setup but not recommended for running the application."
     fi
-    
+
     # Check Docker installation
     if ! command -v docker &> /dev/null; then
         error "Docker is not installed. Please install Docker first."
     fi
-    
+
     # Check Docker Compose
     if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
         error "Docker Compose is not installed. Please install Docker Compose first."
     fi
-    
+
     # Check available disk space (minimum 10GB)
     AVAILABLE_SPACE=$(df / | tail -1 | awk '{print $4}')
     if [ "$AVAILABLE_SPACE" -lt 10485760 ]; then  # 10GB in KB
         error "Insufficient disk space. At least 10GB free space required."
     fi
-    
+
     # Check available memory (minimum 2GB)
     AVAILABLE_MEM=$(free -m | grep '^Mem:' | awk '{print $2}')
     if [ "$AVAILABLE_MEM" -lt 2048 ]; then
         warn "Low memory detected ($AVAILABLE_MEM MB). Recommended minimum: 2GB"
     fi
-    
+
     log "System requirements check completed successfully"
 }
 
 # Environment validation
 validate_environment() {
     log "Validating environment configuration..."
-    
+
     # Check for required environment file
     if [ ! -f "$PROJECT_ROOT/.env" ]; then
         error ".env file not found. Please create .env file with required configuration."
     fi
-    
+
     # Source environment variables
     source "$PROJECT_ROOT/.env"
-    
+
     # Validate critical environment variables
     REQUIRED_VARS=(
         "EXCHANGE__BLUEFIN_PRIVATE_KEY"
         "BLUEFIN_SERVICE_API_KEY"
         "LLM__OPENAI_API_KEY"
     )
-    
+
     for var in "${REQUIRED_VARS[@]}"; do
         if [ -z "${!var:-}" ]; then
             error "Required environment variable $var is not set"
         fi
     done
-    
+
     # Validate Bluefin private key format
     if [[ ! "$EXCHANGE__BLUEFIN_PRIVATE_KEY" =~ ^0x[a-fA-F0-9]{64}$ ]]; then
         error "Invalid Bluefin private key format. Must be 64-character hex string starting with 0x"
     fi
-    
+
     # Validate API key format
     if [[ ${#BLUEFIN_SERVICE_API_KEY} -lt 32 ]]; then
         warn "Bluefin service API key seems short. Ensure it's correctly configured."
     fi
-    
+
     log "Environment validation completed successfully"
 }
 
 # VPS-specific system setup
 setup_vps_system() {
     log "Setting up VPS-specific system configuration..."
-    
+
     # Create necessary directories
     sudo mkdir -p /var/log/vps-trading-bot
     sudo mkdir -p /var/lib/vps-trading-bot/data
@@ -123,12 +123,12 @@ setup_vps_system() {
     sudo mkdir -p /var/log/vps-mcp-memory
     sudo mkdir -p /var/log/vps-dashboard
     sudo mkdir -p /var/lib/vps-dashboard/data
-    
+
     # Set proper permissions
     sudo chown -R 1000:1000 /var/log/vps-*
     sudo chown -R 1000:1000 /var/lib/vps-*
     sudo chown -R 1000:1000 /etc/vps-trading-bot
-    
+
     # Create systemd service for monitoring
     sudo tee /etc/systemd/system/vps-trading-monitor.service > /dev/null <<EOF
 [Unit]
@@ -144,7 +144,7 @@ User=root
 [Install]
 WantedBy=multi-user.target
 EOF
-    
+
     # Create systemd timer for periodic health checks
     sudo tee /etc/systemd/system/vps-trading-monitor.timer > /dev/null <<EOF
 [Unit]
@@ -158,19 +158,19 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 EOF
-    
+
     # Enable and start the timer
     sudo systemctl daemon-reload
     sudo systemctl enable vps-trading-monitor.timer
     sudo systemctl start vps-trading-monitor.timer
-    
+
     log "VPS system setup completed"
 }
 
 # Create VPS configuration files
 create_vps_config() {
     log "Creating VPS-specific configuration files..."
-    
+
     # Create VPS production config
     cat > "$PROJECT_ROOT/config/vps_production.json" <<EOF
 {
@@ -232,7 +232,7 @@ create_vps_config() {
   }
 }
 EOF
-    
+
     # Create Fluent Bit configuration for log aggregation
     mkdir -p "$PROJECT_ROOT/config"
     cat > "$PROJECT_ROOT/config/fluent-bit-vps.conf" <<EOF
@@ -282,7 +282,7 @@ EOF
     Match *
     Format json
 EOF
-    
+
     # Create VPS health check script
     sudo tee /usr/local/bin/vps-health-check.sh > /dev/null <<'EOF'
 #!/bin/bash
@@ -300,7 +300,7 @@ log() {
 # Check if services are running
 check_services() {
     local services=("bluefin-service-vps" "ai-trading-bot-vps" "mcp-memory-vps")
-    
+
     for service in "${services[@]}"; do
         if ! docker ps --format "table {{.Names}}" | grep -q "$service"; then
             log "ERROR: Service $service is not running"
@@ -341,16 +341,16 @@ main() {
 
 main
 EOF
-    
+
     sudo chmod +x /usr/local/bin/vps-health-check.sh
-    
+
     log "VPS configuration files created successfully"
 }
 
 # Network optimization for VPS
 optimize_vps_network() {
     log "Optimizing VPS network configuration..."
-    
+
     # Create Docker network if it doesn't exist
     if ! docker network ls | grep -q "vps-trading-network"; then
         docker network create \
@@ -359,7 +359,7 @@ optimize_vps_network() {
             --opt com.docker.network.bridge.name=vps-trading-br \
             vps-trading-network
     fi
-    
+
     # Optimize network settings for better performance
     sudo tee -a /etc/sysctl.conf > /dev/null <<EOF
 
@@ -371,35 +371,35 @@ net.ipv4.tcp_wmem = 4096 65536 16777216
 net.ipv4.tcp_congestion_control = bbr
 net.core.default_qdisc = fq
 EOF
-    
+
     # Apply sysctl settings
     sudo sysctl -p
-    
+
     log "VPS network optimization completed"
 }
 
 # Security hardening for VPS
 harden_vps_security() {
     log "Applying VPS security hardening..."
-    
+
     # Configure firewall rules
     if command -v ufw &> /dev/null; then
         sudo ufw --force enable
         sudo ufw default deny incoming
         sudo ufw default allow outgoing
-        
+
         # Allow SSH (adjust port as needed)
         sudo ufw allow 22/tcp
-        
+
         # Allow HTTPS for external services
         sudo ufw allow 443/tcp
-        
+
         # Allow monitoring dashboard (adjust as needed)
         sudo ufw allow 8000/tcp
-        
+
         log "UFW firewall configured"
     fi
-    
+
     # Set up log rotation for application logs
     sudo tee /etc/logrotate.d/vps-trading-bot > /dev/null <<EOF
 /var/log/vps-trading-bot/*.log {
@@ -435,29 +435,29 @@ harden_vps_security() {
     copytruncate
 }
 EOF
-    
+
     log "VPS security hardening completed"
 }
 
 # Deploy services
 deploy_services() {
     log "Deploying VPS services..."
-    
+
     cd "$PROJECT_ROOT"
-    
+
     # Build and start services
     docker-compose -f docker-compose.vps.yml build --no-cache
     docker-compose -f docker-compose.vps.yml up -d
-    
+
     # Wait for services to start
     log "Waiting for services to start..."
     sleep 30
-    
+
     # Verify service health
     local services=("bluefin-service-vps" "ai-trading-bot-vps" "mcp-memory-vps")
     local max_attempts=30
     local attempt=0
-    
+
     for service in "${services[@]}"; do
         attempt=0
         while [ $attempt -lt $max_attempts ]; do
@@ -465,61 +465,61 @@ deploy_services() {
                 log "Service $service is healthy"
                 break
             fi
-            
+
             attempt=$((attempt + 1))
             log "Waiting for $service to become healthy (attempt $attempt/$max_attempts)..."
             sleep 10
         done
-        
+
         if [ $attempt -eq $max_attempts ]; then
             error "Service $service failed to become healthy within expected time"
         fi
     done
-    
+
     log "All services deployed successfully"
 }
 
 # Verify deployment
 verify_deployment() {
     log "Verifying VPS deployment..."
-    
+
     # Check service status
     docker-compose -f "$PROJECT_ROOT/docker-compose.vps.yml" ps
-    
+
     # Check service logs for errors
     local services=("bluefin-service-vps" "ai-trading-bot-vps" "mcp-memory-vps")
-    
+
     for service in "${services[@]}"; do
         log "Checking logs for $service..."
         if docker logs "$service" 2>&1 | grep -i "error\|exception\|failed" | tail -5; then
             warn "Found potential issues in $service logs. Please review."
         fi
     done
-    
+
     # Test service endpoints
     log "Testing service endpoints..."
-    
+
     # Test Bluefin service health
     if curl -f --connect-timeout 10 http://localhost:8081/health &> /dev/null; then
         log "Bluefin service health endpoint is responding"
     else
         warn "Bluefin service health endpoint is not responding"
     fi
-    
+
     # Test MCP memory service health
     if curl -f --connect-timeout 10 http://localhost:8765/health &> /dev/null; then
         log "MCP memory service health endpoint is responding"
     else
         warn "MCP memory service health endpoint is not responding"
     fi
-    
+
     log "Deployment verification completed"
 }
 
 # Backup configuration
 setup_backup() {
     log "Setting up backup configuration..."
-    
+
     # Create backup script
     sudo tee /usr/local/bin/vps-backup.sh > /dev/null <<'EOF'
 #!/bin/bash
@@ -553,12 +553,12 @@ find "$BACKUP_DIR" -name "*.tar.gz" -mtime +$RETENTION_DAYS -delete
 
 echo "Backup completed: $DATE"
 EOF
-    
+
     sudo chmod +x /usr/local/bin/vps-backup.sh
-    
+
     # Create cron job for daily backups
     echo "0 2 * * * /usr/local/bin/vps-backup.sh" | sudo crontab -
-    
+
     log "Backup configuration completed"
 }
 
@@ -567,7 +567,7 @@ main() {
     log "Starting VPS deployment for AI Trading Bot..."
     log "Deployment environment: $DEPLOYMENT_ENV"
     log "VPS region: $VPS_REGION"
-    
+
     # Run deployment steps
     check_system_requirements
     validate_environment
@@ -578,9 +578,9 @@ main() {
     deploy_services
     verify_deployment
     setup_backup
-    
+
     log "VPS deployment completed successfully!"
-    
+
     # Display deployment summary
     echo ""
     echo "========================================"

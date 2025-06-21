@@ -4686,8 +4686,8 @@ if __name__ == "__main__":
     try:
         web.run_app(app, host=host, port=port)
     except Exception as e:
-        logger.error("❌ Failed to start Bluefin SDK service: %s", e)
-        logger.error(
+        logger.exception("❌ Failed to start Bluefin SDK service: %s", e)
+        logger.exception(
             "🔍 Check if port %s is already in use or host %s is accessible", port, host
         )
         raise

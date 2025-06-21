@@ -143,7 +143,9 @@ class CommandConsumer:
             return
 
         self.running = True
-        logger.info("Starting command polling every %s seconds", self.poll_interval)
+        logger.info(
+            "Starting command polling every %d seconds", int(self.poll_interval)
+        )
 
         while self.running:
             try:
@@ -210,7 +212,7 @@ class CommandConsumer:
                     pending_commands = data.get("pending_commands", [])
 
                     if pending_commands:
-                        logger.debug("Found %s pending commands", len(pending_commands))
+                        logger.debug("Found %d pending commands", len(pending_commands))
 
                         # Process commands by priority (lower number = higher priority)
                         sorted_commands = sorted(

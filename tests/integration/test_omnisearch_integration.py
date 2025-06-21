@@ -39,7 +39,7 @@ except ImportError as e:
 class TestOmniSearchClientIntegration:
     """Integration tests for OmniSearch client with real-world scenarios."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def omnisearch_client(self):
         """Create OmniSearch client for testing."""
         return OmniSearchClient(
@@ -51,7 +51,7 @@ class TestOmniSearchClientIntegration:
             rate_limit_window=60,
         )
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_client_connection_and_health_check(self, omnisearch_client):
         """Test client connection and health check functionality."""
         with patch.object(omnisearch_client, "_session") as mock_session:
@@ -75,7 +75,7 @@ class TestOmniSearchClientIntegration:
             await omnisearch_client.disconnect()
             assert omnisearch_client._connected is False
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_financial_news_search_integration(self, omnisearch_client):
         """Test financial news search with realistic data flow."""
         with patch.object(omnisearch_client, "_session") as mock_session:
@@ -139,7 +139,7 @@ class TestOmniSearchClientIntegration:
             )
             assert "ETH" in results[1].mentioned_symbols
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_sentiment_analysis_integration(self, omnisearch_client):
         """Test crypto sentiment analysis integration."""
         with patch.object(omnisearch_client, "_session") as mock_session:
@@ -185,7 +185,7 @@ class TestOmniSearchClientIntegration:
             assert "ETF approval momentum" in sentiment.key_drivers
             assert len(sentiment.risk_factors) == 2
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_market_correlation_integration(self, omnisearch_client):
         """Test market correlation analysis integration."""
         with patch.object(omnisearch_client, "_session") as mock_session:
@@ -216,7 +216,7 @@ class TestOmniSearchClientIntegration:
             assert correlation.beta == 1.45
             assert correlation.r_squared == 0.45
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_caching_and_rate_limiting_integration(self, omnisearch_client):
         """Test caching and rate limiting integration."""
         with patch.object(omnisearch_client, "_session") as mock_session:
@@ -243,12 +243,12 @@ class TestOmniSearchClientIntegration:
 class TestFinancialSentimentServiceIntegration:
     """Integration tests for financial sentiment service."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def sentiment_service(self):
         """Create financial sentiment service for testing."""
         return FinancialSentimentService()
 
-    @pytest.fixture()
+    @pytest.fixture
     def sample_market_news(self):
         """Sample market news for integration testing."""
         return [
@@ -303,7 +303,7 @@ class TestFinancialSentimentServiceIntegration:
             },
         ]
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_comprehensive_sentiment_analysis(
         self, sentiment_service, sample_market_news
     ):
@@ -333,7 +333,7 @@ class TestFinancialSentimentServiceIntegration:
             for indicator in ["surge", "rally", "bullish", "breakout"]
         )
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_crypto_indicators_extraction(
         self, sentiment_service, sample_market_news
     ):
@@ -365,7 +365,7 @@ class TestFinancialSentimentServiceIntegration:
             for indicator in crypto_indicators.volume_indicators
         )
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_nasdaq_indicators_extraction(
         self, sentiment_service, sample_market_news
     ):
@@ -392,7 +392,7 @@ class TestFinancialSentimentServiceIntegration:
         tech_signals_text = " ".join(nasdaq_indicators.tech_sector_signals).lower()
         assert "tech" in tech_signals_text or "ai" in tech_signals_text
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_correlation_score_calculation(
         self, sentiment_service, sample_market_news
     ):
@@ -416,7 +416,7 @@ class TestFinancialSentimentServiceIntegration:
             correlation_score > 0.0
         )  # Should be positive given bullish trends in both
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_llm_formatting_integration(
         self, sentiment_service, sample_market_news
     ):
@@ -464,12 +464,12 @@ class TestFinancialSentimentServiceIntegration:
 class TestMarketContextAnalyzerIntegration:
     """Integration tests for market context analyzer."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def context_analyzer(self):
         """Create market context analyzer for testing."""
         return MarketContextAnalyzer()
 
-    @pytest.fixture()
+    @pytest.fixture
     def sample_crypto_price_data(self):
         """Generate sample crypto price data."""
         rng = np.random.default_rng(42)
@@ -487,7 +487,7 @@ class TestMarketContextAnalyzerIntegration:
             "ohlcv": [{"close": price} for price in prices[-50:]],  # Last 50 candles
         }
 
-    @pytest.fixture()
+    @pytest.fixture
     def sample_nasdaq_price_data(self):
         """Generate sample NASDAQ price data."""
         rng = np.random.default_rng(24)
@@ -505,7 +505,7 @@ class TestMarketContextAnalyzerIntegration:
             "candles": [{"close": price} for price in prices[-50:]],  # Last 50 candles
         }
 
-    @pytest.fixture()
+    @pytest.fixture
     def sample_comprehensive_sentiment_data(self):
         """Sample comprehensive sentiment data for regime analysis."""
         return {
@@ -531,7 +531,7 @@ class TestMarketContextAnalyzerIntegration:
             "sentiment_divergence": False,
         }
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_comprehensive_correlation_analysis(
         self, context_analyzer, sample_crypto_price_data, sample_nasdaq_price_data
     ):
@@ -556,7 +556,7 @@ class TestMarketContextAnalyzerIntegration:
         if correlation.rolling_correlation_7d is not None:
             assert -1.0 <= correlation.rolling_correlation_7d <= 1.0
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_comprehensive_regime_detection(
         self, context_analyzer, sample_comprehensive_sentiment_data
     ):
@@ -589,7 +589,7 @@ class TestMarketContextAnalyzerIntegration:
         ]
         assert regime.fed_policy_stance == "DOVISH"
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_comprehensive_risk_sentiment_assessment(self, context_analyzer):
         """Test comprehensive risk sentiment assessment."""
         # Sample news data with mixed sentiment
@@ -625,7 +625,7 @@ class TestMarketContextAnalyzerIntegration:
             SentimentLevel.NEUTRAL,
         ]
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_momentum_alignment_analysis(self, context_analyzer):
         """Test momentum alignment analysis."""
         # Sample momentum indicators
@@ -675,7 +675,7 @@ class TestMarketContextAnalyzerIntegration:
         assert alignment.crypto_momentum_score > 0.0
         assert alignment.nasdaq_momentum_score > 0.0
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_comprehensive_context_summary(
         self,
         context_analyzer,
@@ -718,12 +718,12 @@ class TestMarketContextAnalyzerIntegration:
 class TestWebSearchFormatterIntegration:
     """Integration tests for web search formatter."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def search_formatter(self):
         """Create web search formatter for testing."""
         return WebSearchFormatter(max_tokens_per_section=400, max_total_tokens=1500)
 
-    @pytest.fixture()
+    @pytest.fixture
     def comprehensive_market_context(self):
         """Create comprehensive market context for testing."""
         # Sample news results
@@ -805,7 +805,7 @@ class TestWebSearchFormatterIntegration:
             "market_regime": market_regime,
         }
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_comprehensive_market_context_formatting(
         self, search_formatter, comprehensive_market_context
     ):
@@ -835,7 +835,7 @@ class TestWebSearchFormatterIntegration:
         assert "RISK_ON" in formatted_output  # Regime type
         assert "DOVISH" in formatted_output  # Fed stance
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_news_analysis_formatting_integration(self, search_formatter):
         """Test detailed news analysis formatting."""
         news_items = [
@@ -895,7 +895,7 @@ class TestWebSearchFormatterIntegration:
         # Check for sentiment analysis
         assert "BULLISH" in formatted_news or "bullish" in formatted_news
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_token_optimization_integration(self, search_formatter):
         """Test token optimization with large content."""
         # Create oversized content
@@ -945,7 +945,7 @@ class TestWebSearchFormatterIntegration:
         assert "NEWS ANALYSIS" in formatted_output
         assert "MARKET SENTIMENT ANALYSIS" in formatted_output
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_key_insights_extraction_integration(self, search_formatter):
         """Test comprehensive key insights extraction."""
         search_results = {
@@ -1013,14 +1013,14 @@ class TestWebSearchFormatterIntegration:
 class TestFullOmniSearchLLMIntegration:
     """Full integration tests for OmniSearch with LLM agent."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def mock_llm_agent(self):
         """Create mock LLM agent for testing."""
         agent = Mock()
         agent.generate_response = AsyncMock()
         return agent
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_complete_omnisearch_llm_workflow(self, mock_llm_agent):
         """Test complete OmniSearch integration with LLM agent workflow."""
         # Create all components
@@ -1192,7 +1192,7 @@ class TestFullOmniSearchLLMIntegration:
                 or "Institutional" in formatted_context
             )
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_error_handling_integration(self):
         """Test error handling across the complete integration."""
         # Create components
@@ -1233,7 +1233,7 @@ class TestFullOmniSearchLLMIntegration:
             assert isinstance(formatted_error, str)
             assert "COMPREHENSIVE MARKET CONTEXT ANALYSIS" in formatted_error
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_performance_integration(self):
         """Test performance of complete integration."""
         import time
@@ -1283,7 +1283,7 @@ class TestFullOmniSearchLLMIntegration:
 
 
 # Test fixtures for shared use
-@pytest.fixture()
+@pytest.fixture
 def sample_trading_context():
     """Sample trading context for integration testing."""
     return {
@@ -1310,7 +1310,7 @@ def sample_trading_context():
     }
 
 
-@pytest.fixture()
+@pytest.fixture
 def comprehensive_omnisearch_response():
     """Comprehensive OmniSearch response for testing."""
     return {
@@ -1391,7 +1391,7 @@ class TestOmniSearchConfigurationIntegration:
             # This would require actual environment variable handling in the client
             pass  # Placeholder for environment variable tests
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_configuration_validation(self):
         """Test configuration validation and error handling."""
         # Test with invalid configuration

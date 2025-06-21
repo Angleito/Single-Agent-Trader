@@ -29,7 +29,7 @@ from bot.trading_types import (
 class TestBalanceIntegration:
     """Test end-to-end balance functionality integration."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def mock_market_data(self):
         """Create realistic mock market data for testing."""
         base_price = 50000
@@ -53,14 +53,14 @@ class TestBalanceIntegration:
             )
         return market_data
 
-    @pytest.fixture()
+    @pytest.fixture
     def temp_data_dir(self, tmp_path):
         """Create temporary data directory for testing."""
         data_dir = tmp_path / "paper_trading"
         data_dir.mkdir(parents=True, exist_ok=True)
         return data_dir
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_account_initialization_and_balance_loading(self, temp_data_dir):
         """Test account initialization and balance loading from persistent storage."""
         starting_balance = Decimal("10000.00")
@@ -93,7 +93,7 @@ class TestBalanceIntegration:
         assert account2.margin_used == Decimal("1000.00")
         assert account2.equity == Decimal("10500.00")
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_trade_execution_with_balance_updates(
         self, mock_market_data, temp_data_dir
     ):
@@ -195,7 +195,7 @@ class TestBalanceIntegration:
 
             await engine._shutdown()
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_balance_reconciliation_after_trades(
         self, mock_market_data, temp_data_dir
     ):
@@ -252,7 +252,7 @@ class TestBalanceIntegration:
         assert isinstance(account_status["equity"], float)
         assert isinstance(account_status["total_pnl"], float)
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_balance_consistency_across_restarts(
         self, mock_market_data, temp_data_dir
     ):
@@ -309,7 +309,7 @@ class TestBalanceIntegration:
             == pre_restart_status["open_positions"]
         )
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_multi_trade_balance_reconciliation(self, temp_data_dir):
         """Test balance reconciliation across multiple trades with different outcomes."""
         account = PaperTradingAccount(
@@ -417,7 +417,7 @@ class TestBalanceIntegration:
         assert account_status["current_balance"] == float(account.current_balance)
         assert account_status["unrealized_pnl"] == 0.0  # No open positions
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_balance_validation_integration(self, temp_data_dir):
         """Test balance validation across different scenarios."""
         account = PaperTradingAccount(
@@ -462,7 +462,7 @@ class TestBalanceIntegration:
         assert account.margin_used > Decimal("0.00")  # Margin allocated
         assert len(account.open_trades) == 1
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_balance_performance_monitoring(
         self, mock_market_data, temp_data_dir
     ):
@@ -522,7 +522,7 @@ class TestBalanceIntegration:
         for metric, value in performance_metrics.items():
             print(f"  {metric}: {value:.2f}ms")
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_balance_edge_cases(self, temp_data_dir):
         """Test balance handling in edge cases."""
         account = PaperTradingAccount(

@@ -32,7 +32,7 @@
           "type": "bluefin_rest"
         },
         {
-          "name": "bluefin_testnet_rest", 
+          "name": "bluefin_testnet_rest",
           "url": "https://dapi.api.sui-staging.bluefin.io",
           "type": "bluefin_rest"
         }
@@ -53,7 +53,7 @@
         {
           "name": "high_error_rate",
           "metric": "error_rate",
-          "condition": "greater_than", 
+          "condition": "greater_than",
           "threshold": 5.0,
           "severity": "warning"
         },
@@ -87,7 +87,7 @@
         },
         {
           "name": "service_unavailable_restart",
-          "trigger": "service_unavailable", 
+          "trigger": "service_unavailable",
           "action": "restart_service",
           "cooldown_minutes": 10,
           "max_attempts": 3
@@ -122,7 +122,7 @@
       "webhook_url": "",
       "channels": {
         "critical": ["webhook", "email"],
-        "warning": ["webhook"], 
+        "warning": ["webhook"],
         "info": []
       }
     }

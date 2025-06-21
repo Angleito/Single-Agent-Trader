@@ -270,7 +270,7 @@ class TestMarketContextAnalyzer:
         assert len(analyzer._geopolitical_keywords) > 0
         assert len(analyzer._crypto_adoption_keywords) > 0
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_analyze_crypto_nasdaq_correlation_insufficient_data(self):
         """Test correlation analysis with insufficient data."""
         analyzer = MarketContextAnalyzer()
@@ -287,7 +287,7 @@ class TestMarketContextAnalyzer:
         assert correlation.direction == "INSUFFICIENT_DATA"
         assert correlation.is_significant is False
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_analyze_crypto_nasdaq_correlation_success(self):
         """Test successful correlation analysis."""
         analyzer = MarketContextAnalyzer()
@@ -318,7 +318,7 @@ class TestMarketContextAnalyzer:
         assert correlation.sample_size == 100
         assert correlation.reliability_score > 0.0
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_analyze_crypto_nasdaq_correlation_negative(self):
         """Test correlation analysis with negative correlation."""
         analyzer = MarketContextAnalyzer()
@@ -345,7 +345,7 @@ class TestMarketContextAnalyzer:
         assert correlation.correlation_coefficient < 0.0
         assert correlation.direction == "NEGATIVE"
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_analyze_crypto_nasdaq_correlation_error_handling(self):
         """Test correlation analysis error handling."""
         analyzer = MarketContextAnalyzer()
@@ -362,7 +362,7 @@ class TestMarketContextAnalyzer:
         assert correlation.direction == "ERROR"
         assert correlation.reliability_score == 0.0
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_detect_market_regime_risk_on(self):
         """Test market regime detection - risk on."""
         analyzer = MarketContextAnalyzer()
@@ -385,7 +385,7 @@ class TestMarketContextAnalyzer:
         assert regime.confidence > 0.0
         assert len(regime.key_drivers) > 0
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_detect_market_regime_risk_off(self):
         """Test market regime detection - risk off."""
         analyzer = MarketContextAnalyzer()
@@ -412,7 +412,7 @@ class TestMarketContextAnalyzer:
             or regime.fed_policy_stance == "HAWKISH"
         )
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_detect_market_regime_transition(self):
         """Test market regime detection - transition."""
         analyzer = MarketContextAnalyzer()
@@ -431,7 +431,7 @@ class TestMarketContextAnalyzer:
         assert isinstance(regime.regime_type, MarketRegimeType)
         assert regime.confidence >= 0.0
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_assess_risk_sentiment_extreme_fear(self):
         """Test risk sentiment assessment - extreme fear."""
         analyzer = MarketContextAnalyzer()
@@ -456,7 +456,7 @@ class TestMarketContextAnalyzer:
         ]
         assert sentiment.volatility_expectation > 20.0
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_assess_risk_sentiment_extreme_greed(self):
         """Test risk sentiment assessment - extreme greed."""
         analyzer = MarketContextAnalyzer()
@@ -480,7 +480,7 @@ class TestMarketContextAnalyzer:
             SentimentLevel.EXTREME_GREED,
         ]
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_assess_risk_sentiment_neutral(self):
         """Test risk sentiment assessment - neutral."""
         analyzer = MarketContextAnalyzer()
@@ -497,7 +497,7 @@ class TestMarketContextAnalyzer:
         assert 30.0 <= sentiment.fear_greed_index <= 70.0  # Should be neutral range
         assert sentiment.sentiment_level == SentimentLevel.NEUTRAL
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_assess_risk_sentiment_error_handling(self):
         """Test risk sentiment assessment error handling."""
         analyzer = MarketContextAnalyzer()
@@ -511,7 +511,7 @@ class TestMarketContextAnalyzer:
         assert sentiment.fear_greed_index == 50.0
         assert sentiment.sentiment_level == SentimentLevel.NEUTRAL
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_calculate_momentum_alignment_positive(self):
         """Test momentum alignment calculation - positive alignment."""
         analyzer = MarketContextAnalyzer()
@@ -539,7 +539,7 @@ class TestMarketContextAnalyzer:
         assert alignment.nasdaq_momentum_score > 0.0
         assert alignment.strength_alignment > 0.0
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_calculate_momentum_alignment_negative(self):
         """Test momentum alignment calculation - negative alignment."""
         analyzer = MarketContextAnalyzer()
@@ -570,7 +570,7 @@ class TestMarketContextAnalyzer:
             "Crypto bullish while NASDAQ bearish" in alignment.momentum_divergences[0]
         )
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_calculate_momentum_alignment_error_handling(self):
         """Test momentum alignment calculation error handling."""
         analyzer = MarketContextAnalyzer()
@@ -961,7 +961,7 @@ class TestMarketContextAnalyzer:
 
 
 # Fixtures for integration tests
-@pytest.fixture()
+@pytest.fixture
 def sample_crypto_data():
     """Sample crypto market data."""
     rng = np.random.default_rng(42)
@@ -976,7 +976,7 @@ def sample_crypto_data():
     }
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_nasdaq_data():
     """Sample NASDAQ market data."""
     rng = np.random.default_rng(24)
@@ -991,7 +991,7 @@ def sample_nasdaq_data():
     }
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_sentiment_data():
     """Sample sentiment data for regime detection."""
     return {
@@ -1012,7 +1012,7 @@ def sample_sentiment_data():
 class TestMarketContextAnalyzerIntegration:
     """Integration tests for MarketContextAnalyzer."""
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_full_correlation_analysis_workflow(
         self, sample_crypto_data, sample_nasdaq_data
     ):
@@ -1029,7 +1029,7 @@ class TestMarketContextAnalyzerIntegration:
         assert -1.0 <= correlation.correlation_coefficient <= 1.0
         assert correlation.p_value >= 0.0
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_full_regime_detection_workflow(self, sample_sentiment_data):
         """Test complete regime detection workflow."""
         analyzer = MarketContextAnalyzer()
@@ -1042,7 +1042,7 @@ class TestMarketContextAnalyzerIntegration:
         assert regime.fed_policy_stance in ["HAWKISH", "DOVISH", "NEUTRAL"]
         assert regime.inflation_environment in ["HIGH", "LOW", "STABLE"]
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_full_risk_sentiment_workflow(self):
         """Test complete risk sentiment analysis workflow."""
         analyzer = MarketContextAnalyzer()
@@ -1065,7 +1065,7 @@ class TestMarketContextAnalyzerIntegration:
         assert isinstance(sentiment.sentiment_level, SentimentLevel)
         assert sentiment.volatility_expectation > 0.0
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_full_momentum_alignment_workflow(self):
         """Test complete momentum alignment analysis workflow."""
         analyzer = MarketContextAnalyzer()
@@ -1097,7 +1097,7 @@ class TestMarketContextAnalyzerIntegration:
         assert 0.0 <= alignment.strength_alignment <= 1.0
         assert alignment.momentum_regime in ["ACCELERATION", "DECELERATION", "NORMAL"]
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_comprehensive_market_analysis(
         self, sample_crypto_data, sample_nasdaq_data, sample_sentiment_data
     ):
@@ -1125,7 +1125,7 @@ class TestMarketContextAnalyzerIntegration:
         assert "MARKET REGIME ANALYSIS" in summary
         assert "TRADING IMPLICATIONS" in summary
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_error_resilience_comprehensive(self):
         """Test error resilience across all analyzer methods."""
         analyzer = MarketContextAnalyzer()

@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 class TestComponentIntegration:
     """Test integration between major bot components."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def sample_ohlcv_data(self):
         """Create sample OHLCV data for testing."""
         dates = pd.date_range("2024-01-01", periods=200, freq="1min")
@@ -72,7 +72,7 @@ class TestComponentIntegration:
 
         return pd.DataFrame(data).set_index("timestamp")
 
-    @pytest.fixture()
+    @pytest.fixture
     def market_data_list(self, sample_ohlcv_data):
         """Convert DataFrame to MarketData list."""
         market_data = []
@@ -375,7 +375,7 @@ class TestComponentIntegration:
                     not approved
                 ), f"Scenario '{scenario['name']}' should be rejected: {reason}"
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_exchange_client_order_flow_integration(self):
         """Test CoinbaseClient integration with order flow."""
         # Mock the exchange client

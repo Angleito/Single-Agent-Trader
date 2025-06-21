@@ -1162,9 +1162,9 @@ class MarketContextAnalyzer:
     ) -> tuple[MarketRegimeType, float, list[str]]:
         """Determine overall market regime from component analyses."""
         try:
-            risk_on_factors = []
-            risk_off_factors = []
-            key_drivers = []
+            risk_on_factors: list[str] = []
+            risk_off_factors: list[str] = []
+            key_drivers: list[str] = []
 
             # Analyze macroeconomic factors
             self._analyze_macro_factors(

@@ -17,12 +17,12 @@ from bot.paper_trading import PaperTradingAccount
 class TestBalanceValidation:
     """Test cases for balance validation systems."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def validator(self):
         """Create a balance response validator."""
         return CoinbaseResponseValidator()
 
-    @pytest.fixture()
+    @pytest.fixture
     def account(self):
         """Create a paper trading account for validation testing."""
         return PaperTradingAccount(starting_balance=Decimal(10000))

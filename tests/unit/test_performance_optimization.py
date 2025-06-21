@@ -28,7 +28,7 @@ class SimulatedLLMFailureError(Exception):
 class TestLLMPerformanceOptimization:
     """Test suite for LLM performance optimizations."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def mock_market_state(self):
         """Create a mock market state for testing."""
         return MarketState(
@@ -51,7 +51,7 @@ class TestLLMPerformanceOptimization:
             ohlcv_data=[],
         )
 
-    @pytest.fixture()
+    @pytest.fixture
     def mock_trade_action(self):
         """Create a mock trade action for testing."""
         return TradeAction(
@@ -95,7 +95,7 @@ class TestLLMPerformanceOptimization:
 
         # Mock computation function that takes time
         async def slow_computation(*args, **kwargs):
-            await asyncio.sleep(0.1)  # Simulate LLM call delay
+            await asyncio.sleep(0.001)  # Simulate LLM call delay
             return mock_trade_action
 
         async def test_cache():
@@ -224,7 +224,7 @@ class TestLLMPerformanceOptimization:
         target_met = expected_avg <= 2000
         assert stats.target_achieved == target_met
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_end_to_end_performance_optimization(
         self, mock_market_state, mock_trade_action
     ):
