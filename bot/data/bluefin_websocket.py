@@ -127,9 +127,9 @@ class BluefinWebSocketClient:
         # Subscription tracking
         self._subscribed_channels: set[str] = set()
         self._subscription_id = 1
-        self._pending_subscriptions: dict[int, str] = (
-            {}
-        )  # Track pending subscription requests
+        self._pending_subscriptions: dict[
+            int, str
+        ] = {}  # Track pending subscription requests
 
         # Tasks
         self._connection_task: asyncio.Task | None = None
@@ -189,7 +189,11 @@ class BluefinWebSocketClient:
             logger.warning("Already connected to Bluefin WebSocket")
             return
 
-        logger.info("Connecting to Bluefin WebSocket at %s", self.NOTIFICATION_WS_URL)
+        logger.info(
+            "Initializing Bluefin WebSocket client for %s on %s network",
+            self.symbol,
+            self.network
+        )
 
         # Start connection task
         self._connection_task = asyncio.create_task(self._connection_handler())
@@ -201,8 +205,20 @@ class BluefinWebSocketClient:
         if self.use_trade_aggregation:
             self._trade_aggregation_task = asyncio.create_task(self._trade_aggregator())
 
-        # Wait for initial connection
-        await self._wait_for_connection(timeout=30)
+        # Wait for initial connection with a timeout
+        try:
+            connected = await self._wait_for_connection(timeout=30)
+            if not connected:
+                logger.warning(
+                    "Bluefin WebSocket connection timeout after 30s. "
+                    "Service will continue attempting to connect in background."
+                )
+        except Exception as e:
+            logger.warning(
+                "Error during initial Bluefin WebSocket connection: %s. "
+                "Service will continue attempting to connect in background.",
+                str(e)
+            )
 
     async def disconnect(self) -> None:
         """Disconnect from WebSocket and cleanup resources."""
@@ -238,45 +254,50 @@ class BluefinWebSocketClient:
     async def _connection_handler(self) -> None:
         """Handle WebSocket connection with enhanced reconnection logic."""
         consecutive_failures = 0
+        max_consecutive_failures = 5
+        connection_healthy = False
 
         while True:
             try:
+                # Check if we should give up on reconnection
+                if consecutive_failures >= max_consecutive_failures:
+                    logger.error(
+                        "Bluefin WebSocket: %d consecutive failures, disabling connection",
+                        consecutive_failures
+                    )
+                    self._connected = False
+                    break
+
                 await self._connect_and_subscribe()
                 self._reconnect_attempts = 0
                 consecutive_failures = 0  # Reset on successful connection
+                connection_healthy = True
 
                 # Handle incoming messages
                 await self._message_handler()
 
             except ConnectionClosed as e:
-                exception_handler.log_exception_with_context(
-                    e,
-                    {
-                        "symbol": self.symbol,
-                        "reconnect_attempts": self._reconnect_attempts,
-                        "consecutive_failures": consecutive_failures,
-                        "message_count": self._message_count,
-                    },
-                    component="BluefinWebSocketClient",
-                    operation="connection_handler",
-                )
+                if connection_healthy:
+                    logger.warning(
+                        "Bluefin WebSocket connection closed after being healthy: %s",
+                        str(e)
+                    )
+                else:
+                    logger.debug("Bluefin WebSocket connection closed: %s", str(e))
+
                 self._connected = False
                 self._ws = None
                 self._subscribed_channels.clear()
                 self._pending_subscriptions.clear()
                 consecutive_failures += 1
+                connection_healthy = False
 
             except (WebSocketException, OSError, ConnectionError) as e:
-                exception_handler.log_exception_with_context(
-                    e,
-                    {
-                        "symbol": self.symbol,
-                        "reconnect_attempts": self._reconnect_attempts,
-                        "consecutive_failures": consecutive_failures,
-                        "error_count": self._error_count,
-                    },
-                    component="BluefinWebSocketClient",
-                    operation="connection_handler",
+                logger.warning(
+                    "Bluefin WebSocket network error (attempt %d/%d): %s",
+                    self._reconnect_attempts + 1,
+                    self._max_reconnect_attempts,
+                    str(e)
                 )
                 self._connected = False
                 self._ws = None
@@ -284,18 +305,13 @@ class BluefinWebSocketClient:
                 self._pending_subscriptions.clear()
                 self._error_count += 1
                 consecutive_failures += 1
+                connection_healthy = False
 
-            except Exception as e:
-                exception_handler.log_exception_with_context(
-                    e,
-                    {
-                        "symbol": self.symbol,
-                        "unexpected_error": True,
-                        "reconnect_attempts": self._reconnect_attempts,
-                        "consecutive_failures": consecutive_failures,
-                    },
-                    component="BluefinWebSocketClient",
-                    operation="connection_handler",
+            except Exception:
+                logger.exception(
+                    "Unexpected error in Bluefin WebSocket (attempt %d/%d)",
+                    self._reconnect_attempts + 1,
+                    self._max_reconnect_attempts
                 )
                 self._connected = False
                 self._ws = None
@@ -303,10 +319,14 @@ class BluefinWebSocketClient:
                 self._pending_subscriptions.clear()
                 self._error_count += 1
                 consecutive_failures += 1
+                connection_healthy = False
 
             # Check if we should reconnect
             if self._reconnect_attempts >= self._max_reconnect_attempts:
-                logger.error("Max reconnection attempts reached, stopping")
+                logger.error(
+                    "Bluefin WebSocket: Max reconnection attempts (%d) reached, stopping",
+                    self._max_reconnect_attempts
+                )
                 break
 
             self._reconnect_attempts += 1
@@ -320,12 +340,13 @@ class BluefinWebSocketClient:
             if consecutive_failures > 3:
                 delay = min(delay * 1.5, 120)
                 logger.warning(
-                    "Multiple consecutive failures (%s), extending delay",
+                    "Bluefin WebSocket: Multiple consecutive failures (%s), extending delay to %.1fs",
                     consecutive_failures,
+                    delay
                 )
 
             logger.info(
-                "Reconnecting to Bluefin in %.1fs (attempt %s/%s)",
+                "Bluefin WebSocket: Reconnecting in %.1fs (attempt %s/%s)",
                 delay,
                 self._reconnect_attempts,
                 self._max_reconnect_attempts,
@@ -335,31 +356,57 @@ class BluefinWebSocketClient:
 
     async def _connect_and_subscribe(self) -> None:
         """Establish WebSocket connection and subscribe to channels."""
-        # Enhanced connection parameters for better stability
-        self._ws = await websockets.connect(
-            self.NOTIFICATION_WS_URL,
-            ping_interval=15,  # More frequent pings
-            ping_timeout=8,  # Shorter timeout to detect issues faster
-            close_timeout=5,  # Quick close timeout
-            max_size=2**20,  # 1MB max message size
-            compression=None,  # Disable compression for performance
-            extra_headers={
-                "User-Agent": "AI-Trading-Bot-Bluefin-Client/1.0",
-                "Accept": "*/*",
-                "Connection": "Upgrade",
-            },
-        )
+        try:
+            logger.info(
+                "Connecting to Bluefin WebSocket at %s (network: %s)",
+                self.NOTIFICATION_WS_URL,
+                self.network
+            )
 
-        self._connected = True
-        logger.info("Bluefin WebSocket connection established")
+            # Enhanced connection parameters for better stability
+            # Note: extra_headers removed due to compatibility issues with some asyncio implementations
+            self._ws = await asyncio.wait_for(
+                websockets.connect(
+                    self.NOTIFICATION_WS_URL,
+                    ping_interval=15,  # More frequent pings
+                    ping_timeout=8,  # Shorter timeout to detect issues faster
+                    close_timeout=5,  # Quick close timeout
+                    max_size=2**20,  # 1MB max message size
+                    compression=None,  # Disable compression for performance
+                ),
+                timeout=30.0  # Connection timeout
+            )
 
-        # Start heartbeat task
-        if self._heartbeat_task:
-            self._heartbeat_task.cancel()
-        self._heartbeat_task = asyncio.create_task(self._heartbeat_handler())
+            self._connected = True
+            logger.info(
+                "Bluefin WebSocket connection established to %s",
+                self.NOTIFICATION_WS_URL
+            )
 
-        # Subscribe to market data channels
-        await self._subscribe_to_market_data()
+            # Start heartbeat task
+            if self._heartbeat_task:
+                self._heartbeat_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self._heartbeat_task
+
+            self._heartbeat_task = asyncio.create_task(self._heartbeat_handler())
+
+            # Subscribe to market data channels
+            await self._subscribe_to_market_data()
+
+        except TimeoutError:
+            logger.error(
+                "Timeout connecting to Bluefin WebSocket at %s after 30s",
+                self.NOTIFICATION_WS_URL
+            )
+            raise
+        except Exception as e:
+            logger.error(
+                "Failed to connect to Bluefin WebSocket at %s: %s",
+                self.NOTIFICATION_WS_URL,
+                str(e)
+            )
+            raise
 
     async def _subscribe_to_market_data(self) -> None:
         """Subscribe to relevant market data channels using JSON-RPC format."""

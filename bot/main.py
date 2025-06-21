@@ -294,9 +294,9 @@ class TradingEngine:
         self._shutdown_requested = False
         self._memory_available = False  # Initialize early to prevent AttributeError
         self._last_position_log_time: datetime | None = None
-        self._background_tasks: list[asyncio.Task[Any]] = (
-            []
-        )  # Track background tasks for cleanup
+        self._background_tasks: list[
+            asyncio.Task[Any]
+        ] = []  # Track background tasks for cleanup
 
         # Initialize market making integrator (will be set up after LLM agent)
         self.market_making_integrator: Any | None = None
@@ -520,8 +520,8 @@ class TradingEngine:
                 )
                 self.llm_agent = None
         except Exception as e:
-            self.logger.error("Failed to initialize LLM agent: %s", e)
-            self.logger.error("Bot cannot make trading decisions without LLM agent")
+            self.logger.exception("Failed to initialize LLM agent: %s", e)
+            self.logger.exception("Bot cannot make trading decisions without LLM agent")
             self.llm_agent = None
 
     def _initialize_market_making_integrator(self):
@@ -1171,7 +1171,7 @@ class TradingEngine:
         # Check minimum interval between actual trades
         if self.last_trade_time is not None:
             min_interval = self.settings.trading.min_trading_interval_seconds
-            if not isinstance(min_interval, (int, float)):
+            if not isinstance(min_interval, int | float):
                 self.logger.warning(
                     f"Invalid min_interval type: {type(min_interval)}, value: {min_interval}"
                 )
@@ -1391,13 +1391,8 @@ class TradingEngine:
                     await self._shutdown()
                 except Exception:
                     self.logger.exception("Error in shutdown")
-                    # Force cleanup of dominance provider session as last resort
-                    if (
-                        hasattr(self, "dominance_provider")
-                        and self.dominance_provider
-                        and hasattr(self.dominance_provider, "_session")
-                    ):
-                        self.dominance_provider._session = None
+                    # Force cleanup of services
+                    await self._force_cleanup_services()
 
     def _setup_signal_handlers(self) -> None:
         """Setup signal handlers for graceful shutdown."""
@@ -1590,8 +1585,41 @@ class TradingEngine:
             self.market_making_integrator = None
 
     async def _connect_optional_services(self):
-        """Connect to optional services like OmniSearch."""
-        if self.omnisearch_client:
+        """Connect to optional services with proper error handling and fallback."""
+        service_statuses = {}  # Initialize to empty dict for fallback
+
+        try:
+            # Use service startup manager for robust initialization
+            from bot.utils.service_startup import startup_services_with_retry
+
+            console.print("  • Initializing optional services...")
+            service_instances, service_statuses = await startup_services_with_retry(
+                self.settings, max_retries=2
+            )
+
+            # Update component references from successful services
+            if "websocket_publisher" in service_instances:
+                self.websocket_publisher = service_instances["websocket_publisher"]
+
+            if "bluefin_service" in service_instances:
+                self._bluefin_service_client = service_instances["bluefin_service"]
+
+            if "omnisearch" in service_instances:
+                self.omnisearch_client = service_instances["omnisearch"]
+
+            # Log service status summary
+            for name, status in service_statuses.items():
+                if status.available:
+                    self.logger.info("Service %s: Available", name)
+                else:
+                    self.logger.warning("Service %s: %s", name, status.error or "Unavailable")
+
+        except Exception as e:
+            self.logger.warning("Service initialization error: %s. Continuing with available services.", str(e))
+            console.print("    [yellow]⚠ Some optional services unavailable[/yellow]")
+
+        # Connect OmniSearch if available (legacy path)
+        if self.omnisearch_client and "omnisearch" not in service_statuses:
             await self._connect_omnisearch()
 
     async def _connect_omnisearch(self):
@@ -1682,29 +1710,22 @@ class TradingEngine:
 
     async def _initialize_dashboard_components(self):
         """Initialize dashboard-related components."""
-        await self._connect_websocket_publisher()
-        await self._start_command_consumer()
-
-    async def _connect_websocket_publisher(self):
-        """Connect WebSocket publisher for dashboard."""
-        if not self.websocket_publisher:
-            return
-
-        console.print("  • Connecting to dashboard WebSocket...")
-        try:
-            connected = await self.websocket_publisher.initialize()
-            if connected:
-                console.print("    [green]✓ Dashboard WebSocket connected[/green]")
+        # WebSocket publisher should already be initialized in _connect_optional_services
+        # Just log the status here
+        if self.websocket_publisher:
+            console.print("    [green]✓ Dashboard WebSocket already connected[/green]")
+            try:
                 await self.websocket_publisher.publish_system_status(
                     status="initialized", health=True
                 )
-            else:
-                console.print("    [yellow]⚠ Dashboard WebSocket unavailable[/yellow]")
-        except Exception as e:
-            self.logger.warning("Failed to connect to dashboard WebSocket: %s", e)
-            console.print(
-                "    [yellow]⚠ Dashboard WebSocket connection failed[/yellow]"
-            )
+            except Exception as e:
+                self.logger.debug("Could not publish initial status: %s", str(e))
+        else:
+            console.print("    [yellow]⚠ Dashboard WebSocket not available[/yellow]")
+
+        await self._start_command_consumer()
+
+    # Method removed - functionality moved to _connect_optional_services
 
     async def _start_command_consumer(self):
         """Start command consumer for dashboard."""
@@ -1746,7 +1767,7 @@ class TradingEngine:
 
         while True:
             elapsed_time = (datetime.now(UTC) - wait_start).total_seconds()
-            if not isinstance(elapsed_time, (int, float)) or elapsed_time < 0:
+            if not isinstance(elapsed_time, int | float) or elapsed_time < 0:
                 self.logger.warning(f"Invalid elapsed_time: {elapsed_time}")
                 elapsed_time = 0
 
@@ -1849,7 +1870,7 @@ class TradingEngine:
                 "Data is still a coroutine: %s. This should have been awaited.", data
             )
             return []
-        if not isinstance(data, (list, tuple)):
+        if not isinstance(data, list | tuple):
             self.logger.warning(
                 "Unexpected data type: %s, converting to list", type(data)
             )
@@ -1963,7 +1984,7 @@ class TradingEngine:
         # Ensure elapsed_time is valid before using in modulo operation
         safe_elapsed_time = (
             int(elapsed_time)
-            if isinstance(elapsed_time, (int, float)) and elapsed_time >= 0
+            if isinstance(elapsed_time, int | float) and elapsed_time >= 0
             else 0
         )
         if safe_elapsed_time % 10 != 0 or elapsed_time <= 0:
@@ -1990,7 +2011,7 @@ class TradingEngine:
             # Ensure elapsed_time is valid for logging
             safe_elapsed_time = (
                 int(elapsed_time)
-                if isinstance(elapsed_time, (int, float)) and elapsed_time >= 0
+                if isinstance(elapsed_time, int | float) and elapsed_time >= 0
                 else 0
             )
             self.logger.info(
@@ -2019,7 +2040,7 @@ class TradingEngine:
         # Ensure elapsed_time is valid for logging
         safe_elapsed_time = (
             int(elapsed_time)
-            if isinstance(elapsed_time, (int, float)) and elapsed_time >= 0
+            if isinstance(elapsed_time, int | float) and elapsed_time >= 0
             else 0
         )
         self.logger.info(
@@ -2039,7 +2060,7 @@ class TradingEngine:
         # Ensure elapsed_time is valid for logging
         safe_elapsed_time = (
             int(elapsed_time)
-            if isinstance(elapsed_time, (int, float)) and elapsed_time >= 0
+            if isinstance(elapsed_time, int | float) and elapsed_time >= 0
             else 0
         )
         self.logger.info(
@@ -2431,7 +2452,7 @@ class TradingEngine:
             latest_data = await self._resolve_async_data(latest_data)
 
             # Validate data type
-            if not isinstance(latest_data, (list, tuple)):
+            if not isinstance(latest_data, list | tuple):
                 self.logger.warning(
                     "Unexpected latest_data type: %s, converting to list",
                     type(latest_data),
@@ -2763,11 +2784,15 @@ class TradingEngine:
             candle_timestamp = candle_timestamp.replace(tzinfo=UTC)
         self.last_candle_analysis_time = candle_timestamp
 
+        # Convert price for display if it's in 18-decimal format
+        from bot.utils.price_conversion import convert_from_18_decimal
+        display_price = convert_from_18_decimal(current_price, self.symbol, "current_price")
+
         self.logger.info(
             "⚡ Scalping analysis: %s candle at %s - Price: $%s",
             self.interval,
             latest_candle.timestamp.strftime("%H:%M:%S.%f")[:-3],
-            current_price,
+            display_price,
         )
 
         # Get LLM decision
@@ -2941,10 +2966,14 @@ class TradingEngine:
             validated_action, self.current_position, current_price
         )
 
+        # Convert price for display if it's in 18-decimal format
+        from bot.utils.price_conversion import convert_from_18_decimal
+        display_price = convert_from_18_decimal(current_price, self.symbol, "current_price")
+
         self.logger.info(
             "Loop %s: Price=$%s | LLM=%s | Action=%s (%s%%) | Risk=%s",
             loop_count,
-            current_price,
+            display_price,
             trade_action.action,
             final_action.action,
             final_action.size_pct,
@@ -3015,11 +3044,17 @@ class TradingEngine:
         if (datetime.now(UTC) - last_status_log).total_seconds() > status_log_interval:
             if self.market_data is not None:
                 data_status = self.market_data.get_data_status()
+                # Convert latest price for display
+                latest_price = data_status.get("latest_price", "N/A")
+                if latest_price != "N/A":
+                    from bot.utils.price_conversion import convert_from_18_decimal
+                    latest_price = convert_from_18_decimal(latest_price, self.symbol, "latest_price")
+
                 self.logger.info(
                     "🔄 Trading Status: Loop #%s | WebSocket: %s | Latest Price: $%s | OmniSearch: %s",
                     loop_count,
                     "✓" if data_status.get("websocket_connected") else "✗",
-                    data_status.get("latest_price", "N/A"),
+                    latest_price,
                     "✓ Active" if hasattr(self, "omnisearch_client") else "✗ Disabled",
                 )
             else:
@@ -3998,6 +4033,33 @@ class TradingEngine:
                         "Error closing dominance provider connector during cleanup: %s",
                         e,
                     )
+
+    async def _force_cleanup_services(self) -> None:
+        """Force cleanup of all services during emergency shutdown."""
+        # Cleanup dominance provider session
+        if (
+            hasattr(self, "dominance_provider")
+            and self.dominance_provider
+            and hasattr(self.dominance_provider, "_session")
+        ):
+            self.dominance_provider._session = None
+
+        # Cleanup WebSocket publisher
+        if hasattr(self, "websocket_publisher") and self.websocket_publisher:
+            try:
+                await asyncio.wait_for(self.websocket_publisher.close(), timeout=2.0)
+            except Exception:
+                pass
+
+        # Cleanup Bluefin service client
+        if hasattr(self, "_bluefin_service_client"):
+            try:
+                from bot.exchange.bluefin_service_client import (
+                    close_bluefin_service_client,
+                )
+                await asyncio.wait_for(close_bluefin_service_client(), timeout=2.0)
+            except Exception:
+                pass
 
     async def _reconcile_positions(self) -> None:
         """
@@ -5144,7 +5206,7 @@ def mm_validate(config_file: str | None) -> None:
                     config_data = json.load(f)
                 validate_config = _get_lazy_import("validate_config")
                 if validate_config:
-                    config = validate_config(config_data)
+                    validate_config(config_data)
                     console.print("   ✅ Configuration file is valid")
                     validation_results.append(("Config File", True, "Valid"))
                 else:
@@ -5156,7 +5218,7 @@ def mm_validate(config_file: str | None) -> None:
                 # Test default configuration
                 create_default_config = _get_lazy_import("create_default_config")
                 if create_default_config:
-                    config = create_default_config("moderate")
+                    create_default_config("moderate")
                     console.print("   ✅ Default configuration created successfully")
                     validation_results.append(("Default Config", True, "Valid"))
                 else:
@@ -5271,7 +5333,7 @@ def mm_test(profile: str, duration: int) -> None:
         # Test configuration validation
         validate_config = _get_lazy_import("validate_config")
         if validate_config:
-            validated_config = validate_config(config.to_dict())
+            validate_config(config.to_dict())
             console.print("✅ Configuration validation passed")
         else:
             console.print("⚠️  Configuration validator not available")
@@ -5282,7 +5344,7 @@ def mm_test(profile: str, duration: int) -> None:
             console.print("✅ Market making integrator available")
 
             # Create a test integrator (dry-run mode)
-            test_integrator = MarketMakingIntegrator(
+            MarketMakingIntegrator(
                 symbol="SUI-PERP",
                 exchange_client=None,  # No real exchange for testing
                 dry_run=True,
