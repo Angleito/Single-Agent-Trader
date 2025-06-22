@@ -82,8 +82,10 @@ warnings.simplefilter("ignore", SyntaxWarning)
 
 # Standard library imports
 import asyncio
+import inspect
 import logging
 import signal
+import tempfile
 import time
 from asyncio import Task
 from contextlib import contextmanager
@@ -295,9 +297,9 @@ class TradingEngine:
         self._shutdown_requested = False
         self._memory_available = False  # Initialize early to prevent AttributeError
         self._last_position_log_time: datetime | None = None
-        self._background_tasks: list[
-            asyncio.Task[Any]
-        ] = []  # Track background tasks for cleanup
+        self._background_tasks: list[asyncio.Task[Any]] = (
+            []
+        )  # Track background tasks for cleanup
 
         # Initialize market making integrator (will be set up after LLM agent)
         self.market_making_integrator: Any | None = None
@@ -1123,9 +1125,7 @@ class TradingEngine:
     def _get_latest_market_data(self) -> list:
         """Get latest market data, handling sync/async methods."""
         try:
-            import inspect
-
-            latest_data = []
+            latest_data: list[Any] = []
             if self.market_data is not None and hasattr(
                 self.market_data, "get_latest_ohlcv"
             ):
@@ -1141,10 +1141,11 @@ class TradingEngine:
             if not latest_data:
                 self.logger.debug("📊 No market data available")
 
-            return latest_data
         except Exception as e:
             self.logger.warning("Error checking latest data: %s", e)
             return []
+        else:
+            return latest_data
 
     def _validate_trading_timing(self, latest_candle) -> bool:
         """Validate if timing conditions allow trading."""
@@ -1324,8 +1325,6 @@ class TradingEngine:
             return None
 
         # List of paths to try in order of preference
-        import tempfile
-
         temp_dir = Path(tempfile.gettempdir())
         fallback_paths = [
             self.settings.system.log_file_path,  # Original path
@@ -1852,9 +1851,7 @@ class TradingEngine:
 
     async def _fetch_initial_market_data(self) -> list:
         """Fetch initial market data with async handling."""
-        import inspect
-
-        data = []
+        data: list[Any] = []
         if self.market_data is not None and hasattr(
             self.market_data, "get_latest_ohlcv"
         ):
@@ -1877,8 +1874,6 @@ class TradingEngine:
 
     async def _resolve_market_data_async(self, data):
         """Resolve various async data types for initial data."""
-        import asyncio
-        import inspect
 
         if inspect.iscoroutine(data):
             self.logger.warning("Detected coroutine data, awaiting...")
@@ -1894,8 +1889,6 @@ class TradingEngine:
 
     def _validate_market_data_type(self, data) -> list:
         """Validate and convert market data to proper type."""
-        import asyncio
-        import inspect
 
         if isinstance(data, asyncio.Task):
             self.logger.error(
@@ -2562,8 +2555,6 @@ class TradingEngine:
 
     async def _get_standard_market_data(self) -> list:
         """Get market data from standard provider."""
-        import inspect
-
         method = self.market_data.get_latest_ohlcv
         try:
             if inspect.iscoroutinefunction(method):
@@ -2590,9 +2581,6 @@ class TradingEngine:
 
     async def _resolve_async_data(self, latest_data):
         """Resolve various async data types."""
-        import asyncio
-        import inspect
-
         if inspect.iscoroutine(latest_data):
             self.logger.warning("Detected coroutine data in main loop, awaiting...")
             return await latest_data
