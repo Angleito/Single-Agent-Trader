@@ -230,9 +230,9 @@ class BluefinServiceClient:
 
                 raise BluefinServiceUnavailable(
                     f"Cannot connect to Bluefin service: {e!s}"
-                )
+                ) from e
 
-            except TimeoutError:
+            except TimeoutError as err:
                 if attempt < self.max_retries - 1:
                     logger.warning(
                         "Timeout calling Bluefin service (attempt %d/%d)",
@@ -242,7 +242,7 @@ class BluefinServiceClient:
                     await asyncio.sleep(self.retry_delay * (attempt + 1))
                     continue
 
-                raise BluefinServiceError("Bluefin service request timeout")
+                raise BluefinServiceError("Bluefin service request timeout") from err
 
             except BluefinServiceUnavailable:
                 # Don't retry for service unavailable
@@ -259,7 +259,7 @@ class BluefinServiceClient:
                     await asyncio.sleep(self.retry_delay * (attempt + 1))
                     continue
 
-                raise BluefinServiceError(f"Unexpected error: {e!s}")
+                raise BluefinServiceError(f"Unexpected error: {e!s}") from e
 
     async def get_balance(self, address: str) -> dict[str, Any]:
         """Get balance from Bluefin service."""
