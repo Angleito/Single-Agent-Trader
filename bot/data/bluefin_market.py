@@ -412,18 +412,17 @@ class BluefinMarketDataProvider:
                     historical_data = await self._generate_fallback_historical_data()
                     break
 
-            except Exception as e:
+            except Exception:
                 logger.exception(
-                    "❌ Error in historical data fetching attempt %d: %s",
+                    "❌ Error in historical data fetching attempt %d",
                     retry_count + 1,
-                    e,
                 )
                 retry_count += 1
                 if retry_count < max_retries:
                     await asyncio.sleep(min(2**retry_count, 10))
                     continue
                 # Generate fallback data to ensure bot can start
-                logger.error(
+                logger.exception(
                     "❌ All historical data fetch attempts failed. Generating fallback data to ensure bot startup"
                 )
                 historical_data = await self._generate_fallback_historical_data()
@@ -2724,8 +2723,8 @@ class BluefinMarketDataProvider:
             )
             return validated_data
 
-        except Exception as e:
-            logger.error("Error during historical data integrity validation: %s", e)
+        except Exception:
+            logger.exception("Error during historical data integrity validation")
             return None
 
     def _validate_temporal_consistency(self, data: list[MarketData]) -> bool:
@@ -2772,8 +2771,8 @@ class BluefinMarketDataProvider:
 
             return True
 
-        except Exception as e:
-            logger.error("Error validating temporal consistency: %s", e)
+        except Exception:
+            logger.exception("Error validating temporal consistency")
             return False
 
     def _validate_api_response_structure(
@@ -2861,9 +2860,9 @@ class BluefinMarketDataProvider:
 
             return True
 
-        except Exception as e:
-            logger.error(
-                "Error validating API response structure for %s: %s", endpoint_type, e
+        except Exception:
+            logger.exception(
+                "Error validating API response structure for %s", endpoint_type
             )
             return False
 

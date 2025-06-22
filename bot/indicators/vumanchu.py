@@ -2558,7 +2558,7 @@ class VuManChuIndicators:
                     if not result.empty:
                         try:
                             # Handle different value types appropriately
-                            if isinstance(val, (list, tuple, set)):
+                            if isinstance(val, list | tuple | set):
                                 # For iterables, we need to use at[] for object columns
                                 # or convert to a string representation
                                 if (
@@ -2566,7 +2566,7 @@ class VuManChuIndicators:
                                     and result[col].dtype == "object"
                                 ):
                                     # Store the list/tuple/set directly in object column
-                                    result.at[result.index[-1], col] = val
+                                    result.loc[result.index[-1], col] = val
                                 else:
                                     # For non-object columns, convert to string
                                     result.loc[result.index[-1], col] = str(val)
