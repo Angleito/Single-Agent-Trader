@@ -6,7 +6,6 @@ connection failures, and graceful degradation when optional services are unavail
 """
 
 import asyncio
-import logging
 from typing import Any
 
 from bot.config import Settings
@@ -15,9 +14,11 @@ from bot.exchange.bluefin_service_client import (
     BluefinServiceUnavailable,
 )
 from bot.mcp.omnisearch_client import OmniSearchClient
+from bot.utils.logger_factory import get_logger
+from bot.utils.typed_config import get_typed
 from bot.websocket_publisher import WebSocketPublisher
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ServiceStatus:
@@ -96,13 +97,14 @@ class ServiceStartupManager:
             self.services_status[service_name] = status
 
             # Apply startup delay
-            if config["startup_delay"] > 0:
+            startup_delay = get_typed(config, "startup_delay", 2.0)
+            if startup_delay > 0:
                 logger.info(
                     "Waiting %.1fs before starting %s...",
-                    config["startup_delay"],
+                    startup_delay,
                     service_name,
                 )
-                await asyncio.sleep(config["startup_delay"])
+                await asyncio.sleep(startup_delay)
 
             # Start the service
             instance = await self._start_service(
@@ -150,7 +152,7 @@ class ServiceStartupManager:
             logger.info(
                 "✓ %s service started successfully (%.1fs)",
                 service_name,
-                status.startup_time,
+                float(status.startup_time),
             )
             return instance
 

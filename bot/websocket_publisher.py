@@ -3,7 +3,6 @@
 import asyncio
 import contextlib
 import json
-import logging
 import time
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -15,11 +14,13 @@ from websockets.exceptions import ConnectionClosed, InvalidURI, WebSocketExcepti
 
 from .config import Settings
 from .trading_types import MarketState, Position, TradeAction
+from .utils.logger_factory import get_logger
+from .utils.typed_config import get_typed
 
 if TYPE_CHECKING:
     from websockets.client import WebSocketClientProtocol
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TradingJSONEncoder(json.JSONEncoder):
@@ -63,114 +64,33 @@ class WebSocketPublisher:
         ]
 
         # Configuration with proper type conversion and error handling
-        try:
-            self.publish_interval = float(
-                getattr(settings.system, "websocket_publish_interval", 1.0)
-            )
-        except (ValueError, TypeError):
-            self.publish_interval = 1.0
-            logger.warning(
-                "Invalid websocket_publish_interval value, using default: 1.0"
-            )
+        self.publish_interval = get_typed(
+            settings.system, "websocket_publish_interval", 1.0
+        )
+        self.max_retries = get_typed(settings.system, "websocket_max_retries", 15)
+        self.retry_delay = get_typed(settings.system, "websocket_retry_delay", 5.0)
 
-        try:
-            self.max_retries = int(
-                getattr(settings.system, "websocket_max_retries", 15)
-            )
-        except (ValueError, TypeError):
-            self.max_retries = 15
-            logger.warning("Invalid websocket_max_retries value, using default: 15")
-
-        try:
-            self.retry_delay = float(
-                getattr(settings.system, "websocket_retry_delay", 5)
-            )
-        except (ValueError, TypeError):
-            self.retry_delay = 5.0
-            logger.warning("Invalid websocket_retry_delay value, using default: 5.0")
-
-        try:
-            self.connection_timeout = float(
-                getattr(settings.system, "websocket_timeout", 45)
-            )
-        except (ValueError, TypeError):
-            self.connection_timeout = 45.0
-            logger.warning("Invalid websocket_timeout value, using default: 45.0")
-
-        try:
-            self.initial_connect_timeout = float(
-                getattr(settings.system, "websocket_initial_connect_timeout", 60)
-            )
-        except (ValueError, TypeError):
-            self.initial_connect_timeout = 60.0
-            logger.warning(
-                "Invalid websocket_initial_connect_timeout value, using default: 60.0"
-            )
-
-        try:
-            self.connection_delay = float(
-                getattr(settings.system, "websocket_connection_delay", 0)
-            )
-        except (ValueError, TypeError):
-            self.connection_delay = 0.0
-            logger.warning(
-                "Invalid websocket_connection_delay value, using default: 0.0"
-            )
-
-        try:
-            self.ping_interval = float(
-                getattr(settings.system, "websocket_ping_interval", 20)
-            )
-        except (ValueError, TypeError):
-            self.ping_interval = 20.0
-            logger.warning("Invalid websocket_ping_interval value, using default: 20.0")
-
-        try:
-            self.ping_timeout = float(
-                getattr(settings.system, "websocket_ping_timeout", 10)
-            )
-        except (ValueError, TypeError):
-            self.ping_timeout = 10.0
-            logger.warning("Invalid websocket_ping_timeout value, using default: 10.0")
-
-        try:
-            self.queue_size = int(getattr(settings.system, "websocket_queue_size", 500))
-        except (ValueError, TypeError):
-            self.queue_size = 500
-            logger.warning("Invalid websocket_queue_size value, using default: 500")
-
-        try:
-            self.health_check_interval = float(
-                getattr(settings.system, "websocket_health_check_interval", 45)
-            )
-        except (ValueError, TypeError):
-            self.health_check_interval = 45.0
-            logger.warning(
-                "Invalid websocket_health_check_interval value, using default: 45.0"
-            )
+        self.connection_timeout = get_typed(settings.system, "websocket_timeout", 45.0)
+        self.initial_connect_timeout = get_typed(
+            settings.system, "websocket_initial_connect_timeout", 60.0
+        )
+        self.connection_delay = get_typed(
+            settings.system, "websocket_connection_delay", 0.0
+        )
+        self.ping_interval = get_typed(settings.system, "websocket_ping_interval", 20.0)
+        self.ping_timeout = get_typed(settings.system, "websocket_ping_timeout", 10.0)
+        self.queue_size = get_typed(settings.system, "websocket_queue_size", 500)
+        self.health_check_interval = get_typed(
+            settings.system, "websocket_health_check_interval", 45.0
+        )
 
         self._ws: WebSocketClientProtocol | None = None
         self._connected = False
         self._retry_count = 0
         # Boolean configuration with proper type conversion
-        try:
-            publish_enabled_value = getattr(
-                settings.system, "enable_websocket_publishing", True
-            )
-            if isinstance(publish_enabled_value, str):
-                self._publish_enabled = publish_enabled_value.lower() in (
-                    "true",
-                    "1",
-                    "yes",
-                    "on",
-                )
-            else:
-                self._publish_enabled = bool(publish_enabled_value)
-        except (ValueError, TypeError):
-            self._publish_enabled = True
-            logger.warning(
-                "Invalid enable_websocket_publishing value, using default: True"
-            )
+        self._publish_enabled = get_typed(
+            settings.system, "enable_websocket_publishing", True
+        )
         self._last_pong_time: float | None = None
         self._ping_task: asyncio.Task | None = None
         self._connection_monitor_task: asyncio.Task | None = None
