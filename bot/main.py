@@ -295,9 +295,9 @@ class TradingEngine:
         self._shutdown_requested = False
         self._memory_available = False  # Initialize early to prevent AttributeError
         self._last_position_log_time: datetime | None = None
-        self._background_tasks: list[asyncio.Task[Any]] = (
-            []
-        )  # Track background tasks for cleanup
+        self._background_tasks: list[
+            asyncio.Task[Any]
+        ] = []  # Track background tasks for cleanup
 
         # Initialize market making integrator (will be set up after LLM agent)
         self.market_making_integrator: Any | None = None
@@ -349,9 +349,9 @@ class TradingEngine:
         # Initialize VuManChu indicators with lazy loading
         self.logger.debug("About to initialize VuManChu indicators...")
         try:
-            VuManChuIndicators = _get_lazy_import("VuManChuIndicators")
-            if VuManChuIndicators:
-                self.indicator_calc = VuManChuIndicators()
+            vuman_chu_indicators_cls = _get_lazy_import("VuManChuIndicators")
+            if vuman_chu_indicators_cls:
+                self.indicator_calc = vuman_chu_indicators_cls()
                 self.logger.debug("VuManChu indicators initialized successfully")
             else:
                 self.logger.warning("VuManChu indicators unavailable - using fallback")
@@ -385,9 +385,9 @@ class TradingEngine:
         if self.settings.omnisearch.enabled:
             self.logger.info("OmniSearch integration enabled, initializing client...")
             try:
-                OmniSearchClient = _get_lazy_import("OmniSearchClient")
-                if OmniSearchClient:
-                    self.omnisearch_client = OmniSearchClient(
+                omnisearch_client_cls = _get_lazy_import("OmniSearchClient")
+                if omnisearch_client_cls:
+                    self.omnisearch_client = omnisearch_client_cls(
                         server_url=self.settings.omnisearch.server_url,
                         api_key=(
                             self.settings.omnisearch.api_key.get_secret_value()
@@ -469,18 +469,24 @@ class TradingEngine:
         """Initialize memory-enhanced LLM agent with MCP support."""
         self.logger.info("MCP memory system enabled, initializing components...")
         try:
-            MCPMemoryServer = _get_lazy_import("MCPMemoryServer")
-            ExperienceManager = _get_lazy_import("ExperienceManager")
-            MemoryEnhancedLLMAgent = _get_lazy_import("MemoryEnhancedLLMAgent")
+            mcp_memory_server_cls = _get_lazy_import("MCPMemoryServer")
+            experience_manager_cls = _get_lazy_import("ExperienceManager")
+            memory_enhanced_llm_agent_cls = _get_lazy_import("MemoryEnhancedLLMAgent")
 
-            if not all([MCPMemoryServer, ExperienceManager, MemoryEnhancedLLMAgent]):
+            if not all(
+                [
+                    mcp_memory_server_cls,
+                    experience_manager_cls,
+                    memory_enhanced_llm_agent_cls,
+                ]
+            ):
                 self.logger.warning(
                     "MCP components unavailable - falling back to standard agent"
                 )
                 self._initialize_standard_agent()
                 return
 
-            self.memory_server = MCPMemoryServer(
+            self.memory_server = mcp_memory_server_cls(
                 server_url=self.settings.mcp.server_url,
                 api_key=(
                     self.settings.mcp.memory_api_key.get_secret_value()
@@ -488,10 +494,10 @@ class TradingEngine:
                     else None
                 ),
             )
-            self.experience_manager = ExperienceManager(self.memory_server)
+            self.experience_manager = experience_manager_cls(self.memory_server)
 
             # Use memory-enhanced agent
-            self.llm_agent = MemoryEnhancedLLMAgent(
+            self.llm_agent = memory_enhanced_llm_agent_cls(
                 model_provider=self.settings.llm.provider,
                 model_name=self.settings.llm.model_name,
                 memory_server=self.memory_server,
@@ -507,9 +513,9 @@ class TradingEngine:
     def _initialize_standard_agent(self):
         """Initialize standard LLM agent without memory."""
         try:
-            LLMAgent = _get_lazy_import("LLMAgent")
-            if LLMAgent:
-                self.llm_agent = LLMAgent(
+            llm_agent_cls = _get_lazy_import("LLMAgent")
+            if llm_agent_cls:
+                self.llm_agent = llm_agent_cls(
                     model_provider=self.settings.llm.provider,
                     model_name=self.settings.llm.model_name,
                     omnisearch_client=self.omnisearch_client,
@@ -520,8 +526,8 @@ class TradingEngine:
                     "LLM agent unavailable - bot cannot make trading decisions"
                 )
                 self.llm_agent = None
-        except Exception as e:
-            self.logger.exception("Failed to initialize LLM agent: %s", e)
+        except Exception:
+            self.logger.exception("Failed to initialize LLM agent")
             self.logger.exception("Bot cannot make trading decisions without LLM agent")
             self.llm_agent = None
 
@@ -539,8 +545,8 @@ class TradingEngine:
             return
 
         try:
-            MarketMakingIntegrator = _get_lazy_import("MarketMakingIntegrator")
-            if not MarketMakingIntegrator:
+            market_making_integrator_cls = _get_lazy_import("MarketMakingIntegrator")
+            if not market_making_integrator_cls:
                 self.logger.warning(
                     "MarketMakingIntegrator unavailable - falling back to LLM agent only"
                 )
@@ -568,7 +574,7 @@ class TradingEngine:
             market_making_symbols = [mm_config.symbol]
 
             # Initialize the integrator
-            self.market_making_integrator = MarketMakingIntegrator(
+            self.market_making_integrator = market_making_integrator_cls(
                 symbol=self.symbol,
                 exchange_client=None,  # Will be set later during trading infrastructure setup
                 dry_run=self.dry_run,
@@ -671,9 +677,9 @@ class TradingEngine:
 
         # Initialize structured trade logger for comprehensive logging
         try:
-            TradeLogger = _get_lazy_import("TradeLogger")
-            if TradeLogger:
-                self.trade_logger = TradeLogger()
+            trade_logger_cls = _get_lazy_import("TradeLogger")
+            if trade_logger_cls:
+                self.trade_logger = trade_logger_cls()
                 self.logger.info("Structured trade logger initialized")
             else:
                 self.logger.warning("Trade logger unavailable - using basic logging")
@@ -695,7 +701,7 @@ class TradingEngine:
 
         @contextmanager
         def track_operation(
-            self, operation_name: str, tags: dict[str, str] | None = None
+            self, _operation_name: str, _tags: dict[str, str] | None = None
         ):
             """
             No-op context manager for tracking operations.
@@ -713,10 +719,10 @@ class TradingEngine:
         def add_alert_callback(self, callback):
             """No-op alert callback registration."""
 
-        def get_performance_summary(self, duration=None):
+        def get_performance_summary(self, _duration=None):
             """Return empty performance summary."""
             return {
-                "timestamp": datetime.now(),
+                "timestamp": datetime.now(UTC),
                 "period_minutes": 0,
                 "latency_summary": {},
                 "resource_summary": {},
@@ -736,16 +742,18 @@ class TradingEngine:
         """Initialize performance monitoring system."""
         self.logger.debug("Initializing performance monitoring system...")
         try:
-            PerformanceThresholds = _get_lazy_import("PerformanceThresholds")
-            PerformanceMonitor = _get_lazy_import("PerformanceMonitor")
+            performance_thresholds_cls = _get_lazy_import("PerformanceThresholds")
+            performance_monitor_cls = _get_lazy_import("PerformanceMonitor")
 
-            if PerformanceThresholds and PerformanceMonitor:
-                performance_thresholds = PerformanceThresholds()
+            if performance_thresholds_cls and performance_monitor_cls:
+                performance_thresholds = performance_thresholds_cls()
 
                 # Customize thresholds based on trading frequency
                 self._configure_performance_thresholds(performance_thresholds)
 
-                self.performance_monitor = PerformanceMonitor(performance_thresholds)
+                self.performance_monitor = performance_monitor_cls(
+                    performance_thresholds
+                )
 
                 # Add alert callback for critical performance issues
                 self.performance_monitor.add_alert_callback(
@@ -2342,7 +2350,6 @@ class TradingEngine:
         last_status_log = datetime.now(UTC)
         consecutive_errors = 0
         max_consecutive_errors = 10
-        component_health_cache = {}
         last_health_check = datetime.now(UTC)
         health_check_interval = 60  # seconds
 
@@ -2360,8 +2367,8 @@ class TradingEngine:
         # Initialize loop with performance metrics
         try:
             await self._initialize_trading_loop()
-        except Exception as e:
-            self.logger.error("Failed to initialize trading loop: %s", e)
+        except Exception:
+            self.logger.exception("Failed to initialize trading loop")
             return
 
         # Setup trading environment with validation
@@ -2370,21 +2377,20 @@ class TradingEngine:
             self.logger.info(
                 "✅ Trading loop initialized successfully with enhanced error handling"
             )
-        except Exception as e:
-            self.logger.error("Failed to setup trading environment: %s", e)
+        except Exception:
+            self.logger.exception("Failed to setup trading environment")
             return
 
         while self._running and not self._shutdown_requested:
             loop_start = datetime.now(UTC)
             loop_count += 1
-            iteration_success = False
 
             try:
                 # Pre-iteration health checks
                 if (
                     datetime.now(UTC) - last_health_check
                 ).total_seconds() > health_check_interval:
-                    component_health_cache = await self._perform_basic_health_check()
+                    await self._perform_basic_health_check()
                     last_health_check = datetime.now(UTC)
 
                 # Check circuit breaker state before processing
@@ -2398,7 +2404,6 @@ class TradingEngine:
                 )
 
                 if trade_result:
-                    iteration_success = True
                     consecutive_errors = 0  # Reset on successful iteration
 
                     # Handle periodic maintenance tasks
@@ -2422,7 +2427,6 @@ class TradingEngine:
 
             except Exception as e:
                 consecutive_errors += 1
-                iteration_success = False
 
                 # Categorize and handle error
                 error_category = self._categorize_error_basic(e)
@@ -2434,7 +2438,7 @@ class TradingEngine:
 
                 # Check if we've hit consecutive error threshold
                 if consecutive_errors >= max_consecutive_errors:
-                    self.logger.error(
+                    self.logger.exception(
                         "🚨 Maximum consecutive errors reached (%d). Entering emergency pause.",
                         max_consecutive_errors,
                     )
@@ -2489,13 +2493,13 @@ class TradingEngine:
         """Get realtime provider class with error handling."""
         try:
             from .data.realtime_market import RealtimeMarketDataProvider
-
-            return RealtimeMarketDataProvider
         except ImportError:
             return None
+        else:
+            return RealtimeMarketDataProvider
 
     async def _process_trading_iteration(
-        self, loop_context: dict, loop_count: int, loop_start
+        self, loop_context: dict, loop_count: int, _loop_start
     ) -> bool:
         """Process a single trading iteration. Returns False if iteration should be skipped."""
         # Check market data connection
@@ -2577,12 +2581,12 @@ class TradingEngine:
                     type(latest_data),
                 )
                 latest_data = list(latest_data) if latest_data else []
-
-            return latest_data
+            else:
+                return latest_data
 
         except Exception as e:
             self.logger.warning("Error getting market data in main loop: %s", e)
-            return []
+        return latest_data
 
     async def _resolve_async_data(self, latest_data):
         """Resolve various async data types."""
@@ -4385,21 +4389,17 @@ class TradingEngine:
 
         # Cleanup WebSocket publisher
         if hasattr(self, "websocket_publisher") and self.websocket_publisher:
-            try:
+            with contextlib.suppress(Exception):
                 await asyncio.wait_for(self.websocket_publisher.close(), timeout=2.0)
-            except Exception:
-                pass
 
         # Cleanup Bluefin service client
         if hasattr(self, "_bluefin_service_client"):
-            try:
+            with contextlib.suppress(Exception):
                 from bot.exchange.bluefin_service_client import (
                     close_bluefin_service_client,
                 )
 
                 await asyncio.wait_for(close_bluefin_service_client(), timeout=2.0)
-            except Exception:
-                pass
 
     async def _reconcile_positions(self) -> None:
         """
@@ -4836,11 +4836,8 @@ def cli() -> None:
 
         # Log system information if logging is working
         if logging_results["status"] in ["success", "fallback"]:
-            try:
+            with contextlib.suppress(Exception):
                 log_system_info()
-            except Exception:
-                # If system info logging fails, continue silently
-                pass
 
         # Print any critical logging issues to console
         if logging_results["errors"]:
@@ -4849,7 +4846,7 @@ def cli() -> None:
                 console.print(f"  - {error}", style="yellow")
 
         if logging_results["status"] == "fallback":
-            console.print("ℹ️  Logging system running in fallback mode", style="blue")
+            console.print("INFO: Logging system running in fallback mode", style="blue")
 
     except ImportError:
         # If our logging modules aren't available, setup basic logging
@@ -5295,7 +5292,7 @@ def diagnose() -> None:
 
 @cli.command()
 @click.option("--symbol", default=None, help="Symbol to check market making status for")
-def mm_status(symbol: str | None) -> None:
+def mm_status(_symbol: str | None) -> None:
     """Show market making configuration and status."""
     try:
         console.print("🔍 Market Making Status", style="cyan bold")
@@ -5542,7 +5539,7 @@ def mm_validate(config_file: str | None) -> None:
             if config_file:
                 import json
 
-                with open(config_file) as f:
+                with Path(config_file).open() as f:
                     config_data = json.load(f)
                 validate_config = _get_lazy_import("validate_config")
                 if validate_config:
@@ -5679,12 +5676,12 @@ def mm_test(profile: str, duration: int) -> None:
             console.print("⚠️  Configuration validator not available")
 
         # Test market making integrator initialization
-        MarketMakingIntegrator = _get_lazy_import("MarketMakingIntegrator")
-        if MarketMakingIntegrator:
+        market_making_integrator_cls = _get_lazy_import("MarketMakingIntegrator")
+        if market_making_integrator_cls:
             console.print("✅ Market making integrator available")
 
             # Create a test integrator (dry-run mode)
-            MarketMakingIntegrator(
+            market_making_integrator_cls(
                 symbol="SUI-PERP",
                 exchange_client=None,  # No real exchange for testing
                 dry_run=True,
