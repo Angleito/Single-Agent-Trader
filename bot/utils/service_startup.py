@@ -276,7 +276,9 @@ class ServiceStartupManager:
         # Print each service status
         for name, status in self.services_status.items():
             if status.available:
-                logger.info("✓ %-20s: Available (%.1fs)", name, status.startup_time)
+                logger.info(
+                    "✓ %-20s: Available (%.1fs)", name, float(status.startup_time)
+                )
             else:
                 req_marker = " [REQUIRED]" if status.required else ""
                 logger.warning(
@@ -288,7 +290,7 @@ class ServiceStartupManager:
 
         logger.info("-" * 60)
         logger.info(
-            "Services available: %d/%d (%.0f%%)",
+            "Services available: %s/%s (%.0f%%)",
             available,
             total,
             (available / total * 100) if total > 0 else 0,
@@ -296,7 +298,7 @@ class ServiceStartupManager:
 
         if required_failed > 0:
             logger.error(
-                "ERROR: %d required service(s) failed to start!", required_failed
+                "ERROR: %s required service(s) failed to start!", required_failed
             )
         else:
             logger.info("All required services started successfully")
@@ -352,7 +354,7 @@ async def startup_services_with_retry(
         except RuntimeError as e:
             if "Required service" in str(e) and attempt < max_retries - 1:
                 logger.warning(
-                    "Service startup failed (attempt %d/%d): %s",
+                    "Service startup failed (attempt %s/%s): %s",
                     attempt + 1,
                     max_retries,
                     str(e),

@@ -358,7 +358,7 @@ class BluefinMarketDataProvider:
         while retry_count < max_retries and not historical_data:
             try:
                 logger.info(
-                    "🔄 Fetching historical data BEFORE WebSocket connection to ensure data sufficiency (attempt %d/%d)",
+                    "🔄 Fetching historical data BEFORE WebSocket connection to ensure data sufficiency (attempt %s/%s)",
                     retry_count + 1,
                     max_retries,
                 )
@@ -366,7 +366,7 @@ class BluefinMarketDataProvider:
                 # Validate API connectivity before attempting data fetch
                 if not await self._validate_api_connectivity():
                     logger.warning(
-                        "⚠️ API connectivity validation failed on attempt %d",
+                        "⚠️ API connectivity validation failed on attempt %s",
                         retry_count + 1,
                     )
                     retry_count += 1
@@ -383,12 +383,12 @@ class BluefinMarketDataProvider:
                     if validated_data:
                         historical_data = validated_data
                         logger.info(
-                            "✅ Historical data validated and ready (%d candles)",
+                            "✅ Historical data validated and ready (%s candles)",
                             len(historical_data),
                         )
                         break
                     logger.warning(
-                        "⚠️ Historical data failed integrity validation on attempt %d",
+                        "⚠️ Historical data failed integrity validation on attempt %s",
                         retry_count + 1,
                     )
                     historical_data = None

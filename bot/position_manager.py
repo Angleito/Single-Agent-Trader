@@ -879,7 +879,7 @@ class PositionManager:
                         timestamp=datetime.fromisoformat(pos_data["timestamp"]),
                     )
 
-                logger.info("Loaded %d active positions", len(self._positions))
+                logger.info("Loaded %s active positions", len(self._positions))
 
             # Load position history
             if self.history_file.exists():

@@ -62,8 +62,8 @@ class BluefinFeeCalculator:
 
         logger.info(
             "Initialized BluefinFeeCalculator - Maker: %.4f%%, Taker: %.4f%%",
-            maker_rate_pct,
-            taker_rate_pct,
+            float(maker_rate_pct),
+            float(taker_rate_pct),
         )
 
     def _ensure_decimal(self, value, default: Decimal) -> Decimal:
