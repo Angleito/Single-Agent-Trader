@@ -655,8 +655,8 @@ def aggregate_candles(
     if not candles:
         return []
 
-    aggregated = []
-    current_group = []
+    aggregated: list[CandleData] = []
+    current_group: list[CandleData] = []
 
     for candle in sorted(candles, key=lambda x: x.timestamp):
         if not current_group:
@@ -678,7 +678,7 @@ def aggregate_candles(
                     high=max(c.high for c in current_group),
                     low=min(c.low for c in current_group),
                     close=current_group[-1].close,
-                    volume=sum(c.volume for c in current_group),
+                    volume=Decimal(sum(c.volume for c in current_group)),
                     trades_count=sum(c.trades_count or 0 for c in current_group),
                 )
                 aggregated.append(agg_candle)
