@@ -11,7 +11,7 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, Literal, NoReturn
+from typing import Any, Literal, NoReturn, TypedDict, Callable, Optional, Union
 
 from bot.error_handling import (
     ErrorBoundary,
@@ -33,6 +33,52 @@ from bot.trading_types import (
 
 # Configure logger
 logger = logging.getLogger(__name__)
+
+
+# Type definitions for structured responses
+class BalanceValidationResult(TypedDict):
+    """Type definition for balance validation result."""
+    valid: bool
+    balance: Decimal
+    operation_type: str
+    validation_timestamp: str
+
+
+class MarginValidationResult(TypedDict):
+    """Type definition for margin validation result."""
+    valid: bool
+    balance: Decimal
+    used_margin: Decimal
+    available_margin: Decimal
+    margin_ratio_pct: float
+    validation_timestamp: str
+
+
+class ReconciliationResult(TypedDict):
+    """Type definition for balance reconciliation result."""
+    valid: bool
+    calculated_balance: Decimal
+    exchange_reported_balance: Decimal
+    difference: Decimal
+    relative_difference_pct: float
+    tolerance_pct: float
+    validation_timestamp: str
+
+
+class BalanceStatus(TypedDict):
+    """Type definition for balance validation status."""
+    exchange_name: str
+    last_validated_balance: Optional[float]
+    validation_enabled: bool
+    validation_method: str
+
+
+class ConnectionStatus(TypedDict):
+    """Type definition for connection status."""
+    connected: bool
+    environment: str
+    last_health_check: Optional[str]
+    auth_method: Optional[str]
 
 
 class ExchangeError(Exception):
@@ -69,15 +115,15 @@ class BalanceRetrievalError(ExchangeError):
         message: str,
         account_type: str | None = None,
         symbol: str | None = None,
-        balance_context: dict | None = None,
+        balance_context: dict[str, Any] | None = None,
     ):
         super().__init__(message)
         self.account_type = account_type
         self.symbol = symbol
-        self.balance_context = balance_context or {}
+        self.balance_context: dict[str, Any] = balance_context or {}
         self.timestamp = datetime.now(UTC)
 
-    def get_error_context(self) -> dict:
+    def get_error_context(self) -> dict[str, Any]:
         """Get structured error context for logging and debugging."""
         return {
             "error_type": self.__class__.__name__,
@@ -104,7 +150,7 @@ class InsufficientBalanceError(BalanceRetrievalError):
         available_balance: float | None = None,
         account_type: str | None = None,
         symbol: str | None = None,
-        operation_context: dict | None = None,
+        operation_context: dict[str, Any] | None = None,
     ):
         super().__init__(message, account_type, symbol, operation_context)
         self.required_balance = required_balance
@@ -113,7 +159,7 @@ class InsufficientBalanceError(BalanceRetrievalError):
         if required_balance is not None and available_balance is not None:
             self.shortfall = required_balance - available_balance
 
-    def get_error_context(self) -> dict:
+    def get_error_context(self) -> dict[str, Any]:
         """Get enhanced error context including balance details."""
         context = super().get_error_context()
         context.update(
@@ -137,7 +183,7 @@ class BalanceValidationError(BalanceRetrievalError):
     def __init__(
         self,
         message: str,
-        invalid_value: Any = None,
+        invalid_value: Union[str, int, float, Decimal, None] = None,
         validation_rule: str | None = None,
         account_type: str | None = None,
     ):
@@ -145,7 +191,7 @@ class BalanceValidationError(BalanceRetrievalError):
         self.invalid_value = invalid_value
         self.validation_rule = validation_rule
 
-    def get_error_context(self) -> dict:
+    def get_error_context(self) -> dict[str, Any]:
         """Get validation-specific error context."""
         context = super().get_error_context()
         context.update(
@@ -180,7 +226,7 @@ class BalanceServiceUnavailableError(BalanceRetrievalError):
         self.retry_after = retry_after
         self.is_retryable = True
 
-    def get_error_context(self) -> dict:
+    def get_error_context(self) -> dict[str, Any]:
         """Get service availability error context."""
         context = super().get_error_context()
         context.update(
@@ -214,7 +260,7 @@ class BalanceTimeoutError(BalanceRetrievalError):
         self.endpoint = endpoint
         self.is_retryable = True
 
-    def get_error_context(self) -> dict:
+    def get_error_context(self) -> dict[str, Any]:
         """Get timeout-specific error context."""
         context = super().get_error_context()
         context.update(
@@ -245,7 +291,7 @@ class BaseExchange(ABC):
         """
         self.dry_run = dry_run
         self._connected = False
-        self._last_health_check: Any | None = None
+        self._last_health_check: datetime | None = None
         self._last_validated_balance: Decimal | None = None
 
         # Balance validation - using inline validation with proper exceptions
@@ -284,7 +330,7 @@ class BaseExchange(ABC):
         new_balance: Decimal,
         operation_type: str = "balance_update",
         metadata: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+    ) -> BalanceValidationResult:
         """
         Validate balance update with comprehensive checks.
 
@@ -377,7 +423,7 @@ class BaseExchange(ABC):
         used_margin: Decimal,
         _position_value: Decimal | None = None,
         _leverage: int | None = None,
-    ) -> dict[str, Any]:
+    ) -> MarginValidationResult:
         """
         Validate margin requirements and calculations.
 
@@ -451,7 +497,7 @@ class BaseExchange(ABC):
         calculated_balance: Decimal,
         exchange_reported_balance: Decimal,
         tolerance_pct: float = 0.1,
-    ) -> dict[str, Any]:
+    ) -> ReconciliationResult:
         """
         Validate balance reconciliation between internal calculations and exchange.
 
@@ -527,7 +573,7 @@ class BaseExchange(ABC):
                 validation_rule="reconciliation",
             ) from e
 
-    def get_balance_validation_status(self) -> dict[str, Any]:
+    def get_balance_validation_status(self) -> BalanceStatus:
         """
         Get current balance validation status and statistics.
 
@@ -777,7 +823,7 @@ class BaseExchange(ABC):
         """
 
     @abstractmethod
-    def get_connection_status(self) -> dict[str, Any]:
+    def get_connection_status(self) -> ConnectionStatus:
         """
         Get connection status information.
 
@@ -945,7 +991,7 @@ class BaseExchange(ABC):
                 # Return empty list as safe default
                 return []
 
-    def get_error_boundary_status(self) -> dict[str, Any]:
+    def get_error_boundary_status(self) -> dict[str, str | bool | int | dict[str, Any] | None]:
         """Get error boundary status and health information."""
         return {
             "exchange_name": self.exchange_name,

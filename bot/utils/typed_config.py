@@ -1,21 +1,29 @@
 """Type-safe configuration access utilities."""
 
-from typing import Any, TypeVar, overload
+from typing import Any, Protocol, TypeVar, Union, overload
 
 T = TypeVar("T")
 
-
-@overload
-def get_typed(obj: Any, attr: str, default: int) -> int: ...
-@overload
-def get_typed(obj: Any, attr: str, default: float) -> float: ...
-@overload
-def get_typed(obj: Any, attr: str, default: str) -> str: ...
-@overload
-def get_typed(obj: Any, attr: str, default: bool) -> bool: ...
+# Common configuration value types
+ConfigValue = Union[str, int, float, bool, None]
 
 
-def get_typed(obj: Any, attr: str, default: T) -> T:
+class DictLike(Protocol):
+    """Protocol for dict-like objects."""
+    def get(self, key: str, default: Any = None) -> Any: ...
+
+
+@overload
+def get_typed(obj: Union[dict[str, Any], DictLike, object], attr: str, default: int) -> int: ...
+@overload
+def get_typed(obj: Union[dict[str, Any], DictLike, object], attr: str, default: float) -> float: ...
+@overload
+def get_typed(obj: Union[dict[str, Any], DictLike, object], attr: str, default: str) -> str: ...
+@overload
+def get_typed(obj: Union[dict[str, Any], DictLike, object], attr: str, default: bool) -> bool: ...
+
+
+def get_typed(obj: Union[dict[str, Any], DictLike, object], attr: str, default: T) -> T:
     """
     Type-safe config getter with automatic conversion.
 
@@ -62,7 +70,7 @@ def get_typed(obj: Any, attr: str, default: T) -> T:
         return default
 
 
-def ensure_int(value: Any, default: int = 0) -> int:
+def ensure_int(value: ConfigValue | Any, default: int = 0) -> int:
     """Ensure a value is an integer."""
     if isinstance(value, int):
         return value
@@ -72,7 +80,7 @@ def ensure_int(value: Any, default: int = 0) -> int:
         return default
 
 
-def ensure_float(value: Any, default: float = 0.0) -> float:
+def ensure_float(value: ConfigValue | Any, default: float = 0.0) -> float:
     """Ensure a value is a float."""
     if isinstance(value, (int, float)):
         return float(value)
@@ -82,7 +90,7 @@ def ensure_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
-def ensure_str(value: Any, default: str = "") -> str:
+def ensure_str(value: ConfigValue | Any, default: str = "") -> str:
     """Ensure a value is a string."""
     if value is None:
         return default

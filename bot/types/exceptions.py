@@ -7,7 +7,11 @@ replacing the 97 scattered error classes found across the codebase.
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, TypeAlias, Union
+
+# Type alias for error context data
+ErrorContextData: TypeAlias = Union[str, int, float, bool, Decimal, datetime, None]
+ErrorContextDict: TypeAlias = dict[str, ErrorContextData]
 
 
 class TradingBotError(Exception):
@@ -22,7 +26,7 @@ class TradingBotError(Exception):
         self,
         message: str,
         error_code: str | None = None,
-        context: dict[str, Any] | None = None,
+        context: ErrorContextDict | None = None,
         recoverable: bool = True,
     ):
         super().__init__(message)
@@ -32,13 +36,13 @@ class TradingBotError(Exception):
         self.recoverable = recoverable
         self.timestamp = datetime.now(UTC)
 
-    def get_error_context(self) -> dict[str, Any]:
+    def get_error_context(self) -> ErrorContextDict:
         """Get structured error context for logging and debugging."""
         return {
             "error_type": self.__class__.__name__,
             "error_code": self.error_code,
             "message": self.message,
-            "context": self.context,
+            "context": str(self.context),  # Convert to string for serialization
             "recoverable": self.recoverable,
             "timestamp": self.timestamp.isoformat(),
         }
@@ -52,16 +56,16 @@ class ValidationError(TradingBotError):
         self,
         message: str,
         field_name: str | None = None,
-        invalid_value: Any = None,
+        invalid_value: ErrorContextData = None,
         validation_rule: str | None = None,
-        **kwargs,
+        **kwargs: ErrorContextData,
     ):
         super().__init__(message, **kwargs)
         self.field_name = field_name
         self.invalid_value = invalid_value
         self.validation_rule = validation_rule
 
-    def get_error_context(self) -> dict[str, Any]:
+    def get_error_context(self) -> ErrorContextDict:
         context = super().get_error_context()
         context.update(
             {
@@ -82,7 +86,7 @@ class TradeValidationError(ValidationError):
         self,
         message: str,
         trade_action: str | None = None,
-        **kwargs,
+        **kwargs: ErrorContextData,
     ):
         super().__init__(message, **kwargs)
         self.trade_action = trade_action
@@ -97,7 +101,7 @@ class BalanceValidationError(ValidationError):
         required_balance: Decimal | None = None,
         available_balance: Decimal | None = None,
         account_type: str | None = None,
-        **kwargs,
+        **kwargs: ErrorContextData,
     ):
         super().__init__(message, **kwargs)
         self.required_balance = required_balance
@@ -116,7 +120,7 @@ class PositionValidationError(ValidationError):
         message: str,
         position_side: str | None = None,
         position_size: Decimal | None = None,
-        **kwargs,
+        **kwargs: ErrorContextData,
     ):
         super().__init__(message, **kwargs)
         self.position_side = position_side
@@ -132,7 +136,7 @@ class ExchangeError(TradingBotError):
         message: str,
         exchange_name: str | None = None,
         symbol: str | None = None,
-        **kwargs,
+        **kwargs: ErrorContextData,
     ):
         super().__init__(message, **kwargs)
         self.exchange_name = exchange_name
@@ -146,7 +150,7 @@ class ExchangeConnectionError(ExchangeError):
         self,
         message: str,
         retry_after: float | None = None,
-        **kwargs,
+        **kwargs: ErrorContextData,
     ):
         super().__init__(message, **kwargs)
         self.retry_after = retry_after
@@ -155,7 +159,7 @@ class ExchangeConnectionError(ExchangeError):
 class ExchangeAuthError(ExchangeError):
     """Authentication-related exchange errors."""
 
-    def __init__(self, message: str, **kwargs):
+    def __init__(self, message: str, **kwargs: ErrorContextData):
         super().__init__(message, recoverable=False, **kwargs)
 
 
@@ -168,7 +172,7 @@ class OrderExecutionError(ExchangeError):
         order_id: str | None = None,
         order_type: str | None = None,
         order_side: str | None = None,
-        **kwargs,
+        **kwargs: ErrorContextData,
     ):
         super().__init__(message, **kwargs)
         self.order_id = order_id
@@ -184,7 +188,7 @@ class InsufficientFundsError(ExchangeError):
         message: str,
         required_amount: Decimal | None = None,
         available_amount: Decimal | None = None,
-        **kwargs,
+        **kwargs: ErrorContextData,
     ):
         super().__init__(message, **kwargs)
         self.required_amount = required_amount
@@ -205,7 +209,7 @@ class LLMError(StrategyError):
         model_name: str | None = None,
         prompt_size: int | None = None,
         response_time: float | None = None,
-        **kwargs,
+        **kwargs: ErrorContextData,
     ):
         super().__init__(message, **kwargs)
         self.model_name = model_name
@@ -221,7 +225,7 @@ class IndicatorError(StrategyError):
         message: str,
         indicator_name: str | None = None,
         data_points: int | None = None,
-        **kwargs,
+        **kwargs: ErrorContextData,
     ):
         super().__init__(message, **kwargs)
         self.indicator_name = indicator_name
@@ -245,7 +249,7 @@ class MarginError(RiskManagementError):
         message: str,
         margin_required: Decimal | None = None,
         margin_available: Decimal | None = None,
-        **kwargs,
+        **kwargs: ErrorContextData,
     ):
         super().__init__(message, **kwargs)
         self.margin_required = margin_required
@@ -260,7 +264,7 @@ class DailyLossLimitError(RiskManagementError):
         message: str,
         daily_loss: Decimal | None = None,
         loss_limit: Decimal | None = None,
-        **kwargs,
+        **kwargs: ErrorContextData,
     ):
         super().__init__(message, recoverable=False, **kwargs)
         self.daily_loss = daily_loss

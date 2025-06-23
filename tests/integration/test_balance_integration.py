@@ -113,7 +113,7 @@ class TestBalanceIntegration:
                 ),
             ),
             patch.multiple(
-                "bot.main.LLMAgent",
+                "bot.strategy.llm_agent.LLMAgent",
                 analyze_market=AsyncMock(
                     return_value=TradeAction(
                         action="LONG",
@@ -125,14 +125,18 @@ class TestBalanceIntegration:
                 ),
                 is_available=Mock(return_value=True),
             ),
-            patch.multiple(
-                "bot.main.CoinbaseClient",
-                connect=AsyncMock(return_value=True),
-                disconnect=AsyncMock(return_value=True),
-                is_connected=Mock(return_value=True),
-                _get_account_balance=AsyncMock(return_value=Decimal(10000)),
-            ),
+            patch(
+                "bot.exchange.factory.ExchangeFactory.create_exchange"
+            ) as mock_exchange_factory,
         ):
+            # Create mock exchange
+            mock_exchange = AsyncMock()
+            mock_exchange.connect = AsyncMock(return_value=True)
+            mock_exchange.disconnect = AsyncMock(return_value=True)
+            mock_exchange.is_connected = Mock(return_value=True)
+            mock_exchange._get_account_balance = AsyncMock(return_value=Decimal(10000))
+            mock_exchange_factory.return_value = mock_exchange
+            
             # Override the paper account data directory
             engine = TradingEngine(symbol="BTC-USD", interval="1m", dry_run=True)
             await engine._initialize_components()

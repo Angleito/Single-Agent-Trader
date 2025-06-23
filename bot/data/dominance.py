@@ -123,18 +123,18 @@ class DominanceDataProvider:
             # Note: We can't reliably close async sessions from __del__
             # The session will be cleaned up when the event loop closes
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "DominanceDataProvider":
         """Async context manager entry."""
         await self.connect()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, _exc_tb):
+    async def __aexit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, _exc_tb: Any) -> bool:
         """Async context manager exit."""
         await self.disconnect()
         return False
 
     @classmethod
-    def _cleanup_all_instances(cls):
+    def _cleanup_all_instances(cls) -> None:
         """Cleanup all instances on exit."""
         for instance in cls._instances:
             if instance._session and not instance._session.closed:

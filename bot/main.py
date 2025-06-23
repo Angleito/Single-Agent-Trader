@@ -12,7 +12,7 @@ warnings.resetwarnings()
 try:
     current_module = sys.modules[__name__]
     if not hasattr(current_module, "__warningregistry__"):
-        current_module.__warningregistry__ = {}  # type: ignore[attr-defined]
+        current_module.__warningregistry__ = {}
 except (AttributeError, TypeError):
     # Some modules don't support setting attributes
     # This is fine, warnings will still be filtered
@@ -318,7 +318,7 @@ class TradingEngine:
         self._initialize_trading_infrastructure()
         self._initialize_performance_monitoring()
 
-    def _initialize_basic_setup(self, config_file: str | None, dry_run: bool | None):
+    def _initialize_basic_setup(self, config_file: str | None, dry_run: bool | None) -> None:
         """Initialize basic configuration and setup."""
         # Initialize adaptive timing attributes
         self._adaptive_timing_info: dict[str, Any] | None = None
@@ -343,7 +343,7 @@ class TradingEngine:
             balance = self.settings.paper_trading.starting_balance
             self.paper_account = PaperTradingAccount(starting_balance=balance)
 
-    def _initialize_core_components(self):
+    def _initialize_core_components(self) -> None:
         """Initialize core trading components with error handling."""
         # Initialize components (market data will be initialized after exchange connection)
         self.market_data: MarketDataProviderType = None
@@ -373,14 +373,14 @@ class TradingEngine:
         self._memory_available = False
         self.logger.debug("MCP memory components initialized")
 
-    def _initialize_optional_components(self):
+    def _initialize_optional_components(self) -> None:
         """Initialize optional components like OmniSearch and WebSocket."""
         self._initialize_omnisearch()
         self._initialize_websocket_components()
         self._initialize_llm_agent()
         self._initialize_market_making_integrator()
 
-    def _initialize_omnisearch(self):
+    def _initialize_omnisearch(self) -> None:
         """Initialize OmniSearch client if enabled."""
         self.logger.debug("About to initialize OmniSearch client...")
         self.omnisearch_client = None
@@ -412,12 +412,12 @@ class TradingEngine:
                 self.logger.info("Continuing without OmniSearch integration")
                 self.omnisearch_client = None
 
-    def _initialize_websocket_components(self):
+    def _initialize_websocket_components(self) -> None:
         """Initialize WebSocket-related components."""
         self._initialize_websocket_publisher()
         self._initialize_command_consumer()
 
-    def _initialize_websocket_publisher(self):
+    def _initialize_websocket_publisher(self) -> None:
         """Initialize WebSocket publisher for real-time dashboard integration."""
         self.websocket_publisher = None
         if self.settings.system.enable_websocket_publishing:
@@ -436,7 +436,7 @@ class TradingEngine:
                 self.logger.info("Continuing without WebSocket publishing")
                 self.websocket_publisher = None
 
-    def _initialize_command_consumer(self):
+    def _initialize_command_consumer(self) -> None:
         """Initialize Command Consumer for bidirectional dashboard control."""
         self.command_consumer = None
         if self.settings.system.enable_websocket_publishing:  # Use same setting for now
@@ -458,7 +458,7 @@ class TradingEngine:
                 self.logger.info("Continuing without dashboard control")
                 self.command_consumer = None
 
-    def _initialize_llm_agent(self):
+    def _initialize_llm_agent(self) -> None:
         """Initialize LLM agent (will be either LLMAgent or MemoryEnhancedLLMAgent)."""
         self.llm_agent: Any
 
@@ -467,7 +467,7 @@ class TradingEngine:
         else:
             self._initialize_standard_agent()
 
-    def _initialize_memory_enhanced_agent(self):
+    def _initialize_memory_enhanced_agent(self) -> None:
         """Initialize memory-enhanced LLM agent with MCP support."""
         self.logger.info("MCP memory system enabled, initializing components...")
         try:
@@ -512,7 +512,7 @@ class TradingEngine:
             self.logger.info("Falling back to standard LLM agent")
             self._initialize_standard_agent()
 
-    def _initialize_standard_agent(self):
+    def _initialize_standard_agent(self) -> None:
         """Initialize standard LLM agent without memory."""
         try:
             llm_agent_cls = _get_lazy_import("LLMAgent")
@@ -533,7 +533,7 @@ class TradingEngine:
             self.logger.exception("Bot cannot make trading decisions without LLM agent")
             self.llm_agent = None
 
-    def _initialize_market_making_integrator(self):
+    def _initialize_market_making_integrator(self) -> None:
         """Initialize market making integrator if enabled."""
         self.market_making_integrator = None
 
@@ -599,7 +599,7 @@ class TradingEngine:
             self.logger.info("Falling back to LLM agent for all symbols")
             self.market_making_integrator = None
 
-    def _initialize_trading_infrastructure(self):
+    def _initialize_trading_infrastructure(self) -> None:
         """Initialize trading infrastructure components."""
         self.validator = TradeValidator()
         self.position_manager = PositionManager(
@@ -628,7 +628,7 @@ class TradingEngine:
         # Initialize position and performance tracking
         self._initialize_tracking()
 
-    def _initialize_dominance_provider(self):
+    def _initialize_dominance_provider(self) -> None:
         """Initialize dominance data provider if enabled."""
         self.dominance_provider = None
         if self.settings.dominance.enable_dominance_data:
@@ -655,7 +655,7 @@ class TradingEngine:
                 )
                 self.dominance_provider = None
 
-    def _initialize_tracking(self):
+    def _initialize_tracking(self) -> None:
         """Initialize position and performance tracking."""
         # Position tracking
         self.current_position = Position(
@@ -740,7 +740,7 @@ class TradingEngine:
         async def stop_monitoring(self):
             """No-op stop monitoring."""
 
-    def _initialize_performance_monitoring(self):
+    def _initialize_performance_monitoring(self) -> None:
         """Initialize performance monitoring system."""
         self.logger.debug("Initializing performance monitoring system...")
         try:
@@ -774,7 +774,7 @@ class TradingEngine:
             )
             self.performance_monitor = self.NullPerformanceMonitor()
 
-    def _configure_performance_thresholds(self, thresholds: Any):
+    def _configure_performance_thresholds(self, thresholds: Any) -> None:
         """Configure performance thresholds based on trading interval."""
         # High-frequency trading thresholds
         if self.interval in ["1s", "5s", "10s", "15s"]:
@@ -806,7 +806,7 @@ class TradingEngine:
             "Initialized TradingEngine for %s at %s", self.symbol, self.interval
         )
 
-    def _log_component_status(self):
+    def _log_component_status(self) -> None:
         """Log the status of all initialized components."""
         components = {
             "Indicators": self.indicator_calc is not None,
@@ -1082,7 +1082,7 @@ class TradingEngine:
 
         return True
 
-    def _get_market_data_provider(self):
+    def _get_market_data_provider(self) -> Any:
         """
         Get the market data provider with proper type safety.
 
@@ -1122,7 +1122,7 @@ class TradingEngine:
         # Perform timing validations
         return self._validate_trading_timing(latest_candle)
 
-    def _get_latest_market_data(self) -> list:
+    def _get_latest_market_data(self) -> list[Any]:
         """Get latest market data, handling sync/async methods."""
         try:
             latest_data: list[Any] = []
@@ -2579,7 +2579,7 @@ class TradingEngine:
             self.logger.warning("Error getting market data in main loop: %s", e)
         return latest_data
 
-    async def _resolve_async_data(self, latest_data):
+    async def _resolve_async_data(self, latest_data: Any) -> Any:
         """Resolve various async data types."""
         if inspect.iscoroutine(latest_data):
             self.logger.warning("Detected coroutine data in main loop, awaiting...")
@@ -2636,7 +2636,7 @@ class TradingEngine:
 
         return current_price, market_state
 
-    async def _calculate_indicators(self) -> tuple:
+    async def _calculate_indicators(self) -> tuple[list[Any], Any | None]:
         """Calculate technical indicators."""
         if self.market_data is None:
             self.logger.error(
@@ -2661,7 +2661,7 @@ class TradingEngine:
             dominance_candles,
         )
 
-    async def _get_dominance_candles(self):
+    async def _get_dominance_candles(self) -> Any:
         """Generate dominance candlesticks if provider available."""
         if not hasattr(self, "dominance_provider") or not self.dominance_provider:
             return None
@@ -2683,7 +2683,7 @@ class TradingEngine:
 
         return None
 
-    async def _compute_indicators(self, market_data, dominance_candles) -> dict:
+    async def _compute_indicators(self, market_data: list[Any], dominance_candles: Any) -> dict[str, Any]:
         """Compute technical indicators with error handling."""
         try:
             with self.performance_monitor.track_operation(
@@ -2720,7 +2720,7 @@ class TradingEngine:
 
             return indicator_state
 
-    async def _publish_indicator_data(self, indicator_state: dict):
+    async def _publish_indicator_data(self, indicator_state: dict[str, Any]) -> None:
         """Publish indicator data to dashboard."""
         await self.websocket_publisher.publish_indicator_data(
             symbol=self.actual_trading_symbol,
@@ -2798,7 +2798,16 @@ class TradingEngine:
                     self.logger.warning("Failed to get market sentiment: %s", e)
                     indicator_dict["market_sentiment"] = "NEUTRAL"
 
-                dominance_obj = dominance_data
+                # Convert DominanceData to StablecoinDominance for MarketState compatibility
+                from .trading_types import StablecoinDominance
+                dominance_obj = StablecoinDominance(
+                    timestamp=dominance_data.timestamp,
+                    stablecoin_dominance=dominance_data.stablecoin_dominance or 0.0,
+                    usdt_dominance=dominance_data.usdt_dominance or 0.0,
+                    usdc_dominance=dominance_data.usdc_dominance or 0.0,
+                    dominance_24h_change=dominance_data.dominance_24h_change or 0.0,
+                    dominance_rsi=dominance_data.dominance_rsi or 50.0,
+                )
 
         except Exception as e:
             self.logger.warning(
@@ -2844,7 +2853,7 @@ class TradingEngine:
             ),
         }
 
-    def _get_default_dominance_values(self) -> dict:
+    def _get_default_dominance_values(self) -> dict[str, Any]:
         """Get default dominance values."""
         return {
             "usdt_dominance": 0.0,

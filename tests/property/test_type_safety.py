@@ -19,7 +19,7 @@ ULTRATHINK DESIGN RATIONALE:
 """
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -888,7 +888,7 @@ class TestComplexTypeInteractions:
 class TestPerformanceAndEdgeCases:
     """Test performance characteristics and edge cases."""
 
-    @settings(max_examples=1000, deadline=None)
+    @settings(max_examples=1000, deadline=timedelta(seconds=10))
     @given(st.data())
     def test_high_frequency_type_validation(self, data: st.DataObject) -> None:
         """Type validation should be performant under load."""

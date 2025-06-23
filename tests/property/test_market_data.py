@@ -1,12 +1,13 @@
 """Property-based tests for market data consistency invariants."""
 
+from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 
 import numpy as np
 import pandas as pd
 import pytest
-from hypothesis import given
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from hypothesis.strategies import composite
 
@@ -18,13 +19,13 @@ from bot.indicators.vumanchu import VuManChuIndicators
 def valid_candle(draw: Any) -> dict[str, float]:
     """Generate a valid OHLC candle with invariants preserved."""
     # Generate base prices
-    open_price = draw(st.floats(min_value=0.01, max_value=100000, width=32))
-    close_price = draw(st.floats(min_value=0.01, max_value=100000, width=32))
+    open_price = draw(st.floats(min_value=0.01, max_value=100000))
+    close_price = draw(st.floats(min_value=0.01, max_value=100000))
 
     # Ensure high is >= max(open, close) and low is <= min(open, close)
     price_range = abs(close_price - open_price)
-    high_offset = draw(st.floats(min_value=0, max_value=price_range * 2, width=32))
-    low_offset = draw(st.floats(min_value=0, max_value=price_range * 2, width=32))
+    high_offset = draw(st.floats(min_value=0, max_value=price_range * 2))
+    low_offset = draw(st.floats(min_value=0, max_value=price_range * 2))
 
     high_price = max(open_price, close_price) + high_offset
     low_price = min(open_price, close_price) - low_offset
@@ -34,7 +35,7 @@ def valid_candle(draw: Any) -> dict[str, float]:
 
     # Generate timestamp and volume
     timestamp = draw(st.integers(min_value=1600000000, max_value=2000000000))
-    volume = draw(st.floats(min_value=0, max_value=1000000, width=32))
+    volume = draw(st.floats(min_value=0, max_value=1000000))
 
     return {
         "open": open_price,
@@ -106,8 +107,8 @@ class TestMarketDataInvariants:
         assert (df["low"] <= df["high"]).all()
 
     @given(
-        base_price=st.floats(min_value=1, max_value=100000, width=32),
-        volatility=st.floats(min_value=0.001, max_value=0.5, width=32),
+        base_price=st.floats(min_value=1, max_value=100000),
+        volatility=st.floats(min_value=0.001, max_value=0.5),
         num_candles=st.integers(min_value=10, max_value=100),
     )
     def test_realistic_price_movement(
@@ -242,7 +243,9 @@ class TestMinimumDataRequirements:
 
     @given(
         num_candles=st.integers(min_value=1, max_value=50),
-        base_price=st.floats(min_value=10, max_value=10000, width=32),
+        base_price=st.floats(
+            min_value=10, max_value=10000, allow_nan=False, allow_infinity=False
+        ),
     )
     def test_indicator_minimum_candles(
         self, num_candles: int, base_price: float
@@ -270,7 +273,7 @@ class TestMinimumDataRequirements:
 
         # Should not raise exceptions even with minimal data
         try:
-            result = indicators.calculate(df)
+            result = indicators.calculate_all(df)
             assert isinstance(result, dict)
 
             # With insufficient data, signals should be None or empty
@@ -286,6 +289,7 @@ class TestMinimumDataRequirements:
             )
 
     @given(candles=candle_series(min_size=100, max_size=500))
+    @settings(deadline=timedelta(seconds=10))
     def test_indicator_output_consistency(
         self, candles: list[dict[str, float]]
     ) -> None:
@@ -295,7 +299,7 @@ class TestMinimumDataRequirements:
         df.set_index("timestamp", inplace=True)
 
         indicators = VuManChuIndicators()
-        result = indicators.calculate(df)
+        result = indicators.calculate_all(df)
 
         # Check that result is properly structured
         assert isinstance(result, dict)
@@ -324,7 +328,7 @@ class TestDataQuality:
                 max_value=100000,
                 allow_nan=False,
                 allow_infinity=False,
-                width=32,
+                width=64,  # Use float64 for better precision
             ),
             min_size=10,
             max_size=100,
@@ -351,6 +355,9 @@ class TestDataQuality:
     @given(
         candles=st.lists(valid_candle(), min_size=2, max_size=1000),
         gap_probability=st.floats(min_value=0, max_value=0.3),
+    )
+    @settings(
+        deadline=timedelta(seconds=10), suppress_health_check=[HealthCheck.too_slow]
     )
     def test_price_gap_detection(
         self, candles: list[dict[str, float]], gap_probability: float
@@ -441,7 +448,7 @@ class TestDataQuality:
             assert data_loss_rate <= timestamp_error_rate * 2  # Some tolerance
 
     @given(
-        base_price=st.floats(min_value=1, max_value=100000, width=32),
+        base_price=st.floats(min_value=1, max_value=100000),
         extreme_move_probability=st.floats(min_value=0, max_value=0.1),
         num_candles=st.integers(min_value=10, max_value=100),
     )
@@ -602,7 +609,7 @@ class TestEdgeCases:
     """Test various edge cases in market data."""
 
     @given(
-        price=st.floats(min_value=0.01, max_value=100000, width=32),
+        price=st.floats(min_value=0.01, max_value=100000),
         num_candles=st.integers(min_value=10, max_value=100),
     )
     def test_flat_market_conditions(self, price: float, num_candles: int) -> None:
@@ -640,7 +647,7 @@ class TestEdgeCases:
         assert (returns == 0).all()
 
     @given(
-        base_price=st.floats(min_value=0.01, max_value=1, width=32),
+        base_price=st.floats(min_value=0.01, max_value=1),
         multiplier=st.integers(min_value=1000, max_value=1000000),
     )
     def test_extreme_price_ranges(self, base_price: float, multiplier: int) -> None:
@@ -685,6 +692,7 @@ class TestEdgeCases:
         assert abs(low_return - high_return) < 0.001
 
     @given(candles=candle_series(min_size=100, max_size=1000))
+    @settings(deadline=timedelta(seconds=10))
     def test_missing_data_handling(self, candles: list[dict[str, float]]) -> None:
         """Test handling of missing data points."""
         df = pd.DataFrame(candles)

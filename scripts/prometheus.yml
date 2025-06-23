@@ -1,0 +1,53 @@
+# Prometheus configuration for AI Trading Bot monitoring
+
+global:
+  scrape_interval: 15s  # How frequently to scrape targets
+  evaluation_interval: 15s  # How frequently to evaluate rules
+  scrape_timeout: 10s
+
+# Scrape configurations
+scrape_configs:
+  # Trading bot performance metrics
+  - job_name: 'trading_bot_performance'
+    static_configs:
+      - targets: ['performance-monitor:9090']
+    metrics_path: '/metrics'
+    scrape_interval: 10s  # More frequent for trading metrics
+
+  # Main trading bot (if it exports metrics)
+  - job_name: 'trading_bot_main'
+    static_configs:
+      - targets: ['ai-trading-bot:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # MCP Memory Server
+  - job_name: 'mcp_memory'
+    static_configs:
+      - targets: ['mcp-memory:8765']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Bluefin Service
+  - job_name: 'bluefin_service'
+    static_configs:
+      - targets: ['bluefin-service:8081']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Dashboard Backend
+  - job_name: 'dashboard_backend'
+    static_configs:
+      - targets: ['dashboard-backend:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+# Alerting rules (optional)
+rule_files:
+  - 'alerts.yml'
+
+# Alertmanager configuration (optional)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []  # Add alertmanager targets if needed

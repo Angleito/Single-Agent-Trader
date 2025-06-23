@@ -87,6 +87,7 @@ safety = "^3.5.2"
 bandit = "^1.8.0"
 vulture = "^2.14.0"
 djlint = "^1.36.0"
+hypothesis = "^6.125.0"
 
 
 [build-system]

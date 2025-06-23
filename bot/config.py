@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, TypedDict
 from urllib.parse import urlparse
 
 from dotenv import load_dotenv
@@ -98,6 +98,62 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 logger = logging.getLogger(__name__)
 
 
+# Type definitions for validation results
+class ValidationCheck(TypedDict):
+    """Single validation check result."""
+    name: str
+    status: Literal["pass", "error", "warning", "skip"]
+    message: str | None
+
+
+class ValidationResult(TypedDict):
+    """Result of a single validation test."""
+    name: str
+    status: Literal["pass", "error", "warning", "skip"]
+    message: str
+
+
+class ValidationResultWithChecks(TypedDict):
+    """Validation result with sub-checks."""
+    status: Literal["pass", "error", "warning"]
+    checks: list[ValidationCheck]
+
+
+class ValidationSummary(TypedDict):
+    """Summary of all validation results."""
+    total_errors: int
+    total_warnings: int
+    errors: list[str]
+    warnings: list[str]
+    is_valid: bool
+
+
+class TestResult(TypedDict):
+    """Result of a test."""
+    name: str
+    status: Literal["pass", "error", "warning"]
+    warnings: list[str] | None
+
+
+class TestValidationResult(TypedDict):
+    """Validation result with tests."""
+    status: Literal["pass", "skipped"]
+    reason: str | None
+    tests: list[TestResult] | None
+
+
+class FullValidationResults(TypedDict):
+    """Complete validation results."""
+    environment: ValidationResultWithChecks
+    network_connectivity: ValidationResultWithChecks
+    exchange_config: ValidationResultWithChecks
+    security: ValidationResultWithChecks
+    trading_parameters: ValidationResultWithChecks
+    llm_config: ValidationResultWithChecks
+    sui_network: ValidationResultWithChecks | None
+    summary: ValidationSummary
+
+
 class ConfigValidationError(Exception):
     """Raised when configuration validation fails."""
 
@@ -113,19 +169,19 @@ class ConfigurationValidator:
         self.settings = settings
         self.errors: list[str] = []
         self.warnings: list[str] = []
-        self.validation_results: dict[str, Any] = {}
+        self.validation_results: FullValidationResults | dict[str, Any] = {}
 
-    def _check_aiohttp_available(self, test_name: str) -> dict[str, Any] | None:
+    def _check_aiohttp_available(self, test_name: str) -> ValidationResult | None:
         """Check if aiohttp is available for network testing."""
         if not AIOHTTP_AVAILABLE:
-            return {
-                "name": test_name,
-                "status": "skip",
-                "message": "aiohttp not available for network testing",
-            }
+            return ValidationResult(
+                name=test_name,
+                status="skip",
+                message="aiohttp not available for network testing",
+            )
         return None
 
-    async def validate_all(self) -> dict[str, Any]:
+    async def validate_all(self) -> FullValidationResults:
         """Run all configuration validations."""
         results = {
             "environment": await self._validate_environment(),
@@ -152,9 +208,9 @@ class ConfigurationValidator:
         self.validation_results = results
         return results
 
-    async def _validate_environment(self) -> dict[str, Any]:
+    async def _validate_environment(self) -> ValidationResultWithChecks:
         """Validate environment configuration consistency."""
-        results: dict[str, Any] = {"status": "pass", "checks": []}
+        results = ValidationResultWithChecks(status="pass", checks=[])
 
         # Environment-network consistency
         if self.settings.exchange.exchange_type == "bluefin":
@@ -185,9 +241,9 @@ class ConfigurationValidator:
 
         return results
 
-    async def _validate_network_connectivity(self) -> dict[str, Any]:
+    async def _validate_network_connectivity(self) -> ValidationResultWithChecks:
         """Test network connectivity to required services."""
-        results: dict[str, Any] = {"status": "pass", "checks": []}
+        results = ValidationResultWithChecks(status="pass", checks=[])
 
         # Test basic internet connectivity
         internet_check = await self._test_internet_connectivity()
@@ -203,9 +259,9 @@ class ConfigurationValidator:
 
         return results
 
-    async def _validate_exchange_configuration(self) -> dict[str, Any]:
+    async def _validate_exchange_configuration(self) -> ValidationResultWithChecks:
         """Validate exchange-specific configuration."""
-        results: dict[str, Any] = {"status": "pass", "checks": []}
+        results = ValidationResultWithChecks(status="pass", checks=[])
 
         if self.settings.exchange.exchange_type == "bluefin":
             # Validate Bluefin service URL
@@ -228,9 +284,9 @@ class ConfigurationValidator:
 
         return results
 
-    async def _validate_security_settings(self) -> dict[str, Any]:
+    async def _validate_security_settings(self) -> ValidationResultWithChecks:
         """Validate security-related configuration."""
-        results: dict[str, Any] = {"status": "pass", "checks": []}
+        results = ValidationResultWithChecks(status="pass", checks=[])
 
         # Check for secure private key handling
         if (
@@ -258,9 +314,9 @@ class ConfigurationValidator:
 
         return results
 
-    async def _validate_trading_parameters(self) -> dict[str, Any]:
+    async def _validate_trading_parameters(self) -> ValidationResultWithChecks:
         """Validate trading parameter bounds and consistency."""
-        results: dict[str, Any] = {"status": "pass", "checks": []}
+        results = ValidationResultWithChecks(status="pass", checks=[])
 
         # Leverage validation
         if self.settings.trading.leverage > 20:
@@ -291,9 +347,9 @@ class ConfigurationValidator:
 
         return results
 
-    async def _validate_llm_configuration(self) -> dict[str, Any]:
+    async def _validate_llm_configuration(self) -> ValidationResultWithChecks:
         """Validate LLM configuration and test connectivity."""
-        results: dict[str, Any] = {"status": "pass", "checks": []}
+        results = ValidationResultWithChecks(status="pass", checks=[])
 
         # Test LLM API connectivity if key is provided
         if self.settings.llm.openai_api_key:
@@ -311,9 +367,9 @@ class ConfigurationValidator:
 
         return results
 
-    async def _validate_sui_network(self) -> dict[str, Any]:
+    async def _validate_sui_network(self) -> ValidationResultWithChecks:
         """Validate Sui network connectivity and configuration."""
-        results: dict[str, Any] = {"status": "pass", "checks": []}
+        results = ValidationResultWithChecks(status="pass", checks=[])
 
         # Test Sui RPC connectivity
         rpc_test = await self._test_sui_rpc_connectivity()
@@ -329,7 +385,7 @@ class ConfigurationValidator:
 
         return results
 
-    async def _test_internet_connectivity(self) -> dict[str, Any]:
+    async def _test_internet_connectivity(self) -> ValidationResult:
         """Test basic internet connectivity."""
         skip_result = self._check_aiohttp_available("internet_connectivity")
         if skip_result:
@@ -363,7 +419,7 @@ class ConfigurationValidator:
             "message": "Internet test failed",
         }
 
-    async def _test_dns_resolution(self) -> dict[str, Any]:
+    async def _test_dns_resolution(self) -> ValidationResult:
         """Test DNS resolution for key domains."""
         domains_to_test = ["api.openai.com"]
 
@@ -401,7 +457,7 @@ class ConfigurationValidator:
             "message": "DNS resolution OK",
         }
 
-    async def _test_bluefin_service_connectivity(self) -> dict[str, Any]:
+    async def _test_bluefin_service_connectivity(self) -> ValidationResult:
         """Test connectivity to Bluefin service."""
         service_url = self.settings.exchange.bluefin_service_url
 
@@ -499,7 +555,7 @@ class ConfigurationValidator:
             "message": f"Valid format: {', '.join(formats_detected)}",
         }
 
-    async def _validate_bluefin_endpoints(self) -> dict[str, Any]:
+    async def _validate_bluefin_endpoints(self) -> ValidationResult:
         """Validate Bluefin API endpoints."""
         if not BLUEFIN_ENDPOINTS_AVAILABLE:
             return {
@@ -543,7 +599,7 @@ class ConfigurationValidator:
                 "message": f"Endpoint test failed: {e!s}",
             }
 
-    async def _test_openai_api_connectivity(self) -> dict[str, Any]:
+    async def _test_openai_api_connectivity(self) -> ValidationResult:
         """Test OpenAI API connectivity."""
         if not self.settings.llm.openai_api_key:
             return {
@@ -594,7 +650,7 @@ class ConfigurationValidator:
                 "message": f"API unreachable: {e!s}",
             }
 
-    async def _test_sui_rpc_connectivity(self) -> dict[str, Any]:
+    async def _test_sui_rpc_connectivity(self) -> ValidationResult:
         """Test Sui RPC connectivity."""
         # Determine RPC URL based on network
         network = self.settings.exchange.bluefin_network
@@ -651,7 +707,7 @@ class ConfigurationValidator:
                 "message": f"RPC unreachable: {e!s}",
             }
 
-    async def _test_bluefin_api_connectivity(self) -> dict[str, Any]:
+    async def _test_bluefin_api_connectivity(self) -> ValidationResult:
         """Test Bluefin API connectivity."""
         if not BLUEFIN_ENDPOINTS_AVAILABLE:
             return {
@@ -2787,12 +2843,12 @@ class Settings(BaseSettings):
         """Create a configuration monitor for runtime change detection."""
         return ConfigurationMonitor(self)
 
-    def test_bluefin_configuration(self) -> dict[str, Any]:
+    def test_bluefin_configuration(self) -> TestValidationResult:
         """Test Bluefin-specific configuration synchronously."""
         if self.exchange.exchange_type != "bluefin":
             return {"status": "skipped", "reason": "Not using Bluefin exchange"}
 
-        results: dict[str, Any] = {"status": "pass", "tests": []}
+        results = TestValidationResult(status="pass", reason=None, tests=[])
 
         # Test private key format
         try:

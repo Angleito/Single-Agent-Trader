@@ -18,12 +18,17 @@ from unittest.mock import Mock, patch
 import pytest
 from aiohttp import ClientError, ClientTimeout
 
-from services.bluefin_sdk_service import (
-    BluefinAPIError,
-    BluefinConnectionError,
-    BluefinSDKService,
-    BluefinServiceError,
-)
+# Skip tests if bluefin SDK is not available
+pytest_plugins = []
+try:
+    from services.bluefin_sdk_service import (
+        BluefinAPIError,
+        BluefinConnectionError,
+        BluefinSDKService,
+        BluefinServiceError,
+    )
+except ImportError:
+    pytestmark = pytest.mark.skip(reason="bluefin_v2_client not installed")
 
 logger = logging.getLogger(__name__)
 

@@ -649,7 +649,7 @@ def _validate_price_before_conversion(
                 )
                 return False
 
-        # Check for patterns that indicate corrupted floating point representation
+        # Enhanced pattern detection for suspicious digit repetition
         if isinstance(value, str):
             # Look for patterns like repeated sequences of digits
             cleaned_str = value.replace(".", "").replace("-", "")
@@ -659,11 +659,27 @@ def _validate_price_before_conversion(
                 for digit in cleaned_str:
                     digit_counts[digit] = digit_counts.get(digit, 0) + 1
 
-                # If any single digit appears more than 70% of the time, it's suspicious
+                # If any single digit appears more than 80% of the time, it's suspicious
+                # This catches clearly corrupted data while allowing legitimate values
                 max_count = max(digit_counts.values())
-                if max_count / len(cleaned_str) > 0.7:
-                    logger.warning("Suspicious digit repetition in %s", value)
+                repetition_ratio = max_count / len(cleaned_str)
+                if repetition_ratio > 0.8:
+                    logger.warning(
+                        "Suspicious repeated digit pattern: %s (%.1f%% repetition)",
+                        value, repetition_ratio * 100
+                    )
                     return False
+                
+                # Additional check for suspicious ending patterns (many zeros)
+                # Only flag if there are 12+ trailing zeros (more conservative)
+                if cleaned_str.endswith('000000000000'):  # 12+ trailing zeros
+                    trailing_zeros = len(cleaned_str) - len(cleaned_str.rstrip('0'))
+                    if trailing_zeros >= 12:
+                        logger.warning(
+                            "Suspicious trailing zeros pattern: %s (%d zeros)",
+                            value, trailing_zeros
+                        )
+                        return False
 
         return True
 

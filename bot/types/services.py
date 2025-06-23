@@ -60,11 +60,19 @@ from typing import (
     Literal,
     NotRequired,
     Protocol,
+    TypeAlias,
     TypedDict,
     TypeGuard,
     Union,
+    cast,
     runtime_checkable,
 )
+
+# Type aliases for common metadata and auth types
+ServiceMetadata: TypeAlias = dict[str, str | int | float | bool | list[str]]
+AuthConfig: TypeAlias = dict[str, str | int | bool]
+HeaderConfig: TypeAlias = dict[str, str]
+EnvironmentVars: TypeAlias = dict[str, str]
 
 
 # Service Status Types
@@ -89,7 +97,7 @@ class ServiceHealth(TypedDict):
     error: NotRequired[str | None]
     response_time_ms: NotRequired[float | None]
     consecutive_failures: NotRequired[int]
-    metadata: NotRequired[dict[str, Any]]
+    metadata: NotRequired[ServiceMetadata]
 
 
 class ServiceEndpoint(TypedDict):
@@ -101,8 +109,8 @@ class ServiceEndpoint(TypedDict):
     health_endpoint: str | None
     base_path: NotRequired[str]
     timeout_seconds: NotRequired[float]
-    headers: NotRequired[dict[str, str]]
-    auth: NotRequired[dict[str, Any]]
+    headers: NotRequired[HeaderConfig]
+    auth: NotRequired[AuthConfig]
 
 
 # Connection State Types
@@ -140,7 +148,7 @@ class ServiceConfig(TypedDict):
     max_wait: NotRequired[float]
     retry_config: NotRequired["RetryConfig"]
     dependencies: NotRequired[list[str]]
-    environment: NotRequired[dict[str, str]]
+    environment: NotRequired[EnvironmentVars]
 
 
 class RetryConfig(TypedDict):
@@ -164,7 +172,7 @@ class ServiceRegistration(TypedDict):
     registered_at: datetime
     updated_at: datetime
     tags: NotRequired[list[str]]
-    metadata: NotRequired[dict[str, Any]]
+    metadata: NotRequired[ServiceMetadata]
 
 
 class ServiceRegistry(TypedDict):
@@ -426,7 +434,8 @@ def validate_service_config(config: Any) -> ServiceConfig:
         if not all(isinstance(dep, str) for dep in config["dependencies"]):
             raise ValueError("All dependencies must be strings")
 
-    return config  # type: ignore
+    # Type narrowing: At this point, config is validated to be ServiceConfig
+    return cast("ServiceConfig", config)
 
 
 # Utility Functions
@@ -434,7 +443,7 @@ def create_health_status(
     status: ServiceStatus,
     error: str | None = None,
     response_time_ms: float | None = None,
-    **metadata: Any,
+    **metadata: str | int | float | bool | list[str],
 ) -> ServiceHealth:
     """
     Create a ServiceHealth object.
@@ -470,7 +479,10 @@ def create_endpoint(
     port: int,
     protocol: Literal["http", "https", "ws", "wss", "tcp", "grpc"] = "http",
     health_endpoint: str | None = "/health",
-    **kwargs: Any,
+    base_path: str | None = None,
+    timeout_seconds: float | None = None,
+    headers: HeaderConfig | None = None,
+    auth: AuthConfig | None = None,
 ) -> ServiceEndpoint:
     """
     Create a ServiceEndpoint object.
@@ -480,7 +492,10 @@ def create_endpoint(
         port: Service port
         protocol: Connection protocol
         health_endpoint: Health check endpoint
-        **kwargs: Additional endpoint configuration
+        base_path: Base path for API endpoints
+        timeout_seconds: Request timeout in seconds
+        headers: Request headers
+        auth: Authentication configuration
 
     Returns:
         ServiceEndpoint object
@@ -492,10 +507,15 @@ def create_endpoint(
         "health_endpoint": health_endpoint,
     }
 
-    # Add optional fields
-    for key in ["base_path", "timeout_seconds", "headers", "auth"]:
-        if key in kwargs:
-            endpoint[key] = kwargs[key]  # type: ignore
+    # Add optional fields if provided
+    if base_path is not None:
+        endpoint["base_path"] = base_path
+    if timeout_seconds is not None:
+        endpoint["timeout_seconds"] = timeout_seconds
+    if headers is not None:
+        endpoint["headers"] = headers
+    if auth is not None:
+        endpoint["auth"] = auth
 
     return endpoint
 
@@ -528,4 +548,4 @@ class DiscoveredService(TypedDict):
     discovery_method: DiscoveryMethod
     discovered_at: datetime
     tags: NotRequired[list[str]]
-    metadata: NotRequired[dict[str, Any]]
+    metadata: NotRequired[ServiceMetadata]

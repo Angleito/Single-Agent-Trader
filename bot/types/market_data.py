@@ -9,7 +9,7 @@ All types include comprehensive validation to ensure data integrity.
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import NewType
+from typing import Any, NewType
 
 from pydantic import (
     BaseModel,
@@ -605,7 +605,7 @@ class AggregatedMarketData(BaseModel):
 
 
 # Type guards for runtime type checking
-def is_valid_price(value: any) -> bool:
+def is_valid_price(value: Any) -> bool:
     """Check if value is a valid price."""
     try:
         price = Decimal(str(value))
@@ -614,7 +614,7 @@ def is_valid_price(value: any) -> bool:
         return False
 
 
-def is_valid_volume(value: any) -> bool:
+def is_valid_volume(value: Any) -> bool:
     """Check if value is a valid volume."""
     try:
         volume = Decimal(str(value))
@@ -623,7 +623,7 @@ def is_valid_volume(value: any) -> bool:
         return False
 
 
-def is_valid_timestamp(value: any) -> bool:
+def is_valid_timestamp(value: Any) -> bool:
     """Check if value is a valid timestamp."""
     if isinstance(value, datetime):
         return value.tzinfo is not None

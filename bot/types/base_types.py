@@ -7,7 +7,7 @@ generic Any types throughout the codebase for improved type safety.
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Literal, NotRequired, TypeAlias, TypedDict
+from typing import Literal, NotRequired, TypeAlias, TypedDict, Union
 
 # Type aliases for common types
 Price: TypeAlias = Decimal
@@ -17,6 +17,14 @@ Timestamp: TypeAlias = datetime
 Symbol: TypeAlias = str
 OrderId: TypeAlias = str
 AccountId: TypeAlias = str
+
+# Type for validation details
+ValidationDetail: TypeAlias = Union[str, int, float, bool, Decimal, datetime, list[str]]
+ValidationDetails: TypeAlias = dict[str, ValidationDetail]
+
+# Type for error details
+ErrorDetail: TypeAlias = Union[str, int, float, bool, list[str], dict[str, str]]
+ErrorDetails: TypeAlias = dict[str, ErrorDetail]
 
 
 class MarketDataDict(TypedDict):
@@ -83,7 +91,7 @@ class ValidationResult(TypedDict):
     valid: bool
     message: NotRequired[str]
     error: NotRequired[dict[str, str]]
-    details: NotRequired[dict[str, Any]]
+    details: NotRequired[ValidationDetails]
     timestamp: NotRequired[str]
 
 
@@ -139,7 +147,7 @@ class ErrorContext(TypedDict):
     component: NotRequired[str]
     operation: NotRequired[str]
     timestamp: str
-    details: NotRequired[dict[str, Any]]
+    details: NotRequired[ErrorDetails]
 
 
 class CircuitBreakerStatus(TypedDict):
