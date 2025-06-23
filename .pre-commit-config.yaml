@@ -34,9 +34,22 @@ repos:
       - id: mypy
         additional_dependencies:
           - types-requests
+          - types-aiofiles
+          - types-python-dateutil
           - pandas-stubs
-        args: [--ignore-missing-imports, --no-strict-optional]
-        files: ^bot/
+          - numpy
+          - pydantic
+        args: [--config-file, pyproject.toml, --show-error-codes, --show-column-numbers]
+        files: ^bot/.*\.py$
+
+  # Pyright for additional type checking (temporarily disabled for tests)
+  # - repo: https://github.com/RobertCraigie/pyright-python
+  #   rev: v1.1.383
+  #   hooks:
+  #     - id: pyright
+  #       args: [--project, .]
+  #       files: ^bot/
+  #       pass_filenames: false
 
   # Vulture for dead code detection
   - repo: https://github.com/jendrikseipp/vulture

@@ -22,8 +22,8 @@ echo "📐 Formatting with Ruff..."
 poetry run ruff format .
 
 # Type checking
-echo "🔬 Type checking with MyPy..."
-poetry run mypy bot/ || echo "⚠️  Type checking issues found (non-blocking)"
+echo "🔬 Type checking with MyPy (strict mode)..."
+poetry run mypy bot/ --config-file pyproject.toml || echo "⚠️  Type checking issues found (non-blocking)"
 
 # Dead code detection
 echo "🧹 Dead code detection with Vulture..."

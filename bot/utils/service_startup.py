@@ -177,21 +177,34 @@ class ServiceStartupManager:
         try:
             publisher = WebSocketPublisher(self.settings)
 
-            # Initialize with timeout
+            # Initialize with timeout - will always return True now (either connected or null mode)
             async with asyncio.timeout(timeout):
                 success = await publisher.initialize()
 
                 if success:
+                    # Check if actually connected or in null mode
+                    if publisher.connected:
+                        logger.info("WebSocket publisher connected successfully")
+                    else:
+                        logger.info("WebSocket publisher in offline mode (dashboard unavailable)")
                     return publisher
+                    
+                # This should not happen with new implementation
                 logger.warning("WebSocket publisher initialization returned False")
                 return None
 
         except TimeoutError:
-            logger.warning("WebSocket publisher initialization timeout")
-            raise
+            logger.warning("WebSocket publisher initialization timeout - using offline mode")
+            # Create publisher in null mode
+            publisher = WebSocketPublisher(self.settings)
+            publisher._enable_null_publisher_mode()
+            return publisher
         except Exception as e:
-            logger.warning("WebSocket publisher initialization error: %s", str(e))
-            raise
+            logger.warning("WebSocket publisher initialization error: %s - using offline mode", str(e))
+            # Create publisher in null mode  
+            publisher = WebSocketPublisher(self.settings)
+            publisher._enable_null_publisher_mode()
+            return publisher
 
     async def _start_bluefin_service(
         self, timeout: float
@@ -250,17 +263,33 @@ class ServiceStartupManager:
                 client = OmniSearchClient(self.settings)
 
                 # Test connection
-                test_result = await client.search("test connection", limit=1)
-                if test_result is not None:
+                connected = await client.connect()
+                if connected:
+                    # Test search functionality with a simple query
+                    test_result = await client.search("test connection", limit=1)
+                    if test_result is not None:
+                        logger.info("OmniSearch test query successful")
+                        return client
+                    else:
+                        logger.warning("OmniSearch test query returned no results")
+                        # Return client anyway - it might work for other queries
+                        return client
+                else:
+                    logger.warning("OmniSearch connection failed")
+                    # Return unconnected client for graceful degradation
                     return client
-                raise Exception("OmniSearch test query failed")
 
         except TimeoutError:
             logger.warning("OmniSearch connection timeout")
-            raise
+            # Return None for timeout - service is completely unreachable
+            return None
         except Exception as e:
             logger.warning("OmniSearch connection error: %s", str(e))
-            raise
+            # For other errors, try to return a client for graceful degradation
+            try:
+                return OmniSearchClient(self.settings)
+            except Exception:
+                return None
 
     def _print_startup_summary(self):
         """Print summary of service startup results."""

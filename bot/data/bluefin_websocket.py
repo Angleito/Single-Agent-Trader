@@ -128,9 +128,9 @@ class BluefinWebSocketClient:
         # Subscription tracking
         self._subscribed_channels: set[str] = set()
         self._subscription_id = 1
-        self._pending_subscriptions: dict[
-            int, str
-        ] = {}  # Track pending subscription requests
+        self._pending_subscriptions: dict[int, str] = (
+            {}
+        )  # Track pending subscription requests
 
         # Tasks
         self._connection_task: asyncio.Task | None = None
@@ -985,8 +985,20 @@ class BluefinWebSocketClient:
             await self._handle_ticker_update(data)
         elif channel == "orderbook" or "orderbook" in str(channel):
             await self._handle_orderbook_update(data)
-        elif self._message_count % 100 == 0:
-            logger.debug("Unhandled event/channel: %s", event_name or channel)
+        else:
+            # Enhanced handling for unrecognized messages
+            # Log first few unhandled messages in detail for debugging
+            if self._message_count <= 10 or self._message_count % 100 == 0:
+                logger.info(
+                    "Unhandled message #%d - event: %s, channel: %s, keys: %s",
+                    self._message_count,
+                    event_name,
+                    channel,
+                    list(data.keys())[:10]
+                )
+            
+            # Try to extract price data from unstructured messages
+            await self._handle_generic_price_update(data)
 
     async def _handle_trade_update(self, data: dict[str, Any]) -> None:
         """
@@ -1753,6 +1765,121 @@ class BluefinWebSocketClient:
                 component="BluefinWebSocketClient",
                 operation="process_aggregated_candle",
             )
+
+    async def _handle_generic_price_update(self, data: dict[str, Any]) -> None:
+        """
+        Handle generic price updates from unstructured messages.
+        
+        This method attempts to extract price data from messages that don't
+        match the standard event/channel patterns.
+        
+        Args:
+            data: Message data that might contain price information
+        """
+        try:
+            # Look for price-related fields in the data
+            price_fields = [
+                "price", "lastPrice", "last", "close", "currentPrice",
+                "markPrice", "indexPrice", "bid", "ask", "mid"
+            ]
+            
+            price_value = None
+            price_source = None
+            
+            # Search for price data in various structures
+            if isinstance(data.get("data"), dict):
+                # Check nested data structure
+                for field in price_fields:
+                    if field in data["data"]:
+                        price_value = data["data"][field]
+                        price_source = f"data.{field}"
+                        break
+            
+            if not price_value:
+                # Check top-level fields
+                for field in price_fields:
+                    if field in data:
+                        price_value = data[field]
+                        price_source = field
+                        break
+            
+            if not price_value:
+                # Check for tick data structure
+                if "tick" in data and isinstance(data["tick"], dict):
+                    for field in price_fields:
+                        if field in data["tick"]:
+                            price_value = data["tick"][field]
+                            price_source = f"tick.{field}"
+                            break
+            
+            # If we found a price, process it
+            if price_value is not None:
+                try:
+                    # Convert from 18-decimal format if needed
+                    if is_likely_18_decimal(price_value):
+                        price_decimal = convert_from_18_decimal(
+                            price_value, self.symbol, f"generic_{price_source}"
+                        )
+                    else:
+                        price_decimal = Decimal(str(price_value))
+                    
+                    # Validate price
+                    if price_decimal > 0 and self._validate_price_continuity(
+                        price_decimal, f"generic_{price_source}"
+                    ):
+                        # Create a tick update for the aggregator
+                        timestamp = datetime.now(UTC)
+                        
+                        # If we have timestamp in the data, use it
+                        if "timestamp" in data:
+                            try:
+                                ts = data["timestamp"]
+                                if isinstance(ts, (int, float)):
+                                    # Convert from milliseconds if needed
+                                    if ts > 1e10:
+                                        ts = ts / 1000
+                                    timestamp = datetime.fromtimestamp(ts, UTC)
+                            except:
+                                pass
+                        
+                        # Create simplified market data for price update
+                        market_data = MarketData(
+                            symbol=self.symbol,
+                            timestamp=timestamp,
+                            open=price_decimal,
+                            high=price_decimal,
+                            low=price_decimal,
+                            close=price_decimal,
+                            volume=Decimal("0"),
+                            last_trade_price=price_decimal,
+                        )
+                        
+                        # Process as tick for aggregation
+                        await self._process_tick_update(
+                            price_decimal,
+                            Decimal("1"),  # Default volume
+                            timestamp
+                        )
+                        
+                        logger.debug(
+                            "Extracted price from generic message: $%s (source: %s)",
+                            price_decimal,
+                            price_source
+                        )
+                        
+                except Exception as e:
+                    logger.debug(
+                        "Failed to process generic price update: %s",
+                        str(e)
+                    )
+            
+        except Exception as e:
+            # Don't log errors for every unhandled message
+            if self._message_count <= 10:
+                logger.debug(
+                    "Error in generic price handler: %s",
+                    str(e)
+                )
 
     async def _heartbeat_handler(self) -> None:
         """Enhanced heartbeat handler with ping/pong monitoring."""

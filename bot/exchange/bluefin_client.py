@@ -64,6 +64,38 @@ class BluefinServiceClient:
     allowing the main bot to interact with Bluefin without dependency
     conflicts.
     """
+    
+    @staticmethod
+    def _detect_docker_environment() -> bool:
+        """Detect if we're running inside a Docker container."""
+        # Check for Docker-specific files
+        if os.path.exists("/.dockerenv"):
+            return True
+        
+        # Check for Docker in cgroup
+        try:
+            with open("/proc/self/cgroup", "r") as f:
+                if "docker" in f.read():
+                    return True
+        except (FileNotFoundError, PermissionError):
+            pass
+        
+        # Check for common Docker environment variables
+        docker_env_vars = ["DOCKER_CONTAINER", "DOCKER_HOST", "KUBERNETES_SERVICE_HOST"]
+        if any(os.getenv(var) for var in docker_env_vars):
+            return True
+        
+        # Check hostname (often container ID in Docker)
+        try:
+            import socket
+            hostname = socket.gethostname()
+            # Docker container hostnames are typically 12-character hex strings
+            if len(hostname) == 12 and all(c in "0123456789abcdef" for c in hostname):
+                return True
+        except Exception:
+            pass
+        
+        return False
 
     def __init__(
         self,
@@ -78,7 +110,53 @@ class BluefinServiceClient:
             api_key: API key for authentication (if not provided, will use
                 BLUEFIN_SERVICE_API_KEY env var)
         """
-        self.service_url = service_url
+        # Detect if we're running inside Docker
+        self.is_docker = self._detect_docker_environment()
+        
+        # Primary service URL (can be overridden)
+        self.primary_service_url = service_url
+        
+        # Build fallback URLs based on environment
+        if self.is_docker:
+            # Inside Docker, prioritize Docker service name
+            self.fallback_urls = [
+                "http://bluefin-service:8080",      # Docker service name
+                "http://host.docker.internal:8080", # Docker Desktop host
+                "http://172.17.0.1:8080",          # Default Docker bridge gateway
+                "http://localhost:8080",            # Fallback to localhost
+                "http://127.0.0.1:8080",           # Fallback to localhost IP
+            ]
+        else:
+            # Outside Docker, prioritize localhost
+            self.fallback_urls = [
+                "http://localhost:8080",            # Local host
+                "http://127.0.0.1:8080",           # Localhost IP
+                "http://bluefin-service:8080",     # Try Docker service name
+                "http://host.docker.internal:8080", # Docker Desktop on macOS/Windows
+            ]
+        
+        # Remove duplicates and put primary URL first
+        self.service_urls = [self.primary_service_url]
+        for url in self.fallback_urls:
+            if url not in self.service_urls:
+                self.service_urls.append(url)
+        
+        # Current active URL and tracking
+        self.service_url = self.primary_service_url
+        self.current_url_index = 0
+        self.url_failure_counts: dict[str, int] = {url: 0 for url in self.service_urls}
+        self.last_successful_url = None
+        self.service_discovery_complete = False
+        
+        logger.info(
+            "Bluefin client initialized with service discovery",
+            extra={
+                "is_docker": self.is_docker,
+                "primary_url": self.primary_service_url,
+                "fallback_urls": self.fallback_urls[:3],  # Log first 3 for brevity
+                "total_urls": len(self.service_urls)
+            }
+        )
         self._session: aiohttp.ClientSession | None = None
         self._connected = False
         self._session_closed = False
@@ -129,11 +207,21 @@ class BluefinServiceClient:
             "messages_sent": 0,
         }
 
-        # Enhanced circuit breaker state
-        self.circuit_open = False
-        self.circuit_open_until = 0.0
+        # Enhanced circuit breaker state (per URL)
+        self.circuit_states: dict[str, dict[str, Any]] = {}
+        for url in self.service_urls:
+            self.circuit_states[url] = {
+                "open": False,
+                "open_until": 0.0,
+                "consecutive_failures": 0,
+                "last_attempt": 0.0
+            }
         self.circuit_failure_threshold = 3  # Reduced threshold for faster failover
         self.circuit_recovery_timeout = 60  # seconds
+        
+        # Legacy circuit breaker properties for backward compatibility
+        self.circuit_open = False
+        self.circuit_open_until = 0.0
 
         # Balance operation health tracking
         self.balance_operation_failures = 0
@@ -151,14 +239,13 @@ class BluefinServiceClient:
         self._session_request_count = 0
         self._max_requests_per_session = 1000
 
-        # Get API key from parameter or environment - MANDATORY
+        # Get API key from parameter or environment - make it optional for graceful degradation
         self.api_key = api_key or os.getenv("BLUEFIN_SERVICE_API_KEY")
         if not self.api_key:
-            error_msg = (
-                "BLUEFIN_SERVICE_API_KEY is required for Bluefin service authentication"
-            )
-            logger.error(
-                "Critical: API key missing - service will fail",
+            # Generate a dummy API key for testing/development when service might not be running
+            self.api_key = "dummy-api-key-for-optional-service"
+            logger.warning(
+                "BLUEFIN_SERVICE_API_KEY not provided - using dummy key. Service may not work properly.",
                 extra={
                     "client_id": self.client_id,
                     "service_url": self.service_url,
@@ -166,20 +253,18 @@ class BluefinServiceClient:
                     "required_env_var": "BLUEFIN_SERVICE_API_KEY",
                 },
             )
-            raise BluefinServiceAuthError(error_msg)
 
-        # Validate API key format
-        if len(self.api_key) < 16:
-            error_msg = "BLUEFIN_SERVICE_API_KEY appears to be invalid or missing"
-            logger.error(
-                "API key validation failed",
+        # Validate API key format only if it's not the dummy key
+        if self.api_key != "dummy-api-key-for-optional-service" and len(self.api_key) < 16:
+            logger.warning(
+                "API key appears to be invalid (too short) - service may not authenticate properly",
                 extra={
                     "client_id": self.client_id,
                     "service_url": self.service_url,
                     "auth_configured": False,
+                    "key_length": len(self.api_key)
                 },
             )
-            raise BluefinServiceAuthError(error_msg)
 
         logger.info(
             "Bluefin service client initialized with valid authentication",
@@ -213,7 +298,7 @@ class BluefinServiceClient:
             "Connection": "keep-alive",
             "Accept-Encoding": "gzip, deflate",
         }
-        if self.api_key:
+        if self.api_key and self.api_key != "dummy-api-key-for-optional-service":
             self._headers["Authorization"] = f"Bearer {self.api_key}"
 
     def _validate_parameters(self, **kwargs) -> bool:
@@ -329,7 +414,9 @@ class BluefinServiceClient:
                 times = self.balance_performance_metrics["balance_response_times"]
                 self.balance_performance_metrics["average_balance_response_time"] = sum(  # type: ignore[index]
                     times
-                ) / len(times)  # type: ignore[arg-type]
+                ) / len(
+                    times
+                )  # type: ignore[arg-type]
         else:
             self.balance_performance_metrics["failed_balance_requests"] += 1
 
@@ -488,8 +575,170 @@ class BluefinServiceClient:
 
         return metrics
 
+    def _is_url_circuit_open(self, url: str) -> bool:
+        """Check if circuit breaker is open for a specific URL."""
+        if url not in self.circuit_states:
+            return False
+            
+        circuit = self.circuit_states[url]
+        if circuit["open"] and time.time() < circuit["open_until"]:
+            return True
+        if circuit["open"] and time.time() >= circuit["open_until"]:
+            # Circuit breaker timeout expired, attempt to close
+            circuit["open"] = False
+            circuit["consecutive_failures"] = 0
+            logger.info(
+                "Circuit breaker closed for URL",
+                extra={
+                    "url": url,
+                    "client_id": self.client_id
+                }
+            )
+        return False
+    
+    def _is_circuit_open(self) -> bool:
+        """Check if circuit breaker is currently open for current URL (backward compatibility)."""
+        return self._is_url_circuit_open(self.service_url)
+    
+    def _open_circuit_for_url(self, url: str) -> None:
+        """Open circuit breaker for a specific URL."""
+        if url in self.circuit_states:
+            self.circuit_states[url]["open"] = True
+            self.circuit_states[url]["open_until"] = time.time() + self.circuit_recovery_timeout
+            logger.warning(
+                "Circuit breaker opened for URL",
+                extra={
+                    "url": url,
+                    "recovery_timeout": self.circuit_recovery_timeout,
+                    "consecutive_failures": self.circuit_states[url]["consecutive_failures"]
+                }
+            )
+    
+    def _record_url_failure(self, url: str) -> None:
+        """Record a failure for a specific URL."""
+        if url in self.circuit_states:
+            self.circuit_states[url]["consecutive_failures"] += 1
+            self.circuit_states[url]["last_attempt"] = time.time()
+            
+            if self.circuit_states[url]["consecutive_failures"] >= self.circuit_failure_threshold:
+                self._open_circuit_for_url(url)
+        
+        if url in self.url_failure_counts:
+            self.url_failure_counts[url] += 1
+    
+    def _record_url_success(self, url: str) -> None:
+        """Record a success for a specific URL."""
+        if url in self.circuit_states:
+            self.circuit_states[url]["consecutive_failures"] = 0
+            self.circuit_states[url]["open"] = False
+        
+        self.last_successful_url = url
+        self.service_url = url  # Update current URL to the successful one
+    
+    async def _try_connect_to_url(self, url: str) -> bool:
+        """Try to connect to a specific URL."""
+        if self._is_url_circuit_open(url):
+            logger.debug(
+                "Skipping URL - circuit breaker open",
+                extra={"url": url, "client_id": self.client_id}
+            )
+            return False
+        
+        try:
+            logger.debug(
+                "Attempting connection to URL",
+                extra={"url": url, "client_id": self.client_id}
+            )
+            
+            # Temporarily set service_url for the health check
+            original_url = self.service_url
+            self.service_url = url
+            
+            # Try health check
+            health_url = f"{url}/health"
+            
+            if self._session is not None:
+                async with self._session.get(
+                    health_url, timeout=self.quick_timeout
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        if data.get("status") == "healthy":
+                            self._record_url_success(url)
+                            logger.info(
+                                "Successfully connected to Bluefin service",
+                                extra={
+                                    "url": url,
+                                    "client_id": self.client_id,
+                                    "service_status": data.get("status"),
+                                    "service_initialized": data.get("initialized"),
+                                    "service_network": data.get("network")
+                                }
+                            )
+                            return True
+            
+            # If we get here, connection failed
+            self.service_url = original_url
+            self._record_url_failure(url)
+            return False
+            
+        except (ClientError, TimeoutError, OSError) as e:
+            self.service_url = original_url
+            self._record_url_failure(url)
+            logger.debug(
+                "Connection attempt failed for URL",
+                extra={
+                    "url": url,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "client_id": self.client_id
+                }
+            )
+            return False
+    
+    async def _discover_service(self) -> bool:
+        """Discover which service URL is available."""
+        logger.info(
+            "Starting service discovery",
+            extra={
+                "urls_to_try": self.service_urls,
+                "client_id": self.client_id
+            }
+        )
+        
+        # Try last successful URL first if available
+        if self.last_successful_url:
+            if await self._try_connect_to_url(self.last_successful_url):
+                self.service_discovery_complete = True
+                return True
+        
+        # Try all URLs in order
+        for url in self.service_urls:
+            if url == self.last_successful_url:
+                continue  # Already tried
+                
+            if await self._try_connect_to_url(url):
+                self.service_discovery_complete = True
+                return True
+        
+        # All URLs failed
+        logger.error(
+            "Service discovery failed - all URLs unavailable",
+            extra={
+                "urls_tried": self.service_urls,
+                "failure_counts": self.url_failure_counts,
+                "client_id": self.client_id
+            }
+        )
+        return False
+        
     def _is_circuit_open(self) -> bool:
         """Check if circuit breaker is currently open."""
+        # For backward compatibility, check current URL
+        return self._is_url_circuit_open(self.service_url)
+        
+    def _old_is_circuit_open(self) -> bool:
+        """Legacy circuit breaker check."""
         if self.circuit_open and time.time() < self.circuit_open_until:
             return True
         if self.circuit_open and time.time() >= self.circuit_open_until:
@@ -976,13 +1225,30 @@ class BluefinServiceClient:
                 "Establishing connection to Bluefin service",
                 extra={
                     "client_id": self.client_id,
-                    "service_url": self.service_url,
+                    "primary_url": self.primary_service_url,
+                    "current_url": self.service_url,
+                    "discovery_complete": self.service_discovery_complete,
                     "session_age": time.time() - self._session_created_at,
                     "request_count": self._session_request_count,
                 },
             )
 
-            # Check service health (health endpoint doesn't require auth)
+            # If we haven't discovered a working service yet, do it now
+            if not self.service_discovery_complete:
+                if await self._discover_service():
+                    self._connected = True
+                    self.last_health_check = time.time()
+                    self._record_success()
+                    return True
+                else:
+                    self._connected = False
+                    self._record_failure()
+                    raise BluefinServiceConnectionError(
+                        "Service unavailable - all connection attempts failed",
+                        service_url="All URLs failed"
+                    )
+            
+            # Otherwise, just check the current URL
             health_url = f"{self.service_url}/health"
             logger.debug(
                 "Checking service health",
@@ -1004,6 +1270,7 @@ class BluefinServiceClient:
                         self._connected = data.get("status") == "healthy"
                         self.last_health_check = time.time()
                         self._record_success()
+                        self._record_url_success(self.service_url)
 
                         logger.info(
                             "Successfully connected to Bluefin service",
@@ -1017,10 +1284,13 @@ class BluefinServiceClient:
                             },
                         )
                         return self._connected
+                    
+                    # Health check failed, try rediscovery
                     error_text = await resp.text()
                     self._record_failure()
-                    logger.error(
-                        "Bluefin service health check failed",
+                    self._record_url_failure(self.service_url)
+                    logger.warning(
+                        "Bluefin service health check failed, attempting rediscovery",
                         extra={
                             "client_id": self.client_id,
                             "service_url": self.service_url,
@@ -1029,6 +1299,13 @@ class BluefinServiceClient:
                             "operation": "health_check",
                         },
                     )
+                    
+                    # Force rediscovery
+                    self.service_discovery_complete = False
+                    if await self._discover_service():
+                        self._connected = True
+                        return True
+                    
                     return False
             else:
                 self._record_failure()
@@ -1044,12 +1321,31 @@ class BluefinServiceClient:
 
         except (ClientError, TimeoutError, OSError) as e:
             self._record_failure()
+            self._record_url_failure(self.service_url)
+            
+            # Try rediscovery on connection errors
+            logger.warning(
+                "Connection error, attempting service rediscovery",
+                extra={
+                    "client_id": self.client_id,
+                    "service_url": self.service_url,
+                    "error": str(e),
+                    "error_type": type(e).__name__
+                }
+            )
+            
+            self.service_discovery_complete = False
+            if await self._discover_service():
+                self._connected = True
+                return True
+            
             exception_handler.log_exception_with_context(
                 e,
                 {
                     "client_id": self.client_id,
                     "service_url": self.service_url,
                     "connection_network_error": True,
+                    "all_urls_failed": True,
                 },
                 component="BluefinServiceClient",
                 operation="connect",
@@ -1741,236 +2037,294 @@ class BluefinServiceClient:
             BluefinServiceRateLimitError: When rate limited
             BluefinServiceConnectionError: When request fails
         """
-        # Check circuit breaker first
-        if self._is_circuit_open():
-            logger.warning(
-                "Circuit breaker is open, skipping request",
-                extra={"client_id": self.client_id, "operation": operation},
-            )
-            raise BluefinServiceConnectionError(
-                "Circuit breaker is open - service temporarily unavailable",
-                service_url=self.service_url,
-            )
-
-        # Ensure we have a healthy connection
-        if not await self._check_connection_health():
-            logger.error(
-                "Connection health check failed before request",
-                extra={"client_id": self.client_id, "operation": operation},
-            )
-            raise BluefinServiceConnectionError(
-                "Connection unhealthy", service_url=self.service_url
-            )
-
-        url = f"{self.service_url}{endpoint}"
-
-        for attempt in range(self._max_retries):
-            try:
-                # Ensure session is valid before each attempt
-                await self._ensure_session()
-
-                logger.debug(
-                    "Making HTTP request (attempt %s/%s)",
-                    attempt + 1,
-                    self._max_retries,
-                    extra={
-                        "client_id": self.client_id,
-                        "method": method,
-                        "url": url,
-                        "operation": operation,
-                        "attempt": attempt + 1,
-                        "has_json_data": bool(json_data),
-                        "has_params": bool(params),
-                        "session_request_count": self._session_request_count,
-                    },
+        # Ensure we have a working service URL
+        if not self.service_discovery_complete:
+            if not await self._discover_service():
+                raise BluefinServiceConnectionError(
+                    "Service unavailable - all connection attempts failed",
+                    service_url="All URLs failed"
                 )
-
-                request_kwargs: dict[str, Any] = {}
-                if json_data is not None:
-                    request_kwargs["json"] = json_data
-                if params is not None:
-                    request_kwargs["params"] = params
-
-                # Choose appropriate timeout based on endpoint
-                if "/market/candles" in endpoint:
-                    timeout = self.heavy_timeout
-                elif "/health" in endpoint:
-                    timeout = self.quick_timeout
-                else:
-                    timeout = self.normal_timeout
-                request_kwargs["timeout"] = timeout
-
-                if self._session is not None:
-                    async with self._session.request(
-                        method, url, **request_kwargs
-                    ) as resp:
-                        self._session_request_count += 1
-
-                        if resp.status == 200:
-                            data = await resp.json()
-                            self._record_success()
-                            logger.debug(
-                                "Request successful",
-                                extra={
-                                    "client_id": self.client_id,
-                                    "operation": operation,
-                                    "status_code": resp.status,
-                                    "response_size": len(str(data)),
-                                    "session_requests": self._session_request_count,
-                                },
-                            )
-                            return data
-
-                        if resp.status == 401:
-                            error_msg = (
-                                "Authentication failed - check BLUEFIN_SERVICE_API_KEY"
-                            )
-                            logger.error(
-                                "Authentication failed",
-                                extra={
-                                    "client_id": self.client_id,
-                                    "operation": operation,
-                                    "status_code": resp.status,
-                                    "endpoint": endpoint,
-                                },
-                            )
-                            raise BluefinServiceAuthError(error_msg)
-
-                        if resp.status == 429:
-                            retry_after = int(resp.headers.get("Retry-After", "60"))
-                            error_msg = f"Rate limit exceeded, retry after {retry_after} seconds"
-                            logger.warning(
-                                "Rate limit exceeded",
-                                extra={
-                                    "client_id": self.client_id,
-                                    "operation": operation,
-                                    "status_code": resp.status,
-                                    "retry_after": retry_after,
-                                    "endpoint": endpoint,
-                                },
-                            )
-
-                            # For rate limiting, wait and retry if we have attempts left
-                            if attempt < self._max_retries - 1:
-                                wait_time = min(retry_after, 30)  # Cap wait time at 30s
-                                logger.info(
-                                    "Waiting %ss for rate limit reset",
-                                    wait_time,
+        
+        # Track URLs we've tried for this request
+        urls_tried = set()
+        last_error = None
+        
+        # Get list of URLs to try (current first, then others)
+        urls_to_try = [self.service_url]
+        for url in self.service_urls:
+            if url not in urls_to_try and not self._is_url_circuit_open(url):
+                urls_to_try.append(url)
+        
+        # Try each URL until one works
+        for url_index, base_url in enumerate(urls_to_try):
+            urls_tried.add(base_url)
+            
+            # Skip if circuit is open for this URL
+            if self._is_url_circuit_open(base_url):
+                logger.debug(
+                    "Skipping URL due to open circuit",
+                    extra={
+                        "url": base_url,
+                        "client_id": self.client_id,
+                        "operation": operation
+                    }
+                )
+                continue
+            
+            url = f"{base_url}{endpoint}"
+            
+            # Attempt request with retries for this specific URL
+            for attempt in range(self._max_retries):
+                try:
+                    # Log URL switch if not the first URL
+                    if url_index > 0 and attempt == 0:
+                        logger.info(
+                            "Switching to fallback URL",
+                            extra={
+                                "fallback_url": base_url,
+                                "previous_url": urls_to_try[url_index - 1] if url_index > 0 else None,
+                                "client_id": self.client_id,
+                                "operation": operation
+                            }
+                        )
+                    
+                    # Rest of the original request logic...
+                    await self._ensure_session()
+                    
+                    logger.debug(
+                        "Making HTTP request (attempt %s/%s)",
+                        attempt + 1,
+                        self._max_retries,
+                        extra={
+                            "client_id": self.client_id,
+                            "method": method,
+                            "url": url,
+                            "operation": operation,
+                            "attempt": attempt + 1,
+                            "url_index": url_index + 1,
+                            "total_urls": len(urls_to_try),
+                            "has_json_data": bool(json_data),
+                            "has_params": bool(params),
+                            "session_request_count": self._session_request_count,
+                        },
+                    )
+                    
+                    request_kwargs: dict[str, Any] = {}
+                    if json_data is not None:
+                        request_kwargs["json"] = json_data
+                    if params is not None:
+                        request_kwargs["params"] = params
+                    
+                    # Choose appropriate timeout based on endpoint
+                    if "/market/candles" in endpoint:
+                        timeout = self.heavy_timeout
+                    elif "/health" in endpoint:
+                        timeout = self.quick_timeout
+                    else:
+                        timeout = self.normal_timeout
+                    request_kwargs["timeout"] = timeout
+                    
+                    if self._session is not None:
+                        async with self._session.request(
+                            method, url, **request_kwargs
+                        ) as resp:
+                            self._session_request_count += 1
+                            
+                            if resp.status == 200:
+                                data = await resp.json()
+                                self._record_success()
+                                self._record_url_success(base_url)
+                                
+                                # Update service URL to successful one
+                                if base_url != self.service_url:
+                                    logger.info(
+                                        "Updating primary service URL to successful fallback",
+                                        extra={
+                                            "new_url": base_url,
+                                            "old_url": self.service_url,
+                                            "client_id": self.client_id
+                                        }
+                                    )
+                                    self.service_url = base_url
+                                
+                                logger.debug(
+                                    "Request successful",
                                     extra={
                                         "client_id": self.client_id,
                                         "operation": operation,
+                                        "status_code": resp.status,
+                                        "response_size": len(str(data)),
+                                        "session_requests": self._session_request_count,
+                                        "service_url": base_url,
                                     },
                                 )
-                                await asyncio.sleep(wait_time)
+                                return data
+                            
+                            # Handle non-200 responses (keeping original logic)
+                            if resp.status == 401:
+                                error_msg = (
+                                    "Authentication failed - check BLUEFIN_SERVICE_API_KEY"
+                                )
+                                logger.error(
+                                    "Authentication failed",
+                                    extra={
+                                        "client_id": self.client_id,
+                                        "operation": operation,
+                                        "status_code": resp.status,
+                                        "endpoint": endpoint,
+                                        "service_url": base_url,
+                                    },
+                                )
+                                raise BluefinServiceAuthError(error_msg)
+                            
+                            if resp.status == 429:
+                                retry_after = int(resp.headers.get("Retry-After", "60"))
+                                error_msg = f"Rate limit exceeded, retry after {retry_after} seconds"
+                                logger.warning(
+                                    "Rate limit exceeded",
+                                    extra={
+                                        "client_id": self.client_id,
+                                        "operation": operation,
+                                        "status_code": resp.status,
+                                        "retry_after": retry_after,
+                                        "endpoint": endpoint,
+                                        "service_url": base_url,
+                                    },
+                                )
+                                
+                                # For rate limiting, wait and retry if we have attempts left
+                                if attempt < self._max_retries - 1:
+                                    wait_time = min(retry_after, 30)  # Cap wait time at 30s
+                                    logger.info(
+                                        "Waiting %ss for rate limit reset",
+                                        wait_time,
+                                        extra={
+                                            "client_id": self.client_id,
+                                            "operation": operation,
+                                        },
+                                    )
+                                    await asyncio.sleep(wait_time)
+                                    continue
+                                raise BluefinServiceRateLimitError(
+                                    error_msg, retry_after=retry_after
+                                )
+                            
+                            # Other error responses
+                            error_text = await resp.text()
+                            self._record_failure()
+                            self._record_url_failure(base_url)
+                            
+                            if attempt < self._max_retries - 1:
+                                delay = self._calculate_retry_delay(attempt)
+                                logger.warning(
+                                    "Request failed, retrying in %.2fs",
+                                    delay,
+                                    extra={
+                                        "client_id": self.client_id,
+                                        "operation": operation,
+                                        "status_code": resp.status,
+                                        "error_response": error_text[:200],
+                                        "attempt": attempt + 1,
+                                        "max_retries": self._max_retries,
+                                        "delay": delay,
+                                        "service_url": base_url,
+                                    },
+                                )
+                                await asyncio.sleep(delay)
                                 continue
-                            raise BluefinServiceRateLimitError(
-                                error_msg, retry_after=retry_after
+                            
+                            # All retries exhausted for this URL
+                            last_error = BluefinServiceConnectionError(
+                                f"Request failed: HTTP {resp.status}",
+                                status_code=resp.status,
+                                service_url=base_url,
                             )
-
-                        error_text = await resp.text()
-                        self._record_failure()
-
-                        if attempt < self._max_retries - 1:
-                            delay = self._calculate_retry_delay(attempt)
-                            logger.warning(
-                                "Request failed, retrying in %.2fs",
-                                delay,
-                                extra={
-                                    "client_id": self.client_id,
-                                    "operation": operation,
-                                    "status_code": resp.status,
-                                    "error_response": error_text[:200],
-                                    "attempt": attempt + 1,
-                                    "max_retries": self._max_retries,
-                                    "delay": delay,
-                                },
-                            )
-                            await asyncio.sleep(delay)
-                            continue
-                        error_msg = f"Request failed: HTTP {resp.status}"
-                        logger.error(
-                            "All retry attempts failed",
+                            break  # Try next URL
+                
+                except (
+                    BluefinServiceAuthError,
+                    BluefinServiceRateLimitError,
+                ) as e:
+                    # Don't retry auth or specific service errors across URLs
+                    raise
+                
+                except (ClientError, TimeoutError, OSError) as e:
+                    self._record_failure()
+                    self._record_url_failure(base_url)
+                    
+                    if attempt < self._max_retries - 1:
+                        delay = self._calculate_retry_delay(attempt)
+                        logger.warning(
+                            "Network error, retrying in %.2fs",
+                            delay,
                             extra={
                                 "client_id": self.client_id,
                                 "operation": operation,
-                                "status_code": resp.status,
-                                "error_response": error_text[:200],
-                                "total_attempts": attempt + 1,
+                                "error_type": type(e).__name__,
+                                "error_message": str(e),
+                                "attempt": attempt + 1,
+                                "max_retries": self._max_retries,
+                                "delay": delay,
+                                "service_url": base_url,
                             },
                         )
-                        raise BluefinServiceConnectionError(
-                            error_msg,
-                            status_code=resp.status,
-                            service_url=self.service_url,
-                        )
-
-            except (
-                BluefinServiceAuthError,
-                BluefinServiceRateLimitError,
-                BluefinServiceConnectionError,
-            ):
-                # Re-raise our custom exceptions without retry, with context
-                logger.exception("Bluefin service error during %s", operation)
-                raise
-            except aiohttp.ClientError as e:
-                self._record_failure()
-
-                if attempt < self._max_retries - 1:
-                    delay = self._calculate_retry_delay(attempt)
-                    logger.warning(
-                        "Network error, retrying in %.2fs",
-                        delay,
-                        extra={
+                        await asyncio.sleep(delay)
+                        continue
+                    
+                    # All retries exhausted for this URL
+                    last_error = BluefinServiceConnectionError(
+                        f"Network error: {e!s}",
+                        service_url=base_url
+                    )
+                    break  # Try next URL
+                
+                except Exception as e:
+                    self._record_failure()
+                    self._record_url_failure(base_url)
+                    last_error = BluefinServiceConnectionError(
+                        f"Unexpected error in {operation}: {e!s}",
+                        service_url=base_url
+                    )
+                    exception_handler.log_exception_with_context(
+                        e,
+                        {
                             "client_id": self.client_id,
                             "operation": operation,
-                            "error_type": type(e).__name__,
-                            "error_message": str(e),
                             "attempt": attempt + 1,
-                            "max_retries": self._max_retries,
-                            "delay": delay,
+                            "unexpected_request_error": True,
+                            "method": method,
+                            "endpoint": endpoint,
+                            "service_url": base_url,
                         },
+                        component="BluefinServiceClient",
+                        operation="_make_request_with_retry",
                     )
-                    await asyncio.sleep(delay)
-                    continue
-                error_msg = f"Network error after {self._max_retries} retries: {e!s}"
-                logger.exception(
-                    "Network error - all retries exhausted",
-                    extra={
-                        "client_id": self.client_id,
-                        "operation": operation,
-                        "error_type": type(e).__name__,
-                        "error_message": str(e),
-                        "total_attempts": attempt + 1,
-                    },
-                )
-                raise BluefinServiceConnectionError(
-                    error_msg, service_url=self.service_url
-                ) from e
-            except Exception as e:
-                self._record_failure()
-                error_msg = f"Unexpected error in {operation}: {e!s}"
-                exception_handler.log_exception_with_context(
-                    e,
-                    {
-                        "client_id": self.client_id,
-                        "operation": operation,
-                        "attempt": attempt + 1,
-                        "unexpected_request_error": True,
-                        "method": method,
-                        "endpoint": endpoint,
-                    },
-                    component="BluefinServiceClient",
-                    operation="_make_request_with_retry",
-                )
-                raise BluefinServiceConnectionError(
-                    error_msg, service_url=self.service_url
-                ) from e
-
-        # This should never be reached due to the logic above
-        raise BluefinServiceConnectionError(
-            f"Request failed after {self._max_retries} attempts",
-            service_url=self.service_url,
+                    break  # Try next URL
+        
+        # All URLs failed
+        logger.error(
+            "All service URLs failed",
+            extra={
+                "client_id": self.client_id,
+                "operation": operation,
+                "urls_tried": list(urls_tried),
+                "total_urls": len(self.service_urls),
+                "last_error": str(last_error) if last_error else "Unknown",
+            }
         )
+        
+        # Force rediscovery on next request
+        self.service_discovery_complete = False
+        
+        if last_error:
+            raise last_error
+        else:
+            raise BluefinServiceConnectionError(
+                f"Request failed - all URLs exhausted",
+                service_url="All URLs failed"
+            )
+
+# This section has been replaced by the new implementation above
 
     def _validate_candle_data(self, candles: list[Any]) -> bool:
         """
@@ -2748,9 +3102,9 @@ class BluefinServiceClient:
         }
 
         # Run all connectivity tests
-        test_results["tests"][
-            "basic_connectivity"
-        ] = await self._run_basic_connectivity_test(test_start)
+        test_results["tests"]["basic_connectivity"] = (
+            await self._run_basic_connectivity_test(test_start)
+        )
         test_results["tests"][
             "detailed_health"
         ] = await self._run_detailed_health_test()

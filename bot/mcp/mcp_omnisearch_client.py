@@ -124,6 +124,7 @@ class MCPOmniSearchClient:
             node_executable = shutil.which("node")
             if not node_executable:
                 logger.error("Node.js executable not found in PATH")
+                self._connected = False
                 return False
 
             # Security: Validate server path exists and is not attempting path traversal
@@ -131,6 +132,7 @@ class MCPOmniSearchClient:
 
             if not Path(self.server_path).exists() or ".." in self.server_path:
                 logger.error("Invalid or unsafe server path: %s", self.server_path)
+                self._connected = False
                 return False
 
             # Start the MCP server process with validated paths
@@ -151,8 +153,13 @@ class MCPOmniSearchClient:
             logger.info("✅ MCP-OmniSearch: Successfully connected")
             return True
 
+        except MCPConnectionError as e:
+            logger.warning("MCP-OmniSearch connection failed: %s", str(e))
+            self._connected = False
+            return False
         except Exception:
             logger.exception("Failed to connect to MCP-OmniSearch server")
+            self._connected = False
             return False
 
     async def disconnect(self) -> None:
@@ -250,6 +257,10 @@ class MCPOmniSearchClient:
         Returns:
             List of financial news results with metadata
         """
+        if not self._connected:
+            logger.warning("MCP-OmniSearch not connected, returning empty results")
+            return []
+            
         try:
             # Use Tavily search for financial news
             result = await self._call_tool(
@@ -316,6 +327,10 @@ class MCPOmniSearchClient:
         # Normalize symbol
         base_symbol = symbol.split("-")[0].upper()
 
+        if not self._connected:
+            logger.warning("MCP-OmniSearch not connected, returning fallback sentiment")
+            return self._get_fallback_sentiment(base_symbol)
+            
         try:
             # Use Perplexity AI for sentiment analysis
             result = await self._call_tool(
@@ -370,6 +385,10 @@ class MCPOmniSearchClient:
         Returns:
             NASDAQ market sentiment analysis
         """
+        if not self._connected:
+            logger.warning("MCP-OmniSearch not connected, returning fallback sentiment")
+            return self._get_fallback_sentiment("NASDAQ")
+            
         try:
             # Use Kagi FastGPT for quick market sentiment
             result = await self._call_tool(
@@ -434,6 +453,10 @@ class MCPOmniSearchClient:
         crypto_base = crypto_symbol.split("-")[0].upper()
         nasdaq_base = nasdaq_symbol.upper()
 
+        if not self._connected:
+            logger.warning("MCP-OmniSearch not connected, returning fallback correlation")
+            return self._get_fallback_correlation(crypto_base, nasdaq_base, timeframe)
+            
         try:
             # Use search to find correlation information
             await self._call_tool(
@@ -621,6 +644,37 @@ class MCPOmniSearchClient:
             strength="weak",
             direction="neutral",
         )
+
+    async def search(self, query: str, limit: int = 5) -> list[SearchResult] | None:
+        """
+        Generic search method for testing and basic queries.
+        
+        Args:
+            query: Search query string
+            limit: Maximum number of results to return
+            
+        Returns:
+            List of search results or None if search fails
+        """
+        try:
+            # Use financial news search as the generic search endpoint
+            news_results = await self.search_financial_news(
+                query=query, 
+                limit=limit, 
+                timeframe="24h",
+                include_sentiment=False
+            )
+            
+            # Convert to basic SearchResult objects
+            basic_results = []
+            for news in news_results:
+                basic_results.append(news.base_result)
+                
+            return basic_results
+            
+        except Exception as e:
+            logger.warning("Generic search failed for '%s': %s", query, str(e))
+            return None
 
     async def health_check(self) -> dict[str, Any]:
         """Check the health and status of the MCP-OmniSearch client."""

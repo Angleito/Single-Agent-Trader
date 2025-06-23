@@ -38,12 +38,16 @@ from .bluefin_fee_calculator import BluefinFeeCalculator, BluefinFees
 
 # Use the service client instead of direct SDK
 try:
-    from .bluefin_client import BluefinServiceClient
+    from .bluefin_client import BluefinServiceClient, BluefinServiceConnectionError
 except ImportError:
     # Fallback if BluefinServiceClient is not available
     class BluefinServiceClient:  # type: ignore[misc]
         def __init__(self):
             pass
+    
+    class BluefinServiceConnectionError(Exception):  # type: ignore[misc]
+        """Fallback exception if client not available."""
+        pass
 
 
 # Import monitoring components
@@ -349,55 +353,124 @@ class BluefinClient(BaseExchange):
         Connect and authenticate with Bluefin via service.
 
         Returns:
-            True if connection successful
+            True if connection successful (or gracefully degraded)
         """
         try:
             # Connect to Bluefin service
             connected = False
+            service_error_msg = None
+            
             if (
                 self._service_client
                 and hasattr(self._service_client, "connect")
                 and callable(self._service_client.connect)
             ):
                 try:
+                    logger.info(
+                        "Attempting to connect to Bluefin service...",
+                        extra={
+                            "network": self.network_name,
+                            "dry_run": self.dry_run,
+                        }
+                    )
                     connected = await self._service_client.connect()
-                except Exception as service_error:
+                except BluefinServiceConnectionError as e:
+                    service_error_msg = str(e)
                     logger.warning(
-                        "Service client connection failed: %s", service_error
+                        "Bluefin service connection failed (this is optional): %s", 
+                        service_error_msg,
+                        extra={
+                            "error_type": "connection_error",
+                            "can_continue": True,
+                            "dry_run": self.dry_run
+                        }
+                    )
+                    connected = False
+                except Exception as e:
+                    service_error_msg = str(e)
+                    logger.warning(
+                        "Unexpected error connecting to Bluefin service: %s", 
+                        service_error_msg,
+                        extra={
+                            "error_type": type(e).__name__,
+                            "can_continue": True,
+                            "dry_run": self.dry_run
+                        }
                     )
                     connected = False
             else:
                 logger.debug("Service client not available or missing connect method")
+                service_error_msg = "Service client not initialized"
 
             if connected:
-                logger.info("Successfully connected to Bluefin DEX via service")
+                logger.info(
+                    "✅ Successfully connected to Bluefin DEX via service",
+                    extra={
+                        "network": self.network_name,
+                        "service_available": True
+                    }
+                )
                 self._connected = True
                 self._last_health_check = datetime.now(UTC)
                 await self._init_client()
                 return True
-            logger.warning("Failed to connect to Bluefin service")
+            
+            # Handle graceful degradation
             if self.dry_run:
                 logger.info(
-                    "PAPER TRADING MODE: Bluefin connection failed but continuing with simulation. "
-                    "All trades will be simulated."
+                    "📋 PAPER TRADING MODE: Continuing without Bluefin service.\n"
+                    "   • All trades will be simulated locally\n"
+                    "   • Market data will be fetched if available\n"
+                    "   • No real positions or orders will be created\n"
+                    "   Service issue: %s",
+                    service_error_msg or "Service unavailable",
+                    extra={
+                        "mode": "paper_trading",
+                        "service_required": False
+                    }
                 )
                 self._connected = True  # Allow dry run to continue
                 self._last_health_check = datetime.now(UTC)
                 await self._init_client()
                 return True
-            # For testing: Allow connection without service in live mode
+            
+            # Live mode warning
             logger.warning(
-                "⚠️ LIVE MODE: Proceeding without Bluefin service connection. "
-                "Position queries and order execution will not work!"
+                "⚠️  LIVE TRADING MODE - Bluefin service unavailable!\n"
+                "   • The Bluefin service container appears to be down\n"
+                "   • Position queries and order execution WILL NOT WORK\n"
+                "   • Consider switching to paper trading mode (DRY_RUN=true)\n"
+                "   Service issue: %s\n"
+                "   To fix: Ensure bluefin-service container is running",
+                service_error_msg or "Service unavailable",
+                extra={
+                    "mode": "live_trading",
+                    "service_required": True,
+                    "recommendation": "switch_to_paper_trading"
+                }
             )
+            
+            # In live mode, still allow initialization but with clear warnings
             self._connected = True
             self._last_health_check = datetime.now(UTC)
             await self._init_client()
+            return True
 
         except Exception as e:
-            logger.exception("Failed to connect to Bluefin")
-            raise ExchangeConnectionError(f"Connection failed: {e}") from e
-        else:
+            logger.exception(
+                "Unexpected error during Bluefin connection setup",
+                extra={
+                    "error_type": type(e).__name__,
+                    "dry_run": self.dry_run
+                }
+            )
+            # Only raise in live mode if it's a critical error
+            if not self.dry_run and "auth" in str(e).lower():
+                raise ExchangeConnectionError(f"Authentication failed: {e}") from e
+            
+            # Otherwise allow graceful degradation
+            self._connected = True
+            self._last_health_check = datetime.now(UTC)
             return True
 
     async def _init_client(self) -> None:

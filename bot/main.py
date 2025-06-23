@@ -297,9 +297,9 @@ class TradingEngine:
         self._shutdown_requested = False
         self._memory_available = False  # Initialize early to prevent AttributeError
         self._last_position_log_time: datetime | None = None
-        self._background_tasks: list[
-            asyncio.Task[Any]
-        ] = []  # Track background tasks for cleanup
+        self._background_tasks: list[asyncio.Task[Any]] = (
+            []
+        )  # Track background tasks for cleanup
 
         # Initialize market making integrator (will be set up after LLM agent)
         self.market_making_integrator: Any | None = None

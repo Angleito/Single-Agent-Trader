@@ -221,16 +221,96 @@ extension = "html"
 
 [tool.mypy]
 python_version = "3.12"
-check_untyped_defs = false
-disallow_any_generics = false
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+# Strict mode additional settings
+disallow_any_generics = true
+disallow_any_unimported = true
+disallow_any_expr = false  # Too restrictive for some patterns
+disallow_any_decorated = false  # Too restrictive for decorators
+disallow_any_explicit = false  # Allow explicit Any when needed
+disallow_subclassing_any = true
+no_implicit_reexport = true
+strict_concatenate = true
+
+# Error reporting
+show_error_codes = true
+show_column_numbers = true
+pretty = true
+show_absolute_path = false
+
+# Import discovery
+namespace_packages = true
+explicit_package_bases = true
+follow_imports = "normal"
+
+# Per-module options
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = false
+disallow_untyped_defs = false  # Allow untyped test functions
 disallow_incomplete_defs = false
-disallow_untyped_defs = false
-no_implicit_optional = false
-warn_redundant_casts = false
-warn_unused_ignores = false
-warn_return_any = false
-strict_equality = false
+
+[[tool.mypy.overrides]]
+module = [
+    "pandas.*",
+    "pandas_ta.*",
+    "scipy.*",
+    "langchain.*",
+    "langchain_openai.*",
+    "langchain_community.*",
+    "coinbase.*",
+    "coinbase_advanced_py.*",
+    "coinbase_advanced_trader.*",
+    "websockets.*",
+    "aiohttp.*",
+    "docker.*",
+    "psutil.*",
+    "aiohappyeyeballs.*",
+    "prometheus_client.*",
+    "websocket_client.*",
+    "socketio.*",
+    "uvicorn.*",
+    "httpx.*",
+    "memory_profiler.*",
+    "djlint.*",
+    "bluefin_v2_client.*",
+    "click.*",
+    "rich.*",
+    "dotenv.*",
+    "ta.*",
+    "openai.*",
+    "pydantic_settings.*",
+    "fastapi.*",
+    "sqlalchemy.*",
+]
 ignore_missing_imports = true
+
+# Strict type checking for core modules
+[[tool.mypy.overrides]]
+module = [
+    "bot.types.*",
+    "bot.config",
+    "bot.trading_types",
+    "bot.risk.types",
+    "bot.validation.*",
+    "bot.exchange.base",
+    "bot.utils.typed_config",
+]
+disallow_any_expr = true
+disallow_any_decorated = true
+disallow_any_explicit = true
 
 [tool.pytest.ini_options]
 minversion = "6.0"
