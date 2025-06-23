@@ -20,12 +20,21 @@ class SensitiveDataFilter(logging.Filter):
             r'(api[_-]?key|apikey|api_secret)[\s:=]+[\'""]?([A-Za-z0-9\-_]{20,})[\'""]?',
             re.IGNORECASE,
         ),
-        re.compile(r"(sk-[A-Za-z0-9]{48,})", re.IGNORECASE),  # OpenAI keys
-        re.compile(r"(pk-[A-Za-z0-9]{48,})", re.IGNORECASE),  # Public keys
-        re.compile(r"(tvly-[A-Za-z0-9]{32,})", re.IGNORECASE),  # Tavily keys
-        re.compile(r"(pplx-[A-Za-z0-9]{32,})", re.IGNORECASE),  # Perplexity keys
-        re.compile(r"(jina_[A-Za-z0-9]{32,})", re.IGNORECASE),  # Jina keys
-        re.compile(r"(fc-[A-Za-z0-9]{32,})", re.IGNORECASE),  # Firecrawl keys
+        # Environment variable style keys
+        re.compile(
+            r'([A-Z_]+(?:API_KEY|KEY|TOKEN|SECRET|PASSWORD))[\s:=]+[\'""]?([A-Za-z0-9\-_/+=]{10,})[\'""]?',
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"(sk-[A-Za-z0-9]{10,})", re.IGNORECASE
+        ),  # OpenAI keys (relaxed for tests)
+        re.compile(
+            r"(pk-[A-Za-z0-9]{10,})", re.IGNORECASE
+        ),  # Public keys (relaxed for tests)
+        re.compile(r"(tvly-[A-Za-z0-9]{10,})", re.IGNORECASE),  # Tavily keys
+        re.compile(r"(pplx-[A-Za-z0-9]{10,})", re.IGNORECASE),  # Perplexity keys
+        re.compile(r"(jina_[A-Za-z0-9]{10,})", re.IGNORECASE),  # Jina keys
+        re.compile(r"(fc-[A-Za-z0-9]{10,})", re.IGNORECASE),  # Firecrawl keys
         # Private Keys
         re.compile(
             r'(private[_-]?key)[\s:=]+[\'""]?([A-Za-z0-9\-_/+=]{32,})[\'""]?',
@@ -111,6 +120,12 @@ class SensitiveDataFilter(logging.Filter):
         """
         groups = match.groups()
         full_match = match.group(0)
+
+        # Handle API keys with prefixes (sk-, pk-, tvly-, etc.)
+        api_key_prefixes = ["sk-", "pk-", "tvly-", "pplx-", "jina_", "fc-"]
+        for prefix in api_key_prefixes:
+            if full_match.lower().startswith(prefix):
+                return self.REDACTED
 
         # Handle Ethereum addresses - preserve first 6 and last 4 chars
         if full_match.startswith("0x") and len(full_match) == 42:

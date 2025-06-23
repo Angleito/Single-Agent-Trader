@@ -128,7 +128,12 @@ class DominanceDataProvider:
         await self.connect()
         return self
 
-    async def __aexit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, _exc_tb: Any) -> bool:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        _exc_tb: Any,
+    ) -> bool:
         """Async context manager exit."""
         await self.disconnect()
         return False

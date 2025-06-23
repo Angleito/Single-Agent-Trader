@@ -11,7 +11,7 @@ import asyncio
 import json
 import logging
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -90,7 +90,7 @@ class GracefulShutdown:
         """Save current state for recovery."""
         try:
             state = {
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "positions": positions,
                 "config": {
                     "symbol": self.config.trading.symbol,

@@ -16,7 +16,7 @@ Key Features:
 """
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, NamedTuple
 
@@ -535,7 +535,7 @@ class DynamicSpreadCalculator:
         """
         try:
             if current_time is None:
-                current_time = datetime.now()
+                current_time = datetime.now(UTC)
 
             # Extract volatility (using ATR or price change)
             volatility = market_data.get(
@@ -608,7 +608,7 @@ class DynamicSpreadCalculator:
         """
         try:
             if current_time is None:
-                current_time = datetime.now()
+                current_time = datetime.now(UTC)
 
             # Extract signals and market conditions
             signals = self.extract_vumanchu_signals(indicator_data)
@@ -711,5 +711,5 @@ class DynamicSpreadCalculator:
                     SpreadLevel(0, self.base_spread_bps, self.base_spread_bps, 1.0)
                 ],
                 reasoning="Fallback recommendation due to calculation error",
-                timestamp=current_time or datetime.now(),
+                timestamp=current_time or datetime.now(UTC),
             )

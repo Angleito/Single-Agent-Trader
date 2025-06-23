@@ -318,6 +318,9 @@ minversion = "6.0"
 addopts = "-ra -q --strict-markers --strict-config"
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "docker: marks tests that require Docker to be running (deselect with '-k \"not docker\"')",
+]
 
 [tool.coverage.run]
 source = ["bot"]

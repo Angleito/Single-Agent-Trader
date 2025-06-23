@@ -6,7 +6,7 @@ is in 18-decimal format and convert it appropriately, with validation and loggin
 """
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from math import isfinite, isnan
 from typing import Any
@@ -666,18 +666,20 @@ def _validate_price_before_conversion(
                 if repetition_ratio > 0.8:
                     logger.warning(
                         "Suspicious repeated digit pattern: %s (%.1f%% repetition)",
-                        value, repetition_ratio * 100
+                        value,
+                        repetition_ratio * 100,
                     )
                     return False
-                
+
                 # Additional check for suspicious ending patterns (many zeros)
                 # Only flag if there are 12+ trailing zeros (more conservative)
-                if cleaned_str.endswith('000000000000'):  # 12+ trailing zeros
-                    trailing_zeros = len(cleaned_str) - len(cleaned_str.rstrip('0'))
+                if cleaned_str.endswith("000000000000"):  # 12+ trailing zeros
+                    trailing_zeros = len(cleaned_str) - len(cleaned_str.rstrip("0"))
                     if trailing_zeros >= 12:
                         logger.warning(
                             "Suspicious trailing zeros pattern: %s (%d zeros)",
-                            value, trailing_zeros
+                            value,
+                            trailing_zeros,
                         )
                         return False
 
@@ -708,7 +710,7 @@ def _is_circuit_breaker_open(circuit_key: str) -> bool:
     # Check if timeout has passed and we should attempt to close
     if circuit_key in _CIRCUIT_BREAKER_STATE["failure_timestamps"]:
         last_failure = _CIRCUIT_BREAKER_STATE["failure_timestamps"][circuit_key]
-        current_time = datetime.now().timestamp()
+        current_time = datetime.now(UTC).timestamp()
         if current_time - last_failure > _CIRCUIT_BREAKER_TIMEOUT:
             logger.info(
                 "Circuit breaker timeout passed for %s, attempting to close",
@@ -731,9 +733,9 @@ def _record_conversion_failure(circuit_key: str) -> None:
         _CIRCUIT_BREAKER_STATE["consecutive_failures"][circuit_key] = 0
 
     _CIRCUIT_BREAKER_STATE["consecutive_failures"][circuit_key] += 1
-    _CIRCUIT_BREAKER_STATE["failure_timestamps"][
-        circuit_key
-    ] = datetime.now().timestamp()
+    _CIRCUIT_BREAKER_STATE["failure_timestamps"][circuit_key] = datetime.now(
+        UTC
+    ).timestamp()
 
     logger.debug(
         "Recorded conversion failure for %s (count: %d)",
@@ -801,7 +803,7 @@ def _update_last_known_good_price(
     price_key = f"{symbol}_{field_name}"
     _CIRCUIT_BREAKER_STATE["last_known_good_prices"][price_key] = {
         "price": price,
-        "timestamp": datetime.now().timestamp(),
+        "timestamp": datetime.now(UTC).timestamp(),
     }
 
     logger.debug("Updated last known good price for %s: %s", price_key, price)
@@ -833,7 +835,7 @@ def _get_fallback_price(symbol: str | None, field_name: str | None) -> Decimal:
             good_price_data = _CIRCUIT_BREAKER_STATE["last_known_good_prices"][
                 price_key
             ]
-            age = datetime.now().timestamp() - good_price_data["timestamp"]
+            age = datetime.now(UTC).timestamp() - good_price_data["timestamp"]
 
             # Use last known good price if it's not too old
             # Extended tolerance: 2 hours for prices, 6 hours for non-critical fields
@@ -877,7 +879,7 @@ def _get_fallback_price(symbol: str | None, field_name: str | None) -> Decimal:
                 if key.startswith(f"{symbol}_") and key.endswith(
                     ("_price", "_close", "_open")
                 ):
-                    age = datetime.now().timestamp() - price_data["timestamp"]
+                    age = datetime.now(UTC).timestamp() - price_data["timestamp"]
                     if age < 86400:  # Within 24 hours
                         related_prices.append(float(price_data["price"]))
 
@@ -950,7 +952,7 @@ def get_circuit_breaker_status() -> dict[str, Any]:
         "last_known_good_prices": {
             k: {
                 "price": float(v["price"]),
-                "age_minutes": (datetime.now().timestamp() - v["timestamp"]) / 60,
+                "age_minutes": (datetime.now(UTC).timestamp() - v["timestamp"]) / 60,
             }
             for k, v in _CIRCUIT_BREAKER_STATE["last_known_good_prices"].items()
         },

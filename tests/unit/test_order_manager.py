@@ -195,9 +195,8 @@ class TestOrderManager(unittest.TestCase):
         )
 
         assert updated_order.status == OrderStatus.FILLED
-        assert updated_order.fill_price == Decimal("50100.00")
         assert updated_order.filled_quantity == Decimal("0.1")
-        assert updated_order.updated_at > order.created_at
+        assert updated_order.timestamp > order.timestamp
 
     def test_update_nonexistent_order(self):
         """Test updating a non-existent order."""

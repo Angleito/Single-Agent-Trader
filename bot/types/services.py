@@ -53,7 +53,7 @@ Example usage:
 """
 
 from collections.abc import Awaitable, Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import (
     Any,
@@ -459,7 +459,7 @@ def create_health_status(
     """
     health: ServiceHealth = {
         "status": status.value,  # type: ignore
-        "last_check": datetime.now().timestamp(),
+        "last_check": datetime.now(UTC).timestamp(),
     }
 
     if error is not None:

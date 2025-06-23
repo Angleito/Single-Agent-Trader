@@ -219,14 +219,14 @@ def create_connection_info(state: ConnectionState) -> ConnectionInfo:
     Returns:
         ConnectionInfo object
     """
-    import datetime
+    from datetime import UTC, datetime
 
     info: ConnectionInfo = {"state": state}
 
     if state == ConnectionState.CONNECTED:
-        info["connected_at"] = datetime.datetime.now()
+        info["connected_at"] = datetime.now(UTC)
     elif state == ConnectionState.DISCONNECTED:
-        info["disconnected_at"] = datetime.datetime.now()
+        info["disconnected_at"] = datetime.now(UTC)
 
     return info
 

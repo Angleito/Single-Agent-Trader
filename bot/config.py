@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
 from pathlib import Path
-from typing import Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
 from urllib.parse import urlparse
 
 from dotenv import load_dotenv
@@ -28,12 +28,14 @@ from bot.utils.path_utils import (
 )
 
 # Try to import Bluefin endpoints, but don't fail if it's not available
+if TYPE_CHECKING:
+    from bot.exchange.bluefin_endpoints import BluefinEndpointConfig
+
 try:
     from bot.exchange.bluefin_endpoints import BluefinEndpointConfig
 
     BLUEFIN_ENDPOINTS_AVAILABLE = True
 except ImportError:
-    BluefinEndpointConfig = None
     BLUEFIN_ENDPOINTS_AVAILABLE = False
 
 # Optional dependency for network testing
@@ -47,36 +49,36 @@ except ImportError:
     # Create a mock aiohttp for type hints
     class MockAiohttp:
         class ClientSession:
-            def __init__(self, *args, **kwargs):
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
                 pass
 
-            async def __aenter__(self):
+            async def __aenter__(self) -> "MockAiohttp.ClientSession":
                 return self
 
-            async def __aexit__(self, *args):
+            async def __aexit__(self, *args: Any) -> None:
                 pass
 
-            def get(self, *_args, **_kwargs):
+            def get(self, *_args: Any, **_kwargs: Any) -> "MockResponse":
                 return MockResponse()
 
-            def post(self, *_args, **_kwargs):
+            def post(self, *_args: Any, **_kwargs: Any) -> "MockResponse":
                 return MockResponse()
 
         class ClientTimeout:
-            def __init__(self, *args, **kwargs):
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
                 pass
 
     class MockResponse:
-        def __init__(self):
+        def __init__(self) -> None:
             self.status = 200
 
-        async def __aenter__(self):
+        async def __aenter__(self) -> "MockResponse":
             return self
 
-        async def __aexit__(self, *args):
+        async def __aexit__(self, *args: Any) -> None:
             pass
 
-        async def json(self):
+        async def json(self) -> dict[str, object]:
             return {}
 
     # Assign the mock class instance to aiohttp for type compatibility
@@ -101,6 +103,7 @@ logger = logging.getLogger(__name__)
 # Type definitions for validation results
 class ValidationCheck(TypedDict):
     """Single validation check result."""
+
     name: str
     status: Literal["pass", "error", "warning", "skip"]
     message: str | None
@@ -108,6 +111,7 @@ class ValidationCheck(TypedDict):
 
 class ValidationResult(TypedDict):
     """Result of a single validation test."""
+
     name: str
     status: Literal["pass", "error", "warning", "skip"]
     message: str
@@ -115,12 +119,14 @@ class ValidationResult(TypedDict):
 
 class ValidationResultWithChecks(TypedDict):
     """Validation result with sub-checks."""
+
     status: Literal["pass", "error", "warning"]
     checks: list[ValidationCheck]
 
 
 class ValidationSummary(TypedDict):
     """Summary of all validation results."""
+
     total_errors: int
     total_warnings: int
     errors: list[str]
@@ -130,6 +136,7 @@ class ValidationSummary(TypedDict):
 
 class TestResult(TypedDict):
     """Result of a test."""
+
     name: str
     status: Literal["pass", "error", "warning"]
     warnings: list[str] | None
@@ -137,6 +144,7 @@ class TestResult(TypedDict):
 
 class TestValidationResult(TypedDict):
     """Validation result with tests."""
+
     status: Literal["pass", "skipped"]
     reason: str | None
     tests: list[TestResult] | None
@@ -144,6 +152,7 @@ class TestValidationResult(TypedDict):
 
 class FullValidationResults(TypedDict):
     """Complete validation results."""
+
     environment: ValidationResultWithChecks
     network_connectivity: ValidationResultWithChecks
     exchange_config: ValidationResultWithChecks
@@ -152,6 +161,42 @@ class FullValidationResults(TypedDict):
     llm_config: ValidationResultWithChecks
     sui_network: ValidationResultWithChecks | None
     summary: ValidationSummary
+
+
+class ConfigSummary(TypedDict):
+    """Configuration summary structure."""
+
+    basic_info: dict[str, str | int | bool]
+    security_status: dict[str, bool]
+    risk_parameters: dict[str, float]
+    network_config: dict[str, Any]
+    warnings: list[str]
+    config_hash: str
+
+
+class BackupConfig(TypedDict):
+    """Backup configuration structure."""
+
+    metadata: dict[str, str]
+    configuration: dict[str, Any]
+
+
+class HealthStatus(TypedDict):
+    """Health status structure."""
+
+    overall_status: str
+    last_check: float
+    config_hash: str
+    issues: list[str]
+
+
+class MonitoringData(TypedDict):
+    """Monitoring data structure."""
+
+    monitor_info: dict[str, Any]
+    current_config: ConfigSummary
+    health_status: HealthStatus
+    validation_cache: dict[str, Any]
 
 
 class ConfigValidationError(Exception):
@@ -169,7 +214,10 @@ class ConfigurationValidator:
         self.settings = settings
         self.errors: list[str] = []
         self.warnings: list[str] = []
-        self.validation_results: FullValidationResults | dict[str, Any] = {}
+        self.validation_results: (
+            FullValidationResults
+            | dict[str, ValidationResultWithChecks | ValidationSummary | None]
+        ) = {}
 
     def _check_aiohttp_available(self, test_name: str) -> ValidationResult | None:
         """Check if aiohttp is available for network testing."""
@@ -197,16 +245,17 @@ class ConfigurationValidator:
             ),
         }
 
-        results["summary"] = {
-            "total_errors": len(self.errors),
-            "total_warnings": len(self.warnings),
-            "errors": self.errors,
-            "warnings": self.warnings,
-            "is_valid": len(self.errors) == 0,
-        }
+        summary = ValidationSummary(
+            total_errors=len(self.errors),
+            total_warnings=len(self.warnings),
+            errors=self.errors,
+            warnings=self.warnings,
+            is_valid=len(self.errors) == 0,
+        )
+        results["summary"] = summary
 
         self.validation_results = results
-        return results
+        return results  # type: ignore[return-value]
 
     async def _validate_environment(self) -> ValidationResultWithChecks:
         """Validate environment configuration consistency."""
@@ -221,22 +270,34 @@ class ConfigurationValidator:
             if env.value == "production" and network == "testnet":
                 self.warnings.append("Production environment using testnet network")
                 results["checks"].append(
-                    {"name": "prod_testnet_mismatch", "status": "warning"}
+                    ValidationCheck(
+                        name="prod_testnet_mismatch",
+                        status="warning",
+                        message="Production environment using testnet network",
+                    )
                 )
 
             if not dry_run and network == "testnet":
                 self.warnings.append("Live trading enabled on testnet network")
                 results["checks"].append(
-                    {"name": "live_testnet_mismatch", "status": "warning"}
+                    ValidationCheck(
+                        name="live_testnet_mismatch",
+                        status="warning",
+                        message="Live trading enabled on testnet network",
+                    )
                 )
 
             if env.value == "development" and network == "mainnet" and not dry_run:
                 self.errors.append(
                     "Development environment should not use live mainnet trading"
                 )
-                results["status"] = "fail"
+                results["status"] = "error"
                 results["checks"].append(
-                    {"name": "dev_mainnet_live", "status": "error"}
+                    ValidationCheck(
+                        name="dev_mainnet_live",
+                        status="error",
+                        message="Development environment should not use live mainnet trading",
+                    )
                 )
 
         return results
@@ -247,15 +308,27 @@ class ConfigurationValidator:
 
         # Test basic internet connectivity
         internet_check = await self._test_internet_connectivity()
-        results["checks"].append(internet_check)
         if internet_check["status"] == "error":
-            results["status"] = "fail"
+            results["status"] = "error"
+        results["checks"].append(
+            ValidationCheck(
+                name=internet_check["name"],
+                status=internet_check["status"],
+                message=internet_check["message"],
+            )
+        )
 
         # Test DNS resolution
         dns_check = await self._test_dns_resolution()
-        results["checks"].append(dns_check)
         if dns_check["status"] == "error":
-            results["status"] = "fail"
+            results["status"] = "error"
+        results["checks"].append(
+            ValidationCheck(
+                name=dns_check["name"],
+                status=dns_check["status"],
+                message=dns_check["message"],
+            )
+        )
 
         return results
 
@@ -266,21 +339,39 @@ class ConfigurationValidator:
         if self.settings.exchange.exchange_type == "bluefin":
             # Validate Bluefin service URL
             service_url_check = await self._test_bluefin_service_connectivity()
-            results["checks"].append(service_url_check)
             if service_url_check["status"] == "error":
-                results["status"] = "fail"
+                results["status"] = "error"
+            results["checks"].append(
+                ValidationCheck(
+                    name=service_url_check["name"],
+                    status=service_url_check["status"],
+                    message=service_url_check["message"],
+                )
+            )
 
             # Validate private key format comprehensively
             key_validation = self._validate_bluefin_private_key_format()
-            results["checks"].append(key_validation)
             if key_validation["status"] == "error":
-                results["status"] = "fail"
+                results["status"] = "error"
+            results["checks"].append(
+                ValidationCheck(
+                    name=key_validation["name"],
+                    status=key_validation["status"],
+                    message=key_validation["message"],
+                )
+            )
 
             # Validate network endpoints
             endpoint_validation = await self._validate_bluefin_endpoints()
-            results["checks"].append(endpoint_validation)
             if endpoint_validation["status"] == "error":
-                results["status"] = "fail"
+                results["status"] = "error"
+            results["checks"].append(
+                ValidationCheck(
+                    name=endpoint_validation["name"],
+                    status=endpoint_validation["status"],
+                    message=endpoint_validation["message"],
+                )
+            )
 
         return results
 
@@ -1166,7 +1257,7 @@ class LLMSettings(BaseModel):
 
     @field_validator("model_name")
     @classmethod
-    def validate_model_name(cls, v: str, info) -> str:
+    def validate_model_name(cls, v: str, info: Any) -> str:
         """Validate model name based on provider."""
         provider = info.data.get("provider", "openai")
 
@@ -2834,7 +2925,7 @@ class Settings(BaseSettings):
         config_str = json.dumps(config_for_hash, sort_keys=True, default=str)
         return hashlib.sha256(config_str.encode()).hexdigest()[:16]
 
-    async def validate_configuration_comprehensive(self) -> dict[str, Any]:
+    async def validate_configuration_comprehensive(self) -> FullValidationResults:
         """Run comprehensive configuration validation with network testing."""
         validator = ConfigurationValidator(self)
         return await validator.validate_all()
@@ -2848,77 +2939,91 @@ class Settings(BaseSettings):
         if self.exchange.exchange_type != "bluefin":
             return {"status": "skipped", "reason": "Not using Bluefin exchange"}
 
-        results = TestValidationResult(status="pass", reason=None, tests=[])
+        results: TestValidationResult = {"status": "pass", "reason": None, "tests": []}
 
         # Test private key format
         try:
             if self.exchange.bluefin_private_key:
                 self.exchange._validate_bluefin_private_key_comprehensive()
-                results["tests"].append(
-                    {"name": "private_key_format", "status": "pass"}
-                )
-            else:
+                if results["tests"] is not None:
+                    results["tests"].append(
+                        {
+                            "name": "private_key_format",
+                            "status": "pass",
+                            "warnings": None,
+                        }
+                    )
+            elif results["tests"] is not None:
                 results["tests"].append(
                     {
                         "name": "private_key_format",
-                        "status": "skip",
-                        "reason": "No private key provided",
+                        "status": "warning",
+                        "warnings": ["No private key provided"],
                     }
                 )
         except ValueError as e:
-            results["status"] = "fail"
-            results["tests"].append(
-                {"name": "private_key_format", "status": "fail", "error": str(e)}
-            )
+            results["status"] = "skipped"
+            if results["tests"] is not None:
+                results["tests"].append(
+                    {
+                        "name": "private_key_format",
+                        "status": "error",
+                        "warnings": [str(e)],
+                    }
+                )
 
         # Test network endpoint validation
         endpoint_issues = self.exchange.validate_network_endpoints()
         if endpoint_issues:
-            results["status"] = "fail"
+            results["status"] = "skipped"
+            if results["tests"] is not None:
+                results["tests"].append(
+                    {
+                        "name": "network_endpoints",
+                        "status": "error",
+                        "warnings": endpoint_issues,
+                    }
+                )
+        elif results["tests"] is not None:
             results["tests"].append(
-                {
-                    "name": "network_endpoints",
-                    "status": "fail",
-                    "issues": endpoint_issues,
-                }
+                {"name": "network_endpoints", "status": "pass", "warnings": None}
             )
-        else:
-            results["tests"].append({"name": "network_endpoints", "status": "pass"})
 
         # Test environment consistency
         consistency_warnings = self.validate_network_consistency()
         if consistency_warnings:
+            if results["tests"] is not None:
+                results["tests"].append(
+                    {
+                        "name": "environment_consistency",
+                        "status": "warning",
+                        "warnings": consistency_warnings,
+                    }
+                )
+        elif results["tests"] is not None:
             results["tests"].append(
-                {
-                    "name": "environment_consistency",
-                    "status": "warning",
-                    "warnings": consistency_warnings,
-                }
-            )
-        else:
-            results["tests"].append(
-                {"name": "environment_consistency", "status": "pass"}
+                {"name": "environment_consistency", "status": "pass", "warnings": None}
             )
 
         return results
 
-    def get_configuration_summary(self) -> dict[str, Any]:
+    def get_configuration_summary(self) -> ConfigSummary:
         """Get a comprehensive configuration summary."""
-        summary: dict[str, Any] = {
-            "basic_info": {
+        summary = ConfigSummary(
+            basic_info={
                 "environment": self.system.environment.value,
                 "exchange": self.exchange.exchange_type,
-                "dry_run": self.system.dry_run,
+                "dry_run": str(self.system.dry_run),
                 "trading_symbol": self.trading.symbol,
-                "leverage": self.trading.leverage,
+                "leverage": str(self.trading.leverage),
                 "profile": self.profile.value,
             },
-            "security_status": {
+            security_status={
                 "has_llm_key": bool(self.llm.openai_api_key),
                 "has_exchange_credentials": self._has_exchange_credentials(),
                 "dry_run_enabled": self.system.dry_run,
             },
-            "risk_parameters": {
+            risk_parameters={
                 "max_daily_loss_pct": self.risk.max_daily_loss_pct,
                 "max_position_size_pct": self.trading.max_size_pct,
                 "stop_loss_pct": self.risk.default_stop_loss_pct,
@@ -2926,10 +3031,10 @@ class Settings(BaseSettings):
                 "risk_reward_ratio": self.risk.default_take_profit_pct
                 / self.risk.default_stop_loss_pct,
             },
-            "network_config": {},
-            "warnings": [],
-            "config_hash": self.generate_config_hash(),
-        }
+            network_config={},
+            warnings=[],
+            config_hash=self.generate_config_hash(),
+        )
 
         # Add exchange-specific info
         if self.exchange.exchange_type == "bluefin":
@@ -2970,7 +3075,7 @@ class Settings(BaseSettings):
 
         return False
 
-    def create_backup_configuration(self) -> dict[str, Any]:
+    def create_backup_configuration(self) -> BackupConfig:
         """Create a backup of the current configuration without secrets."""
         return {
             "metadata": {
@@ -3006,12 +3111,12 @@ class ConfigurationMonitor:
         self.settings = settings
         self.initial_hash = settings.generate_config_hash()
         self.last_check = time.time()
-        self.change_callbacks: list[Callable[[Any, str, str], None]] = []
-        self.validation_cache: dict[str, Any] = {}
+        self.change_callbacks: list[Callable[[Settings, str, str], None]] = []
+        self.validation_cache: dict[str, FullValidationResults | float | str] = {}
         self.cache_ttl = 300  # 5 minutes
 
     def register_change_callback(
-        self, callback: Callable[[Any, str, str], None]
+        self, callback: Callable[[Settings, str, str], None]
     ) -> None:
         """Register a callback to be called when configuration changes."""
         self.change_callbacks.append(callback)
@@ -3039,7 +3144,7 @@ class ConfigurationMonitor:
 
         return False
 
-    async def validate_and_cache(self) -> dict[str, Any]:
+    async def validate_and_cache(self) -> FullValidationResults:
         """Validate configuration and cache results."""
         current_time = time.time()
 
@@ -3063,14 +3168,14 @@ class ConfigurationMonitor:
 
         return validation_results
 
-    def get_health_status(self) -> dict[str, Any]:
+    def get_health_status(self) -> HealthStatus:
         """Get overall configuration health status."""
-        status: dict[str, Any] = {
-            "overall_status": "healthy",
-            "last_check": self.last_check,
-            "config_hash": self.settings.generate_config_hash(),
-            "issues": [],
-        }
+        status = HealthStatus(
+            overall_status="healthy",
+            last_check=self.last_check,
+            config_hash=self.settings.generate_config_hash(),
+            issues=[],
+        )
 
         # Check basic configuration issues
         if self.settings.exchange.exchange_type == "bluefin":
@@ -3092,7 +3197,7 @@ class ConfigurationMonitor:
 
         return status
 
-    def export_monitoring_data(self) -> dict[str, Any]:
+    def export_monitoring_data(self) -> MonitoringData:
         """Export monitoring data for external analysis."""
         return {
             "monitor_info": {

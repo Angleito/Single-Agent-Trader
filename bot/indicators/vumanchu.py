@@ -2118,7 +2118,7 @@ class VuManChuIndicators:
 
     def calculate_all(
         self, df: pd.DataFrame, dominance_candles: pd.DataFrame | None = None
-    ) -> pd.DataFrame:
+    ) -> dict[str, Any]:
         """
         Calculate all indicators for the given DataFrame.
 
@@ -2131,7 +2131,10 @@ class VuManChuIndicators:
             dominance_candles: Optional list of DominanceCandleData for sentiment analysis
 
         Returns:
-            DataFrame with comprehensive indicator suite:
+            Dictionary containing:
+            - indicators: DataFrame with comprehensive indicator suite
+            - signal: Trading signal ("LONG", "SHORT", "HOLD")
+            - error: Error message if insufficient data
 
             Cipher A Indicators:
             - All WaveTrend, EMA Ribbon, Signal Patterns
@@ -2158,16 +2161,19 @@ class VuManChuIndicators:
         """
         if df.empty:
             logger.warning("Empty DataFrame provided for indicator calculation")
-            return df.copy()
+            return {"error": "Insufficient data: Empty DataFrame provided"}
 
         # Check data sufficiency before starting calculations
         min_required = 100  # VuManChu indicators need ~80 + buffer
         if len(df) < min_required:
             logger.warning(
-                "Insufficient data for reliable VuManChu calculation. Have %s candles, need %s. Calculations may be unreliable.",
+                "Insufficient data for reliable VuManChu calculation. Have %s candles, need %s.",
                 len(df),
                 min_required,
             )
+            return {
+                "error": f"Insufficient data: Have {len(df)} candles, need at least {min_required}"
+            }
 
         # Start with original data
         result = df.copy()
@@ -2208,12 +2214,14 @@ class VuManChuIndicators:
 
             logger.debug("VuManChu Cipher calculation completed successfully")
 
+            # Determine trading signal from the indicators
+            signal = self._determine_signal(result)
+
+            return {"indicators": result, "signal": signal}
+
         except Exception:
             logger.exception("Error in comprehensive indicator calculation")
-            # Add error indicators
-            result["calculation_error"] = True
-
-        return result
+            return {"error": "Calculation error: Failed to compute indicators"}
 
     def _add_utility_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -2362,6 +2370,42 @@ class VuManChuIndicators:
             logger.warning("Error adding combined analysis")
 
         return result
+
+    def _determine_signal(self, df: pd.DataFrame) -> str:
+        """
+        Determine trading signal based on calculated indicators.
+        
+        Args:
+            df: DataFrame with calculated indicators
+            
+        Returns:
+            Trading signal: "LONG", "SHORT", or "HOLD"
+        """
+        if df.empty or len(df) < 1:
+            return "HOLD"
+            
+        try:
+            # Get the latest combined signal
+            latest = df.iloc[-1]
+            combined_signal = latest.get("combined_signal", 0)
+            combined_confidence = latest.get("combined_confidence", 0.0)
+            
+            # Require minimum confidence for a signal
+            min_confidence = 0.3
+            
+            if combined_confidence < min_confidence:
+                return "HOLD"
+                
+            if combined_signal > 0:
+                return "LONG"
+            elif combined_signal < 0:
+                return "SHORT"
+            else:
+                return "HOLD"
+                
+        except Exception:
+            logger.exception("Error determining signal")
+            return "HOLD"
 
     def _add_dominance_analysis(
         self, df: pd.DataFrame, dominance_candles

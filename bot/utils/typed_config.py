@@ -10,20 +10,29 @@ ConfigValue = Union[str, int, float, bool, None]
 
 class DictLike(Protocol):
     """Protocol for dict-like objects."""
+
     def get(self, key: str, default: Any = None) -> Any: ...
 
 
 @overload
-def get_typed(obj: Union[dict[str, Any], DictLike, object], attr: str, default: int) -> int: ...
+def get_typed(
+    obj: dict[str, Any] | DictLike | object, attr: str, default: int
+) -> int: ...
 @overload
-def get_typed(obj: Union[dict[str, Any], DictLike, object], attr: str, default: float) -> float: ...
+def get_typed(
+    obj: dict[str, Any] | DictLike | object, attr: str, default: float
+) -> float: ...
 @overload
-def get_typed(obj: Union[dict[str, Any], DictLike, object], attr: str, default: str) -> str: ...
+def get_typed(
+    obj: dict[str, Any] | DictLike | object, attr: str, default: str
+) -> str: ...
 @overload
-def get_typed(obj: Union[dict[str, Any], DictLike, object], attr: str, default: bool) -> bool: ...
+def get_typed(
+    obj: dict[str, Any] | DictLike | object, attr: str, default: bool
+) -> bool: ...
 
 
-def get_typed(obj: Union[dict[str, Any], DictLike, object], attr: str, default: T) -> T:
+def get_typed(obj: dict[str, Any] | DictLike | object, attr: str, default: T) -> T:
     """
     Type-safe config getter with automatic conversion.
 

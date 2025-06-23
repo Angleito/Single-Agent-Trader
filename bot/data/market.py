@@ -7,7 +7,7 @@ import logging
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any, NoReturn, Union, Optional
+from typing import Any, NoReturn
 
 import aiohttp
 import pandas as pd
@@ -49,7 +49,7 @@ except ImportError:
     # Mock jwt_generator module for when SDK is not available
     class MockJwtGenerator:
         @staticmethod
-        def build_ws_jwt(_api_key: str, _api_secret: str) -> Optional[str]:
+        def build_ws_jwt(_api_key: str, _api_secret: str) -> str | None:
             return None
 
     jwt_generator = MockJwtGenerator()
@@ -434,7 +434,7 @@ class MarketDataProvider:
         self._ohlcv_cache: list[MarketData] = []
         self._price_cache: dict[str, Decimal] = {}
         self._orderbook_cache: dict[str, list[list[float]]] = {}
-        self._tick_cache: list[dict[str, Union[str, float, int]]] = []
+        self._tick_cache: list[dict[str, str | float | int]] = []
         self._cache_timestamps: dict[str, datetime] = {}
         self._cache_ttl = timedelta(seconds=settings.data.data_cache_ttl_seconds)
         self._last_update: datetime | None = None
@@ -457,7 +457,7 @@ class MarketDataProvider:
         self._running = False
 
         # Subscribers for real-time updates
-        self._subscribers: list[Callable[[MarketData], Union[None, Any]]] = []
+        self._subscribers: list[Callable[[MarketData], None | Any]] = []
 
         # Background tasks tracking
         self._background_tasks: set[asyncio.Task] = set()
@@ -1050,7 +1050,9 @@ class MarketDataProvider:
         # Fall back to cached OHLCV data
         return self.get_latest_price()
 
-    async def fetch_orderbook(self, level: int = 2) -> dict[str, list[list[float]]] | None:
+    async def fetch_orderbook(
+        self, level: int = 2
+    ) -> dict[str, list[list[float]]] | None:
         """
         Fetch order book data from Coinbase REST API.
 
@@ -1276,7 +1278,9 @@ class MarketDataProvider:
                 logger.exception("Error in message processor: %s")
                 await asyncio.sleep(0.1)
 
-    async def _handle_websocket_message_async(self, message: dict[str, Union[str, list, dict]]) -> None:
+    async def _handle_websocket_message_async(
+        self, message: dict[str, str | list | dict]
+    ) -> None:
         """
         Handle WebSocket message asynchronously without blocking the queue processor.
 
@@ -1288,7 +1292,9 @@ class MarketDataProvider:
         except Exception:
             logger.exception("Error in async message handler: %s")
 
-    async def _handle_websocket_message(self, message: dict[str, Union[str, list, dict]]) -> None:
+    async def _handle_websocket_message(
+        self, message: dict[str, str | list | dict]
+    ) -> None:
         """
         Handle incoming WebSocket messages with validation.
 
@@ -1340,7 +1346,9 @@ class MarketDataProvider:
             )
             logger.debug("Message: %s", json.dumps(message, indent=2))
 
-    async def _handle_ticker_update(self, message: dict[str, Union[str, list, dict]]) -> None:
+    async def _handle_ticker_update(
+        self, message: dict[str, str | list | dict]
+    ) -> None:
         """
         Handle ticker price updates.
 
@@ -1418,7 +1426,7 @@ class MarketDataProvider:
             logger.exception("Error handling ticker update: %s")
             logger.debug("Ticker message: %s", json.dumps(message, indent=2))
 
-    async def _handle_trade_update(self, message: dict[str, Union[str, list, dict]]) -> None:
+    async def _handle_trade_update(self, message: dict[str, str | list | dict]) -> None:
         """
         Handle trade/market_trades updates.
 
@@ -1620,14 +1628,18 @@ class MarketDataProvider:
         # Don't wait for all tasks to complete - fire and forget for non-blocking behavior
         # Tasks will run in background without blocking the caller
 
-    async def _safe_callback_async(self, callback: Callable[[MarketData], Any], data: MarketData) -> None:
+    async def _safe_callback_async(
+        self, callback: Callable[[MarketData], Any], data: MarketData
+    ) -> None:
         """Safely execute async callback."""
         try:
             await callback(data)
         except Exception:
             logger.exception("Error in async subscriber callback %s", callback.__name__)
 
-    async def _safe_callback_sync(self, callback: Callable[[MarketData], Any], data: MarketData) -> None:
+    async def _safe_callback_sync(
+        self, callback: Callable[[MarketData], Any], data: MarketData
+    ) -> None:
         """Safely execute sync callback in thread pool."""
         try:
             # Run sync callback in thread pool to avoid blocking event loop

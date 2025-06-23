@@ -244,7 +244,7 @@ class OmniSearchClient:
     ):
         """Initialize the OmniSearch client."""
         # Handle case where settings object is passed instead of individual parameters
-        if hasattr(server_url, 'omnisearch'):
+        if hasattr(server_url, "omnisearch"):
             # If a settings object is passed, extract the relevant values
             settings_obj = server_url
             self.server_url = getattr(
@@ -259,11 +259,12 @@ class OmniSearchClient:
             # Server configuration with safe settings access
             self.server_url = server_url or "http://localhost:8766"
             self.api_key = api_key
-            
+
             # Try to get from global settings if available
             try:
                 from bot.config import settings
-                if hasattr(settings, 'omnisearch'):
+
+                if hasattr(settings, "omnisearch"):
                     self.server_url = self.server_url or getattr(
                         settings.omnisearch, "server_url", "http://localhost:8766"
                     )
@@ -295,9 +296,7 @@ class OmniSearchClient:
             self.local_storage_path = (
                 Path(tempfile.gettempdir()) / "omnisearch_cache_fallback"
             )
-            logger.warning(
-                "Using minimal fallback path: %s", self.local_storage_path
-            )
+            logger.warning("Using minimal fallback path: %s", self.local_storage_path)
 
         logger.info("🔍 OmniSearch Client: Initialized for %s", self.server_url)
 

@@ -605,7 +605,11 @@ class OrderManager:
                     "quantity": str(order.quantity),
                     "price": str(order.price) if order.price else None,
                     "stop_price": str(order.stop_price) if order.stop_price else None,
-                    "status": order.status.value,
+                    "status": (
+                        order.status
+                        if isinstance(order.status, str)
+                        else order.status.value
+                    ),
                     "timestamp": order.timestamp.isoformat(),
                     "filled_quantity": str(order.filled_quantity),
                 }
@@ -627,7 +631,11 @@ class OrderManager:
                         "stop_price": (
                             str(order.stop_price) if order.stop_price else None
                         ),
-                        "status": order.status.value,
+                        "status": (
+                            order.status
+                            if isinstance(order.status, str)
+                            else order.status.value
+                        ),
                         "timestamp": order.timestamp.isoformat(),
                         "filled_quantity": str(order.filled_quantity),
                     }

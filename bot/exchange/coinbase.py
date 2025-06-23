@@ -10,9 +10,10 @@ import decimal
 import logging
 import time
 import traceback
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any, Literal, cast, Callable, Optional, Union
+from typing import Any, Literal, cast
 
 try:
     # Prefer the new official SDK import path first
@@ -138,7 +139,9 @@ class CoinbaseResponseValidator:
     before processing to prevent corruption-based trading losses.
     """
 
-    def __init__(self, failure_callback: Optional[Callable[[str, dict[str, Any]], None]] = None):
+    def __init__(
+        self, failure_callback: Callable[[str, dict[str, Any]], None] | None = None
+    ):
         """
         Initialize the response validator.
 
@@ -184,7 +187,7 @@ class CoinbaseResponseValidator:
             logger.exception("Error validating account response")
             return False
 
-    def validate_balance_response(self, response: Union[dict[str, Any], Any]) -> bool:
+    def validate_balance_response(self, response: dict[str, Any] | Any) -> bool:
         """
         Validate balance response structure.
 
@@ -233,7 +236,9 @@ class CoinbaseResponseValidator:
 
         return self._validate_balance_value(response["balance"])
 
-    def _validate_balance_value(self, balance_value: Union[str, int, float, Decimal]) -> bool:
+    def _validate_balance_value(
+        self, balance_value: str | int | float | Decimal
+    ) -> bool:
         """Validate balance value format and range."""
         try:
             balance_decimal = Decimal(str(balance_value))
@@ -246,7 +251,7 @@ class CoinbaseResponseValidator:
         else:
             return True
 
-    def validate_order_response(self, response: Union[dict[str, Any], Any]) -> bool:
+    def validate_order_response(self, response: dict[str, Any] | Any) -> bool:
         """
         Validate order response structure.
 
@@ -834,7 +839,9 @@ class CoinbaseClient(BaseExchange):
                 "Use --dry-run flag for paper trading."
             )
 
-    def set_failure_callback(self, callback: Callable[[str, dict[str, Any]], None]) -> None:
+    def set_failure_callback(
+        self, callback: Callable[[str, dict[str, Any]], None]
+    ) -> None:
         """
         Set failure callback for validation errors.
 
@@ -1032,7 +1039,9 @@ class CoinbaseClient(BaseExchange):
         else:
             return True
 
-    async def _retry_request(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    async def _retry_request(
+        self, func: Callable[..., Any], *args: Any, **kwargs: Any
+    ) -> Any:
         """Execute a request with retry logic."""
         # In paper trading mode, don't make any real API calls
         if self.dry_run:
@@ -1184,7 +1193,7 @@ class CoinbaseClient(BaseExchange):
             logger.warning("Failed to load portfolios: %s", e)
             self._portfolios = {}
 
-    async def get_portfolios(self) -> list[dict[str, Union[str, float, bool]]]:
+    async def get_portfolios(self) -> list[dict[str, str | float | bool]]:
         """
         Get list of all portfolios.
 

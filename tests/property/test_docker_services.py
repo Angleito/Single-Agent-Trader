@@ -20,6 +20,9 @@ import requests
 from hypothesis import assume, given, settings
 from hypothesis.stateful import Bundle, RuleBasedStateMachine, rule
 
+# Mark all tests in this module as requiring Docker
+pytestmark = pytest.mark.docker
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -102,10 +105,9 @@ SERVICE_CONFIG = {
 }
 
 
-# Docker client fixture
-@pytest.fixture(scope="session")
-def docker_client():
-    """Create Docker client for the test session."""
+# Helper function to create Docker client
+def get_docker_client():
+    """Create Docker client with error handling."""
     try:
         client = docker.from_env()
         # Verify Docker is accessible
@@ -115,10 +117,18 @@ def docker_client():
         pytest.skip(f"Docker not available: {e}")
 
 
+# Docker client fixture for non-Hypothesis tests
+@pytest.fixture(scope="session")
+def docker_client():
+    """Create Docker client for the test session."""
+    return get_docker_client()
+
+
 @pytest.fixture(scope="function")
-def service_monitor(docker_client):
+def service_monitor():
     """Monitor service status during tests."""
-    monitor = ServiceMonitor(docker_client)
+    client = get_docker_client()
+    monitor = ServiceMonitor(client)
     yield monitor
     monitor.cleanup()
 
@@ -279,8 +289,11 @@ class TestDockerServiceProperties:
 
     @given(service_name=service_names())
     @settings(max_examples=20, deadline=timedelta(seconds=30))
-    def test_service_discoverable(self, docker_client, service_name):
+    def test_service_discoverable(self, service_name):
         """Property: All configured services must be discoverable in Docker."""
+        # Create Docker client inline for Hypothesis compatibility
+        docker_client = get_docker_client()
+
         config = SERVICE_CONFIG[service_name]
         container_name = config["container_name"]
 
@@ -302,10 +315,12 @@ class TestDockerServiceProperties:
 
     @given(service_name=service_names())
     @settings(max_examples=15, deadline=timedelta(seconds=45))
-    def test_health_check_schema_invariant(
-        self, docker_client, service_monitor, service_name
-    ):
+    def test_health_check_schema_invariant(self, service_name):
         """Property: Health check responses must maintain expected schema."""
+        # Create Docker client and monitor inline for Hypothesis compatibility
+        docker_client = get_docker_client()
+        service_monitor = ServiceMonitor(docker_client)
+
         config = SERVICE_CONFIG[service_name]
 
         if not config.get("health_endpoint"):
@@ -333,10 +348,12 @@ class TestDockerServiceProperties:
         restart_delay=st.floats(min_value=0.5, max_value=5.0),
     )
     @settings(max_examples=10, deadline=timedelta(seconds=60))
-    def test_service_restart_resilience(
-        self, docker_client, service_monitor, service_name, restart_delay
-    ):
+    def test_service_restart_resilience(self, service_name, restart_delay):
         """Property: Services must recover from restarts within expected time."""
+        # Create Docker client and monitor inline for Hypothesis compatibility
+        docker_client = get_docker_client()
+        service_monitor = ServiceMonitor(docker_client)
+
         config = SERVICE_CONFIG[service_name]
         container_name = config["container_name"]
 
@@ -386,10 +403,12 @@ class TestDockerServiceProperties:
         partition_duration=st.floats(min_value=0.5, max_value=3.0),
     )
     @settings(max_examples=5, deadline=timedelta(seconds=90))
-    def test_network_partition_tolerance(
-        self, docker_client, service_monitor, services, partition_duration
-    ):
+    def test_network_partition_tolerance(self, services, partition_duration):
         """Property: Services must handle network partitions gracefully."""
+        # Create Docker client and monitor inline for Hypothesis compatibility
+        docker_client = get_docker_client()
+        service_monitor = ServiceMonitor(docker_client)
+
         # Get containers for selected services
         containers = []
         for service_name in services:
@@ -453,10 +472,12 @@ class TestDockerServiceProperties:
         load_factor=st.floats(min_value=1.0, max_value=10.0),
     )
     @settings(max_examples=10, deadline=timedelta(seconds=45))
-    def test_resource_limit_enforcement(
-        self, docker_client, service_monitor, service_name, load_factor
-    ):
+    def test_resource_limit_enforcement(self, service_name, load_factor):
         """Property: Services must respect resource limits under load."""
+        # Create Docker client and monitor inline for Hypothesis compatibility
+        docker_client = get_docker_client()
+        service_monitor = ServiceMonitor(docker_client)
+
         config = SERVICE_CONFIG[service_name]
         container_name = config["container_name"]
 
@@ -505,16 +526,22 @@ class DockerServiceStateMachine(RuleBasedStateMachine):
 
     def __init__(self):
         super().__init__()
-        try:
-            self.docker_client = docker.from_env()
-            self.service_monitor = ServiceMonitor(self.docker_client)
-        except Exception:
-            pytest.skip("Docker not available")
-
+        # Initialize Docker client inline
+        self.docker_client = None
+        self.service_monitor = None
         self.running_services = set()
         self.health_states = {}
         self.network_connected = defaultdict(bool)
-        self._initialize_state()
+
+    def setup(self):
+        """Setup method called before test execution."""
+        try:
+            self.docker_client = docker.from_env()
+            self.docker_client.ping()
+            self.service_monitor = ServiceMonitor(self.docker_client)
+            self._initialize_state()
+        except Exception as e:
+            pytest.skip(f"Docker not available: {e}")
 
     def _initialize_state(self):
         """Initialize state from current Docker environment."""
@@ -542,6 +569,9 @@ class DockerServiceStateMachine(RuleBasedStateMachine):
     @rule(target=services, service=service_names())
     def add_service(self, service):
         """Add a service to track."""
+        # Ensure setup was called
+        if self.docker_client is None:
+            self.setup()
         assume(service in self.running_services)
         return service
 
@@ -637,8 +667,12 @@ class DockerServiceStateMachine(RuleBasedStateMachine):
 # Integration test using property strategies
 @given(failure_scenario=failure_scenarios())
 @settings(max_examples=5, deadline=timedelta(seconds=120))
-def test_failure_recovery_integration(docker_client, service_monitor, failure_scenario):
+def test_failure_recovery_integration(failure_scenario):
     """Integration test: System recovers from various failure scenarios."""
+    # Create Docker client and monitor inline for Hypothesis compatibility
+    docker_client = get_docker_client()
+    service_monitor = ServiceMonitor(docker_client)
+
     scenario_type = failure_scenario["type"]
     duration = failure_scenario["duration"]
     services = failure_scenario["services"]
@@ -739,10 +773,12 @@ def test_failure_recovery_integration(docker_client, service_monitor, failure_sc
     check_interval=st.floats(min_value=0.1, max_value=1.0),
 )
 @settings(max_examples=10, deadline=timedelta(seconds=60))
-def test_concurrent_health_check_performance(
-    docker_client, service_monitor, concurrent_services, check_interval
-):
+def test_concurrent_health_check_performance(concurrent_services, check_interval):
     """Property: Concurrent health checks should not degrade performance."""
+    # Create Docker client and monitor inline for Hypothesis compatibility
+    docker_client = get_docker_client()
+    service_monitor = ServiceMonitor(docker_client)
+
     # Select services with health endpoints
     services_with_health = [
         name for name, config in SERVICE_CONFIG.items() if config.get("health_endpoint")
@@ -755,23 +791,26 @@ def test_concurrent_health_check_performance(
     async def check_all_services():
         tasks = []
         for service in services_with_health:
-            tasks.append(
-                asyncio.create_task(async_health_check(service, service_monitor))
-            )
+            tasks.append(async_health_check(service, service_monitor))
         return await asyncio.gather(*tasks)
 
     async def async_health_check(service, monitor):
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, monitor.check_service_health, service)
 
-    # Run multiple rounds of concurrent checks
-    response_times = []
-    for _ in range(5):
-        start_time = time.time()
-        results = asyncio.run(check_all_services())
-        elapsed = time.time() - start_time
-        response_times.append(elapsed)
-        time.sleep(check_interval)
+    async def run_checks():
+        # Run multiple rounds of concurrent checks
+        response_times = []
+        for _ in range(5):
+            start_time = time.time()
+            results = await check_all_services()
+            elapsed = time.time() - start_time
+            response_times.append(elapsed)
+            await asyncio.sleep(check_interval)
+        return response_times
+
+    # Run async function in new event loop
+    response_times = asyncio.run(run_checks())
 
     # Response times should be consistent (not degrading)
     avg_response_time = sum(response_times) / len(response_times)
@@ -834,6 +873,11 @@ def verify_service_logs_health(
 # Run stateful tests
 def test_docker_service_state_machine():
     """Run the stateful property tests."""
+    # Create a test instance and setup
+    state_machine = DockerServiceStateMachine()
+    state_machine.setup()
+
+    # Run with custom settings
     TestCase = DockerServiceStateMachine.TestCase
     TestCase.settings = settings(
         max_examples=20,
