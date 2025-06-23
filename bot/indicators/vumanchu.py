@@ -2374,35 +2374,34 @@ class VuManChuIndicators:
     def _determine_signal(self, df: pd.DataFrame) -> str:
         """
         Determine trading signal based on calculated indicators.
-        
+
         Args:
             df: DataFrame with calculated indicators
-            
+
         Returns:
             Trading signal: "LONG", "SHORT", or "HOLD"
         """
         if df.empty or len(df) < 1:
             return "HOLD"
-            
+
         try:
             # Get the latest combined signal
             latest = df.iloc[-1]
             combined_signal = latest.get("combined_signal", 0)
             combined_confidence = latest.get("combined_confidence", 0.0)
-            
+
             # Require minimum confidence for a signal
             min_confidence = 0.3
-            
+
             if combined_confidence < min_confidence:
                 return "HOLD"
-                
+
             if combined_signal > 0:
                 return "LONG"
-            elif combined_signal < 0:
+            if combined_signal < 0:
                 return "SHORT"
-            else:
-                return "HOLD"
-                
+            return "HOLD"
+
         except Exception:
             logger.exception("Error determining signal")
             return "HOLD"

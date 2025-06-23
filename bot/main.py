@@ -2699,9 +2699,20 @@ class TradingEngine:
                     "dominance_available": str(dominance_candles is not None),
                 },
             ):
-                df_with_indicators = self.indicator_calc.calculate_all(
+                calc_result = self.indicator_calc.calculate_all(
                     market_data, dominance_candles=dominance_candles
                 )
+                
+                # Handle new dict return format
+                if isinstance(calc_result, dict):
+                    if "error" in calc_result:
+                        self.logger.warning("Indicator calculation error: %s", calc_result["error"])
+                        return self._get_fallback_indicator_state()
+                    df_with_indicators = calc_result.get("indicators", market_data)
+                else:
+                    # Backward compatibility
+                    df_with_indicators = calc_result
+                    
                 indicator_state = self.indicator_calc.get_latest_state(
                     df_with_indicators
                 )

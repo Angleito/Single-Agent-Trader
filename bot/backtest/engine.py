@@ -134,7 +134,17 @@ class BacktestEngine:
             )
 
         # Calculate indicators
-        data_with_indicators = self.indicator_calc.calculate_all(data)
+        calc_result = self.indicator_calc.calculate_all(data)
+        
+        # Handle new dict return format
+        if isinstance(calc_result, dict):
+            if "error" in calc_result:
+                logger.error("Failed to calculate indicators: %s", calc_result["error"])
+                raise ValueError(f"Indicator calculation failed: {calc_result['error']}")
+            data_with_indicators = calc_result.get("indicators", data)
+        else:
+            # Backward compatibility
+            data_with_indicators = calc_result
 
         # Reset state
         self._reset_state()

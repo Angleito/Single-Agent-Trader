@@ -49,23 +49,23 @@ except ImportError:
     # Create a mock aiohttp for type hints
     class MockAiohttp:
         class ClientSession:
-            def __init__(self, *args: Any, **kwargs: Any) -> None:
+            def __init__(self, *args: object, **kwargs: object) -> None:
                 pass
 
             async def __aenter__(self) -> "MockAiohttp.ClientSession":
                 return self
 
-            async def __aexit__(self, *args: Any) -> None:
+            async def __aexit__(self, *args: object) -> None:
                 pass
 
-            def get(self, *_args: Any, **_kwargs: Any) -> "MockResponse":
+            def get(self, *_args: object, **_kwargs: object) -> "MockResponse":
                 return MockResponse()
 
-            def post(self, *_args: Any, **_kwargs: Any) -> "MockResponse":
+            def post(self, *_args: object, **_kwargs: object) -> "MockResponse":
                 return MockResponse()
 
         class ClientTimeout:
-            def __init__(self, *args: Any, **kwargs: Any) -> None:
+            def __init__(self, *args: object, **kwargs: object) -> None:
                 pass
 
     class MockResponse:
@@ -75,7 +75,7 @@ except ImportError:
         async def __aenter__(self) -> "MockResponse":
             return self
 
-        async def __aexit__(self, *args: Any) -> None:
+        async def __aexit__(self, *args: object) -> None:
             pass
 
         async def json(self) -> dict[str, object]:
@@ -169,7 +169,7 @@ class ConfigSummary(TypedDict):
     basic_info: dict[str, str | int | bool]
     security_status: dict[str, bool]
     risk_parameters: dict[str, float]
-    network_config: dict[str, Any]
+    network_config: dict[str, str | bool | dict[str, str] | None]
     warnings: list[str]
     config_hash: str
 
@@ -178,7 +178,7 @@ class BackupConfig(TypedDict):
     """Backup configuration structure."""
 
     metadata: dict[str, str]
-    configuration: dict[str, Any]
+    configuration: dict[str, object]
 
 
 class HealthStatus(TypedDict):
@@ -193,10 +193,10 @@ class HealthStatus(TypedDict):
 class MonitoringData(TypedDict):
     """Monitoring data structure."""
 
-    monitor_info: dict[str, Any]
+    monitor_info: dict[str, str | float | int]
     current_config: ConfigSummary
     health_status: HealthStatus
-    validation_cache: dict[str, Any]
+    validation_cache: dict[str, object]
 
 
 class ConfigValidationError(Exception):
@@ -3213,7 +3213,7 @@ class ConfigurationMonitor:
 
 
 def create_settings(
-    env_file: str | None = None, profile: TradingProfile | None = None, **overrides: Any
+    env_file: str | None = None, profile: TradingProfile | None = None, **overrides: object
 ) -> Settings:
     """Factory function to create settings with optional overrides."""
     # Ensure .env file is loaded
@@ -3243,7 +3243,7 @@ def create_settings(
 settings = create_settings()
 
 
-def get_config_template() -> dict[str, Any]:
+def get_config_template() -> dict[str, object]:
     """Get a configuration template with descriptions."""
     return {
         "trading": {
