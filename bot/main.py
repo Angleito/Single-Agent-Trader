@@ -3516,7 +3516,7 @@ class TradingEngine:
                 self.logger.error("Market data not available for trade execution")
                 return False
             # Both MarketDataProvider and BluefinMarketDataProvider have get_current_price method
-            current_price = await self.market_data.get_current_price()  # type: ignore[union-attr]
+            current_price = await self.market_data.get_current_price()
             if not current_price:
                 self.logger.error("Current price not available for trade execution")
                 return False
@@ -4225,14 +4225,14 @@ class TradingEngine:
                 cancel_task: Task[bool] = asyncio.create_task(
                     self.exchange_client.cancel_all_orders(self.symbol)
                 )
-                cleanup_tasks.append(cancel_task)  # type: ignore[arg-type]
+                cleanup_tasks.append(cancel_task)
 
             # Close market data connection
             if hasattr(self, "market_data") and self.market_data is not None:
                 console.print("  • Disconnecting from market data...")
                 market_task: Task[None] = asyncio.create_task(
                     self.market_data.disconnect()
-                )  # type: ignore[arg-type]
+                )
                 cleanup_tasks.append(market_task)
 
             # Close exchange connection
@@ -4240,7 +4240,7 @@ class TradingEngine:
                 console.print("  • Disconnecting from exchange...")
                 exchange_task: Task[None] = asyncio.create_task(
                     self.exchange_client.disconnect()
-                )  # type: ignore[arg-type]
+                )
                 cleanup_tasks.append(exchange_task)
 
             # Close OmniSearch connection
@@ -4251,7 +4251,7 @@ class TradingEngine:
                 console.print("  • Disconnecting from OmniSearch...")
                 omnisearch_task: Task[None] = asyncio.create_task(
                     self.omnisearch_client.disconnect()
-                )  # type: ignore[arg-type]
+                )
                 cleanup_tasks.append(omnisearch_task)
 
             # Close WebSocket publisher connection
@@ -4285,7 +4285,7 @@ class TradingEngine:
                 console.print("  • Stopping experience tracking...")
                 experience_task: Task[None] = asyncio.create_task(
                     self.experience_manager.stop()
-                )  # type: ignore[arg-type]
+                )
                 cleanup_tasks.append(experience_task)
 
             # Stop market making integrator if enabled
@@ -4296,7 +4296,7 @@ class TradingEngine:
                 console.print("  • Stopping market making engine...")
                 market_making_task: Task[None] = asyncio.create_task(
                     self.market_making_integrator.stop()
-                )  # type: ignore[arg-type]
+                )
                 cleanup_tasks.append(market_making_task)
 
             # Close dominance data connection - CRITICAL for async session cleanup
@@ -4307,7 +4307,7 @@ class TradingEngine:
                 console.print("  • Disconnecting from dominance data...")
                 dominance_task: Task[None] = asyncio.create_task(
                     self.dominance_provider.disconnect()
-                )  # type: ignore[arg-type]
+                )
                 cleanup_tasks.append(dominance_task)
 
             # Stop performance monitoring
