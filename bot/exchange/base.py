@@ -11,7 +11,7 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, Literal, NoReturn, TypedDict, Callable, Optional, Union
+from typing import Any, Literal, NoReturn, TypedDict
 
 from bot.error_handling import (
     ErrorBoundary,
@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 # Type definitions for structured responses
 class BalanceValidationResult(TypedDict):
     """Type definition for balance validation result."""
+
     valid: bool
     balance: Decimal
     operation_type: str
@@ -46,6 +47,7 @@ class BalanceValidationResult(TypedDict):
 
 class MarginValidationResult(TypedDict):
     """Type definition for margin validation result."""
+
     valid: bool
     balance: Decimal
     used_margin: Decimal
@@ -56,6 +58,7 @@ class MarginValidationResult(TypedDict):
 
 class ReconciliationResult(TypedDict):
     """Type definition for balance reconciliation result."""
+
     valid: bool
     calculated_balance: Decimal
     exchange_reported_balance: Decimal
@@ -67,18 +70,20 @@ class ReconciliationResult(TypedDict):
 
 class BalanceStatus(TypedDict):
     """Type definition for balance validation status."""
+
     exchange_name: str
-    last_validated_balance: Optional[float]
+    last_validated_balance: float | None
     validation_enabled: bool
     validation_method: str
 
 
 class ConnectionStatus(TypedDict):
     """Type definition for connection status."""
+
     connected: bool
     environment: str
-    last_health_check: Optional[str]
-    auth_method: Optional[str]
+    last_health_check: str | None
+    auth_method: str | None
 
 
 class ExchangeError(Exception):
@@ -183,7 +188,7 @@ class BalanceValidationError(BalanceRetrievalError):
     def __init__(
         self,
         message: str,
-        invalid_value: Union[str, int, float, Decimal, None] = None,
+        invalid_value: str | int | float | Decimal | None = None,
         validation_rule: str | None = None,
         account_type: str | None = None,
     ):
@@ -991,7 +996,9 @@ class BaseExchange(ABC):
                 # Return empty list as safe default
                 return []
 
-    def get_error_boundary_status(self) -> dict[str, str | bool | int | dict[str, Any] | None]:
+    def get_error_boundary_status(
+        self,
+    ) -> dict[str, str | bool | int | None | dict[str, str | int | float | None]]:
         """Get error boundary status and health information."""
         return {
             "exchange_name": self.exchange_name,

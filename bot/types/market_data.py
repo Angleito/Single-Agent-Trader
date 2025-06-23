@@ -428,7 +428,8 @@ class MarketDepth(BaseModel):
             volume for price, volume in self.ask_depth if price <= max_ask_price
         )
 
-        return bid_liquidity, ask_liquidity
+        # Ensure we return Decimal types
+        return Decimal(bid_liquidity), Decimal(ask_liquidity)
 
 
 class MarketDataStatus(BaseModel):
@@ -492,12 +493,13 @@ class MarketDataStatus(BaseModel):
 
     def is_healthy(self) -> bool:
         """Check if market data connection is healthy."""
+        success_rate = self.get_success_rate()
         return (
             self.connection_state == ConnectionState.CONNECTED
             and self.data_quality
             in [MarketDataQuality.EXCELLENT, MarketDataQuality.GOOD]
-            and self.get_success_rate() is not None
-            and self.get_success_rate() > 95.0
+            and success_rate is not None
+            and success_rate > 95.0
         )
 
     def get_staleness_seconds(self) -> float | None:
@@ -601,7 +603,7 @@ class AggregatedMarketData(BaseModel):
         # Calculate standard deviation
         mean_return = sum(returns) / len(returns)
         variance = sum((r - mean_return) ** 2 for r in returns) / len(returns)
-        return variance**0.5
+        return float(variance**0.5)
 
 
 # Type guards for runtime type checking
@@ -609,7 +611,11 @@ def is_valid_price(value: Any) -> bool:
     """Check if value is a valid price."""
     try:
         price = Decimal(str(value))
-        return price > 0 and price.as_tuple().exponent >= -8
+        exponent = price.as_tuple().exponent
+        # Check for special values (infinity, NaN)
+        if isinstance(exponent, str):
+            return False
+        return price > 0 and exponent >= -8
     except:
         return False
 

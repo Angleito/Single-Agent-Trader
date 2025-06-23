@@ -698,13 +698,13 @@ class TradingEngine:
         allowing graceful degradation when performance monitoring is unavailable.
         """
 
-        def __init__(self):
+        def __init__(self) -> None:
             pass
 
         @contextmanager
         def track_operation(
             self, _operation_name: str, _tags: dict[str, str] | None = None
-        ):
+        ) -> Any:
             """
             No-op context manager for tracking operations.
 
@@ -718,10 +718,10 @@ class TradingEngine:
             # No-op context manager - just yield control back
             yield
 
-        def add_alert_callback(self, callback):
+        def add_alert_callback(self, callback: Any) -> None:
             """No-op alert callback registration."""
 
-        def get_performance_summary(self, _duration=None):
+        def get_performance_summary(self, _duration: Any = None) -> dict[str, Any]:
             """Return empty performance summary."""
             return {
                 "timestamp": datetime.now(UTC),
@@ -734,10 +734,10 @@ class TradingEngine:
                 "monitoring_available": False,
             }
 
-        async def start_monitoring(self, resource_monitor_interval: float = 5.0):
+        async def start_monitoring(self, resource_monitor_interval: float = 5.0) -> None:
             """No-op start monitoring."""
 
-        async def stop_monitoring(self):
+        async def stop_monitoring(self) -> None:
             """No-op stop monitoring."""
 
     def _initialize_performance_monitoring(self) -> None:

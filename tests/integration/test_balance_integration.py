@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import AsyncMock, Mock, patch
 
+import pandas as pd
 import pytest
 
 from bot.main import TradingEngine
@@ -136,7 +137,7 @@ class TestBalanceIntegration:
             mock_exchange.is_connected = Mock(return_value=True)
             mock_exchange._get_account_balance = AsyncMock(return_value=Decimal(10000))
             mock_exchange_factory.return_value = mock_exchange
-            
+
             # Override the paper account data directory
             engine = TradingEngine(symbol="BTC-USD", interval="1m", dry_run=True)
             await engine._initialize_components()
@@ -584,8 +585,6 @@ class TestBalanceIntegration:
 
     def _create_mock_dataframe(self, market_data):
         """Convert market data to DataFrame for testing."""
-        import pandas as pd
-
         data = []
         for candle in market_data:
             data.append(
