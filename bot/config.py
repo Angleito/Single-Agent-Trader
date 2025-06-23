@@ -252,10 +252,20 @@ class ConfigurationValidator:
             warnings=self.warnings,
             is_valid=len(self.errors) == 0,
         )
-        results["summary"] = summary
+        # Cast to the expected return type
+        full_results = FullValidationResults(
+            environment=results["environment"],
+            network_connectivity=results["network_connectivity"],
+            exchange_config=results["exchange_config"],
+            security=results["security"],
+            trading_parameters=results["trading_parameters"],
+            llm_config=results["llm_config"],
+            sui_network=results.get("sui_network"),
+            summary=summary,
+        )
 
-        self.validation_results = results
-        return results  # type: ignore[return-value]
+        self.validation_results = full_results
+        return full_results
 
     async def _validate_environment(self) -> ValidationResultWithChecks:
         """Validate environment configuration consistency."""
@@ -471,16 +481,28 @@ class ConfigurationValidator:
         # Test LLM API connectivity if key is provided
         if self.settings.llm.openai_api_key:
             api_test = await self._test_openai_api_connectivity()
-            results["checks"].append(api_test)
+            results["checks"].append(
+                ValidationCheck(
+                    name=api_test["name"],
+                    status=api_test["status"],
+                    message=api_test["message"],
+                )
+            )
             if api_test["status"] == "error":
-                results["status"] = "fail"
+                results["status"] = "error"
 
         # Validate temperature setting for trading
         if self.settings.llm.temperature > 0.3:
             self.warnings.append(
                 f"High LLM temperature ({self.settings.llm.temperature}) may cause inconsistent decisions"
             )
-            results["checks"].append({"name": "high_temperature", "status": "warning"})
+            results["checks"].append(
+                ValidationCheck(
+                    name="high_temperature",
+                    status="warning",
+                    message=f"High LLM temperature ({self.settings.llm.temperature}) may cause inconsistent decisions",
+                )
+            )
 
         return results
 
@@ -490,15 +512,27 @@ class ConfigurationValidator:
 
         # Test Sui RPC connectivity
         rpc_test = await self._test_sui_rpc_connectivity()
-        results["checks"].append(rpc_test)
         if rpc_test["status"] == "error":
-            results["status"] = "fail"
+            results["status"] = "error"
+        results["checks"].append(
+            ValidationCheck(
+                name=rpc_test["name"],
+                status=rpc_test["status"],
+                message=rpc_test["message"],
+            )
+        )
 
         # Test Bluefin API endpoints
         bluefin_api_test = await self._test_bluefin_api_connectivity()
-        results["checks"].append(bluefin_api_test)
         if bluefin_api_test["status"] == "error":
-            results["status"] = "fail"
+            results["status"] = "error"
+        results["checks"].append(
+            ValidationCheck(
+                name=bluefin_api_test["name"],
+                status=bluefin_api_test["status"],
+                message=bluefin_api_test["message"],
+            )
+        )
 
         return results
 
@@ -616,7 +650,7 @@ class ConfigurationValidator:
                 "message": f"Service unreachable: {e!s}",
             }
 
-    def _validate_bluefin_private_key_format(self) -> dict[str, Any]:
+    def _validate_bluefin_private_key_format(self) -> ValidationResult:
         """Comprehensively validate Bluefin private key format."""
         if not self.settings.exchange.bluefin_private_key:
             self.errors.append("Bluefin private key is required")
@@ -795,15 +829,15 @@ class ConfigurationValidator:
                 session.post(rpc_url, json=payload) as response,
             ):
                 if response.status == 200:
-                    data = await response.json()
-                    if "result" in data:
+                    data = await response.json()  # type: ignore[misc]
+                    if "result" in data:  # type: ignore[operator]
                         return {
                             "name": "sui_rpc",
                             "status": "pass",
                             "message": f"Sui RPC accessible ({network})",
                         }
                     self.warnings.append(
-                        f"Sui RPC returned unexpected response: {data}"
+                        f"Sui RPC returned unexpected response: {data}"  # type: ignore[str-format]
                     )
                     return {
                         "name": "sui_rpc",
@@ -1283,7 +1317,7 @@ class LLMSettings(BaseModel):
 
     @field_validator("model_name")
     @classmethod
-    def validate_model_name(cls, v: str, info: Any) -> str:
+    def validate_model_name(cls, v: str, info: object) -> str:
         """Validate model name based on provider."""
         provider = info.data.get("provider", "openai")
 
@@ -3241,7 +3275,7 @@ class ConfigurationMonitor:
 def create_settings(
     env_file: str | None = None,
     profile: TradingProfile | None = None,
-    **overrides: object,
+    **overrides: dict[str, object],
 ) -> Settings:
     """Factory function to create settings with optional overrides."""
     # Ensure .env file is loaded
@@ -3258,7 +3292,11 @@ def create_settings(
         os.environ.setdefault("ENV_FILE", env_file)
 
     # Create base settings
-    settings = Settings(**overrides)
+    # Type-safe settings creation
+    settings_kwargs: dict[str, object] = {}
+    if overrides:
+        settings_kwargs.update(overrides)
+    settings = Settings(**settings_kwargs)  # type: ignore[arg-type]
 
     # Apply profile if specified
     if profile:

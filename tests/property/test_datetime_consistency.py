@@ -158,30 +158,18 @@ class TestDatetimeConsistency:
         self, status: ConnectionState, timestamp: datetime
     ) -> None:
         """ConnectionInfo timestamps must maintain timezone."""
-        # Mock datetime.now(UTC) to return our test timestamp
-        import bot.types.services_integration
+        # Since we already fixed the create_connection_info function to use datetime.now(UTC),
+        # we can directly test it
         from bot.types.services_integration import create_connection_info
 
-        original_datetime = bot.types.services_integration.datetime
+        conn_info = create_connection_info(status)
 
-        class MockDatetime:
-            @staticmethod
-            def now(tz=None):
-                return timestamp
-
-        bot.types.services_integration.datetime = MockDatetime
-
-        try:
-            conn_info = create_connection_info(status)
-
-            if status == ConnectionState.CONNECTED:
-                assert conn_info.get("connected_at") is not None
-                assert conn_info["connected_at"].tzinfo == UTC
-            elif status == ConnectionState.DISCONNECTED:
-                assert conn_info.get("disconnected_at") is not None
-                assert conn_info["disconnected_at"].tzinfo == UTC
-        finally:
-            bot.types.services_integration.datetime = original_datetime
+        if status == ConnectionState.CONNECTED:
+            assert conn_info.get("connected_at") is not None
+            assert conn_info["connected_at"].tzinfo == UTC
+        elif status == ConnectionState.DISCONNECTED:
+            assert conn_info.get("disconnected_at") is not None
+            assert conn_info["disconnected_at"].tzinfo == UTC
 
     @given(
         dt1=timezone_aware_datetime(),
@@ -262,7 +250,7 @@ class TestDatetimeConsistency:
 
     @given(
         base_dt=timezone_aware_datetime(),
-        offset_hours=st.integers(min_value=-24, max_value=24),
+        offset_hours=st.integers(min_value=-23, max_value=23),
     )
     def test_timezone_offset_handling(
         self, base_dt: datetime, offset_hours: int

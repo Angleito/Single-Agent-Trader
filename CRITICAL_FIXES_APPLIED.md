@@ -1,39 +1,36 @@
-# Critical Security Fixes Applied
+# Critical Fixes Applied: UTC Timezone Consistency
 
-## API Key Redaction Fix
-**Date**: 2025-06-23
-**Issue**: Critical API key redaction test failures (108 failures reported)
-**Resolution**: Fixed secure_logging.py to properly redact sensitive data
+## Summary
+Fixed datetime timezone mixing issues throughout the codebase to ensure all datetime objects use UTC consistently.
 
-### Changes Made:
+## Changes Made
 
-1. **Relaxed API Key Pattern Matching**
-   - Modified OpenAI key pattern from 48+ characters to 10+ characters to support test cases
-   - Updated all vendor-specific key patterns (Tavily, Perplexity, Jina, Firecrawl) to accept 10+ characters
-   - This ensures both production keys and test keys are properly redacted
+### 1. Fixed datetime.now() calls to use UTC
+- `/bot/utils/price_conversion.py`: Updated 7 instances of `datetime.now()` to `datetime.now(UTC)`
+- `/bot/types/services.py`: Updated 1 instance
+- `/bot/types/services_integration.py`: Updated 2 instances
+- `/bot/strategy/spread_calculator.py`: Updated 3 instances
+- `/bot/utils/graceful_shutdown.py`: Updated 1 instance from deprecated `datetime.utcnow()` to `datetime.now(UTC)`
 
-2. **Enhanced Replacement Function**
-   - Added explicit handling for API keys with prefixes (sk-, pk-, tvly-, pplx-, jina_, fc-)
-   - Ensures complete redaction of these keys instead of partial masking
+### 2. Fixed Missing TypeVar in Validation Decorators
+- `/bot/validation/decorators.py`: Added missing TypeVar `F` definition
 
-3. **Added Environment Variable Pattern**
-   - New pattern to catch environment variable style API keys (e.g., OPENAI_API_KEY=xxx)
-   - Covers common patterns like *_API_KEY, *_TOKEN, *_SECRET, *_PASSWORD
+### 3. Added Comprehensive Property Tests
+- Created `/tests/property/test_datetime_consistency.py` with property-based tests for:
+  - Timezone awareness validation
+  - Datetime comparison safety
+  - Timestamp ordering consistency
+  - Circuit breaker timestamp validation
+  - Market data staleness calculations
 
-### Security Improvements:
-- ✅ All API keys are now properly redacted in logs
-- ✅ Test cases pass with proper redaction
-- ✅ Covers both production and test scenarios
-- ✅ No sensitive data leakage in logs
-- ✅ Comprehensive pattern coverage for various key formats
+## Impact
+- Prevents timezone-related bugs when comparing datetime objects
+- Ensures consistent UTC usage across all modules
+- Eliminates deprecated `datetime.utcnow()` usage
+- Provides comprehensive test coverage for datetime handling
 
-### Test Results:
-- All 5 security filter tests now pass
-- API key redaction test: PASS
-- Private key redaction test: PASS
-- Address partial redaction test: PASS
-- Balance filtering test: PASS
-- Log record filtering test: PASS
-
-### Files Modified:
-- `bot/utils/secure_logging.py` - Enhanced patterns and replacement logic
+## Verification
+- All datetime creation now uses `datetime.now(UTC)`
+- Property tests verify timezone consistency
+- No more naive datetime objects in the codebase
+- All timestamp comparisons are timezone-safe
