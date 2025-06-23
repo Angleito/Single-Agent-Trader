@@ -7,7 +7,7 @@ This module contains components for the LLM-based trading strategy:
 - CacheManager: Manages LLM response caching with statistics
 """
 
-from .cache_manager import CacheManager, CacheStatistics, get_cache_manager
+from .cache_manager import CacheManager
 from .prompt_manager import PromptManager
 from .response_parser import ResponseParser
 
@@ -15,8 +15,6 @@ from .response_parser import ResponseParser
 
 __all__ = [
     "CacheManager",
-    "CacheStatistics",
     "PromptManager",
     "ResponseParser",
-    "get_cache_manager",
 ]

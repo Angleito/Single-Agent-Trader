@@ -329,9 +329,7 @@ class BluefinServiceClient:
                 times = self.balance_performance_metrics["balance_response_times"]
                 self.balance_performance_metrics["average_balance_response_time"] = sum(  # type: ignore[index]
                     times
-                ) / len(
-                    times
-                )  # type: ignore[arg-type]
+                ) / len(times)  # type: ignore[arg-type]
         else:
             self.balance_performance_metrics["failed_balance_requests"] += 1
 
@@ -2750,9 +2748,9 @@ class BluefinServiceClient:
         }
 
         # Run all connectivity tests
-        test_results["tests"]["basic_connectivity"] = (
-            await self._run_basic_connectivity_test(test_start)
-        )
+        test_results["tests"][
+            "basic_connectivity"
+        ] = await self._run_basic_connectivity_test(test_start)
         test_results["tests"][
             "detailed_health"
         ] = await self._run_detailed_health_test()

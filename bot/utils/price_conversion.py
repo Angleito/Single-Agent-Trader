@@ -715,9 +715,9 @@ def _record_conversion_failure(circuit_key: str) -> None:
         _CIRCUIT_BREAKER_STATE["consecutive_failures"][circuit_key] = 0
 
     _CIRCUIT_BREAKER_STATE["consecutive_failures"][circuit_key] += 1
-    _CIRCUIT_BREAKER_STATE["failure_timestamps"][
-        circuit_key
-    ] = datetime.now().timestamp()
+    _CIRCUIT_BREAKER_STATE["failure_timestamps"][circuit_key] = (
+        datetime.now().timestamp()
+    )
 
     logger.debug(
         "Recorded conversion failure for %s (count: %d)",

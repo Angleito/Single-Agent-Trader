@@ -75,15 +75,23 @@ class SensitiveDataFilter(logging.Filter):
         if hasattr(record, "args") and record.args:
             if isinstance(record.args, dict):
                 record.args = {
-                    k: self._redact_sensitive_data(str(v))
-                    for k, v in record.args.items()
+                    k: self._redact_if_string(v) for k, v in record.args.items()
                 }
             elif isinstance(record.args, list | tuple):
                 record.args = type(record.args)(
-                    self._redact_sensitive_data(str(arg)) for arg in record.args
+                    self._redact_if_string(arg) for arg in record.args
                 )
 
         return True
+
+    def _redact_if_string(self, value: Any) -> Any:
+        """
+        Redact sensitive data only if the value is a string.
+        Preserves numeric types and other non-string values.
+        """
+        if isinstance(value, str):
+            return self._redact_sensitive_data(value)
+        return value
 
     def _redact_sensitive_data(self, text: str) -> str:
         """
@@ -368,7 +376,9 @@ def get_balance_operation_context(
             else (
                 "normal"
                 if duration_ms < 1000
-                else "slow" if duration_ms < 5000 else "very_slow"
+                else "slow"
+                if duration_ms < 5000
+                else "very_slow"
             )
         )
 

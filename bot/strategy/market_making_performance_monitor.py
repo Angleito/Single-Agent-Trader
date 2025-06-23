@@ -171,9 +171,9 @@ class MarketMakingPerformanceMonitor:
 
         # Trade tracking
         self.completed_trades: deque[TradePnL] = deque(maxlen=max_history_size)
-        self.active_positions: dict[str, dict[str, Any]] = (
-            {}
-        )  # order_id -> position data
+        self.active_positions: dict[
+            str, dict[str, Any]
+        ] = {}  # order_id -> position data
         self.trade_counter = 0
 
         # Order tracking

@@ -2,7 +2,7 @@
 
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Any, Protocol, TypeVar
+from typing import Any, Protocol, TypeVar, cast
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,9 @@ class CacheManager:
         Args:
             cache: Optional cache instance. If not provided, uses SimpleCacheAdapter.
         """
-        self._cache: CacheProtocol = cache if cache is not None else SimpleCacheAdapter()
+        self._cache: CacheProtocol = (
+            cache if cache is not None else SimpleCacheAdapter()
+        )
         self._hits = 0
         self._misses = 0
 
@@ -82,12 +84,12 @@ class CacheManager:
             cached_value = await self._cache.get(key)
             if cached_value is not None:
                 self._hits += 1
-                logger.debug(f"Cache hit for key: {key}")
-                return cached_value
+                logger.debug("Cache hit for key: %s", key)
+                return cast("T", cached_value)
 
             # Cache miss - compute value
             self._misses += 1
-            logger.debug(f"Cache miss for key: {key}")
+            logger.debug("Cache miss for key: %s", key)
 
             # Call compute function with kwargs if provided
             if kwargs:
@@ -98,14 +100,14 @@ class CacheManager:
             # Store in cache
             await self._cache.set(key, value)
 
-            return value
-
-        except Exception as e:
-            logger.error(f"Error in cache get_or_compute: {e}")
+        except Exception:
+            logger.exception("Error in cache get_or_compute")
             # Fallback to compute function on cache error
             if kwargs:
                 return await compute_fn(**kwargs)
             return await compute_fn()
+        else:
+            return value
 
     def get_cache_stats(self) -> dict[str, int | float]:
         """
@@ -123,9 +125,9 @@ class CacheManager:
             if hasattr(self._cache, "size"):
                 cache_size = self._cache.size()
             elif hasattr(self._cache, "__len__"):
-                cache_size = len(self._cache)
+                cache_size = len(self._cache)  # type: ignore[arg-type]
         except Exception as e:
-            logger.debug(f"Could not get cache size: {e}")
+            logger.debug("Could not get cache size: %s", e)
 
         return {
             "hits": self._hits,
@@ -138,16 +140,12 @@ class CacheManager:
     async def clear_cache(self) -> None:
         """Clear the cache and reset statistics."""
         try:
-            if hasattr(self._cache, "clear"):
-                await self._cache.clear()
-            else:
-                # Fallback for caches without clear method
-                logger.warning("Cache does not support clear operation")
+            await self._cache.clear()
 
             # Reset statistics
             self._hits = 0
             self._misses = 0
 
             logger.info("Cache cleared and statistics reset")
-        except Exception as e:
-            logger.error(f"Error clearing cache: {e}")
+        except Exception:
+            logger.exception("Error clearing cache")

@@ -1064,7 +1064,9 @@ class CipherA:
                 "strength": (
                     "STRONG"
                     if confidence >= 50
-                    else "MODERATE" if confidence >= 25 else "WEAK"
+                    else "MODERATE"
+                    if confidence >= 25
+                    else "WEAK"
                 ),
                 "value": signal,
             },
@@ -1991,7 +1993,9 @@ class CipherB:
                 "strength": (
                     "STRONG"
                     if confidence >= 50
-                    else "MODERATE" if confidence >= 25 else "WEAK"
+                    else "MODERATE"
+                    if confidence >= 25
+                    else "WEAK"
                 ),
                 "value": signal,
             },
