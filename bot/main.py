@@ -318,7 +318,9 @@ class TradingEngine:
         self._initialize_trading_infrastructure()
         self._initialize_performance_monitoring()
 
-    def _initialize_basic_setup(self, config_file: str | None, dry_run: bool | None) -> None:
+    def _initialize_basic_setup(
+        self, config_file: str | None, dry_run: bool | None
+    ) -> None:
         """Initialize basic configuration and setup."""
         # Initialize adaptive timing attributes
         self._adaptive_timing_info: dict[str, Any] | None = None
@@ -734,7 +736,9 @@ class TradingEngine:
                 "monitoring_available": False,
             }
 
-        async def start_monitoring(self, resource_monitor_interval: float = 5.0) -> None:
+        async def start_monitoring(
+            self, resource_monitor_interval: float = 5.0
+        ) -> None:
             """No-op start monitoring."""
 
         async def stop_monitoring(self) -> None:
@@ -2683,7 +2687,9 @@ class TradingEngine:
 
         return None
 
-    async def _compute_indicators(self, market_data: list[Any], dominance_candles: Any) -> dict[str, Any]:
+    async def _compute_indicators(
+        self, market_data: list[Any], dominance_candles: Any
+    ) -> dict[str, Any]:
         """Compute technical indicators with error handling."""
         try:
             with self.performance_monitor.track_operation(
@@ -2800,6 +2806,7 @@ class TradingEngine:
 
                 # Convert DominanceData to StablecoinDominance for MarketState compatibility
                 from .trading_types import StablecoinDominance
+
                 dominance_obj = StablecoinDominance(
                     timestamp=dominance_data.timestamp,
                     stablecoin_dominance=dominance_data.stablecoin_dominance or 0.0,
