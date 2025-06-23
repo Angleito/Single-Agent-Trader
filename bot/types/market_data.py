@@ -138,11 +138,10 @@ class CandleData(BaseModel):
             )
 
         # Validate VWAP if provided
-        if self.vwap is not None:
-            if self.vwap > self.high or self.vwap < self.low:
-                raise ValueError(
-                    f"VWAP {self.vwap} must be between Low {self.low} and High {self.high}"
-                )
+        if self.vwap is not None and (self.vwap > self.high or self.vwap < self.low):
+            raise ValueError(
+                f"VWAP {self.vwap} must be between Low {self.low} and High {self.high}"
+            )
 
         return self
 
@@ -150,12 +149,8 @@ class CandleData(BaseModel):
     @classmethod
     def validate_price_precision(cls, v: Decimal | None) -> Decimal | None:
         """Validate price precision (max 8 decimal places)."""
-        if v is not None:
-            # Check for excessive decimal places
-            if v.as_tuple().exponent < -8:
-                raise ValueError(
-                    f"Price {v} has too many decimal places (max 8 allowed)"
-                )
+        if v is not None and v.as_tuple().exponent < -8:
+            raise ValueError(f"Price {v} has too many decimal places (max 8 allowed)")
         return v
 
     def get_price_range(self) -> Decimal:
@@ -215,11 +210,10 @@ class TickerData(BaseModel):
     @model_validator(mode="after")
     def validate_bid_ask_spread(self) -> "TickerData":
         """Validate bid/ask relationship."""
-        if self.bid is not None and self.ask is not None:
-            if self.bid >= self.ask:
-                raise ValueError(
-                    f"Bid price {self.bid} must be less than ask price {self.ask}"
-                )
+        if self.bid is not None and self.ask is not None and self.bid >= self.ask:
+            raise ValueError(
+                f"Bid price {self.bid} must be less than ask price {self.ask}"
+            )
         return self
 
     @model_validator(mode="after")
@@ -616,7 +610,7 @@ def is_valid_price(value: Any) -> bool:
         if isinstance(exponent, str):
             return False
         return price > 0 and exponent >= -8
-    except:
+    except Exception:
         return False
 
 
@@ -624,16 +618,17 @@ def is_valid_volume(value: Any) -> bool:
     """Check if value is a valid volume."""
     try:
         volume = Decimal(str(value))
-        return volume >= 0
-    except:
+    except Exception:
         return False
+    else:
+        return volume >= 0
 
 
 def is_valid_timestamp(value: Any) -> bool:
     """Check if value is a valid timestamp."""
     if isinstance(value, datetime):
         return value.tzinfo is not None
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return value > 0
     return False
 
