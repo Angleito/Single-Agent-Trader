@@ -7,6 +7,9 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any, Literal
 
+# Import proper types to replace Any
+from bot.types.base_types import DominanceCandleData
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
@@ -142,9 +145,7 @@ class IndicatorData(BaseModel):
     market_sentiment: str | None = None  # BULLISH/BEARISH/NEUTRAL based on dominance
 
     # Dominance candlestick data for trend analysis
-    dominance_candles: list[Any] | None = (
-        None  # Will be list[DominanceCandleData] at runtime
-    )
+    dominance_candles: list[DominanceCandleData] | None = None
 
     model_config = ConfigDict(use_enum_values=True)
 

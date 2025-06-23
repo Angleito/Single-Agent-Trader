@@ -153,21 +153,22 @@ class LLMPerformanceMonitor:
         """
         if metric.error_occurred:
             logger.error(
-                "🚨 LLM Error: Request failed after %.1fms", metric.response_time_ms
+                "🚨 LLM Error: Request failed after %.1fms",
+                float(metric.response_time_ms),
             )
             return
 
         if metric.response_time_ms >= self.critical_response_threshold_ms:
             logger.error(
                 "🚨 CRITICAL SLOW: %.1fms (threshold: %sms) Cache: %s",
-                metric.response_time_ms,
+                float(metric.response_time_ms),
                 self.critical_response_threshold_ms,
                 "HIT" if metric.cache_hit else "MISS",
             )
         elif metric.response_time_ms >= self.slow_response_threshold_ms:
             logger.warning(
                 "⚠️ SLOW RESPONSE: %.1fms (threshold: %sms) Cache: %s",
-                metric.response_time_ms,
+                float(metric.response_time_ms),
                 self.slow_response_threshold_ms,
                 "HIT" if metric.cache_hit else "MISS",
             )
@@ -177,7 +178,7 @@ class LLMPerformanceMonitor:
         ):
             logger.info(
                 "⚡ FAST: %.1fms (target: %sms) FRESH",
-                metric.response_time_ms,
+                float(metric.response_time_ms),
                 self.target_response_time_ms,
             )
 

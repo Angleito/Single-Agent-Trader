@@ -2019,7 +2019,8 @@ class PaperTradingAccount:
                     )
 
                 logger.info(
-                    "Loaded paper trading account: $%.2f balance", self.current_balance
+                    "Loaded paper trading account: $%.2f balance",
+                    float(self.current_balance),
                 )
 
             # Load trades
