@@ -39,12 +39,12 @@ Example usage:
         protocol="http",
         health_endpoint="/health"
     )
-    
+
     # Validate endpoint at runtime
     if is_valid_endpoint(endpoint):
         # Create service with validated endpoint
         service = MyDockerService("my-service", endpoint, required=True)
-    
+
     # Check service health
     health = await service.async_health_check()
     if is_healthy_service(health):
@@ -52,24 +52,19 @@ Example usage:
     ```
 """
 
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from enum import Enum
 from typing import (
     Any,
-    Awaitable,
-    Callable,
-    Dict,
-    List,
     Literal,
-    Optional,
+    NotRequired,
     Protocol,
     TypedDict,
     TypeGuard,
     Union,
     runtime_checkable,
 )
-
-from typing_extensions import NotRequired
 
 
 # Service Status Types
@@ -87,12 +82,14 @@ class ServiceStatus(Enum):
 class ServiceHealth(TypedDict):
     """Type-safe service health status."""
 
-    status: Literal["healthy", "unhealthy", "unknown", "starting", "stopping", "degraded"]
+    status: Literal[
+        "healthy", "unhealthy", "unknown", "starting", "stopping", "degraded"
+    ]
     last_check: float  # Unix timestamp
-    error: NotRequired[Optional[str]]
-    response_time_ms: NotRequired[Optional[float]]
+    error: NotRequired[str | None]
+    response_time_ms: NotRequired[float | None]
     consecutive_failures: NotRequired[int]
-    metadata: NotRequired[Dict[str, Any]]
+    metadata: NotRequired[dict[str, Any]]
 
 
 class ServiceEndpoint(TypedDict):
@@ -101,11 +98,11 @@ class ServiceEndpoint(TypedDict):
     host: str
     port: int
     protocol: Literal["http", "https", "ws", "wss", "tcp", "grpc"]
-    health_endpoint: Optional[str]
+    health_endpoint: str | None
     base_path: NotRequired[str]
     timeout_seconds: NotRequired[float]
-    headers: NotRequired[Dict[str, str]]
-    auth: NotRequired[Dict[str, Any]]
+    headers: NotRequired[dict[str, str]]
+    auth: NotRequired[dict[str, Any]]
 
 
 # Connection State Types
@@ -124,11 +121,11 @@ class ConnectionInfo(TypedDict):
     """Connection information."""
 
     state: ConnectionState
-    connected_at: NotRequired[Optional[datetime]]
-    disconnected_at: NotRequired[Optional[datetime]]
+    connected_at: NotRequired[datetime | None]
+    disconnected_at: NotRequired[datetime | None]
     reconnect_attempts: NotRequired[int]
-    last_error: NotRequired[Optional[str]]
-    latency_ms: NotRequired[Optional[float]]
+    last_error: NotRequired[str | None]
+    latency_ms: NotRequired[float | None]
 
 
 # Service Configuration Types
@@ -142,8 +139,8 @@ class ServiceConfig(TypedDict):
     startup_delay: NotRequired[float]
     max_wait: NotRequired[float]
     retry_config: NotRequired["RetryConfig"]
-    dependencies: NotRequired[List[str]]
-    environment: NotRequired[Dict[str, str]]
+    dependencies: NotRequired[list[str]]
+    environment: NotRequired[dict[str, str]]
 
 
 class RetryConfig(TypedDict):
@@ -166,16 +163,16 @@ class ServiceRegistration(TypedDict):
     health: ServiceHealth
     registered_at: datetime
     updated_at: datetime
-    tags: NotRequired[List[str]]
-    metadata: NotRequired[Dict[str, Any]]
+    tags: NotRequired[list[str]]
+    metadata: NotRequired[dict[str, Any]]
 
 
 class ServiceRegistry(TypedDict):
     """Service registry state."""
 
-    services: Dict[str, ServiceRegistration]
+    services: dict[str, ServiceRegistration]
     discovery_enabled: bool
-    last_discovery: Optional[datetime]
+    last_discovery: datetime | None
     discovery_interval_seconds: float
 
 
@@ -221,15 +218,15 @@ class ServiceManager(Protocol):
         """Unregister a service."""
         ...
 
-    def get_service(self, service_name: str) -> Optional[DockerService]:
+    def get_service(self, service_name: str) -> DockerService | None:
         """Get a registered service."""
         ...
 
-    def get_healthy_services(self) -> List[DockerService]:
+    def get_healthy_services(self) -> list[DockerService]:
         """Get all healthy services."""
         ...
 
-    async def health_check_all(self) -> Dict[str, ServiceHealth]:
+    async def health_check_all(self) -> dict[str, ServiceHealth]:
         """Check health of all services."""
         ...
 
@@ -254,8 +251,8 @@ class ServiceError(Exception):
     def __init__(
         self,
         message: str,
-        service_name: Optional[str] = None,
-        error_code: Optional[str] = None,
+        service_name: str | None = None,
+        error_code: str | None = None,
         **kwargs: Any,
     ):
         super().__init__(message)
@@ -267,37 +264,25 @@ class ServiceError(Exception):
 class ServiceConnectionError(ServiceError):
     """Service connection failed."""
 
-    pass
-
 
 class ServiceHealthCheckError(ServiceError):
     """Service health check failed."""
-
-    pass
 
 
 class ServiceTimeoutError(ServiceError):
     """Service operation timed out."""
 
-    pass
-
 
 class ServiceNotFoundError(ServiceError):
     """Service not found in registry."""
-
-    pass
 
 
 class ServiceStartupError(ServiceError):
     """Service failed to start."""
 
-    pass
-
 
 class ServiceDependencyError(ServiceError):
     """Service dependency not met."""
-
-    pass
 
 
 # Type Guards
@@ -329,12 +314,15 @@ def is_valid_endpoint(value: Any) -> TypeGuard[ServiceEndpoint]:
     if value["protocol"] not in valid_protocols:
         return False
 
-    if value["health_endpoint"] is not None and not isinstance(value["health_endpoint"], str):
+    if value["health_endpoint"] is not None and not isinstance(
+        value["health_endpoint"], str
+    ):
         return False
 
     # Validate optional fields if present
     if "timeout_seconds" in value and (
-        not isinstance(value["timeout_seconds"], (int, float)) or value["timeout_seconds"] <= 0
+        not isinstance(value["timeout_seconds"], (int, float))
+        or value["timeout_seconds"] <= 0
     ):
         return False
 
@@ -422,7 +410,10 @@ def validate_service_config(config: Any) -> ServiceConfig:
 
     # Validate optional fields
     if "startup_delay" in config:
-        if not isinstance(config["startup_delay"], (int, float)) or config["startup_delay"] < 0:
+        if (
+            not isinstance(config["startup_delay"], (int, float))
+            or config["startup_delay"] < 0
+        ):
             raise ValueError("Startup delay must be a non-negative number")
 
     if "max_wait" in config:
@@ -441,8 +432,8 @@ def validate_service_config(config: Any) -> ServiceConfig:
 # Utility Functions
 def create_health_status(
     status: ServiceStatus,
-    error: Optional[str] = None,
-    response_time_ms: Optional[float] = None,
+    error: str | None = None,
+    response_time_ms: float | None = None,
     **metadata: Any,
 ) -> ServiceHealth:
     """
@@ -478,7 +469,7 @@ def create_endpoint(
     host: str,
     port: int,
     protocol: Literal["http", "https", "ws", "wss", "tcp", "grpc"] = "http",
-    health_endpoint: Optional[str] = "/health",
+    health_endpoint: str | None = "/health",
     **kwargs: Any,
 ) -> ServiceEndpoint:
     """
@@ -512,7 +503,9 @@ def create_endpoint(
 # Async Type Aliases
 AsyncHealthCheck = Callable[[], Awaitable[ServiceHealth]]
 AsyncServiceValidator = Callable[[DockerService], Awaitable[bool]]
-ServiceCallback = Union[Callable[[DockerService], None], Callable[[DockerService], Awaitable[None]]]
+ServiceCallback = Union[
+    Callable[[DockerService], None], Callable[[DockerService], Awaitable[None]]
+]
 
 
 # Service Discovery Types
@@ -534,5 +527,5 @@ class DiscoveredService(TypedDict):
     endpoint: ServiceEndpoint
     discovery_method: DiscoveryMethod
     discovered_at: datetime
-    tags: NotRequired[List[str]]
-    metadata: NotRequired[Dict[str, Any]]
+    tags: NotRequired[list[str]]
+    metadata: NotRequired[dict[str, Any]]

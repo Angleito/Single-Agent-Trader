@@ -55,13 +55,13 @@ class WebSocketPublisher:
     def __init__(self, settings: Settings):
         """Initialize WebSocket publisher with settings."""
         self.settings = settings
-        
+
         # Get configured URLs
         configured_url = getattr(
             settings.system, "websocket_dashboard_url", "ws://localhost:8000/ws"
         )
         fallback_urls_str = getattr(settings.system, "websocket_fallback_urls", "")
-        
+
         # Build intelligent fallback chain based on environment
         self.dashboard_url, self.fallback_urls = self._build_url_chain(
             configured_url, fallback_urls_str
@@ -127,7 +127,7 @@ class WebSocketPublisher:
         # Null publisher mode flag
         self._null_publisher_mode = False
         self._environment_detected = self._detect_environment()
-        
+
         logger.info(
             "WebSocketPublisher initialized - Environment: %s, Primary URL: %s",
             self._environment_detected,
@@ -137,94 +137,102 @@ class WebSocketPublisher:
             logger.info("Fallback URLs configured: %s", ", ".join(self.fallback_urls))
         if self.connection_delay > 0:
             logger.info("Connection delay configured: %ss", self.connection_delay)
-    
+
     def _detect_environment(self) -> str:
         """Detect if running in Docker or local environment."""
         # Check for Docker environment indicators
         import os
-        
+
         # Method 1: Check for /.dockerenv file
         if os.path.exists("/.dockerenv"):
             return "docker"
-        
+
         # Method 2: Check for Docker-specific environment variables
         if os.environ.get("DOCKER_CONTAINER"):
             return "docker"
-        
+
         # Method 3: Check /proc/1/cgroup for docker references
         try:
-            with open("/proc/1/cgroup", "r") as f:
+            with open("/proc/1/cgroup") as f:
                 if "docker" in f.read():
                     return "docker"
         except Exception:
             pass
-        
+
         # Method 4: Try to resolve Docker service names
         try:
             socket.gethostbyname("dashboard-backend")
             return "docker"
-        except socket.error:
+        except OSError:
             pass
-        
+
         return "local"
-    
-    def _build_url_chain(self, configured_url: str, fallback_urls_str: str) -> tuple[str, list[str]]:
+
+    def _build_url_chain(
+        self, configured_url: str, fallback_urls_str: str
+    ) -> tuple[str, list[str]]:
         """Build intelligent URL chain based on environment."""
         # Parse configured fallback URLs
         configured_fallbacks = [
             url.strip() for url in fallback_urls_str.split(",") if url.strip()
         ]
-        
+
         # Common URL patterns
         docker_urls = [
             "ws://dashboard-backend:8000/ws",
             "ws://dashboard:8000/ws",
         ]
-        
+
         local_urls = [
             "ws://localhost:8000/ws",
             "ws://127.0.0.1:8000/ws",
             "ws://host.docker.internal:8000/ws",  # Works from inside Docker to host
         ]
-        
+
         # Build URL chain based on environment
         if self._detect_environment() == "docker":
             # In Docker: prioritize Docker service names
-            primary = configured_url if "dashboard" in configured_url else docker_urls[0]
+            primary = (
+                configured_url if "dashboard" in configured_url else docker_urls[0]
+            )
             fallbacks = []
-            
+
             # Add Docker URLs first
             for url in docker_urls:
                 if url != primary and url not in fallbacks:
                     fallbacks.append(url)
-            
+
             # Add configured fallbacks
             fallbacks.extend(configured_fallbacks)
-            
+
             # Add local URLs as last resort
             for url in local_urls:
                 if url not in fallbacks:
                     fallbacks.append(url)
         else:
             # Local environment: prioritize localhost
-            primary = configured_url if "localhost" in configured_url or "127.0.0.1" in configured_url else local_urls[0]
+            primary = (
+                configured_url
+                if "localhost" in configured_url or "127.0.0.1" in configured_url
+                else local_urls[0]
+            )
             fallbacks = []
-            
+
             # Add local URLs first
             for url in local_urls:
                 if url != primary and url not in fallbacks:
                     fallbacks.append(url)
-            
+
             # Add configured fallbacks
             fallbacks.extend(configured_fallbacks)
-            
+
             # Docker URLs less likely to work but try anyway
             for url in docker_urls:
                 if url not in fallbacks:
                     fallbacks.append(url)
-        
+
         return primary, fallbacks
-    
+
     def _enable_null_publisher_mode(self) -> None:
         """Enable null publisher mode for graceful degradation."""
         logger.info(
@@ -233,10 +241,10 @@ class WebSocketPublisher:
         self._null_publisher_mode = True
         self._connected = False
         self._publish_enabled = True  # Keep enabled but in null mode
-        
+
         # Start a dummy auto-reconnect task that does nothing
         self._auto_reconnect_task = asyncio.create_task(self._null_reconnect_manager())
-    
+
     async def _null_reconnect_manager(self) -> None:
         """Dummy reconnect manager for null publisher mode."""
         # Just sleep forever, we're in null mode
@@ -271,11 +279,10 @@ class WebSocketPublisher:
                 return True
         except Exception as e:
             logger.warning(
-                "WebSocket connection failed: %s. Enabling null publisher mode.",
-                str(e)
+                "WebSocket connection failed: %s. Enabling null publisher mode.", str(e)
             )
             self._enable_null_publisher_mode()
-            
+
         # Always return True to allow bot to continue
         return True
 
@@ -292,7 +299,10 @@ class WebSocketPublisher:
                     consecutive_reconnect_failures += 1
                     total_reconnect_attempts += 1
 
-                    if consecutive_reconnect_failures > max_consecutive_failures or total_reconnect_attempts > max_total_attempts:
+                    if (
+                        consecutive_reconnect_failures > max_consecutive_failures
+                        or total_reconnect_attempts > max_total_attempts
+                    ):
                         logger.warning(
                             "WebSocket reconnection limit reached (consecutive: %d/%d, total: %d/%d). "
                             "Switching to null publisher mode.",
@@ -337,14 +347,16 @@ class WebSocketPublisher:
         """Run network diagnostics to check connectivity to dashboard service."""
         try:
             logger.debug("Running network diagnostics for dashboard connectivity...")
-            
+
             # Quick DNS resolution test for Docker services
             if self._environment_detected == "docker":
                 try:
                     socket.gethostbyname("dashboard-backend")
                     logger.debug("✓ Docker service name 'dashboard-backend' resolves")
-                except socket.error:
-                    logger.debug("✗ Docker service name 'dashboard-backend' does not resolve")
+                except OSError:
+                    logger.debug(
+                        "✗ Docker service name 'dashboard-backend' does not resolve"
+                    )
 
             # Test only the first few URLs to avoid long delays
             urls_to_test = [self.dashboard_url, *self.fallback_urls[:2]]
@@ -354,31 +366,39 @@ class WebSocketPublisher:
                 try:
                     # Extract host and port from WebSocket URL
                     import urllib.parse
+
                     parsed = urllib.parse.urlparse(url)
                     host = parsed.hostname or "localhost"
                     port = parsed.port or 8000
-                    
+
                     # Quick TCP connection test
                     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     sock.settimeout(2)  # 2 second timeout
-                    
+
                     try:
                         # Try to resolve hostname first
                         ip = socket.gethostbyname(host)
                         result = sock.connect_ex((ip, port))
                         if result == 0:
-                            logger.debug("✓ TCP connectivity to %s:%d confirmed", host, port)
+                            logger.debug(
+                                "✓ TCP connectivity to %s:%d confirmed", host, port
+                            )
                             successful_urls.append(url)
                         else:
-                            logger.debug("✗ TCP connection to %s:%d failed (error: %d)", host, port, result)
+                            logger.debug(
+                                "✗ TCP connection to %s:%d failed (error: %d)",
+                                host,
+                                port,
+                                result,
+                            )
                     except socket.gaierror:
                         logger.debug("✗ Cannot resolve hostname: %s", host)
                     finally:
                         sock.close()
-                        
+
                 except Exception as e:
                     logger.debug("Network diagnostic error for %s: %s", url, str(e))
-            
+
             if not successful_urls:
                 logger.info(
                     "⚠ No dashboard endpoints reachable. Bot will continue in offline mode."
@@ -389,17 +409,21 @@ class WebSocketPublisher:
 
     async def _connect_with_fallback(self) -> None:
         """Try to connect using primary URL and fallback URLs if needed."""
-        urls_to_try = [self.dashboard_url, *self.fallback_urls[:5]]  # Limit fallbacks to prevent long delays
-        
+        urls_to_try = [
+            self.dashboard_url,
+            *self.fallback_urls[:5],
+        ]  # Limit fallbacks to prevent long delays
+
         # Quick connectivity pre-check
         reachable_urls = []
         for url in urls_to_try:
             try:
                 import urllib.parse
+
                 parsed = urllib.parse.urlparse(url)
                 host = parsed.hostname or "localhost"
                 port = parsed.port or 8000
-                
+
                 # Quick socket test
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.settimeout(1)
@@ -413,12 +437,16 @@ class WebSocketPublisher:
                     sock.close()
             except Exception:
                 pass
-        
+
         # Try reachable URLs first
-        urls_to_try = reachable_urls + [u for u in urls_to_try if u not in reachable_urls]
-        
+        urls_to_try = reachable_urls + [
+            u for u in urls_to_try if u not in reachable_urls
+        ]
+
         if not reachable_urls:
-            logger.info("No reachable dashboard URLs found. Enabling null publisher mode.")
+            logger.info(
+                "No reachable dashboard URLs found. Enabling null publisher mode."
+            )
             raise Exception("No reachable dashboard endpoints")
 
         for i, url in enumerate(urls_to_try):
@@ -457,8 +485,12 @@ class WebSocketPublisher:
 
             # Use shorter timeout for faster failure detection
             timeout = min(
-                self.initial_connect_timeout if self._retry_count == 0 else self.connection_timeout,
-                10.0  # Cap at 10 seconds for faster fallback
+                (
+                    self.initial_connect_timeout
+                    if self._retry_count == 0
+                    else self.connection_timeout
+                ),
+                10.0,  # Cap at 10 seconds for faster fallback
             )
 
             # Enhanced connection parameters for better stability
@@ -504,7 +536,9 @@ class WebSocketPublisher:
         except Exception as e:
             self._connected = False
             self._consecutive_failures += 1
-            logger.debug("Unexpected error connecting to dashboard WebSocket: %s", str(e))
+            logger.debug(
+                "Unexpected error connecting to dashboard WebSocket: %s", str(e)
+            )
             raise
 
     async def _reconnect(self) -> None:
@@ -512,7 +546,7 @@ class WebSocketPublisher:
         # Don't reconnect in null publisher mode
         if self._null_publisher_mode:
             return
-            
+
         if self._retry_count >= self.max_retries:
             logger.warning(
                 "Max retries (%s) reached, switching to null publisher mode",
@@ -561,7 +595,7 @@ class WebSocketPublisher:
         """Send message to dashboard with queue-based delivery and prioritization."""
         if not self._publish_enabled:
             return
-        
+
         # In null publisher mode, just drop all messages silently
         if self._null_publisher_mode:
             return
@@ -707,7 +741,7 @@ class WebSocketPublisher:
         # Don't run worker in null publisher mode
         if self._null_publisher_mode:
             return
-            
+
         backoff_delay = 0.1
         max_backoff = 5.0
 

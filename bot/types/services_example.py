@@ -5,14 +5,11 @@ This file demonstrates how to use the comprehensive service type system.
 """
 
 import asyncio
-from datetime import datetime
-from typing import Dict, Optional
 
 from bot.types import (
     DockerService,
     ServiceEndpoint,
     ServiceHealth,
-    ServiceManager,
     ServiceStatus,
     create_endpoint,
     create_health_status,
@@ -41,11 +38,10 @@ class BluefinService:
                 version="1.0.0",
                 connections=42,
             )
-        else:
-            return create_health_status(
-                status=ServiceStatus.UNHEALTHY,
-                error="Service not initialized",
-            )
+        return create_health_status(
+            status=ServiceStatus.UNHEALTHY,
+            error="Service not initialized",
+        )
 
     async def async_health_check(self) -> ServiceHealth:
         """Perform asynchronous health check."""
@@ -78,7 +74,7 @@ class SimpleServiceManager:
 
     def __init__(self):
         """Initialize service manager."""
-        self._services: Dict[str, DockerService] = {}
+        self._services: dict[str, DockerService] = {}
 
     def register_service(self, service: DockerService) -> None:
         """Register a service."""
@@ -93,7 +89,7 @@ class SimpleServiceManager:
             del self._services[service_name]
             print(f"Unregistered service: {service_name}")
 
-    def get_service(self, service_name: str) -> Optional[DockerService]:
+    def get_service(self, service_name: str) -> DockerService | None:
         """Get a registered service."""
         return self._services.get(service_name)
 
@@ -106,7 +102,7 @@ class SimpleServiceManager:
                 healthy.append(service)
         return healthy
 
-    async def health_check_all(self) -> Dict[str, ServiceHealth]:
+    async def health_check_all(self) -> dict[str, ServiceHealth]:
         """Check health of all services."""
         results = {}
         for name, service in self._services.items():
@@ -137,7 +133,7 @@ async def main():
     )
 
     # Validate endpoints
-    print(f"\nValidating endpoints:")
+    print("\nValidating endpoints:")
     print(f"  Bluefin endpoint valid: {is_valid_endpoint(bluefin_endpoint)}")
     print(f"  WebSocket endpoint valid: {is_valid_endpoint(websocket_endpoint)}")
 
@@ -158,26 +154,26 @@ async def main():
     manager = SimpleServiceManager()
 
     # Register services
-    print(f"\nRegistering services:")
+    print("\nRegistering services:")
     manager.register_service(bluefin_service)
     manager.register_service(websocket_service)
 
     # Check initial health
-    print(f"\nInitial health check:")
+    print("\nInitial health check:")
     initial_health = await manager.health_check_all()
     for name, health in initial_health.items():
         status = health["status"]
         print(f"  {name}: {status}")
 
     # Initialize services
-    print(f"\nInitializing services:")
+    print("\nInitializing services:")
     for service_name in ["bluefin-sdk", "websocket-publisher"]:
         service = manager.get_service(service_name)
         if service:
             await service.initialize()
 
     # Check health after initialization
-    print(f"\nHealth check after initialization:")
+    print("\nHealth check after initialization:")
     final_health = await manager.health_check_all()
     for name, health in final_health.items():
         status = health["status"]
@@ -191,13 +187,13 @@ async def main():
         print(f"  - {service.name}")
 
     # Shutdown services
-    print(f"\nShutting down services:")
+    print("\nShutting down services:")
     for service_name in ["bluefin-sdk", "websocket-publisher"]:
         service = manager.get_service(service_name)
         if service:
             await service.shutdown()
 
-    print(f"\n✅ Example completed successfully!")
+    print("\n✅ Example completed successfully!")
 
 
 if __name__ == "__main__":

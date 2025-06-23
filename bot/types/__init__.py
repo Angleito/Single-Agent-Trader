@@ -17,27 +17,6 @@ from .base_types import (
     Timestamp,
     ValidationResult,
 )
-from .market_data import (
-    AggregatedMarketData,
-    CandleData,
-    ConnectionState,
-    MarketDataQuality,
-    MarketDataStatus,
-    MarketDepth,
-    OrderBook,
-    OrderBookLevel,
-    OrderType,
-    PriceLevel,
-    Spread,
-    TickerData,
-    TradeExecution,
-    TradeId,
-    TradeSide,
-    aggregate_candles,
-    is_valid_price as is_valid_market_price,
-    is_valid_timestamp,
-    is_valid_volume,
-)
 from .exceptions import (
     BalanceValidationError,
     ExchangeAuthError,
@@ -59,6 +38,29 @@ from .guards import (
     is_valid_price,
     is_valid_quantity,
     is_valid_symbol,
+)
+from .market_data import (
+    AggregatedMarketData,
+    CandleData,
+    ConnectionState,
+    MarketDataQuality,
+    MarketDataStatus,
+    MarketDepth,
+    OrderBook,
+    OrderBookLevel,
+    OrderType,
+    PriceLevel,
+    Spread,
+    TickerData,
+    TradeExecution,
+    TradeId,
+    TradeSide,
+    aggregate_candles,
+    is_valid_timestamp,
+    is_valid_volume,
+)
+from .market_data import (
+    is_valid_price as is_valid_market_price,
 )
 from .services import (
     AsyncHealthCheck,

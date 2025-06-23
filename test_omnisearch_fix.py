@@ -10,13 +10,13 @@ Tests:
 
 import asyncio
 import logging
-from bot.mcp.omnisearch_client import OmniSearchClient
+
 from bot.mcp.mcp_omnisearch_client import MCPOmniSearchClient
+from bot.mcp.omnisearch_client import OmniSearchClient
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -24,15 +24,15 @@ logger = logging.getLogger(__name__)
 async def test_omnisearch_client():
     """Test the standard OmniSearchClient."""
     logger.info("Testing OmniSearchClient...")
-    
+
     # Create client without server URL to simulate unavailable service
     client = OmniSearchClient(server_url="http://localhost:9999/nonexistent")
-    
+
     # Test connection (should fail gracefully)
     logger.info("Testing connection...")
     connected = await client.connect()
     logger.info(f"Connection result: {connected}")
-    
+
     # Test generic search method
     logger.info("Testing generic search method...")
     try:
@@ -47,17 +47,19 @@ async def test_omnisearch_client():
         raise
     except Exception as e:
         logger.warning(f"Search failed with: {e}")
-    
+
     # Test specific search methods with graceful degradation
     logger.info("Testing crypto sentiment...")
     sentiment = await client.search_crypto_sentiment("BTC")
-    logger.info(f"Sentiment: {sentiment.overall_sentiment} (score: {sentiment.sentiment_score})")
-    
+    logger.info(
+        f"Sentiment: {sentiment.overall_sentiment} (score: {sentiment.sentiment_score})"
+    )
+
     # Test health check
     logger.info("Testing health check...")
     health = await client.health_check()
     logger.info(f"Health status: {health}")
-    
+
     await client.disconnect()
     logger.info("OmniSearchClient test completed")
 
@@ -65,15 +67,15 @@ async def test_omnisearch_client():
 async def test_mcp_omnisearch_client():
     """Test the MCPOmniSearchClient."""
     logger.info("\nTesting MCPOmniSearchClient...")
-    
+
     # Create client with invalid server path
     client = MCPOmniSearchClient(server_path="/nonexistent/path/to/server.js")
-    
+
     # Test connection (should fail gracefully)
     logger.info("Testing connection...")
     connected = await client.connect()
     logger.info(f"Connection result: {connected}")
-    
+
     # Test generic search method
     logger.info("Testing generic search method...")
     try:
@@ -88,17 +90,17 @@ async def test_mcp_omnisearch_client():
         raise
     except Exception as e:
         logger.warning(f"Search failed with: {e}")
-    
+
     # Test specific methods with graceful degradation
     logger.info("Testing financial news search...")
     news = await client.search_financial_news("Bitcoin", limit=2)
     logger.info(f"News results: {len(news)} items")
-    
+
     # Test health check
     logger.info("Testing health check...")
     health = await client.health_check()
     logger.info(f"Health status: {health}")
-    
+
     await client.disconnect()
     logger.info("MCPOmniSearchClient test completed")
 
@@ -106,23 +108,23 @@ async def test_mcp_omnisearch_client():
 async def test_service_startup_integration():
     """Test the service startup integration."""
     logger.info("\nTesting service startup integration...")
-    
-    from bot.utils.service_startup import ServiceStartupManager
+
     from bot.config import Settings
-    
+    from bot.utils.service_startup import ServiceStartupManager
+
     # Create settings with OmniSearch enabled
     settings = Settings()
-    if hasattr(settings, 'omnisearch'):
+    if hasattr(settings, "omnisearch"):
         settings.omnisearch.enabled = True
-    
+
     # Test service startup
     manager = ServiceStartupManager(settings)
-    
+
     try:
         # Test OmniSearch startup with timeout
         logger.info("Testing OmniSearch startup with timeout...")
         omnisearch = await manager._start_omnisearch(timeout=5.0)
-        
+
         if omnisearch:
             logger.info("OmniSearch client created successfully")
             # Test search method
@@ -130,32 +132,32 @@ async def test_service_startup_integration():
             logger.info(f"Test search result: {results}")
         else:
             logger.info("OmniSearch client creation returned None")
-            
+
     except Exception as e:
         logger.warning(f"Service startup test failed: {e}")
-    
+
     logger.info("Service startup integration test completed")
 
 
 async def main():
     """Run all tests."""
     logger.info("Starting OmniSearch fix verification tests...")
-    
+
     try:
         await test_omnisearch_client()
     except Exception as e:
         logger.error(f"OmniSearchClient test failed: {e}")
-    
+
     try:
         await test_mcp_omnisearch_client()
     except Exception as e:
         logger.error(f"MCPOmniSearchClient test failed: {e}")
-    
+
     try:
         await test_service_startup_integration()
     except Exception as e:
         logger.error(f"Service startup integration test failed: {e}")
-    
+
     logger.info("\nAll tests completed!")
 
 

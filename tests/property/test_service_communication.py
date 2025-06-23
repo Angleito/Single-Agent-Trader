@@ -6,23 +6,19 @@ connection state transitions, and graceful degradation using Hypothesis.
 """
 
 import asyncio
-import json
 import time
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-import websockets
 from hypothesis import (
     HealthCheck,
-    assume,
     event,
     given,
     note,
     settings,
+)
+from hypothesis import (
     strategies as st,
 )
 from hypothesis.stateful import (
@@ -30,18 +26,15 @@ from hypothesis.stateful import (
     RuleBasedStateMachine,
     initialize,
     invariant,
-    precondition,
     rule,
 )
-from websockets.exceptions import ConnectionClosed, WebSocketException
+from websockets.exceptions import ConnectionClosed
 
 from bot.data.bluefin_websocket import (
     BluefinWebSocketClient,
-    BluefinWebSocketConnectionError,
 )
 from bot.exchange.bluefin_client import BluefinRestClient
 from bot.risk.circuit_breaker import TradingCircuitBreaker
-from bot.trading_types import MarketData
 
 
 # Strategies for generating test data
@@ -197,7 +190,9 @@ class ServiceCommunicationStateMachine(RuleBasedStateMachine):
                 }
             )
 
-        event(f"Message {message_id}: {'success' if success else 'failed'} (delay: {delay:.3f}s)")
+        event(
+            f"Message {message_id}: {'success' if success else 'failed'} (delay: {delay:.3f}s)"
+        )
 
     @rule(failures=st.lists(st.booleans(), min_size=1, max_size=10))
     def test_circuit_breaker_transitions(self, failures):
@@ -218,7 +213,9 @@ class ServiceCommunicationStateMachine(RuleBasedStateMachine):
                 self.record_state_transition(f"cb_{initial_state}", f"cb_{new_state}")
                 initial_state = new_state
 
-        event(f"Circuit breaker: {self.circuit_breaker.state} (failures: {self.circuit_breaker.failure_count})")
+        event(
+            f"Circuit breaker: {self.circuit_breaker.state} (failures: {self.circuit_breaker.failure_count})"
+        )
 
     def record_state_transition(self, from_state: str, to_state: str):
         """Record a state transition."""
@@ -300,7 +297,9 @@ class TestWebSocketFallback:
             st.integers(min_value=0, max_value=5), min_size=3, max_size=10
         )
     )
-    @settings(deadline=5000, suppress_health_check=[HealthCheck.function_scoped_fixture])
+    @settings(
+        deadline=5000, suppress_health_check=[HealthCheck.function_scoped_fixture]
+    )
     async def test_exponential_backoff_behavior(self, failure_counts):
         """Property: Retry delays must follow exponential backoff pattern."""
         ws_client = BluefinWebSocketClient("BTC-PERP")
@@ -344,7 +343,9 @@ class TestWebSocketFallback:
             max_size=20,
         )
     )
-    @settings(deadline=5000, suppress_health_check=[HealthCheck.function_scoped_fixture])
+    @settings(
+        deadline=5000, suppress_health_check=[HealthCheck.function_scoped_fixture]
+    )
     async def test_graceful_degradation(self, message_sequence):
         """Property: System must degrade gracefully under partial failures."""
         ws_client = BluefinWebSocketClient("BTC-PERP")
@@ -356,8 +357,7 @@ class TestWebSocketFallback:
             if should_fail:
                 failed_messages.append(message)
                 raise Exception("Processing failed")
-            else:
-                processed_messages.append(message)
+            processed_messages.append(message)
 
         # Test message processing with failures
         for msg in message_sequence:
@@ -372,7 +372,7 @@ class TestWebSocketFallback:
         failed_msg_count = len(failed_messages)
 
         assert successful_messages + failed_msg_count == total_messages
-        
+
         # Even with failures, some messages should process
         if failed_msg_count < total_messages:
             assert successful_messages > 0
@@ -442,7 +442,9 @@ class TestRetryMechanismInvariants:
         failure_sequence=st.lists(st.booleans(), min_size=1, max_size=20),
         max_retries=st.integers(min_value=1, max_value=10),
     )
-    @settings(deadline=5000, suppress_health_check=[HealthCheck.function_scoped_fixture])
+    @settings(
+        deadline=5000, suppress_health_check=[HealthCheck.function_scoped_fixture]
+    )
     async def test_retry_count_never_exceeds_maximum(
         self, failure_sequence, max_retries
     ):
@@ -471,7 +473,9 @@ class TestRetryMechanismInvariants:
         num_retries=st.integers(min_value=1, max_value=5),
         jitter_factor=st.floats(min_value=0.0, max_value=0.2),
     )
-    async def test_backoff_delay_calculation(self, base_delay, num_retries, jitter_factor):
+    async def test_backoff_delay_calculation(
+        self, base_delay, num_retries, jitter_factor
+    ):
         """Property: Backoff delays must follow exponential pattern with jitter."""
         delays = []
 
@@ -488,10 +492,10 @@ class TestRetryMechanismInvariants:
             # Account for jitter in verification
             min_expected = base_delay * (2**i) * (1 - jitter_factor)
             max_expected = base_delay * (2**i) * (1 + jitter_factor)
-            
+
             # Remove jitter from actual delay for comparison
             base_actual = delays[i] / (1 + jitter_factor * (0.5 - (time.time() % 1)))
-            
+
             assert min_expected * 0.8 <= base_actual <= max_expected * 1.2
 
 
@@ -562,7 +566,7 @@ class TestCircuitBreakerProperties:
         breaker = TradingCircuitBreaker()
         recorded_failures = []
 
-        for failure_type, severity in zip(failure_types, severities):
+        for failure_type, severity in zip(failure_types, severities, strict=False):
             breaker.record_failure(failure_type, f"{failure_type} error", severity)
             recorded_failures.append(
                 {
@@ -590,7 +594,9 @@ class TestMessageLossAndPartitions:
         partition_duration=st.floats(min_value=0.1, max_value=5.0),
         message_count=st.integers(min_value=10, max_value=100),
     )
-    @settings(deadline=10000, suppress_health_check=[HealthCheck.function_scoped_fixture])
+    @settings(
+        deadline=10000, suppress_health_check=[HealthCheck.function_scoped_fixture]
+    )
     async def test_message_loss_recovery(
         self, message_loss_rate, partition_duration, message_count
     ):
@@ -678,9 +684,11 @@ class TestMessageLossAndPartitions:
         # In split brain, each group should continue independently
         if partition_pattern == "split_brain":
             assert len(partition_events[0]["groups"]) == 2
-            assert len(partition_events[0]["groups"][0]) + len(
-                partition_events[0]["groups"][1]
-            ) == num_nodes
+            assert (
+                len(partition_events[0]["groups"][0])
+                + len(partition_events[0]["groups"][1])
+                == num_nodes
+            )
 
 
 # Test runner for state machine
@@ -694,17 +702,19 @@ class TestMessageLossAndPartitions:
 async def test_service_communication_state_machine(data):
     """Run the service communication state machine tests."""
     state_machine = ServiceCommunicationStateMachine()
-    
+
     # Use a more controlled approach for async state machine testing
     async def run_state_machine():
         await state_machine.setup()
         # Run a few rules manually to avoid hypothesis async issues
         for _ in range(5):
-            await state_machine.attempt_connection(data.draw(connection_failure_pattern()))
+            await state_machine.attempt_connection(
+                data.draw(connection_failure_pattern())
+            )
             state_machine.test_circuit_breaker_transitions(
                 data.draw(st.lists(st.booleans(), min_size=1, max_size=5))
             )
-    
+
     await run_state_machine()
 
 

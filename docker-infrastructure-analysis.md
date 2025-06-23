@@ -11,7 +11,7 @@ This report provides a comprehensive analysis of the Docker infrastructure for t
 #### 1. **ai-trading-bot** (Main Trading Bot)
 - **Role**: Core trading bot responsible for automated trading decisions
 - **Container**: `ai-trading-bot`
-- **Dependencies**: 
+- **Dependencies**:
   - `mcp-memory` (optional, condition: service_started)
   - `mcp-omnisearch` (optional, condition: service_started)
 - **Health Check**: `/app/healthcheck.sh`
@@ -57,7 +57,7 @@ This report provides a comprehensive analysis of the Docker infrastructure for t
 - **Role**: Backend API for the trading dashboard
 - **Container**: `dashboard-backend`
 - **Port Mapping**: `8000 → 8000` (public access)
-- **Dependencies**: 
+- **Dependencies**:
   - `bluefin-service` (optional, condition: service_started)
 - **Health Check**: `curl http://localhost:8000/health`
 - **Network Aliases**: `dashboard-backend`, `api`
@@ -142,7 +142,7 @@ Each service has multiple DNS names for inter-container communication:
 ### 2. Service Connectivity
 - **Issue**: WebSocket connection failures to dashboard-backend
 - **Evidence**: `Failed to connect to dashboard WebSocket` errors
-- **Configuration**: 
+- **Configuration**:
   - Primary URL: `ws://dashboard-backend:8000/ws`
   - Fallback URLs: `ws://localhost:8000/ws`, `ws://127.0.0.1:8000/ws`
   - Max retries: 15 (enhanced from 10)
@@ -171,7 +171,7 @@ Each service has multiple DNS names for inter-container communication:
 2. **Capability Restrictions**: `cap_drop: ALL` with minimal additions
 3. **User Permissions**: Run as non-root users (HOST_UID:HOST_GID)
 4. **Tmpfs Mounts**: Writable areas isolated to tmpfs
-5. **Security Options**: 
+5. **Security Options**:
    - no-new-privileges: false (VPS compatibility)
    - seccomp: unconfined (VPS requirement)
    - apparmor: unconfined (Ubuntu compatibility)
@@ -217,12 +217,12 @@ dashboard-backend:
 1. **Exchange Configuration**:
    - `EXCHANGE__EXCHANGE_TYPE`: coinbase or bluefin
    - `EXCHANGE__BLUEFIN_NETWORK`: mainnet or testnet
-   
+
 2. **Service URLs**:
    - `BLUEFIN_SERVICE_URL`: http://bluefin-service:8080
    - `MCP_SERVER_URL`: http://mcp-memory:8765
    - `OMNISEARCH__SERVER_URL`: http://mcp-omnisearch:8767
-   
+
 3. **WebSocket Configuration**:
    - `SYSTEM__WEBSOCKET_DASHBOARD_URL`: ws://dashboard-backend:8000/ws
    - `SYSTEM__WEBSOCKET_MAX_RETRIES`: 15
@@ -231,7 +231,7 @@ dashboard-backend:
 ## Recommendations
 
 ### Immediate Actions
-1. **Start Docker Stack**: 
+1. **Start Docker Stack**:
    ```bash
    docker-compose up -d
    ```

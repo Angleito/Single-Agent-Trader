@@ -7,7 +7,7 @@ validation rules that enforce safety-first defaults, especially for paper tradin
 
 import os
 import re
-from typing import Literal, Optional, Union
+from typing import Literal
 from urllib.parse import urlparse
 
 from pydantic import (
@@ -39,11 +39,11 @@ class ExchangeConfig(BaseModel):
         default="coinbase",
         description="Exchange to use for trading",
     )
-    service_url: Optional[str] = Field(
+    service_url: str | None = Field(
         default=None,
         description="Exchange service URL",
     )
-    bluefin_private_key: Optional[SecretStr] = Field(
+    bluefin_private_key: SecretStr | None = Field(
         default=None,
         description="Sui wallet private key for Bluefin (hex format)",
     )
@@ -51,11 +51,11 @@ class ExchangeConfig(BaseModel):
         default="mainnet",
         description="Bluefin network to connect to",
     )
-    cdp_api_key_name: Optional[SecretStr] = Field(
+    cdp_api_key_name: SecretStr | None = Field(
         default=None,
         description="Coinbase CDP API key name",
     )
-    cdp_private_key: Optional[SecretStr] = Field(
+    cdp_private_key: SecretStr | None = Field(
         default=None,
         description="Coinbase CDP private key (PEM format)",
     )
@@ -66,7 +66,7 @@ class ExchangeConfig(BaseModel):
 
     @field_validator("service_url")
     @classmethod
-    def validate_service_url(cls, v: Optional[str]) -> Optional[str]:
+    def validate_service_url(cls, v: str | None) -> str | None:
         """Validate service URL format."""
         if v is None:
             return v
@@ -94,7 +94,7 @@ class ExchangeConfig(BaseModel):
 
     @field_validator("bluefin_private_key")
     @classmethod
-    def validate_bluefin_key(cls, v: Optional[SecretStr]) -> Optional[SecretStr]:
+    def validate_bluefin_key(cls, v: SecretStr | None) -> SecretStr | None:
         """Validate Bluefin private key format."""
         if v is None:
             return v
@@ -107,15 +107,13 @@ class ExchangeConfig(BaseModel):
             if key.startswith("0x") and re.match(r"^0x[a-fA-F0-9]{64}$", key):
                 # Strip 0x prefix and return
                 return SecretStr(key[2:])
-            raise ValueError(
-                "Bluefin private key must be 64 hex characters (32 bytes)"
-            )
+            raise ValueError("Bluefin private key must be 64 hex characters (32 bytes)")
 
         return v
 
     @field_validator("cdp_private_key")
     @classmethod
-    def validate_cdp_key(cls, v: Optional[SecretStr]) -> Optional[SecretStr]:
+    def validate_cdp_key(cls, v: SecretStr | None) -> SecretStr | None:
         """Validate Coinbase CDP private key format."""
         if v is None:
             return v
@@ -384,22 +382,22 @@ class SystemConfig(BaseModel):
 class APIKeyConfig(BaseModel):
     """Type-safe API key configuration with validation."""
 
-    openai_api_key: Optional[SecretStr] = Field(
+    openai_api_key: SecretStr | None = Field(
         default=None,
         description="OpenAI API key for LLM",
     )
-    mem0_api_key: Optional[SecretStr] = Field(
+    mem0_api_key: SecretStr | None = Field(
         default=None,
         description="Mem0 API key for memory storage",
     )
-    coingecko_api_key: Optional[SecretStr] = Field(
+    coingecko_api_key: SecretStr | None = Field(
         default=None,
         description="CoinGecko API key for market data",
     )
 
     @field_validator("openai_api_key")
     @classmethod
-    def validate_openai_key(cls, v: Optional[SecretStr]) -> Optional[SecretStr]:
+    def validate_openai_key(cls, v: SecretStr | None) -> SecretStr | None:
         """Validate OpenAI API key format."""
         if v is None:
             return v

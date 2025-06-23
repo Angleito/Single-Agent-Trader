@@ -104,10 +104,10 @@ from datetime import datetime
 
 class Trade:
     """Fully typed trade class."""
-    
+
     # Class variables
     MAX_LEVERAGE: ClassVar[int] = 10
-    
+
     def __init__(
         self,
         symbol: str,
@@ -121,7 +121,7 @@ class Trade:
         self.amount = amount
         self.price = price
         self.timestamp = timestamp or datetime.now()
-    
+
     def calculate_value(self) -> float:
         """Calculate trade value."""
         return self.amount * self.price
@@ -135,7 +135,7 @@ T = TypeVar('T')
 
 class Result(Generic[T]):
     """Generic result container."""
-    
+
     def __init__(
         self,
         value: Optional[T] = None,
@@ -144,12 +144,12 @@ class Result(Generic[T]):
         self.value = value
         self.error = error
         self._success = error is None
-    
+
     @property
     def success(self) -> bool:
         """Check if result is successful."""
         return self._success
-    
+
     def unwrap(self) -> T:
         """Unwrap value or raise exception."""
         if self.error:
@@ -166,9 +166,9 @@ from typing import Protocol, runtime_checkable
 @runtime_checkable
 class Exchange(Protocol):
     """Protocol for exchange implementations."""
-    
+
     name: str
-    
+
     async def connect(self) -> None: ...
     async def disconnect(self) -> None: ...
     async def place_order(
@@ -256,11 +256,11 @@ from types import TracebackType
 
 class AsyncClient:
     """Async client with proper typing."""
-    
+
     async def __aenter__(self) -> "AsyncClient":
         await self.connect()
         return self
-    
+
     async def __aexit__(
         self,
         exc_type: Optional[type[BaseException]],

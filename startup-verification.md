@@ -1,6 +1,6 @@
 # Docker Services Startup Verification Report
 
-**Generated:** 2025-06-23 01:44:00 PST  
+**Generated:** 2025-06-23 01:44:00 PST
 **Project:** AI Trading Bot with Dashboard
 
 ## Executive Summary
@@ -63,8 +63,8 @@ The Docker services startup encountered mixed results:
 
 ## Network Configuration
 
-**Network Name:** trading-network  
-**Subnet:** 172.20.0.0/16  
+**Network Name:** trading-network
+**Subnet:** 172.20.0.0/16
 **Gateway:** 172.20.0.1
 
 ### Service IP Assignments:
@@ -107,7 +107,7 @@ The Docker services startup encountered mixed results:
    - Add `BLUEFIN_PRIVATE_KEY` to .env file, OR
    - Comment out bluefin-service in docker-compose.yml if using Coinbase only
 
-3. **For dashboard-frontend:** 
+3. **For dashboard-frontend:**
    - Check Docker volume mounts and ensure write permissions
    - Verify Dockerfile doesn't set read-only file system
    - Consider mounting runtime-env.js as a volume

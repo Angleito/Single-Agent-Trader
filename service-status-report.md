@@ -60,7 +60,7 @@ Docker-compose services were never started. The `docker-compose ps` command retu
 ### 4. WebSocket Connection Failures
 Recent error logs show the trading bot attempting to connect to dashboard-backend WebSocket endpoint:
 ```
-OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 8000, 0, 0), 
+OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 8000, 0, 0),
 [Errno 61] Connect call failed ('127.0.0.1', 8000)
 ```
 This confirms the dashboard-backend service is not accessible.

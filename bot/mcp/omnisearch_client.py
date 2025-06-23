@@ -875,30 +875,27 @@ class OmniSearchClient:
     async def search(self, query: str, limit: int = 5) -> list[SearchResult] | None:
         """
         Generic search method for testing and basic queries.
-        
+
         Args:
             query: Search query string
             limit: Maximum number of results to return
-            
+
         Returns:
             List of search results or None if search fails
         """
         try:
             # Use financial news search as the generic search endpoint
             news_results = await self.search_financial_news(
-                query=query, 
-                limit=limit, 
-                timeframe="24h",
-                include_sentiment=False
+                query=query, limit=limit, timeframe="24h", include_sentiment=False
             )
-            
+
             # Convert to basic SearchResult objects
             basic_results = []
             for news in news_results:
                 basic_results.append(news.base_result)
-                
+
             return basic_results
-            
+
         except Exception as e:
             logger.warning("Generic search failed for '%s': %s", query, str(e))
             return None

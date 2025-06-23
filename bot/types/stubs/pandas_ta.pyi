@@ -1,299 +1,286 @@
 """Type stubs for pandas_ta library."""
 
-from typing import Any, Optional, Union, overload
-import pandas as pd
+from typing import Any, overload
+
 from pandas import DataFrame, Series
 
 __all__ = [
-    "rsi",
-    "ema",
-    "sma",
-    "wma",
-    "hma",
-    "stoch",
-    "stochrsi",
-    "bbands",
-    "atr",
     "adx",
-    "macd",
-    "obv",
-    "mfi",
-    "vwap",
-    "kc",
-    "donchian",
-    "supertrend",
-    "psar",
-    "ichimoku",
-    "ha",
-    "rma",
-    "linreg",
-    "willr",
+    "atr",
+    "bbands",
     "cci",
     "cmf",
     "cmo",
+    "cti",
+    "donchian",
+    "ema",
+    "entropy",
+    "ha",
+    "hma",
+    "ichimoku",
+    "kc",
+    "kurtosis",
+    "linreg",
+    "macd",
+    "mfi",
+    "obv",
+    "psar",
+    "rma",
     "roc",
+    "rsi",
+    "skew",
+    "sma",
+    "stdev",
+    "stoch",
+    "stochrsi",
+    "supertrend",
     "tsi",
     "ultimate",
-    "volatility",
-    "kurtosis",
-    "skew",
-    "stdev",
     "variance",
+    "volatility",
+    "vwap",
+    "willr",
+    "wma",
     "zscore",
-    "entropy",
-    "cti",
 ]
 
 # RSI
 @overload
 def rsi(
     close: Series,
-    length: Optional[int] = None,
-    scalar: Optional[float] = None,
-    drift: Optional[int] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
+    length: int | None = None,
+    scalar: float | None = None,
+    drift: int | None = None,
+    offset: int | None = None,
+    **kwargs: Any,
 ) -> Series: ...
-
 @overload
 def rsi(
     close: DataFrame,
-    length: Optional[int] = None,
-    scalar: Optional[float] = None,
-    drift: Optional[int] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
+    length: int | None = None,
+    scalar: float | None = None,
+    drift: int | None = None,
+    offset: int | None = None,
+    **kwargs: Any,
 ) -> DataFrame: ...
 
 # EMA
 @overload
 def ema(
-    close: Series,
-    length: Optional[int] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
+    close: Series, length: int | None = None, offset: int | None = None, **kwargs: Any
 ) -> Series: ...
-
 @overload
 def ema(
     close: DataFrame,
-    length: Optional[int] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
+    length: int | None = None,
+    offset: int | None = None,
+    **kwargs: Any,
 ) -> DataFrame: ...
 
 # SMA
 @overload
 def sma(
-    close: Series,
-    length: Optional[int] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
+    close: Series, length: int | None = None, offset: int | None = None, **kwargs: Any
 ) -> Series: ...
-
 @overload
 def sma(
     close: DataFrame,
-    length: Optional[int] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
+    length: int | None = None,
+    offset: int | None = None,
+    **kwargs: Any,
 ) -> DataFrame: ...
 
 # RMA (Running Moving Average)
 @overload
 def rma(
-    close: Series,
-    length: Optional[int] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
+    close: Series, length: int | None = None, offset: int | None = None, **kwargs: Any
 ) -> Series: ...
-
 @overload
 def rma(
     close: DataFrame,
-    length: Optional[int] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
+    length: int | None = None,
+    offset: int | None = None,
+    **kwargs: Any,
 ) -> DataFrame: ...
 
 # WMA
 def wma(
-    close: Union[Series, DataFrame],
-    length: Optional[int] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
-) -> Union[Series, DataFrame]: ...
+    close: Series | DataFrame,
+    length: int | None = None,
+    offset: int | None = None,
+    **kwargs: Any,
+) -> Series | DataFrame: ...
 
 # HMA
 def hma(
-    close: Union[Series, DataFrame],
-    length: Optional[int] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
-) -> Union[Series, DataFrame]: ...
+    close: Series | DataFrame,
+    length: int | None = None,
+    offset: int | None = None,
+    **kwargs: Any,
+) -> Series | DataFrame: ...
 
 # Stochastic
 def stoch(
-    high: Union[Series, DataFrame],
-    low: Union[Series, DataFrame],
-    close: Union[Series, DataFrame],
-    k: Optional[int] = None,
-    d: Optional[int] = None,
-    smooth_k: Optional[int] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
+    high: Series | DataFrame,
+    low: Series | DataFrame,
+    close: Series | DataFrame,
+    k: int | None = None,
+    d: int | None = None,
+    smooth_k: int | None = None,
+    offset: int | None = None,
+    **kwargs: Any,
 ) -> DataFrame: ...
 
 # Stochastic RSI
 def stochrsi(
-    close: Union[Series, DataFrame],
-    length: Optional[int] = None,
-    rsi_length: Optional[int] = None,
-    k: Optional[int] = None,
-    d: Optional[int] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
+    close: Series | DataFrame,
+    length: int | None = None,
+    rsi_length: int | None = None,
+    k: int | None = None,
+    d: int | None = None,
+    offset: int | None = None,
+    **kwargs: Any,
 ) -> DataFrame: ...
 
 # Bollinger Bands
 def bbands(
-    close: Union[Series, DataFrame],
-    length: Optional[int] = None,
-    std: Optional[float] = None,
-    ddof: Optional[int] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
+    close: Series | DataFrame,
+    length: int | None = None,
+    std: float | None = None,
+    ddof: int | None = None,
+    offset: int | None = None,
+    **kwargs: Any,
 ) -> DataFrame: ...
 
 # ATR
 def atr(
-    high: Union[Series, DataFrame],
-    low: Union[Series, DataFrame],
-    close: Union[Series, DataFrame],
-    length: Optional[int] = None,
-    mamode: Optional[str] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
-) -> Union[Series, DataFrame]: ...
+    high: Series | DataFrame,
+    low: Series | DataFrame,
+    close: Series | DataFrame,
+    length: int | None = None,
+    mamode: str | None = None,
+    offset: int | None = None,
+    **kwargs: Any,
+) -> Series | DataFrame: ...
 
 # ADX
 def adx(
-    high: Union[Series, DataFrame],
-    low: Union[Series, DataFrame],
-    close: Union[Series, DataFrame],
-    length: Optional[int] = None,
-    lensig: Optional[int] = None,
-    scalar: Optional[float] = None,
-    drift: Optional[int] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
+    high: Series | DataFrame,
+    low: Series | DataFrame,
+    close: Series | DataFrame,
+    length: int | None = None,
+    lensig: int | None = None,
+    scalar: float | None = None,
+    drift: int | None = None,
+    offset: int | None = None,
+    **kwargs: Any,
 ) -> DataFrame: ...
 
 # MACD
 def macd(
-    close: Union[Series, DataFrame],
-    fast: Optional[int] = None,
-    slow: Optional[int] = None,
-    signal: Optional[int] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
+    close: Series | DataFrame,
+    fast: int | None = None,
+    slow: int | None = None,
+    signal: int | None = None,
+    offset: int | None = None,
+    **kwargs: Any,
 ) -> DataFrame: ...
 
 # OBV
 def obv(
-    close: Union[Series, DataFrame],
-    volume: Union[Series, DataFrame],
-    offset: Optional[int] = None,
-    **kwargs: Any
-) -> Union[Series, DataFrame]: ...
+    close: Series | DataFrame,
+    volume: Series | DataFrame,
+    offset: int | None = None,
+    **kwargs: Any,
+) -> Series | DataFrame: ...
 
 # MFI
 def mfi(
-    high: Union[Series, DataFrame],
-    low: Union[Series, DataFrame],
-    close: Union[Series, DataFrame],
-    volume: Union[Series, DataFrame],
-    length: Optional[int] = None,
-    drift: Optional[int] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
-) -> Union[Series, DataFrame]: ...
+    high: Series | DataFrame,
+    low: Series | DataFrame,
+    close: Series | DataFrame,
+    volume: Series | DataFrame,
+    length: int | None = None,
+    drift: int | None = None,
+    offset: int | None = None,
+    **kwargs: Any,
+) -> Series | DataFrame: ...
 
 # VWAP
 def vwap(
-    high: Union[Series, DataFrame],
-    low: Union[Series, DataFrame],
-    close: Union[Series, DataFrame],
-    volume: Union[Series, DataFrame],
-    anchor: Optional[str] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
-) -> Union[Series, DataFrame]: ...
+    high: Series | DataFrame,
+    low: Series | DataFrame,
+    close: Series | DataFrame,
+    volume: Series | DataFrame,
+    anchor: str | None = None,
+    offset: int | None = None,
+    **kwargs: Any,
+) -> Series | DataFrame: ...
 
 # Linear Regression
 def linreg(
-    close: Union[Series, DataFrame],
-    length: Optional[int] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
-) -> Union[Series, DataFrame]: ...
+    close: Series | DataFrame,
+    length: int | None = None,
+    offset: int | None = None,
+    **kwargs: Any,
+) -> Series | DataFrame: ...
 
 # Williams %R
 def willr(
-    high: Union[Series, DataFrame],
-    low: Union[Series, DataFrame],
-    close: Union[Series, DataFrame],
-    length: Optional[int] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
-) -> Union[Series, DataFrame]: ...
+    high: Series | DataFrame,
+    low: Series | DataFrame,
+    close: Series | DataFrame,
+    length: int | None = None,
+    offset: int | None = None,
+    **kwargs: Any,
+) -> Series | DataFrame: ...
 
 # CCI
 def cci(
-    high: Union[Series, DataFrame],
-    low: Union[Series, DataFrame],
-    close: Union[Series, DataFrame],
-    length: Optional[int] = None,
-    c: Optional[float] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
-) -> Union[Series, DataFrame]: ...
+    high: Series | DataFrame,
+    low: Series | DataFrame,
+    close: Series | DataFrame,
+    length: int | None = None,
+    c: float | None = None,
+    offset: int | None = None,
+    **kwargs: Any,
+) -> Series | DataFrame: ...
 
 # CMF
 def cmf(
-    high: Union[Series, DataFrame],
-    low: Union[Series, DataFrame],
-    close: Union[Series, DataFrame],
-    volume: Union[Series, DataFrame],
-    length: Optional[int] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
-) -> Union[Series, DataFrame]: ...
+    high: Series | DataFrame,
+    low: Series | DataFrame,
+    close: Series | DataFrame,
+    volume: Series | DataFrame,
+    length: int | None = None,
+    offset: int | None = None,
+    **kwargs: Any,
+) -> Series | DataFrame: ...
 
 # Standard Deviation
 def stdev(
-    close: Union[Series, DataFrame],
-    length: Optional[int] = None,
-    ddof: Optional[int] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
-) -> Union[Series, DataFrame]: ...
+    close: Series | DataFrame,
+    length: int | None = None,
+    ddof: int | None = None,
+    offset: int | None = None,
+    **kwargs: Any,
+) -> Series | DataFrame: ...
 
 # Z-Score
 def zscore(
-    close: Union[Series, DataFrame],
-    length: Optional[int] = None,
-    std: Optional[float] = None,
-    offset: Optional[int] = None,
-    **kwargs: Any
-) -> Union[Series, DataFrame]: ...
+    close: Series | DataFrame,
+    length: int | None = None,
+    std: float | None = None,
+    offset: int | None = None,
+    **kwargs: Any,
+) -> Series | DataFrame: ...
 
 # Heikin Ashi
 def ha(
-    open_: Union[Series, DataFrame],
-    high: Union[Series, DataFrame],
-    low: Union[Series, DataFrame],
-    close: Union[Series, DataFrame],
-    offset: Optional[int] = None,
-    **kwargs: Any
+    open_: Series | DataFrame,
+    high: Series | DataFrame,
+    low: Series | DataFrame,
+    close: Series | DataFrame,
+    offset: int | None = None,
+    **kwargs: Any,
 ) -> DataFrame: ...

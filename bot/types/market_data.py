@@ -6,16 +6,15 @@ OHLCV candles, order books, ticker data, trade executions, and market status.
 All types include comprehensive validation to ensure data integrity.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Annotated, List, Literal, NewType, Optional, Union
+from typing import NewType
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    ValidationInfo,
     field_validator,
     model_validator,
 )
@@ -85,10 +84,10 @@ class CandleData(BaseModel):
     volume: Decimal = Field(ge=0, description="Trading volume in base currency")
 
     # Optional fields for enhanced data
-    trades_count: Optional[int] = Field(
+    trades_count: int | None = Field(
         default=None, ge=0, description="Number of trades in this candle"
     )
-    vwap: Optional[Decimal] = Field(
+    vwap: Decimal | None = Field(
         default=None, gt=0, description="Volume-weighted average price"
     )
 
@@ -149,7 +148,7 @@ class CandleData(BaseModel):
 
     @field_validator("open", "high", "low", "close", "vwap")
     @classmethod
-    def validate_price_precision(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+    def validate_price_precision(cls, v: Decimal | None) -> Decimal | None:
         """Validate price precision (max 8 decimal places)."""
         if v is not None:
             # Check for excessive decimal places
@@ -193,27 +192,19 @@ class TickerData(BaseModel):
     product_id: str = Field(description="Trading pair symbol")
     timestamp: datetime = Field(description="Data timestamp")
     price: Decimal = Field(gt=0, description="Current price")
-    size: Optional[Decimal] = Field(
-        default=None, ge=0, description="Size of last trade"
-    )
-    bid: Optional[Decimal] = Field(default=None, gt=0, description="Best bid price")
-    ask: Optional[Decimal] = Field(default=None, gt=0, description="Best ask price")
-    volume_24h: Optional[Decimal] = Field(
-        default=None, ge=0, description="24-hour volume"
-    )
-    low_24h: Optional[Decimal] = Field(
-        default=None, gt=0, description="24-hour low price"
-    )
-    high_24h: Optional[Decimal] = Field(
+    size: Decimal | None = Field(default=None, ge=0, description="Size of last trade")
+    bid: Decimal | None = Field(default=None, gt=0, description="Best bid price")
+    ask: Decimal | None = Field(default=None, gt=0, description="Best ask price")
+    volume_24h: Decimal | None = Field(default=None, ge=0, description="24-hour volume")
+    low_24h: Decimal | None = Field(default=None, gt=0, description="24-hour low price")
+    high_24h: Decimal | None = Field(
         default=None, gt=0, description="24-hour high price"
     )
-    low_52w: Optional[Decimal] = Field(
-        default=None, gt=0, description="52-week low price"
-    )
-    high_52w: Optional[Decimal] = Field(
+    low_52w: Decimal | None = Field(default=None, gt=0, description="52-week low price")
+    high_52w: Decimal | None = Field(
         default=None, gt=0, description="52-week high price"
     )
-    price_percent_chg_24h: Optional[float] = Field(
+    price_percent_chg_24h: float | None = Field(
         default=None, description="24-hour price change percentage"
     )
 
@@ -250,13 +241,13 @@ class TickerData(BaseModel):
                 )
         return self
 
-    def get_spread(self) -> Optional[Decimal]:
+    def get_spread(self) -> Decimal | None:
         """Calculate bid-ask spread."""
         if self.bid is not None and self.ask is not None:
             return self.ask - self.bid
         return None
 
-    def get_spread_percentage(self) -> Optional[float]:
+    def get_spread_percentage(self) -> float | None:
         """Calculate spread as percentage of mid price."""
         if self.bid is not None and self.ask is not None:
             mid_price = (self.bid + self.ask) / 2
@@ -270,7 +261,7 @@ class OrderBookLevel(BaseModel):
 
     price: Decimal = Field(gt=0, description="Price level")
     size: Decimal = Field(gt=0, description="Total size at this level")
-    order_count: Optional[int] = Field(
+    order_count: int | None = Field(
         default=None, ge=1, description="Number of orders at this level"
     )
 
@@ -282,13 +273,13 @@ class OrderBook(BaseModel):
 
     product_id: str = Field(description="Trading pair symbol")
     timestamp: datetime = Field(description="Snapshot timestamp")
-    bids: List[OrderBookLevel] = Field(
+    bids: list[OrderBookLevel] = Field(
         description="Bid levels sorted by price descending"
     )
-    asks: List[OrderBookLevel] = Field(
+    asks: list[OrderBookLevel] = Field(
         description="Ask levels sorted by price ascending"
     )
-    sequence: Optional[int] = Field(
+    sequence: int | None = Field(
         default=None, description="Sequence number for order book updates"
     )
 
@@ -320,15 +311,15 @@ class OrderBook(BaseModel):
 
         return self
 
-    def get_best_bid(self) -> Optional[OrderBookLevel]:
+    def get_best_bid(self) -> OrderBookLevel | None:
         """Get the best bid level."""
         return self.bids[0] if self.bids else None
 
-    def get_best_ask(self) -> Optional[OrderBookLevel]:
+    def get_best_ask(self) -> OrderBookLevel | None:
         """Get the best ask level."""
         return self.asks[0] if self.asks else None
 
-    def get_spread(self) -> Optional[Decimal]:
+    def get_spread(self) -> Decimal | None:
         """Calculate the bid-ask spread."""
         best_bid = self.get_best_bid()
         best_ask = self.get_best_ask()
@@ -336,7 +327,7 @@ class OrderBook(BaseModel):
             return best_ask.price - best_bid.price
         return None
 
-    def get_mid_price(self) -> Optional[Decimal]:
+    def get_mid_price(self) -> Decimal | None:
         """Calculate the mid price."""
         best_bid = self.get_best_bid()
         best_ask = self.get_best_ask()
@@ -344,7 +335,7 @@ class OrderBook(BaseModel):
             return (best_bid.price + best_ask.price) / 2
         return None
 
-    def get_depth_imbalance(self, levels: int = 5) -> Optional[float]:
+    def get_depth_imbalance(self, levels: int = 5) -> float | None:
         """
         Calculate order book imbalance.
 
@@ -377,10 +368,10 @@ class TradeExecution(BaseModel):
     price: Decimal = Field(gt=0, description="Execution price")
     size: Decimal = Field(gt=0, description="Trade size")
     side: TradeSide = Field(description="Trade side (BUY/SELL)")
-    maker_order_id: Optional[str] = Field(
+    maker_order_id: str | None = Field(
         default=None, description="Maker order ID if available"
     )
-    taker_order_id: Optional[str] = Field(
+    taker_order_id: str | None = Field(
         default=None, description="Taker order ID if available"
     )
 
@@ -398,10 +389,10 @@ class MarketDepth(BaseModel):
 
     product_id: str = Field(description="Trading pair symbol")
     timestamp: datetime = Field(description="Snapshot timestamp")
-    bid_depth: List[PriceLevel] = Field(
+    bid_depth: list[PriceLevel] = Field(
         description="Aggregated bid liquidity at price levels"
     )
-    ask_depth: List[PriceLevel] = Field(
+    ask_depth: list[PriceLevel] = Field(
         description="Aggregated ask liquidity at price levels"
     )
     total_bid_volume: Decimal = Field(ge=0, description="Total bid volume")
@@ -420,7 +411,7 @@ class MarketDepth(BaseModel):
             Tuple of (bid_liquidity, ask_liquidity)
         """
         if not self.bid_depth or not self.ask_depth:
-            return Decimal("0"), Decimal("0")
+            return Decimal(0), Decimal(0)
 
         best_bid = self.bid_depth[0][0]
         best_ask = self.ask_depth[0][0]
@@ -431,14 +422,10 @@ class MarketDepth(BaseModel):
         max_ask_price = mid_price + distance
 
         bid_liquidity = sum(
-            volume
-            for price, volume in self.bid_depth
-            if price >= min_bid_price
+            volume for price, volume in self.bid_depth if price >= min_bid_price
         )
         ask_liquidity = sum(
-            volume
-            for price, volume in self.ask_depth
-            if price <= max_ask_price
+            volume for price, volume in self.ask_depth if price <= max_ask_price
         )
 
         return bid_liquidity, ask_liquidity
@@ -455,47 +442,49 @@ class MarketDataStatus(BaseModel):
     timestamp: datetime = Field(description="Status timestamp")
     connection_state: ConnectionState = Field(description="WebSocket connection state")
     data_quality: MarketDataQuality = Field(description="Overall data quality")
-    
+
     # Connection metrics
-    connected_since: Optional[datetime] = Field(
+    connected_since: datetime | None = Field(
         default=None, description="Connection establishment time"
     )
     reconnect_count: int = Field(
         default=0, ge=0, description="Number of reconnection attempts"
     )
-    last_error: Optional[str] = Field(
+    last_error: str | None = Field(
         default=None, description="Last error message if any"
     )
-    
+
     # Data freshness
-    last_ticker_update: Optional[datetime] = Field(
+    last_ticker_update: datetime | None = Field(
         default=None, description="Last ticker data received"
     )
-    last_trade_update: Optional[datetime] = Field(
+    last_trade_update: datetime | None = Field(
         default=None, description="Last trade data received"
     )
-    last_orderbook_update: Optional[datetime] = Field(
+    last_orderbook_update: datetime | None = Field(
         default=None, description="Last order book update"
     )
-    
+
     # Data statistics
-    messages_received: int = Field(default=0, ge=0, description="Total messages received")
-    messages_processed: int = Field(default=0, ge=0, description="Successfully processed messages")
+    messages_received: int = Field(
+        default=0, ge=0, description="Total messages received"
+    )
+    messages_processed: int = Field(
+        default=0, ge=0, description="Successfully processed messages"
+    )
     validation_failures: int = Field(default=0, ge=0, description="Failed validations")
-    
+
     # Performance metrics
-    avg_latency_ms: Optional[float] = Field(
+    avg_latency_ms: float | None = Field(
         default=None, ge=0, description="Average message latency in milliseconds"
     )
-    message_rate_per_sec: Optional[float] = Field(
+    message_rate_per_sec: float | None = Field(
         default=None, ge=0, description="Current message rate"
     )
 
-    model_config = ConfigDict(
-        arbitrary_types_allowed=True, use_enum_values=True
-    )
+    model_config = ConfigDict(arbitrary_types_allowed=True, use_enum_values=True)
 
-    def get_success_rate(self) -> Optional[float]:
+    def get_success_rate(self) -> float | None:
         """Calculate message processing success rate."""
         if self.messages_received == 0:
             return None
@@ -505,35 +494,39 @@ class MarketDataStatus(BaseModel):
         """Check if market data connection is healthy."""
         return (
             self.connection_state == ConnectionState.CONNECTED
-            and self.data_quality in [MarketDataQuality.EXCELLENT, MarketDataQuality.GOOD]
+            and self.data_quality
+            in [MarketDataQuality.EXCELLENT, MarketDataQuality.GOOD]
             and self.get_success_rate() is not None
             and self.get_success_rate() > 95.0
         )
 
-    def get_staleness_seconds(self) -> Optional[float]:
+    def get_staleness_seconds(self) -> float | None:
         """Get seconds since last update."""
         latest_update = max(
-            filter(None, [
-                self.last_ticker_update,
-                self.last_trade_update,
-                self.last_orderbook_update
-            ]),
-            default=None
+            filter(
+                None,
+                [
+                    self.last_ticker_update,
+                    self.last_trade_update,
+                    self.last_orderbook_update,
+                ],
+            ),
+            default=None,
         )
         if latest_update is None:
             return None
-        
+
         # Ensure both timestamps have timezone info
         if self.timestamp.tzinfo is None:
-            current = self.timestamp.replace(tzinfo=timezone.utc)
+            current = self.timestamp.replace(tzinfo=UTC)
         else:
             current = self.timestamp
-            
+
         if latest_update.tzinfo is None:
-            latest = latest_update.replace(tzinfo=timezone.utc)
+            latest = latest_update.replace(tzinfo=UTC)
         else:
             latest = latest_update
-            
+
         return (current - latest).total_seconds()
 
 
@@ -542,41 +535,39 @@ class AggregatedMarketData(BaseModel):
 
     product_id: str = Field(description="Trading pair symbol")
     timestamp: datetime = Field(description="Aggregation timestamp")
-    
+
     # Current data
     current_price: Decimal = Field(gt=0, description="Current market price")
     current_volume: Decimal = Field(ge=0, description="Current period volume")
-    
+
     # Time-based aggregations
-    candles_1m: Optional[List[CandleData]] = Field(
+    candles_1m: list[CandleData] | None = Field(
         default=None, description="1-minute candles"
     )
-    candles_5m: Optional[List[CandleData]] = Field(
+    candles_5m: list[CandleData] | None = Field(
         default=None, description="5-minute candles"
     )
-    candles_1h: Optional[List[CandleData]] = Field(
+    candles_1h: list[CandleData] | None = Field(
         default=None, description="1-hour candles"
     )
-    
+
     # Volume profile
-    volume_profile: Optional[List[tuple[Decimal, Decimal]]] = Field(
+    volume_profile: list[tuple[Decimal, Decimal]] | None = Field(
         default=None, description="Price levels and volumes"
     )
-    
+
     # Market microstructure
-    average_trade_size: Optional[Decimal] = Field(
+    average_trade_size: Decimal | None = Field(
         default=None, gt=0, description="Average trade size"
     )
-    trade_count: Optional[int] = Field(
-        default=None, ge=0, description="Number of trades"
-    )
-    buy_volume_ratio: Optional[float] = Field(
+    trade_count: int | None = Field(default=None, ge=0, description="Number of trades")
+    buy_volume_ratio: float | None = Field(
         default=None, ge=0, le=1, description="Buy volume as ratio of total"
     )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def get_volatility(self, period: str = "1h") -> Optional[float]:
+    def get_volatility(self, period: str = "1h") -> float | None:
         """
         Calculate price volatility for a given period.
 
@@ -591,24 +582,26 @@ class AggregatedMarketData(BaseModel):
             "5m": self.candles_5m,
             "1h": self.candles_1h,
         }
-        
+
         candles = candles_map.get(period)
         if not candles or len(candles) < 2:
             return None
-        
+
         returns = []
         for i in range(1, len(candles)):
-            if candles[i-1].close > 0:
-                ret = float((candles[i].close - candles[i-1].close) / candles[i-1].close)
+            if candles[i - 1].close > 0:
+                ret = float(
+                    (candles[i].close - candles[i - 1].close) / candles[i - 1].close
+                )
                 returns.append(ret)
-        
+
         if not returns:
             return None
-        
+
         # Calculate standard deviation
         mean_return = sum(returns) / len(returns)
         variance = sum((r - mean_return) ** 2 for r in returns) / len(returns)
-        return variance ** 0.5
+        return variance**0.5
 
 
 # Type guards for runtime type checking
@@ -634,13 +627,15 @@ def is_valid_timestamp(value: any) -> bool:
     """Check if value is a valid timestamp."""
     if isinstance(value, datetime):
         return value.tzinfo is not None
-    elif isinstance(value, (int, float)):
+    if isinstance(value, (int, float)):
         return value > 0
     return False
 
 
 # Aggregation helpers
-def aggregate_candles(candles: List[CandleData], target_interval_minutes: int) -> List[CandleData]:
+def aggregate_candles(
+    candles: list[CandleData], target_interval_minutes: int
+) -> list[CandleData]:
     """
     Aggregate fine-grained candles into larger intervals.
 
@@ -653,19 +648,19 @@ def aggregate_candles(candles: List[CandleData], target_interval_minutes: int) -
     """
     if not candles:
         return []
-    
+
     aggregated = []
     current_group = []
-    
+
     for candle in sorted(candles, key=lambda x: x.timestamp):
         if not current_group:
             current_group.append(candle)
             continue
-        
+
         # Check if candle belongs to current group
         first_timestamp = current_group[0].timestamp
         time_diff = (candle.timestamp - first_timestamp).total_seconds() / 60
-        
+
         if time_diff < target_interval_minutes:
             current_group.append(candle)
         else:
@@ -681,10 +676,10 @@ def aggregate_candles(candles: List[CandleData], target_interval_minutes: int) -
                     trades_count=sum(c.trades_count or 0 for c in current_group),
                 )
                 aggregated.append(agg_candle)
-            
+
             # Start new group
             current_group = [candle]
-    
+
     # Handle last group
     if current_group:
         agg_candle = CandleData(
@@ -697,5 +692,5 @@ def aggregate_candles(candles: List[CandleData], target_interval_minutes: int) -
             trades_count=sum(c.trades_count or 0 for c in current_group),
         )
         aggregated.append(agg_candle)
-    
+
     return aggregated

@@ -186,22 +186,29 @@ class ServiceStartupManager:
                     if publisher.connected:
                         logger.info("WebSocket publisher connected successfully")
                     else:
-                        logger.info("WebSocket publisher in offline mode (dashboard unavailable)")
+                        logger.info(
+                            "WebSocket publisher in offline mode (dashboard unavailable)"
+                        )
                     return publisher
-                    
+
                 # This should not happen with new implementation
                 logger.warning("WebSocket publisher initialization returned False")
                 return None
 
         except TimeoutError:
-            logger.warning("WebSocket publisher initialization timeout - using offline mode")
+            logger.warning(
+                "WebSocket publisher initialization timeout - using offline mode"
+            )
             # Create publisher in null mode
             publisher = WebSocketPublisher(self.settings)
             publisher._enable_null_publisher_mode()
             return publisher
         except Exception as e:
-            logger.warning("WebSocket publisher initialization error: %s - using offline mode", str(e))
-            # Create publisher in null mode  
+            logger.warning(
+                "WebSocket publisher initialization error: %s - using offline mode",
+                str(e),
+            )
+            # Create publisher in null mode
             publisher = WebSocketPublisher(self.settings)
             publisher._enable_null_publisher_mode()
             return publisher
@@ -270,14 +277,12 @@ class ServiceStartupManager:
                     if test_result is not None:
                         logger.info("OmniSearch test query successful")
                         return client
-                    else:
-                        logger.warning("OmniSearch test query returned no results")
-                        # Return client anyway - it might work for other queries
-                        return client
-                else:
-                    logger.warning("OmniSearch connection failed")
-                    # Return unconnected client for graceful degradation
+                    logger.warning("OmniSearch test query returned no results")
+                    # Return client anyway - it might work for other queries
                     return client
+                logger.warning("OmniSearch connection failed")
+                # Return unconnected client for graceful degradation
+                return client
 
         except TimeoutError:
             logger.warning("OmniSearch connection timeout")

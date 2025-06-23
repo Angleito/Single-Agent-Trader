@@ -1933,7 +1933,7 @@ class BluefinMarketDataProvider:
                     return await self._generate_fallback_historical_data_for_symbol(
                         symbol, limit
                     )
-                
+
                 logger.info(
                     "Successfully fetched %s candles from Bluefin directly",
                     len(candles),
@@ -2131,31 +2131,34 @@ class BluefinMarketDataProvider:
     ) -> list[MarketData]:
         """
         Generate synthetic historical data for a specific symbol with a specific limit.
-        
+
         This is used when API returns no data for a specific request.
-        
+
         Args:
             symbol: Trading symbol
             limit: Number of candles to generate
-            
+
         Returns:
             List of synthetic MarketData objects
         """
         logger.info(
             "🎭 Generating %d fallback candles for %s due to empty API response",
-            limit, symbol
+            limit,
+            symbol,
         )
-        
+
         try:
             # Try to get current price first
             reference_price = None
             try:
                 reference_price = await self.fetch_latest_price()
                 if reference_price:
-                    logger.info("💰 Using real price as reference: $%s", reference_price)
+                    logger.info(
+                        "💰 Using real price as reference: $%s", reference_price
+                    )
             except Exception as e:
                 logger.debug("Could not get real price for reference: %s", e)
-            
+
             # Use default prices if no real price available
             if not reference_price:
                 default_prices = {
@@ -2170,40 +2173,43 @@ class BluefinMarketDataProvider:
                 }
                 reference_price = default_prices.get(symbol, Decimal("100.0"))
                 logger.info("Using default price for %s: $%s", symbol, reference_price)
-            
+
             # Generate synthetic candles with realistic price movement
             candles = []
             current_time = datetime.now(UTC)
             current_price = float(reference_price)
-            
+
             # Parse interval to minutes
             interval_minutes = 1
-            if self.interval.endswith('m'):
+            if self.interval.endswith("m"):
                 interval_minutes = int(self.interval[:-1])
-            elif self.interval.endswith('h'):
+            elif self.interval.endswith("h"):
                 interval_minutes = int(self.interval[:-1]) * 60
-            elif self.interval.endswith('d'):
+            elif self.interval.endswith("d"):
                 interval_minutes = int(self.interval[:-1]) * 1440
-            
+
             for i in range(limit):
                 # Calculate timestamp for this candle
                 candle_time = current_time - timedelta(
                     minutes=interval_minutes * (limit - i - 1)
                 )
-                
+
                 # Generate realistic OHLCV data with some randomness
                 import random
+
                 volatility = 0.0005  # 0.05% volatility
                 price_change = current_price * volatility * (random.random() - 0.5) * 2
-                
+
                 open_price = current_price
                 close_price = current_price + price_change
-                high_price = max(open_price, close_price) * (1 + random.random() * 0.001)
+                high_price = max(open_price, close_price) * (
+                    1 + random.random() * 0.001
+                )
                 low_price = min(open_price, close_price) * (1 - random.random() * 0.001)
-                
+
                 # Generate volume
                 base_volume = random.uniform(50, 200)
-                
+
                 market_data = MarketData(
                     symbol=symbol,
                     timestamp=candle_time,
@@ -2213,16 +2219,19 @@ class BluefinMarketDataProvider:
                     close=Decimal(str(round(close_price, 6))),
                     volume=Decimal(str(round(base_volume, 4))),
                 )
-                
+
                 candles.append(market_data)
                 current_price = close_price
-            
+
             logger.info(
                 "✅ Generated %d synthetic candles for %s (range: $%s - $%s)",
-                len(candles), symbol, candles[0].close, candles[-1].close
+                len(candles),
+                symbol,
+                candles[0].close,
+                candles[-1].close,
             )
             return candles
-            
+
         except Exception as e:
             logger.error("Failed to generate fallback data for %s: %s", symbol, e)
             # Return minimal data
@@ -2779,28 +2788,40 @@ class BluefinMarketDataProvider:
             test_endpoints = [
                 ("/exchangeInfo", "exchangeInfo"),
                 (f"/ticker?symbol={self.symbol}", "ticker"),
-                ("/candlestickData?symbol={self.symbol}&interval=1m&limit=1", "candlestick"),
+                (
+                    "/candlestickData?symbol={self.symbol}&interval=1m&limit=1",
+                    "candlestick",
+                ),
             ]
-            
+
             for endpoint, name in test_endpoints:
                 try:
                     test_url = f"{self._api_base_url}{endpoint}"
                     logger.debug("Testing connectivity with %s endpoint", name)
-                    
+
                     async with self._session.get(
                         test_url, timeout=aiohttp.ClientTimeout(total=3)
                     ) as response:
                         if response.status == 200:
                             data = await response.json()
                             # Different validation for different endpoints
-                            if name == "exchangeInfo" and isinstance(data, list) and len(data) > 0:
-                                logger.debug("✅ API connectivity validated using %s", name)
+                            if (
+                                name == "exchangeInfo"
+                                and isinstance(data, list)
+                                and len(data) > 0
+                            ) or (
+                                name == "ticker"
+                                and isinstance(data, list)
+                                and len(data) > 0
+                            ):
+                                logger.debug(
+                                    "✅ API connectivity validated using %s", name
+                                )
                                 return True
-                            elif name == "ticker" and isinstance(data, list) and len(data) > 0:
-                                logger.debug("✅ API connectivity validated using %s", name)
-                                return True
-                            elif name == "candlestick" and isinstance(data, list):
-                                logger.debug("✅ API connectivity validated using %s", name)
+                            if name == "candlestick" and isinstance(data, list):
+                                logger.debug(
+                                    "✅ API connectivity validated using %s", name
+                                )
                                 return True
                         else:
                             logger.debug(
@@ -2809,7 +2830,7 @@ class BluefinMarketDataProvider:
                 except Exception as e:
                     logger.debug("Failed to test %s endpoint: %s", name, str(e))
                     continue
-            
+
             logger.warning("❌ API connectivity test failed for all endpoints")
             return False
 

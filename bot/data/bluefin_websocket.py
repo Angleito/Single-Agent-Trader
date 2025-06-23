@@ -994,9 +994,9 @@ class BluefinWebSocketClient:
                     self._message_count,
                     event_name,
                     channel,
-                    list(data.keys())[:10]
+                    list(data.keys())[:10],
                 )
-            
+
             # Try to extract price data from unstructured messages
             await self._handle_generic_price_update(data)
 
@@ -1769,23 +1769,31 @@ class BluefinWebSocketClient:
     async def _handle_generic_price_update(self, data: dict[str, Any]) -> None:
         """
         Handle generic price updates from unstructured messages.
-        
+
         This method attempts to extract price data from messages that don't
         match the standard event/channel patterns.
-        
+
         Args:
             data: Message data that might contain price information
         """
         try:
             # Look for price-related fields in the data
             price_fields = [
-                "price", "lastPrice", "last", "close", "currentPrice",
-                "markPrice", "indexPrice", "bid", "ask", "mid"
+                "price",
+                "lastPrice",
+                "last",
+                "close",
+                "currentPrice",
+                "markPrice",
+                "indexPrice",
+                "bid",
+                "ask",
+                "mid",
             ]
-            
+
             price_value = None
             price_source = None
-            
+
             # Search for price data in various structures
             if isinstance(data.get("data"), dict):
                 # Check nested data structure
@@ -1794,7 +1802,7 @@ class BluefinWebSocketClient:
                         price_value = data["data"][field]
                         price_source = f"data.{field}"
                         break
-            
+
             if not price_value:
                 # Check top-level fields
                 for field in price_fields:
@@ -1802,7 +1810,7 @@ class BluefinWebSocketClient:
                         price_value = data[field]
                         price_source = field
                         break
-            
+
             if not price_value:
                 # Check for tick data structure
                 if "tick" in data and isinstance(data["tick"], dict):
@@ -1811,7 +1819,7 @@ class BluefinWebSocketClient:
                             price_value = data["tick"][field]
                             price_source = f"tick.{field}"
                             break
-            
+
             # If we found a price, process it
             if price_value is not None:
                 try:
@@ -1822,14 +1830,14 @@ class BluefinWebSocketClient:
                         )
                     else:
                         price_decimal = Decimal(str(price_value))
-                    
+
                     # Validate price
                     if price_decimal > 0 and self._validate_price_continuity(
                         price_decimal, f"generic_{price_source}"
                     ):
                         # Create a tick update for the aggregator
                         timestamp = datetime.now(UTC)
-                        
+
                         # If we have timestamp in the data, use it
                         if "timestamp" in data:
                             try:
@@ -1841,7 +1849,7 @@ class BluefinWebSocketClient:
                                     timestamp = datetime.fromtimestamp(ts, UTC)
                             except:
                                 pass
-                        
+
                         # Create simplified market data for price update
                         market_data = MarketData(
                             symbol=self.symbol,
@@ -1850,36 +1858,30 @@ class BluefinWebSocketClient:
                             high=price_decimal,
                             low=price_decimal,
                             close=price_decimal,
-                            volume=Decimal("0"),
+                            volume=Decimal(0),
                             last_trade_price=price_decimal,
                         )
-                        
+
                         # Process as tick for aggregation
                         await self._process_tick_update(
                             price_decimal,
-                            Decimal("1"),  # Default volume
-                            timestamp
+                            Decimal(1),  # Default volume
+                            timestamp,
                         )
-                        
+
                         logger.debug(
                             "Extracted price from generic message: $%s (source: %s)",
                             price_decimal,
-                            price_source
+                            price_source,
                         )
-                        
+
                 except Exception as e:
-                    logger.debug(
-                        "Failed to process generic price update: %s",
-                        str(e)
-                    )
-            
+                    logger.debug("Failed to process generic price update: %s", str(e))
+
         except Exception as e:
             # Don't log errors for every unhandled message
             if self._message_count <= 10:
-                logger.debug(
-                    "Error in generic price handler: %s",
-                    str(e)
-                )
+                logger.debug("Error in generic price handler: %s", str(e))
 
     async def _heartbeat_handler(self) -> None:
         """Enhanced heartbeat handler with ping/pong monitoring."""
