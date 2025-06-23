@@ -408,7 +408,7 @@ class BacktestEngine:
         self.trades.append(self.current_position)
         self.current_position = None
 
-        logger.debug("Closed position: %.2f PnL (%s)", pnl, reason)
+        logger.debug("Closed position: %.2f PnL (%s)", float(pnl), reason)
 
     async def _check_exit_conditions(
         self, timestamp: datetime, market_data: pd.Series

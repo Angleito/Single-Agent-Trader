@@ -13,8 +13,11 @@ real trading conditions including:
 import json
 import logging
 import os
+import statistics
+import tempfile
 import threading
 import time
+import traceback
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_EVEN, Decimal, getcontext
@@ -150,7 +153,6 @@ class PaperTradingAccount:
                 self.data_dir = get_data_directory() / "paper_trading"
             except OSError:
                 # Fallback to temporary directory
-                import tempfile
 
                 self.data_dir = Path(tempfile.mkdtemp(prefix="paper_trading_"))
 
@@ -1476,8 +1478,6 @@ class PaperTradingAccount:
             float(m.total_pnl / m.starting_balance) for m in daily_metrics.values()
         ]
 
-        import statistics
-
         mean_return = statistics.mean(daily_returns)
         std_return = statistics.stdev(daily_returns) if len(daily_returns) > 1 else 0
 
@@ -1873,7 +1873,6 @@ class PaperTradingAccount:
                 )
 
                 # Log stack trace for debugging
-                import traceback
 
                 logger.info("🚨 Stack trace:\n%s", traceback.format_exc())
 
@@ -2149,7 +2148,9 @@ class PaperTradingAccount:
             self.max_drawdown = Decimal(0)
 
             self._save_state()
-            logger.info("Paper trading account reset to $%.2f", self.starting_balance)
+            logger.info(
+                "Paper trading account reset to $%.2f", float(self.starting_balance)
+            )
 
     def get_monitoring_summary(self) -> dict[str, Any]:
         """Get comprehensive monitoring summary for paper trading."""

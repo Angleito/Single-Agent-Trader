@@ -5,12 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Literal
-
-# Import proper types to replace Any
-from bot.types.base_types import DominanceCandleData
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+# Import proper types to replace Any
+if TYPE_CHECKING:
+    from .types.base_types import DominanceCandleData
 
 
 class TradeAction(BaseModel):
@@ -162,12 +163,10 @@ class MarketState(BaseModel):
     current_position: Position
 
     # Stablecoin dominance data for sentiment analysis
-    dominance_data: Any | None = None  # Will be DominanceData when available
+    dominance_data: StablecoinDominance | None = None
 
     # Dominance candlesticks for technical analysis
-    dominance_candles: list[Any] | None = (
-        None  # Will be list[DominanceCandleData] at runtime
-    )
+    dominance_candles: list[DominanceCandleData] | None = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
