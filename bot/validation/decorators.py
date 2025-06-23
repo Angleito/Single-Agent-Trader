@@ -7,9 +7,9 @@ validate inputs and outputs, reducing boilerplate code and ensuring consistency.
 
 import functools
 import inspect
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from decimal import Decimal
-from typing import Any, TypeVar
+from typing import Any, ParamSpec, Protocol, TypeVar, Union, cast, overload
 
 from bot.trading_types import Position, TradeAction
 from bot.types.exceptions import (
@@ -25,15 +25,23 @@ from bot.types.guards import (
     is_valid_quantity,
 )
 
-# Type variable for decorated functions
-F = TypeVar("F", bound=Callable[..., Any])
+# Type variables for decorated functions
+P = ParamSpec("P")
+T = TypeVar("T")
+
+# Protocol for functions that can be sync or async
+class SyncOrAsyncCallable(Protocol[P, T]):
+    @overload
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> T: ...
+    @overload  
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> Awaitable[T]: ...
 
 
 def validate_balance(
     balance_arg_name: str = "balance",
     require_positive: bool = True,
     max_value: Decimal | None = None,
-) -> Callable[[F], F]:
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
     """
     Decorator to validate Decimal balance values.
 

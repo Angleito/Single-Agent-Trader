@@ -12,8 +12,6 @@ from decimal import Decimal
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-import pytest
-
 from bot.position_manager import (
     PositionManager,
     PositionManagerError,
@@ -73,6 +71,35 @@ class TestPositionManager(unittest.TestCase):
         ):
             self.position_manager = PositionManager(data_dir=self.temp_dir)
 
+        # Counter for generating unique order IDs
+        self.order_counter = 0
+
+    def create_order(
+        self,
+        symbol: str,
+        side: str,
+        quantity: Decimal,
+        order_type: str = "MARKET",
+        filled_quantity: Decimal | None = None,
+        status: OrderStatus = OrderStatus.FILLED,
+        price: Decimal | None = None,
+    ) -> Order:
+        """Helper method to create valid Order objects."""
+        self.order_counter += 1
+        return Order(
+            id=f"test_order_{self.order_counter}",
+            symbol=symbol,
+            side=side,
+            type=order_type,
+            quantity=quantity,
+            price=price,
+            status=status,
+            timestamp=datetime.now(UTC),
+            filled_quantity=(
+                filled_quantity if filled_quantity is not None else quantity
+            ),
+        )
+
     def tearDown(self):
         """Clean up test fixtures."""
         # Clean up temporary directory
@@ -90,13 +117,10 @@ class TestPositionManager(unittest.TestCase):
     def test_create_position(self):
         """Test creating a new position via order."""
         # Create a BUY order that will create a LONG position
-        order = Order(
+        order = self.create_order(
             symbol="BTC-USD",
             side="BUY",
-            size=Decimal("0.5"),
-            order_type="MARKET",
-            filled_quantity=Decimal("0.5"),
-            status=OrderStatus.FILLED,
+            quantity=Decimal("0.5"),
         )
 
         position = self.position_manager.update_position_from_order(
@@ -114,13 +138,10 @@ class TestPositionManager(unittest.TestCase):
     def test_get_position(self):
         """Test retrieving a position."""
         # Create a position via order
-        order = Order(
+        order = self.create_order(
             symbol="BTC-USD",
             side="BUY",
-            size=Decimal("0.5"),
-            order_type="MARKET",
-            filled_quantity=Decimal("0.5"),
-            status=OrderStatus.FILLED,
+            quantity=Decimal("0.5"),
         )
 
         position = self.position_manager.update_position_from_order(
@@ -142,13 +163,10 @@ class TestPositionManager(unittest.TestCase):
     def test_update_position_size(self):
         """Test updating position size via additional order."""
         # Create initial position
-        order1 = Order(
+        order1 = self.create_order(
             symbol="BTC-USD",
             side="BUY",
-            size=Decimal("0.5"),
-            order_type="MARKET",
-            filled_quantity=Decimal("0.5"),
-            status=OrderStatus.FILLED,
+            quantity=Decimal("0.5"),
         )
 
         self.position_manager.update_position_from_order(
@@ -156,13 +174,10 @@ class TestPositionManager(unittest.TestCase):
         )
 
         # Increase position size with another order
-        order2 = Order(
+        order2 = self.create_order(
             symbol="BTC-USD",
             side="BUY",
-            size=Decimal("0.3"),
-            order_type="MARKET",
-            filled_quantity=Decimal("0.3"),
-            status=OrderStatus.FILLED,
+            quantity=Decimal("0.3"),
         )
 
         updated_position = self.position_manager.update_position_from_order(
@@ -180,13 +195,10 @@ class TestPositionManager(unittest.TestCase):
     def test_update_position_size_reduction(self):
         """Test reducing position size via partial sell."""
         # Create initial position
-        order1 = Order(
+        order1 = self.create_order(
             symbol="BTC-USD",
             side="BUY",
-            size=Decimal("1.0"),
-            order_type="MARKET",
-            filled_quantity=Decimal("1.0"),
-            status=OrderStatus.FILLED,
+            quantity=Decimal("1.0"),
         )
 
         self.position_manager.update_position_from_order(
@@ -194,13 +206,10 @@ class TestPositionManager(unittest.TestCase):
         )
 
         # Reduce position size by selling
-        order2 = Order(
+        order2 = self.create_order(
             symbol="BTC-USD",
             side="SELL",
-            size=Decimal("0.4"),
-            order_type="MARKET",
-            filled_quantity=Decimal("0.4"),
-            status=OrderStatus.FILLED,
+            quantity=Decimal("0.4"),
         )
 
         updated_position = self.position_manager.update_position_from_order(
@@ -586,8 +595,7 @@ class TestPositionManager(unittest.TestCase):
             status=OrderStatus.FILLED,
         )
         self.position_manager.update_position_from_order(
-            order=order1,
-            fill_price=Decimal("50000.00")
+            order=order1, fill_price=Decimal("50000.00")
         )
 
         # Close the position
@@ -600,8 +608,7 @@ class TestPositionManager(unittest.TestCase):
             status=OrderStatus.FILLED,
         )
         self.position_manager.update_position_from_order(
-            order=order2,
-            fill_price=Decimal("55000.00")
+            order=order2, fill_price=Decimal("55000.00")
         )
 
         # Check that position is now flat
@@ -621,14 +628,13 @@ class TestPositionManager(unittest.TestCase):
             filled_quantity=Decimal(0),
             status=OrderStatus.FILLED,
         )
-        
+
         # The position manager should handle this gracefully
         # Either by returning a FLAT position or handling the edge case
         position = self.position_manager.update_position_from_order(
-            order=order,
-            fill_price=Decimal("50000.00")
+            order=order, fill_price=Decimal("50000.00")
         )
-        
+
         # Position should remain flat with zero size
         assert position.side == "FLAT"
         assert position.size == Decimal(0)
@@ -645,8 +651,7 @@ class TestPositionManager(unittest.TestCase):
             status=OrderStatus.FILLED,
         )
         self.position_manager.update_position_from_order(
-            order=btc_order,
-            fill_price=Decimal("50000.00")
+            order=btc_order, fill_price=Decimal("50000.00")
         )
 
         eth_order = Order(
@@ -658,8 +663,7 @@ class TestPositionManager(unittest.TestCase):
             status=OrderStatus.FILLED,
         )
         self.position_manager.update_position_from_order(
-            order=eth_order,
-            fill_price=Decimal("3000.00")
+            order=eth_order, fill_price=Decimal("3000.00")
         )
 
         # Update unrealized P&L
@@ -672,7 +676,7 @@ class TestPositionManager(unittest.TestCase):
 
         # Test risk metrics for individual positions
         btc_risk_metrics = self.position_manager.get_position_risk_metrics("BTC-USD")
-        
+
         assert "position_value" in btc_risk_metrics
         assert "unrealized_pnl" in btc_risk_metrics
         assert "unrealized_pnl_pct" in btc_risk_metrics
@@ -691,12 +695,12 @@ class TestPositionManager(unittest.TestCase):
             status=OrderStatus.FILLED,
         )
         position = self.position_manager.update_position_from_order(
-            order=order,
-            fill_price=Decimal("50000.00")
+            order=order, fill_price=Decimal("50000.00")
         )
 
         # The state should be saved automatically, but we'll wait a bit
         import time
+
         time.sleep(0.1)  # Give async save time to complete
 
         # Create new position manager
@@ -737,8 +741,7 @@ class TestPositionManager(unittest.TestCase):
             status=OrderStatus.FILLED,
         )
         self.position_manager.update_position_from_order(
-            order=order1,
-            fill_price=Decimal("50000.00")
+            order=order1, fill_price=Decimal("50000.00")
         )
 
         # Reduce position by selling (partial close)
@@ -751,8 +754,7 @@ class TestPositionManager(unittest.TestCase):
             status=OrderStatus.FILLED,
         )
         self.position_manager.update_position_from_order(
-            order=order2,
-            fill_price=Decimal("52000.00")
+            order=order2, fill_price=Decimal("52000.00")
         )
 
         updated_position = self.position_manager.get_position("BTC-USD")

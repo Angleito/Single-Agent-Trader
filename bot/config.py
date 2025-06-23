@@ -391,8 +391,14 @@ class ConfigurationValidator:
                 self.errors.append(
                     "Bluefin private key appears to be truncated or invalid"
                 )
-                results["status"] = "fail"
-                results["checks"].append({"name": "key_length", "status": "error"})
+                results["status"] = "error"
+                results["checks"].append(
+                    ValidationCheck(
+                        name="key_length",
+                        status="error",
+                        message="Key must be 32 bytes for security",
+                    )
+                )
 
             # Security recommendations
             if not self.settings.system.dry_run:
@@ -400,7 +406,11 @@ class ConfigurationValidator:
                     "Live trading enabled - ensure private keys are securely stored"
                 )
                 results["checks"].append(
-                    {"name": "live_trading_security", "status": "warning"}
+                    ValidationCheck(
+                        name="live_trading_security",
+                        status="warning",
+                        message="Live trading enabled - ensure secure key storage",
+                    )
                 )
 
         return results
@@ -414,7 +424,13 @@ class ConfigurationValidator:
             self.warnings.append(
                 f"High leverage ({self.settings.trading.leverage}x) detected"
             )
-            results["checks"].append({"name": "high_leverage", "status": "warning"})
+            results["checks"].append(
+                ValidationCheck(
+                    name="high_leverage",
+                    status="warning",
+                    message=f"High leverage ({self.settings.trading.leverage}x) increases risk",
+                )
+            )
 
         # Position size validation
         if self.settings.trading.max_size_pct > 50.0:
@@ -422,7 +438,11 @@ class ConfigurationValidator:
                 f"High position size ({self.settings.trading.max_size_pct}%) detected"
             )
             results["checks"].append(
-                {"name": "high_position_size", "status": "warning"}
+                ValidationCheck(
+                    name="high_position_size",
+                    status="warning",
+                    message=f"High position size ({self.settings.trading.max_size_pct}%) increases risk",
+                )
             )
 
         # Risk-reward ratio validation
@@ -434,7 +454,13 @@ class ConfigurationValidator:
             self.warnings.append(
                 f"Low risk-reward ratio ({risk_reward:.2f}) may impact profitability"
             )
-            results["checks"].append({"name": "low_risk_reward", "status": "warning"})
+            results["checks"].append(
+                ValidationCheck(
+                    name="low_risk_reward",
+                    status="warning",
+                    message=f"Low risk-reward ratio ({risk_reward:.2f}) may impact profitability",
+                )
+            )
 
         return results
 
@@ -3213,7 +3239,9 @@ class ConfigurationMonitor:
 
 
 def create_settings(
-    env_file: str | None = None, profile: TradingProfile | None = None, **overrides: object
+    env_file: str | None = None,
+    profile: TradingProfile | None = None,
+    **overrides: object,
 ) -> Settings:
     """Factory function to create settings with optional overrides."""
     # Ensure .env file is loaded
