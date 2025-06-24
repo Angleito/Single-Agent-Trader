@@ -8,7 +8,7 @@ from .ema_ribbon import EMAribbon
 from .rsimfi import RSIMFIIndicator
 from .schaff_trend_cycle import SchaffTrendCycle
 from .stochastic_rsi import StochasticRSI
-from .vumanchu import CipherA, CipherB, VuManChuIndicators
+from .vumanchu import CipherA, CipherB, VuManChuIndicators, VuManchuState
 
 __all__ = [
     "CipherA",
@@ -18,6 +18,7 @@ __all__ = [
     "SchaffTrendCycle",
     "StochasticRSI",
     "VuManChuIndicators",
+    "VuManchuState",
 ]
 
 

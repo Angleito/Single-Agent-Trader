@@ -7,13 +7,28 @@ based on time, market conditions, and other criteria.
 from collections.abc import Callable
 from datetime import UTC, datetime, time
 
-import numpy as np
-import pandas as pd
+try:
+    import numpy as np
 
-from bot.fp.core.types import ValidationResult, failure, success
+    HAS_NUMPY = True
+except ImportError:
+    np = None
+    HAS_NUMPY = False
+
+try:
+    import pandas as pd
+
+    HAS_PANDAS = True
+except ImportError:
+    pd = None
+    HAS_PANDAS = False
+
+from bot.fp.types.result import Failure as failure
+from bot.fp.types.result import Result as ValidationResult
+from bot.fp.types.result import Success as success
 
 # Type aliases
-Filter = Callable[[dict], ValidationResult[dict]]
+Filter = Callable[[dict], ValidationResult[dict, str]]
 TimeRange = tuple[time, time]
 
 
@@ -569,3 +584,52 @@ def create_risk_filters(
         filters.append(news_blackout_filter())
 
     return sequential_filter(*filters)
+
+
+# Classes for import compatibility
+from dataclasses import dataclass
+from typing import Any
+
+
+@dataclass(frozen=True)
+class FilterConfig:
+    """Configuration for strategy filters."""
+
+    enabled: bool = True
+    params: dict[str, Any] = None
+
+    def __post_init__(self):
+        if self.params is None:
+            object.__setattr__(self, "params", {})
+
+
+@dataclass(frozen=True)
+class FilterResult:
+    """Result of filter application."""
+
+    passed: bool
+    reason: str
+    filtered_data: dict[str, Any] = None
+
+    def __post_init__(self):
+        if self.filtered_data is None:
+            object.__setattr__(self, "filtered_data", {})
+
+
+class StrategyFilter:
+    """Base strategy filter class."""
+
+    def __init__(self, config: FilterConfig):
+        self.config = config
+
+    def apply(self, data: dict[str, Any]) -> FilterResult:
+        """Apply filter to data."""
+        if not self.config.enabled:
+            return FilterResult(
+                passed=True, reason="Filter disabled", filtered_data=data
+            )
+
+        # Default implementation passes all data
+        return FilterResult(
+            passed=True, reason="Default filter passed", filtered_data=data
+        )

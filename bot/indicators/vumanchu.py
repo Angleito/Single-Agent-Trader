@@ -1042,12 +1042,17 @@ async def calculate_vumanchu_async(
     return await loop.run_in_executor(None, vumanchu_indicators.calculate, df)
 
 
+# Import VuManchuState for backward compatibility export
+from bot.fp.types.indicators import VuManchuState
+
 # Export all classes and functions for backward compatibility
 __all__ = [
     # Original classes (preserved)
     "CipherA",
     "CipherB",
     "VuManChuIndicators",
+    # State classes for compatibility
+    "VuManchuState",
     # Functional enhancements (new)
     "VuManChuFunctional",
     # Factory functions (preserved)

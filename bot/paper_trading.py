@@ -26,7 +26,7 @@ from typing import Any
 
 from .config import settings
 from .fee_calculator import fee_calculator
-from .fp.types import Order, OrderStatus, TradeAction
+from .trading_types import Order, OrderStatus, TradeAction
 from .validation import BalanceValidator
 
 # Import monitoring components

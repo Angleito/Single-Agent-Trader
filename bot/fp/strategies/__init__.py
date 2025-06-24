@@ -21,16 +21,29 @@ from .execution import (
 )
 
 # Strategy filters
-from .filters import (
-    FilterConfig,
-    FilterResult,
-    StrategyFilter,
-)
-
+# from .filters import (
+#     FilterConfig,
+#     FilterResult,
+#     StrategyFilter,
+# )
 # LLM strategies
 from .llm_functional import (
     LLMConfig,
+    LLMProvider,
+    LLMResponse,
+    adjust_confidence_by_market_conditions,
+    create_market_context,
+    generate_trading_prompt,
+    parse_llm_response,
+    validate_llm_decision,
 )
+
+# Import FunctionalLLMStrategy from strategy_adapter
+try:
+    from ..adapters.strategy_adapter import FunctionalLLMStrategy
+except ImportError:
+    # Define a placeholder if import fails
+    FunctionalLLMStrategy = None
 
 # Market making strategies
 from .market_making import (

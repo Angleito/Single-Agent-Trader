@@ -7,7 +7,7 @@ from typing import Any
 
 from ..types import MarketState, TradingParams
 from ..types.indicators import VuManchuState
-from ..types.trading import TradeSignal as Signal
+from ..types.trading import Hold, Long, Short, TradeSignal
 
 
 class LLMProvider(Enum):
@@ -47,7 +47,7 @@ class LLMContext:
 class LLMResponse:
     """Parsed LLM response with trading decision."""
 
-    signal: Signal
+    signal: TradeSignal
     confidence: float
     reasoning: str
     risk_assessment: dict[str, Any]
@@ -205,15 +205,36 @@ def parse_llm_response(response_text: str, market_state: MarketState) -> LLMResp
 
         # Map action to signal
         action = data.get("action", "HOLD").upper()
-        signal_map = {"LONG": Signal.LONG, "SHORT": Signal.SHORT, "HOLD": Signal.HOLD}
-        signal = signal_map.get(action, Signal.HOLD)
 
-        # Extract confidence
+        # Extract confidence and size for Long/Short signals
         confidence = float(data.get("confidence", 0.5))
         confidence = max(0.0, min(1.0, confidence))  # Clamp to [0, 1]
 
-        # Extract other fields
         reasoning = data.get("reasoning", "No reasoning provided")
+
+        # Create appropriate signal instance
+        if action == "LONG":
+            # Extract position size from suggested params
+            position_size = 0.25  # default
+            if (
+                data.get("suggested_params")
+                and "position_size" in data["suggested_params"]
+            ):
+                position_size = float(data["suggested_params"]["position_size"])
+            signal = Long(confidence=confidence, size=position_size, reason=reasoning)
+        elif action == "SHORT":
+            # Extract position size from suggested params
+            position_size = 0.25  # default
+            if (
+                data.get("suggested_params")
+                and "position_size" in data["suggested_params"]
+            ):
+                position_size = float(data["suggested_params"]["position_size"])
+            signal = Short(confidence=confidence, size=position_size, reason=reasoning)
+        else:  # HOLD
+            signal = Hold(reason=reasoning)
+
+        # Extract other fields
         risk_assessment = data.get(
             "risk_assessment",
             {
@@ -225,7 +246,7 @@ def parse_llm_response(response_text: str, market_state: MarketState) -> LLMResp
 
         # Process suggested parameters
         suggested_params = None
-        if "suggested_params" in data and signal != Signal.HOLD:
+        if "suggested_params" in data and not isinstance(signal, Hold):
             params = data["suggested_params"]
             suggested_params = {
                 "position_size": float(params.get("position_size", 0.25)),
@@ -234,7 +255,7 @@ def parse_llm_response(response_text: str, market_state: MarketState) -> LLMResp
                         "stop_loss",
                         (
                             market_state.current_price * 0.98
-                            if signal == Signal.LONG
+                            if isinstance(signal, Long)
                             else market_state.current_price * 1.02
                         ),
                     )
@@ -244,7 +265,7 @@ def parse_llm_response(response_text: str, market_state: MarketState) -> LLMResp
                         "take_profit",
                         (
                             market_state.current_price * 1.02
-                            if signal == Signal.LONG
+                            if isinstance(signal, Long)
                             else market_state.current_price * 0.98
                         ),
                     )
@@ -279,13 +300,13 @@ def adjust_confidence_by_market_conditions(
 
     # Reduce confidence for counter-trend trades
     trend = _calculate_price_trend(market_state)
-    if (response.signal == Signal.SHORT and trend > 0.01) or (
-        response.signal == Signal.LONG and trend < -0.01
+    if (isinstance(response.signal, Short) and trend > 0.01) or (
+        isinstance(response.signal, Long) and trend < -0.01
     ):
         adjusted_confidence *= 0.8
 
     # Don't trade with low confidence
-    if adjusted_confidence < 0.4 and response.signal != Signal.HOLD:
+    if adjusted_confidence < 0.4 and not isinstance(response.signal, Hold):
         return _create_hold_response(
             f"Confidence too low after adjustments: {adjusted_confidence:.2f}"
         )
@@ -334,10 +355,10 @@ def validate_llm_decision(
             return False, "Suggested position size exceeds maximum"
 
         # Check stop loss is reasonable
-        if response.signal == Signal.LONG:
+        if isinstance(response.signal, Long):
             if response.suggested_params["stop_loss"] >= market_state.current_price:
                 return False, "Invalid stop loss for long position"
-        elif response.signal == Signal.SHORT:
+        elif isinstance(response.signal, Short):
             if response.suggested_params["stop_loss"] <= market_state.current_price:
                 return False, "Invalid stop loss for short position"
 
@@ -436,7 +457,7 @@ def _calculate_price_trend(market_state: MarketState) -> float:
 def _create_hold_response(reason: str) -> LLMResponse:
     """Create a HOLD response with given reason."""
     return LLMResponse(
-        signal=Signal.HOLD,
+        signal=Hold(reason=f"Defaulting to HOLD: {reason}"),
         confidence=1.0,
         reasoning=f"Defaulting to HOLD: {reason}",
         risk_assessment={

@@ -12,7 +12,8 @@ from bot.fp.analysis.performance import (
     calculate_sharpe_ratio,
     calculate_sortino_ratio,
 )
-from bot.fp.core.types import Either, Failure, Success
+from bot.fp.types.result import Failure, Success
+from bot.fp.types.result import Result as Either
 
 logger = logging.getLogger(__name__)
 

@@ -13,13 +13,13 @@ from enum import Enum
 import numpy as np
 import pandas as pd
 
-from bot.fp.core.types import Signal, SignalType
 from bot.fp.indicators.technical import (
     bollinger_bands,
     moving_average,
     rsi,
     standard_deviation,
 )
+from bot.fp.strategies.signals import Signal, SignalType
 
 
 class MeanReversionType(Enum):

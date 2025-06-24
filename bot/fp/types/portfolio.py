@@ -14,14 +14,38 @@ class Position:
     """Immutable position representation."""
 
     symbol: str
-    side: str  # "LONG" or "SHORT"
+    side: str  # "LONG", "SHORT", or "FLAT"
     size: Decimal
-    entry_price: Decimal
+    entry_price: Decimal | None  # None for FLAT positions
     current_price: Decimal
+
+    def __post_init__(self) -> None:
+        """Validate position data."""
+        if not self.symbol:
+            raise ValueError("Symbol cannot be empty")
+
+        if self.side not in ["LONG", "SHORT", "FLAT"]:
+            raise ValueError(f"Invalid side: {self.side}")
+
+        if self.side == "FLAT":
+            if self.size != Decimal(0):
+                raise ValueError("FLAT positions must have zero size")
+        else:
+            if self.size <= 0:
+                raise ValueError(
+                    "Position size must be positive for non-FLAT positions"
+                )
+            if self.entry_price is None or self.entry_price <= 0:
+                raise ValueError("Entry price must be positive for non-FLAT positions")
+
+        if self.current_price <= 0:
+            raise ValueError("Current price must be positive")
 
     @property
     def unrealized_pnl(self) -> Decimal:
         """Calculate unrealized P&L."""
+        if self.side == "FLAT" or self.entry_price is None:
+            return Decimal(0)
         if self.side == "LONG":
             return (self.current_price - self.entry_price) * self.size
         # SHORT
@@ -32,9 +56,79 @@ class Position:
         """Calculate current position value."""
         return self.current_price * self.size
 
+    @property
+    def return_pct(self) -> Decimal:
+        """Calculate percentage return on position."""
+        if self.side == "FLAT" or self.entry_price is None or self.entry_price == 0:
+            return Decimal(0)
+
+        if self.side == "LONG":
+            pct = ((self.current_price - self.entry_price) / self.entry_price) * 100
+        else:  # SHORT
+            pct = ((self.entry_price - self.current_price) / self.entry_price) * 100
+
+        # Round to 2 decimal places for consistency
+        return pct.quantize(Decimal("0.01"))
+
     def with_price(self, new_price: Decimal) -> "Position":
         """Return new Position with updated price."""
         return replace(self, current_price=new_price)
+
+    def to_dict(self) -> dict[str, str]:
+        """Serialize position to dictionary."""
+        return {
+            "symbol": self.symbol,
+            "side": self.side,
+            "size": str(self.size),
+            "entry_price": (
+                str(self.entry_price) if self.entry_price is not None else "0"
+            ),
+            "current_price": str(self.current_price),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, str]) -> "Position":
+        """Deserialize position from dictionary."""
+        entry_price = (
+            None if data["entry_price"] == "0" else Decimal(data["entry_price"])
+        )
+        return cls(
+            symbol=data["symbol"],
+            side=data["side"],
+            size=Decimal(data["size"]),
+            entry_price=entry_price,
+            current_price=Decimal(data["current_price"]),
+        )
+
+    def to_legacy_format(self) -> dict[str, any]:
+        """Convert to legacy position format."""
+        return {
+            "symbol": self.symbol,
+            "side": self.side,
+            "size": float(self.size),
+            "entry_price": (
+                float(self.entry_price) if self.entry_price is not None else None
+            ),
+            "current_price": float(self.current_price),
+            "unrealized_pnl": float(self.unrealized_pnl),
+            "value": float(self.value),
+        }
+
+    @classmethod
+    def from_legacy_format(cls, data: dict[str, any]) -> "Position":
+        """Create position from legacy format."""
+        entry_price = (
+            Decimal(str(data["entry_price"]))
+            if data["entry_price"] is not None
+            else None
+        )
+        return cls(
+            symbol=data["symbol"],
+            side=data["side"],
+            size=Decimal(str(data["size"])),
+            entry_price=entry_price,
+            current_price=Decimal(str(data["current_price"])),
+        )
 
 
 @dataclass(frozen=True)
@@ -61,10 +155,12 @@ class Portfolio:
         existing_positions = tuple(
             pos for pos in self.positions if pos.symbol != position.symbol
         )
+        # Only adjust cash for non-FLAT positions
+        cash_adjustment = position.value if position.side != "FLAT" else Decimal(0)
         return replace(
             self,
             positions=existing_positions + (position,),
-            cash_balance=self.cash_balance - position.value,
+            cash_balance=self.cash_balance - cash_adjustment,
         )
 
     def without_position(self, symbol: str) -> "Portfolio":
@@ -95,6 +191,24 @@ class Portfolio:
             for pos in self.positions
         )
         return replace(self, positions=new_positions)
+
+    def to_dict(self) -> dict[str, any]:
+        """Serialize portfolio to dictionary."""
+        return {
+            "positions": [pos.to_dict() for pos in self.positions],
+            "cash_balance": str(self.cash_balance),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, any]) -> "Portfolio":
+        """Deserialize portfolio from dictionary."""
+        positions = tuple(
+            Position.from_dict(pos_data) for pos_data in data["positions"]
+        )
+        return cls(
+            positions=positions,
+            cash_balance=Decimal(data["cash_balance"]),
+        )
 
 
 @dataclass(frozen=True)
@@ -148,6 +262,8 @@ class PortfolioMetrics:
     avg_win: Decimal
     avg_loss: Decimal
     profit_factor: float
+    gross_profit: Decimal
+    gross_loss: Decimal
 
     @classmethod
     def from_trades(
@@ -193,7 +309,7 @@ class PortfolioMetrics:
             else Decimal(0)
         )
 
-        # Calculate profit factor
+        # Calculate profit factor and gross P&L
         gross_profit = sum(t.pnl for t in winning_trades)
         gross_loss = sum(abs(t.pnl) for t in losing_trades)
         profit_factor = float(gross_profit / gross_loss) if gross_loss > 0 else 0.0
@@ -242,6 +358,8 @@ class PortfolioMetrics:
             avg_win=avg_win,
             avg_loss=avg_loss,
             profit_factor=profit_factor,
+            gross_profit=gross_profit,
+            gross_loss=gross_loss,
         )
 
 
@@ -293,6 +411,52 @@ def calculate_portfolio_metrics(
     return PortfolioMetrics.from_trades(
         trades=historical_trades, current_unrealized=portfolio.unrealized_pnl
     )
+
+
+# Money type for proper functional type integration
+@dataclass(frozen=True)
+class Money:
+    """Immutable money representation with currency."""
+
+    amount: Decimal
+    currency: str = "USD"
+
+    def __post_init__(self) -> None:
+        """Validate money data."""
+        if not self.currency:
+            raise ValueError("Currency cannot be empty")
+
+    def __add__(self, other: "Money") -> "Money":
+        """Add two money amounts (must be same currency)."""
+        if self.currency != other.currency:
+            raise ValueError(f"Cannot add {self.currency} and {other.currency}")
+        return Money(self.amount + other.amount, self.currency)
+
+    def __sub__(self, other: "Money") -> "Money":
+        """Subtract two money amounts (must be same currency)."""
+        if self.currency != other.currency:
+            raise ValueError(f"Cannot subtract {other.currency} from {self.currency}")
+        return Money(self.amount - other.amount, self.currency)
+
+    def __mul__(self, factor: Decimal) -> "Money":
+        """Multiply money by a factor."""
+        return Money(self.amount * factor, self.currency)
+
+    def __truediv__(self, divisor: Decimal) -> "Money":
+        """Divide money by a divisor."""
+        if divisor == 0:
+            raise ValueError("Cannot divide by zero")
+        return Money(self.amount / divisor, self.currency)
+
+    @property
+    def is_positive(self) -> bool:
+        """Check if amount is positive."""
+        return self.amount > 0
+
+    @property
+    def is_zero(self) -> bool:
+        """Check if amount is zero."""
+        return self.amount == 0
 
 
 # Enhanced Portfolio Types for Asset Allocation and Balance Management
@@ -766,3 +930,117 @@ def create_balanced_allocation(
         )
 
     return tuple(allocations)
+
+
+# Pure calculation functions for position and portfolio management
+
+
+def calculate_position_pnl(
+    side: str, size: Decimal, entry_price: Decimal, current_price: Decimal
+) -> Decimal:
+    """Calculate P&L for a position using pure function."""
+    if side == "FLAT":
+        return Decimal(0)
+
+    if side == "LONG":
+        return size * (current_price - entry_price)
+    if side == "SHORT":
+        return size * (entry_price - current_price)
+    return Decimal(0)
+
+
+def calculate_portfolio_pnl(positions: list[Position]) -> Decimal:
+    """Calculate total P&L for a portfolio."""
+    return sum(pos.unrealized_pnl for pos in positions)
+
+
+def calculate_position_value(size: Decimal, price: Decimal) -> Decimal:
+    """Calculate position value."""
+    return size * price
+
+
+def update_position_price(position: Position, new_price: Decimal) -> Position:
+    """Update position with new current price."""
+    return position.with_price(new_price)
+
+
+def open_position(
+    portfolio: Portfolio,
+    symbol: str,
+    side: str,
+    size: Decimal,
+    entry_price: Decimal,
+) -> Portfolio:
+    """Open a new position in the portfolio."""
+    new_position = Position(
+        symbol=symbol,
+        side=side,
+        size=size,
+        entry_price=entry_price,
+        current_price=entry_price,
+    )
+    return portfolio.with_position(new_position)
+
+
+# Enhanced Portfolio Metrics
+@dataclass(frozen=True)
+class EnhancedPortfolioMetrics:
+    """Enhanced portfolio metrics with additional statistics."""
+
+    total_pnl: Decimal
+    realized_pnl: Decimal
+    unrealized_pnl: Decimal
+    win_rate: float
+    total_trades: int
+    winning_trades: int
+    losing_trades: int
+    gross_profit: Decimal
+    gross_loss: Decimal
+    profit_factor: float
+    sharpe_ratio: float
+    max_drawdown: float
+    avg_win: Decimal
+    avg_loss: Decimal
+    realized_trades: int
+
+    @classmethod
+    def from_positions_and_trades(
+        cls,
+        positions: tuple[Position, ...],
+        trades: tuple[TradeResult, ...],
+        risk_free_rate: float = 0.02,
+    ) -> "EnhancedPortfolioMetrics":
+        """Calculate enhanced metrics from positions and trades."""
+        # Use base PortfolioMetrics for foundation
+        base_metrics = PortfolioMetrics.from_trades(
+            trades, risk_free_rate=risk_free_rate
+        )
+
+        # Calculate additional metrics
+        unrealized_pnl = sum(pos.unrealized_pnl for pos in positions)
+        total_pnl = base_metrics.realized_pnl + unrealized_pnl
+
+        # Calculate gross profit/loss
+        winning_trades = tuple(t for t in trades if t.pnl > 0)
+        losing_trades = tuple(t for t in trades if t.pnl < 0)
+
+        gross_profit = sum(t.pnl for t in winning_trades)
+        gross_loss = sum(abs(t.pnl) for t in losing_trades)
+
+        return cls(
+            total_pnl=total_pnl,
+            realized_pnl=base_metrics.realized_pnl,
+            unrealized_pnl=unrealized_pnl,
+            win_rate=base_metrics.win_rate,
+            total_trades=base_metrics.total_trades,
+            winning_trades=base_metrics.winning_trades,
+            losing_trades=base_metrics.losing_trades,
+            gross_profit=gross_profit,
+            gross_loss=gross_loss,
+            profit_factor=base_metrics.profit_factor,
+            sharpe_ratio=base_metrics.sharpe_ratio,
+            max_drawdown=base_metrics.max_drawdown,
+            avg_win=base_metrics.avg_win,
+            avg_loss=base_metrics.avg_loss,
+            realized_trades=len(trades),
+        )

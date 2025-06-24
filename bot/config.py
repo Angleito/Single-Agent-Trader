@@ -214,80 +214,67 @@ class TradingSettings:
             # Extract from functional config based on strategy type
             self._from_functional_config(functional_config)
         else:
-            # Load from environment first, then kwargs, then defaults (maintaining exact compatibility)
-            self.symbol: str = os.getenv(
-                "TRADING__SYMBOL", kwargs.get("symbol", "BTC-USD")
+            # Load from kwargs first (overrides), then environment, then defaults
+            self.symbol: str = kwargs.get("symbol") or os.getenv(
+                "TRADING__SYMBOL", "BTC-USD"
             )
-            self.interval: str = os.getenv(
-                "TRADING__INTERVAL", kwargs.get("interval", "1m")
+            self.interval: str = kwargs.get("interval") or os.getenv(
+                "TRADING__INTERVAL", "1m"
             )
-            self.leverage: int = int(
-                os.getenv("TRADING__LEVERAGE", str(kwargs.get("leverage", 5)))
+            self.leverage: int = (
+                kwargs.get("leverage")
+                if kwargs.get("leverage") is not None
+                else parse_int_env("TRADING__LEVERAGE", 5)
             )
-            self.max_size_pct: float = float(
-                os.getenv("TRADING__MAX_SIZE_PCT", kwargs.get("max_size_pct", 20.0))
+            self.max_size_pct: float = (
+                kwargs.get("max_size_pct")
+                if kwargs.get("max_size_pct") is not None
+                else parse_float_env("TRADING__MAX_SIZE_PCT", 20.0)
             )
-            self.order_timeout_seconds: int = int(
-                os.getenv(
-                    "TRADING__ORDER_TIMEOUT_SECONDS",
-                    kwargs.get("order_timeout_seconds", 30),
-                )
+            self.order_timeout_seconds: int = parse_int_env(
+                "TRADING__ORDER_TIMEOUT_SECONDS",
+                kwargs.get("order_timeout_seconds", 30),
             )
-            self.slippage_tolerance_pct: float = float(
-                os.getenv(
-                    "TRADING__SLIPPAGE_TOLERANCE_PCT",
-                    kwargs.get("slippage_tolerance_pct", 0.1),
-                )
+            self.slippage_tolerance_pct: float = parse_float_env(
+                "TRADING__SLIPPAGE_TOLERANCE_PCT",
+                kwargs.get("slippage_tolerance_pct", 0.1),
             )
-            self.min_profit_pct: float = float(
-                os.getenv("TRADING__MIN_PROFIT_PCT", kwargs.get("min_profit_pct", 0.5))
+            self.min_profit_pct: float = parse_float_env(
+                "TRADING__MIN_PROFIT_PCT", kwargs.get("min_profit_pct", 0.5)
             )
-            self.maker_fee_rate: float = float(
-                os.getenv(
-                    "TRADING__MAKER_FEE_RATE", kwargs.get("maker_fee_rate", 0.004)
-                )
+            self.maker_fee_rate: float = parse_float_env(
+                "TRADING__MAKER_FEE_RATE", kwargs.get("maker_fee_rate", 0.004)
             )
-            self.taker_fee_rate: float = float(
-                os.getenv(
-                    "TRADING__TAKER_FEE_RATE", kwargs.get("taker_fee_rate", 0.006)
-                )
+            self.taker_fee_rate: float = parse_float_env(
+                "TRADING__TAKER_FEE_RATE", kwargs.get("taker_fee_rate", 0.006)
             )
-            self.futures_fee_rate: float = float(
-                os.getenv(
-                    "TRADING__FUTURES_FEE_RATE", kwargs.get("futures_fee_rate", 0.0015)
-                )
+            self.futures_fee_rate: float = parse_float_env(
+                "TRADING__FUTURES_FEE_RATE", kwargs.get("futures_fee_rate", 0.0015)
             )
-            self.min_trading_interval_seconds: int = int(
-                os.getenv(
-                    "TRADING__MIN_TRADING_INTERVAL_SECONDS",
-                    kwargs.get("min_trading_interval_seconds", 60),
-                )
+            self.min_trading_interval_seconds: int = parse_int_env(
+                "TRADING__MIN_TRADING_INTERVAL_SECONDS",
+                kwargs.get("min_trading_interval_seconds", 60),
             )
             self.require_24h_data_before_trading: bool = parse_bool_env(
                 "TRADING__REQUIRE_24H_DATA_BEFORE_TRADING",
                 kwargs.get("require_24h_data_before_trading", True),
             )
-            self.min_candles_for_trading: int = int(
-                os.getenv(
-                    "TRADING__MIN_CANDLES_FOR_TRADING",
-                    kwargs.get("min_candles_for_trading", 100),
-                )
+            self.min_candles_for_trading: int = parse_int_env(
+                "TRADING__MIN_CANDLES_FOR_TRADING",
+                kwargs.get("min_candles_for_trading", 100),
             )
             self.enable_futures: bool = parse_bool_env(
                 "TRADING__ENABLE_FUTURES", kwargs.get("enable_futures", True)
             )
-            self.futures_account_type: str = os.getenv(
-                "TRADING__FUTURES_ACCOUNT_TYPE",
-                kwargs.get("futures_account_type", "CFM"),
-            )
+            self.futures_account_type: str = kwargs.get(
+                "futures_account_type"
+            ) or os.getenv("TRADING__FUTURES_ACCOUNT_TYPE", "CFM")
             self.auto_cash_transfer: bool = parse_bool_env(
                 "TRADING__AUTO_CASH_TRANSFER", kwargs.get("auto_cash_transfer", True)
             )
-            self.max_futures_leverage: int = int(
-                os.getenv(
-                    "TRADING__MAX_FUTURES_LEVERAGE",
-                    kwargs.get("max_futures_leverage", 20),
-                )
+            self.max_futures_leverage: int = parse_int_env(
+                "TRADING__MAX_FUTURES_LEVERAGE",
+                kwargs.get("max_futures_leverage", 20),
             )
 
     def _from_functional_config(self, config: Any) -> None:
@@ -320,12 +307,12 @@ class LLMSettings:
         if functional_config:
             self._from_functional_config(functional_config)
         else:
-            # Maintain exact compatibility with environment variable loading
-            self.provider: str = os.getenv(
-                "LLM__PROVIDER", kwargs.get("provider", "openai")
+            # Load from kwargs first (overrides), then environment, then defaults
+            self.provider: str = kwargs.get("provider") or os.getenv(
+                "LLM__PROVIDER", "openai"
             )
-            self.model_name: str = os.getenv(
-                "LLM__MODEL_NAME", kwargs.get("model_name", "gpt-4")
+            self.model_name: str = kwargs.get("model_name") or os.getenv(
+                "LLM__MODEL_NAME", "gpt-4"
             )
             self.temperature: float = parse_float_env(
                 "LLM__TEMPERATURE", kwargs.get("temperature", 0.1)
@@ -384,9 +371,9 @@ class ExchangeSettings:
         if functional_config:
             self._from_functional_config(functional_config)
         else:
-            # Maintain exact compatibility with environment variable loading
-            self.exchange_type: str = os.getenv(
-                "EXCHANGE__EXCHANGE_TYPE", kwargs.get("exchange_type", "coinbase")
+            # Load from kwargs first (overrides), then environment, then defaults
+            self.exchange_type: str = kwargs.get("exchange_type") or os.getenv(
+                "EXCHANGE__EXCHANGE_TYPE", "coinbase"
             )
             self.cb_sandbox: bool = parse_bool_env(
                 "EXCHANGE__CB_SANDBOX", kwargs.get("cb_sandbox", True)
@@ -401,8 +388,8 @@ class ExchangeSettings:
                 "EXCHANGE__RATE_LIMIT_WINDOW_SECONDS",
                 kwargs.get("rate_limit_window_seconds", 60),
             )
-            self.bluefin_network: str = os.getenv(
-                "EXCHANGE__BLUEFIN_NETWORK", kwargs.get("bluefin_network", "mainnet")
+            self.bluefin_network: str = kwargs.get("bluefin_network") or os.getenv(
+                "EXCHANGE__BLUEFIN_NETWORK", "mainnet"
             )
 
             # Coinbase credentials
@@ -564,15 +551,17 @@ class SystemSettings:
         if functional_config:
             self._from_functional_config(functional_config)
         else:
-            # Maintain exact compatibility with environment variable loading
-            self.dry_run: bool = parse_bool_env(
-                "SYSTEM__DRY_RUN", kwargs.get("dry_run", True)
+            # Load from kwargs first (overrides), then environment, then defaults
+            self.dry_run: bool = (
+                kwargs.get("dry_run")
+                if kwargs.get("dry_run") is not None
+                else parse_bool_env("SYSTEM__DRY_RUN", True)
             )
-            self.environment: str = os.getenv(
-                "SYSTEM__ENVIRONMENT", kwargs.get("environment", "development")
+            self.environment: str = kwargs.get("environment") or os.getenv(
+                "SYSTEM__ENVIRONMENT", "development"
             )
-            self.log_level: str = os.getenv(
-                "SYSTEM__LOG_LEVEL", kwargs.get("log_level", "INFO")
+            self.log_level: str = kwargs.get("log_level") or os.getenv(
+                "SYSTEM__LOG_LEVEL", "INFO"
             )
             self.update_frequency_seconds: float = parse_float_env(
                 "SYSTEM__UPDATE_FREQUENCY_SECONDS",

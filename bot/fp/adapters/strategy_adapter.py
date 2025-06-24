@@ -7,7 +7,7 @@ while using functional strategy implementations internally.
 
 import logging
 import time
-from typing import Any, cast
+from typing import Any, Union, cast
 
 from bot.config import settings
 from bot.fp.strategies.llm_functional import (
@@ -24,19 +24,29 @@ from bot.trading_types import MarketState, TradeAction
 
 # Import TradingParams and TradeSignal types
 try:
-    from bot.fp.types import TradeSignal, TradingParams
+    from bot.fp.types import Hold, Long, Short, TradeSignal, TradingParams
 
-    # Create alias for backward compatibility
-    Signal = TradeSignal
 except ImportError:
     # Define minimal types if they don't exist
     from dataclasses import dataclass
-    from enum import Enum
 
-    class Signal(Enum):
-        LONG = "LONG"
-        SHORT = "SHORT"
-        HOLD = "HOLD"
+    @dataclass
+    class Long:
+        confidence: float
+        size: float
+        reason: str
+
+    @dataclass
+    class Short:
+        confidence: float
+        size: float
+        reason: str
+
+    @dataclass
+    class Hold:
+        reason: str
+
+    TradeSignal = Union[Long, Short, Hold]
 
     @dataclass
     class TradingParams:
@@ -59,21 +69,25 @@ class TypeConverter:
     ) -> TradeAction:
         """Convert LLMResponse to TradeAction."""
 
-        # Map signal to action
-        signal_map = {Signal.LONG: "LONG", Signal.SHORT: "SHORT", Signal.HOLD: "HOLD"}
-        action = signal_map.get(llm_response.signal, "HOLD")
+        # Map functional signal to action string
+        if isinstance(llm_response.signal, Long):
+            action = "LONG"
+            # Extract size from the Long signal
+            size_pct = llm_response.signal.size * 100  # Convert to percentage
+        elif isinstance(llm_response.signal, Short):
+            action = "SHORT"
+            # Extract size from the Short signal
+            size_pct = llm_response.signal.size * 100  # Convert to percentage
+        else:  # Hold
+            action = "HOLD"
+            size_pct = 0.0
 
-        # Extract size from suggested params or use confidence as size
+        # Override with suggested params if available
         if (
             llm_response.suggested_params
             and "position_size" in llm_response.suggested_params
         ):
             size_pct = llm_response.suggested_params["position_size"] * 100
-        # Use confidence to determine size (higher confidence = larger size)
-        elif action in ["LONG", "SHORT"]:
-            size_pct = llm_response.confidence * settings.trading.max_size_pct
-        else:
-            size_pct = 0.0
 
         # Extract stop loss and take profit
         if action in ["LONG", "SHORT"]:
@@ -184,7 +198,7 @@ class FunctionalLLMStrategy:
                 logger.warning(f"Invalid LLM decision: {validation_error}")
                 # Create a HOLD response
                 llm_response = LLMResponse(
-                    signal=Signal.HOLD,
+                    signal=Hold(reason=f"Invalid decision: {validation_error}"),
                     confidence=1.0,
                     reasoning=f"Invalid decision: {validation_error}",
                     risk_assessment={
@@ -205,7 +219,7 @@ class FunctionalLLMStrategy:
             logger.error(f"Error in functional LLM strategy: {e}")
             # Return safe HOLD response
             return LLMResponse(
-                signal=Signal.HOLD,
+                signal=Hold(reason=f"Strategy error: {e!s}"),
                 confidence=1.0,
                 reasoning=f"Strategy error: {e!s}",
                 risk_assessment={

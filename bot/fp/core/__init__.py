@@ -33,6 +33,32 @@ from .validation import (
     validate_timestamp,
 )
 
+# Strategy and Signal types (with safe imports)
+try:
+    from bot.fp.strategies.base import SignalType, Strategy
+    from bot.fp.strategies.signals import Signal
+    from bot.fp.types.trading import MarketState
+
+    STRATEGY_TYPES_AVAILABLE = True
+except ImportError:
+    # Fallback definitions
+    from collections.abc import Callable
+    from typing import Any
+
+    class SignalType:
+        LONG = "LONG"
+        SHORT = "SHORT"
+        HOLD = "HOLD"
+
+    class Signal:
+        pass
+
+    class MarketState:
+        pass
+
+    Strategy = Callable[[Any], Any]
+    STRATEGY_TYPES_AVAILABLE = False
+
 __all__ = [
     # Core monads
     "Either",
@@ -71,4 +97,10 @@ __all__ = [
     "validate_non_negative",
     "validate_positive",
     "validate_range",
+    # Strategy and Signal types
+    "Strategy",
+    "Signal",
+    "SignalType",
+    "MarketState",
+    "STRATEGY_TYPES_AVAILABLE",
 ]

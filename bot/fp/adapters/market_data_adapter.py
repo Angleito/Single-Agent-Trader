@@ -16,7 +16,6 @@ from bot.trading_types import MarketData as CurrentMarketData
 from ..types.market import (
     ConnectionState,
     DataQuality,
-    FPCandle,
     MarketDataStream,
     OrderBookMessage,
     RealtimeUpdate,
