@@ -240,6 +240,21 @@ def fp_candle_to_current_market_data(candle: FPCandle) -> CurrentMarketData:
     )
 
 
+def fp_candle_to_simple_market_data(candle: FPCandle) -> "SimpleMarketData":
+    """Convert functional Candle to simple MarketData (from fp.types.market)."""
+    from bot.fp.types.market import MarketData as SimpleMarketData
+    
+    return SimpleMarketData.from_ohlcv(
+        symbol=candle.symbol,
+        timestamp=candle.timestamp,
+        open=Decimal(str(candle.open)),
+        high=Decimal(str(candle.high)),
+        low=Decimal(str(candle.low)),
+        close=Decimal(str(candle.close)),
+        volume=Decimal(str(candle.volume)),
+    )
+
+
 def pydantic_candle_to_fp_candle(candle_data: CandleData) -> FPCandle:
     """Convert Pydantic CandleData to functional Candle."""
     return FPCandle(
