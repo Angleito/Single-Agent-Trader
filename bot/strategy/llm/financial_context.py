@@ -11,8 +11,18 @@ from typing import TYPE_CHECKING
 from bot.trading_types import MarketState
 
 if TYPE_CHECKING:
+    # Legacy imports (maintained for compatibility)
     from bot.config import Settings
     from bot.mcp.omnisearch_client import OmniSearchClient
+    
+    # Functional imports (added for migration to functional programming patterns)
+    try:
+        from bot.fp.types.config import Config, SystemConfig
+        from bot.fp.types.market import MarketSnapshot
+        FUNCTIONAL_AVAILABLE = True
+    except ImportError:
+        # Functional implementations not available, continue with legacy
+        FUNCTIONAL_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 

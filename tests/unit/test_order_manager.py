@@ -12,7 +12,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from bot.order_manager import OrderEvent, OrderManager
-from bot.trading_types import Order, OrderStatus
+from bot.fp.types import Order, OrderStatus
 
 
 class TestOrderEvent(unittest.TestCase):

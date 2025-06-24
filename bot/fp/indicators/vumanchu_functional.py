@@ -10,42 +10,42 @@ from datetime import datetime
 import numpy as np
 
 from bot.fp.types.indicators import (
+    CandlePattern,
+    CompositeSignal,
+    DiamondPattern,
+    DivergencePattern,
+    MarketStructure,
+    VolumeProfile,
     VuManchuResult,
     VuManchuSignalSet,
     VuManchuState,
-    DiamondPattern,
     YellowCrossSignal,
-    CandlePattern,
-    DivergencePattern,
-    CompositeSignal,
-    MarketStructure,
-    VolumeProfile,
 )
 
 
 def calculate_hlc3(high: np.ndarray, low: np.ndarray, close: np.ndarray) -> np.ndarray:
     """
     Calculate HLC3 (High-Low-Close average) values for more stable price representation.
-    
+
     The HLC3 is a commonly used price aggregation method that provides a more balanced
     view of price action by averaging the high, low, and close prices. This reduces
     noise and provides a smoother input for technical indicators.
-    
+
     Mathematical Formula:
         HLC3 = (High + Low + Close) / 3
-    
+
     Args:
         high: Array of high prices for each period
-        low: Array of low prices for each period  
+        low: Array of low prices for each period
         close: Array of close prices for each period
-        
+
     Returns:
         Array of HLC3 values with same length as input arrays
-        
+
     Raises:
         ValueError: If input arrays have different lengths or are empty
         TypeError: If inputs are not numpy arrays
-        
+
     Example:
         >>> high = np.array([101, 102, 103])
         >>> low = np.array([99, 100, 101])
@@ -56,51 +56,55 @@ def calculate_hlc3(high: np.ndarray, low: np.ndarray, close: np.ndarray) -> np.n
     # Input validation for robustness
     if not all(isinstance(arr, np.ndarray) for arr in [high, low, close]):
         raise TypeError("All inputs must be numpy arrays")
-    
+
     if not (len(high) == len(low) == len(close)):
-        raise ValueError(f"Input arrays must have same length: high={len(high)}, low={len(low)}, close={len(close)}")
-    
+        raise ValueError(
+            f"Input arrays must have same length: high={len(high)}, low={len(low)}, close={len(close)}"
+        )
+
     if len(high) == 0:
         raise ValueError("Input arrays cannot be empty")
-    
+
     # Validate that high >= low for each period (basic sanity check)
     if np.any(high < low):
         raise ValueError("High prices must be >= low prices for all periods")
-    
+
     # Calculate HLC3 with proper floating point precision
-    return (high.astype(np.float64) + low.astype(np.float64) + close.astype(np.float64)) / 3.0
+    return (
+        high.astype(np.float64) + low.astype(np.float64) + close.astype(np.float64)
+    ) / 3.0
 
 
 def calculate_ema(values: np.ndarray, period: int) -> np.ndarray:
     """
     Calculate Exponential Moving Average with proper initialization and edge case handling.
-    
+
     The EMA gives more weight to recent values, making it more responsive to price changes
     compared to Simple Moving Average. This implementation uses the standard EMA formula
     with a smoothing factor (alpha) calculated from the period.
-    
+
     Mathematical Formula:
         Alpha = 2 / (period + 1)
         EMA[t] = Alpha * Value[t] + (1 - Alpha) * EMA[t-1]
-        
+
     The first EMA value is initialized using the Simple Moving Average of the first 'period' values.
-    
+
     Args:
         values: Input price values as numpy array
         period: Number of periods for EMA calculation (must be positive integer)
-        
+
     Returns:
         Array of EMA values with NaN for insufficient data periods
-        
+
     Raises:
         ValueError: If period is not positive or values array is empty
         TypeError: If values is not a numpy array
-        
+
     Example:
         >>> values = np.array([1, 2, 3, 4, 5])
         >>> ema = calculate_ema(values, period=3)
         >>> print(ema)  # [nan, nan, 2.0, 3.0, 4.0]
-        
+
     Performance Notes:
         - Time complexity: O(n) where n is the length of values
         - Space complexity: O(n) for the output array
@@ -109,10 +113,10 @@ def calculate_ema(values: np.ndarray, period: int) -> np.ndarray:
     # Input validation for robustness
     if not isinstance(values, np.ndarray):
         raise TypeError("Values must be a numpy array")
-    
+
     if len(values) == 0:
         raise ValueError("Values array cannot be empty")
-        
+
     if not isinstance(period, int) or period <= 0:
         raise ValueError(f"Period must be a positive integer, got {period}")
 
@@ -140,29 +144,29 @@ def calculate_ema(values: np.ndarray, period: int) -> np.ndarray:
 def calculate_sma(values: np.ndarray, period: int) -> np.ndarray:
     """
     Calculate Simple Moving Average using efficient numpy convolution.
-    
+
     The SMA provides a simple trend-following indicator by averaging the last N values.
     This implementation uses numpy's convolution for optimal performance with large datasets.
-    
+
     Mathematical Formula:
         SMA[i] = (Sum of last 'period' values) / period
-        
+
     Args:
         values: Input price values as numpy array
         period: Number of periods for SMA calculation (must be positive integer)
-        
+
     Returns:
         Array of SMA values with NaN for insufficient data periods
-        
+
     Raises:
         ValueError: If period is not positive or values array is empty
         TypeError: If values is not a numpy array
-        
+
     Example:
         >>> values = np.array([1, 2, 3, 4, 5])
         >>> sma = calculate_sma(values, period=3)
         >>> print(sma)  # [nan, nan, 2.0, 3.0, 4.0]
-        
+
     Performance Notes:
         - Uses numpy.convolve for O(n log n) performance
         - Memory efficient with minimal intermediate arrays
@@ -171,10 +175,10 @@ def calculate_sma(values: np.ndarray, period: int) -> np.ndarray:
     # Input validation for robustness
     if not isinstance(values, np.ndarray):
         raise TypeError("Values must be a numpy array")
-    
+
     if len(values) == 0:
         raise ValueError("Values array cannot be empty")
-        
+
     if not isinstance(period, int) or period <= 0:
         raise ValueError(f"Period must be a positive integer, got {period}")
 
@@ -188,10 +192,10 @@ def calculate_sma(values: np.ndarray, period: int) -> np.ndarray:
     # Use numpy's convolve for efficient SMA calculation
     # The kernel is a uniform weight array normalized by period
     kernel = np.ones(period, dtype=np.float64) / period
-    
+
     # Apply convolution and place results in appropriate positions
     # 'valid' mode ensures we only get results where kernel fully overlaps data
-    sma[period - 1:] = np.convolve(values.astype(np.float64), kernel, mode="valid")
+    sma[period - 1 :] = np.convolve(values.astype(np.float64), kernel, mode="valid")
 
     return sma
 
@@ -257,21 +261,27 @@ def calculate_wavetrend_oscillator(
     # Input validation for robustness
     if not isinstance(src, np.ndarray):
         raise TypeError("Source prices must be a numpy array")
-    
+
     if len(src) == 0:
         raise ValueError("Source prices array cannot be empty")
-    
-    for param_name, param_value in [("channel_length", channel_length), 
-                                   ("average_length", average_length), 
-                                   ("ma_length", ma_length)]:
+
+    for param_name, param_value in [
+        ("channel_length", channel_length),
+        ("average_length", average_length),
+        ("ma_length", ma_length),
+    ]:
         if not isinstance(param_value, int) or param_value <= 0:
-            raise ValueError(f"{param_name} must be a positive integer, got {param_value}")
+            raise ValueError(
+                f"{param_name} must be a positive integer, got {param_value}"
+            )
 
     # Check if we have sufficient data for calculation
     min_required_length = max(channel_length, average_length, ma_length)
     if len(src) < min_required_length:
         # Return arrays filled with NaN if insufficient data
-        return np.full_like(src, np.nan, dtype=np.float64), np.full_like(src, np.nan, dtype=np.float64)
+        return np.full_like(src, np.nan, dtype=np.float64), np.full_like(
+            src, np.nan, dtype=np.float64
+        )
 
     # Step 1: Calculate ESA (Exponential Smoothing Average)
     # This provides the baseline trend of the source prices
@@ -357,13 +367,15 @@ def detect_crossovers(
     # Input validation for robustness
     if not all(isinstance(arr, np.ndarray) for arr in [wave_a, wave_b]):
         raise TypeError("Both wave inputs must be numpy arrays")
-    
+
     if len(wave_a) != len(wave_b):
-        raise ValueError(f"Wave arrays must have same length: wave_a={len(wave_a)}, wave_b={len(wave_b)}")
-    
+        raise ValueError(
+            f"Wave arrays must have same length: wave_a={len(wave_a)}, wave_b={len(wave_b)}"
+        )
+
     if len(wave_a) == 0:
         raise ValueError("Wave arrays cannot be empty")
-    
+
     # Handle single element arrays (no crossovers possible)
     if len(wave_a) == 1:
         return np.array([False], dtype=bool), np.array([False], dtype=bool)
@@ -390,7 +402,7 @@ def detect_crossovers(
     # or from zero to positive (sign_change = +1)
     bullish[1:] = sign_changes > 0
 
-    # Bearish crossover: wave_a crosses below wave_b  
+    # Bearish crossover: wave_a crosses below wave_b
     # This occurs when sign changes from positive to negative (sign_change = -2)
     # or from zero to negative (sign_change = -1)
     bearish[1:] = sign_changes < 0
@@ -412,11 +424,11 @@ def determine_signal(
     1. LONG Signal: WT1 > WT2 (bullish crossover) AND WT1 in oversold zone
        - Indicates potential reversal from oversold conditions
        - High probability of upward momentum
-       
+
     2. SHORT Signal: WT1 < WT2 (bearish crossover) AND WT1 in overbought zone
        - Indicates potential reversal from overbought conditions
        - High probability of downward momentum
-       
+
     3. NEUTRAL: All other conditions
        - No clear directional bias
        - Wait for better setup
@@ -438,8 +450,8 @@ def determine_signal(
         >>> # Bullish crossover in oversold zone
         >>> signal = determine_signal(wt1=-50, wt2=-52, overbought=45, oversold=-45)
         >>> print(signal)  # "LONG"
-        
-        >>> # Bearish crossover in overbought zone  
+
+        >>> # Bearish crossover in overbought zone
         >>> signal = determine_signal(wt1=48, wt2=50, overbought=45, oversold=-45)
         >>> print(signal)  # "SHORT"
 
@@ -450,31 +462,38 @@ def determine_signal(
         - False signals can occur in choppy, sideways markets
     """
     # Input validation for robustness
-    for name, value in [("wt1", wt1), ("wt2", wt2), ("overbought", overbought), ("oversold", oversold)]:
+    for name, value in [
+        ("wt1", wt1),
+        ("wt2", wt2),
+        ("overbought", overbought),
+        ("oversold", oversold),
+    ]:
         if not isinstance(value, (int, float)):
             raise TypeError(f"{name} must be numeric, got {type(value)}")
-    
+
     if overbought <= oversold:
-        raise ValueError(f"Overbought ({overbought}) must be greater than oversold ({oversold})")
+        raise ValueError(
+            f"Overbought ({overbought}) must be greater than oversold ({oversold})"
+        )
 
     # Handle NaN values gracefully
     if np.isnan(wt1) or np.isnan(wt2):
         return "NEUTRAL"
 
     # Enhanced signal logic with zone analysis
-    
+
     # LONG Signal: Bullish crossover in oversold zone
     # WT1 above WT2 indicates bullish momentum
     # WT1 below oversold threshold indicates potential reversal opportunity
     if wt1 > wt2 and wt1 < oversold:
         return "LONG"
-    
-    # SHORT Signal: Bearish crossover in overbought zone  
+
+    # SHORT Signal: Bearish crossover in overbought zone
     # WT1 below WT2 indicates bearish momentum
     # WT1 above overbought threshold indicates potential reversal opportunity
     if wt1 < wt2 and wt1 > overbought:
         return "SHORT"
-    
+
     # All other conditions result in NEUTRAL
     # This includes:
     # - Crossovers in neutral zone (between oversold and overbought)
@@ -508,7 +527,7 @@ def vumanchu_cipher(
 
     Parameter Optimization Guidelines:
     - channel_length (6-10): Controls sensitivity to price changes
-    - average_length (8-21): Balances responsiveness vs smoothness  
+    - average_length (8-21): Balances responsiveness vs smoothness
     - ma_length (3-4): Signal line smoothing for crossover detection
     - Shorter periods: More signals, higher noise
     - Longer periods: Fewer signals, higher reliability
@@ -529,7 +548,7 @@ def vumanchu_cipher(
         VuManchuResult containing:
         - timestamp: Analysis timestamp
         - wave_a: Current WT1 (main oscillator) value
-        - wave_b: Current WT2 (signal line) value  
+        - wave_b: Current WT2 (signal line) value
         - signal: Trading signal ("LONG", "SHORT", or "NEUTRAL")
 
     Raises:
@@ -539,21 +558,21 @@ def vumanchu_cipher(
     Example:
         >>> import numpy as np
         >>> from datetime import datetime
-        >>> 
+        >>>
         >>> # Sample OHLCV data (open, high, low, close, volume)
         >>> ohlcv = np.array([
         ...     [100.0, 101.0, 99.0, 100.5, 1000],
         ...     [100.5, 102.0, 100.0, 101.0, 1200],
         ...     [101.0, 103.0, 100.5, 102.5, 1100]
         ... ])
-        >>> 
+        >>>
         >>> result = vumanchu_cipher(ohlcv, period=9)
         >>> print(f"Signal: {result.signal}")
         >>> print(f"WT1: {result.wave_a:.2f}, WT2: {result.wave_b:.2f}")
 
     Signal Interpretation:
         - LONG: Bullish crossover in oversold zone (< -45)
-        - SHORT: Bearish crossover in overbought zone (> +45)  
+        - SHORT: Bearish crossover in overbought zone (> +45)
         - NEUTRAL: No clear signal or crossover in neutral zone
 
     Performance Notes:
@@ -565,27 +584,39 @@ def vumanchu_cipher(
     # Enhanced input validation
     if not isinstance(ohlcv, np.ndarray):
         raise TypeError("OHLCV data must be a numpy array")
-    
+
     if ohlcv.size == 0:
         raise ValueError("OHLCV array cannot be empty")
-    
+
     if ohlcv.ndim != 2:
         raise ValueError(f"OHLCV array must be 2-dimensional, got {ohlcv.ndim}D")
-    
+
     if ohlcv.shape[1] < 4:
-        raise ValueError(f"OHLCV array must have at least 4 columns (OHLC), got {ohlcv.shape[1]}")
-    
+        raise ValueError(
+            f"OHLCV array must have at least 4 columns (OHLC), got {ohlcv.shape[1]}"
+        )
+
     # Validate numeric parameters
-    for param_name, param_value in [("period", period), ("channel_length", channel_length), 
-                                   ("average_length", average_length), ("ma_length", ma_length)]:
-        if param_value is not None and (not isinstance(param_value, int) or param_value <= 0):
-            raise ValueError(f"{param_name} must be a positive integer, got {param_value}")
-    
+    for param_name, param_value in [
+        ("period", period),
+        ("channel_length", channel_length),
+        ("average_length", average_length),
+        ("ma_length", ma_length),
+    ]:
+        if param_value is not None and (
+            not isinstance(param_value, int) or param_value <= 0
+        ):
+            raise ValueError(
+                f"{param_name} must be a positive integer, got {param_value}"
+            )
+
     if not isinstance(mult, (int, float)) or mult <= 0:
         raise ValueError(f"Multiplier must be positive, got {mult}")
-    
+
     if overbought <= oversold:
-        raise ValueError(f"Overbought ({overbought}) must be greater than oversold ({oversold})")
+        raise ValueError(
+            f"Overbought ({overbought}) must be greater than oversold ({oversold})"
+        )
 
     # Set intelligent default parameters based on period
     ch_len = channel_length if channel_length is not None else period
@@ -607,7 +638,7 @@ def vumanchu_cipher(
     # Validate price data integrity
     if np.any(high < low):
         raise ValueError("High prices must be >= low prices for all periods")
-    
+
     if np.any(high <= 0) or np.any(low <= 0) or np.any(close <= 0):
         raise ValueError("All prices must be positive")
 
@@ -627,7 +658,7 @@ def vumanchu_cipher(
     if len(wt1) > 0 and not np.isnan(wt1[-1]) and not np.isnan(wt2[-1]):
         wave_a = float(wt1[-1])
         wave_b = float(wt2[-1])
-        
+
         # Generate trading signal based on current values
         try:
             signal = determine_signal(wave_a, wave_b, overbought, oversold)
@@ -644,10 +675,7 @@ def vumanchu_cipher(
 
     # Return structured result
     return VuManchuResult(
-        timestamp=timestamp, 
-        wave_a=wave_a, 
-        wave_b=wave_b, 
-        signal=signal
+        timestamp=timestamp, wave_a=wave_a, wave_b=wave_b, signal=signal
     )
 
 
@@ -847,38 +875,54 @@ def analyze_diamond_patterns(
 ) -> list[DiamondPattern]:
     """Analyze diamond patterns from WaveTrend data."""
     patterns = []
-    
+
     if len(wt1) < 2 or len(wt2) < 2:
         return patterns
-    
+
     # Detect crossovers
     bullish_cross, bearish_cross = detect_crossovers(wt1, wt2)
-    
+
     for i in range(1, len(wt1)):
         timestamp = datetime.now()
-        
+
         # Red Diamond: bearish cross in overbought + bullish cross in oversold
         if bearish_cross[i] and wt2[i] > overbought:
             # Look for prior bullish cross in oversold
-            for j in range(max(0, i-10), i):
+            for j in range(max(0, i - 10), i):
                 if bullish_cross[j] and wt2[j] < oversold:
                     strength = min(abs(wt1[i] - wt2[i]) / 10, 1.0)
-                    patterns.append(create_diamond_pattern(
-                        "red_diamond", True, True, strength, overbought, oversold, timestamp
-                    ))
+                    patterns.append(
+                        create_diamond_pattern(
+                            "red_diamond",
+                            True,
+                            True,
+                            strength,
+                            overbought,
+                            oversold,
+                            timestamp,
+                        )
+                    )
                     break
-        
+
         # Green Diamond: bullish cross in oversold + bearish cross in overbought
         if bullish_cross[i] and wt2[i] < oversold:
             # Look for prior bearish cross in overbought
-            for j in range(max(0, i-10), i):
+            for j in range(max(0, i - 10), i):
                 if bearish_cross[j] and wt2[j] > overbought:
                     strength = min(abs(wt1[i] - wt2[i]) / 10, 1.0)
-                    patterns.append(create_diamond_pattern(
-                        "green_diamond", True, True, strength, overbought, oversold, timestamp
-                    ))
+                    patterns.append(
+                        create_diamond_pattern(
+                            "green_diamond",
+                            True,
+                            True,
+                            strength,
+                            overbought,
+                            oversold,
+                            timestamp,
+                        )
+                    )
                     break
-    
+
     return patterns
 
 
@@ -891,44 +935,60 @@ def analyze_yellow_cross_signals(
 ) -> list[YellowCrossSignal]:
     """Analyze yellow cross signals."""
     signals = []
-    
+
     if len(wt2) == 0 or len(rsi) == 0:
         return signals
-    
+
     # Check latest values
     latest_wt2 = wt2[-1] if len(wt2) > 0 else 0.0
     latest_rsi = rsi[-1] if len(rsi) > 0 else 50.0
-    
+
     # Check for required diamond patterns
     has_red_diamond = any(p.pattern_type == "red_diamond" for p in diamond_patterns)
     has_green_diamond = any(p.pattern_type == "green_diamond" for p in diamond_patterns)
-    
+
     timestamp = datetime.now()
-    
+
     # Yellow Cross Up conditions
     if has_red_diamond:
         wt2_in_range = latest_wt2 < 35.0 and latest_wt2 > oversold
         rsi_in_range = 15.0 < latest_rsi < 30.0
-        
+
         if wt2_in_range and rsi_in_range:
             confidence = 0.9 if wt2_in_range and rsi_in_range else 0.6
-            signals.append(create_yellow_cross_signal(
-                "up", True, wt2_in_range, rsi_in_range,
-                latest_wt2, latest_rsi, confidence, timestamp=timestamp
-            ))
-    
+            signals.append(
+                create_yellow_cross_signal(
+                    "up",
+                    True,
+                    wt2_in_range,
+                    rsi_in_range,
+                    latest_wt2,
+                    latest_rsi,
+                    confidence,
+                    timestamp=timestamp,
+                )
+            )
+
     # Yellow Cross Down conditions
     if has_green_diamond:
         wt2_in_range = latest_wt2 > 45.0 and latest_wt2 < overbought
         rsi_in_range = 70.0 < latest_rsi < 85.0
-        
+
         if wt2_in_range and rsi_in_range:
             confidence = 0.9 if wt2_in_range and rsi_in_range else 0.6
-            signals.append(create_yellow_cross_signal(
-                "down", True, wt2_in_range, rsi_in_range,
-                latest_wt2, latest_rsi, confidence, timestamp=timestamp
-            ))
-    
+            signals.append(
+                create_yellow_cross_signal(
+                    "down",
+                    True,
+                    wt2_in_range,
+                    rsi_in_range,
+                    latest_wt2,
+                    latest_rsi,
+                    confidence,
+                    timestamp=timestamp,
+                )
+            )
+
     return signals
 
 
@@ -943,19 +1003,19 @@ def create_composite_signal(
     total_strength = 0.0
     total_confidence = 0.0
     component_count = 0
-    
+
     for name, component in components.items():
-        if hasattr(component, 'is_bullish') and component.is_bullish():
+        if hasattr(component, "is_bullish") and component.is_bullish():
             bullish_count += 1
-        elif hasattr(component, 'is_bearish') and component.is_bearish():
+        elif hasattr(component, "is_bearish") and component.is_bearish():
             bearish_count += 1
-        
-        if hasattr(component, 'strength'):
+
+        if hasattr(component, "strength"):
             total_strength += component.strength
             component_count += 1
-        if hasattr(component, 'confidence'):
+        if hasattr(component, "confidence"):
             total_confidence += component.confidence
-    
+
     # Determine overall direction
     if bullish_count > bearish_count:
         signal_direction = 1
@@ -966,12 +1026,12 @@ def create_composite_signal(
     else:
         signal_direction = 0
         dominant = "neutral"
-    
+
     # Calculate metrics
     avg_strength = total_strength / max(component_count, 1)
     avg_confidence = total_confidence / max(len(components), 1)
     agreement_score = max(bullish_count, bearish_count) / max(len(components), 1)
-    
+
     return CompositeSignal(
         timestamp=timestamp or datetime.now(),
         signal_direction=signal_direction,
@@ -1018,42 +1078,52 @@ def vumanchu_comprehensive_analysis(
     """Comprehensive VuManChu analysis with all signal types."""
     # Calculate basic VuManChu result
     vumanchu_result = vumanchu_cipher(
-        ohlcv, period, mult, timestamp, channel_length, average_length, ma_length, overbought, oversold
+        ohlcv,
+        period,
+        mult,
+        timestamp,
+        channel_length,
+        average_length,
+        ma_length,
+        overbought,
+        oversold,
     )
-    
+
     # Extract price data
     high = ohlcv[:, 1]
     low = ohlcv[:, 2]
     close = ohlcv[:, 3]
     hlc3 = calculate_hlc3(high, low, close)
-    
+
     # Calculate WaveTrend components
     ch_len = channel_length or period
     avg_len = average_length or (period * 2)
     ma_len = ma_length or 3
-    
+
     wt1, wt2 = calculate_wavetrend_oscillator(hlc3, ch_len, avg_len, ma_len)
-    
+
     # Calculate RSI (simplified for demonstration)
     rsi = np.full_like(close, 50.0)  # Would use proper RSI calculation
-    
+
     # Analyze patterns
     diamond_patterns = analyze_diamond_patterns(wt1, wt2, overbought, oversold)
-    yellow_cross_signals = analyze_yellow_cross_signals(wt2, rsi, diamond_patterns, overbought, oversold)
-    
+    yellow_cross_signals = analyze_yellow_cross_signals(
+        wt2, rsi, diamond_patterns, overbought, oversold
+    )
+
     # Create empty lists for other patterns (would be filled with actual analysis)
     candle_patterns: list[CandlePattern] = []
     divergence_patterns: list[DivergencePattern] = []
-    
+
     # Create composite signal
     components = {
         "vumanchu": vumanchu_result,
         **{f"diamond_{i}": p for i, p in enumerate(diamond_patterns)},
         **{f"yellow_{i}": s for i, s in enumerate(yellow_cross_signals)},
     }
-    
+
     composite_signal = create_composite_signal(components, timestamp)
-    
+
     return create_vumanchu_signal_set(
         vumanchu_result,
         diamond_patterns,
@@ -1069,28 +1139,30 @@ def calculate_signal_strength(signals: list[any]) -> float:
     """Calculate overall signal strength from multiple signals."""
     if not signals:
         return 0.0
-    
+
     total_strength = 0.0
     count = 0
-    
+
     for signal in signals:
-        if hasattr(signal, 'strength'):
+        if hasattr(signal, "strength"):
             total_strength += signal.strength
             count += 1
-        elif hasattr(signal, 'confidence'):
+        elif hasattr(signal, "confidence"):
             total_strength += signal.confidence
             count += 1
-    
+
     return total_strength / max(count, 1)
 
 
-def filter_high_confidence_signals(signals: list[any], min_confidence: float = 0.7) -> list[any]:
+def filter_high_confidence_signals(
+    signals: list[any], min_confidence: float = 0.7
+) -> list[any]:
     """Filter signals by minimum confidence threshold."""
     filtered = []
     for signal in signals:
-        if hasattr(signal, 'confidence') and signal.confidence >= min_confidence:
-            filtered.append(signal)
-        elif hasattr(signal, 'is_high_confidence') and signal.is_high_confidence():
+        if (hasattr(signal, "confidence") and signal.confidence >= min_confidence) or (
+            hasattr(signal, "is_high_confidence") and signal.is_high_confidence()
+        ):
             filtered.append(signal)
     return filtered
 
@@ -1103,10 +1175,10 @@ def count_signal_types(signal_set: VuManchuSignalSet) -> dict[str, int]:
         "candle_patterns": len(signal_set.candle_patterns),
         "divergence_patterns": len(signal_set.divergence_patterns),
         "total_signals": (
-            len(signal_set.diamond_patterns) + 
-            len(signal_set.yellow_cross_signals) + 
-            len(signal_set.candle_patterns) + 
-            len(signal_set.divergence_patterns)
+            len(signal_set.diamond_patterns)
+            + len(signal_set.yellow_cross_signals)
+            + len(signal_set.candle_patterns)
+            + len(signal_set.divergence_patterns)
         ),
     }
 
@@ -1124,25 +1196,27 @@ def create_default_vumanchu_config() -> dict:
     }
 
 
-def calculate_all(market_data: np.ndarray, dominance_candles: np.ndarray | None = None) -> VuManchuSignalSet:
+def calculate_all(
+    market_data: np.ndarray, dominance_candles: np.ndarray | None = None
+) -> VuManchuSignalSet:
     """
     Calculate all VuManChu indicators - BACKWARD COMPATIBILITY METHOD.
-    
+
     This method maintains backward compatibility with existing code that calls calculate_all().
     It provides the same interface as the original VuManChu indicators but using the new
     functional programming approach.
-    
+
     Args:
         market_data: OHLCV data array with columns [open, high, low, close, volume]
         dominance_candles: Dominance data (ignored for VuManChu indicators)
-        
+
     Returns:
         VuManchuSignalSet with all VuManChu indicators and signals
     """
     if dominance_candles is not None:
         # Log that dominance data is ignored but don't fail
         pass
-    
+
     # Use comprehensive analysis for backward compatibility
     return vumanchu_comprehensive_analysis(market_data)
 
@@ -1151,32 +1225,27 @@ def calculate_all(market_data: np.ndarray, dominance_candles: np.ndarray | None 
 __all__ = [
     # Core VuManChu functions
     "vumanchu_cipher",
-    "vumanchu_cipher_series", 
+    "vumanchu_cipher_series",
     "vumanchu_comprehensive_analysis",
     "calculate_all",
-    
     # Core calculation functions
     "calculate_hlc3",
     "calculate_ema",
     "calculate_sma",
     "calculate_wavetrend_oscillator",
-    
     # Signal analysis functions
     "detect_crossovers",
     "determine_signal",
     "calculate_divergence",
-    
     # Pattern analysis functions
     "analyze_diamond_patterns",
     "analyze_yellow_cross_signals",
-    
     # Signal creation functions
     "create_diamond_pattern",
-    "create_yellow_cross_signal", 
+    "create_yellow_cross_signal",
     "create_candle_pattern",
     "create_composite_signal",
     "create_vumanchu_signal_set",
-    
     # Helper functions
     "is_overbought",
     "is_oversold",
@@ -1184,15 +1253,14 @@ __all__ = [
     "filter_high_confidence_signals",
     "count_signal_types",
     "create_default_vumanchu_config",
-    
     # Types (for backward compatibility)
     "VuManchuResult",
-    "VuManchuSignalSet", 
+    "VuManchuSignalSet",
     "VuManchuState",  # Alias for VuManchuSignalSet
     "DiamondPattern",
     "YellowCrossSignal",
     "CandlePattern",
-    "DivergencePattern", 
+    "DivergencePattern",
     "CompositeSignal",
     "MarketStructure",
     "VolumeProfile",

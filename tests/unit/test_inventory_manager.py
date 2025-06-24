@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
+# Legacy imports (maintained for compatibility)
 from bot.strategy.inventory_manager import (
     InventoryManager,
     InventoryMetrics,
@@ -21,6 +22,16 @@ from bot.strategy.inventory_manager import (
     VuManChuBias,
 )
 from bot.trading_types import Order, OrderStatus, Position
+
+# Functional imports (added for migration to functional programming patterns)
+try:
+    from bot.fp.strategies.portfolio import PortfolioState, PositionAllocation
+    from bot.fp.strategies.execution import ExecutionStrategy, ExecutionResult
+    from bot.fp.types.trading import TradeSignal, Long, Short, Hold
+    FUNCTIONAL_STRATEGIES_AVAILABLE = True
+except ImportError:
+    # Functional implementations not available, continue with legacy
+    FUNCTIONAL_STRATEGIES_AVAILABLE = False
 
 
 class TestInventoryManager(unittest.TestCase):

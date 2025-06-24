@@ -126,4 +126,4 @@ def stream_order_updates() -> AsyncIO[list[dict[str, Any]]]:
         await asyncio.sleep(1)
         return [{"order_id": "123", "status": "filled"}]
 
-    return AsyncIO.pure(await stream())
+    return AsyncIO.from_coroutine(stream())

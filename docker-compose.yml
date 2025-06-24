@@ -162,6 +162,17 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONWARNINGS=ignore::UserWarning,ignore::DeprecationWarning,ignore::SyntaxWarning,ignore::FutureWarning
       - CONFIG_FILE=${CONFIG_FILE:-}
+      # Functional Programming Runtime Configuration
+      - FP_RUNTIME_ENABLED=${FP_RUNTIME_ENABLED:-true}
+      - FP_RUNTIME_MODE=${FP_RUNTIME_MODE:-hybrid}
+      - FP_EFFECT_TIMEOUT=${FP_EFFECT_TIMEOUT:-30.0}
+      - FP_MAX_CONCURRENT_EFFECTS=${FP_MAX_CONCURRENT_EFFECTS:-100}
+      - FP_ERROR_RECOVERY=${FP_ERROR_RECOVERY:-true}
+      - FP_METRICS_ENABLED=${FP_METRICS_ENABLED:-true}
+      - FP_SCHEDULER_ENABLED=${FP_SCHEDULER_ENABLED:-true}
+      - FP_ASYNC_RUNTIME=${FP_ASYNC_RUNTIME:-true}
+      - FP_INTERPRETER_STATS=${FP_INTERPRETER_STATS:-true}
+      - FP_DEBUG_MODE=${FP_DEBUG_MODE:-false}
       # System Configuration
       - SYSTEM__DRY_RUN=${SYSTEM__DRY_RUN:-true}   # PAPER TRADING MODE - SAFE (MAINNET DATA)
       - SYSTEM__ENVIRONMENT=${SYSTEM__ENVIRONMENT:-development}  # Development environment for paper trading
@@ -201,12 +212,16 @@ services:
       - OMNISEARCH__ENABLED=${OMNISEARCH__ENABLED:-true}
       - OMNISEARCH__SERVER_URL=${OMNISEARCH__SERVER_URL:-http://mcp-omnisearch:8767}
 
-    # SECURITY: Volume mounts with minimal required access
+    # SECURITY: Volume mounts with minimal required access including FP runtime support
     volumes:
       - ./logs:/app/logs:rw       # Writable logs only
       - ./data:/app/data:rw       # Writable data only
       - ./config:/app/config:ro   # Read-only config mount
       - ./bot:/app/bot:ro         # Read-only code mount
+      # Functional Programming Runtime Volumes
+      - fp-runtime-state:/app/data/fp_runtime:rw    # FP runtime state persistence
+      - fp-logs:/app/logs/fp:rw                     # FP-specific logging
+      - ./data/fp_runtime/config:/app/data/fp_runtime/config:rw  # FP config persistence
 
     # Health check configuration
     healthcheck:
@@ -651,6 +666,11 @@ services:
       - DEBUG=true
       - TESTING=true
       - SYSTEM__DRY_RUN=true
+      # Enhanced FP debugging for development
+      - FP_DEBUG_MODE=true
+      - FP_INTERPRETER_STATS=true
+      - FP_EFFECT_LOGGING=true
+      - FP_SCHEDULER_DEBUG=true
     volumes:
       - .:/app:delegated  # Mount entire project for development
     networks:
@@ -659,6 +679,71 @@ services:
           - ai-trading-bot-dev
           - trading-bot-dev
     command: ["python", "-m", "bot.main", "live", "--symbol", "BTC-USD"]
+
+  # Functional Programming Development Service - Enhanced FP testing and debugging
+  ai-trading-bot-fp-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
+      args:
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
+        VCS_REF: ${VCS_REF:-$(git rev-parse --short HEAD)}
+        VERSION: ${VERSION:-0.1.0}
+        EXCHANGE_TYPE: coinbase
+        USER_ID: ${HOST_UID:-1000}
+        GROUP_ID: ${HOST_GID:-1000}
+        FP_ENABLED: true
+        FP_RUNTIME_MODE: pure
+    image: ai-trading-bot:fp-dev-${VERSION:-latest}
+    platform: linux/amd64
+    container_name: ai-trading-bot-fp-dev
+    restart: "no"
+    profiles:
+      - fp-dev
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - DEBUG=true
+      - TESTING=true
+      - SYSTEM__DRY_RUN=true
+      # Pure Functional Programming Mode for testing
+      - FP_RUNTIME_ENABLED=true
+      - FP_RUNTIME_MODE=pure
+      - FP_DEBUG_MODE=true
+      - FP_INTERPRETER_STATS=true
+      - FP_EFFECT_LOGGING=true
+      - FP_SCHEDULER_DEBUG=true
+      - FP_ADAPTER_DEBUG=true
+      - FP_TEST_MODE=true
+      # Reduced resource limits for development
+      - FP_MAX_CONCURRENT_EFFECTS=50
+      - FP_EFFECT_TIMEOUT=60.0
+    volumes:
+      - .:/app:delegated  # Mount entire project for development
+      - fp-dev-logs:/app/logs/fp:rw
+      - fp-dev-state:/app/data/fp_runtime:rw
+    networks:
+      trading-network:
+        aliases:
+          - ai-trading-bot-fp-dev
+          - fp-dev
+    command: ["python", "-m", "bot.fp.runtime.cli", "live", "--symbol", "BTC-USD", "--debug"]
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.2'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
 
   # VPS deployment service (optional) - use with: docker-compose --profile vps up
   # This service demonstrates VPS configuration within the main compose file
@@ -676,6 +761,15 @@ services:
       - CONFIG_FILE=/app/config/vps_production.json
       - MONITORING__ENABLED=true
       - BACKUP_ENABLED=true
+      # VPS-optimized FP Runtime Configuration
+      - FP_RUNTIME_ENABLED=${FP_RUNTIME_ENABLED:-true}
+      - FP_RUNTIME_MODE=${FP_RUNTIME_MODE:-hybrid}
+      - FP_MAX_CONCURRENT_EFFECTS=${FP_MAX_CONCURRENT_EFFECTS:-150}
+      - FP_EFFECT_TIMEOUT=${FP_EFFECT_TIMEOUT:-45.0}
+      - FP_ERROR_RECOVERY=true
+      - FP_METRICS_ENABLED=true
+      - FP_SCHEDULER_ENABLED=true
+      - FP_DEBUG_MODE=false
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
@@ -706,6 +800,23 @@ volumes:
     name: dashboard-data
   dashboard-node-modules:
     name: dashboard-node-modules
+  # Functional Programming Runtime Volumes
+  fp-runtime-state:
+    name: fp-runtime-state
+    driver: local
+  fp-logs:
+    name: fp-logs
+    driver: local
+  fp-metrics:
+    name: fp-metrics
+    driver: local
+  # FP Development Volumes
+  fp-dev-logs:
+    name: fp-dev-logs
+    driver: local
+  fp-dev-state:
+    name: fp-dev-state
+    driver: local
 
 networks:
   trading-network:

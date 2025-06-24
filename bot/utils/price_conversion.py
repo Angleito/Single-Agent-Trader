@@ -1063,7 +1063,7 @@ def get_current_real_price(symbol: str) -> float | None:
     """
     try:
         # Try to import and use the market data providers
-        from bot.data.market import MarketDataProvider
+        from bot.data import MarketDataProvider
 
         # Create a temporary market data provider to get current price
         market_provider = MarketDataProvider(symbol)

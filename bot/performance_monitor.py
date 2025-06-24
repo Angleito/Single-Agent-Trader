@@ -900,6 +900,143 @@ class PerformanceMonitor:
     ):
         """Decorator for tracking sync operations."""
         return self.latency_tracker.track_sync_operation(operation_name, tags)
+    
+    def get_current_metrics(self) -> dict[str, Any]:
+        """
+        Get current performance metrics in a simplified format.
+        
+        This method provides a quick snapshot of current system performance
+        for monitoring and validation purposes.
+        
+        Returns:
+            Dictionary containing current performance metrics
+        """
+        metrics: dict[str, Any] = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "monitoring_active": self._monitoring,
+            "latency_metrics": {},
+            "resource_metrics": {},
+            "alert_count": len(self.alert_manager.alerts),
+            "health_score": 0.0,
+        }
+        
+        # Get recent latency metrics (last 5 minutes)
+        recent_duration = timedelta(minutes=5)
+        
+        latency_metric_names = [
+            "latency.indicator_calculation",
+            "latency.llm_response", 
+            "latency.market_data_processing",
+            "latency.trade_execution",
+        ]
+        
+        for metric_name in latency_metric_names:
+            stats = self.metrics_collector.get_metric_statistics(
+                metric_name, recent_duration
+            )
+            if stats:
+                metrics["latency_metrics"][metric_name] = {
+                    "count": stats["count"],
+                    "mean_ms": round(stats["mean"], 2),
+                    "p95_ms": round(stats["p95"], 2),
+                    "max_ms": round(stats["max"], 2),
+                }
+        
+        # Get recent resource metrics
+        resource_metric_names = [
+            "resource.memory_usage_mb",
+            "resource.cpu_percent",
+            "resource.memory_growth_mb",
+            "resource.thread_count",
+        ]
+        
+        for metric_name in resource_metric_names:
+            stats = self.metrics_collector.get_metric_statistics(
+                metric_name, recent_duration
+            )
+            if stats:
+                # Use different formatting based on metric type
+                if "memory" in metric_name:
+                    metrics["resource_metrics"][metric_name] = {
+                        "current_mb": round(stats["max"], 1),
+                        "avg_mb": round(stats["mean"], 1),
+                        "peak_mb": round(stats["max"], 1),
+                    }
+                elif "cpu" in metric_name:
+                    metrics["resource_metrics"][metric_name] = {
+                        "current_percent": round(stats["max"], 1),
+                        "avg_percent": round(stats["mean"], 1),
+                        "peak_percent": round(stats["max"], 1),
+                    }
+                elif "thread" in metric_name:
+                    metrics["resource_metrics"][metric_name] = {
+                        "current_count": int(stats["max"]),
+                        "avg_count": round(stats["mean"], 0),
+                        "peak_count": int(stats["max"]),
+                    }
+                else:
+                    metrics["resource_metrics"][metric_name] = {
+                        "current": round(stats["max"], 2),
+                        "avg": round(stats["mean"], 2),
+                        "peak": round(stats["max"], 2),
+                    }
+        
+        # Get recent alerts
+        recent_alerts = self.alert_manager.get_recent_alerts(recent_duration)
+        metrics["recent_alerts"] = [
+            {
+                "level": alert.level.value,
+                "message": alert.message,
+                "metric": alert.metric_name,
+                "timestamp": alert.timestamp.isoformat(),
+            }
+            for alert in recent_alerts[-5:]  # Last 5 alerts
+        ]
+        
+        # Calculate simplified health score
+        health_score = 100.0
+        
+        # Deduct for high latency
+        for metric_name, metric_data in metrics["latency_metrics"].items():
+            if "llm_response" in metric_name and metric_data.get("p95_ms", 0) > 5000:
+                health_score -= 20
+            elif "indicator_calculation" in metric_name and metric_data.get("p95_ms", 0) > 100:
+                health_score -= 10
+            elif "market_data_processing" in metric_name and metric_data.get("p95_ms", 0) > 50:
+                health_score -= 10
+        
+        # Deduct for high resource usage
+        memory_metrics = metrics["resource_metrics"].get("resource.memory_usage_mb", {})
+        if memory_metrics.get("current_mb", 0) > 1024:  # > 1GB
+            health_score -= 15
+        
+        cpu_metrics = metrics["resource_metrics"].get("resource.cpu_percent", {})
+        if cpu_metrics.get("avg_percent", 0) > 80:
+            health_score -= 15
+        
+        # Deduct for alerts
+        critical_alerts = len([a for a in recent_alerts if a.level == AlertLevel.CRITICAL])
+        warning_alerts = len([a for a in recent_alerts if a.level == AlertLevel.WARNING])
+        health_score -= critical_alerts * 10
+        health_score -= warning_alerts * 5
+        
+        metrics["health_score"] = max(0.0, min(100.0, health_score))
+        
+        # Add summary
+        metrics["summary"] = {
+            "total_metrics_collected": len(self.metrics_collector.get_all_metrics()),
+            "monitoring_duration_minutes": (
+                5 if self._monitoring else 0
+            ),  # Simplified for current metrics
+            "performance_status": (
+                "excellent" if health_score >= 90
+                else "good" if health_score >= 75
+                else "fair" if health_score >= 60
+                else "poor"
+            ),
+        }
+        
+        return metrics
 
 
 # Global performance monitor instance

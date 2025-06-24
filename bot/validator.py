@@ -3,16 +3,39 @@ Trade action validation and schema enforcement.
 
 This module validates LLM outputs and ensures all trade actions
 conform to required schemas and business rules.
+
+Enhanced with functional programming patterns for improved reliability:
+- Pure validation functions
+- Composable validation chains
+- Monadic error handling
+- Data integrity checks
+- Backward compatibility with existing APIs
 """
 
 import json
 import logging
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import ValidationError
 
 from .config import settings
-from .trading_types import Position, TradeAction
+from .fp.types import Position, TradeAction
+
+# Enhanced functional validation imports
+try:
+    from .fp.core.functional_validation import (
+        validate_trade_action_functional,
+        FPResult, FPSuccess, FPFailure
+    )
+    from .validation.data_integrity import (
+        FunctionalIntegrityValidator, IntegrityLevel
+    )
+    from .validation.pipeline import (
+        create_trade_action_pipeline, FunctionalValidationPipeline
+    )
+    FUNCTIONAL_VALIDATION_AVAILABLE = True
+except ImportError:
+    FUNCTIONAL_VALIDATION_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -23,16 +46,44 @@ class TradeValidator:
 
     Ensures all trade actions are valid, safe, and conform to risk parameters
     before execution. Defaults to HOLD on any validation failures.
+    
+    Enhanced with functional programming patterns:
+    - Pure validation functions for better reliability
+    - Composable validation chains
+    - Data integrity checks
+    - Validation pipelines for complex validation flows
     """
 
-    def __init__(self):
-        """Initialize the trade validator."""
+    def __init__(self, use_functional_validation: bool = True, integrity_level: str = "basic") -> None:
+        """
+        Initialize the trade validator.
+        
+        Args:
+            use_functional_validation: Whether to use enhanced functional validation
+            integrity_level: Level of data integrity validation ("basic", "strict", "paranoid")
+        """
         self.max_size_pct = settings.trading.max_size_pct
         self.max_tp_pct = 20.0  # Maximum take profit percentage
         self.max_sl_pct = 10.0  # Maximum stop loss percentage
         self.valid_actions = {"LONG", "SHORT", "CLOSE", "HOLD"}
-
-        logger.info("Initialized TradeValidator")
+        
+        # Enhanced functional validation setup
+        self.use_functional_validation = use_functional_validation and FUNCTIONAL_VALIDATION_AVAILABLE
+        
+        if self.use_functional_validation:
+            # Initialize functional components
+            integrity_map = {
+                "basic": IntegrityLevel.BASIC,
+                "strict": IntegrityLevel.STRICT,
+                "paranoid": IntegrityLevel.PARANOID
+            }
+            self.integrity_validator = FunctionalIntegrityValidator(
+                integrity_map.get(integrity_level, IntegrityLevel.BASIC)
+            )
+            self.validation_pipeline = create_trade_action_pipeline()
+            logger.info("Initialized TradeValidator with functional validation (integrity: %s)", integrity_level)
+        else:
+            logger.info("Initialized TradeValidator with legacy validation")
 
     def validate(
         self,
@@ -44,6 +95,7 @@ class TradeValidator:
 
         Args:
             llm_output: Raw LLM output (JSON string, dict, or TradeAction)
+            current_position: Current position (if any)
 
         Returns:
             Valid TradeAction object (defaults to HOLD on errors)
@@ -52,10 +104,15 @@ class TradeValidator:
             # Convert to TradeAction if needed
             trade_action = self._parse_llm_output(llm_output)
 
-            # Validate the trade action
-            validated_action = self._validate_trade_action(
-                trade_action, current_position
-            )
+            # Choose validation method based on configuration
+            if self.use_functional_validation:
+                validated_action = self._validate_trade_action_functional(
+                    trade_action, current_position
+                )
+            else:
+                validated_action = self._validate_trade_action(
+                    trade_action, current_position
+                )
 
         except Exception as e:
             logger.exception("Validation failed")
@@ -401,3 +458,235 @@ class TradeValidator:
             summary["comparison_error"] = str(e)
 
         return summary
+
+    def _validate_trade_action_functional(
+        self, action: TradeAction, current_position: Position | None = None
+    ) -> TradeAction:
+        """
+        Validate trade action using functional programming patterns.
+        
+        Args:
+            action: Trade action to validate
+            current_position: Current position (if any)
+            
+        Returns:
+            Validated trade action
+            
+        Raises:
+            ValidationError: If action cannot be validated
+        """
+        if not self.use_functional_validation:
+            # Fall back to legacy validation
+            return self._validate_trade_action(action, current_position)
+        
+        try:
+            # Convert TradeAction to dict for functional validation
+            action_dict = {
+                "action": action.action,
+                "size_pct": action.size_pct,
+                "take_profit_pct": action.take_profit_pct,
+                "stop_loss_pct": action.stop_loss_pct,
+                "leverage": action.leverage,
+                "rationale": action.rationale
+            }
+            
+            # Apply functional validation pipeline
+            pipeline_result = self.validation_pipeline.execute(action_dict)
+            
+            if not pipeline_result.success:
+                # Log detailed error information
+                error_summary = []
+                for error in pipeline_result.errors:
+                    error_summary.append(f"{error.field}: {error.message}")
+                
+                logger.warning(
+                    "Functional validation failed: %s (execution_path: %s)",
+                    "; ".join(error_summary),
+                    " -> ".join(pipeline_result.execution_path)
+                )
+                
+                # Fall back to legacy validation with warnings
+                logger.info("Falling back to legacy validation")
+                return self._validate_trade_action(action, current_position)
+            
+            # Apply data integrity checks
+            integrity_result = self.integrity_validator.validate_trade_action(action)
+            
+            if integrity_result.is_failure():
+                logger.warning(
+                    "Data integrity check failed: %s", 
+                    integrity_result.failure()
+                )
+                # Apply business rules from legacy validation for safety
+                return self._apply_business_rules(action, current_position)
+            
+            # Apply legacy business rules as final safety check
+            validated_action = self._apply_business_rules(action, current_position)
+            
+            logger.debug(
+                "Functional validation succeeded: %s (execution_time: %.2fms, success_rate: %.1f%%)",
+                validated_action.action,
+                pipeline_result.metrics.execution_time_ms,
+                pipeline_result.metrics.success_rate * 100
+            )
+            
+            return validated_action
+            
+        except Exception as e:
+            logger.exception("Functional validation error, falling back to legacy: %s", e)
+            return self._validate_trade_action(action, current_position)
+
+    def validate_with_detailed_result(
+        self,
+        llm_output: str | dict[str, Any] | TradeAction,
+        current_position: Position | None = None,
+    ) -> dict[str, Any]:
+        """
+        Validate with detailed result information including metrics and errors.
+        
+        Args:
+            llm_output: Raw LLM output
+            current_position: Current position (if any)
+            
+        Returns:
+            Dictionary with validation result, metrics, and detailed error information
+        """
+        result = {
+            "success": False,
+            "validated_action": None,
+            "errors": [],
+            "warnings": [],
+            "metrics": {},
+            "validation_method": "legacy"
+        }
+        
+        try:
+            # Parse LLM output
+            trade_action = self._parse_llm_output(llm_output)
+            result["parsed_action"] = trade_action
+            
+            if self.use_functional_validation:
+                # Functional validation with detailed results
+                action_dict = {
+                    "action": trade_action.action,
+                    "size_pct": trade_action.size_pct,
+                    "take_profit_pct": trade_action.take_profit_pct,
+                    "stop_loss_pct": trade_action.stop_loss_pct,
+                    "leverage": trade_action.leverage,
+                    "rationale": trade_action.rationale
+                }
+                
+                # Run pipeline validation
+                pipeline_result = self.validation_pipeline.execute(action_dict)
+                
+                result["validation_method"] = "functional"
+                result["metrics"] = {
+                    "execution_time_ms": pipeline_result.metrics.execution_time_ms,
+                    "success_rate": pipeline_result.metrics.success_rate,
+                    "steps_executed": len(pipeline_result.execution_path),
+                    "total_steps": pipeline_result.metrics.total_steps,
+                    "execution_path": pipeline_result.execution_path
+                }
+                
+                if pipeline_result.success:
+                    # Run integrity checks
+                    integrity_result = self.integrity_validator.validate_trade_action(trade_action)
+                    
+                    if integrity_result.is_success():
+                        # Apply final business rules
+                        validated_action = self._apply_business_rules(trade_action, current_position)
+                        result["success"] = True
+                        result["validated_action"] = validated_action
+                    else:
+                        result["errors"].append({
+                            "type": "integrity_violation",
+                            "details": str(integrity_result.failure())
+                        })
+                        # Still return a safe action
+                        result["validated_action"] = self._apply_business_rules(trade_action, current_position)
+                else:
+                    result["errors"] = [
+                        {
+                            "type": "validation_error",
+                            "field": error.field if hasattr(error, 'field') else "unknown",
+                            "message": str(error),
+                            "context": error.context if hasattr(error, 'context') else {}
+                        }
+                        for error in pipeline_result.errors
+                    ]
+                    result["warnings"] = pipeline_result.warnings
+                    # Fall back to legacy validation
+                    result["validated_action"] = self._validate_trade_action(trade_action, current_position)
+            else:
+                # Legacy validation
+                validated_action = self._validate_trade_action(trade_action, current_position)
+                result["success"] = True
+                result["validated_action"] = validated_action
+                
+        except Exception as e:
+            result["errors"].append({
+                "type": "exception",
+                "message": str(e)
+            })
+            result["validated_action"] = self._get_default_hold_action(f"Validation error: {e!s}")
+        
+        return result
+
+    def validate_batch(
+        self, 
+        llm_outputs: list[str | dict[str, Any] | TradeAction],
+        current_position: Position | None = None
+    ) -> list[dict[str, Any]]:
+        """
+        Validate a batch of LLM outputs efficiently.
+        
+        Args:
+            llm_outputs: List of LLM outputs to validate
+            current_position: Current position (if any)
+            
+        Returns:
+            List of validation results with detailed information
+        """
+        results = []
+        
+        for i, llm_output in enumerate(llm_outputs):
+            try:
+                result = self.validate_with_detailed_result(llm_output, current_position)
+                result["batch_index"] = i
+                results.append(result)
+            except Exception as e:
+                results.append({
+                    "batch_index": i,
+                    "success": False,
+                    "validated_action": self._get_default_hold_action(f"Batch validation error: {e}"),
+                    "errors": [{"type": "batch_error", "message": str(e)}],
+                    "validation_method": "error_fallback"
+                })
+        
+        return results
+
+    def get_validation_metrics(self) -> dict[str, Any]:
+        """
+        Get validation system metrics and health information.
+        
+        Returns:
+            Dictionary with validation metrics
+        """
+        metrics = {
+            "validation_method": "functional" if self.use_functional_validation else "legacy",
+            "functional_validation_available": FUNCTIONAL_VALIDATION_AVAILABLE,
+            "max_size_pct": self.max_size_pct,
+            "max_tp_pct": self.max_tp_pct,
+            "max_sl_pct": self.max_sl_pct,
+            "valid_actions": list(self.valid_actions)
+        }
+        
+        if self.use_functional_validation:
+            # Add functional validation specific metrics
+            metrics.update({
+                "integrity_level": str(self.integrity_validator.level),
+                "pipeline_steps": len(self.validation_pipeline.steps),
+                "pipeline_stages": list(set(step.stage.value for step in self.validation_pipeline.steps))
+            })
+        
+        return metrics

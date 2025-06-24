@@ -58,6 +58,9 @@ psutil = "^6.1.0"
 aiofiles = "^24.1.0"
 python-socketio = "^5.13.0"
 aiohappyeyeballs = "^2.6.1"
+# Functional Programming Dependencies
+returns = "^0.22.0"
+toolz = "^0.12.0"
 # MCP Memory Server Dependencies
 fastapi = ">=0.115.0"
 uvicorn = {version = ">=0.34.0", extras = ["standard"]}

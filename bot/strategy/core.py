@@ -12,7 +12,8 @@ from typing import Any, Literal, cast
 from bot.config import settings
 from bot.error_handling import ErrorBoundary
 from bot.system_monitor import error_recovery_manager, system_monitor
-from bot.trading_types import IndicatorData, MarketState, TradeAction
+from bot.fp.types import TradeAction
+from bot.trading_types import IndicatorData, MarketState  # Keep legacy imports until functional equivalents available
 
 logger = logging.getLogger(__name__)
 

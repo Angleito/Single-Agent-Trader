@@ -114,17 +114,51 @@ class Position(BaseModel):
 
 
 class MarketData(BaseModel):
-    """Market data container."""
+    """Market data container with validation."""
 
     symbol: str
     timestamp: datetime
-    open: Decimal
-    high: Decimal
-    low: Decimal
-    close: Decimal
-    volume: Decimal
+    open: Decimal = Field(gt=0, description="Opening price")
+    high: Decimal = Field(gt=0, description="Highest price in period")
+    low: Decimal = Field(gt=0, description="Lowest price in period")
+    close: Decimal = Field(gt=0, description="Closing price")
+    volume: Decimal = Field(ge=0, description="Trading volume")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def validate_price_relationships(self) -> "MarketData":
+        """
+        Validate OHLCV price relationships.
+
+        Ensures:
+        - High is the highest price
+        - Low is the lowest price
+        - Open and Close are within High/Low range
+        """
+        if self.high < max(self.open, self.close, self.low):
+            raise ValueError(
+                f"High price {self.high} must be >= all other prices. "
+                f"Open: {self.open}, Close: {self.close}, Low: {self.low}"
+            )
+
+        if self.low > min(self.open, self.close, self.high):
+            raise ValueError(
+                f"Low price {self.low} must be <= all other prices. "
+                f"Open: {self.open}, Close: {self.close}, High: {self.high}"
+            )
+
+        if self.open > self.high or self.open < self.low:
+            raise ValueError(
+                f"Open price {self.open} must be between Low {self.low} and High {self.high}"
+            )
+
+        if self.close > self.high or self.close < self.low:
+            raise ValueError(
+                f"Close price {self.close} must be between Low {self.low} and High {self.high}"
+            )
+
+        return self
 
 
 class IndicatorData(BaseModel):
@@ -360,3 +394,55 @@ Position.model_rebuild()
 MarketState.model_rebuild()
 FuturesMarketState.model_rebuild()
 StablecoinDominance.model_rebuild()
+
+# Import FP trading types for compatibility
+try:
+    from bot.fp.types.trading import (
+        TradeSignal as FPTradeSignal,
+        Long as FPLong,
+        Short as FPShort,  
+        Hold as FPHold,
+        MarketMake as FPMarketMake,
+        Order as FPOrder,
+        LimitOrder as FPLimitOrder,
+        MarketOrder as FPMarketOrder,
+        StopOrder as FPStopOrder,
+        Position as FPPosition,
+        MarketData as FPMarketData,
+        MarketState as FPMarketState,
+        TradingParams as FPTradingParams,
+    )
+    
+    # Compatibility aliases for legacy code using FP types
+    TradeSignal = FPTradeSignal  # Legacy code can use TradeSignal instead of TradeAction
+    FPOrder = FPOrder  # Make FP Order available
+    FPPosition = FPPosition  # Make FP Position available
+    FPMarketData = FPMarketData  # Make FP MarketData available
+    FPMarketState = FPMarketState  # Make FP MarketState available
+    TradingParams = FPTradingParams  # Make TradingParams available for legacy usage
+    
+    # Signal type aliases 
+    LongSignal = FPLong
+    ShortSignal = FPShort
+    HoldSignal = FPHold
+    MarketMakeSignal = FPMarketMake
+    
+    # Order type aliases
+    FunctionalLimitOrder = FPLimitOrder
+    FunctionalMarketOrder = FPMarketOrder
+    FunctionalStopOrder = FPStopOrder
+    
+    _FP_TYPES_AVAILABLE = True
+except ImportError:
+    _FP_TYPES_AVAILABLE = False
+    
+    # Define fallback types if FP types are not available
+    class TradeSignal:
+        """Fallback TradeSignal when FP types unavailable."""
+        pass
+    
+    TradingParams = None
+    FPOrder = None
+    FPPosition = None
+    FPMarketData = None
+    FPMarketState = None

@@ -2212,3 +2212,220 @@ def create_market_data_client(
         MarketDataClient instance
     """
     return MarketDataClient(symbol, interval)
+
+
+class MarketDataFeed:
+    """
+    Real-time market data feed for processing live market data.
+    
+    This class provides a unified interface for real-time market data processing
+    with support for both live and simulated data feeds.
+    """
+    
+    def __init__(
+        self, 
+        symbol: str, 
+        interval: str = "1m", 
+        dry_run: bool = False,
+        websocket_enabled: bool = True
+    ):
+        """
+        Initialize the market data feed.
+        
+        Args:
+            symbol: Trading symbol (e.g., "BTC-USD")
+            interval: Data interval (default: "1m")
+            dry_run: If True, use simulated data instead of live feeds
+            websocket_enabled: Enable WebSocket connections for real-time data
+        """
+        self.symbol = symbol
+        self.interval = interval
+        self.dry_run = dry_run
+        self.websocket_enabled = websocket_enabled
+        self._client = create_market_data_client(symbol, interval)
+        self._running = False
+        self._callbacks: list[Callable[[MarketData], None]] = []
+        self._last_price: Decimal | None = None
+        self._websocket_task: asyncio.Task | None = None
+        
+        logging.getLogger(__name__).info(
+            "MarketDataFeed initialized for %s (dry_run=%s, websocket=%s)",
+            symbol, dry_run, websocket_enabled
+        )
+    
+    def add_callback(self, callback: Callable[[MarketData], None]) -> None:
+        """Add a callback function to receive market data updates."""
+        self._callbacks.append(callback)
+    
+    def remove_callback(self, callback: Callable[[MarketData], None]) -> None:
+        """Remove a callback function."""
+        if callback in self._callbacks:
+            self._callbacks.remove(callback)
+    
+    async def start(self) -> None:
+        """Start the market data feed."""
+        if self._running:
+            return
+        
+        self._running = True
+        
+        if self.dry_run:
+            # Start simulated data feed
+            self._websocket_task = asyncio.create_task(self._simulate_data_feed())
+        elif self.websocket_enabled:
+            # Start real-time WebSocket feed
+            self._websocket_task = asyncio.create_task(self._start_websocket_feed())
+        else:
+            # Use polling mode
+            self._websocket_task = asyncio.create_task(self._poll_data_feed())
+    
+    async def stop(self) -> None:
+        """Stop the market data feed."""
+        self._running = False
+        
+        if self._websocket_task and not self._websocket_task.done():
+            self._websocket_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._websocket_task
+    
+    async def get_current_price(self) -> Decimal | None:
+        """Get the current market price."""
+        if self._last_price:
+            return self._last_price
+        
+        try:
+            # Fetch current price from client
+            current_data = await self._client.get_current_price()
+            if current_data:
+                self._last_price = Decimal(str(current_data))
+                return self._last_price
+        except Exception as e:
+            logging.getLogger(__name__).warning(
+                "Failed to fetch current price for %s: %s", self.symbol, e
+            )
+        
+        return None
+    
+    async def get_historical_data(
+        self, 
+        limit: int = 100, 
+        start_time: datetime | None = None,
+        end_time: datetime | None = None
+    ) -> pd.DataFrame:
+        """
+        Get historical market data.
+        
+        Args:
+            limit: Maximum number of candles to fetch
+            start_time: Start time for historical data
+            end_time: End time for historical data
+            
+        Returns:
+            DataFrame with historical market data
+        """
+        try:
+            if start_time and end_time:
+                return await self._client.get_candles_range(start_time, end_time)
+            else:
+                return await self._client.get_candles(limit)
+        except Exception as e:
+            logging.getLogger(__name__).error(
+                "Failed to fetch historical data for %s: %s", self.symbol, e
+            )
+            # Return empty DataFrame with expected structure
+            return pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    
+    def _notify_callbacks(self, market_data: MarketData) -> None:
+        """Notify all registered callbacks with new market data."""
+        self._last_price = market_data.price
+        
+        for callback in self._callbacks:
+            try:
+                callback(market_data)
+            except Exception as e:
+                logging.getLogger(__name__).error(
+                    "Market data callback failed: %s", e
+                )
+    
+    async def _simulate_data_feed(self) -> None:
+        """Simulate market data updates for testing/dry-run mode."""
+        base_price = Decimal("50000.0")  # Base price for simulation
+        
+        while self._running:
+            try:
+                # Generate simulated market data
+                import random
+                
+                # Add small random variation (±1%)
+                variation = Decimal(str(random.uniform(-0.01, 0.01)))
+                current_price = base_price * (1 + variation)
+                
+                market_data = MarketData(
+                    symbol=self.symbol,
+                    timestamp=datetime.now(UTC),
+                    price=current_price,
+                    volume=Decimal("100.0"),  # Simulated volume
+                )
+                
+                self._notify_callbacks(market_data)
+                
+                # Update base price slowly
+                base_price = current_price
+                
+                # Wait before next update
+                await asyncio.sleep(1.0)
+                
+            except Exception as e:
+                logging.getLogger(__name__).error(
+                    "Error in simulated data feed: %s", e
+                )
+                await asyncio.sleep(5.0)
+    
+    async def _start_websocket_feed(self) -> None:
+        """Start real-time WebSocket data feed."""
+        while self._running:
+            try:
+                # This would connect to real WebSocket feeds
+                # For now, fall back to polling mode
+                await self._poll_data_feed()
+                break
+                
+            except Exception as e:
+                logging.getLogger(__name__).error(
+                    "WebSocket feed error: %s", e
+                )
+                await asyncio.sleep(5.0)
+    
+    async def _poll_data_feed(self) -> None:
+        """Poll for market data updates."""
+        while self._running:
+            try:
+                current_price = await self.get_current_price()
+                
+                if current_price:
+                    market_data = MarketData(
+                        symbol=self.symbol,
+                        timestamp=datetime.now(UTC),
+                        price=current_price,
+                        volume=Decimal("0.0"),  # Volume not available in polling mode
+                    )
+                    
+                    self._notify_callbacks(market_data)
+                
+                # Wait before next poll
+                await asyncio.sleep(5.0)
+                
+            except Exception as e:
+                logging.getLogger(__name__).error(
+                    "Error in polling data feed: %s", e
+                )
+                await asyncio.sleep(10.0)
+    
+    def is_running(self) -> bool:
+        """Check if the market data feed is running."""
+        return self._running
+    
+    @property
+    def last_price(self) -> Decimal | None:
+        """Get the last received price."""
+        return self._last_price

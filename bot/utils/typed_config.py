@@ -1,6 +1,6 @@
 """Type-safe configuration access utilities."""
 
-from typing import Any, Protocol, TypeVar, Union, overload
+from typing import Protocol, TypeVar, Union, overload
 
 T = TypeVar("T")
 
@@ -11,28 +11,28 @@ ConfigValue = Union[str, int, float, bool, None]
 class DictLike(Protocol):
     """Protocol for dict-like objects."""
 
-    def get(self, key: str, default: Any = None) -> Any: ...
+    def get(self, key: str, default: ConfigValue = None) -> ConfigValue: ...
 
 
 @overload
 def get_typed(
-    obj: dict[str, Any] | DictLike | object, attr: str, default: int
+    obj: dict[str, ConfigValue] | DictLike | object, attr: str, default: bool
+) -> bool: ...
+@overload
+def get_typed(
+    obj: dict[str, ConfigValue] | DictLike | object, attr: str, default: int
 ) -> int: ...
 @overload
 def get_typed(
-    obj: dict[str, Any] | DictLike | object, attr: str, default: float
+    obj: dict[str, ConfigValue] | DictLike | object, attr: str, default: float
 ) -> float: ...
 @overload
 def get_typed(
-    obj: dict[str, Any] | DictLike | object, attr: str, default: str
+    obj: dict[str, ConfigValue] | DictLike | object, attr: str, default: str
 ) -> str: ...
-@overload
-def get_typed(
-    obj: dict[str, Any] | DictLike | object, attr: str, default: bool
-) -> bool: ...
 
 
-def get_typed(obj: dict[str, Any] | DictLike | object, attr: str, default: T) -> T:
+def get_typed(obj: dict[str, ConfigValue] | DictLike | object, attr: str, default: T) -> T:
     """
     Type-safe config getter with automatic conversion.
 
@@ -63,23 +63,23 @@ def get_typed(obj: dict[str, Any] | DictLike | object, attr: str, default: T) ->
         # Handle string to numeric conversions
         if target_type == int:
             # Convert through float to handle decimal strings
-            return int(float(str(value)))
+            return int(float(str(value)))  # type: ignore[return-value]
         if target_type == float:
-            return float(str(value))
+            return float(str(value))  # type: ignore[return-value]
         if target_type == bool:
             # Handle string booleans
             if isinstance(value, str):
-                return value.lower() in ("true", "1", "yes", "on")
-            return bool(value)
+                return value.lower() in ("true", "1", "yes", "on")  # type: ignore[return-value]
+            return bool(value)  # type: ignore[return-value]
         if target_type == str:
-            return str(value)
+            return str(value)  # type: ignore[return-value]
         # For other types, try direct conversion
-        return target_type(value)
+        return target_type(value)  # type: ignore[return-value]
     except (ValueError, TypeError):
         return default
 
 
-def ensure_int(value: ConfigValue | Any, default: int = 0) -> int:
+def ensure_int(value: ConfigValue, default: int = 0) -> int:
     """Ensure a value is an integer."""
     if isinstance(value, int):
         return value
@@ -89,7 +89,7 @@ def ensure_int(value: ConfigValue | Any, default: int = 0) -> int:
         return default
 
 
-def ensure_float(value: ConfigValue | Any, default: float = 0.0) -> float:
+def ensure_float(value: ConfigValue, default: float = 0.0) -> float:
     """Ensure a value is a float."""
     if isinstance(value, (int, float)):
         return float(value)
@@ -99,7 +99,7 @@ def ensure_float(value: ConfigValue | Any, default: float = 0.0) -> float:
         return default
 
 
-def ensure_str(value: ConfigValue | Any, default: str = "") -> str:
+def ensure_str(value: ConfigValue, default: str = "") -> str:
     """Ensure a value is a string."""
     if value is None:
         return default

@@ -1,5 +1,5 @@
-# AI Trading Bot Dockerfile - Ubuntu Optimized
-# Multi-stage build optimized for Ubuntu deployment
+# AI Trading Bot Dockerfile - Ubuntu Optimized with Functional Programming Support
+# Multi-stage build optimized for Ubuntu deployment with FP runtime capabilities
 
 # Build stage
 FROM --platform=linux/amd64 python:3.12-slim AS builder
@@ -11,12 +11,21 @@ ARG VERSION=0.1.0
 ARG POETRY_VERSION=1.8.2
 ARG TARGETPLATFORM=linux/amd64
 ARG BUILDPLATFORM
+ARG FP_ENABLED=true
+ARG FP_RUNTIME_MODE=hybrid
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    # Functional Programming Runtime Environment
+    FP_RUNTIME_ENABLED=true \
+    FP_RUNTIME_MODE=hybrid \
+    FP_EFFECT_TIMEOUT=30.0 \
+    FP_MAX_CONCURRENT_EFFECTS=100 \
+    FP_ERROR_RECOVERY=true \
+    FP_METRICS_ENABLED=true
 
 # Ubuntu-optimized package installation
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -74,14 +83,25 @@ ARG VERSION=0.1.0
 ARG EXCHANGE_TYPE=coinbase
 ARG USER_ID=1000
 ARG GROUP_ID=1000
+ARG FP_ENABLED=true
+ARG FP_RUNTIME_MODE=hybrid
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/app/.venv/bin:$PATH" \
-    PYTHONPATH="/app" \
+    PYTHONPATH="/app:/app/bot/fp" \
     APP_VERSION=${VERSION} \
-    EXCHANGE__EXCHANGE_TYPE=${EXCHANGE_TYPE}
+    EXCHANGE__EXCHANGE_TYPE=${EXCHANGE_TYPE} \
+    # Functional Programming Runtime
+    FP_RUNTIME_ENABLED=${FP_ENABLED} \
+    FP_RUNTIME_MODE=${FP_RUNTIME_MODE} \
+    FP_EFFECT_TIMEOUT=30.0 \
+    FP_MAX_CONCURRENT_EFFECTS=100 \
+    FP_ERROR_RECOVERY=true \
+    FP_METRICS_ENABLED=true \
+    FP_SCHEDULER_ENABLED=true \
+    FP_ASYNC_RUNTIME=true
 
 # Ubuntu-optimized runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -128,7 +148,7 @@ COPY --from=builder /app/.venv /app/.venv
 COPY bot/ ./bot/
 COPY pyproject.toml ./
 
-# Create required directories with proper Ubuntu permissions
+# Create required directories with proper Ubuntu permissions including FP runtime support
 # This comprehensive directory setup reduces the burden on the entrypoint script
 # and ensures proper permissions for the botuser (1000:1000)
 RUN echo "Creating application directories..." \
@@ -140,6 +160,14 @@ RUN echo "Creating application directories..." \
     && mkdir -p /app/logs/bluefin /app/logs/trades \
     # Trading data directories
     && mkdir -p /app/data/orders /app/data/paper_trading /app/data/positions /app/data/bluefin /app/data/omnisearch_cache \
+    # Functional Programming runtime directories
+    && mkdir -p /app/data/fp_runtime /app/logs/fp \
+    # FP effect state and monitoring
+    && mkdir -p /app/data/fp_runtime/effects /app/data/fp_runtime/scheduler /app/data/fp_runtime/metrics \
+    # FP configuration and adapter state
+    && mkdir -p /app/data/fp_runtime/config /app/data/fp_runtime/adapters \
+    # FP debugging and development support
+    && mkdir -p /app/logs/fp/effects /app/logs/fp/scheduler /app/logs/fp/interpreter \
     # Set ownership conditionally - only if not running as root
     && echo "Setting directory ownership to (${USER_ID}:${GROUP_ID})..." \
     && if [ "${USER_ID}" != "0" ]; then \
@@ -151,8 +179,8 @@ RUN echo "Creating application directories..." \
     && echo "Setting directory permissions..." \
     && chmod 755 /app \
     # Set writable directory permissions (775 - read/write/execute for owner and group)
-    && chmod 775 /app/logs /app/logs/mcp /app/logs/bluefin /app/logs/trades \
-    && chmod 775 /app/data /app/data/mcp_memory /app/data/orders /app/data/paper_trading /app/data/positions /app/data/bluefin /app/data/omnisearch_cache \
+    && chmod 775 /app/logs /app/logs/mcp /app/logs/bluefin /app/logs/trades /app/logs/fp /app/logs/fp/effects /app/logs/fp/scheduler /app/logs/fp/interpreter \
+    && chmod 775 /app/data /app/data/mcp_memory /app/data/orders /app/data/paper_trading /app/data/positions /app/data/bluefin /app/data/omnisearch_cache /app/data/fp_runtime /app/data/fp_runtime/effects /app/data/fp_runtime/scheduler /app/data/fp_runtime/metrics /app/data/fp_runtime/config /app/data/fp_runtime/adapters \
     && chmod 775 /app/tmp \
     # Set read-only directory permissions (755 - read allowed, no write access)
     && chmod 755 /app/config /app/prompts \
@@ -161,6 +189,9 @@ RUN echo "Creating application directories..." \
     && ls -la /app/ \
     && ls -la /app/data/ \
     && ls -la /app/logs/ \
+    && echo "Verifying FP runtime directories..." \
+    && ls -la /app/data/fp_runtime/ \
+    && ls -la /app/logs/fp/ \
     && echo "Directory setup complete - all required directories created with proper ownership (${USER_ID}:${GROUP_ID})"
 
 # Copy prompt files
@@ -203,9 +234,9 @@ ENTRYPOINT ["/app/docker-entrypoint.sh"]
 # Default command - starts in safe dry-run mode
 CMD ["python", "-m", "bot.main", "live", "--dry-run"]
 
-# Ubuntu deployment optimized labels
-LABEL org.opencontainers.image.title="AI Trading Bot" \
-      org.opencontainers.image.description="Ubuntu optimized crypto trading bot with Coinbase and Bluefin support" \
+# Ubuntu deployment optimized labels with FP support
+LABEL org.opencontainers.image.title="AI Trading Bot with Functional Programming Runtime" \
+      org.opencontainers.image.description="Ubuntu optimized crypto trading bot with Coinbase and Bluefin support, featuring functional programming runtime" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.revision="${VCS_REF}" \
@@ -214,4 +245,9 @@ LABEL org.opencontainers.image.title="AI Trading Bot" \
       org.opencontainers.image.platform="${TARGETPLATFORM}" \
       ubuntu.optimized="true" \
       ubuntu.compatible="22.04+" \
+      fp.runtime.enabled="${FP_ENABLED}" \
+      fp.runtime.mode="${FP_RUNTIME_MODE}" \
+      fp.effect.interpreter="true" \
+      fp.scheduler="true" \
+      fp.adapters="true" \
       maintainer="ai-trading-bot"

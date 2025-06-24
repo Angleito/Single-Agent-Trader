@@ -15,8 +15,8 @@ from decimal import Decimal
 import pandas as pd
 import pytest
 
+from bot.data import MarketDataProvider
 from bot.data.bluefin_market import BluefinMarketDataProvider
-from bot.data.market import MarketDataProvider
 from bot.indicators.vumanchu import CipherA
 from bot.trading_types import MarketData
 

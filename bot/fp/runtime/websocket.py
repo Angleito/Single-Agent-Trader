@@ -179,7 +179,7 @@ class WebSocketManager:
                     # Attempt reconnection
                     await self.reconnect_single(connection_name)
 
-        return AsyncIO.pure(await heartbeat())
+        return AsyncIO.from_async(lambda: heartbeat())
 
     async def reconnect_single(self, connection_name: str) -> None:
         """Reconnect a single WebSocket"""
@@ -296,7 +296,7 @@ class WebSocketManager:
                 self.running = False
                 info("WebSocket manager stopped").run()
 
-        return AsyncIO.pure(await start())
+        return AsyncIO.from_async(start())
 
     def stop(self) -> IO[None]:
         """Stop the WebSocket manager"""

@@ -12,9 +12,20 @@ from pathlib import Path
 # Add bot module to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# Legacy imports (maintained for compatibility)
 from bot.config import settings
 from bot.risk import RiskManager
 from bot.trading_types import Position
+
+# Functional imports (added for migration to functional programming patterns)
+try:
+    from bot.fp.types.config import Config
+    from bot.fp.strategies.risk_management import RiskAssessment, RiskLevel
+    from bot.fp.types.trading import PositionSide, PositionState
+    FUNCTIONAL_AVAILABLE = True
+except ImportError:
+    # Functional implementations not available, continue with legacy
+    FUNCTIONAL_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 

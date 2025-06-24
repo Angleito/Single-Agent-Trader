@@ -17,7 +17,7 @@ from typing import (
 from bot.fp.core.either import Either, Left, Right
 from bot.fp.core.io import IO
 from bot.fp.core.option import Empty, Option, Some
-from bot.fp.events.events import Event
+from bot.fp.events.base import Event
 
 T = TypeVar("T")
 E = TypeVar("E", bound=Event)

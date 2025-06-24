@@ -18,7 +18,7 @@ from bot.position_manager import (
     PositionStateError,
     PositionValidationError,
 )
-from bot.trading_types import Order, OrderStatus, Position
+from bot.fp.types import Order, OrderStatus, Position
 
 
 class TestPositionManagerExceptions(unittest.TestCase):

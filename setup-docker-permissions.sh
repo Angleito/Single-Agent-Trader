@@ -83,6 +83,19 @@ DIRECTORIES=(
     "data/omnisearch_cache"
     "tmp/bluefin"
 
+    # Functional Programming directories
+    "logs/fp"
+    "logs/fp/migration"
+    "logs/fp/performance"
+    "logs/fp/validation"
+    "data/fp"
+    "data/fp/benchmarks"
+    "data/fp/migration_reports"
+    "data/fp/validation_results"
+    "tmp/fp"
+    "tmp/fp/testing"
+    "tmp/fp/migration"
+
     # Dashboard directories
     "dashboard/backend/logs"
     "dashboard/backend/data"
@@ -126,6 +139,15 @@ LOG_FILES=(
     "data/paper_trading/trades.json"
     "data/orders/active_orders.json"
     "data/positions/positions.json"
+    
+    # Functional Programming log files
+    "logs/fp/migration.log"
+    "logs/fp/performance.log"
+    "logs/fp/validation.log"
+    "logs/fp/type_checking.log"
+    "data/fp/migration_reports/latest_report.json"
+    "data/fp/benchmarks/performance_baseline.json"
+    "data/fp/validation_results/latest_validation.json"
 )
 
 for log_file in "${LOG_FILES[@]}"; do
@@ -338,6 +360,27 @@ if [ $VALIDATION_ERRORS -eq 0 ]; then
     echo ""
     echo "   # Alternative startup scripts:"
     echo "   ./scripts/start-trading-bot.sh"
+    echo ""
+    echo "🧮 Functional Programming Support:"
+    echo "================================="
+    echo "The following FP-specific directories have been configured:"
+    echo "• logs/fp/ - Functional programming logs (migration, performance, validation)"
+    echo "• data/fp/ - FP benchmarks, migration reports, and validation results"
+    echo "• tmp/fp/ - Temporary FP testing and migration data"
+    echo ""
+    echo "🔧 FP Development Tools:"
+    echo "======================="
+    echo "   # Run FP-specific code quality checks:"
+    echo "   ./scripts/fp-code-quality.sh"
+    echo ""
+    echo "   # FP migration assistance:"
+    echo "   ./scripts/fp-migration-helper.sh"
+    echo ""
+    echo "   # FP performance benchmarks:"
+    echo "   ./scripts/fp-performance-benchmark.sh"
+    echo ""
+    echo "   # FP validation and testing:"
+    echo "   ./scripts/fp-test-runner.sh"
     echo ""
 else
     echo ""

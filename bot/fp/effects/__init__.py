@@ -84,6 +84,8 @@ from .monitoring import (
     HealthStatus,
     Span,
     alert,
+    create_alert,
+    send_alert,
     health_check,
     increment_counter,
     record_gauge,
@@ -189,6 +191,8 @@ __all__ = [
     "health_check",
     "start_span",
     "alert",
+    "create_alert",
+    "send_alert",
     # Configuration
     "ConfigSource",
     "Config",

@@ -10,7 +10,7 @@ This module provides fundamental monadic types for handling effects in a pure fu
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import (
     Any,
@@ -261,6 +261,56 @@ class Log:
 
     level: str
     message: str
+
+
+# WebSocket and API Types
+@dataclass(frozen=True)
+class WebSocketConnection:
+    """WebSocket connection state"""
+    
+    websocket: Any  # WebSocket connection object
+    config: Any  # Connection configuration
+    is_connected: bool
+    subscriptions: list[Any] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class RateLimit:
+    """Rate limiting configuration"""
+    
+    requests_per_second: float
+    max_burst: int = 10
+
+
+@dataclass(frozen=True)
+class RetryPolicy:
+    """Retry policy configuration"""
+    
+    max_attempts: int
+    delay: float
+    backoff_multiplier: float = 2.0
+
+
+# Exchange Operation Types
+@dataclass(frozen=True)
+class CancelResult:
+    """Result of order cancellation"""
+    
+    order_id: str
+    success: bool
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class PositionUpdate:
+    """Position update notification"""
+    
+    symbol: str
+    side: str
+    size: Any  # Decimal
+    entry_price: Any  # Decimal
+    unrealized_pnl: Any  # Decimal
+    timestamp: Any  # datetime
 
 
 # Effect sum type

@@ -9,8 +9,19 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import datetime
 
-from bot.fp.indicators.moving_averages import calculate_sma
+import numpy as np
+from bot.fp.indicators.moving_averages import sma
 from bot.fp.types.indicators import BollingerBandsResult
+
+
+def _calculate_sma_simple(prices: Sequence[float], period: int) -> float | None:
+    """Simple SMA calculation for internal use."""
+    if len(prices) < period or period <= 0:
+        return None
+    
+    prices_array = np.array(prices, dtype=np.float64)
+    result = sma(prices_array, period, datetime.now())
+    return result.value if result else None
 
 
 def calculate_bollinger_bands(
@@ -31,7 +42,7 @@ def calculate_bollinger_bands(
         return None, None, None
 
     # Calculate middle band (SMA)
-    middle = calculate_sma(prices, period)
+    middle = _calculate_sma_simple(prices, period)
     if middle is None:
         return None, None, None
 

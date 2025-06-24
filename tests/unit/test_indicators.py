@@ -3,7 +3,18 @@
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
 
+# Legacy imports (maintained for compatibility)
 from bot.indicators.vumanchu import CipherA, CipherB, VuManChuIndicators
+
+# Functional imports (added for migration to functional programming patterns)
+try:
+    from bot.fp.indicators import rsi, macd, stochastic, calculate_all_momentum_indicators
+    from bot.fp.indicators.vumanchu_functional import VuManchuState
+    from bot.fp.indicators.momentum import momentum_oscillator
+    FUNCTIONAL_INDICATORS_AVAILABLE = True
+except ImportError:
+    # Functional implementations not available, continue with legacy
+    FUNCTIONAL_INDICATORS_AVAILABLE = False
 
 
 class TestCipherA:

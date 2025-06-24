@@ -22,7 +22,7 @@ class TradeLot:
     purchase_date: datetime = field(default_factory=datetime.now)
     remaining_quantity: Decimal = field(default_factory=lambda: Decimal(0))
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Initialize remaining quantity to match quantity if not set."""
         if self.remaining_quantity == Decimal(0) and self.quantity > Decimal(0):
             self.remaining_quantity = self.quantity

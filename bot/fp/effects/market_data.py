@@ -40,8 +40,8 @@ class APIConfig:
 
     base_url: str
     headers: dict[str, str]
-    timeout: int = 30
     rate_limit: RateLimit
+    timeout: int = 30
 
 
 # WebSocket Effects
@@ -371,4 +371,4 @@ def create_multi_exchange_stream(
             symbol=symbol, exchanges=exchanges, connections=connections, active=True
         )
 
-    return AsyncIO.pure(await create_stream())
+    return AsyncIO(lambda: asyncio.create_task(create_stream()))
