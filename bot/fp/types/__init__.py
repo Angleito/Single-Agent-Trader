@@ -433,13 +433,11 @@ __all__ = [
     "RiskLimits",
     "RiskMetrics",
     "TradingParams",
-    
     # Additional trading types
     "FuturesLimitOrder",
     "FuturesMarketOrder",
     "FuturesStopOrder",
     "CashTransferRequest",
-    
     # Balance validation types
     "BalanceValidationType",
     "BalanceRange",
@@ -448,7 +446,6 @@ __all__ = [
     "TradeAffordabilityCheck",
     "BalanceValidationConfig",
     "ComprehensiveBalanceValidation",
-    
     # Effect system types
     "IO",
     "ReadFile",
@@ -462,7 +459,6 @@ __all__ = [
     "CancelResult",
     "PositionUpdate",
     "Effect",
-    
     # Event sourcing types
     "EventMetadata",
     "TradingEvent",
@@ -483,7 +479,6 @@ __all__ = [
     "ErrorOccurred",
     "AuditTrailEntry",
     "EVENT_REGISTRY",
-    
     # Paper trading types
     "PaperTrade",
     "PaperPosition",
@@ -494,7 +489,6 @@ __all__ = [
     "AccountUpdate",
     "TradeStateTransition",
     "AccountStateTransition",
-    
     # Enhanced portfolio types
     "PortfolioAccountType",
     "BalanceType",
@@ -503,7 +497,6 @@ __all__ = [
     "AccountSnapshot",
     "PortfolioAllocation",
     "PerformanceSnapshot",
-    
     # Risk management types
     "RiskParameters",
     "RiskAlertType",
