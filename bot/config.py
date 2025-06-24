@@ -375,7 +375,7 @@ class ExchangeSettings:
         self.cdp_api_key_name: SecretStr | None = None
         self.cdp_private_key: SecretStr | None = None
         self.bluefin_private_key: SecretStr | None = None
-        
+
         if functional_config:
             self._from_functional_config(functional_config)
         else:
@@ -399,15 +399,14 @@ class ExchangeSettings:
             self.bluefin_network: str = kwargs.get("bluefin_network") or os.getenv(
                 "EXCHANGE__BLUEFIN_NETWORK", "mainnet"
             )
-            
+
             # WebSocket settings
             self.websocket_reconnect_attempts: int = parse_int_env(
-                "EXCHANGE__WEBSOCKET_RECONNECT_ATTEMPTS", 
-                kwargs.get("websocket_reconnect_attempts", 5)
+                "EXCHANGE__WEBSOCKET_RECONNECT_ATTEMPTS",
+                kwargs.get("websocket_reconnect_attempts", 5),
             )
             self.websocket_timeout: int = parse_int_env(
-                "EXCHANGE__WEBSOCKET_TIMEOUT", 
-                kwargs.get("websocket_timeout", 30)
+                "EXCHANGE__WEBSOCKET_TIMEOUT", kwargs.get("websocket_timeout", 30)
             )
 
             # Load credentials from environment
@@ -587,7 +586,7 @@ class SystemSettings:
                 "SYSTEM__UPDATE_FREQUENCY_SECONDS",
                 kwargs.get("update_frequency_seconds", 30.0),
             )
-            
+
             # Add missing logging attributes
             self.log_to_console: bool = parse_bool_env(
                 "SYSTEM__LOG_TO_CONSOLE",
@@ -621,13 +620,13 @@ class SystemSettings:
         )
         self.log_level = config.log_level.value
         self.update_frequency_seconds = 30.0  # Default
-        
+
         # Add missing logging attributes with functional config defaults
         self.log_to_console = True  # Default for functional config
-        self.log_to_file = True     # Default for functional config
+        self.log_to_file = True  # Default for functional config
         self.log_file_path = "logs/bot.log"  # Default
         self.max_log_size_mb = 100  # Default
-        self.log_backup_count = 5   # Default
+        self.log_backup_count = 5  # Default
 
 
 @dataclass

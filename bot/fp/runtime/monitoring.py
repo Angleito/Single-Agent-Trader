@@ -159,30 +159,28 @@ class MonitoringRuntime:
             def database_check() -> bool:
                 # Database is healthy if we can connect (simplified check)
                 return True  # TODO: implement actual database connection check
-            
+
             def exchange_api_check() -> bool:
                 # Exchange API is healthy if we can make requests (simplified check)
                 return True  # TODO: implement actual API health check
-            
+
             def websocket_check() -> bool:
                 # WebSocket is healthy if connection is active (simplified check)
                 return True  # TODO: implement actual WebSocket health check
-            
+
             def scheduler_check() -> bool:
                 # Scheduler is healthy if it's running (simplified check)
                 return True  # TODO: implement actual scheduler health check
-            
+
             health_checks = {
                 "database": health_check("database", database_check).run(),
                 "exchange_api": health_check("exchange_api", exchange_api_check).run(),
                 "websocket": health_check("websocket", websocket_check).run(),
                 "scheduler": health_check("scheduler", scheduler_check).run(),
             }
-            
+
             # Extract status from HealthCheck objects
-            checks = {
-                name: check.status for name, check in health_checks.items()
-            }
+            checks = {name: check.status for name, check in health_checks.items()}
 
             # Log health status
             unhealthy = [

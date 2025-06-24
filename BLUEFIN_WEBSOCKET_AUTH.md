@@ -16,7 +16,7 @@ The Bluefin WebSocket authentication system enables access to private channels f
 
 ### 📡 Private Channel Support
 - **Account Updates**: Real-time balance and account data changes
-- **Position Updates**: Live position changes and PnL updates  
+- **Position Updates**: Live position changes and PnL updates
 - **Order Updates**: Order status changes (pending, filled, cancelled, etc.)
 - **Trade Updates**: User trade confirmations and settlements
 - **Settlement Updates**: On-chain settlement notifications
@@ -48,17 +48,17 @@ from bot.data.bluefin_websocket import BluefinWebSocketClient
 async def main():
     # Your ED25519 private key (64 hex characters)
     private_key = "your_private_key_here"
-    
+
     # Create callbacks for private data
     async def handle_account_update(data):
         print(f"Account: {data}")
-    
+
     async def handle_position_update(data):
         print(f"Position: {data}")
-        
+
     async def handle_order_update(data):
         print(f"Order: {data}")
-    
+
     # Create authenticated WebSocket client
     ws_client = BluefinWebSocketClient(
         symbol="SUI-PERP",
@@ -69,13 +69,13 @@ async def main():
         on_position_update=handle_position_update,
         on_order_update=handle_order_update,
     )
-    
+
     # Connect and start receiving data
     await ws_client.connect()
-    
+
     # Keep running
     await asyncio.sleep(3600)  # Run for 1 hour
-    
+
     # Cleanup
     await ws_client.disconnect()
 
@@ -140,7 +140,7 @@ python your_script.py
   "payload": {
     "iss": "bluefin-client",
     "sub": "user_public_key",
-    "aud": "bluefin-websocket", 
+    "aud": "bluefin-websocket",
     "iat": 1234567890,
     "exp": 1234571490,
     "user_id": "user_public_key",
@@ -163,7 +163,7 @@ BluefinWebSocketClient(
     private_key_hex: str = None,    # ED25519 private key (64 hex chars)
     enable_private_channels: bool = False,  # Enable private channels
     on_account_update: Callable = None,     # Account update callback
-    on_position_update: Callable = None,    # Position update callback  
+    on_position_update: Callable = None,    # Position update callback
     on_order_update: Callable = None,       # Order update callback
     # ... other existing parameters
 )
@@ -202,7 +202,7 @@ ws_client._authenticator.get_status() -> dict
 #### Position Update Event
 ```python
 {
-    "eventType": "PositionUpdate", 
+    "eventType": "PositionUpdate",
     "symbol": "SUI-PERP",
     "size": "100.0",
     "side": "LONG",
@@ -218,7 +218,7 @@ ws_client._authenticator.get_status() -> dict
 {
     "eventType": "OrderUpdate",
     "orderId": "order_123",
-    "symbol": "SUI-PERP", 
+    "symbol": "SUI-PERP",
     "side": "BUY",
     "quantity": "100.0",
     "status": "FILLED",

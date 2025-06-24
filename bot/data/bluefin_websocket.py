@@ -10,7 +10,7 @@ from collections import deque
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal
 
 import websockets
 from websockets.exceptions import ConnectionClosed, WebSocketException
@@ -22,11 +22,12 @@ from bot.utils.price_conversion import convert_from_18_decimal, is_likely_18_dec
 # Import optimized precision utilities
 try:
     from bot.utils.precision_manager import (
-        convert_price_optimized, 
         batch_convert_market_data,
+        convert_price_optimized,
         format_price_for_display,
-        get_precision_manager
+        get_precision_manager,
     )
+
     PRECISION_MANAGER_AVAILABLE = True
 except ImportError:
     PRECISION_MANAGER_AVAILABLE = False
@@ -55,6 +56,7 @@ except ImportError:
             return "wss://notifications.api.sui-staging.bluefin.io"
         return "wss://notifications.api.sui-prod.bluefin.io"
 
+
 # Import authentication components
 try:
     from bot.exchange.bluefin_websocket_auth import (
@@ -62,10 +64,13 @@ try:
         BluefinWebSocketAuthError,
         create_websocket_authenticator,
     )
+
     WEBSOCKET_AUTH_AVAILABLE = True
 except ImportError:
     WEBSOCKET_AUTH_AVAILABLE = False
-    logger.warning("Bluefin WebSocket authentication not available - private channels will not work")
+    logger.warning(
+        "Bluefin WebSocket authentication not available - private channels will not work"
+    )
 
 
 logger = logging.getLogger(__name__)
@@ -101,11 +106,11 @@ class BluefinWebSocketClient:
         network: str | None = None,
         use_trade_aggregation: bool = True,
         auth_token: str | None = None,
-        private_key_hex: Optional[str] = None,
+        private_key_hex: str | None = None,
         enable_private_channels: bool = False,
-        on_account_update: Optional[Callable[[dict], None | Awaitable[None]]] = None,
-        on_position_update: Optional[Callable[[dict], None | Awaitable[None]]] = None,
-        on_order_update: Optional[Callable[[dict], None | Awaitable[None]]] = None,
+        on_account_update: Callable[[dict], None | Awaitable[None]] | None = None,
+        on_position_update: Callable[[dict], None | Awaitable[None]] | None = None,
+        on_order_update: Callable[[dict], None | Awaitable[None]] | None = None,
     ):
         """
         Initialize the Bluefin WebSocket client.
@@ -129,7 +134,7 @@ class BluefinWebSocketClient:
         self.candle_limit = candle_limit
         self.on_candle_update = on_candle_update
         self.use_trade_aggregation = use_trade_aggregation
-        
+
         # Authentication and private channel support
         self.private_key_hex = private_key_hex
         self.enable_private_channels = enable_private_channels
@@ -137,9 +142,9 @@ class BluefinWebSocketClient:
         self.on_position_update = on_position_update
         self.on_order_update = on_order_update
         self._auth_token = auth_token  # Static token (deprecated)
-        
+
         # Initialize authenticator if private key provided
-        self._authenticator: Optional[BluefinWebSocketAuthenticator] = None
+        self._authenticator: BluefinWebSocketAuthenticator | None = None
         if private_key_hex and WEBSOCKET_AUTH_AVAILABLE:
             try:
                 self._authenticator = create_websocket_authenticator(private_key_hex)
@@ -253,20 +258,22 @@ class BluefinWebSocketClient:
                         "empty_socketio_array", "Socket.IO message array is empty"
                     )
                     return False
-                
+
                 # Validate first element is a string (event name)
                 if not isinstance(data[0], str):
                     self._log_invalid_message(
-                        "invalid_socketio_event", f"Socket.IO event name must be string: {data[0]}"
+                        "invalid_socketio_event",
+                        f"Socket.IO event name must be string: {data[0]}",
                     )
                     return False
-                
+
                 return True
 
             # Basic structure validation for JSON-RPC
             if not isinstance(data, dict):
                 self._log_invalid_message(
-                    "invalid_data_type", f"Message must be dict or list, got: {type(data)}"
+                    "invalid_data_type",
+                    f"Message must be dict or list, got: {type(data)}",
                 )
                 return False
 
@@ -548,7 +555,9 @@ class BluefinWebSocketClient:
 
         # Start token refresh task if authentication is enabled
         if self._authenticator:
-            self._token_refresh_task = asyncio.create_task(self._token_refresh_handler())
+            self._token_refresh_task = asyncio.create_task(
+                self._token_refresh_handler()
+            )
 
         # Wait for initial connection with a timeout
         try:
@@ -775,11 +784,13 @@ class BluefinWebSocketClient:
         """Subscribe to global updates for the symbol using Socket.IO array format."""
         global_subscription = [
             "SUBSCRIBE",
-            [{
-                "e": "globalUpdates",
-                "p": self.symbol,  # Symbol like "SUI-PERP"
-                "t": self.auth_token
-            }]
+            [
+                {
+                    "e": "globalUpdates",
+                    "p": self.symbol,  # Symbol like "SUI-PERP"
+                    "t": self.auth_token,
+                }
+            ],
         ]
         channel_key = f"globalUpdates:{self.symbol}"
         self._subscribed_channels.add(channel_key)
@@ -792,11 +803,7 @@ class BluefinWebSocketClient:
         """Subscribe to ticker updates for price data using Socket.IO array format."""
         ticker_subscription = [
             "SUBSCRIBE",
-            [{
-                "e": "ticker",
-                "p": self.symbol,
-                "t": self.auth_token
-            }]
+            [{"e": "ticker", "p": self.symbol, "t": self.auth_token}],
         ]
         channel_key = f"ticker:{self.symbol}"
         self._subscribed_channels.add(channel_key)
@@ -851,12 +858,14 @@ class BluefinWebSocketClient:
         try:
             kline_subscription = [
                 "SUBSCRIBE",
-                [{
-                    "e": "kline",
-                    "p": self.symbol,
-                    "i": self.interval,  # Format: "1m", "5m", etc.
-                    "t": self.auth_token
-                }]
+                [
+                    {
+                        "e": "kline",
+                        "p": self.symbol,
+                        "i": self.interval,  # Format: "1m", "5m", etc.
+                        "t": self.auth_token,
+                    }
+                ],
             ]
             channel_key = f"kline:{self.symbol}@{self.interval}"
             self._subscribed_channels.add(channel_key)
@@ -884,11 +893,7 @@ class BluefinWebSocketClient:
         try:
             trade_subscription = [
                 "SUBSCRIBE",
-                [{
-                    "e": "trades",
-                    "p": self.symbol,
-                    "t": self.auth_token
-                }]
+                [{"e": "trades", "p": self.symbol, "t": self.auth_token}],
             ]
             channel_key = f"trade:{self.symbol}"
             self._subscribed_channels.add(channel_key)
@@ -913,13 +918,13 @@ class BluefinWebSocketClient:
         if not self._authenticator:
             logger.warning("Cannot subscribe to private channels: no authenticator")
             return
-        
+
         try:
             logger.info("Subscribing to private channels for authenticated user")
-            
+
             # Subscribe to userUpdates channel for account, position, and order updates
             await self._subscribe_to_user_updates()
-            
+
         except Exception as e:
             exception_handler.log_exception_with_context(
                 e,
@@ -937,26 +942,25 @@ class BluefinWebSocketClient:
         """Subscribe to userUpdates channel for private user data."""
         if not self._authenticator:
             return
-        
+
         try:
             # Get authenticated subscription message
-            subscription_msg = self._authenticator.get_user_updates_subscription_message()
-            
+            subscription_msg = (
+                self._authenticator.get_user_updates_subscription_message()
+            )
+
             # Use Socket.IO array format consistent with other subscriptions
-            user_updates_subscription = [
-                "SUBSCRIBE", 
-                [subscription_msg]
-            ]
-            
+            user_updates_subscription = ["SUBSCRIBE", [subscription_msg]]
+
             channel_key = "userUpdates"
             self._subscribed_channels.add(channel_key)
             await self._send_message(user_updates_subscription)
-            
+
             logger.info(
                 "Subscribed to userUpdates channel with authentication (public key: %s)",
-                self._authenticator.get_public_key()[:16] + "..."
+                self._authenticator.get_public_key()[:16] + "...",
             )
-            
+
         except BluefinWebSocketAuthError as e:
             logger.error("Authentication error subscribing to userUpdates: %s", e)
             raise
@@ -1047,7 +1051,7 @@ class BluefinWebSocketClient:
             # Handle subscription responses first
             if await self._handle_subscription_response(data):
                 return
-            
+
             # Handle Socket.IO event messages
             await self._handle_socketio_messages(data)
             return
@@ -1066,22 +1070,26 @@ class BluefinWebSocketClient:
             if "error" in data:
                 error_data = data["error"]
                 logger.error("WebSocket error: %s", error_data)
-                
+
                 # Check for authentication errors
                 if isinstance(error_data, dict):
                     await self._handle_authentication_error(error_data)
                 elif isinstance(error_data, str) and any(
-                    auth_term in error_data.lower() 
+                    auth_term in error_data.lower()
                     for auth_term in ["auth", "token", "unauthorized", "forbidden"]
                 ):
-                    await self._handle_authentication_error({"message": error_data, "code": "AUTH_ERROR"})
-                
+                    await self._handle_authentication_error(
+                        {"message": error_data, "code": "AUTH_ERROR"}
+                    )
+
                 return
 
             # Handle event-based messages
             await self._handle_event_messages(data)
 
-    async def _handle_subscription_response(self, data: dict[str, Any] | list[Any]) -> bool:
+    async def _handle_subscription_response(
+        self, data: dict[str, Any] | list[Any]
+    ) -> bool:
         """Handle subscription confirmations and errors for both JSON-RPC and Socket.IO formats.
 
         Returns:
@@ -1103,7 +1111,7 @@ class BluefinWebSocketClient:
                     error_info = data[1]
                     logger.error(
                         "Socket.IO subscription failed: %s",
-                        error_info.get('message', 'Unknown error'),
+                        error_info.get("message", "Unknown error"),
                     )
                     return True
             return False
@@ -1126,7 +1134,9 @@ class BluefinWebSocketClient:
                     data["result"],
                 )
             else:
-                logger.debug("Legacy subscription %s confirmed: %s", sub_id, data["result"])
+                logger.debug(
+                    "Legacy subscription %s confirmed: %s", sub_id, data["result"]
+                )
             return True
 
         if "error" in data:
@@ -1234,7 +1244,9 @@ class BluefinWebSocketClient:
                 operation="handle_socketio_messages",
             )
 
-    async def _handle_socketio_global_updates(self, data: dict[str, Any] | list[Any]) -> None:
+    async def _handle_socketio_global_updates(
+        self, data: dict[str, Any] | list[Any]
+    ) -> None:
         """Handle Socket.IO global updates."""
         if isinstance(data, list):
             for item in data:
@@ -1270,32 +1282,36 @@ class BluefinWebSocketClient:
         elif isinstance(data, dict):
             await self._handle_bluefin_kline_update({"data": data})
 
-    async def _handle_socketio_orderbook(self, data: dict[str, Any] | list[Any]) -> None:
+    async def _handle_socketio_orderbook(
+        self, data: dict[str, Any] | list[Any]
+    ) -> None:
         """Handle Socket.IO orderbook updates."""
         logger.debug("Received Socket.IO orderbook update for %s", self.symbol)
 
-    async def _handle_socketio_user_updates(self, data: dict[str, Any] | list[Any]) -> None:
+    async def _handle_socketio_user_updates(
+        self, data: dict[str, Any] | list[Any]
+    ) -> None:
         """Handle Socket.IO userUpdates for private account data."""
         try:
             if not self.enable_private_channels:
                 logger.debug("Received userUpdates but private channels disabled")
                 return
-            
+
             logger.debug("Processing userUpdates event data")
-            
+
             # Handle different data formats
             events_data = []
             if isinstance(data, list):
                 events_data = data
             elif isinstance(data, dict):
                 events_data = [data]
-            
+
             for event_data in events_data:
                 if not isinstance(event_data, dict):
                     continue
-                
+
                 event_type = event_data.get("eventType", event_data.get("type", ""))
-                
+
                 # Route to specific handlers based on event type
                 if event_type == "AccountDataUpdate":
                     await self._handle_account_update(event_data)
@@ -1311,9 +1327,9 @@ class BluefinWebSocketClient:
                     logger.debug(
                         "Unhandled userUpdates event type: %s, keys: %s",
                         event_type,
-                        list(event_data.keys())[:10]
+                        list(event_data.keys())[:10],
                     )
-                    
+
         except Exception as e:
             exception_handler.log_exception_with_context(
                 e,
@@ -1330,7 +1346,7 @@ class BluefinWebSocketClient:
         """Handle account balance and data updates."""
         try:
             logger.debug("Account update received: %s", list(data.keys()))
-            
+
             # Call user callback if provided
             if self.on_account_update:
                 try:
@@ -1340,7 +1356,7 @@ class BluefinWebSocketClient:
                         self.on_account_update(data)
                 except Exception as e:
                     logger.error("Error in account update callback: %s", e)
-                    
+
         except Exception as e:
             exception_handler.log_exception_with_context(
                 e,
@@ -1355,8 +1371,10 @@ class BluefinWebSocketClient:
     async def _handle_position_update(self, data: dict[str, Any]) -> None:
         """Handle position updates."""
         try:
-            logger.debug("Position update received for %s", data.get("symbol", "unknown"))
-            
+            logger.debug(
+                "Position update received for %s", data.get("symbol", "unknown")
+            )
+
             # Call user callback if provided
             if self.on_position_update:
                 try:
@@ -1366,7 +1384,7 @@ class BluefinWebSocketClient:
                         self.on_position_update(data)
                 except Exception as e:
                     logger.error("Error in position update callback: %s", e)
-                    
+
         except Exception as e:
             exception_handler.log_exception_with_context(
                 e,
@@ -1384,7 +1402,7 @@ class BluefinWebSocketClient:
             order_id = data.get("orderId", data.get("id", "unknown"))
             order_status = data.get("status", "unknown")
             logger.debug("Order update received: %s status %s", order_id, order_status)
-            
+
             # Call user callback if provided
             if self.on_order_update:
                 try:
@@ -1394,7 +1412,7 @@ class BluefinWebSocketClient:
                         self.on_order_update(data)
                 except Exception as e:
                     logger.error("Error in order update callback: %s", e)
-                    
+
         except Exception as e:
             exception_handler.log_exception_with_context(
                 e,
@@ -1411,10 +1429,10 @@ class BluefinWebSocketClient:
         try:
             trade_id = data.get("tradeId", data.get("id", "unknown"))
             logger.debug("User trade update received: %s", trade_id)
-            
+
             # These are user's own trades, different from market trades
             # Can be used for trade confirmations and PnL tracking
-            
+
         except Exception as e:
             exception_handler.log_exception_with_context(
                 e,
@@ -1431,9 +1449,9 @@ class BluefinWebSocketClient:
         try:
             settlement_id = data.get("settlementId", data.get("id", "unknown"))
             logger.debug("Order settlement update received: %s", settlement_id)
-            
+
             # These updates relate to on-chain settlement of orders
-            
+
         except Exception as e:
             exception_handler.log_exception_with_context(
                 e,
@@ -1497,12 +1515,16 @@ class BluefinWebSocketClient:
                 # OPTIMIZATION: Use batch conversion for better performance
                 if PRECISION_MANAGER_AVAILABLE:
                     trade_data_raw = {"price": price_str, "size": size_str}
-                    converted_data = batch_convert_market_data(trade_data_raw, self.symbol)
-                    price = converted_data.get("price", Decimal("0"))
-                    size = converted_data.get("size", Decimal("0"))
+                    converted_data = batch_convert_market_data(
+                        trade_data_raw, self.symbol
+                    )
+                    price = converted_data.get("price", Decimal(0))
+                    size = converted_data.get("size", Decimal(0))
                 else:
                     # Legacy conversion for compatibility
-                    price = convert_from_18_decimal(price_str, self.symbol, "trade_price")
+                    price = convert_from_18_decimal(
+                        price_str, self.symbol, "trade_price"
+                    )
                     size = convert_from_18_decimal(size_str, self.symbol, "trade_size")
                 side = trade.get("side", "")
                 timestamp = self._parse_timestamp(
@@ -1862,14 +1884,16 @@ class BluefinWebSocketClient:
                             "high": high_price,
                             "low": low_price,
                             "close": close_price,
-                            "volume": volume
+                            "volume": volume,
                         }
-                        converted_data = batch_convert_market_data(ohlcv_data, self.symbol)
-                        open_val = converted_data.get("open", Decimal("0"))
-                        high_val = converted_data.get("high", Decimal("0"))
-                        low_val = converted_data.get("low", Decimal("0"))
-                        close_val = converted_data.get("close", Decimal("0"))
-                        volume_val = converted_data.get("volume", Decimal("0"))
+                        converted_data = batch_convert_market_data(
+                            ohlcv_data, self.symbol
+                        )
+                        open_val = converted_data.get("open", Decimal(0))
+                        high_val = converted_data.get("high", Decimal(0))
+                        low_val = converted_data.get("low", Decimal(0))
+                        close_val = converted_data.get("close", Decimal(0))
+                        volume_val = converted_data.get("volume", Decimal(0))
                     else:
                         # Legacy conversion for compatibility
                         open_val = convert_from_18_decimal(
@@ -2163,51 +2187,53 @@ class BluefinWebSocketClient:
     async def _token_refresh_handler(self) -> None:
         """
         Background task to refresh authentication tokens before expiration.
-        
+
         Runs periodically to check token expiration and refresh when needed.
         """
         if not self._authenticator:
             logger.debug("Token refresh handler started but no authenticator available")
             return
-        
+
         logger.info("Started token refresh handler for WebSocket authentication")
-        
+
         # Refresh token every 30 minutes (tokens are valid for 1 hour)
         refresh_interval = 30 * 60  # 30 minutes in seconds
-        
+
         while self._connected:
             try:
                 await asyncio.sleep(refresh_interval)
-                
+
                 if not self._connected:
                     break
-                
+
                 # Check if token needs refresh
                 auth_status = self._authenticator.get_status()
-                
+
                 if auth_status.get("authenticated", False):
                     expires_in = auth_status.get("token_expires_in_seconds", 0)
-                    
+
                     # Refresh if token expires within 10 minutes
                     if expires_in < 600:  # 10 minutes
                         logger.info(
                             "Refreshing WebSocket token (expires in %d seconds)",
-                            expires_in
+                            expires_in,
                         )
-                        
+
                         refresh_success = await self.refresh_authentication()
                         if refresh_success:
-                            logger.info("Successfully refreshed WebSocket authentication token")
+                            logger.info(
+                                "Successfully refreshed WebSocket authentication token"
+                            )
                         else:
                             logger.error("Failed to refresh WebSocket token")
                     else:
                         logger.debug(
                             "WebSocket token still valid (expires in %d seconds)",
-                            expires_in
+                            expires_in,
                         )
                 else:
                     logger.warning("WebSocket authenticator reports not authenticated")
-                    
+
             except asyncio.CancelledError:
                 logger.info("Token refresh handler cancelled")
                 break
@@ -2518,10 +2544,7 @@ class BluefinWebSocketClient:
                 # Also send application-level ping using Socket.IO format
                 ping_message = [
                     "ping",
-                    [{
-                        "timestamp": time.time(),
-                        "t": self.auth_token
-                    }]
+                    [{"timestamp": time.time(), "t": self.auth_token}],
                 ]
 
                 await self._send_message(ping_message)
@@ -2686,27 +2709,27 @@ class BluefinWebSocketClient:
     async def refresh_authentication(self) -> bool:
         """
         Refresh authentication token and re-subscribe to private channels.
-        
+
         Returns:
             True if refresh successful, False otherwise
         """
         if not self._authenticator:
             logger.warning("Cannot refresh authentication: no authenticator")
             return False
-        
+
         try:
             logger.info("Refreshing WebSocket authentication token")
-            
+
             # Force refresh the token
             self._authenticator.refresh_token()
-            
+
             # Re-subscribe to private channels with new token
             if self.enable_private_channels and self._connected:
                 await self._subscribe_to_private_channels()
-            
+
             logger.info("Successfully refreshed WebSocket authentication")
             return True
-            
+
         except Exception as e:
             logger.error("Failed to refresh WebSocket authentication: %s", e)
             return False
@@ -2714,28 +2737,32 @@ class BluefinWebSocketClient:
     async def _handle_authentication_error(self, error_data: dict[str, Any]) -> None:
         """
         Handle authentication errors and attempt recovery.
-        
+
         Args:
             error_data: Error message data from WebSocket
         """
         try:
             error_code = error_data.get("code", "unknown")
             error_message = error_data.get("message", "Authentication failed")
-            
-            logger.warning("WebSocket authentication error: %s (%s)", error_message, error_code)
-            
+
+            logger.warning(
+                "WebSocket authentication error: %s (%s)", error_message, error_code
+            )
+
             # Attempt to refresh authentication
             if error_code in ["401", "403", "TOKEN_EXPIRED", "INVALID_TOKEN"]:
                 logger.info("Attempting to refresh authentication due to auth error")
-                
+
                 refresh_success = await self.refresh_authentication()
                 if not refresh_success:
-                    logger.error("Authentication refresh failed - disabling private channels")
+                    logger.error(
+                        "Authentication refresh failed - disabling private channels"
+                    )
                     self.enable_private_channels = False
             else:
                 logger.error("Unrecoverable authentication error: %s", error_message)
                 self.enable_private_channels = False
-                
+
         except Exception as e:
             logger.error("Error handling authentication error: %s", e)
             self.enable_private_channels = False
@@ -2743,20 +2770,20 @@ class BluefinWebSocketClient:
     def is_authenticated(self) -> bool:
         """
         Check if client is properly authenticated for private channels.
-        
+
         Returns:
             True if authenticated and ready for private channels
         """
         return (
-            self._authenticator is not None and 
-            self._authenticator.is_authenticated() and 
-            self.enable_private_channels
+            self._authenticator is not None
+            and self._authenticator.is_authenticated()
+            and self.enable_private_channels
         )
 
     def get_authentication_status(self) -> dict[str, Any]:
         """
         Get detailed authentication status information.
-        
+
         Returns:
             Authentication status dictionary
         """
@@ -2764,15 +2791,15 @@ class BluefinWebSocketClient:
             return {
                 "enabled": False,
                 "authenticated": False,
-                "error": "No authenticator configured"
+                "error": "No authenticator configured",
             }
-        
+
         return {
             "enabled": True,
             "authenticated": self._authenticator.is_authenticated(),
             "private_channels_enabled": self.enable_private_channels,
             "public_key": self._authenticator.get_public_key(),
-            "status": self._authenticator.get_status()
+            "status": self._authenticator.get_status(),
         }
 
     def get_status(self) -> dict[str, Any]:
@@ -2909,7 +2936,11 @@ class BluefinWebSocketClient:
 
 # Integration with BluefinMarketDataProvider
 async def integrate_websocket_with_provider(
-    provider: Any, symbol: str, interval: str, use_trade_aggregation: bool = True, auth_token: str | None = None
+    provider: Any,
+    symbol: str,
+    interval: str,
+    use_trade_aggregation: bool = True,
+    auth_token: str | None = None,
 ) -> BluefinWebSocketClient:
     """
     Create and integrate WebSocket client with BluefinMarketDataProvider.

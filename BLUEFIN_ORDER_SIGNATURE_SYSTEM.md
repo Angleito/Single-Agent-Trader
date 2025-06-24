@@ -98,7 +98,7 @@ symbol:SUI-PERP|side:BUY|quantity:10.0|price:3.45|orderType:LIMIT|timestamp:1703
 Signed orders include these additional fields:
 
 - `signature`: 128-character hex string (64 bytes)
-- `publicKey`: 64-character hex string (32 bytes)  
+- `publicKey`: 64-character hex string (32 bytes)
 - `orderHash`: 64-character hex string (32 bytes)
 - `signatureType`: "ED25519"
 - `nonce`: Unique integer identifier

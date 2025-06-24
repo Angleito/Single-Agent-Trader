@@ -30,7 +30,7 @@ else:
 # Check exchange configuration
 python -c "from bot.fp.types.config import build_exchange_config_from_env; result = build_exchange_config_from_env(); print('✅ Exchange OK' if result.is_success() else f'❌ Exchange: {result.failure()}')"
 
-# Check strategy configuration  
+# Check strategy configuration
 python -c "from bot.fp.types.config import build_strategy_config_from_env; result = build_strategy_config_from_env(); print('✅ Strategy OK' if result.is_success() else f'❌ Strategy: {result.failure()}')"
 
 # Check system configuration
@@ -66,7 +66,7 @@ if result.is_failure():
    ```bash
    # Check which variables are set
    env | grep -E "(EXCHANGE_TYPE|TRADING_MODE|STRATEGY_TYPE)"
-   
+
    # Set missing variables
    export EXCHANGE_TYPE=coinbase
    export TRADING_MODE=paper
@@ -78,7 +78,7 @@ if result.is_failure():
    # Check for typos in values
    export TRADING_MODE=paper  # ✅ Correct
    # export TRADING_MODE=Paper  # ❌ Wrong case
-   
+
    export EXCHANGE_TYPE=coinbase  # ✅ Correct
    # export EXCHANGE_TYPE=Coinbase  # ❌ Wrong case
    ```
@@ -136,7 +136,7 @@ print('✅ Private key valid' if private_key.is_success() else f'❌ {private_ke
    # Use FP format (recommended)
    export COINBASE_API_KEY=your_actual_api_key_here
    export COINBASE_PRIVATE_KEY=your_actual_private_key_here
-   
+
    # Or use legacy format
    export EXCHANGE__CDP_API_KEY_NAME=your_api_key
    export EXCHANGE__CDP_PRIVATE_KEY=your_private_key
@@ -182,7 +182,7 @@ else:
    ```bash
    # Set correct network
    export BLUEFIN_NETWORK=mainnet  # or testnet
-   
+
    # Optional: custom RPC URL
    export BLUEFIN_RPC_URL=https://sui-mainnet.bluefin.io
    ```
@@ -213,7 +213,7 @@ print('✅ Strategy valid' if result.is_success() else f'❌ {result.failure()}'
 ```bash
 # Use valid strategy types
 export STRATEGY_TYPE=llm              # ✅ LLM strategy
-export STRATEGY_TYPE=momentum         # ✅ Momentum strategy  
+export STRATEGY_TYPE=momentum         # ✅ Momentum strategy
 export STRATEGY_TYPE=mean_reversion   # ✅ Mean reversion strategy
 
 # Not valid:
@@ -280,7 +280,7 @@ print(f'Failure value: {f.failure()} (should be test error)')
    ```python
    # ✅ Correct Result handling
    from bot.fp.types.result import Result
-   
+
    result = some_function_returning_result()
    if result.is_success():
        value = result.success()
@@ -294,7 +294,7 @@ print(f'Failure value: {f.failure()} (should be test error)')
    ```python
    # ❌ Don't access value directly
    # value = result.value  # Wrong
-   
+
    # ✅ Check success first
    if result.is_success():
        value = result.success()
@@ -545,7 +545,7 @@ When reporting issues, include:
 ### Self-Help Resources
 
 1. **Configuration Reference**: Check `CLAUDE.md` for complete config options
-2. **Migration Guide**: `FP_CONFIGURATION_MIGRATION_GUIDE.md` for migration issues  
+2. **Migration Guide**: `FP_CONFIGURATION_MIGRATION_GUIDE.md` for migration issues
 3. **Testing Checklist**: `FP_INTEGRATION_TESTING_CHECKLIST.md` for validation
 4. **Exchange Guides**: `bluefin_integration.md` and `BLUEFIN_SETUP_GUIDE.md`
 

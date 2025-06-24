@@ -8,7 +8,7 @@ while maintaining compatibility with the current infrastructure.
 
 import logging
 from collections.abc import Callable
-from typing import Any, Optional
+from typing import Any
 
 from bot.data.market import MarketDataProvider
 from bot.trading_types import MarketData as CurrentMarketData
@@ -518,13 +518,13 @@ def create_integrated_market_data_system(
 def create_market_data_adapter(symbol: str, interval: str = "1m"):
     """
     Create market data adapter for backward compatibility.
-    
+
     This function provides backward compatibility with the existing import structure.
-    
+
     Args:
         symbol: Trading symbol
         interval: Data interval
-        
+
     Returns:
         Functional market data processor
     """
@@ -535,38 +535,36 @@ def create_market_data_adapter(symbol: str, interval: str = "1m"):
 class FunctionalMarketDataAdapter:
     """
     Functional Market Data Adapter.
-    
+
     This class provides a compatibility layer for the functional market data system.
     It wraps the FunctionalMarketDataProcessor to provide a consistent interface.
     """
-    
+
     def __init__(self, symbol: str, interval: str = "1m"):
         self.symbol = symbol
         self.interval = interval
         self.processor = create_functional_market_data_processor(symbol, interval)
-        self._provider: Optional[MarketDataProvider] = None
-    
+        self._provider: MarketDataProvider | None = None
+
     @property
     def provider(self) -> MarketDataProvider:
         """Get or create the market data provider."""
         if self._provider is None:
             self._provider = MarketDataProvider(self.symbol, self.interval)
         return self._provider
-    
+
     def get_processor(self) -> FunctionalMarketDataProcessor:
         """Get the functional market data processor."""
         return self.processor
-    
+
     def start(self) -> None:
         """Start the market data adapter."""
         # Initialize the processor if needed
-        pass
-    
+
     def stop(self) -> None:
         """Stop the market data adapter."""
         # Cleanup if needed
-        pass
-    
+
     def is_connected(self) -> bool:
         """Check if the adapter is connected."""
         return self.processor.connection_state.status == "CONNECTED"

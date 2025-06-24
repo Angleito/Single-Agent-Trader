@@ -181,7 +181,7 @@ services:
       - EXCHANGE__EXCHANGE_TYPE=${EXCHANGE__EXCHANGE_TYPE:-bluefin}  # Primary exchange type setting
       # Coinbase Configuration (only used when EXCHANGE__EXCHANGE_TYPE=coinbase)
       - EXCHANGE__CB_SANDBOX=${EXCHANGE__CB_SANDBOX:-true}
-      # Bluefin Configuration (only used when EXCHANGE__EXCHANGE_TYPE=bluefin)  
+      # Bluefin Configuration (only used when EXCHANGE__EXCHANGE_TYPE=bluefin)
       - EXCHANGE__BLUEFIN_NETWORK=${EXCHANGE__BLUEFIN_NETWORK:-mainnet}
       - BLUEFIN_USE_REAL_DATA=${BLUEFIN_USE_REAL_DATA:-true}
       - BLUEFIN_SERVICE_URL=${BLUEFIN_SERVICE_URL:-http://bluefin-service:8080}

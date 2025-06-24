@@ -109,7 +109,7 @@ check_user() {
     # Check for user permission conflicts
     if [[ "${current_uid}" != "${APP_UID}" ]] || [[ "${current_gid}" != "${APP_GID}" ]]; then
         log_info "User mapping detected: running as ${current_uid}:${current_gid}, container built for ${APP_UID}:${APP_GID}"
-        
+
         # This is normal for Docker Compose user mapping, but we should verify permissions
         if [[ "${current_uid}" -eq 0 ]]; then
             log_warning "Running as root - this can cause permission issues with volume mounts"
@@ -117,7 +117,7 @@ check_user() {
         else
             log_success "User mapping is appropriate for volume permissions"
         fi
-        
+
         # Check if we can fix ownership of critical files if running as root
         if [[ "${current_uid}" -eq 0 ]]; then
             log_info "Attempting to fix ownership conflicts as root user..."
@@ -133,14 +133,14 @@ check_user() {
 # Fix ownership conflicts when running as root
 fix_ownership_conflicts() {
     log_info "Fixing ownership conflicts for volume mounts..."
-    
+
     # Get HOST_UID and HOST_GID from environment if available
     local target_uid="${HOST_UID:-${RUNTIME_UID}}"
     local target_gid="${HOST_GID:-${RUNTIME_GID}}"
-    
+
     # Critical directories that need proper ownership
     local ownership_dirs=("/app/logs" "/app/data" "/app/tmp")
-    
+
     for dir in "${ownership_dirs[@]}"; do
         if [[ -d "${dir}" ]]; then
             log_debug "Fixing ownership for ${dir} to ${target_uid}:${target_gid}"
@@ -151,7 +151,7 @@ fix_ownership_conflicts() {
             fi
         fi
     done
-    
+
     # Fix permissions for writable directories
     for dir in "${ownership_dirs[@]}"; do
         if [[ -d "${dir}" ]]; then
@@ -162,7 +162,7 @@ fix_ownership_conflicts() {
             fi
         fi
     done
-    
+
     log_success "Ownership conflict resolution completed"
 }
 

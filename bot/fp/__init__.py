@@ -63,131 +63,196 @@ except ImportError:
         MarketDataStatus,
     )
 
+
 # Enhanced data processing components - using lazy loading to avoid circular imports
 def get_functional_data_pipeline():
     """Get FunctionalDataPipeline class (lazy loaded)"""
     from .data_pipeline import FunctionalDataPipeline
+
     return FunctionalDataPipeline
+
 
 def create_market_data_pipeline(*args, **kwargs):
     """Create market data pipeline (lazy loaded)"""
     from .data_pipeline import create_market_data_pipeline as _create
+
     return _create(*args, **kwargs)
+
 
 def create_high_performance_pipeline(*args, **kwargs):
     """Create high performance pipeline (lazy loaded)"""
     from .data_pipeline import create_high_performance_pipeline as _create
+
     return _create(*args, **kwargs)
+
 
 def create_low_latency_pipeline(*args, **kwargs):
     """Create low latency pipeline (lazy loaded)"""
     from .data_pipeline import create_low_latency_pipeline as _create
+
     return _create(*args, **kwargs)
+
 
 # Real-time aggregation - lazy loading
 def get_real_time_aggregator():
     """Get RealTimeAggregator class (lazy loaded)"""
     from .effects.market_data_aggregation import RealTimeAggregator
+
     return RealTimeAggregator
+
 
 def create_real_time_aggregator(*args, **kwargs):
     """Create real-time aggregator (lazy loaded)"""
     from .effects.market_data_aggregation import create_real_time_aggregator as _create
+
     return _create(*args, **kwargs)
+
 
 def create_high_frequency_aggregator(*args, **kwargs):
     """Create high frequency aggregator (lazy loaded)"""
-    from .effects.market_data_aggregation import create_high_frequency_aggregator as _create
+    from .effects.market_data_aggregation import (
+        create_high_frequency_aggregator as _create,
+    )
+
     return _create(*args, **kwargs)
+
 
 def create_batch_aggregator(*args, **kwargs):
     """Create batch aggregator (lazy loaded)"""
     from .effects.market_data_aggregation import create_batch_aggregator as _create
+
     return _create(*args, **kwargs)
+
 
 # Enhanced WebSocket - lazy loading
 def get_enhanced_websocket_manager():
     """Get EnhancedWebSocketManager class (lazy loaded)"""
     from .effects.websocket_enhanced import EnhancedWebSocketManager
+
     return EnhancedWebSocketManager
+
 
 def create_enhanced_websocket_manager(*args, **kwargs):
     """Create enhanced WebSocket manager (lazy loaded)"""
     from .effects.websocket_enhanced import create_enhanced_websocket_manager as _create
+
     return _create(*args, **kwargs)
+
 
 def create_high_reliability_websocket_manager(*args, **kwargs):
     """Create high reliability WebSocket manager (lazy loaded)"""
-    from .effects.websocket_enhanced import create_high_reliability_websocket_manager as _create
+    from .effects.websocket_enhanced import (
+        create_high_reliability_websocket_manager as _create,
+    )
+
     return _create(*args, **kwargs)
+
 
 def create_low_latency_websocket_manager(*args, **kwargs):
     """Create low latency WebSocket manager (lazy loaded)"""
-    from .effects.websocket_enhanced import create_low_latency_websocket_manager as _create
+    from .effects.websocket_enhanced import (
+        create_low_latency_websocket_manager as _create,
+    )
+
     return _create(*args, **kwargs)
+
 
 # Enhanced adapters - lazy loading
 def get_enhanced_functional_market_data_adapter():
     """Get EnhancedFunctionalMarketDataAdapter class (lazy loaded)"""
-    from .adapters.enhanced_market_data_adapter import EnhancedFunctionalMarketDataAdapter
+    from .adapters.enhanced_market_data_adapter import (
+        EnhancedFunctionalMarketDataAdapter,
+    )
+
     return EnhancedFunctionalMarketDataAdapter
+
 
 def create_enhanced_coinbase_adapter(*args, **kwargs):
     """Create enhanced Coinbase adapter (lazy loaded)"""
-    from .adapters.enhanced_market_data_adapter import create_enhanced_coinbase_adapter as _create
+    from .adapters.enhanced_market_data_adapter import (
+        create_enhanced_coinbase_adapter as _create,
+    )
+
     return _create(*args, **kwargs)
+
 
 def create_enhanced_bluefin_adapter(*args, **kwargs):
     """Create enhanced Bluefin adapter (lazy loaded)"""
-    from .adapters.enhanced_market_data_adapter import create_enhanced_bluefin_adapter as _create
+    from .adapters.enhanced_market_data_adapter import (
+        create_enhanced_bluefin_adapter as _create,
+    )
+
     return _create(*args, **kwargs)
+
 
 def create_enhanced_market_data_adapter(*args, **kwargs):
     """Create enhanced market data adapter (lazy loaded)"""
-    from .adapters.enhanced_market_data_adapter import create_enhanced_market_data_adapter as _create
+    from .adapters.enhanced_market_data_adapter import (
+        create_enhanced_market_data_adapter as _create,
+    )
+
     return _create(*args, **kwargs)
 
-# Enhanced runtime - lazy loading  
+
+# Enhanced runtime - lazy loading
 def get_enhanced_data_runtime():
     """Get EnhancedDataRuntime class (lazy loaded)"""
     from .runtime.enhanced_data_runtime import EnhancedDataRuntime
+
     return EnhancedDataRuntime
+
 
 def create_and_initialize_runtime(*args, **kwargs):
     """Create and initialize runtime (lazy loaded)"""
     from .runtime.enhanced_data_runtime import create_and_initialize_runtime as _create
+
     return _create(*args, **kwargs)
+
 
 def create_high_performance_runtime(*args, **kwargs):
     """Create high performance runtime (lazy loaded)"""
-    from .runtime.enhanced_data_runtime import create_high_performance_runtime as _create
+    from .runtime.enhanced_data_runtime import (
+        create_high_performance_runtime as _create,
+    )
+
     return _create(*args, **kwargs)
+
 
 def create_low_latency_runtime(*args, **kwargs):
     """Create low latency runtime (lazy loaded)"""
     from .runtime.enhanced_data_runtime import create_low_latency_runtime as _create
+
     return _create(*args, **kwargs)
+
 
 # Backward compatibility - lazy loading
 def get_functional_market_data_adapter():
     """Get FunctionalMarketDataAdapter class (lazy loaded)"""
     from .adapters.market_data_adapter import FunctionalMarketDataAdapter
+
     return FunctionalMarketDataAdapter
+
 
 def create_coinbase_adapter(*args, **kwargs):
     """Create Coinbase adapter (lazy loaded)"""
     from .adapters.market_data_adapter import create_coinbase_adapter as _create
+
     return _create(*args, **kwargs)
+
 
 def create_bluefin_adapter(*args, **kwargs):
     """Create Bluefin adapter (lazy loaded)"""
     from .adapters.market_data_adapter import create_bluefin_adapter as _create
+
     return _create(*args, **kwargs)
+
 
 def create_market_data_adapter(*args, **kwargs):
     """Create market data adapter (lazy loaded)"""
     from .adapters.market_data_adapter import create_market_data_adapter as _create
+
     return _create(*args, **kwargs)
+
 
 __version__ = "2.0.0"
 

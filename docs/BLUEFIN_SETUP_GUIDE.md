@@ -126,7 +126,7 @@ BLUEFIN_RPC_URL=https://sui-mainnet.bluefin.io  # optional custom RPC
 
 # Rate limiting (FP configuration)
 RATE_LIMIT_RPS=10      # Requests per second
-RATE_LIMIT_RPM=100     # Requests per minute  
+RATE_LIMIT_RPM=100     # Requests per minute
 RATE_LIMIT_RPH=1000    # Requests per hour
 
 # ===================

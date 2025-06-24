@@ -38,15 +38,18 @@ from .llm_functional import (
     validate_llm_decision,
 )
 
+
 # Lazy loading for FunctionalLLMStrategy to avoid circular imports
 def get_functional_llm_strategy():
     """Get FunctionalLLMStrategy class (lazy loaded to avoid circular imports)"""
     try:
         from ..adapters.strategy_adapter import FunctionalLLMStrategy
+
         return FunctionalLLMStrategy
     except ImportError:
         # Return placeholder if import fails
         return None
+
 
 # Runtime fallback for compatibility
 FunctionalLLMStrategy = None

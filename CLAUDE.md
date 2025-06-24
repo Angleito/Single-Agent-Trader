@@ -38,7 +38,7 @@ python -c "from bot.fp.types.config import build_exchange_config_from_env; resul
 # Paper trading mode (safe - no real money) - FP Configuration
 TRADING_MODE=paper python -m bot.main live
 
-# Paper trading mode - Legacy Configuration  
+# Paper trading mode - Legacy Configuration
 python -m bot.main live
 poetry run ai-trading-bot live
 

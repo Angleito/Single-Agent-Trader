@@ -476,7 +476,6 @@ def convert_trade_action(action: CurrentTradeAction) -> TradeSignal:
 
 from ..types.market import (
     ConnectionState,
-    ConnectionStatus,
     DataQuality,
     MarketDataStream,
     OrderBookMessage,
@@ -486,16 +485,13 @@ from ..types.market import (
 )
 
 
-def create_connection_state(
-    url: str, 
-    status: str = "CONNECTING"
-) -> ConnectionState:
+def create_connection_state(url: str, status: str = "CONNECTING") -> ConnectionState:
     """Create initial connection state."""
     try:
         connection_status = ConnectionStatus(status)
     except ValueError:
         connection_status = ConnectionStatus.CONNECTING
-        
+
     return ConnectionState(
         status=connection_status,
         url=url,
@@ -522,20 +518,17 @@ def create_data_quality(
     )
 
 
-def create_market_data_stream(
-    symbol: str, 
-    exchanges: list[str]
-) -> MarketDataStream:
+def create_market_data_stream(symbol: str, exchanges: list[str]) -> MarketDataStream:
     """Create initial market data stream."""
     # Create initial connection states for all exchanges
     connection_states = {
         exchange: create_connection_state(f"wss://{exchange}.example.com")
         for exchange in exchanges
     }
-    
+
     # Create initial data quality
     data_quality = create_data_quality()
-    
+
     return MarketDataStream(
         symbol=symbol,
         exchanges=exchanges,
@@ -564,8 +557,7 @@ def create_realtime_update(
 
 
 def create_ticker_message_from_data(
-    message: dict[str, Any], 
-    symbol: str
+    message: dict[str, Any], symbol: str
 ) -> TickerMessage:
     """Create ticker message from WebSocket data."""
     # Extract price from various possible fields
@@ -577,10 +569,10 @@ def create_ticker_message_from_data(
                 break
             except (ValueError, TypeError):
                 continue
-    
+
     if price is None:
         raise TypeConversionError(f"No valid price found in ticker message: {message}")
-    
+
     # Extract volume (optional)
     volume_24h = None
     for volume_field in ["volume", "volume_24h", "base_volume", "volume_24hr"]:
@@ -590,13 +582,13 @@ def create_ticker_message_from_data(
                 break
             except (ValueError, TypeError):
                 continue
-    
+
     # Extract channel
     channel = message.get("channel", message.get("type", "ticker"))
-    
+
     # Extract message ID
     message_id = message.get("id", message.get("message_id"))
-    
+
     return TickerMessage(
         channel=channel,
         timestamp=datetime.now(UTC),
@@ -608,13 +600,12 @@ def create_ticker_message_from_data(
 
 
 def create_trade_message_from_data(
-    message: dict[str, Any], 
-    symbol: str
+    message: dict[str, Any], symbol: str
 ) -> TradeMessage:
     """Create trade message from WebSocket data."""
     # Extract trade ID
     trade_id = message.get("trade_id", message.get("id", message.get("tradeId")))
-    
+
     # Extract price
     price = None
     for price_field in ["price", "last", "last_price"]:
@@ -624,7 +615,7 @@ def create_trade_message_from_data(
                 break
             except (ValueError, TypeError):
                 continue
-    
+
     # Extract size
     size = None
     for size_field in ["size", "amount", "quantity", "vol"]:
@@ -634,7 +625,7 @@ def create_trade_message_from_data(
                 break
             except (ValueError, TypeError):
                 continue
-    
+
     # Extract side
     side = None
     for side_field in ["side", "type", "taker_side"]:
@@ -643,13 +634,13 @@ def create_trade_message_from_data(
             if raw_side in ["BUY", "SELL", "B", "S"]:
                 side = "BUY" if raw_side in ["BUY", "B"] else "SELL"
                 break
-    
+
     # Extract channel
     channel = message.get("channel", message.get("type", "trades"))
-    
+
     # Extract message ID
     message_id = message.get("id", message.get("message_id"))
-    
+
     return TradeMessage(
         channel=channel,
         timestamp=datetime.now(UTC),
@@ -663,14 +654,13 @@ def create_trade_message_from_data(
 
 
 def create_orderbook_message_from_data(
-    message: dict[str, Any], 
-    symbol: str
+    message: dict[str, Any], symbol: str
 ) -> OrderBookMessage:
     """Create orderbook message from WebSocket data."""
     # Extract bids and asks
     bids = None
     asks = None
-    
+
     # Try to extract bids
     if "bids" in message:
         try:
@@ -681,24 +671,24 @@ def create_orderbook_message_from_data(
             ]
         except (ValueError, TypeError, IndexError):
             bids = None
-    
+
     # Try to extract asks
     if "asks" in message:
         try:
             asks = [
                 (Decimal(str(ask[0])), Decimal(str(ask[1])))
-                for ask in message["asks"] 
+                for ask in message["asks"]
                 if len(ask) >= 2
             ]
         except (ValueError, TypeError, IndexError):
             asks = None
-    
+
     # Extract channel
     channel = message.get("channel", message.get("type", "orderbook"))
-    
+
     # Extract message ID
     message_id = message.get("id", message.get("message_id"))
-    
+
     return OrderBookMessage(
         channel=channel,
         timestamp=datetime.now(UTC),

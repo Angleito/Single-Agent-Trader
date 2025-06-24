@@ -17,12 +17,12 @@ All functions are pure and composable for maximum reliability and testability.
 import math
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
 
 from bot.fp.core import MarketState, Signal, SignalType, Strategy
 from bot.fp.indicators.volatility import (
     calculate_bollinger_bands,
 )
+
 from .base import BaseStrategy, StrategyConfig, StrategyMetadata, StrategyResult
 
 # ============================================================================
@@ -800,7 +800,7 @@ def adaptive_market_maker(
 @dataclass(frozen=True)
 class MarketMakingConfig(StrategyConfig):
     """Configuration for functional market making strategy."""
-    
+
     spread_factor: float = 0.002
     inventory_limit: float = 10000.0
     skew_factor: float = 0.3
@@ -814,26 +814,32 @@ class MarketMakingConfig(StrategyConfig):
     stop_loss_pct: float = 0.02
     daily_loss_limit: float = 1000.0
     position_limit: float = 50000.0
-    
+
     def __post_init__(self) -> None:
         """Validate market making configuration."""
         super().__post_init__()
-        
+
         if self.spread_factor <= 0:
             raise ValueError(f"Spread factor must be positive: {self.spread_factor}")
         if self.inventory_limit <= 0:
-            raise ValueError(f"Inventory limit must be positive: {self.inventory_limit}")
+            raise ValueError(
+                f"Inventory limit must be positive: {self.inventory_limit}"
+            )
         if not 0 <= self.skew_factor <= 1:
             raise ValueError(f"Skew factor must be between 0 and 1: {self.skew_factor}")
         if self.min_spread >= self.max_spread:
-            raise ValueError(f"Min spread must be less than max spread: {self.min_spread} >= {self.max_spread}")
+            raise ValueError(
+                f"Min spread must be less than max spread: {self.min_spread} >= {self.max_spread}"
+            )
         if not 0 < self.competitive_factor <= 1:
-            raise ValueError(f"Competitive factor must be between 0 and 1: {self.competitive_factor}")
+            raise ValueError(
+                f"Competitive factor must be between 0 and 1: {self.competitive_factor}"
+            )
 
 
 class FunctionalMarketMakingStrategy(BaseStrategy):
     """Functional market making strategy that wraps pure functions in a class interface."""
-    
+
     def __init__(self, config: MarketMakingConfig):
         """Initialize functional market making strategy."""
         # Create strategy metadata
@@ -855,9 +861,14 @@ class FunctionalMarketMakingStrategy(BaseStrategy):
             risk_level=config.risk_level,
             expected_frequency="scalping",
             created_at=datetime.now(),
-            tags=["market_making", "functional", "inventory_management", "spread_optimization"],
+            tags=[
+                "market_making",
+                "functional",
+                "inventory_management",
+                "spread_optimization",
+            ],
         )
-        
+
         # Create the functional strategy
         base_strategy = market_maker_strategy(
             spread_factor=config.spread_factor,
@@ -870,9 +881,13 @@ class FunctionalMarketMakingStrategy(BaseStrategy):
             imbalance_threshold=config.imbalance_threshold,
             quote_size=config.quote_size,
         )
-        
+
         # Add risk management if configured
-        if config.stop_loss_pct > 0 or config.daily_loss_limit > 0 or config.position_limit > 0:
+        if (
+            config.stop_loss_pct > 0
+            or config.daily_loss_limit > 0
+            or config.position_limit > 0
+        ):
             strategy_func = market_maker_with_stops(
                 base_strategy=base_strategy,
                 stop_loss_pct=config.stop_loss_pct,
@@ -881,28 +896,28 @@ class FunctionalMarketMakingStrategy(BaseStrategy):
             )
         else:
             strategy_func = base_strategy
-            
+
         # Initialize base class
         super().__init__(
             config=config,
             strategy_func=strategy_func,
             metadata=metadata,
         )
-    
+
     def evaluate_with_timing(self, market_state: MarketState) -> StrategyResult:
         """Evaluate strategy with detailed timing and metadata."""
         import time
-        
+
         start_time = time.time()
         signal = self.evaluate(market_state)
         end_time = time.time()
-        
+
         return StrategyResult(
             signal=signal,
             metadata=self.metadata,
             computation_time_ms=(end_time - start_time) * 1000,
         )
-    
+
     def create_adaptive_version(self) -> "FunctionalMarketMakingStrategy":
         """Create an adaptive version of this strategy."""
         # Create adaptive config
@@ -928,10 +943,10 @@ class FunctionalMarketMakingStrategy(BaseStrategy):
             enabled=self.config.enabled,
             parameters=self.config.parameters,
         )
-        
+
         # Create new strategy with adaptive functionality
         adaptive_strategy = FunctionalMarketMakingStrategy(adaptive_config)
-        
+
         # Replace the strategy function with the adaptive version
         adaptive_func = adaptive_market_maker(
             base_spread=adaptive_config.spread_factor,
@@ -939,11 +954,11 @@ class FunctionalMarketMakingStrategy(BaseStrategy):
             max_spread=adaptive_config.max_spread,
             adaptation_rate=adaptive_config.adaptation_rate,
         )
-        
+
         adaptive_strategy.strategy_func = adaptive_func
-        
+
         return adaptive_strategy
-    
+
     def get_current_spread_model(self) -> SpreadModel:
         """Get the current spread model configuration."""
         return SpreadModel(
@@ -955,7 +970,7 @@ class FunctionalMarketMakingStrategy(BaseStrategy):
             inventory_factor=self.config.skew_factor,
             skew_factor=self.config.skew_factor,
         )
-    
+
     def get_inventory_policy(self) -> InventoryPolicy:
         """Get the current inventory management policy."""
         return InventoryPolicy(

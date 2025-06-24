@@ -74,7 +74,7 @@ fi
 # Validate docker-compose configuration
 if command -v docker-compose &> /dev/null; then
     echo "✅ Docker Compose is available"
-    
+
     # Check configuration syntax
     if docker-compose config > /dev/null 2>&1; then
         echo "✅ Docker Compose configuration syntax is valid"
@@ -121,7 +121,7 @@ case "$EXCHANGE_TYPE" in
         else
             echo "✅ Bluefin private key configured"
         fi
-        
+
         if [ -z "${BLUEFIN_SERVICE_API_KEY:-}" ]; then
             echo "⚠️  WARNING: Bluefin service API key not configured"
             echo "   Set BLUEFIN_SERVICE_API_KEY in .env"

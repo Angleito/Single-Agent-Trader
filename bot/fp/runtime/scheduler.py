@@ -194,8 +194,10 @@ class TradingScheduler:
             # Check scheduler health with proper check function
             def scheduler_check() -> bool:
                 # Scheduler is healthy if it's running and has enabled tasks
-                return self.running and any(task.enabled for task in self.tasks.values())
-            
+                return self.running and any(
+                    task.enabled for task in self.tasks.values()
+                )
+
             status = health_check("scheduler", scheduler_check).run()
 
             # Check active tasks

@@ -16,12 +16,13 @@ from typing import Any
 # Import optimized precision manager
 try:
     from .precision_manager import (
-        get_precision_manager, 
-        convert_price_optimized,
+        PriceContext,
         batch_convert_market_data,
-        format_price_for_display as _format_price_for_display,
-        PriceContext
+        convert_price_optimized,
+        get_precision_manager,
     )
+    from .precision_manager import format_price_for_display as _format_price_for_display
+
     PRECISION_MANAGER_AVAILABLE = True
 except ImportError:
     PRECISION_MANAGER_AVAILABLE = False
@@ -172,12 +173,14 @@ def convert_from_18_decimal(
                 value=value,
                 symbol=symbol,
                 field_name=field_name,
-                source_format=None  # Auto-detect
+                source_format=None,  # Auto-detect
             )
         except Exception as e:
             logger.debug(
                 "Precision manager conversion failed for %s:%s, falling back to legacy: %s",
-                symbol, field_name, str(e)
+                symbol,
+                field_name,
+                str(e),
             )
             # Fall through to legacy implementation
 
@@ -372,14 +375,14 @@ def convert_candle_data(candle: list, symbol: str | None = None) -> list:
         if PRECISION_MANAGER_AVAILABLE and symbol:
             ohlcv_dict = {
                 "open": candle[1],
-                "high": candle[2], 
+                "high": candle[2],
                 "low": candle[3],
                 "close": candle[4],
-                "volume": candle[5]
+                "volume": candle[5],
             }
-            
+
             converted_dict = batch_convert_market_data(ohlcv_dict, symbol)
-            
+
             converted_candle = [
                 int(candle[0]) if candle[0] else 0,  # timestamp
                 float(converted_dict.get("open", 0)),
@@ -425,35 +428,42 @@ def convert_ticker_price(
         Dict: Converted price data
     """
     converted_data = {}
-    
+
     # OPTIMIZATION: Use batch conversion if precision manager available
     if PRECISION_MANAGER_AVAILABLE and symbol:
         try:
             # Extract price fields for batch conversion
             price_fields = [
-                "price", "lastPrice", "bestBid", "bestAsk", 
-                "high", "low", "open", "close"
+                "price",
+                "lastPrice",
+                "bestBid",
+                "bestAsk",
+                "high",
+                "low",
+                "open",
+                "close",
             ]
-            
+
             price_subset = {k: v for k, v in price_data.items() if k in price_fields}
             if price_subset:
                 converted_prices = batch_convert_market_data(price_subset, symbol)
-                
+
                 # Convert back to strings and update result
                 for key, decimal_value in converted_prices.items():
                     converted_data[key] = str(decimal_value)
-            
+
             # Copy non-price fields directly
             for key, value in price_data.items():
                 if key not in price_fields:
                     converted_data[key] = value
-            
+
             return converted_data
-            
+
         except Exception as e:
             logger.debug(
                 "Batch ticker conversion failed for %s, falling back to legacy: %s",
-                symbol, str(e)
+                symbol,
+                str(e),
             )
             # Fall through to legacy implementation
 
@@ -539,20 +549,19 @@ def format_price_for_display(
                 # Convert to Decimal if needed
                 if not isinstance(price, Decimal):
                     price_decimal = convert_price_optimized(
-                        value=price,
-                        symbol=symbol,
-                        field_name="display_price"
+                        value=price, symbol=symbol, field_name="display_price"
                     )
                 else:
                     price_decimal = price
-                
+
                 # Use optimized display formatting
                 return _format_price_for_display(price_decimal, symbol, decimals)
-                
+
             except Exception as e:
                 logger.debug(
                     "Optimized display formatting failed for %s, falling back: %s",
-                    symbol, str(e)
+                    symbol,
+                    str(e),
                 )
                 # Fall through to legacy implementation
 

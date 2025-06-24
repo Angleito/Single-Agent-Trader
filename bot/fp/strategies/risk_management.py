@@ -8,14 +8,12 @@ This module provides pure functions for risk management including:
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Union
-from decimal import Decimal
 
 
 @dataclass(frozen=True)
 class RiskConfig:
     """Risk management configuration."""
-    
+
     max_position_size: float = 0.25
     stop_loss_pct: float = 0.02
     take_profit_pct: float = 0.05
@@ -28,72 +26,73 @@ class RiskConfig:
 @dataclass(frozen=True)
 class RiskResult:
     """Risk calculation result."""
-    
+
     position_size: float
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
     risk_score: float = 0.0
     warnings: tuple[str, ...] = ()
 
 
 class FunctionalRiskManager:
     """Functional risk manager implementation."""
-    
+
     def __init__(self, config: RiskConfig):
         self.config = config
-    
+
     def calculate_position_size(
-        self, 
-        account_balance: float, 
+        self,
+        account_balance: float,
         current_price: float,
-        volatility: Optional[float] = None
+        volatility: float | None = None,
     ) -> RiskResult:
         """Calculate optimal position size using functional risk management."""
         # Use Kelly Criterion if we have win probability data
         kelly_size = calculate_kelly_criterion(
             self.config.win_probability,
             self.config.win_loss_ratio,
-            self.config.kelly_fraction
+            self.config.kelly_fraction,
         )
-        
+
         # Fixed fractional as backup
         fixed_size = calculate_fixed_fractional_size(
-            account_balance, 
-            self.config.max_position_size * 100
+            account_balance, self.config.max_position_size * 100
         )
-        
+
         # Use the more conservative estimate
         position_size = min(kelly_size, fixed_size, self.config.max_position_size)
-        
+
         # Calculate stop loss and take profit levels
         stop_loss = current_price * (1 - self.config.stop_loss_pct)
         take_profit = current_price * (1 + self.config.take_profit_pct)
-        
+
         # Calculate risk score based on various factors
         risk_score = self._calculate_risk_score(position_size, volatility)
-        
+
         warnings = []
         if position_size >= self.config.max_position_size:
             warnings.append("Position size at maximum limit")
         if volatility and volatility > 0.05:
             warnings.append("High volatility detected")
-            
+
         return RiskResult(
             position_size=position_size,
             stop_loss=stop_loss,
             take_profit=take_profit,
             risk_score=risk_score,
-            warnings=tuple(warnings)
+            warnings=tuple(warnings),
         )
-    
-    def _calculate_risk_score(self, position_size: float, volatility: Optional[float]) -> float:
+
+    def _calculate_risk_score(
+        self, position_size: float, volatility: float | None
+    ) -> float:
         """Calculate a risk score from 0 (low risk) to 1 (high risk)."""
         base_risk = position_size / self.config.max_position_size
-        
+
         if volatility:
             volatility_risk = min(volatility / 0.1, 1.0)  # Scale volatility to 0-1
             return min((base_risk + volatility_risk) / 2, 1.0)
-        
+
         return base_risk
 
 

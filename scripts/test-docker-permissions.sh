@@ -133,7 +133,7 @@ case "$EXCHANGE_TYPE" in
         else
             print_status "SUCCESS" "Coinbase API key name is configured"
         fi
-        
+
         if [ -z "${EXCHANGE__CDP_PRIVATE_KEY:-}" ]; then
             print_status "ERROR" "EXCHANGE__CDP_PRIVATE_KEY is not set"
             API_KEY_ERRORS=$((API_KEY_ERRORS + 1))
@@ -157,7 +157,7 @@ case "$EXCHANGE_TYPE" in
                 print_status "WARNING" "Bluefin private key format may be invalid"
             fi
         fi
-        
+
         if [ -z "${BLUEFIN_SERVICE_API_KEY:-}" ]; then
             print_status "WARNING" "BLUEFIN_SERVICE_API_KEY is not set"
         else
