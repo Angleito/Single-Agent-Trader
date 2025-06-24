@@ -11,8 +11,8 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
-from bot.order_manager import OrderEvent, OrderManager
 from bot.fp.types import Order, OrderStatus
+from bot.order_manager import OrderEvent, OrderManager
 
 
 class TestOrderEvent(unittest.TestCase):

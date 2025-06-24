@@ -162,7 +162,7 @@ def __post_init__(self) -> None:
 # Real-time risk scoring
 def risk_score(self) -> float:
     # Margin utilization (30% weight)
-    # Exposure ratio (40% weight)  
+    # Exposure ratio (40% weight)
     # Daily loss (30% weight)
     return min(calculated_score, 100.0)
 ```
@@ -214,7 +214,7 @@ def risk_score(self) -> float:
 
 ### Validation Results: 5/5 Tests PASSED ✅
 - ✅ Basic functional types working correctly
-- ✅ Market data validation working correctly  
+- ✅ Market data validation working correctly
 - ✅ Position calculations are accurate
 - ✅ Immutability and functional updates working correctly
 - ✅ Type safety working correctly
@@ -223,6 +223,6 @@ def risk_score(self) -> float:
 
 ---
 
-*Migration completed by Agent 2: Trading Types Migration Specialist*  
-*Date: 2024-06-24*  
+*Migration completed by Agent 2: Trading Types Migration Specialist*
+*Date: 2024-06-24*
 *Status: COMPLETE ✅*

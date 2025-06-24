@@ -1,6 +1,6 @@
 # VuManChu Cipher Reference - Complete Implementation Guide
 
-*Date: 2025-06-24*  
+*Date: 2025-06-24*
 *Enhanced with Functional Programming Improvements*
 
 This document contains the complete Pine Script source code for both VuManChu Cipher A and Cipher B indicators, alongside comprehensive documentation of their Python implementations with functional programming enhancements. These are the original open-source implementations that our AI Trading Bot has re-implemented in Python for local control, now enhanced with functional programming patterns for improved reliability and performance.
@@ -747,7 +747,7 @@ def calculate_wavetrend_functional(
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Calculate WaveTrend oscillator using pure functional approach.
-    
+
     Pine Script formula:
     _esa = ema(_src, _chlen)
     _de = ema(abs(_src - _esa), _chlen)
@@ -759,24 +759,24 @@ def calculate_wavetrend_functional(
     # Input validation
     if len(src) < max(channel_length, average_length, ma_length):
         return np.full_like(src, np.nan), np.full_like(src, np.nan)
-    
+
     # Calculate ESA (Exponential Smoothing Average)
     esa = calculate_ema(src, channel_length)
-    
+
     # Calculate DE (Deviation) with zero-division protection
     deviation = np.abs(src - esa)
     de = calculate_ema(deviation, channel_length)
     de = np.where(de == 0, 1e-6, de)  # Prevent division by zero
-    
+
     # Calculate CI (Commodity Channel Index style)
     ci = (src - esa) / (0.015 * de)
     ci = np.clip(ci, -100, 100)  # Clip extreme values for stability
-    
+
     # Calculate TCI and WaveTrend components
     tci = calculate_ema(ci, average_length)
     wt1 = tci
     wt2 = calculate_sma(wt1, ma_length)
-    
+
     return wt1, wt2
 ```
 
@@ -789,28 +789,28 @@ def vumanchu_comprehensive_analysis(
     **config
 ) -> VuManchuSignalSet:
     """Complete VuManChu analysis with all signal types."""
-    
+
     # Calculate core VuManChu result
     vumanchu_result = vumanchu_cipher(ohlcv, timestamp=timestamp, **config)
-    
+
     # Extract and validate price data
     high, low, close = ohlcv[:, 1], ohlcv[:, 2], ohlcv[:, 3]
     hlc3 = calculate_hlc3(high, low, close)
-    
+
     # Calculate WaveTrend components
     wt1, wt2 = calculate_wavetrend_oscillator(hlc3, **config)
-    
+
     # Analyze patterns using functional approach
     diamond_patterns = analyze_diamond_patterns(wt1, wt2)
     yellow_cross_signals = analyze_yellow_cross_signals(wt2, rsi, diamond_patterns)
-    
+
     # Create composite signal from all components
     composite_signal = create_composite_signal({
         "vumanchu": vumanchu_result,
         **{f"diamond_{i}": p for i, p in enumerate(diamond_patterns)},
         **{f"yellow_{i}": s for i, s in enumerate(yellow_cross_signals)},
     })
-    
+
     return VuManchuSignalSet(
         timestamp=timestamp or datetime.now(),
         vumanchu_result=vumanchu_result,
@@ -829,13 +829,13 @@ def analyze_diamond_patterns(
 ) -> list[DiamondPattern]:
     """Analyze diamond patterns with functional approach."""
     patterns = []
-    
+
     if len(wt1) < 2 or len(wt2) < 2:
         return patterns
-    
+
     # Detect crossovers using pure functions
     bullish_cross, bearish_cross = detect_crossovers(wt1, wt2)
-    
+
     for i in range(1, len(wt1)):
         # Red Diamond: bearish cross in overbought + prior bullish cross in oversold
         if bearish_cross[i] and wt2[i] > overbought:
@@ -847,7 +847,7 @@ def analyze_diamond_patterns(
                         "red_diamond", True, True, strength, overbought, oversold
                     ))
                     break
-        
+
         # Green Diamond: bullish cross in oversold + prior bearish cross in overbought
         if bullish_cross[i] and wt2[i] < oversold:
             for j in range(max(0, i-10), i):
@@ -857,7 +857,7 @@ def analyze_diamond_patterns(
                         "green_diamond", True, True, strength, overbought, oversold
                     ))
                     break
-    
+
     return patterns
 ```
 
@@ -962,7 +962,7 @@ latest_state = vumanchu.get_latest_state(df)  # Same method
 self.stoch_rsi = StochasticRSI(
     stoch_length=stoch_rsi_length,
     # Missing rsi_length parameter!
-    smooth_k=stoch_k_smooth, 
+    smooth_k=stoch_k_smooth,
     smooth_d=stoch_d_smooth
 )
 
@@ -970,7 +970,7 @@ self.stoch_rsi = StochasticRSI(
 self.stoch_rsi = StochasticRSI(
     stoch_length=stoch_rsi_length,
     rsi_length=self.rsi_length,  # ✅ CRITICAL FIX: Add missing rsi_length parameter
-    smooth_k=stoch_k_smooth, 
+    smooth_k=stoch_k_smooth,
     smooth_d=stoch_d_smooth
 )
 ```
@@ -992,13 +992,13 @@ The FP enhancements prevent entire classes of bugs:
 def calculate_wavetrend_oscillator(src, channel_length, average_length, ma_length):
     # ... calculations ...
     de = calculate_ema(deviation, channel_length)
-    
+
     # ✅ FP ENHANCEMENT: Prevent division by zero
     de = np.where(de == 0, 1e-6, de)
-    
+
     # ✅ FP ENHANCEMENT: Clip extreme values for stability
     ci = np.clip((src - esa) / (0.015 * de), -100, 100)
-    
+
     return wt1, wt2
 ```
 
@@ -1105,12 +1105,12 @@ from hypothesis import given, strategies as st
 def test_vumanchu_mathematical_properties(prices):
     """Test VuManChu calculations maintain mathematical properties."""
     wave_a, wave_b = calculate_vumanchu(prices)
-    
+
     if wave_a is not None:
         # Waves should be within reasonable bounds
         assert -100 <= wave_a <= 100
         assert -100 <= wave_b <= 100
-        
+
         # Results should be deterministic
         wave_a2, wave_b2 = calculate_vumanchu(prices)
         assert wave_a == wave_a2
@@ -1123,19 +1123,19 @@ def test_vumanchu_mathematical_properties(prices):
 def test_backward_compatibility():
     """Ensure functional enhancements don't break existing usage."""
     df = generate_test_ohlcv_data()
-    
+
     # Original implementation
     vumanchu_original = VuManChuIndicators(implementation_mode="original")
     result_original = vumanchu_original.calculate_all(df)
-    
+
     # Functional implementation
     vumanchu_functional = VuManChuIndicators(implementation_mode="functional")
     result_functional = vumanchu_functional.calculate_all(df)
-    
+
     # Should have same structure and similar values
     assert result_original.columns.equals(result_functional.columns)
     assert len(result_original) == len(result_functional)
-    
+
     # Core signals should be consistent (within small tolerance for numerical differences)
     np.testing.assert_allclose(
         result_original['wt1'].dropna(),
@@ -1150,19 +1150,19 @@ def test_backward_compatibility():
 def test_performance_improvement():
     """Verify functional implementation performance gains."""
     df = generate_large_ohlcv_data(10000)  # Large dataset
-    
+
     # Benchmark original implementation
     start_time = time.time()
     vumanchu_original = VuManChuIndicators(implementation_mode="original")
     result_original = vumanchu_original.calculate_all(df)
     original_time = time.time() - start_time
-    
+
     # Benchmark functional implementation
     start_time = time.time()
     vumanchu_functional = VuManChuIndicators(implementation_mode="functional")
     result_functional = vumanchu_functional.calculate_all(df)
     functional_time = time.time() - start_time
-    
+
     # Functional should be faster or comparable
     assert functional_time <= original_time * 1.1  # Allow 10% variance
 ```
@@ -1182,7 +1182,7 @@ AttributeError: StochasticRSI() missing 1 required positional argument: 'rsi_len
 self.stoch_rsi = StochasticRSI(
     stoch_length=stoch_rsi_length,
     rsi_length=self.rsi_length,  # ✅ Now included
-    smooth_k=stoch_k_smooth, 
+    smooth_k=stoch_k_smooth,
     smooth_d=stoch_d_smooth
 )
 ```
@@ -1215,7 +1215,7 @@ results = vumanchu_cipher_series(ohlcv_array)  # Vectorized processing
 # Ensure sufficient data for calculation
 min_required_periods = max(
     wt_channel_length,
-    wt_average_length, 
+    wt_average_length,
     max(ema_ribbon_lengths)
 )
 
@@ -1242,27 +1242,27 @@ result = vumanchu.calculate_all(df)
 def validate_vumanchu_results(result_df):
     """Validate VuManChu calculation results."""
     issues = []
-    
+
     # Check for required columns
     required_cols = ['wt1', 'wt2', 'rsi', 'cipher_a_signal', 'cipher_a_confidence']
     for col in required_cols:
         if col not in result_df.columns:
             issues.append(f"Missing required column: {col}")
-    
+
     # Check value ranges
     if 'wt1' in result_df.columns:
         wt1_values = result_df['wt1'].dropna()
         if len(wt1_values) > 0:
             if not (-100 <= wt1_values.min() and wt1_values.max() <= 100):
                 issues.append(f"WaveTrend 1 values outside expected range: {wt1_values.min():.2f} to {wt1_values.max():.2f}")
-    
+
     # Check for excessive NaN values
     for col in ['wt1', 'wt2']:
         if col in result_df.columns:
             nan_pct = result_df[col].isna().mean() * 100
             if nan_pct > 50:
                 issues.append(f"Excessive NaN values in {col}: {nan_pct:.1f}%")
-    
+
     return issues
 
 # Usage
@@ -1289,14 +1289,14 @@ wt1, wt2 = calculate_wavetrend_oscillator(hlc3, 9, 18, 3)
 
 # Custom overbought/oversold levels for different markets
 diamond_patterns = analyze_diamond_patterns(
-    wt1, wt2, 
+    wt1, wt2,
     overbought=40.0,  # More sensitive for crypto
     oversold=-40.0
 )
 
 # Filter for high-confidence signals only
 high_confidence_patterns = filter_high_confidence_signals(
-    diamond_patterns, 
+    diamond_patterns,
     min_confidence=0.8
 )
 ```
@@ -1309,21 +1309,21 @@ def process_new_candle(new_ohlcv_row, historical_data):
     """Process new market data in real-time."""
     # Append new data
     updated_ohlcv = np.vstack([historical_data, new_ohlcv_row])
-    
+
     # Calculate latest VuManChu signal
     result = vumanchu_cipher(updated_ohlcv)
-    
+
     # Check for actionable signals
     if result.signal != "NEUTRAL":
         logger.info(f"VuManChu Signal: {result.signal} (Wave A: {result.wave_a:.2f}, Wave B: {result.wave_b:.2f})")
-        
+
         # Trigger trading logic
         return {
             "action": result.signal,
             "confidence": calculate_signal_confidence(result),
             "timestamp": result.timestamp
         }
-    
+
     return None
 ```
 
@@ -1353,14 +1353,14 @@ import tracemalloc
 
 def profile_memory_usage():
     tracemalloc.start()
-    
+
     # Run VuManChu calculation
     vumanchu = VuManChuIndicators(implementation_mode="functional")
     result = vumanchu.calculate_all(df)
-    
+
     current, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
-    
+
     print(f"Current memory usage: {current / 1024 / 1024:.1f} MB")
     print(f"Peak memory usage: {peak / 1024 / 1024:.1f} MB")
 ```

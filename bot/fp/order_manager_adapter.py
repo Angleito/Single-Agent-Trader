@@ -18,17 +18,11 @@ from ..config import settings
 from ..trading_types import Order, OrderStatus
 from ..utils.path_utils import get_data_directory, get_data_file_path
 from .orders import (
-    EventSourcedOrderManager,
     FunctionalOrderManager,
-    OrderEventType,
     OrderFill,
     OrderId,
-    OrderManagerState,
     OrderParameters,
     OrderState,
-    OrderStatistics,
-    build_robust_cancel_order_effect,
-    build_robust_place_order_effect,
     create_order,
 )
 
@@ -38,7 +32,7 @@ logger = logging.getLogger(__name__)
 class CompatibilityOrderManager:
     """
     Backwards-compatible order manager that wraps the functional implementation.
-    
+
     This adapter maintains the same interface as the original OrderManager class
     while using the new functional order management system underneath.
     """
@@ -60,7 +54,7 @@ class CompatibilityOrderManager:
 
         # Initialize functional order manager
         self._functional_manager = FunctionalOrderManager.create()
-        
+
         # Compatibility layer state
         self._order_callbacks: dict[str, list[Callable]] = {}
         self._timeout_tasks: dict[str, asyncio.Task] = {}
@@ -81,7 +75,7 @@ class CompatibilityOrderManager:
 
         logger.info(
             "Initialized CompatibilityOrderManager with %s active orders",
-            len(self._functional_manager.state.active_orders)
+            len(self._functional_manager.state.active_orders),
         )
 
     async def start(self) -> None:
@@ -140,20 +134,20 @@ class CompatibilityOrderManager:
             timeout_seconds=timeout_seconds,
         )
 
-        if hasattr(params_result, 'error'):  # It's a Failure
+        if hasattr(params_result, "error"):  # It's a Failure
             raise ValueError(f"Invalid order parameters: {params_result.error}")
 
         parameters = params_result.value
 
         # Create order using functional system
         creation_result = self._functional_manager.create_order_effect(parameters)
-        
+
         try:
             updated_manager, new_order = creation_result.run()
             self._functional_manager = updated_manager
         except Exception as e:
             logger.error("Failed to create order: %s", str(e))
-            raise ValueError(f"Order creation failed: {str(e)}")
+            raise ValueError(f"Order creation failed: {e!s}")
 
         # Set up timeout if specified
         if timeout_seconds is None:
@@ -183,26 +177,24 @@ class CompatibilityOrderManager:
         """
         Add an existing order to the manager.
         This method is primarily for testing and integration scenarios.
-        
+
         Args:
             order: Legacy order object to add
         """
         # Convert legacy order to functional order
         functional_order = self._convert_from_legacy_order(order)
-        
+
         # Add to functional manager
         updated_state = self._functional_manager.state.add_order(functional_order)
         self._functional_manager = self._functional_manager.with_state(updated_state)
-        
+
         # Trigger callbacks
         self._trigger_callbacks(order.id, "CREATED")
-        
+
         # Persist state
         self._save_state()
-        
-        logger.info(
-            "Added existing order %s with status %s", order.id, order.status
-        )
+
+        logger.info("Added existing order %s with status %s", order.id, order.status)
 
     def update_order_status(
         self,
@@ -225,7 +217,7 @@ class CompatibilityOrderManager:
         """
         functional_order_id = OrderId(order_id)
         order = self._functional_manager.state.get_order(functional_order_id)
-        
+
         if order is None:
             logger.warning("Order %s not found for status update", order_id)
             return None
@@ -233,16 +225,20 @@ class CompatibilityOrderManager:
         # Handle fills
         if filled_quantity is not None and filled_quantity > order.filled_quantity:
             fill_quantity = filled_quantity - order.filled_quantity
-            fill_price = _fill_price or Decimal("50000")  # Default fill price for compatibility
-            
+            fill_price = _fill_price or Decimal(
+                50000
+            )  # Default fill price for compatibility
+
             fill = OrderFill(
                 quantity=fill_quantity,
                 price=fill_price,
                 timestamp=datetime.now(UTC),
             )
-            
+
             # Process fill
-            fill_result = self._functional_manager.process_fill_effect(functional_order_id, fill)
+            fill_result = self._functional_manager.process_fill_effect(
+                functional_order_id, fill
+            )
             try:
                 self._functional_manager = fill_result.run()
             except Exception as e:
@@ -251,9 +247,16 @@ class CompatibilityOrderManager:
         else:
             # Simple status update
             from .orders import transition_order_status
-            updated_order = transition_order_status(order, self._convert_status_to_functional(status))
-            updated_state = self._functional_manager.state.update_order(functional_order_id, updated_order)
-            self._functional_manager = self._functional_manager.with_state(updated_state)
+
+            updated_order = transition_order_status(
+                order, self._convert_status_to_functional(status)
+            )
+            updated_state = self._functional_manager.state.update_order(
+                functional_order_id, updated_order
+            )
+            self._functional_manager = self._functional_manager.with_state(
+                updated_state
+            )
 
         # Get updated order
         updated_order = self._functional_manager.state.get_order(functional_order_id)
@@ -298,10 +301,10 @@ class CompatibilityOrderManager:
         """
         functional_order_id = OrderId(order_id)
         functional_order = self._functional_manager.state.get_order(functional_order_id)
-        
+
         if functional_order is None:
             return None
-            
+
         return self._convert_to_legacy_order(functional_order)
 
     def get_active_orders(self, symbol: str | None = None) -> list[Order]:
@@ -315,11 +318,11 @@ class CompatibilityOrderManager:
             List of active orders in legacy format
         """
         from .orders import Symbol
-        
+
         symbol_filter = None
         if symbol:
             symbol_result = Symbol.create(symbol)
-            if hasattr(symbol_result, 'value'):  # It's a Success
+            if hasattr(symbol_result, "value"):  # It's a Success
                 symbol_filter = symbol_result.value
 
         active_orders = self._functional_manager.state.get_active_orders(symbol_filter)
@@ -339,18 +342,18 @@ class CompatibilityOrderManager:
             List of orders matching criteria in legacy format
         """
         from .orders import Symbol
-        
+
         symbol_filter = None
         if symbol:
             symbol_result = Symbol.create(symbol)
-            if hasattr(symbol_result, 'value'):  # It's a Success
+            if hasattr(symbol_result, "value"):  # It's a Success
                 symbol_filter = symbol_result.value
 
         functional_status = self._convert_status_to_functional(status)
         orders = self._functional_manager.state.get_orders_by_status(
             functional_status, symbol_filter
         )
-        
+
         return [self._convert_to_legacy_order(order) for order in orders]
 
     def cancel_order(self, order_id: str) -> bool:
@@ -365,7 +368,7 @@ class CompatibilityOrderManager:
         """
         functional_order_id = OrderId(order_id)
         order = self._functional_manager.state.get_order(functional_order_id)
-        
+
         if order is None:
             logger.warning(
                 "Cannot cancel order %s: not found in active orders", order_id
@@ -381,8 +384,10 @@ class CompatibilityOrderManager:
             return False
 
         # Cancel using functional system
-        cancel_result = self._functional_manager.cancel_order_effect(functional_order_id)
-        
+        cancel_result = self._functional_manager.cancel_order_effect(
+            functional_order_id
+        )
+
         try:
             self._functional_manager = cancel_result.run()
             logger.info("Order %s cancelled", order_id)
@@ -405,16 +410,18 @@ class CompatibilityOrderManager:
             Number of orders cancelled
         """
         from .orders import Symbol
-        
+
         symbol_filter = None
         if symbol:
             symbol_result = Symbol.create(symbol)
-            if hasattr(symbol_result, 'value'):  # It's a Success
+            if hasattr(symbol_result, "value"):  # It's a Success
                 symbol_filter = symbol_result.value
 
         # Get active orders to cancel
-        orders_to_cancel = self._functional_manager.state.get_active_orders(symbol_filter)
-        
+        orders_to_cancel = self._functional_manager.state.get_active_orders(
+            symbol_filter
+        )
+
         cancelled_count = 0
         for order in orders_to_cancel:
             if not order.is_complete:
@@ -460,15 +467,15 @@ class CompatibilityOrderManager:
             Dictionary with order statistics
         """
         from .orders import Symbol
-        
+
         symbol_filter = None
         if symbol:
             symbol_result = Symbol.create(symbol)
-            if hasattr(symbol_result, 'value'):  # It's a Success
+            if hasattr(symbol_result, "value"):  # It's a Success
                 symbol_filter = symbol_result.value
 
         stats = self._functional_manager.state.get_statistics(symbol_filter, hours)
-        
+
         return {
             "total_orders": stats.total_orders,
             "filled_orders": stats.filled_orders,
@@ -492,7 +499,7 @@ class CompatibilityOrderManager:
         # Update functional manager state
         cleaned_state = self._functional_manager.state.cleanup_old_orders(days_to_keep)
         self._functional_manager = self._functional_manager.with_state(cleaned_state)
-        
+
         # Persist state
         self._save_state()
 
@@ -505,7 +512,7 @@ class CompatibilityOrderManager:
 
         # Reset functional manager
         self._functional_manager = FunctionalOrderManager.create()
-        
+
         # Clear callbacks
         self._order_callbacks.clear()
 
@@ -537,20 +544,22 @@ class CompatibilityOrderManager:
             order_type=legacy_order.type,
             quantity=float(legacy_order.quantity),
             price=float(legacy_order.price) if legacy_order.price else None,
-            stop_price=float(legacy_order.stop_price) if legacy_order.stop_price else None,
+            stop_price=(
+                float(legacy_order.stop_price) if legacy_order.stop_price else None
+            ),
         )
 
-        if hasattr(params_result, 'error'):  # It's a Failure
+        if hasattr(params_result, "error"):  # It's a Failure
             raise ValueError(f"Invalid legacy order: {params_result.error}")
 
         parameters = params_result.value
 
         # Create functional order
         order = create_order(parameters)
-        
+
         # Update with legacy order data
-        from .orders import transition_order_status, replace
-        
+        from .orders import replace
+
         order = replace(
             order,
             id=OrderId(legacy_order.id),
@@ -559,13 +568,13 @@ class CompatibilityOrderManager:
             updated_at=legacy_order.timestamp,
             filled_quantity=legacy_order.filled_quantity,
         )
-        
+
         return order
 
     def _convert_status_to_functional(self, legacy_status: OrderStatus):
         """Convert legacy OrderStatus to functional OrderStatus."""
         from .orders import OrderStatus as FunctionalOrderStatus
-        
+
         status_map = {
             OrderStatus.PENDING: FunctionalOrderStatus.PENDING,
             OrderStatus.OPEN: FunctionalOrderStatus.OPEN,
@@ -574,13 +583,13 @@ class CompatibilityOrderManager:
             OrderStatus.REJECTED: FunctionalOrderStatus.REJECTED,
             OrderStatus.FAILED: FunctionalOrderStatus.FAILED,
         }
-        
+
         return status_map.get(legacy_status, FunctionalOrderStatus.PENDING)
 
     def _convert_status_from_functional(self, functional_status):
         """Convert functional OrderStatus to legacy OrderStatus."""
         from .orders import OrderStatus as FunctionalOrderStatus
-        
+
         status_map = {
             FunctionalOrderStatus.PENDING: OrderStatus.PENDING,
             FunctionalOrderStatus.OPEN: OrderStatus.OPEN,
@@ -591,7 +600,7 @@ class CompatibilityOrderManager:
             FunctionalOrderStatus.FAILED: OrderStatus.FAILED,
             FunctionalOrderStatus.EXPIRED: OrderStatus.CANCELLED,  # Map expired to cancelled
         }
-        
+
         return status_map.get(functional_status, OrderStatus.PENDING)
 
     def _status_to_event_type(self, status: OrderStatus) -> str | None:
@@ -607,15 +616,15 @@ class CompatibilityOrderManager:
 
     def _schedule_timeout(self, order_id: str, timeout_seconds: int) -> None:
         """Schedule order timeout."""
-        
+
         async def timeout_handler():
             try:
                 await asyncio.sleep(timeout_seconds)
-                
+
                 # Check if order still exists and is active
                 functional_order_id = OrderId(order_id)
                 order = self._functional_manager.state.get_order(functional_order_id)
-                
+
                 if order and not order.is_complete:
                     logger.warning(
                         "Order %s timed out after %ss",
@@ -623,7 +632,9 @@ class CompatibilityOrderManager:
                         timeout_seconds,
                     )
                     # Try to timeout the order
-                    timeout_result = self._functional_manager.timeout_order_effect(functional_order_id)
+                    timeout_result = self._functional_manager.timeout_order_effect(
+                        functional_order_id
+                    )
                     try:
                         self._functional_manager = timeout_result.run()
                         self._trigger_callbacks(order_id, "EXPIRED")
@@ -663,7 +674,7 @@ class CompatibilityOrderManager:
     def _save_state(self) -> None:
         """Save current state to files (legacy format for compatibility)."""
         import json
-        
+
         try:
             # Save active orders in legacy format
             orders_data = {}
@@ -676,8 +687,16 @@ class CompatibilityOrderManager:
                     "type": legacy_order.type,
                     "quantity": str(legacy_order.quantity),
                     "price": str(legacy_order.price) if legacy_order.price else None,
-                    "stop_price": str(legacy_order.stop_price) if legacy_order.stop_price else None,
-                    "status": legacy_order.status if isinstance(legacy_order.status, str) else legacy_order.status.value,
+                    "stop_price": (
+                        str(legacy_order.stop_price)
+                        if legacy_order.stop_price
+                        else None
+                    ),
+                    "status": (
+                        legacy_order.status
+                        if isinstance(legacy_order.status, str)
+                        else legacy_order.status.value
+                    ),
                     "timestamp": legacy_order.timestamp.isoformat(),
                     "filled_quantity": str(legacy_order.filled_quantity),
                 }
@@ -689,18 +708,30 @@ class CompatibilityOrderManager:
             history_data = []
             for order in self._functional_manager.state.completed_orders[-500:]:
                 legacy_order = self._convert_to_legacy_order(order)
-                history_data.append({
-                    "id": legacy_order.id,
-                    "symbol": legacy_order.symbol,
-                    "side": legacy_order.side,
-                    "type": legacy_order.type,
-                    "quantity": str(legacy_order.quantity),
-                    "price": str(legacy_order.price) if legacy_order.price else None,
-                    "stop_price": str(legacy_order.stop_price) if legacy_order.stop_price else None,
-                    "status": legacy_order.status if isinstance(legacy_order.status, str) else legacy_order.status.value,
-                    "timestamp": legacy_order.timestamp.isoformat(),
-                    "filled_quantity": str(legacy_order.filled_quantity),
-                })
+                history_data.append(
+                    {
+                        "id": legacy_order.id,
+                        "symbol": legacy_order.symbol,
+                        "side": legacy_order.side,
+                        "type": legacy_order.type,
+                        "quantity": str(legacy_order.quantity),
+                        "price": (
+                            str(legacy_order.price) if legacy_order.price else None
+                        ),
+                        "stop_price": (
+                            str(legacy_order.stop_price)
+                            if legacy_order.stop_price
+                            else None
+                        ),
+                        "status": (
+                            legacy_order.status
+                            if isinstance(legacy_order.status, str)
+                            else legacy_order.status.value
+                        ),
+                        "timestamp": legacy_order.timestamp.isoformat(),
+                        "filled_quantity": str(legacy_order.filled_quantity),
+                    }
+                )
 
             with self.history_file.open("w") as f:
                 json.dump(history_data, f, indent=2)
@@ -713,7 +744,7 @@ class CompatibilityOrderManager:
     def _load_legacy_state(self) -> None:
         """Load state from legacy files if they exist."""
         import json
-        
+
         try:
             # Load active orders
             if self.orders_file.exists():
@@ -727,18 +758,32 @@ class CompatibilityOrderManager:
                         side=order_data["side"],
                         type=order_data["type"],
                         quantity=Decimal(order_data["quantity"]),
-                        price=Decimal(order_data["price"]) if order_data["price"] else None,
-                        stop_price=Decimal(order_data["stop_price"]) if order_data["stop_price"] else None,
+                        price=(
+                            Decimal(order_data["price"])
+                            if order_data["price"]
+                            else None
+                        ),
+                        stop_price=(
+                            Decimal(order_data["stop_price"])
+                            if order_data["stop_price"]
+                            else None
+                        ),
                         status=OrderStatus(order_data["status"]),
                         timestamp=datetime.fromisoformat(order_data["timestamp"]),
                         filled_quantity=Decimal(order_data["filled_quantity"]),
                     )
-                    
-                    functional_order = self._convert_from_legacy_order(legacy_order)
-                    updated_state = self._functional_manager.state.add_order(functional_order)
-                    self._functional_manager = self._functional_manager.with_state(updated_state)
 
-                logger.info("Loaded %d active orders from legacy state", len(orders_data))
+                    functional_order = self._convert_from_legacy_order(legacy_order)
+                    updated_state = self._functional_manager.state.add_order(
+                        functional_order
+                    )
+                    self._functional_manager = self._functional_manager.with_state(
+                        updated_state
+                    )
+
+                logger.info(
+                    "Loaded %d active orders from legacy state", len(orders_data)
+                )
 
         except Exception:
             logger.exception("Failed to load legacy order state")

@@ -176,56 +176,56 @@ flowchart TD
         CB[Coinbase WebSocket/REST]
         BF[Bluefin DEX API]
     end
-    
+
     subgraph "Functional Data Pipeline"
         PI[Immutable Parser<br/>Pure Functions]
         Val[Validation<br/>Either Monad]
         FMD[FunctionalMarketData<br/>Immutable Types]
     end
-    
+
     subgraph "Indicator Engine"
         VMF[VuManChu Functional<br/>Pure Calculations]
         IC[Indicator Combinators<br/>Function Composition]
         IS[Indicator Signals<br/>Immutable Results]
     end
-    
+
     subgraph "Strategy System"
         SC[Strategy Combinators<br/>Function Composition]
         LLM[LLM Agent<br/>IO Effects]
         SE[Strategy Engine<br/>Monadic Composition]
     end
-    
+
     subgraph "Effect Runtime"
         EI[Effect Interpreter<br/>Side Effect Management]
         RM[Risk Manager<br/>Validation Effects]
         EE[Exchange Effects<br/>IO Operations]
     end
-    
+
     subgraph "Compatibility Layer"
         AL[Adapter Layer<br/>Legacy Bridge]
         TC[Type Converters<br/>Transformation]
     end
-    
+
     CB --> PI
     BF --> PI
     PI --> Val
     Val -->|Right| FMD
     Val -->|Left| ErrorHandling[Error Recovery]
-    
+
     FMD --> VMF
     VMF --> IC
     IC --> IS
-    
+
     IS --> SC
     SC --> LLM
     LLM --> SE
-    
+
     SE --> EI
     EI --> RM
     RM --> EE
     EE --> CB
     EE --> BF
-    
+
     EI --> AL
     AL --> TC
     TC --> LegacyComponents[Legacy APIs]
@@ -240,29 +240,29 @@ flowchart LR
         IC[Immutable Calculations<br/>Referentially Transparent]
         VC[Validation Combinators<br/>Composable Validation]
     end
-    
+
     subgraph "Effect Domain"
         IOE[IO Effects<br/>External Interactions]
         ME[Market Effects<br/>Data Retrieval]
         EE[Exchange Effects<br/>Order Placement]
         LE[Logging Effects<br/>Observability]
     end
-    
+
     subgraph "Runtime"
         EI[Effect Interpreter<br/>Controlled Execution]
         SM[State Management<br/>Immutable State]
         EM[Error Management<br/>Graceful Recovery]
     end
-    
+
     PF --> IOE
     IC --> ME
     VC --> EE
-    
+
     IOE --> EI
     ME --> EI
     EE --> EI
     LE --> EI
-    
+
     EI --> SM
     EI --> EM
 ```
@@ -276,19 +276,19 @@ flowchart TD
         FM[Functional Methods<br/>Pure Functions]
         FE[Functional Effects<br/>Managed Side Effects]
     end
-    
+
     subgraph "Adapter Layer"
         TA[Type Adapters<br/>Bidirectional Conversion]
         MA[Method Adapters<br/>Interface Translation]
         EA[Effect Adapters<br/>Legacy Effect Handling]
     end
-    
+
     subgraph "Legacy System"
         LT[Legacy Types<br/>Mutable Objects]
         LM[Legacy Methods<br/>Imperative Style]
         LS[Legacy Side Effects<br/>Direct Execution]
     end
-    
+
     FT <--> TA <--> LT
     FM <--> MA <--> LM
     FE <--> EA <--> LS
@@ -323,7 +323,7 @@ Guidelines:
 ```python
 class Either[E, T]:
     """Functional error handling without exceptions"""
-    
+
     def map(self, func: Callable[[T], U]) -> Either[E, U]: ...
     def flat_map(self, func: Callable[[T], Either[E, U]]) -> Either[E, U]: ...
     def fold(self, left_func: Callable[[E], U], right_func: Callable[[T], U]) -> U: ...
@@ -340,7 +340,7 @@ final_result = result.map(apply_transformation).fold(
 ```python
 class IO[A]:
     """Lazy evaluation of side effects"""
-    
+
     def map(self, f: Callable[[A], B]) -> IO[B]: ...
     def flat_map(self, f: Callable[[A], IO[B]]) -> IO[B]: ...
     def run(self) -> A: ...  # Execute the computation
@@ -355,7 +355,7 @@ result = processed_data.run()  # Execute all side effects
 ```python
 class EffectInterpreter:
     """Central effect execution engine"""
-    
+
     def run_effect(self, effect: IO[A]) -> A: ...
     def run_async_effect(self, effect: AsyncIO[A]) -> A: ...
     def run_either_effect(self, effect: IOEither[Exception, A]) -> A: ...
@@ -369,14 +369,14 @@ class EffectInterpreter:
 class Money:
     amount: Decimal
     currency: str
-    
+
     @classmethod
     def create(cls, amount: float, currency: str) -> Result[Money, str]: ...
 
 @dataclass(frozen=True)
 class Symbol:
     value: str
-    
+
     @property
     def base(self) -> str: ...  # BTC from BTC-USD
     @property
@@ -385,7 +385,7 @@ class Symbol:
 
 **Trading Types (`bot/fp/types/trading.py`)**
 ```python
-@dataclass(frozen=True) 
+@dataclass(frozen=True)
 class TradeSignal:
     signal: SignalType  # LONG, SHORT, HOLD
     strength: float
@@ -409,12 +409,12 @@ class PositionSnapshot:
 Strategy = Callable[[MarketSnapshot], TradeSignal]
 
 def combine_strategies(
-    strategies: list[tuple[str, Strategy, float]], 
+    strategies: list[tuple[str, Strategy, float]],
     aggregation: str = "weighted_average"
 ) -> Strategy: ...
 
 def filter_strategy(
-    strategy: Strategy, 
+    strategy: Strategy,
     condition: Callable[[MarketSnapshot], bool]
 ) -> Strategy: ...
 
@@ -441,7 +441,7 @@ final_strategy = threshold_strategy(filtered, min_strength=0.8)
 def fetch_market_data(symbol: Symbol) -> IO[MarketData]: ...
 def subscribe_to_stream(symbol: Symbol) -> AsyncIO[Observable[MarketData]]: ...
 
-# Exchange effects  
+# Exchange effects
 def place_order(order: OrderRequest) -> IOEither[OrderError, OrderResult]: ...
 def cancel_order(order_id: str) -> IOEither[CancelError, CancelResult]: ...
 
@@ -596,7 +596,7 @@ Resolution: Complete type definitions and adapter implementations
 ```
 Issues:
 - PaperTradingEngine class not found in bot.paper_trading
-- MarketDataFeed class not found in bot.data.market  
+- MarketDataFeed class not found in bot.data.market
 - WebSocketPublisher missing required settings parameter
 - PerformanceMonitor.get_current_metrics() method missing
 
@@ -640,7 +640,7 @@ class CancelResult:
     success: bool
     message: str = ""
 
-@dataclass(frozen=True) 
+@dataclass(frozen=True)
 class PositionUpdate:
     symbol: str
     side: str
@@ -690,11 +690,11 @@ def test_vumanchu_functional_properties(prices):
     """Test VuManChu functional implementation properties"""
     ohlcv = create_ohlcv_from_prices(prices)
     result = vumanchu_cipher(ohlcv)
-    
+
     # Property: Results should be deterministic
     result2 = vumanchu_cipher(ohlcv)
     assert result == result2
-    
+
     # Property: Wave values should be bounded
     assert -200 <= result.wave_a <= 200
     assert -200 <= result.wave_b <= 200
@@ -705,11 +705,11 @@ def test_vumanchu_functional_properties(prices):
 def test_functional_imperative_consistency():
     """Ensure functional and imperative implementations agree"""
     data = load_test_market_data()
-    
+
     # Get results from both implementations
     functional_result = vumanchu_functional.vumanchu_cipher(data)
     imperative_result = vumanchu_imperative.calculate_all(data)
-    
+
     # Validate consistency within tolerance
     assert abs(functional_result.wave_a - imperative_result['wave_a']) < 0.001
     assert abs(functional_result.wave_b - imperative_result['wave_b']) < 0.001
@@ -743,7 +743,7 @@ def test_functional_imperative_consistency():
 
 ---
 
-*Updated by: Agent 1 - Architecture Documentation Specialist (Batch 9)*  
-*Original Author: Architect Roo*  
-*Functional Programming Transformation: 2025-06-24*  
+*Updated by: Agent 1 - Architecture Documentation Specialist (Batch 9)*
+*Original Author: Architect Roo*
+*Functional Programming Transformation: 2025-06-24*
 *Original Architecture: 2025-06-11*

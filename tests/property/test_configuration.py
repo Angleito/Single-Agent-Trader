@@ -31,12 +31,13 @@ from bot.config import (
 try:
     from bot.fp.types.config import (
         Config,
-        SystemConfig,
         ExchangeConfig,
         StrategyConfig,
-        validate_config,
+        SystemConfig,
         build_system_config_from_env,
+        validate_config,
     )
+
     FUNCTIONAL_CONFIG_AVAILABLE = True
 except ImportError:
     # Functional implementations not available, continue with legacy

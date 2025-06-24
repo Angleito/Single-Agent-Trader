@@ -139,7 +139,7 @@ LOG_FILES=(
     "data/paper_trading/trades.json"
     "data/orders/active_orders.json"
     "data/positions/positions.json"
-    
+
     # Functional Programming log files
     "logs/fp/migration.log"
     "logs/fp/performance.log"

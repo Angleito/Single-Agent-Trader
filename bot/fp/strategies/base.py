@@ -12,18 +12,20 @@ This module provides:
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 from typing import Any
 
 from bot.fp.types.market import MarketSnapshot
-from bot.fp.types.trading import TradeSignal, Long, Short, Hold
-from enum import Enum
+from bot.fp.types.trading import Hold, Long, Short, TradeSignal
 
 
 class SignalType(Enum):
     """Trading signal types."""
+
     LONG = "LONG"
     SHORT = "SHORT"
     HOLD = "HOLD"
+
 
 # Strategy type: A function that takes market data and returns a signal
 Strategy = Callable[[MarketSnapshot], TradeSignal]
@@ -32,7 +34,7 @@ Strategy = Callable[[MarketSnapshot], TradeSignal]
 @dataclass(frozen=True)
 class StrategyConfig:
     """Configuration for trading strategies."""
-    
+
     name: str
     risk_level: str = "medium"
     max_position_size: float = 0.1
@@ -40,27 +42,31 @@ class StrategyConfig:
     take_profit_percentage: float = 15.0
     enabled: bool = True
     parameters: dict[str, Any] = None
-    
+
     def __post_init__(self) -> None:
         """Validate configuration."""
         if self.parameters is None:
             object.__setattr__(self, "parameters", {})
         if self.max_position_size <= 0 or self.max_position_size > 1:
-            raise ValueError(f"Position size must be between 0 and 1: {self.max_position_size}")
+            raise ValueError(
+                f"Position size must be between 0 and 1: {self.max_position_size}"
+            )
         if self.stop_loss_percentage <= 0:
             raise ValueError(f"Stop loss must be positive: {self.stop_loss_percentage}")
         if self.take_profit_percentage <= 0:
-            raise ValueError(f"Take profit must be positive: {self.take_profit_percentage}")
+            raise ValueError(
+                f"Take profit must be positive: {self.take_profit_percentage}"
+            )
 
 
 @dataclass(frozen=True)
 class BaseStrategy:
     """Base strategy class."""
-    
+
     config: StrategyConfig
     strategy_func: Strategy
-    metadata: 'StrategyMetadata'
-    
+    metadata: "StrategyMetadata"
+
     def evaluate(self, snapshot: MarketSnapshot) -> TradeSignal:
         """Evaluate strategy with market data."""
         return self.strategy_func(snapshot)
@@ -69,11 +75,11 @@ class BaseStrategy:
 @dataclass(frozen=True)
 class StrategyComposition:
     """Composition of multiple strategies."""
-    
+
     strategies: list[BaseStrategy]
     aggregation_method: str = "weighted_average"
     weights: list[float] = None
-    
+
     def __post_init__(self) -> None:
         """Validate composition."""
         if self.weights is None:
@@ -228,7 +234,9 @@ def threshold_strategy(strategy: Strategy, min_strength: float = 0.7) -> Strateg
         if isinstance(signal, (Long, Short)):
             if signal.confidence >= min_strength:
                 return signal
-            return Hold(reason=f"Signal confidence {signal.confidence:.2f} below threshold {min_strength}")
+            return Hold(
+                reason=f"Signal confidence {signal.confidence:.2f} below threshold {min_strength}"
+            )
         return signal
 
     return thresholded_strategy

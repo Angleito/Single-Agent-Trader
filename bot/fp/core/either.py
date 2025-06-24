@@ -6,10 +6,11 @@ with Left representing failure and Right representing success.
 """
 
 from abc import ABC, abstractmethod
-from typing import Callable, Generic, TypeVar, cast
+from collections.abc import Callable
+from typing import Generic, TypeVar, cast
 
 T = TypeVar("T")
-U = TypeVar("U") 
+U = TypeVar("U")
 E = TypeVar("E")
 
 
@@ -37,11 +38,7 @@ class Either(Generic[E, T], ABC):
         """Map function over Left value, preserving Right."""
 
     @abstractmethod
-    def fold(
-        self, 
-        left_func: Callable[[E], U], 
-        right_func: Callable[[T], U]
-    ) -> U:
+    def fold(self, left_func: Callable[[E], U], right_func: Callable[[T], U]) -> U:
         """Fold Either by applying appropriate function."""
 
     def get_or_else(self, default: T) -> T:
@@ -76,11 +73,7 @@ class Left(Either[E, T]):
     def map_left(self, func: Callable[[E], U]) -> "Either[U, T]":
         return Left(func(self.value))
 
-    def fold(
-        self, 
-        left_func: Callable[[E], U], 
-        right_func: Callable[[T], U]
-    ) -> U:
+    def fold(self, left_func: Callable[[E], U], right_func: Callable[[T], U]) -> U:
         return left_func(self.value)
 
     def __str__(self) -> str:
@@ -109,22 +102,18 @@ class Right(Either[E, T]):
         try:
             return Right(func(self.value))
         except Exception as e:
-            return Left(cast(E, str(e)))
+            return Left(cast("E", str(e)))
 
     def flat_map(self, func: Callable[[T], "Either[E, U]"]) -> "Either[E, U]":
         try:
             return func(self.value)
         except Exception as e:
-            return Left(cast(E, str(e)))
+            return Left(cast("E", str(e)))
 
     def map_left(self, func: Callable[[E], U]) -> "Either[U, T]":
         return cast("Either[U, T]", self)
 
-    def fold(
-        self, 
-        left_func: Callable[[E], U], 
-        right_func: Callable[[T], U]
-    ) -> U:
+    def fold(self, left_func: Callable[[E], U], right_func: Callable[[T], U]) -> U:
         return right_func(self.value)
 
     def __str__(self) -> str:
@@ -158,7 +147,7 @@ def try_either(func: Callable[[], T]) -> Either[str, T]:
 
 def sequence_either(eithers: list[Either[E, T]]) -> Either[E, list[T]]:
     """Transform a list of Eithers into an Either of list.
-    
+
     Returns Left with the first error found, or Right with all values.
     """
     results = []
@@ -170,8 +159,7 @@ def sequence_either(eithers: list[Either[E, T]]) -> Either[E, list[T]]:
 
 
 def traverse_either(
-    items: list[T], 
-    func: Callable[[T], Either[E, U]]
+    items: list[T], func: Callable[[T], Either[E, U]]
 ) -> Either[E, list[U]]:
     """Apply function to each item and sequence results."""
     return sequence_either([func(item) for item in items])
@@ -179,11 +167,11 @@ def traverse_either(
 
 __all__ = [
     "Either",
-    "Left", 
+    "Left",
     "Right",
     "left",
-    "right", 
-    "try_either",
+    "right",
     "sequence_either",
     "traverse_either",
+    "try_either",
 ]

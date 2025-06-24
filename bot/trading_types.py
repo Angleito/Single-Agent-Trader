@@ -127,7 +127,7 @@ class MarketData(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @model_validator(mode="after")
-    def validate_price_relationships(self) -> "MarketData":
+    def validate_price_relationships(self) -> MarketData:
         """
         Validate OHLCV price relationships.
 
@@ -398,49 +398,74 @@ StablecoinDominance.model_rebuild()
 # Import FP trading types for compatibility
 try:
     from bot.fp.types.trading import (
-        TradeSignal as FPTradeSignal,
-        Long as FPLong,
-        Short as FPShort,  
         Hold as FPHold,
-        MarketMake as FPMarketMake,
-        Order as FPOrder,
+    )
+    from bot.fp.types.trading import (
         LimitOrder as FPLimitOrder,
-        MarketOrder as FPMarketOrder,
-        StopOrder as FPStopOrder,
-        Position as FPPosition,
+    )
+    from bot.fp.types.trading import (
+        Long as FPLong,
+    )
+    from bot.fp.types.trading import (
         MarketData as FPMarketData,
+    )
+    from bot.fp.types.trading import (
+        MarketMake as FPMarketMake,
+    )
+    from bot.fp.types.trading import (
+        MarketOrder as FPMarketOrder,
+    )
+    from bot.fp.types.trading import (
         MarketState as FPMarketState,
+    )
+    from bot.fp.types.trading import (
+        Order as FPOrder,
+    )
+    from bot.fp.types.trading import (
+        Position as FPPosition,
+    )
+    from bot.fp.types.trading import (
+        Short as FPShort,
+    )
+    from bot.fp.types.trading import (
+        StopOrder as FPStopOrder,
+    )
+    from bot.fp.types.trading import (
+        TradeSignal as FPTradeSignal,
+    )
+    from bot.fp.types.trading import (
         TradingParams as FPTradingParams,
     )
-    
+
     # Compatibility aliases for legacy code using FP types
-    TradeSignal = FPTradeSignal  # Legacy code can use TradeSignal instead of TradeAction
+    TradeSignal = (
+        FPTradeSignal  # Legacy code can use TradeSignal instead of TradeAction
+    )
     FPOrder = FPOrder  # Make FP Order available
     FPPosition = FPPosition  # Make FP Position available
     FPMarketData = FPMarketData  # Make FP MarketData available
     FPMarketState = FPMarketState  # Make FP MarketState available
     TradingParams = FPTradingParams  # Make TradingParams available for legacy usage
-    
-    # Signal type aliases 
+
+    # Signal type aliases
     LongSignal = FPLong
     ShortSignal = FPShort
     HoldSignal = FPHold
     MarketMakeSignal = FPMarketMake
-    
+
     # Order type aliases
     FunctionalLimitOrder = FPLimitOrder
     FunctionalMarketOrder = FPMarketOrder
     FunctionalStopOrder = FPStopOrder
-    
+
     _FP_TYPES_AVAILABLE = True
 except ImportError:
     _FP_TYPES_AVAILABLE = False
-    
+
     # Define fallback types if FP types are not available
     class TradeSignal:
         """Fallback TradeSignal when FP types unavailable."""
-        pass
-    
+
     TradingParams = None
     FPOrder = None
     FPPosition = None

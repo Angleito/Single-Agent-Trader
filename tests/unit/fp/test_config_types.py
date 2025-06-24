@@ -6,7 +6,6 @@ validation functions, and environment variable parsing with Result/Either error 
 """
 
 import os
-import tempfile
 from datetime import datetime
 from unittest.mock import patch
 
@@ -15,13 +14,11 @@ import pytest
 from bot.fp.types.config import (
     APIKey,
     BacktestConfig,
-    BinanceExchangeConfig,
-    BluefinExchangeConfig,
     CoinbaseExchangeConfig,
     Config,
     ExchangeType,
-    FeeStructure,
     FeatureFlags,
+    FeeStructure,
     LLMStrategyConfig,
     LogLevel,
     MeanReversionStrategyConfig,
@@ -29,10 +26,6 @@ from bot.fp.types.config import (
     PrivateKey,
     RateLimits,
     SystemConfig,
-    build_backtest_config_from_env,
-    build_exchange_config_from_env,
-    build_strategy_config_from_env,
-    build_system_config_from_env,
     parse_bool_env,
     parse_float_env,
     parse_int_env,
@@ -49,10 +42,10 @@ class TestOpaqueTypes:
         """Test successful API key creation."""
         api_key_result = APIKey.create("sk-1234567890abcdefghij")
         assert isinstance(api_key_result, Success)
-        
+
         api_key = api_key_result.success()
         assert isinstance(api_key, APIKey)
-        
+
         # Test string representation masks the key
         str_repr = str(api_key)
         assert "APIKey(***" in str_repr
@@ -73,12 +66,14 @@ class TestOpaqueTypes:
 
     def test_private_key_creation_success(self):
         """Test successful private key creation."""
-        private_key_result = PrivateKey.create("-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIExamplePrivateKey123\n-----END EC PRIVATE KEY-----")
+        private_key_result = PrivateKey.create(
+            "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIExamplePrivateKey123\n-----END EC PRIVATE KEY-----"
+        )
         assert isinstance(private_key_result, Success)
-        
+
         private_key = private_key_result.success()
         assert isinstance(private_key, PrivateKey)
-        
+
         # Test string representation masks the key completely
         str_repr = str(private_key)
         assert str_repr == "PrivateKey(***)"
@@ -105,9 +100,9 @@ class TestStrategyConfigurations:
             lookback_period=20,
             entry_threshold=2.0,
             exit_threshold=1.0,
-            use_volume_confirmation=True
+            use_volume_confirmation=True,
         )
-        
+
         assert isinstance(result, Success)
         config = result.success()
         assert config.lookback_period == 20
@@ -118,11 +113,9 @@ class TestStrategyConfigurations:
     def test_momentum_strategy_config_invalid_lookback(self):
         """Test momentum strategy config with invalid lookback period."""
         result = MomentumStrategyConfig.create(
-            lookback_period=0,
-            entry_threshold=2.0,
-            exit_threshold=1.0
+            lookback_period=0, entry_threshold=2.0, exit_threshold=1.0
         )
-        
+
         assert isinstance(result, Failure)
         assert "Lookback period must be positive" in result.failure()
 
@@ -131,9 +124,9 @@ class TestStrategyConfigurations:
         result = MomentumStrategyConfig.create(
             lookback_period=20,
             entry_threshold=-1.0,  # Invalid negative threshold
-            exit_threshold=1.0
+            exit_threshold=1.0,
         )
-        
+
         assert isinstance(result, Failure)
         assert "Invalid entry threshold" in result.failure()
 
@@ -143,9 +136,9 @@ class TestStrategyConfigurations:
             window_size=50,
             std_deviations=2.0,
             min_volatility=0.1,
-            max_holding_period=100
+            max_holding_period=100,
         )
-        
+
         assert isinstance(result, Success)
         config = result.success()
         assert config.window_size == 50
@@ -159,9 +152,9 @@ class TestStrategyConfigurations:
             window_size=1,  # Too small
             std_deviations=2.0,
             min_volatility=0.1,
-            max_holding_period=100
+            max_holding_period=100,
         )
-        
+
         assert isinstance(result, Failure)
         assert "Window size must be at least 2" in result.failure()
 
@@ -172,9 +165,9 @@ class TestStrategyConfigurations:
             temperature=0.7,
             max_context_length=4000,
             use_memory=True,
-            confidence_threshold=70.0
+            confidence_threshold=70.0,
         )
-        
+
         assert isinstance(result, Success)
         config = result.success()
         assert config.model_name == "gpt-4"
@@ -190,9 +183,9 @@ class TestStrategyConfigurations:
             temperature=3.0,  # Too high
             max_context_length=4000,
             use_memory=True,
-            confidence_threshold=70.0
+            confidence_threshold=70.0,
         )
-        
+
         assert isinstance(result, Failure)
         assert "Temperature must be between 0 and 2" in result.failure()
 
@@ -203,9 +196,9 @@ class TestStrategyConfigurations:
             temperature=0.7,
             max_context_length=50,  # Too small
             use_memory=True,
-            confidence_threshold=70.0
+            confidence_threshold=70.0,
         )
-        
+
         assert isinstance(result, Failure)
         assert "Max context length too small" in result.failure()
 
@@ -216,11 +209,9 @@ class TestExchangeConfigurations:
     def test_rate_limits_creation_success(self):
         """Test successful rate limits creation."""
         result = RateLimits.create(
-            requests_per_second=10,
-            requests_per_minute=100,
-            requests_per_hour=1000
+            requests_per_second=10, requests_per_minute=100, requests_per_hour=1000
         )
-        
+
         assert isinstance(result, Success)
         limits = result.success()
         assert limits.requests_per_second == 10
@@ -230,11 +221,9 @@ class TestExchangeConfigurations:
     def test_rate_limits_creation_invalid_negative(self):
         """Test rate limits creation with negative values."""
         result = RateLimits.create(
-            requests_per_second=-1,
-            requests_per_minute=100,
-            requests_per_hour=1000
+            requests_per_second=-1, requests_per_minute=100, requests_per_hour=1000
         )
-        
+
         assert isinstance(result, Failure)
         assert "All rate limits must be positive" in result.failure()
 
@@ -243,9 +232,9 @@ class TestExchangeConfigurations:
         result = RateLimits.create(
             requests_per_second=100,  # 100 * 60 = 6000 > 1000
             requests_per_minute=1000,
-            requests_per_hour=1000
+            requests_per_hour=1000,
         )
-        
+
         assert isinstance(result, Failure)
         assert "Inconsistent rate limits" in result.failure()
 
@@ -270,9 +259,9 @@ class TestSystemConfiguration:
                 "enable_metrics": True,
             },
             max_concurrent_positions=3,
-            default_position_size=10.0
+            default_position_size=10.0,
         )
-        
+
         assert isinstance(result, Success)
         config = result.success()
         assert len(config.trading_pairs) == 2
@@ -289,9 +278,9 @@ class TestSystemConfiguration:
             log_level="INFO",
             features={},
             max_concurrent_positions=3,
-            default_position_size=10.0
+            default_position_size=10.0,
         )
-        
+
         assert isinstance(result, Failure)
         assert "Invalid trading pair" in result.failure()
 
@@ -304,9 +293,9 @@ class TestSystemConfiguration:
             log_level="INFO",
             features={},
             max_concurrent_positions=3,
-            default_position_size=10.0
+            default_position_size=10.0,
         )
-        
+
         assert isinstance(result, Failure)
         assert "Invalid trading mode" in result.failure()
 
@@ -319,9 +308,9 @@ class TestSystemConfiguration:
             log_level="INFO",
             features={},
             max_concurrent_positions=0,  # Invalid
-            default_position_size=10.0
+            default_position_size=10.0,
         )
-        
+
         assert isinstance(result, Failure)
         assert "Max concurrent positions must be at least 1" in result.failure()
 
@@ -339,9 +328,9 @@ class TestBacktestConfiguration:
             maker_fee=0.001,
             taker_fee=0.002,
             slippage=0.0005,
-            use_limit_orders=True
+            use_limit_orders=True,
         )
-        
+
         assert isinstance(result, Success)
         config = result.success()
         assert config.start_date == datetime.fromisoformat("2024-01-01")
@@ -358,9 +347,9 @@ class TestBacktestConfiguration:
             currency="USD",
             maker_fee=0.001,
             taker_fee=0.002,
-            slippage=0.0005
+            slippage=0.0005,
         )
-        
+
         assert isinstance(result, Failure)
         assert "Start date must be before end date" in result.failure()
 
@@ -373,16 +362,16 @@ class TestBacktestConfiguration:
             currency="USD",
             maker_fee=0.001,
             taker_fee=0.002,
-            slippage=0.0005
+            slippage=0.0005,
         )
-        
+
         assert isinstance(result, Failure)
         assert "Invalid date format" in result.failure()
 
     def test_fee_structure_creation_success(self):
         """Test successful fee structure creation."""
         result = FeeStructure.create(0.001, 0.002)
-        
+
         assert isinstance(result, Success)
         fees = result.success()
         assert fees.maker_fee.value == 0.001
@@ -391,7 +380,7 @@ class TestBacktestConfiguration:
     def test_fee_structure_invalid_fee(self):
         """Test fee structure with invalid fee."""
         result = FeeStructure.create(-0.001, 0.002)  # Negative fee
-        
+
         assert isinstance(result, Failure)
         assert "Invalid maker fee" in result.failure()
 
@@ -402,7 +391,7 @@ class TestEnvironmentVariableParsing:
     def test_parse_bool_env_true_values(self):
         """Test parsing boolean environment variables for true values."""
         true_values = ["true", "1", "yes", "on", "True", "YES", "ON"]
-        
+
         for value in true_values:
             with patch.dict(os.environ, {"TEST_BOOL": value}):
                 result = parse_bool_env("TEST_BOOL", False)
@@ -411,7 +400,7 @@ class TestEnvironmentVariableParsing:
     def test_parse_bool_env_false_values(self):
         """Test parsing boolean environment variables for false values."""
         false_values = ["false", "0", "no", "off", "False", "NO", "OFF", ""]
-        
+
         for value in false_values:
             with patch.dict(os.environ, {"TEST_BOOL": value}):
                 result = parse_bool_env("TEST_BOOL", True)
@@ -494,21 +483,23 @@ class TestConfigurationValidation:
             temperature=0.7,
             max_context_length=4000,
             use_memory=False,
-            confidence_threshold=70.0
+            confidence_threshold=70.0,
         ).success()
-        
+
         api_key = APIKey.create("sk-1234567890abcdefghij").success()
-        private_key = PrivateKey.create("-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----").success()
+        private_key = PrivateKey.create(
+            "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----"
+        ).success()
         rate_limits = RateLimits.create(10, 100, 1000).success()
-        
+
         exchange = CoinbaseExchangeConfig(
             api_key=api_key,
             private_key=private_key,
             api_url="https://api.coinbase.com",
             websocket_url="wss://ws.coinbase.com",
-            rate_limits=rate_limits
+            rate_limits=rate_limits,
         )
-        
+
         system = SystemConfig.create(
             trading_pairs=["BTC-USD"],
             interval="1m",
@@ -516,15 +507,11 @@ class TestConfigurationValidation:
             log_level="INFO",
             features={"enable_memory": False},
             max_concurrent_positions=3,
-            default_position_size=10.0
+            default_position_size=10.0,
         ).success()
-        
-        config = Config(
-            strategy=strategy,
-            exchange=exchange,
-            system=system
-        )
-        
+
+        config = Config(strategy=strategy, exchange=exchange, system=system)
+
         result = validate_config(config)
         assert isinstance(result, Success)
 
@@ -536,21 +523,23 @@ class TestConfigurationValidation:
             temperature=0.7,
             max_context_length=4000,
             use_memory=True,  # Wants memory
-            confidence_threshold=70.0
+            confidence_threshold=70.0,
         ).success()
-        
+
         api_key = APIKey.create("sk-1234567890abcdefghij").success()
-        private_key = PrivateKey.create("-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----").success()
+        private_key = PrivateKey.create(
+            "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----"
+        ).success()
         rate_limits = RateLimits.create(10, 100, 1000).success()
-        
+
         exchange = CoinbaseExchangeConfig(
             api_key=api_key,
             private_key=private_key,
             api_url="https://api.coinbase.com",
             websocket_url="wss://ws.coinbase.com",
-            rate_limits=rate_limits
+            rate_limits=rate_limits,
         )
-        
+
         system = SystemConfig.create(
             trading_pairs=["BTC-USD"],
             interval="1m",
@@ -558,15 +547,11 @@ class TestConfigurationValidation:
             log_level="INFO",
             features={"enable_memory": False},  # Memory disabled
             max_concurrent_positions=3,
-            default_position_size=10.0
+            default_position_size=10.0,
         ).success()
-        
-        config = Config(
-            strategy=strategy,
-            exchange=exchange,
-            system=system
-        )
-        
+
+        config = Config(strategy=strategy, exchange=exchange, system=system)
+
         result = validate_config(config)
         assert isinstance(result, Failure)
         assert "memory but it's disabled" in result.failure()
@@ -578,7 +563,7 @@ class TestFeatureFlags:
     def test_feature_flags_defaults(self):
         """Test feature flags default values."""
         flags = FeatureFlags()
-        
+
         assert flags.enable_websocket is True
         assert flags.enable_memory is False
         assert flags.enable_backtesting is True
@@ -590,11 +575,9 @@ class TestFeatureFlags:
     def test_feature_flags_custom_values(self):
         """Test feature flags with custom values."""
         flags = FeatureFlags(
-            enable_websocket=False,
-            enable_memory=True,
-            enable_notifications=True
+            enable_websocket=False, enable_memory=True, enable_notifications=True
         )
-        
+
         assert flags.enable_websocket is False
         assert flags.enable_memory is True
         assert flags.enable_notifications is True
@@ -643,18 +626,16 @@ class TestImmutability:
     def test_api_key_immutable(self):
         """Test that APIKey is immutable."""
         api_key = APIKey.create("sk-1234567890abcdefghij").success()
-        
+
         with pytest.raises(AttributeError):
             api_key._value = "new_value"  # type: ignore
 
     def test_strategy_config_immutable(self):
         """Test that strategy configs are immutable."""
         config = MomentumStrategyConfig.create(
-            lookback_period=20,
-            entry_threshold=2.0,
-            exit_threshold=1.0
+            lookback_period=20, entry_threshold=2.0, exit_threshold=1.0
         ).success()
-        
+
         with pytest.raises(AttributeError):
             config.lookback_period = 30  # type: ignore
 
@@ -667,9 +648,9 @@ class TestImmutability:
             log_level="INFO",
             features={},
             max_concurrent_positions=3,
-            default_position_size=10.0
+            default_position_size=10.0,
         ).success()
-        
+
         with pytest.raises(AttributeError):
             config.max_concurrent_positions = 5  # type: ignore
 

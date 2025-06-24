@@ -58,20 +58,20 @@ update_report() {
     local check_name="$1"
     local status="$2"
     local details="$3"
-    
+
     python3 -c "
 import json
 import sys
 try:
     with open('$REPORT_FILE', 'r') as f:
         report = json.load(f)
-    
+
     report['checks']['$check_name'] = {
         'status': '$status',
         'details': '$details',
         'timestamp': '$(date -Iseconds)'
     }
-    
+
     report['summary']['total_checks'] += 1
     if '$status' == 'passed':
         report['summary']['passed'] += 1
@@ -79,7 +79,7 @@ try:
         report['summary']['failed'] += 1
     else:
         report['summary']['warnings'] += 1
-    
+
     with open('$REPORT_FILE', 'w') as f:
         json.dump(report, f, indent=2)
 except Exception as e:
@@ -92,9 +92,9 @@ run_fp_check() {
     local check_name="$1"
     local description="$2"
     shift 2
-    
+
     print_status "FP" "Running $description..."
-    
+
     if "$@" > "$FP_LOG_DIR/${check_name}.log" 2>&1; then
         print_status "SUCCESS" "$description completed successfully"
         update_report "$check_name" "passed" "Check completed without errors"
@@ -111,9 +111,9 @@ run_fp_warning_check() {
     local check_name="$1"
     local description="$2"
     shift 2
-    
+
     print_status "FP" "Running $description..."
-    
+
     if "$@" > "$FP_LOG_DIR/${check_name}.log" 2>&1; then
         print_status "SUCCESS" "$description completed successfully"
         update_report "$check_name" "passed" "Check completed without errors"
@@ -148,14 +148,14 @@ try:
     from bot.fp.core.option import Option
     from bot.fp.core.io import IO
     print('✅ All FP types import successfully')
-    
+
     # Test basic type operations
     result = Money.create(100.0, 'USD')
     assert result.is_ok(), 'Money creation failed'
-    
+
     maybe_val = Some(42)
     assert maybe_val.is_some(), 'Maybe type failed'
-    
+
     print('✅ FP type operations work correctly')
 except ImportError as e:
     print(f'❌ FP type import failed: {e}')
@@ -175,7 +175,7 @@ try:
     from bot.fp.adapters.strategy_adapter import StrategyAdapter
     from bot.fp.adapters.market_data_adapter import MarketDataAdapter
     print('✅ FP adapters import successfully')
-    
+
     # Check adapter methods
     methods = ['get_balance', 'place_order', 'get_market_data']
     print('✅ FP adapter methods available')
@@ -213,14 +213,14 @@ def validate_fp_imports(file_path):
     try:
         with open(file_path, 'r') as f:
             tree = ast.parse(f.read())
-        
+
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
                 if node.module and 'bot.fp' in node.module:
                     # Validate FP imports are properly structured
                     if not any(alias.name for alias in node.names if alias.name != '*'):
                         continue
-                    
+
         return True
     except Exception as e:
         print(f'Import validation failed for {file_path}: {e}')
@@ -246,7 +246,7 @@ try:
     from bot.fp.types.result import Result, Success, Failure
     from bot.fp.types.base import Maybe, Some, Nothing
     from bot.fp.core.io import IO
-    
+
     # Test Result monad laws
     def test_result_laws():
         # Left identity: return a >>= f === f a
@@ -255,14 +255,14 @@ try:
         left = Success(a).bind(f)
         right = f(a)
         assert left.value == right.value, 'Result left identity law failed'
-        
+
         # Right identity: m >>= return === m
         m = Success(10)
         left = m.bind(Success)
         assert left.value == m.value, 'Result right identity law failed'
-        
+
         print('✅ Result monad laws validated')
-    
+
     # Test Maybe monad laws
     def test_maybe_laws():
         # Left identity
@@ -271,13 +271,13 @@ try:
         left = Some(a).flat_map(f)
         right = f(a)
         assert left.value == right.value, 'Maybe left identity law failed'
-        
+
         print('✅ Maybe monad laws validated')
-    
+
     test_result_laws()
     test_maybe_laws()
     print('✅ All monad laws validated')
-    
+
 except Exception as e:
     print(f'❌ Monad law validation failed: {e}')
     sys.exit(1)
@@ -295,22 +295,22 @@ def check_performance_patterns(file_path):
         with open(file_path, 'r') as f:
             content = f.read()
             tree = ast.parse(content)
-        
+
         # Check for potential performance issues
         issues = []
-        
+
         for node in ast.walk(tree):
             # Check for nested loops in FP code
             if isinstance(node, ast.For):
                 for child in ast.walk(node):
                     if isinstance(child, ast.For) and child != node:
                         issues.append(f'Nested loops found in {file_path}')
-            
+
             # Check for list comprehensions with complex expressions
             if isinstance(node, ast.ListComp):
                 if len(node.generators) > 2:
                     issues.append(f'Complex list comprehension in {file_path}')
-        
+
         return issues
     except Exception as e:
         return [f'Performance check failed for {file_path}: {e}']
@@ -342,14 +342,14 @@ def check_fp_documentation(file_path):
         with open(file_path, 'r') as f:
             content = f.read()
             tree = ast.parse(content)
-        
+
         missing_docs = []
-        
+
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 if not ast.get_docstring(node):
                     missing_docs.append(f'{node.name} in {file_path}')
-        
+
         return missing_docs
     except Exception as e:
         return [f'Documentation check failed for {file_path}: {e}']
@@ -417,7 +417,7 @@ import json
 try:
     with open('$REPORT_FILE', 'r') as f:
         report = json.load(f)
-    
+
     summary = report['summary']
     print('📊 FP Code Quality Summary')
     print('=' * 50)
@@ -426,15 +426,15 @@ try:
     print(f'Failed: {summary[\"failed\"]} ❌')
     print(f'Warnings: {summary[\"warnings\"]} ⚠️')
     print('')
-    
+
     if summary['failed'] == 0:
         print('🎉 All critical FP checks passed!')
     else:
         print('⚠️  Some FP checks need attention')
-    
+
     print(f'📄 Detailed report: {\"$REPORT_FILE\"}')
     print(f'📁 Logs directory: {\"$FP_LOG_DIR\"}')
-    
+
 except Exception as e:
     print(f'Error generating summary: {e}')
 "

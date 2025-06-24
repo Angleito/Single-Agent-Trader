@@ -54,7 +54,7 @@ New functional capabilities added:
 class RiskManager:
     def __init__(self):
         self.state = {...}  # Mutable state everywhere
-    
+
     def evaluate_risk(self):
         # Complex imperative logic with side effects
         self.state.update(...)  # Mutations everywhere
@@ -68,7 +68,7 @@ class RiskManager:
     def __init__(self):
         self._risk_params = RiskParameters(...)  # Immutable
         self._risk_limits = RiskLimits(...)      # Immutable
-    
+
     def evaluate_risk(self):
         # Pure functional calculations
         result = calculate_position_risk(...)  # No side effects
@@ -83,7 +83,7 @@ class RiskManager:
 - No complex mocking of stateful dependencies
 - Deterministic outputs for given inputs
 
-### 🔧 **Maintainability** 
+### 🔧 **Maintainability**
 - Clear separation of concerns
 - Functional core with imperative shell
 - Easy to reason about and modify
@@ -185,7 +185,7 @@ approved, modified_action, reason = risk_manager.evaluate_risk(
 
 # But now with functional calculations internally!
 # + Enhanced risk features
-# + Better testability  
+# + Better testability
 # + Improved maintainability
 # + No side effects in core calculations
 ```

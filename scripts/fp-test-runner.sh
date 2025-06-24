@@ -62,26 +62,26 @@ update_test_report() {
     local suite_name="$1"
     local status="$2"
     local details="$3"
-    
+
     python3 -c "
 import json
 import sys
 try:
     with open('$TEST_REPORT', 'r') as f:
         report = json.load(f)
-    
+
     report['test_runs']['$suite_name'] = {
         'status': '$status',
         'details': '$details',
         'timestamp': '$(date -Iseconds)'
     }
-    
+
     report['summary']['total_test_suites'] += 1
     if '$status' == 'passed':
         report['summary']['passed_suites'] += 1
     else:
         report['summary']['failed_suites'] += 1
-    
+
     with open('$TEST_REPORT', 'w') as f:
         json.dump(report, f, indent=2)
 except Exception as e:
@@ -92,28 +92,28 @@ except Exception as e:
 # Function to check test dependencies
 check_test_dependencies() {
     print_status "INFO" "Checking test dependencies..."
-    
+
     # Check if pytest is available
     if ! poetry run python -c "import pytest" 2>/dev/null; then
         print_status "ERROR" "pytest not available. Run: poetry install"
         return 1
     fi
-    
+
     # Check for FP test infrastructure
     if [ ! -f "tests/fp_test_base.py" ]; then
         print_status "WARNING" "FP test base classes not found"
     fi
-    
+
     # Check for FP migration adapters
     if [ ! -f "tests/fp_migration_adapters.py" ]; then
         print_status "WARNING" "FP migration adapters not found"
     fi
-    
+
     # Check for test data generators
     if [ ! -f "tests/data/fp_test_data_generator.py" ]; then
         print_status "WARNING" "FP test data generators not found"
     fi
-    
+
     print_status "SUCCESS" "Test dependencies check complete"
     return 0
 }
@@ -122,17 +122,17 @@ check_test_dependencies() {
 run_fp_tests() {
     local test_pattern="${1:-tests/unit/fp/}"
     local extra_args="$2"
-    
+
     print_status "FP" "Running functional programming tests..."
-    
+
     if [ ! -d "$test_pattern" ]; then
         print_status "WARNING" "FP test directory not found: $test_pattern"
         update_test_report "fp_tests" "skipped" "Directory not found"
         return 0
     fi
-    
+
     local fp_test_log="$FP_TEST_LOG_DIR/fp_tests_$TIMESTAMP.log"
-    
+
     # Run FP tests with special configuration
     if poetry run pytest "$test_pattern" \
         --tb=short \
@@ -143,10 +143,10 @@ run_fp_tests() {
         --cov-report=json \
         $extra_args \
         2>&1 | tee "$fp_test_log"; then
-        
+
         print_status "SUCCESS" "FP tests passed"
         update_test_report "fp_tests" "passed" "All FP tests successful"
-        
+
         # Count FP tests
         local fp_test_count=$(grep -c "PASSED" "$fp_test_log" || echo "0")
         python3 -c "
@@ -159,7 +159,7 @@ try:
         json.dump(report, f, indent=2)
 except: pass
         "
-        
+
         return 0
     else
         print_status "ERROR" "FP tests failed"
@@ -172,11 +172,11 @@ except: pass
 run_legacy_tests() {
     local test_pattern="${1:-tests/unit/}"
     local extra_args="$2"
-    
+
     print_status "TEST" "Running legacy tests with FP compatibility..."
-    
+
     local legacy_test_log="$FP_TEST_LOG_DIR/legacy_tests_$TIMESTAMP.log"
-    
+
     # Exclude FP-specific tests from legacy run
     if poetry run pytest "$test_pattern" \
         --ignore=tests/unit/fp/ \
@@ -185,10 +185,10 @@ run_legacy_tests() {
         --strict-config \
         $extra_args \
         2>&1 | tee "$legacy_test_log"; then
-        
+
         print_status "SUCCESS" "Legacy tests passed"
         update_test_report "legacy_tests" "passed" "All legacy tests successful"
-        
+
         # Count legacy tests
         local legacy_test_count=$(grep -c "PASSED" "$legacy_test_log" || echo "0")
         python3 -c "
@@ -201,7 +201,7 @@ try:
         json.dump(report, f, indent=2)
 except: pass
         "
-        
+
         return 0
     else
         print_status "ERROR" "Legacy tests failed"
@@ -214,27 +214,27 @@ except: pass
 run_integration_tests() {
     local test_pattern="${1:-tests/integration/}"
     local extra_args="$2"
-    
+
     print_status "TEST" "Running integration tests..."
-    
+
     if [ ! -d "$test_pattern" ]; then
         print_status "WARNING" "Integration test directory not found: $test_pattern"
         update_test_report "integration_tests" "skipped" "Directory not found"
         return 0
     fi
-    
+
     local integration_test_log="$FP_TEST_LOG_DIR/integration_tests_$TIMESTAMP.log"
-    
+
     # Run integration tests with extended timeout
     if poetry run pytest "$test_pattern" \
         --tb=short \
         --timeout=300 \
         $extra_args \
         2>&1 | tee "$integration_test_log"; then
-        
+
         print_status "SUCCESS" "Integration tests passed"
         update_test_report "integration_tests" "passed" "All integration tests successful"
-        
+
         # Count integration tests
         local integration_test_count=$(grep -c "PASSED" "$integration_test_log" || echo "0")
         python3 -c "
@@ -247,7 +247,7 @@ try:
         json.dump(report, f, indent=2)
 except: pass
         "
-        
+
         return 0
     else
         print_status "ERROR" "Integration tests failed"
@@ -259,15 +259,15 @@ except: pass
 # Function to run FP property-based tests
 run_property_tests() {
     print_status "FP" "Running property-based tests..."
-    
+
     local property_test_log="$FP_TEST_LOG_DIR/property_tests_$TIMESTAMP.log"
-    
+
     # Run property tests with hypothesis
     if poetry run pytest tests/property/ \
         --tb=short \
         --hypothesis-show-statistics \
         2>&1 | tee "$property_test_log"; then
-        
+
         print_status "SUCCESS" "Property-based tests passed"
         update_test_report "property_tests" "passed" "All property tests successful"
         return 0
@@ -281,9 +281,9 @@ run_property_tests() {
 # Function to check for import issues
 check_import_issues() {
     print_status "INFO" "Checking for import resolution issues..."
-    
+
     local import_log="$FP_TEST_LOG_DIR/import_check_$TIMESTAMP.log"
-    
+
     # Test critical imports
     python3 -c "
 import sys
@@ -322,9 +322,9 @@ else:
     print('\\n✅ All critical imports working')
     sys.exit(0)
     " > "$import_log" 2>&1
-    
+
     local import_exit_code=$?
-    
+
     if [ $import_exit_code -eq 0 ]; then
         print_status "SUCCESS" "No import issues detected"
         update_test_report "import_check" "passed" "All imports successful"
@@ -341,16 +341,16 @@ run_test_with_fallback() {
     local test_func="$1"
     local test_name="$2"
     shift 2
-    
+
     print_status "TEST" "Running $test_name..."
-    
+
     # Try to run the test function
     if $test_func "$@"; then
         print_status "SUCCESS" "$test_name completed successfully"
         return 0
     else
         print_status "WARNING" "$test_name failed, trying fallback..."
-        
+
         # Fallback: run with basic pytest
         if poetry run pytest "$@" --tb=line; then
             print_status "SUCCESS" "$test_name completed with fallback"
@@ -365,7 +365,7 @@ run_test_with_fallback() {
 # Function to generate test summary
 generate_test_summary() {
     print_status "INFO" "Generating test summary..."
-    
+
     python3 -c "
 import json
 import sys
@@ -373,9 +373,9 @@ import sys
 try:
     with open('$TEST_REPORT', 'r') as f:
         report = json.load(f)
-    
+
     summary = report['summary']
-    
+
     print('🧪 Test Execution Summary')
     print('=' * 50)
     print(f'Total Test Suites: {summary[\"total_test_suites\"]}')
@@ -387,21 +387,21 @@ try:
     print(f'  Legacy Tests: {summary.get(\"legacy_tests\", 0)}')
     print(f'  Integration Tests: {summary.get(\"integration_tests\", 0)}')
     print()
-    
+
     if summary['failed_suites'] == 0:
         print('🎉 All test suites passed!')
         success_rate = 100
     else:
         success_rate = (summary['passed_suites'] / summary['total_test_suites']) * 100
         print(f'⚠️  Success Rate: {success_rate:.1f}%')
-    
+
     print()
     print(f'📄 Detailed Report: $TEST_REPORT')
     print(f'📁 Test Logs: $FP_TEST_LOG_DIR')
-    
+
     # Exit with appropriate code
     sys.exit(0 if summary['failed_suites'] == 0 else 1)
-    
+
 except Exception as e:
     print(f'Error generating summary: {e}')
     sys.exit(1)
@@ -445,31 +445,31 @@ case "${1:-all}" in
         print_status "INFO" "Running FP/legacy compatibility tests..."
         check_test_dependencies
         check_import_issues
-        
+
         # Run both FP and legacy tests to check compatibility
         run_test_with_fallback run_fp_tests "FP Tests" tests/unit/fp/
-        run_test_with_fallback run_legacy_tests "Legacy Tests" tests/unit/ 
-        
+        run_test_with_fallback run_legacy_tests "Legacy Tests" tests/unit/
+
         print_status "INFO" "Checking for test conflicts..."
         # Check if any tests interfere with each other
         poetry run pytest tests/unit/fp/ tests/unit/ --ignore=tests/unit/fp/ -x || \
             print_status "WARNING" "Some compatibility issues detected"
-        
+
         generate_test_summary
         ;;
     "all"|"full")
         print_status "INFO" "Running complete test suite..."
         check_test_dependencies
         check_import_issues
-        
+
         local exit_code=0
-        
+
         # Run all test types
         run_test_with_fallback run_fp_tests "FP Tests" tests/unit/fp/ || exit_code=1
         run_test_with_fallback run_legacy_tests "Legacy Tests" tests/unit/ || exit_code=1
         run_test_with_fallback run_integration_tests "Integration Tests" tests/integration/ || exit_code=1
         run_test_with_fallback run_property_tests "Property Tests" || exit_code=1
-        
+
         generate_test_summary
         exit $exit_code
         ;;
@@ -477,14 +477,14 @@ case "${1:-all}" in
         print_status "INFO" "Running debug test mode..."
         check_test_dependencies
         check_import_issues
-        
+
         # Run tests with maximum verbosity and debugging
         poetry run pytest tests/unit/fp/ -v -s --tb=long --capture=no --log-cli-level=DEBUG
         ;;
     "coverage")
         print_status "INFO" "Running tests with comprehensive coverage..."
         check_test_dependencies
-        
+
         # Run tests with detailed coverage
         poetry run pytest tests/ \
             --cov=bot \
@@ -493,7 +493,7 @@ case "${1:-all}" in
             --cov-report=term-missing \
             --cov-report=json \
             --cov-branch
-        
+
         print_status "INFO" "Coverage report generated in htmlcov/"
         ;;
     "help"|*)

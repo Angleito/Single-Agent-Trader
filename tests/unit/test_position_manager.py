@@ -12,13 +12,13 @@ from decimal import Decimal
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+from bot.fp.types import Order, OrderStatus, Position
 from bot.position_manager import (
     PositionManager,
     PositionManagerError,
     PositionStateError,
     PositionValidationError,
 )
-from bot.fp.types import Order, OrderStatus, Position
 
 
 class TestPositionManagerExceptions(unittest.TestCase):

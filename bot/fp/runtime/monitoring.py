@@ -18,10 +18,10 @@ from ..effects.monitoring import (
     AlertLevel,
     HealthStatus,
     create_alert,
-    send_alert,
     health_check,
     record_gauge,
     record_histogram,
+    send_alert,
 )
 from ..effects.time import now
 

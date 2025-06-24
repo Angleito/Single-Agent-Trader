@@ -23,7 +23,7 @@ __all__ = ["MemoryEnhancedLLMAgent"]
 
 # Usage remains identical:
 # agent = MemoryEnhancedLLMAgent(
-#     model_provider="openai", 
+#     model_provider="openai",
 #     model_name="gpt-4",
 #     memory_server=memory_server,
 #     omnisearch_client=omnisearch_client

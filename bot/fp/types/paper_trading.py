@@ -3,7 +3,7 @@
 from dataclasses import dataclass, replace
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional, Union
+from typing import Union
 from uuid import uuid4
 
 from .portfolio import Position, TradeResult
@@ -13,6 +13,7 @@ from .portfolio import Position, TradeResult
 @dataclass(frozen=True)
 class PaperTrade:
     """Simple paper trade for backward compatibility"""
+
     id: str
     symbol: str
     side: str  # 'buy' or 'sell'
@@ -20,39 +21,39 @@ class PaperTrade:
     price: Decimal
     timestamp: datetime
     status: str = "filled"
-    pnl: Optional[Decimal] = None
-    
+    pnl: Decimal | None = None
+
     def calculate_pnl(self, current_price: Decimal) -> Decimal:
         """Calculate unrealized P&L"""
         if self.side == "buy":
             return (current_price - self.price) * self.size
-        else:
-            return (self.price - current_price) * self.size
+        return (self.price - current_price) * self.size
 
 
 @dataclass(frozen=True)
 class PaperPosition:
     """Simple paper position for backward compatibility"""
+
     symbol: str
     side: str  # 'long' or 'short'
     size: Decimal
     entry_price: Decimal
     current_price: Decimal
     unrealized_pnl: Decimal
-    
+
     @classmethod
-    def from_trade(cls, trade: PaperTrade, current_price: Decimal) -> 'PaperPosition':
+    def from_trade(cls, trade: PaperTrade, current_price: Decimal) -> "PaperPosition":
         """Create position from trade"""
         side = "long" if trade.side == "buy" else "short"
         pnl = trade.calculate_pnl(current_price)
-        
+
         return cls(
             symbol=trade.symbol,
             side=side,
             size=trade.size,
             entry_price=trade.price,
             current_price=current_price,
-            unrealized_pnl=pnl
+            unrealized_pnl=pnl,
         )
 
 
@@ -66,9 +67,9 @@ class PaperTradeState:
     entry_time: datetime
     entry_price: Decimal
     size: Decimal
-    exit_time: Optional[datetime] = None
-    exit_price: Optional[Decimal] = None
-    realized_pnl: Optional[Decimal] = None
+    exit_time: datetime | None = None
+    exit_price: Decimal | None = None
+    realized_pnl: Decimal | None = None
     fees: Decimal = Decimal(0)
     slippage: Decimal = Decimal(0)
     status: str = "OPEN"  # "OPEN", "CLOSED", "PARTIAL"
@@ -117,7 +118,7 @@ class PaperTradeState:
             realized_pnl=realized_pnl,
         )
 
-    def to_position(self, current_price: Optional[Decimal] = None) -> Position:
+    def to_position(self, current_price: Decimal | None = None) -> Position:
         """Convert to immutable Position type."""
         price = current_price or self.exit_price or self.entry_price
         return Position(
@@ -128,7 +129,7 @@ class PaperTradeState:
             current_price=price,
         )
 
-    def to_trade_result(self) -> Optional[TradeResult]:
+    def to_trade_result(self) -> TradeResult | None:
         """Convert to TradeResult if trade is closed."""
         if self.status != "CLOSED" or not self.exit_time or not self.exit_price:
             return None
@@ -163,13 +164,17 @@ class PaperTradingAccountState:
     def __post_init__(self) -> None:
         """Validate account state parameters."""
         if self.starting_balance <= 0:
-            raise ValueError(f"Starting balance must be positive, got {self.starting_balance}")
+            raise ValueError(
+                f"Starting balance must be positive, got {self.starting_balance}"
+            )
         if self.trade_counter < 0:
-            raise ValueError(f"Trade counter must be non-negative, got {self.trade_counter}")
+            raise ValueError(
+                f"Trade counter must be non-negative, got {self.trade_counter}"
+            )
 
     @classmethod
     def create_initial(
-        cls, starting_balance: Decimal, session_start_time: Optional[datetime] = None
+        cls, starting_balance: Decimal, session_start_time: datetime | None = None
     ) -> "PaperTradingAccountState":
         """Create initial account state (pure function)."""
         start_time = session_start_time or datetime.now()
@@ -186,10 +191,14 @@ class PaperTradingAccountState:
             session_start_time=start_time,
         )
 
-    def update_equity(self, current_prices: dict[str, Decimal]) -> "PaperTradingAccountState":
+    def update_equity(
+        self, current_prices: dict[str, Decimal]
+    ) -> "PaperTradingAccountState":
         """Update equity based on current prices (pure function)."""
         unrealized_pnl = sum(
-            trade.calculate_unrealized_pnl(current_prices.get(trade.symbol, trade.entry_price))
+            trade.calculate_unrealized_pnl(
+                current_prices.get(trade.symbol, trade.entry_price)
+            )
             for trade in self.open_trades
         )
         new_equity = self.current_balance + unrealized_pnl
@@ -234,7 +243,9 @@ class PaperTradingAccountState:
             return self  # No-op if trade not found
 
         # Close the trade
-        closed_trade = trade_to_close.close_trade(exit_price, exit_time, additional_fees)
+        closed_trade = trade_to_close.close_trade(
+            exit_price, exit_time, additional_fees
+        )
 
         # Update trades
         remaining_open = tuple(
@@ -260,7 +271,9 @@ class PaperTradingAccountState:
             margin_used=max(Decimal(0), new_margin_used),  # Ensure non-negative
         )
 
-    def update_balance(self, amount: Decimal, reason: str = "") -> "PaperTradingAccountState":
+    def update_balance(
+        self, amount: Decimal, reason: str = ""
+    ) -> "PaperTradingAccountState":
         """Update balance by amount (pure function)."""
         return replace(self, current_balance=self.current_balance + amount)
 
@@ -290,9 +303,11 @@ class PaperTradingAccountState:
         """Get total number of trades (pure function)."""
         return len(self.closed_trades)
 
-    def find_open_trade(self, symbol: str) -> Optional[PaperTradeState]:
+    def find_open_trade(self, symbol: str) -> PaperTradeState | None:
         """Find open trade for symbol (pure function)."""
-        return next((trade for trade in self.open_trades if trade.symbol == symbol), None)
+        return next(
+            (trade for trade in self.open_trades if trade.symbol == symbol), None
+        )
 
     def to_portfolio(self, current_prices: dict[str, Decimal]) -> "Portfolio":
         """Convert to immutable Portfolio representation."""
@@ -325,7 +340,7 @@ class TradeExecution:
     """Immutable trade execution result."""
 
     success: bool
-    trade_state: Optional[PaperTradeState]
+    trade_state: PaperTradeState | None
     fees: TradingFees
     execution_price: Decimal
     slippage_amount: Decimal
@@ -366,7 +381,7 @@ class AccountUpdate:
     """Immutable account update result."""
 
     success: bool
-    new_state: Optional[PaperTradingAccountState]
+    new_state: PaperTradingAccountState | None
     operation: str
     reason: str = ""
 
@@ -394,7 +409,7 @@ def create_paper_trade(
     side: str,
     size: Decimal,
     entry_price: Decimal,
-    entry_time: Optional[datetime] = None,
+    entry_time: datetime | None = None,
     fees: Decimal = Decimal(0),
 ) -> PaperTradeState:
     """Create a new paper trade (pure function)."""

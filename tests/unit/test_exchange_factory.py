@@ -15,9 +15,15 @@ from bot.exchange.factory import ExchangeFactory
 
 # Functional imports (added for migration to functional programming patterns)
 try:
-    from bot.fp.effects.exchange import place_order, cancel_order, get_balance, get_positions
     from bot.fp.adapters.exchange_adapter import ExchangeAdapter
-    from bot.fp.types.trading import OrderType, OrderSide
+    from bot.fp.effects.exchange import (
+        cancel_order,
+        get_balance,
+        get_positions,
+        place_order,
+    )
+    from bot.fp.types.trading import OrderSide, OrderType
+
     FUNCTIONAL_EXCHANGE_AVAILABLE = True
 except ImportError:
     # Functional implementations not available, continue with legacy

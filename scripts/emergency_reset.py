@@ -19,9 +19,10 @@ from bot.trading_types import Position
 
 # Functional imports (added for migration to functional programming patterns)
 try:
-    from bot.fp.types.config import Config
     from bot.fp.strategies.risk_management import RiskAssessment, RiskLevel
+    from bot.fp.types.config import Config
     from bot.fp.types.trading import PositionSide, PositionState
+
     FUNCTIONAL_AVAILABLE = True
 except ImportError:
     # Functional implementations not available, continue with legacy

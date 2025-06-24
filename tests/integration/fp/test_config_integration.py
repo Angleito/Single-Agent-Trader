@@ -7,24 +7,23 @@ can start and operate with FP configurations.
 """
 
 import os
-import tempfile
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
+from bot.fp.types.base import TradingMode
 from bot.fp.types.config import (
-    Config,
-    SystemConfig,
-    LLMStrategyConfig,
-    CoinbaseExchangeConfig,
-    BluefinExchangeConfig,
     APIKey,
+    BluefinExchangeConfig,
+    CoinbaseExchangeConfig,
+    Config,
+    LLMStrategyConfig,
     PrivateKey,
     RateLimits,
+    SystemConfig,
     validate_config,
 )
-from bot.fp.types.base import TradingMode
-from bot.fp.types.result import Success, Failure
+from bot.fp.types.result import Failure, Success
 
 
 class TestFPConfigurationSystemIntegration:
@@ -34,23 +33,25 @@ class TestFPConfigurationSystemIntegration:
         """Set up test fixtures."""
         # Create valid FP configurations for testing
         self.api_key = APIKey.create("sk-1234567890abcdefghij").success()
-        self.private_key = PrivateKey.create("-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----").success()
+        self.private_key = PrivateKey.create(
+            "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----"
+        ).success()
         self.rate_limits = RateLimits.create(10, 100, 1000).success()
-        
+
         self.valid_fp_config = Config(
             strategy=LLMStrategyConfig.create(
                 model_name="gpt-4",
                 temperature=0.7,
                 max_context_length=4000,
                 use_memory=False,
-                confidence_threshold=70.0
+                confidence_threshold=70.0,
             ).success(),
             exchange=CoinbaseExchangeConfig(
                 api_key=self.api_key,
                 private_key=self.private_key,
                 api_url="https://api.coinbase.com",
                 websocket_url="wss://ws.coinbase.com",
-                rate_limits=self.rate_limits
+                rate_limits=self.rate_limits,
             ),
             system=SystemConfig.create(
                 trading_pairs=["BTC-USD"],
@@ -59,8 +60,8 @@ class TestFPConfigurationSystemIntegration:
                 log_level="INFO",
                 features={"enable_memory": False},
                 max_concurrent_positions=3,
-                default_position_size=10.0
-            ).success()
+                default_position_size=10.0,
+            ).success(),
         )
 
     def test_fp_config_loads_from_environment_successfully(self):
@@ -72,7 +73,6 @@ class TestFPConfigurationSystemIntegration:
             "LLM_TEMPERATURE": "0.7",
             "LLM_USE_MEMORY": "false",
             "LLM_CONFIDENCE_THRESHOLD": "0.7",
-            
             # Exchange configuration
             "EXCHANGE_TYPE": "coinbase",
             "COINBASE_API_KEY": "sk-1234567890abcdefghij",
@@ -80,7 +80,6 @@ class TestFPConfigurationSystemIntegration:
             "RATE_LIMIT_RPS": "10",
             "RATE_LIMIT_RPM": "100",
             "RATE_LIMIT_RPH": "1000",
-            
             # System configuration
             "TRADING_PAIRS": "BTC-USD",
             "TRADING_INTERVAL": "1m",
@@ -88,20 +87,20 @@ class TestFPConfigurationSystemIntegration:
             "LOG_LEVEL": "INFO",
             "ENABLE_MEMORY": "false",
             "MAX_CONCURRENT_POSITIONS": "3",
-            "DEFAULT_POSITION_SIZE": "10.0"
+            "DEFAULT_POSITION_SIZE": "10.0",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             config_result = Config.from_env()
-            
+
             assert isinstance(config_result, Success)
             config = config_result.success()
-            
+
             # Verify configuration is properly loaded
             assert isinstance(config.strategy, LLMStrategyConfig)
             assert isinstance(config.exchange, CoinbaseExchangeConfig)
             assert config.system.mode == TradingMode.PAPER
-            
+
             # Verify validation passes
             validation_result = validate_config(config)
             assert isinstance(validation_result, Success)
@@ -113,15 +112,15 @@ class TestFPConfigurationSystemIntegration:
             "EXCHANGE_TYPE": "bluefin",
             "BLUEFIN_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\nlongenoughkey\n-----END EC PRIVATE KEY-----",
             "BLUEFIN_NETWORK": "testnet",
-            "TRADING_MODE": "paper"
+            "TRADING_MODE": "paper",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             config_result = Config.from_env()
-            
+
             assert isinstance(config_result, Success)
             config = config_result.success()
-            
+
             assert isinstance(config.exchange, BluefinExchangeConfig)
             assert config.exchange.network == "testnet"
             assert config.system.mode == TradingMode.PAPER
@@ -134,13 +133,13 @@ class TestFPConfigurationSystemIntegration:
             "EXCHANGE_TYPE": "bluefin",
             "BLUEFIN_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\nlongenoughkey\n-----END EC PRIVATE KEY-----",
             "BLUEFIN_NETWORK": "testnet",
-            "TRADING_MODE": "live"  # Should fail with testnet
+            "TRADING_MODE": "live",  # Should fail with testnet
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             config_result = Config.from_env()
             assert isinstance(config_result, Success)
-            
+
             # But validation should fail
             validation_result = validate_config(config_result.success())
             assert isinstance(validation_result, Failure)
@@ -154,13 +153,13 @@ class TestFPConfigurationSystemIntegration:
             "EXCHANGE_TYPE": "coinbase",
             "COINBASE_API_KEY": "sk-1234567890abcdefghij",
             "COINBASE_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----",
-            "ENABLE_MEMORY": "false"  # System disables memory
+            "ENABLE_MEMORY": "false",  # System disables memory
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             config_result = Config.from_env()
             assert isinstance(config_result, Success)
-            
+
             # Validation should catch the inconsistency
             validation_result = validate_config(config_result.success())
             assert isinstance(validation_result, Failure)
@@ -170,25 +169,25 @@ class TestFPConfigurationSystemIntegration:
 class TestFPConfigurationBootstrapIntegration:
     """Test FP configuration integration during system bootstrap."""
 
-    @patch('bot.main.create_settings')  # Mock legacy settings creation
+    @patch("bot.main.create_settings")  # Mock legacy settings creation
     def test_fp_config_can_replace_legacy_settings(self, mock_create_settings):
         """Test that FP configuration can replace legacy settings during bootstrap."""
         # Mock the legacy settings to return None, forcing FP path
         mock_create_settings.return_value = None
-        
+
         env_vars = {
             "STRATEGY_TYPE": "llm",
             "EXCHANGE_TYPE": "coinbase",
             "COINBASE_API_KEY": "sk-1234567890abcdefghij",
             "COINBASE_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----",
-            "TRADING_MODE": "paper"
+            "TRADING_MODE": "paper",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             # FP configuration should work as a fallback
             config_result = Config.from_env()
             assert isinstance(config_result, Success)
-            
+
             config = config_result.success()
             assert config.system.mode == TradingMode.PAPER
 
@@ -201,18 +200,18 @@ class TestFPConfigurationBootstrapIntegration:
             "EXCHANGE_TYPE": "coinbase",
             "COINBASE_API_KEY": "sk-1234567890abcdefghij",
             "COINBASE_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----",
-            "ENABLE_MEMORY": "false"  # Memory disabled - validation should fail
+            "ENABLE_MEMORY": "false",  # Memory disabled - validation should fail
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             # Config should build
             config_result = Config.from_env()
             assert isinstance(config_result, Success)
-            
+
             # But validation should fail
             validation_result = validate_config(config_result.success())
             assert isinstance(validation_result, Failure)
-            
+
             # System should not start with invalid configuration
             # This would typically be enforced by the main application
 
@@ -235,16 +234,16 @@ class TestFPConfigurationFeatureIntegration:
             "ENABLE_PAPER_TRADING": "true",
             "ENABLE_RISK_MANAGEMENT": "true",
             "ENABLE_NOTIFICATIONS": "true",
-            "ENABLE_METRICS": "true"
+            "ENABLE_METRICS": "true",
         }
-        
+
         with patch.dict(os.environ, env_vars_all_features, clear=True):
             config_result = Config.from_env()
             assert isinstance(config_result, Success)
-            
+
             config = config_result.success()
             features = config.system.features
-            
+
             # All features should be enabled
             assert features.enable_websocket is True
             assert features.enable_memory is True
@@ -265,15 +264,15 @@ class TestFPConfigurationFeatureIntegration:
             # Note: We still allow disabling paper trading and risk management
             # but the defaults should be safe
             "ENABLE_PAPER_TRADING": "false",
-            "ENABLE_RISK_MANAGEMENT": "false"
+            "ENABLE_RISK_MANAGEMENT": "false",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             config_result = Config.from_env()
             assert isinstance(config_result, Success)
-            
+
             config = config_result.success()
-            
+
             # Even if user tries to disable safety features, paper mode should be preserved
             assert config.system.mode == TradingMode.PAPER
             # Features reflect user choice but system behavior should remain safe
@@ -291,12 +290,12 @@ class TestFPConfigurationErrorIntegration:
             "STRATEGY_TYPE": "llm",
             "EXCHANGE_TYPE": "coinbase",
             # Missing API keys - should prevent startup
-            "TRADING_MODE": "live"  # Attempting live trading without credentials
+            "TRADING_MODE": "live",  # Attempting live trading without credentials
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             config_result = Config.from_env()
-            
+
             # Should fail to build due to missing credentials
             assert isinstance(config_result, Failure)
             assert "COINBASE_API_KEY not set" in config_result.failure()
@@ -311,21 +310,21 @@ class TestFPConfigurationErrorIntegration:
             "BLUEFIN_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\nlongenoughkey\n-----END EC PRIVATE KEY-----",
             "BLUEFIN_NETWORK": "testnet",
             "TRADING_MODE": "live",  # Invalid: testnet + live
-            "ENABLE_MEMORY": "false"  # Invalid: strategy wants memory but disabled
+            "ENABLE_MEMORY": "false",  # Invalid: strategy wants memory but disabled
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             config_result = Config.from_env()
             assert isinstance(config_result, Success)
-            
+
             validation_result = validate_config(config_result.success())
             assert isinstance(validation_result, Failure)
-            
+
             error_message = validation_result.failure()
             # Should provide actionable error message
             assert len(error_message) > 0
             # Should mention specific issues that can be fixed
-            assert ("testnet" in error_message or "memory" in error_message)
+            assert "testnet" in error_message or "memory" in error_message
 
 
 class TestFPConfigurationPerformanceIntegration:
@@ -339,9 +338,9 @@ class TestFPConfigurationPerformanceIntegration:
             "EXCHANGE_TYPE": "coinbase",
             "COINBASE_API_KEY": "sk-1234567890abcdefghij",
             "COINBASE_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----",
-            "TRADING_MODE": "paper"
+            "TRADING_MODE": "paper",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             # Load configuration multiple times
             configs = []
@@ -349,7 +348,7 @@ class TestFPConfigurationPerformanceIntegration:
                 config_result = Config.from_env()
                 assert isinstance(config_result, Success)
                 configs.append(config_result.success())
-            
+
             # All configs should be equivalent
             assert len(configs) == 10
             assert all(c.system.mode == TradingMode.PAPER for c in configs)
@@ -358,23 +357,25 @@ class TestFPConfigurationPerformanceIntegration:
         """Test that FP configuration validation is performant."""
         # Create a valid config and validate it multiple times
         api_key = APIKey.create("sk-1234567890abcdefghij").success()
-        private_key = PrivateKey.create("-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----").success()
+        private_key = PrivateKey.create(
+            "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----"
+        ).success()
         rate_limits = RateLimits.create(10, 100, 1000).success()
-        
+
         config = Config(
             strategy=LLMStrategyConfig.create(
                 model_name="gpt-4",
                 temperature=0.7,
                 max_context_length=4000,
                 use_memory=False,
-                confidence_threshold=70.0
+                confidence_threshold=70.0,
             ).success(),
             exchange=CoinbaseExchangeConfig(
                 api_key=api_key,
                 private_key=private_key,
                 api_url="https://api.coinbase.com",
                 websocket_url="wss://ws.coinbase.com",
-                rate_limits=rate_limits
+                rate_limits=rate_limits,
             ),
             system=SystemConfig.create(
                 trading_pairs=["BTC-USD"],
@@ -383,10 +384,10 @@ class TestFPConfigurationPerformanceIntegration:
                 log_level="INFO",
                 features={},
                 max_concurrent_positions=3,
-                default_position_size=10.0
-            ).success()
+                default_position_size=10.0,
+            ).success(),
         )
-        
+
         # Validate multiple times
         for _ in range(20):
             result = validate_config(config)
@@ -400,7 +401,7 @@ class TestFPConfigurationCompatibilityIntegration:
         """Test that FP configuration can integrate with existing trading components."""
         # This would typically involve mocking existing components
         # and verifying they can consume FP configuration
-        
+
         env_vars = {
             "STRATEGY_TYPE": "llm",
             "EXCHANGE_TYPE": "coinbase",
@@ -408,15 +409,15 @@ class TestFPConfigurationCompatibilityIntegration:
             "COINBASE_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----",
             "TRADING_MODE": "paper",
             "TRADING_PAIRS": "BTC-USD,ETH-USD",
-            "MAX_CONCURRENT_POSITIONS": "5"
+            "MAX_CONCURRENT_POSITIONS": "5",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             config_result = Config.from_env()
             assert isinstance(config_result, Success)
-            
+
             config = config_result.success()
-            
+
             # Verify configuration can be used by trading components
             assert len(config.system.trading_pairs) == 2
             assert config.system.max_concurrent_positions == 5
@@ -425,23 +426,24 @@ class TestFPConfigurationCompatibilityIntegration:
     def test_fp_config_maintains_backward_compatibility(self):
         """Test that FP configuration maintains backward compatibility where needed."""
         # Test that FP configuration doesn't break existing functionality
-        
+
         env_vars = {
             "STRATEGY_TYPE": "momentum",  # Non-LLM strategy
             "MOMENTUM_LOOKBACK": "20",
             "EXCHANGE_TYPE": "bluefin",
             "BLUEFIN_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\nlongenoughkey\n-----END EC PRIVATE KEY-----",
-            "TRADING_MODE": "paper"
+            "TRADING_MODE": "paper",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             config_result = Config.from_env()
             assert isinstance(config_result, Success)
-            
+
             config = config_result.success()
-            
+
             # Should work with different strategy types
             from bot.fp.types.config import MomentumStrategyConfig
+
             assert isinstance(config.strategy, MomentumStrategyConfig)
             assert config.strategy.lookback_period == 20
 
@@ -456,16 +458,16 @@ class TestFPConfigurationResilience:
             "STRATEGY_TYPE": "llm",
             "EXCHANGE_TYPE": "coinbase",
             "COINBASE_API_KEY": "sk-1234567890abcdefghij",
-            "COINBASE_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----"
+            "COINBASE_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----",
             # Many other settings will use defaults
         }
-        
+
         with patch.dict(os.environ, minimal_env, clear=True):
             config_result = Config.from_env()
             assert isinstance(config_result, Success)
-            
+
             config = config_result.success()
-            
+
             # Should use safe defaults
             assert config.system.mode == TradingMode.PAPER
             assert config.system.max_concurrent_positions == 3
@@ -478,12 +480,12 @@ class TestFPConfigurationResilience:
             "STRATEGY_TYPE": "unknown",
             "EXCHANGE_TYPE": "invalid",
             "TRADING_MODE": "dangerous",
-            "MALICIOUS_SETTING": "value"
+            "MALICIOUS_SETTING": "value",
         }
-        
+
         with patch.dict(os.environ, invalid_env, clear=True):
             config_result = Config.from_env()
-            
+
             # Should fail safely rather than create dangerous configuration
             assert isinstance(config_result, Failure)
             # Error should be specific about what failed

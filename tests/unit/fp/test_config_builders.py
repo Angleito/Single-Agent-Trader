@@ -35,12 +35,12 @@ class TestStrategyConfigBuilders:
             "MOMENTUM_LOOKBACK": "20",
             "MOMENTUM_ENTRY_THRESHOLD": "0.02",
             "MOMENTUM_EXIT_THRESHOLD": "0.01",
-            "MOMENTUM_USE_VOLUME": "true"
+            "MOMENTUM_USE_VOLUME": "true",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_strategy_config_from_env()
-            
+
             assert isinstance(result, Success)
             config = result.success()
             assert isinstance(config, MomentumStrategyConfig)
@@ -55,22 +55,22 @@ class TestStrategyConfigBuilders:
             "STRATEGY_TYPE": "momentum",
             "MOMENTUM_LOOKBACK": "invalid",
             "MOMENTUM_ENTRY_THRESHOLD": "0.02",
-            "MOMENTUM_EXIT_THRESHOLD": "0.01"
+            "MOMENTUM_EXIT_THRESHOLD": "0.01",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_strategy_config_from_env()
-            
+
             assert isinstance(result, Failure)
             assert "Invalid integer" in result.failure()
 
     def test_build_momentum_strategy_with_defaults(self):
         """Test building momentum strategy with default values."""
         env_vars = {"STRATEGY_TYPE": "momentum"}
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_strategy_config_from_env()
-            
+
             assert isinstance(result, Success)
             config = result.success()
             assert isinstance(config, MomentumStrategyConfig)
@@ -84,12 +84,12 @@ class TestStrategyConfigBuilders:
             "MEAN_REVERSION_WINDOW": "50",
             "MEAN_REVERSION_STD_DEV": "2.0",
             "MEAN_REVERSION_MIN_VOL": "0.001",
-            "MEAN_REVERSION_MAX_HOLD": "100"
+            "MEAN_REVERSION_MAX_HOLD": "100",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_strategy_config_from_env()
-            
+
             assert isinstance(result, Success)
             config = result.success()
             assert isinstance(config, MeanReversionStrategyConfig)
@@ -106,12 +106,12 @@ class TestStrategyConfigBuilders:
             "LLM_TEMPERATURE": "0.7",
             "LLM_MAX_CONTEXT": "4000",
             "LLM_USE_MEMORY": "false",
-            "LLM_CONFIDENCE_THRESHOLD": "0.7"
+            "LLM_CONFIDENCE_THRESHOLD": "0.7",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_strategy_config_from_env()
-            
+
             assert isinstance(result, Success)
             config = result.success()
             assert isinstance(config, LLMStrategyConfig)
@@ -124,10 +124,10 @@ class TestStrategyConfigBuilders:
     def test_build_llm_strategy_with_defaults(self):
         """Test building LLM strategy with default values."""
         env_vars = {"STRATEGY_TYPE": "llm"}
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_strategy_config_from_env()
-            
+
             assert isinstance(result, Success)
             config = result.success()
             assert isinstance(config, LLMStrategyConfig)
@@ -138,10 +138,10 @@ class TestStrategyConfigBuilders:
     def test_build_strategy_unknown_type(self):
         """Test building strategy with unknown type."""
         env_vars = {"STRATEGY_TYPE": "unknown_strategy"}
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_strategy_config_from_env()
-            
+
             assert isinstance(result, Failure)
             assert "Unknown strategy type" in result.failure()
 
@@ -149,7 +149,7 @@ class TestStrategyConfigBuilders:
         """Test building strategy with default type (LLM)."""
         with patch.dict(os.environ, {}, clear=True):
             result = build_strategy_config_from_env()
-            
+
             assert isinstance(result, Success)
             config = result.success()
             assert isinstance(config, LLMStrategyConfig)
@@ -168,12 +168,12 @@ class TestExchangeConfigBuilders:
             "COINBASE_WS_URL": "wss://ws.coinbase.com",
             "RATE_LIMIT_RPS": "10",
             "RATE_LIMIT_RPM": "100",
-            "RATE_LIMIT_RPH": "1000"
+            "RATE_LIMIT_RPH": "1000",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_exchange_config_from_env()
-            
+
             assert isinstance(result, Success)
             config = result.success()
             assert isinstance(config, CoinbaseExchangeConfig)
@@ -185,12 +185,12 @@ class TestExchangeConfigBuilders:
         """Test building Coinbase exchange with missing API key."""
         env_vars = {
             "EXCHANGE_TYPE": "coinbase",
-            "COINBASE_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----"
+            "COINBASE_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_exchange_config_from_env()
-            
+
             assert isinstance(result, Failure)
             assert "COINBASE_API_KEY not set" in result.failure()
 
@@ -199,12 +199,12 @@ class TestExchangeConfigBuilders:
         env_vars = {
             "EXCHANGE_TYPE": "coinbase",
             "COINBASE_API_KEY": "short",  # Too short
-            "COINBASE_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----"
+            "COINBASE_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_exchange_config_from_env()
-            
+
             assert isinstance(result, Failure)
             assert "too short" in result.failure()
 
@@ -217,12 +217,12 @@ class TestExchangeConfigBuilders:
             "BLUEFIN_RPC_URL": "https://sui-testnet.bluefin.io",
             "RATE_LIMIT_RPS": "5",
             "RATE_LIMIT_RPM": "50",
-            "RATE_LIMIT_RPH": "500"
+            "RATE_LIMIT_RPH": "500",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_exchange_config_from_env()
-            
+
             assert isinstance(result, Success)
             config = result.success()
             assert isinstance(config, BluefinExchangeConfig)
@@ -235,12 +235,12 @@ class TestExchangeConfigBuilders:
         env_vars = {
             "EXCHANGE_TYPE": "bluefin",
             "BLUEFIN_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\nlongenoughkey\n-----END EC PRIVATE KEY-----",
-            "BLUEFIN_NETWORK": "invalid_network"
+            "BLUEFIN_NETWORK": "invalid_network",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_exchange_config_from_env()
-            
+
             assert isinstance(result, Failure)
             assert "Invalid Bluefin network" in result.failure()
 
@@ -248,12 +248,12 @@ class TestExchangeConfigBuilders:
         """Test building Bluefin exchange with default values."""
         env_vars = {
             "EXCHANGE_TYPE": "bluefin",
-            "BLUEFIN_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\nlongenoughkey\n-----END EC PRIVATE KEY-----"
+            "BLUEFIN_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\nlongenoughkey\n-----END EC PRIVATE KEY-----",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_exchange_config_from_env()
-            
+
             assert isinstance(result, Success)
             config = result.success()
             assert isinstance(config, BluefinExchangeConfig)
@@ -269,12 +269,12 @@ class TestExchangeConfigBuilders:
             "BINANCE_TESTNET": "true",
             "RATE_LIMIT_RPS": "20",
             "RATE_LIMIT_RPM": "200",
-            "RATE_LIMIT_RPH": "2000"
+            "RATE_LIMIT_RPH": "2000",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_exchange_config_from_env()
-            
+
             assert isinstance(result, Success)
             config = result.success()
             assert isinstance(config, BinanceExchangeConfig)
@@ -284,10 +284,10 @@ class TestExchangeConfigBuilders:
     def test_build_exchange_unknown_type(self):
         """Test building exchange with unknown type."""
         env_vars = {"EXCHANGE_TYPE": "unknown_exchange"}
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_exchange_config_from_env()
-            
+
             assert isinstance(result, Failure)
             assert "Unknown exchange type" in result.failure()
 
@@ -295,12 +295,12 @@ class TestExchangeConfigBuilders:
         """Test building exchange with default type (Coinbase)."""
         env_vars = {
             "COINBASE_API_KEY": "sk-1234567890abcdefghij",
-            "COINBASE_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----"
+            "COINBASE_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_exchange_config_from_env()
-            
+
             assert isinstance(result, Success)
             config = result.success()
             assert isinstance(config, CoinbaseExchangeConfig)
@@ -311,12 +311,12 @@ class TestExchangeConfigBuilders:
             "EXCHANGE_TYPE": "coinbase",
             "COINBASE_API_KEY": "sk-1234567890abcdefghij",
             "COINBASE_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----",
-            "RATE_LIMIT_RPS": "invalid"
+            "RATE_LIMIT_RPS": "invalid",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_exchange_config_from_env()
-            
+
             assert isinstance(result, Failure)
             assert "Invalid integer" in result.failure()
 
@@ -335,12 +335,12 @@ class TestSystemConfigBuilder:
             "ENABLE_MEMORY": "true",
             "ENABLE_BACKTESTING": "false",
             "MAX_CONCURRENT_POSITIONS": "5",
-            "DEFAULT_POSITION_SIZE": "0.2"
+            "DEFAULT_POSITION_SIZE": "0.2",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_system_config_from_env()
-            
+
             assert isinstance(result, Success)
             config = result.success()
             assert len(config.trading_pairs) == 3
@@ -356,7 +356,7 @@ class TestSystemConfigBuilder:
         """Test building system config with default values."""
         with patch.dict(os.environ, {}, clear=True):
             result = build_system_config_from_env()
-            
+
             assert isinstance(result, Success)
             config = result.success()
             assert len(config.trading_pairs) == 1
@@ -368,30 +368,30 @@ class TestSystemConfigBuilder:
     def test_build_system_config_invalid_trading_pairs(self):
         """Test building system config with invalid trading pairs."""
         env_vars = {"TRADING_PAIRS": "INVALID_PAIR"}
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_system_config_from_env()
-            
+
             assert isinstance(result, Failure)
             assert "Invalid trading pair" in result.failure()
 
     def test_build_system_config_invalid_max_positions(self):
         """Test building system config with invalid max positions."""
         env_vars = {"MAX_CONCURRENT_POSITIONS": "invalid"}
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_system_config_from_env()
-            
+
             assert isinstance(result, Failure)
             assert "Invalid integer" in result.failure()
 
     def test_build_system_config_invalid_position_size(self):
         """Test building system config with invalid position size."""
         env_vars = {"DEFAULT_POSITION_SIZE": "invalid"}
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_system_config_from_env()
-            
+
             assert isinstance(result, Failure)
             assert "Invalid float" in result.failure()
 
@@ -409,12 +409,12 @@ class TestBacktestConfigBuilder:
             "BACKTEST_MAKER_FEE": "0.0005",
             "BACKTEST_TAKER_FEE": "0.001",
             "BACKTEST_SLIPPAGE": "0.0002",
-            "BACKTEST_USE_LIMIT_ORDERS": "false"
+            "BACKTEST_USE_LIMIT_ORDERS": "false",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_backtest_config_from_env()
-            
+
             assert isinstance(result, Success)
             config = result.success()
             assert config.start_date.year == 2024
@@ -429,7 +429,7 @@ class TestBacktestConfigBuilder:
         """Test building backtest config with default values."""
         with patch.dict(os.environ, {}, clear=True):
             result = build_backtest_config_from_env()
-            
+
             assert isinstance(result, Success)
             config = result.success()
             assert config.start_date.year == 2024
@@ -441,30 +441,30 @@ class TestBacktestConfigBuilder:
     def test_build_backtest_config_invalid_date(self):
         """Test building backtest config with invalid date."""
         env_vars = {"BACKTEST_START_DATE": "invalid-date"}
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_backtest_config_from_env()
-            
+
             assert isinstance(result, Failure)
             assert "Invalid date format" in result.failure()
 
     def test_build_backtest_config_invalid_capital(self):
         """Test building backtest config with invalid capital."""
         env_vars = {"BACKTEST_INITIAL_CAPITAL": "invalid"}
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_backtest_config_from_env()
-            
+
             assert isinstance(result, Failure)
             assert "Invalid float" in result.failure()
 
     def test_build_backtest_config_invalid_fee(self):
         """Test building backtest config with invalid fee."""
         env_vars = {"BACKTEST_MAKER_FEE": "invalid"}
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             result = build_backtest_config_from_env()
-            
+
             assert isinstance(result, Failure)
             assert "Invalid float" in result.failure()
 
@@ -478,27 +478,24 @@ class TestCompleteConfigBuilder:
             # Strategy config
             "STRATEGY_TYPE": "llm",
             "LLM_MODEL": "gpt-4",
-            
             # Exchange config
             "EXCHANGE_TYPE": "coinbase",
             "COINBASE_API_KEY": "sk-1234567890abcdefghij",
             "COINBASE_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----",
-            
             # System config
             "TRADING_PAIRS": "BTC-USD",
             "TRADING_MODE": "paper",
-            
             # Backtest config (optional)
             "ENABLE_BACKTESTING": "true",
             "BACKTEST_START_DATE": "2024-01-01",
-            "BACKTEST_END_DATE": "2024-12-31"
+            "BACKTEST_END_DATE": "2024-12-31",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             from bot.fp.types.config import Config
-            
+
             result = Config.from_env()
-            
+
             assert isinstance(result, Success)
             config = result.success()
             assert isinstance(config.strategy, LLMStrategyConfig)
@@ -510,20 +507,18 @@ class TestCompleteConfigBuilder:
         env_vars = {
             # Strategy config
             "STRATEGY_TYPE": "momentum",
-            
             # Exchange config
             "EXCHANGE_TYPE": "bluefin",
             "BLUEFIN_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\nlongenoughkey\n-----END EC PRIVATE KEY-----",
-            
             # System config
-            "ENABLE_BACKTESTING": "false"
+            "ENABLE_BACKTESTING": "false",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             from bot.fp.types.config import Config
-            
+
             result = Config.from_env()
-            
+
             assert isinstance(result, Success)
             config = result.success()
             assert isinstance(config.strategy, MomentumStrategyConfig)
@@ -535,18 +530,17 @@ class TestCompleteConfigBuilder:
         env_vars = {
             "STRATEGY_TYPE": "momentum",
             "MOMENTUM_LOOKBACK": "invalid",  # Invalid integer
-            
             # Valid exchange config
             "EXCHANGE_TYPE": "coinbase",
             "COINBASE_API_KEY": "sk-1234567890abcdefghij",
-            "COINBASE_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----"
+            "COINBASE_PRIVATE_KEY": "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             from bot.fp.types.config import Config
-            
+
             result = Config.from_env()
-            
+
             assert isinstance(result, Failure)
             assert "Invalid integer" in result.failure()
 
@@ -555,17 +549,16 @@ class TestCompleteConfigBuilder:
         env_vars = {
             # Valid strategy config
             "STRATEGY_TYPE": "llm",
-            
             # Invalid exchange config
             "EXCHANGE_TYPE": "coinbase",
-            "COINBASE_API_KEY": "short"  # Too short
+            "COINBASE_API_KEY": "short",  # Too short
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             from bot.fp.types.config import Config
-            
+
             result = Config.from_env()
-            
+
             assert isinstance(result, Failure)
             assert "too short" in result.failure()
 
@@ -579,11 +572,11 @@ class TestConfigBuilderEdgeCases:
             # Strategy should default to LLM
             strategy_result = build_strategy_config_from_env()
             assert isinstance(strategy_result, Success)
-            
+
             # Exchange should fail due to missing API keys
             exchange_result = build_exchange_config_from_env()
             assert isinstance(exchange_result, Failure)
-            
+
             # System should work with defaults
             system_result = build_system_config_from_env()
             assert isinstance(system_result, Success)
@@ -593,14 +586,14 @@ class TestConfigBuilderEdgeCases:
         env_vars = {
             "STRATEGY_TYPE": "momentum",
             "MOMENTUM_LOOKBACK": "30",  # Only partial config
-            "EXCHANGE_TYPE": "coinbase"  # Missing API keys
+            "EXCHANGE_TYPE": "coinbase",  # Missing API keys
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             # Strategy should work with defaults for missing values
             strategy_result = build_strategy_config_from_env()
             assert isinstance(strategy_result, Success)
-            
+
             # Exchange should fail due to missing API keys
             exchange_result = build_exchange_config_from_env()
             assert isinstance(exchange_result, Failure)
@@ -610,17 +603,17 @@ class TestConfigBuilderEdgeCases:
         env_vars = {
             "RATE_LIMIT_RPS": "not_a_number",
             "LLM_TEMPERATURE": "not_a_float",
-            "ENABLE_MEMORY": "not_a_boolean"
+            "ENABLE_MEMORY": "not_a_boolean",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             # Should handle malformed values gracefully
             exchange_result = build_exchange_config_from_env()
             assert isinstance(exchange_result, Failure)
-            
+
             strategy_result = build_strategy_config_from_env()
             assert isinstance(strategy_result, Failure)
-            
+
             # Boolean parsing is more forgiving, defaults to False
             system_result = build_system_config_from_env()
             assert isinstance(system_result, Success)

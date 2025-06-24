@@ -379,7 +379,7 @@ from bot.config import benchmark_config_loading
 
 results = benchmark_config_loading(iterations=100)
 print(f"Create settings: {results['create_settings_ms']:.2f}ms")
-print(f"Load from file: {results['load_from_file_ms']:.2f}ms") 
+print(f"Load from file: {results['load_from_file_ms']:.2f}ms")
 print(f"Validation: {results['validation_ms']:.2f}ms")
 ```
 
@@ -410,7 +410,7 @@ def validate_trading_config(config: TradingConfig) -> Result[TradingConfig, str]
 @dataclass(frozen=True)
 class APIKey:
     _value: str
-    
+
     def __str__(self) -> str:
         return f"APIKey(***{self._value[-4:]})"
 ```

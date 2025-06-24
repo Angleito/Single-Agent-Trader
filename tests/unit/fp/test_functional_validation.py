@@ -12,43 +12,42 @@ This module tests:
 import json
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict
 
 import pytest
 
 # Import FP validation modules
 from bot.fp.core.functional_validation import (
+    ConversionError,
+    FieldError,
+    SchemaError,
+    ValidationChainError,
+    ValidationPipeline,
+    any_validator,
+    chain_validators,
+    compose_validators,
+    conditional_validator,
+    convert_decimal,
+    convert_money,
+    convert_percentage,
+    optional_field,
+    validate_all,
+    validate_batch_functional,
+    validate_cross_field_constraints,
+    validate_data_integrity,
+    validate_enum,
+    validate_pattern,
+    validate_position_functional,
     validate_positive,
     validate_range,
     validate_string_length,
-    validate_pattern,
-    validate_enum,
-    chain_validators,
-    validate_all,
-    optional_field,
-    compose_validators,
-    any_validator,
-    conditional_validator,
-    convert_decimal,
-    convert_percentage,
-    convert_money,
-    ValidationPipeline,
     validate_trade_action_functional,
-    validate_position_functional,
-    validate_batch_functional,
-    validate_data_integrity,
-    validate_cross_field_constraints,
-    FieldError,
-    SchemaError,
-    ConversionError,
-    ValidationChainError,
 )
 
 # Import FP Result types
-from bot.fp.types.result import Result, Success, Failure
+from bot.fp.types.result import Failure, Success
 
 # Import trading types for conversion tests
-from bot.trading_types import TradeAction, Position
+from bot.trading_types import TradeAction
 
 
 class TestBasicValidators:
@@ -137,20 +136,14 @@ class TestValidationCombinators:
 
     def test_chain_validators_success(self):
         """Test successful validator chaining."""
-        validator = chain_validators(
-            validate_positive,
-            validate_range(0, 100)
-        )
+        validator = chain_validators(validate_positive, validate_range(0, 100))
         result = validator(50.0)
         assert result.is_success()
         assert result.success() == 50.0
 
     def test_chain_validators_failure(self):
         """Test validator chaining with failures."""
-        validator = chain_validators(
-            validate_positive,
-            validate_range(0, 10)
-        )
+        validator = chain_validators(validate_positive, validate_range(0, 10))
         result = validator(50.0)  # Passes positive but fails range
         assert result.is_failure()
         errors = result.failure()
@@ -163,16 +156,12 @@ class TestValidationCombinators:
         validators = {
             "action": validate_enum({"LONG", "SHORT", "HOLD"}),
             "size_pct": chain_validators(validate_positive, validate_range(0, 100)),
-            "rationale": validate_string_length(1, 100)
+            "rationale": validate_string_length(1, 100),
         }
-        
+
         schema_validator = validate_all(validators)
-        data = {
-            "action": "LONG",
-            "size_pct": 25.0,
-            "rationale": "Test trade"
-        }
-        
+        data = {"action": "LONG", "size_pct": 25.0, "rationale": "Test trade"}
+
         result = schema_validator(data)
         assert result.is_success()
         validated_data = result.success()
@@ -183,18 +172,20 @@ class TestValidationCombinators:
         """Test validation with missing required field."""
         validators = {
             "action": validate_enum({"LONG", "SHORT", "HOLD"}),
-            "size_pct": validate_positive
+            "size_pct": validate_positive,
         }
-        
+
         schema_validator = validate_all(validators)
         data = {"action": "LONG"}  # Missing size_pct
-        
+
         result = schema_validator(data)
         assert result.is_failure()
         error = result.failure()
         assert isinstance(error, SchemaError)
-        assert any(e.field == "size_pct" and "Required field missing" in e.message 
-                  for e in error.errors)
+        assert any(
+            e.field == "size_pct" and "Required field missing" in e.message
+            for e in error.errors
+        )
 
     def test_optional_field_with_value(self):
         """Test optional field validator with value."""
@@ -212,10 +203,7 @@ class TestValidationCombinators:
 
     def test_compose_validators_success(self):
         """Test composed validators success."""
-        validator = compose_validators(
-            validate_positive,
-            validate_range(0, 100)
-        )
+        validator = compose_validators(validate_positive, validate_range(0, 100))
         result = validator(50.0)
         assert result.is_success()
         assert result.success() == 50.0
@@ -223,9 +211,7 @@ class TestValidationCombinators:
     def test_any_validator_success(self):
         """Test any validator with at least one success."""
         validator = any_validator(
-            validate_range(0, 10),
-            validate_range(90, 100),
-            validate_range(45, 55)
+            validate_range(0, 10), validate_range(90, 100), validate_range(45, 55)
         )
         result = validator(50.0)  # Should pass third validator
         assert result.is_success()
@@ -233,10 +219,7 @@ class TestValidationCombinators:
 
     def test_any_validator_all_fail(self):
         """Test any validator when all fail."""
-        validator = any_validator(
-            validate_range(0, 10),
-            validate_range(90, 100)
-        )
+        validator = any_validator(validate_range(0, 10), validate_range(90, 100))
         result = validator(50.0)  # Fails both ranges
         assert result.is_failure()
         errors = result.failure()
@@ -246,8 +229,7 @@ class TestValidationCombinators:
     def test_conditional_validator_condition_met(self):
         """Test conditional validator when condition is met."""
         validator = conditional_validator(
-            condition=lambda x: x > 0,
-            validator=validate_range(0, 100)
+            condition=lambda x: x > 0, validator=validate_range(0, 100)
         )
         result = validator(50.0)
         assert result.is_success()
@@ -256,8 +238,7 @@ class TestValidationCombinators:
     def test_conditional_validator_condition_not_met(self):
         """Test conditional validator when condition is not met."""
         validator = conditional_validator(
-            condition=lambda x: x > 0,
-            validator=validate_range(0, 100)
+            condition=lambda x: x > 0, validator=validate_range(0, 100)
         )
         result = validator(-5.0)  # Condition not met, should pass through
         assert result.is_success()
@@ -329,7 +310,7 @@ class TestValidationPipeline:
         pipeline = ValidationPipeline()
         pipeline.add_step("positive", lambda x: validate_positive(x, "value"))
         pipeline.add_step("range", lambda x: validate_range(0, 100)(x, "value"))
-        
+
         result = pipeline.validate(50.0)
         assert result.is_success()
         assert result.success() == 50.0
@@ -339,7 +320,7 @@ class TestValidationPipeline:
         pipeline = ValidationPipeline()
         pipeline.add_step("positive", lambda x: validate_positive(x, "value"))
         pipeline.add_step("range", lambda x: validate_range(0, 10)(x, "value"))
-        
+
         result = pipeline.validate(50.0)  # Passes positive, fails range
         assert result.is_failure()
         error = result.failure()
@@ -349,9 +330,13 @@ class TestValidationPipeline:
     def test_pipeline_collect_errors(self):
         """Test pipeline collecting all errors."""
         pipeline = ValidationPipeline()
-        pipeline.add_step("step1", lambda x: Failure(FieldError(field="test", message="Error 1")))
-        pipeline.add_step("step2", lambda x: Failure(FieldError(field="test", message="Error 2")))
-        
+        pipeline.add_step(
+            "step1", lambda x: Failure(FieldError(field="test", message="Error 1"))
+        )
+        pipeline.add_step(
+            "step2", lambda x: Failure(FieldError(field="test", message="Error 2"))
+        )
+
         result = pipeline.validate_collect_errors("test")
         assert result.is_failure()
         errors = result.failure()
@@ -370,9 +355,9 @@ class TestTradeActionValidation:
             "take_profit_pct": 2.0,
             "stop_loss_pct": 1.0,
             "leverage": 5,
-            "rationale": "Strong bullish signal"
+            "rationale": "Strong bullish signal",
         }
-        
+
         result = validate_trade_action_functional(action_data)
         assert result.is_success()
         trade_action = result.success()
@@ -387,9 +372,9 @@ class TestTradeActionValidation:
             "size_pct": 25.0,
             "take_profit_pct": 2.0,
             "stop_loss_pct": 1.0,
-            "rationale": "Test"
+            "rationale": "Test",
         }
-        
+
         result = validate_trade_action_functional(action_data)
         assert result.is_failure()
         error = result.failure()
@@ -403,15 +388,17 @@ class TestTradeActionValidation:
             "size_pct": -25.0,
             "take_profit_pct": 2.0,
             "stop_loss_pct": 1.0,
-            "rationale": "Test"
+            "rationale": "Test",
         }
-        
+
         result = validate_trade_action_functional(action_data)
         assert result.is_failure()
         error = result.failure()
         assert isinstance(error, SchemaError)
-        assert any(e.field == "size_pct" and "positive" in e.message.lower() 
-                  for e in error.errors)
+        assert any(
+            e.field == "size_pct" and "positive" in e.message.lower()
+            for e in error.errors
+        )
 
     def test_validate_trade_action_oversized_position(self):
         """Test trade action validation with oversized position."""
@@ -420,15 +407,17 @@ class TestTradeActionValidation:
             "size_pct": 150.0,  # Over 100%
             "take_profit_pct": 2.0,
             "stop_loss_pct": 1.0,
-            "rationale": "Test"
+            "rationale": "Test",
         }
-        
+
         result = validate_trade_action_functional(action_data)
         assert result.is_failure()
         error = result.failure()
         assert isinstance(error, SchemaError)
-        assert any(e.field == "size_pct" and "between 0 and 100" in e.message 
-                  for e in error.errors)
+        assert any(
+            e.field == "size_pct" and "between 0 and 100" in e.message
+            for e in error.errors
+        )
 
     def test_validate_trade_action_missing_field(self):
         """Test trade action validation with missing required field."""
@@ -437,7 +426,7 @@ class TestTradeActionValidation:
             "size_pct": 25.0,
             # Missing required fields
         }
-        
+
         result = validate_trade_action_functional(action_data)
         assert result.is_failure()
         error = result.failure()
@@ -452,9 +441,9 @@ class TestTradeActionValidation:
             "take_profit_pct": 2.0,
             "stop_loss_pct": 1.0,
             "leverage": 5,
-            "rationale": "Test"
+            "rationale": "Test",
         }
-        
+
         result = validate_trade_action_functional(action_data)
         assert result.is_success()
         trade_action = result.success()
@@ -472,9 +461,9 @@ class TestPositionValidation:
             "size": 1.5,
             "entry_price": 45000.0,
             "unrealized_pnl": 150.0,
-            "realized_pnl": 0.0
+            "realized_pnl": 0.0,
         }
-        
+
         result = validate_position_functional(position_data)
         assert result.is_success()
         validated_data = result.success()
@@ -483,12 +472,8 @@ class TestPositionValidation:
 
     def test_validate_position_invalid_side(self):
         """Test position validation with invalid side."""
-        position_data = {
-            "symbol": "BTC-USD",
-            "side": "INVALID",
-            "size": 1.5
-        }
-        
+        position_data = {"symbol": "BTC-USD", "side": "INVALID", "size": 1.5}
+
         result = validate_position_functional(position_data)
         assert result.is_failure()
         error = result.failure()
@@ -500,10 +485,10 @@ class TestPositionValidation:
         position_data = {
             "symbol": "BTC-USD",
             "side": "FLAT",
-            "size": 0.0
+            "size": 0.0,
             # Optional fields omitted
         }
-        
+
         result = validate_position_functional(position_data)
         assert result.is_success()
 
@@ -515,7 +500,7 @@ class TestBatchValidation:
         """Test batch validation with all items succeeding."""
         items = [10.0, 20.0, 30.0]
         validator = lambda x: validate_range(0, 100)(x, "value")
-        
+
         result = validate_batch_functional(items, validator)
         assert result.is_success()
         validated_items = result.success()
@@ -525,7 +510,7 @@ class TestBatchValidation:
         """Test batch validation with some failures."""
         items = [10.0, 150.0, 30.0]  # 150.0 should fail range validation
         validator = lambda x: validate_range(0, 100)(x, "value")
-        
+
         result = validate_batch_functional(items, validator)
         assert result.is_failure()
         errors = result.failure()
@@ -538,7 +523,7 @@ class TestBatchValidation:
         """Test batch validation with empty list."""
         items = []
         validator = lambda x: validate_positive(x, "value")
-        
+
         result = validate_batch_functional(items, validator)
         assert result.is_success()
         assert result.success() == []
@@ -552,15 +537,15 @@ class TestDataIntegrity:
         data = {
             "price": 45000.0,
             "volume": 1000.0,
-            "timestamp": datetime.now().timestamp()
+            "timestamp": datetime.now().timestamp(),
         }
-        
+
         integrity_rules = {
             "price": lambda x: x > 0,
             "volume": lambda x: x >= 0,
-            "timestamp": lambda x: x > 0
+            "timestamp": lambda x: x > 0,
         }
-        
+
         result = validate_data_integrity(data, integrity_rules)
         assert result.is_success()
         assert result.success() == data
@@ -569,14 +554,11 @@ class TestDataIntegrity:
         """Test data integrity validation failure."""
         data = {
             "price": -45000.0,  # Should fail positive check
-            "volume": 1000.0
+            "volume": 1000.0,
         }
-        
-        integrity_rules = {
-            "price": lambda x: x > 0,
-            "volume": lambda x: x >= 0
-        }
-        
+
+        integrity_rules = {"price": lambda x: x > 0, "volume": lambda x: x >= 0}
+
         result = validate_data_integrity(data, integrity_rules)
         assert result.is_failure()
         error = result.failure()
@@ -585,15 +567,12 @@ class TestDataIntegrity:
 
     def test_validate_cross_field_constraints_success(self):
         """Test successful cross-field constraint validation."""
-        data = {
-            "stop_loss_pct": 1.0,
-            "take_profit_pct": 2.0
-        }
-        
+        data = {"stop_loss_pct": 1.0, "take_profit_pct": 2.0}
+
         constraints = [
             lambda d: d["take_profit_pct"] > d["stop_loss_pct"]  # TP should be > SL
         ]
-        
+
         result = validate_cross_field_constraints(data, constraints)
         assert result.is_success()
         assert result.success() == data
@@ -602,13 +581,11 @@ class TestDataIntegrity:
         """Test cross-field constraint validation failure."""
         data = {
             "stop_loss_pct": 2.0,
-            "take_profit_pct": 1.0  # TP < SL, should fail
+            "take_profit_pct": 1.0,  # TP < SL, should fail
         }
-        
-        constraints = [
-            lambda d: d["take_profit_pct"] > d["stop_loss_pct"]
-        ]
-        
+
+        constraints = [lambda d: d["take_profit_pct"] > d["stop_loss_pct"]]
+
         result = validate_cross_field_constraints(data, constraints)
         assert result.is_failure()
         error = result.failure()
@@ -631,7 +608,7 @@ class TestJSONSchemaIntegration:
             "rationale": "Strong bullish momentum"
         }
         """
-        
+
         # Parse JSON and validate
         try:
             data = json.loads(json_data)
@@ -650,7 +627,7 @@ class TestJSONSchemaIntegration:
             "size_pct": 25.0,
             "rationale": "Missing closing brace"
         """
-        
+
         # Should fail at JSON parsing stage
         with pytest.raises(json.JSONDecodeError):
             json.loads(malformed_json)
@@ -668,7 +645,7 @@ class TestJSONSchemaIntegration:
             "extra_field": "should_be_ignored"
         }
         """
-        
+
         data = json.loads(json_data)
         result = validate_trade_action_functional(data)
         assert result.is_success()
@@ -686,12 +663,12 @@ class TestJSONSchemaIntegration:
             "rationale": "Bearish divergence detected"
         }
         """
-        
+
         # Create complete pipeline
         pipeline = ValidationPipeline()
         pipeline.add_step("parse_json", lambda x: Success(json.loads(x)))
         pipeline.add_step("validate_schema", validate_trade_action_functional)
-        
+
         result = pipeline.validate(json_data)
         assert result.is_success()
         trade_action = result.success()
@@ -708,9 +685,9 @@ class TestErrorHandling:
             field="test_field",
             message="Test error message",
             value="test_value",
-            context={"key": "value"}
+            context={"key": "value"},
         )
-        
+
         error_str = str(error)
         assert "test_field" in error_str
         assert "Test error message" in error_str
@@ -720,15 +697,13 @@ class TestErrorHandling:
         """Test SchemaError string representation."""
         field_errors = [
             FieldError(field="field1", message="Error 1"),
-            FieldError(field="field2", message="Error 2")
+            FieldError(field="field2", message="Error 2"),
         ]
-        
+
         schema_error = SchemaError(
-            schema="test_schema",
-            errors=field_errors,
-            path=["root", "nested"]
+            schema="test_schema", errors=field_errors, path=["root", "nested"]
         )
-        
+
         error_str = str(schema_error)
         assert "test_schema" in error_str
         assert "root.nested" in error_str
@@ -739,9 +714,9 @@ class TestErrorHandling:
             source_type="str",
             target_type="Decimal",
             message="Invalid number format",
-            conversion_path=["parse", "validate", "convert"]
+            conversion_path=["parse", "validate", "convert"],
         )
-        
+
         error_str = str(error)
         assert "str -> Decimal" in error_str
         assert "parse -> validate -> convert" in error_str
@@ -749,11 +724,8 @@ class TestErrorHandling:
     def test_validation_chain_error_representation(self):
         """Test ValidationChainError string representation."""
         field_error = FieldError(field="test", message="Test error")
-        chain_error = ValidationChainError(
-            chain_step="step1",
-            errors=[field_error]
-        )
-        
+        chain_error = ValidationChainError(chain_step="step1", errors=[field_error])
+
         error_str = str(chain_error)
         assert "step1" in error_str
         assert "1 error(s)" in error_str
@@ -770,9 +742,9 @@ class TestBackwardCompatibility:
             "size_pct": 20,
             "take_profit_pct": 2.5,
             "stop_loss_pct": 1.5,
-            "rationale": "Legacy validation test"
+            "rationale": "Legacy validation test",
         }
-        
+
         result = validate_trade_action_functional(legacy_data)
         assert result.is_success()
         trade_action = result.success()
@@ -787,9 +759,9 @@ class TestBackwardCompatibility:
             "take_profit_pct": 2.0,
             "stop_loss_pct": 1.0,
             "leverage": 5,
-            "rationale": "Migration test"
+            "rationale": "Migration test",
         }
-        
+
         # Should be able to validate using new functional approach
         result = validate_trade_action_functional(old_style_result)
         assert result.is_success()

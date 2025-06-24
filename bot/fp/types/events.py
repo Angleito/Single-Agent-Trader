@@ -8,12 +8,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import Any, ClassVar
 from uuid import UUID, uuid4
 
-from bot.types import TradeSide, OrderType
-from bot.fp.types.result import Result, Success, Failure
-from bot.fp.core.option import Option, Some, Empty
+from bot.fp.core.option import Empty, Option, Some
+from bot.fp.types.result import Failure, Result, Success
+from bot.types import OrderType, TradeSide
 
 
 @dataclass(frozen=True)
@@ -86,13 +86,13 @@ class MarketDataReceived(TradingEvent):
     event_type: ClassVar[str] = "MarketDataReceived"
 
     symbol: str = ""
-    price: Decimal = Decimal("0")
-    volume: Decimal = Decimal("0")
-    bid: Decimal = Decimal("0")
-    ask: Decimal = Decimal("0")
-    high_24h: Decimal = Decimal("0")
-    low_24h: Decimal = Decimal("0")
-    open_24h: Decimal = Decimal("0")
+    price: Decimal = Decimal(0)
+    volume: Decimal = Decimal(0)
+    bid: Decimal = Decimal(0)
+    ask: Decimal = Decimal(0)
+    high_24h: Decimal = Decimal(0)
+    low_24h: Decimal = Decimal(0)
+    open_24h: Decimal = Decimal(0)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -139,7 +139,7 @@ class OrderPlaced(TradingEvent):
     symbol: str = ""
     side: TradeSide = TradeSide.BUY
     order_type: OrderType = OrderType.MARKET
-    size: Decimal = Decimal("0")
+    size: Decimal = Decimal(0)
     price: Decimal | None = None
     stop_price: Decimal | None = None
     time_in_force: str = "GTC"
@@ -188,9 +188,9 @@ class OrderFilled(TradingEvent):
     order_id: str = ""
     symbol: str = ""
     side: TradeSide = TradeSide.BUY
-    fill_price: Decimal = Decimal("0")
-    fill_size: Decimal = Decimal("0")
-    fees: Decimal = Decimal("0")
+    fill_price: Decimal = Decimal(0)
+    fill_size: Decimal = Decimal(0)
+    fees: Decimal = Decimal(0)
     is_partial: bool = False
 
     def to_dict(self) -> dict[str, Any]:
@@ -277,10 +277,10 @@ class PositionOpened(TradingEvent):
     position_id: UUID = field(default_factory=uuid4)
     symbol: str = ""
     side: TradeSide = TradeSide.BUY
-    size: Decimal = Decimal("0")
-    entry_price: Decimal = Decimal("0")
+    size: Decimal = Decimal(0)
+    entry_price: Decimal = Decimal(0)
     leverage: int = 1
-    initial_margin: Decimal = Decimal("0")
+    initial_margin: Decimal = Decimal(0)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -324,11 +324,11 @@ class PositionClosed(TradingEvent):
     position_id: UUID = field(default_factory=uuid4)
     symbol: str = ""
     side: TradeSide = TradeSide.BUY
-    entry_price: Decimal = Decimal("0")
-    exit_price: Decimal = Decimal("0")
-    size: Decimal = Decimal("0")
-    realized_pnl: Decimal = Decimal("0")
-    fees: Decimal = Decimal("0")
+    entry_price: Decimal = Decimal(0)
+    exit_price: Decimal = Decimal(0)
+    size: Decimal = Decimal(0)
+    realized_pnl: Decimal = Decimal(0)
+    fees: Decimal = Decimal(0)
     duration_seconds: int = 0
 
     def to_dict(self) -> dict[str, Any]:
@@ -377,7 +377,7 @@ class StrategySignal(TradingEvent):
     signal_type: str = "HOLD"  # "LONG", "SHORT", "CLOSE", "HOLD"
     confidence: float = 0.0  # 0.0 to 1.0
     symbol: str = ""
-    current_price: Decimal = Decimal("0")
+    current_price: Decimal = Decimal(0)
     indicators: dict[str, Any] = field(default_factory=dict)
     reasoning: str | None = None
 
@@ -414,16 +414,19 @@ class StrategySignal(TradingEvent):
 
 # Enhanced audit trail and notification event types
 
+
 class AlertLevel(Enum):
     """Alert severity levels."""
+
     INFO = "info"
-    WARNING = "warning" 
+    WARNING = "warning"
     ERROR = "error"
     CRITICAL = "critical"
 
 
 class NotificationChannel(Enum):
     """Notification delivery channels."""
+
     EMAIL = "email"
     SMS = "sms"
     SLACK = "slack"
@@ -434,6 +437,7 @@ class NotificationChannel(Enum):
 
 class SystemComponent(Enum):
     """System components for audit trails."""
+
     STRATEGY_ENGINE = "strategy_engine"
     RISK_MANAGER = "risk_manager"
     ORDER_MANAGER = "order_manager"
@@ -459,33 +463,35 @@ class AlertTriggered(TradingEvent):
     threshold_value: Option[Decimal] = field(default_factory=Empty)
     actual_value: Option[Decimal] = field(default_factory=Empty)
     symbol: Option[str] = field(default_factory=Empty)
-    triggered_conditions: Dict[str, Any] = field(default_factory=dict)
+    triggered_conditions: dict[str, Any] = field(default_factory=dict)
     auto_acknowledge: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         data = super().to_dict()
-        data.update({
-            "alert_id": self.alert_id,
-            "alert_name": self.alert_name,
-            "level": self.level.value,
-            "component": self.component.value,
-            "message": self.message,
-            "threshold_value": str(self.threshold_value.get_or_else(Decimal("0"))),
-            "actual_value": str(self.actual_value.get_or_else(Decimal("0"))),
-            "symbol": self.symbol.get_or_else(""),
-            "triggered_conditions": self.triggered_conditions,
-            "auto_acknowledge": self.auto_acknowledge,
-        })
+        data.update(
+            {
+                "alert_id": self.alert_id,
+                "alert_name": self.alert_name,
+                "level": self.level.value,
+                "component": self.component.value,
+                "message": self.message,
+                "threshold_value": str(self.threshold_value.get_or_else(Decimal(0))),
+                "actual_value": str(self.actual_value.get_or_else(Decimal(0))),
+                "symbol": self.symbol.get_or_else(""),
+                "triggered_conditions": self.triggered_conditions,
+                "auto_acknowledge": self.auto_acknowledge,
+            }
+        )
         return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AlertTriggered":
         """Create from dictionary."""
         threshold_str = data.get("threshold_value", "0")
-        actual_str = data.get("actual_value", "0") 
+        actual_str = data.get("actual_value", "0")
         symbol_str = data.get("symbol", "")
-        
+
         return cls(
             event_id=UUID(data["event_id"]),
             timestamp=datetime.fromisoformat(data["timestamp"]),
@@ -495,7 +501,9 @@ class AlertTriggered(TradingEvent):
             level=AlertLevel(data["level"]),
             component=SystemComponent(data["component"]),
             message=data["message"],
-            threshold_value=Some(Decimal(threshold_str)) if threshold_str != "0" else Empty(),
+            threshold_value=(
+                Some(Decimal(threshold_str)) if threshold_str != "0" else Empty()
+            ),
             actual_value=Some(Decimal(actual_str)) if actual_str != "0" else Empty(),
             symbol=Some(symbol_str) if symbol_str else Empty(),
             triggered_conditions=data.get("triggered_conditions", {}),
@@ -521,23 +529,25 @@ class NotificationSent(TradingEvent):
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         data = super().to_dict()
-        data.update({
-            "notification_id": self.notification_id,
-            "channel": self.channel.value,
-            "recipient": self.recipient,
-            "subject": self.subject,
-            "content": self.content,
-            "delivery_status": self.delivery_status,
-            "retry_count": self.retry_count,
-            "alert_reference": self.alert_reference.get_or_else(""),
-        })
+        data.update(
+            {
+                "notification_id": self.notification_id,
+                "channel": self.channel.value,
+                "recipient": self.recipient,
+                "subject": self.subject,
+                "content": self.content,
+                "delivery_status": self.delivery_status,
+                "retry_count": self.retry_count,
+                "alert_reference": self.alert_reference.get_or_else(""),
+            }
+        )
         return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "NotificationSent":
         """Create from dictionary."""
         alert_ref = data.get("alert_reference", "")
-        
+
         return cls(
             event_id=UUID(data["event_id"]),
             timestamp=datetime.fromisoformat(data["timestamp"]),
@@ -566,23 +576,31 @@ class ConfigurationChanged(TradingEvent):
     changed_by: str = "system"
     change_reason: str = ""
     validation_result: str = "success"  # "success", "warning", "error"
-    affected_components: List[SystemComponent] = field(default_factory=list)
+    affected_components: list[SystemComponent] = field(default_factory=list)
     requires_restart: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         data = super().to_dict()
-        data.update({
-            "config_section": self.config_section,
-            "config_key": self.config_key,
-            "old_value": str(self.old_value) if self.old_value is not None else None,
-            "new_value": str(self.new_value) if self.new_value is not None else None,
-            "changed_by": self.changed_by,
-            "change_reason": self.change_reason,
-            "validation_result": self.validation_result,
-            "affected_components": [comp.value for comp in self.affected_components],
-            "requires_restart": self.requires_restart,
-        })
+        data.update(
+            {
+                "config_section": self.config_section,
+                "config_key": self.config_key,
+                "old_value": (
+                    str(self.old_value) if self.old_value is not None else None
+                ),
+                "new_value": (
+                    str(self.new_value) if self.new_value is not None else None
+                ),
+                "changed_by": self.changed_by,
+                "change_reason": self.change_reason,
+                "validation_result": self.validation_result,
+                "affected_components": [
+                    comp.value for comp in self.affected_components
+                ],
+                "requires_restart": self.requires_restart,
+            }
+        )
         return data
 
     @classmethod
@@ -599,7 +617,9 @@ class ConfigurationChanged(TradingEvent):
             changed_by=data.get("changed_by", "system"),
             change_reason=data.get("change_reason", ""),
             validation_result=data.get("validation_result", "success"),
-            affected_components=[SystemComponent(comp) for comp in data.get("affected_components", [])],
+            affected_components=[
+                SystemComponent(comp) for comp in data.get("affected_components", [])
+            ],
             requires_restart=data.get("requires_restart", False),
         )
 
@@ -611,23 +631,25 @@ class SystemPerformanceMetric(TradingEvent):
     event_type: ClassVar[str] = "SystemPerformanceMetric"
 
     metric_name: str = ""
-    metric_value: Decimal = Decimal("0")
+    metric_value: Decimal = Decimal(0)
     metric_unit: str = ""
     component: SystemComponent = SystemComponent.STRATEGY_ENGINE
     threshold_breached: bool = False
-    metric_tags: Dict[str, str] = field(default_factory=dict)
+    metric_tags: dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary.""" 
+        """Convert to dictionary."""
         data = super().to_dict()
-        data.update({
-            "metric_name": self.metric_name,
-            "metric_value": str(self.metric_value),
-            "metric_unit": self.metric_unit,
-            "component": self.component.value,
-            "threshold_breached": self.threshold_breached,
-            "metric_tags": self.metric_tags,
-        })
+        data.update(
+            {
+                "metric_name": self.metric_name,
+                "metric_value": str(self.metric_value),
+                "metric_unit": self.metric_unit,
+                "component": self.component.value,
+                "threshold_breached": self.threshold_breached,
+                "metric_tags": self.metric_tags,
+            }
+        )
         return data
 
     @classmethod
@@ -659,21 +681,23 @@ class ErrorOccurred(TradingEvent):
     stack_trace: Option[str] = field(default_factory=Empty)
     user_impact: str = "none"  # "none", "degraded", "critical"
     recovery_action: Option[str] = field(default_factory=Empty)
-    error_context: Dict[str, Any] = field(default_factory=dict)
+    error_context: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         data = super().to_dict()
-        data.update({
-            "error_type": self.error_type,
-            "error_message": self.error_message,
-            "error_code": self.error_code.get_or_else(""),
-            "component": self.component.value,
-            "stack_trace": self.stack_trace.get_or_else(""),
-            "user_impact": self.user_impact,
-            "recovery_action": self.recovery_action.get_or_else(""),
-            "error_context": self.error_context,
-        })
+        data.update(
+            {
+                "error_type": self.error_type,
+                "error_message": self.error_message,
+                "error_code": self.error_code.get_or_else(""),
+                "component": self.component.value,
+                "stack_trace": self.stack_trace.get_or_else(""),
+                "user_impact": self.user_impact,
+                "recovery_action": self.recovery_action.get_or_else(""),
+                "error_context": self.error_context,
+            }
+        )
         return data
 
     @classmethod
@@ -682,7 +706,7 @@ class ErrorOccurred(TradingEvent):
         error_code_str = data.get("error_code", "")
         stack_trace_str = data.get("stack_trace", "")
         recovery_str = data.get("recovery_action", "")
-        
+
         return cls(
             event_id=UUID(data["event_id"]),
             timestamp=datetime.fromisoformat(data["timestamp"]),
@@ -711,27 +735,29 @@ class AuditTrailEntry(TradingEvent):
     session_id: Option[str] = field(default_factory=Empty)
     ip_address: Option[str] = field(default_factory=Empty)
     user_agent: Option[str] = field(default_factory=Empty)
-    before_state: Dict[str, Any] = field(default_factory=dict)
-    after_state: Dict[str, Any] = field(default_factory=dict)
+    before_state: dict[str, Any] = field(default_factory=dict)
+    after_state: dict[str, Any] = field(default_factory=dict)
     change_summary: str = ""
     compliance_relevant: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         data = super().to_dict()
-        data.update({
-            "action": self.action,
-            "entity_type": self.entity_type,
-            "entity_id": self.entity_id,
-            "user_id": self.user_id.get_or_else(""),
-            "session_id": self.session_id.get_or_else(""),
-            "ip_address": self.ip_address.get_or_else(""),
-            "user_agent": self.user_agent.get_or_else(""),
-            "before_state": self.before_state,
-            "after_state": self.after_state,
-            "change_summary": self.change_summary,
-            "compliance_relevant": self.compliance_relevant,
-        })
+        data.update(
+            {
+                "action": self.action,
+                "entity_type": self.entity_type,
+                "entity_id": self.entity_id,
+                "user_id": self.user_id.get_or_else(""),
+                "session_id": self.session_id.get_or_else(""),
+                "ip_address": self.ip_address.get_or_else(""),
+                "user_agent": self.user_agent.get_or_else(""),
+                "before_state": self.before_state,
+                "after_state": self.after_state,
+                "change_summary": self.change_summary,
+                "compliance_relevant": self.compliance_relevant,
+            }
+        )
         return data
 
     @classmethod
@@ -741,7 +767,7 @@ class AuditTrailEntry(TradingEvent):
         session_id_str = data.get("session_id", "")
         ip_str = data.get("ip_address", "")
         user_agent_str = data.get("user_agent", "")
-        
+
         return cls(
             event_id=UUID(data["event_id"]),
             timestamp=datetime.fromisoformat(data["timestamp"]),
@@ -808,7 +834,7 @@ def create_alert_event(
         return Failure("Alert name cannot be empty")
     if not message.strip():
         return Failure("Alert message cannot be empty")
-    
+
     try:
         event = AlertTriggered(
             alert_id=str(uuid4()),
@@ -829,8 +855,8 @@ def create_audit_event(
     action: str,
     entity_type: str,
     entity_id: str,
-    before_state: Dict[str, Any],
-    after_state: Dict[str, Any],
+    before_state: dict[str, Any],
+    after_state: dict[str, Any],
     user_id: Option[str] = Empty(),
 ) -> Result[AuditTrailEntry, str]:
     """Create an audit trail event with validation."""
@@ -840,7 +866,7 @@ def create_audit_event(
         return Failure("Entity type cannot be empty")
     if not entity_id.strip():
         return Failure("Entity ID cannot be empty")
-    
+
     try:
         # Generate change summary
         changes = []
@@ -850,9 +876,9 @@ def create_audit_event(
             new_val = after_state.get(key)
             if old_val != new_val:
                 changes.append(f"{key}: {old_val} -> {new_val}")
-        
+
         change_summary = "; ".join(changes) if changes else "No changes detected"
-        
+
         event = AuditTrailEntry(
             action=action,
             entity_type=entity_type,

@@ -9,11 +9,11 @@ import re
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum
-from typing import NewType, TypeVar, Generic, Optional
+from typing import Generic, NewType, TypeVar
 
 from bot.fp.types.result import Failure, Result, Success
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 # Opaque types for type safety
@@ -34,7 +34,7 @@ class Money:
             return Failure("Amount cannot be negative")
         if not currency or len(currency) < 2:
             return Failure("Invalid currency")
-        
+
         return Success(cls(amount=Decimal(str(amount)), currency=currency.upper()))
 
     def __str__(self) -> str:
@@ -52,7 +52,7 @@ class Percentage:
         """Create Percentage with validation."""
         if not 0 <= value <= 1:
             return Failure(f"Percentage must be between 0 and 1, got {value}")
-        
+
         return Success(cls(value=Decimal(str(value))))
 
     def __str__(self) -> str:
@@ -78,11 +78,11 @@ class Symbol:
         """Create Symbol with validation."""
         if not symbol:
             return Failure("Symbol cannot be empty")
-        
+
         # Basic symbol format validation
         if not re.match(r"^[A-Z0-9]+-[A-Z0-9]+$", symbol.upper()):
             return Failure(f"Invalid symbol format: {symbol}")
-        
+
         return Success(cls(value=symbol.upper()))
 
     def __str__(self) -> str:
@@ -101,7 +101,7 @@ class Symbol:
 
 class TimeIntervalUnit(Enum):
     """Time interval units."""
-    
+
     SECOND = "s"
     MINUTE = "m"
     HOUR = "h"
@@ -120,27 +120,27 @@ class TimeInterval:
         """Create TimeInterval with validation."""
         if not interval:
             return Failure("Interval cannot be empty")
-        
+
         # Parse interval string (e.g., "1m", "5s", "1h")
         match = re.match(r"^(\d+)([smhd])$", interval.lower())
         if not match:
             return Failure(f"Invalid interval format: {interval}")
-        
+
         value_str, unit_str = match.groups()
         value = int(value_str)
-        
+
         if value <= 0:
             return Failure("Interval value must be positive")
-        
+
         unit_map = {
             "s": TimeIntervalUnit.SECOND,
             "m": TimeIntervalUnit.MINUTE,
             "h": TimeIntervalUnit.HOUR,
             "d": TimeIntervalUnit.DAY,
         }
-        
+
         unit = unit_map[unit_str]
-        
+
         return Success(cls(value=value, unit=unit))
 
     def __str__(self) -> str:
@@ -163,7 +163,7 @@ class TimeInterval:
 
 class TradingMode(Enum):
     """Trading modes."""
-    
+
     PAPER = "paper"
     LIVE = "live"
     BACKTEST = "backtest"
@@ -172,25 +172,25 @@ class TradingMode(Enum):
 # Maybe types for optional values
 class Maybe(Generic[T]):
     """Base class for Maybe monad (Option type)."""
-    
-    def __init__(self, value: Optional[T] = None) -> None:
+
+    def __init__(self, value: T | None = None) -> None:
         self._value = value
-    
+
     def is_some(self) -> bool:
         """Check if this has a value."""
         return self._value is not None
-    
+
     def is_nothing(self) -> bool:
         """Check if this has no value."""
         return self._value is None
-    
+
     @property
     def value(self) -> T:
         """Get the value (only valid if is_some)."""
         if self._value is None:
             raise ValueError("Cannot get value from Nothing")
         return self._value
-    
+
     def map(self, func) -> "Maybe":
         """Apply function to value if present."""
         if self.is_nothing():
@@ -200,7 +200,7 @@ class Maybe(Generic[T]):
             return Some(result) if result is not None else Nothing()
         except Exception:
             return Nothing()
-    
+
     def flat_map(self, func) -> "Maybe":
         """Apply function that returns Maybe."""
         if self.is_nothing():
@@ -209,7 +209,7 @@ class Maybe(Generic[T]):
             return func(self._value)
         except Exception:
             return Nothing()
-    
+
     def get_or_else(self, default: T) -> T:
         """Get value or return default."""
         return self._value if self._value is not None else default
@@ -217,42 +217,42 @@ class Maybe(Generic[T]):
 
 class Some(Maybe[T]):
     """Maybe with a value."""
-    
+
     def __init__(self, value: T) -> None:
         if value is None:
             raise ValueError("Some cannot contain None")
         super().__init__(value)
-    
+
     def __str__(self) -> str:
         return f"Some({self._value})"
-    
+
     def __repr__(self) -> str:
         return f"Some({self._value!r})"
 
 
 class Nothing(Maybe[T]):
     """Maybe with no value."""
-    
+
     def __init__(self) -> None:
         super().__init__(None)
-    
+
     def __str__(self) -> str:
         return "Nothing"
-    
+
     def __repr__(self) -> str:
         return "Nothing()"
 
 
 # Export main types
 __all__ = [
+    "Maybe",
     "Money",
-    "Percentage", 
+    "Nothing",
+    "Percentage",
+    "Some",
     "Symbol",
     "TimeInterval",
     "TimeIntervalUnit",
     "Timestamp",
     "TradingMode",
-    "Maybe",
-    "Some", 
-    "Nothing",
 ]

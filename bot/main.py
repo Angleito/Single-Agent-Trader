@@ -112,10 +112,13 @@ console = Console()
 # Import functional CLI for delegation
 try:
     from bot.fp.runtime.cli import FunctionalCLI
+
     _functional_cli = FunctionalCLI()
 except ImportError:
     _functional_cli = None
-    console.print("⚠️  Functional CLI not available, using fallback implementation", style="yellow")
+    console.print(
+        "⚠️  Functional CLI not available, using fallback implementation", style="yellow"
+    )
 
 # Startup diagnostics
 _startup_errors: list[str] = []
@@ -162,7 +165,9 @@ def _safe_import(
 try:
     from .config import Settings, create_settings
     from .fp.types import Position, TradeAction
-    from .trading_types import MarketState  # Keep legacy import until functional equivalent available
+    from .trading_types import (
+        MarketState,  # Keep legacy import until functional equivalent available
+    )
     from .utils import setup_warnings_suppression
     from .validator import TradeValidator
 except ImportError as e:
@@ -207,16 +212,20 @@ import contextlib
 # Functional programming imports (added for migration to functional programming patterns)
 # These provide alternative implementations using pure functional programming patterns
 try:
-    from .fp.types.config import Config as FunctionalConfig
-    from .fp.types.trading import TradeSignal, Long, Short, Hold
-    from .fp.strategies.llm_functional import LLMConfig, LLMResponse
     from .fp.adapters.strategy_adapter import LLMAgentAdapter
+    from .fp.strategies.llm_functional import LLMConfig, LLMResponse
+    from .fp.types.config import Config as FunctionalConfig
+    from .fp.types.trading import Hold, Long, Short, TradeSignal
+
     FUNCTIONAL_COMPONENTS_AVAILABLE = True
     console.print("✅ Functional programming components available", style="green")
 except ImportError:
     # Functional implementations not available, continue with legacy only
     FUNCTIONAL_COMPONENTS_AVAILABLE = False
-    console.print("⚠️  Functional programming components not available, using legacy implementations", style="yellow")
+    console.print(
+        "⚠️  Functional programming components not available, using legacy implementations",
+        style="yellow",
+    )
 
 # Lazy loading for heavy components
 _lazy_imports = {
@@ -4975,8 +4984,11 @@ def live(
                 sys.exit(exit_code)
             return
         except Exception as e:
-            console.print(f"⚠️  Functional CLI failed: {e}, falling back to original implementation", style="yellow")
-    
+            console.print(
+                f"⚠️  Functional CLI failed: {e}, falling back to original implementation",
+                style="yellow",
+            )
+
     # Original implementation as fallback
     try:
         # Perform startup health checks unless skipped
@@ -5124,8 +5136,11 @@ def backtest(
                 sys.exit(exit_code)
             return
         except Exception as e:
-            console.print(f"⚠️  Functional CLI failed: {e}, falling back to original implementation", style="yellow")
-    
+            console.print(
+                f"⚠️  Functional CLI failed: {e}, falling back to original implementation",
+                style="yellow",
+            )
+
     # Original implementation as fallback
     mm_info = ""
     if market_making:

@@ -121,32 +121,38 @@ class DailyPerformance:
 class PaperTradingEngine:
     """
     Paper Trading Engine that bridges imperative and functional programming patterns.
-    
+
     This class provides a simplified interface for paper trading operations that can
     be used by existing system components while internally leveraging the functional
     paper trading system for better reliability and testability.
     """
-    
-    def __init__(self, initial_balance: Decimal | None = None, data_dir: Path | None = None):
+
+    def __init__(
+        self, initial_balance: Decimal | None = None, data_dir: Path | None = None
+    ):
         """Initialize the paper trading engine."""
         self.account = PaperTradingAccount(initial_balance, data_dir)
-    
+
     def get_balance(self) -> float:
         """Get current account balance."""
         return float(self.account.current_balance)
-    
+
     def get_equity(self) -> float:
         """Get current account equity."""
         return float(self.account.equity)
-    
-    def get_account_status(self, current_prices: dict[str, Decimal] | None = None) -> dict[str, Any]:
+
+    def get_account_status(
+        self, current_prices: dict[str, Decimal] | None = None
+    ) -> dict[str, Any]:
         """Get comprehensive account status."""
         return self.account.get_account_status(current_prices)
-    
-    def execute_trade(self, action: TradeAction, symbol: str, current_price: Decimal) -> Order | None:
+
+    def execute_trade(
+        self, action: TradeAction, symbol: str, current_price: Decimal
+    ) -> Order | None:
         """Execute a trade action."""
         return self.account.execute_trade_action(action, symbol, current_price)
-    
+
     def get_open_positions(self) -> list[dict[str, Any]]:
         """Get all open positions."""
         with self.account._lock:
@@ -163,12 +169,20 @@ class PaperTradingEngine:
                 }
                 for trade in self.account.open_trades.values()
             ]
-    
+
     def get_performance_metrics(self) -> dict[str, Any]:
         """Get performance metrics formatted for monitoring systems."""
         return {
             "total_pnl": float(self.account.equity - self.account.starting_balance),
-            "roi_percent": float((self.account.equity - self.account.starting_balance) / self.account.starting_balance * 100) if self.account.starting_balance > 0 else 0.0,
+            "roi_percent": (
+                float(
+                    (self.account.equity - self.account.starting_balance)
+                    / self.account.starting_balance
+                    * 100
+                )
+                if self.account.starting_balance > 0
+                else 0.0
+            ),
             "open_positions": len(self.account.open_trades),
             "total_trades": len(self.account.closed_trades),
             "current_balance": float(self.account.current_balance),
@@ -176,11 +190,11 @@ class PaperTradingEngine:
             "margin_used": float(self.account.margin_used),
             "max_drawdown": float(self.account.max_drawdown),
         }
-    
+
     def reset(self, new_balance: Decimal | None = None) -> None:
         """Reset the paper trading account."""
         self.account.reset_account(new_balance)
-    
+
     def close(self) -> None:
         """Close and cleanup the paper trading engine."""
         # Save final state

@@ -57,6 +57,7 @@ class WebSocketPublisher:
         # Use provided settings or import default settings
         if settings is None:
             from .config import settings as default_settings
+
             self.settings = default_settings
         else:
             self.settings = settings

@@ -249,11 +249,7 @@ class YellowCrossSignal(IndicatorResult):
 
     def all_conditions_met(self) -> bool:
         """Check if all required conditions are met."""
-        return (
-            self.has_diamond
-            and self.wt2_in_range
-            and self.rsi_in_range
-        )
+        return self.has_diamond and self.wt2_in_range and self.rsi_in_range
 
 
 @dataclass(frozen=True)
@@ -289,9 +285,10 @@ class CandlePattern(IndicatorResult):
     def trend_alignment(self) -> bool:
         """Check if pattern aligns with EMA trend."""
         if self.is_bullish():
-            return self.open_price > self.ema2_value and self.open_price > self.ema8_value
-        else:
-            return self.open_price < self.ema2_value and self.open_price < self.ema8_value
+            return (
+                self.open_price > self.ema2_value and self.open_price > self.ema8_value
+            )
+        return self.open_price < self.ema2_value and self.open_price < self.ema8_value
 
 
 @dataclass(frozen=True)
@@ -366,7 +363,7 @@ class CompositeSignal(IndicatorResult):
         """Get list of bullish component names."""
         bullish = []
         for name, signal in self.components.items():
-            if hasattr(signal, 'is_bullish') and signal.is_bullish():
+            if hasattr(signal, "is_bullish") and signal.is_bullish():
                 bullish.append(name)
         return bullish
 
@@ -374,7 +371,7 @@ class CompositeSignal(IndicatorResult):
         """Get list of bearish component names."""
         bearish = []
         for name, signal in self.components.items():
-            if hasattr(signal, 'is_bearish') and signal.is_bearish():
+            if hasattr(signal, "is_bearish") and signal.is_bearish():
                 bearish.append(name)
         return bearish
 
@@ -641,63 +638,65 @@ class VuManchuSignalSet(IndicatorResult):
     yellow_cross_signals: list[YellowCrossSignal]
     candle_patterns: list[CandlePattern]
     divergence_patterns: list[DivergencePattern]
-    
+
     # Technical indicators
     rsi_result: RSIResult | None = None
     macd_result: MACDResult | None = None
     bollinger_result: BollingerBandsResult | None = None
-    
+
     # Market context
     volume_profile: VolumeProfile | None = None
     market_structure: MarketStructure | None = None
-    
+
     # Composite analysis
     composite_signal: CompositeSignal | None = None
 
     def get_active_patterns(self) -> list[str]:
         """Get list of currently active pattern types."""
         active = []
-        
+
         if self.diamond_patterns:
             active.extend([p.pattern_type for p in self.diamond_patterns])
-        
+
         if self.yellow_cross_signals:
-            active.extend([f"yellow_cross_{s.direction}" for s in self.yellow_cross_signals])
-        
+            active.extend(
+                [f"yellow_cross_{s.direction}" for s in self.yellow_cross_signals]
+            )
+
         if self.candle_patterns:
             active.extend([p.pattern_type for p in self.candle_patterns])
-        
+
         if self.divergence_patterns:
             active.extend([p.divergence_type for p in self.divergence_patterns])
-        
+
         return active
 
     def get_bullish_signals(self) -> list[IndicatorResult]:
         """Get all bullish signals."""
         bullish = []
-        
+
         if self.vumanchu_result.signal == "LONG":
             bullish.append(self.vumanchu_result)
-        
+
         bullish.extend([p for p in self.diamond_patterns if p.is_bullish()])
         bullish.extend([s for s in self.yellow_cross_signals if s.is_bullish()])
         bullish.extend([p for p in self.candle_patterns if p.is_bullish()])
         bullish.extend([d for d in self.divergence_patterns if d.is_bullish()])
-        
+
         return bullish
 
     def get_bearish_signals(self) -> list[IndicatorResult]:
         """Get all bearish signals."""
         bearish = []
-        
+
         if self.vumanchu_result.signal == "SHORT":
             bearish.append(self.vumanchu_result)
-        
+
         bearish.extend([p for p in self.diamond_patterns if p.is_bearish()])
         bearish.extend([s for s in self.yellow_cross_signals if s.is_bearish()])
         bearish.extend([p for p in self.candle_patterns if p.is_bearish()])
         bearish.extend([d for d in self.divergence_patterns if d.is_bearish()])
-        
+
         return bearish
 
     def signal_confluence_score(self) -> float:
@@ -705,10 +704,10 @@ class VuManchuSignalSet(IndicatorResult):
         bullish_count = len(self.get_bullish_signals())
         bearish_count = len(self.get_bearish_signals())
         total_signals = bullish_count + bearish_count
-        
+
         if total_signals == 0:
             return 0.0
-        
+
         # Higher score when signals agree
         max_direction = max(bullish_count, bearish_count)
         return max_direction / total_signals
@@ -717,13 +716,12 @@ class VuManchuSignalSet(IndicatorResult):
         """Get overall signal direction."""
         bullish_count = len(self.get_bullish_signals())
         bearish_count = len(self.get_bearish_signals())
-        
+
         if bullish_count > bearish_count:
             return "BULLISH"
-        elif bearish_count > bullish_count:
+        if bearish_count > bullish_count:
             return "BEARISH"
-        else:
-            return "NEUTRAL"
+        return "NEUTRAL"
 
 
 # Type aliases for common indicator combinations

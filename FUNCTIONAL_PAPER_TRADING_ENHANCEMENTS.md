@@ -136,10 +136,10 @@ engine = FunctionalPaperTradingEngine(
 # Execute trade with effect handling
 result = engine.execute_trade_action(
     symbol="BTC-USD",
-    side="LONG", 
+    side="LONG",
     size_percentage=Decimal("10"),
     current_price=Decimal("50000")
-).flat_map(lambda execution_result: 
+).flat_map(lambda execution_result:
     engine.commit_state_change(execution_result[1])
 ).run()
 
@@ -178,7 +178,7 @@ class PaperTradingAccountState:
     starting_balance: Decimal
     current_balance: Decimal
     # ... other fields
-    
+
     def add_trade(self, trade: PaperTradeState) -> "PaperTradingAccountState":
         return replace(self, open_trades=self.open_trades + (trade,))
 ```
@@ -189,7 +189,7 @@ Calculations have no side effects and always return the same output for the same
 
 ```python
 def calculate_unrealized_pnl(
-    account_state: PaperTradingAccountState, 
+    account_state: PaperTradingAccountState,
     current_prices: dict[str, Decimal]
 ) -> Decimal:
     """Pure function - no side effects, deterministic result."""
@@ -213,7 +213,7 @@ def save_state_to_disk(state: PaperTradingAccountState) -> IOEither[str, bool]:
             return Right(True)
         except Exception as e:
             return Left(f"Save failed: {e}")
-    
+
     return IOEither(save_operation)
 ```
 
@@ -225,7 +225,7 @@ Operations can be composed functionally:
 # Compose trade execution with state persistence
 result = (
     execute_trade_with_logging(engine, symbol, side, size, price)
-    .flat_map(lambda execution: 
+    .flat_map(lambda execution:
         engine.commit_state_change(execution[1])
         .map(lambda _: execution)
     )
@@ -288,7 +288,7 @@ def test_pnl_calculation_properties():
 def test_state_immutability():
     initial_state = create_test_state()
     new_state = initial_state.add_trade(test_trade)
-    
+
     # Verify immutability
     assert initial_state != new_state
     assert len(initial_state.open_trades) == 0

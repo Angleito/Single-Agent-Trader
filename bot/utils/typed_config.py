@@ -32,7 +32,9 @@ def get_typed(
 ) -> str: ...
 
 
-def get_typed(obj: dict[str, ConfigValue] | DictLike | object, attr: str, default: T) -> T:
+def get_typed(
+    obj: dict[str, ConfigValue] | DictLike | object, attr: str, default: T
+) -> T:
     """
     Type-safe config getter with automatic conversion.
 

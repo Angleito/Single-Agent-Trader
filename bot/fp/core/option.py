@@ -6,7 +6,8 @@ with Some representing a value and Empty representing absence.
 """
 
 from abc import ABC, abstractmethod
-from typing import Callable, Generic, TypeVar, cast
+from collections.abc import Callable
+from typing import Generic, TypeVar, cast
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -158,7 +159,7 @@ def try_option(func: Callable[[], T]) -> Option[T]:
 
 def sequence_option(options: list[Option[T]]) -> Option[list[T]]:
     """Transform a list of Options into an Option of list.
-    
+
     Returns Empty if any option is Empty, otherwise Some with all values.
     """
     results = []
@@ -169,10 +170,7 @@ def sequence_option(options: list[Option[T]]) -> Option[list[T]]:
     return Some(results)
 
 
-def traverse_option(
-    items: list[T], 
-    func: Callable[[T], Option[U]]
-) -> Option[list[U]]:
+def traverse_option(items: list[T], func: Callable[[T], Option[U]]) -> Option[list[U]]:
     """Apply function to each item and sequence results."""
     return sequence_option([func(item) for item in items])
 
@@ -186,9 +184,7 @@ def first_some(options: list[Option[T]]) -> Option[T]:
 
 
 def combine_options(
-    option1: Option[T], 
-    option2: Option[U], 
-    combiner: Callable[[T, U], "V"]
+    option1: Option[T], option2: Option[U], combiner: Callable[[T, U], "V"]
 ) -> "Option[V]":
     """Combine two options using a combiner function."""
     if option1.is_some() and option2.is_some():
@@ -231,17 +227,17 @@ def optional_chain(option: Option[T]) -> OptionalChain[T]:
 
 
 __all__ = [
+    "Empty",
     "Option",
-    "Some",
-    "Empty", 
-    "some",
-    "empty",
-    "option_from_nullable",
-    "try_option",
-    "sequence_option",
-    "traverse_option",
-    "first_some",
-    "combine_options",
     "OptionalChain",
+    "Some",
+    "combine_options",
+    "empty",
+    "first_some",
+    "option_from_nullable",
     "optional_chain",
+    "sequence_option",
+    "some",
+    "traverse_option",
+    "try_option",
 ]

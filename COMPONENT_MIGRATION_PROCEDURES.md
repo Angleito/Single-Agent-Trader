@@ -1,9 +1,9 @@
 # Component-by-Component Migration Procedures
 ## Detailed FP Migration Instructions for Trading Bot Components
 
-**Version:** 1.0  
-**Date:** 2025-06-24  
-**Agent:** 8 - Migration Guides Specialist  
+**Version:** 1.0
+**Date:** 2025-06-24
+**Agent:** 8 - Migration Guides Specialist
 **Prerequisites:** [FP_MIGRATION_MASTER_GUIDE.md](./FP_MIGRATION_MASTER_GUIDE.md)
 
 ---
@@ -31,10 +31,10 @@ This guide provides detailed, step-by-step procedures for migrating each compone
 
 ## VuManChu Indicators (CRITICAL)
 
-**Priority:** CRITICAL  
-**Complexity:** HIGH  
-**Risk Level:** HIGH  
-**Estimated Time:** 4-6 hours  
+**Priority:** CRITICAL
+**Complexity:** HIGH
+**Risk Level:** HIGH
+**Estimated Time:** 4-6 hours
 
 ### Current Issues (From Batch 8)
 ```python
@@ -80,7 +80,7 @@ class StochasticRSI:
 class StochasticRSI:
     """
     Fixed StochasticRSI with correct parameter naming.
-    
+
     CRITICAL FIX: Changed 'length' to 'period' for consistency
     with other indicators and expected API calls.
     """
@@ -88,10 +88,10 @@ class StochasticRSI:
         self.period = period  # NOT 'length'
         self.smooth_k = smooth_k
         self.smooth_d = smooth_d
-        
+
         # Maintain backward compatibility
         self.length = period  # For legacy code that references length
-        
+
     @property
     def rsi_period(self) -> int:
         """RSI calculation period"""
@@ -114,80 +114,80 @@ class VuManChuIndicators:
 class VuManChuIndicators:
     """
     Fixed VuManChuIndicators with both imperative and FP compatibility.
-    
+
     CRITICAL FIX: Added missing 'calculate' method for FP compatibility.
     """
-    
+
     def calculate_all(self, ohlcv_data: pd.DataFrame) -> Dict[str, Any]:
         """
         Original imperative implementation.
-        
+
         PRESERVED: This method remains unchanged for backward compatibility.
         """
         # Keep existing logic exactly as is
         try:
             # Cipher A calculations
             cipher_a = self._calculate_cipher_a(ohlcv_data)
-            
-            # Cipher B calculations  
+
+            # Cipher B calculations
             cipher_b = self._calculate_cipher_b(ohlcv_data)
-            
+
             # Combined signals
             combined_signals = self._combine_signals(cipher_a, cipher_b)
-            
+
             return {
                 'cipher_a': cipher_a,
                 'cipher_b': cipher_b,
                 'signals': combined_signals,
                 'timestamp': ohlcv_data.index[-1] if not ohlcv_data.empty else None
             }
-            
+
         except Exception as e:
             raise ValueError(f"VuManChu calculation failed: {str(e)}")
-    
+
     def calculate(self, ohlcv_data: pd.DataFrame) -> Dict[str, Any]:
         """
         FP-compatible wrapper method.
-        
+
         CRITICAL FIX: This method was missing and caused attribute errors.
         Now provides FP compatibility while reusing existing logic.
         """
         return self.calculate_all(ohlcv_data)
-    
+
     def calculate_functional(self, ohlcv_data: pd.DataFrame) -> Result[Dict[str, Any], str]:
         """
         Pure functional programming implementation.
-        
+
         NEW: Full FP implementation with Result type for error handling.
         """
         from bot.fp.types.result import Result, Success, Failure
-        
+
         try:
             result = self.calculate_all(ohlcv_data)
-            return Success(result)  
+            return Success(result)
         except Exception as e:
             return Failure(f"VuManChu calculation failed: {str(e)}")
-    
+
     def calculate_with_validation(self, ohlcv_data: pd.DataFrame) -> Result[Dict[str, Any], str]:
         """
         Enhanced FP implementation with input validation.
-        
+
         NEW: Validates input data before processing.
         """
         from bot.fp.types.result import Result, Success, Failure
-        
+
         # Input validation
         if ohlcv_data.empty:
             return Failure("Empty OHLCV data provided")
-            
+
         if len(ohlcv_data) < 50:  # Minimum data points needed
             return Failure(f"Insufficient data: {len(ohlcv_data)} points, need at least 50")
-            
+
         required_columns = ['open', 'high', 'low', 'close', 'volume']
         missing_columns = [col for col in required_columns if col not in ohlcv_data.columns]
         if missing_columns:
             return Failure(f"Missing required columns: {missing_columns}")
-        
+
         # Perform calculation
         try:
             result = self.calculate_all(ohlcv_data)
@@ -207,9 +207,9 @@ class WaveTrend:
     def __init__(self, channel_length: int = 9, average_length: int = 12):
         self.channel_length = channel_length
         self.average_length = average_length
-        
+
 class EMAFilter:
-    """Fixed EMA filter"""  
+    """Fixed EMA filter"""
     def __init__(self, period: int = 20):  # NOT 'length'
         self.period = period
 
@@ -228,30 +228,30 @@ class RSIFilter:
 class VuManChuAdapter:
     """
     Adapter for VuManChu indicators with FP compatibility.
-    
+
     UPDATED: Works with fixed VuManChu implementation.
     """
-    
+
     def __init__(self, indicators: VuManChuIndicators):
         self.indicators = indicators
-        
+
     def calculate_fp(self, ohlcv_data: pd.DataFrame) -> IO[Result[Dict[str, Any], str]]:
         """
         FP-compatible calculation with IO monad.
         """
         from bot.fp.types.io import IO
-        
+
         def _calculate():
             return self.indicators.calculate_functional(ohlcv_data)
-            
+
         return IO(_calculate)
-    
+
     def calculate_safe(self, ohlcv_data: pd.DataFrame, default: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Safe calculation with fallback to default.
         """
         result = self.indicators.calculate_functional(ohlcv_data)
-        
+
         if result.is_success():
             return result.success()
         else:
@@ -346,10 +346,10 @@ echo "VuManChu rollback: $(date)" >> migration_rollback_log.txt
 
 ## Position Manager
 
-**Priority:** HIGH  
-**Complexity:** MEDIUM  
-**Risk Level:** MEDIUM  
-**Estimated Time:** 2-3 hours  
+**Priority:** HIGH
+**Complexity:** MEDIUM
+**Risk Level:** MEDIUM
+**Estimated Time:** 2-3 hours
 
 ### Current State Assessment
 
@@ -377,129 +377,129 @@ print('Adapter available:', FunctionalPositionManagerAdapter is not None)
 class PositionManager:
     """
     Enhanced position manager with FP compatibility.
-    
+
     ENHANCED: Added FP methods while preserving imperative interface.
     """
-    
+
     def __init__(self):
         # Existing initialization
         self.positions = {}
         self.history = []
-        
+
     # EXISTING METHODS (PRESERVED)
     def get_position(self, symbol: str):
         """Original imperative method - PRESERVED"""
         return self.positions.get(symbol)
-        
+
     def get_all_positions(self):
         """Original imperative method - PRESERVED"""
         return list(self.positions.values())
-    
+
     # NEW FP METHODS
     def get_position_fp(self, symbol: str) -> Result[Optional[Position], str]:
         """
         FP-compatible position retrieval.
-        
+
         NEW: Returns Result type instead of None/raising exceptions.
         """
         from bot.fp.types.result import Result, Success, Failure
-        
+
         try:
             position = self.positions.get(symbol)
             return Success(position)
         except Exception as e:
             return Failure(f"Failed to get position for {symbol}: {str(e)}")
-    
+
     def update_position_fp(self, symbol: str, position_data: dict) -> Result[Position, str]:
         """
         FP-compatible position update.
-        
+
         NEW: Safe position updates with Result type.
         """
         from bot.fp.types.result import Result, Success, Failure
-        
+
         try:
             # Validate position data
             validation_result = self._validate_position_data(position_data)
             if validation_result.is_failure():
                 return validation_result
-                
+
             # Update position
             position = self._create_or_update_position(symbol, position_data)
             self.positions[symbol] = position
-            
+
             # Record in history
             self._record_position_change(symbol, position)
-            
+
             return Success(position)
-            
+
         except Exception as e:
             return Failure(f"Failed to update position {symbol}: {str(e)}")
-    
+
     def calculate_total_pnl_fp(self, current_prices: Dict[str, Decimal]) -> Result[Dict[str, Decimal], str]:
         """
         FP-compatible P&L calculation.
-        
+
         NEW: Safe P&L calculation with comprehensive error handling.
         """
         from bot.fp.types.result import Result, Success, Failure
-        
+
         try:
             realized_pnl = Decimal('0')
             unrealized_pnl = Decimal('0')
-            
+
             for symbol, position in self.positions.items():
                 if position.side == 'FLAT':
                     continue
-                    
+
                 # Get current price
                 current_price = current_prices.get(symbol)
                 if not current_price:
                     return Failure(f"Missing current price for {symbol}")
-                
+
                 # Calculate unrealized P&L
                 if position.entry_price:
                     pnl = self._calculate_position_pnl(position, current_price)
                     unrealized_pnl += pnl
-                
+
                 # Add realized P&L
                 realized_pnl += position.realized_pnl or Decimal('0')
-            
+
             return Success({
                 'realized_pnl': realized_pnl,
                 'unrealized_pnl': unrealized_pnl,
                 'total_pnl': realized_pnl + unrealized_pnl
             })
-            
+
         except Exception as e:
             return Failure(f"P&L calculation failed: {str(e)}")
-    
+
     def get_portfolio_summary_fp(self, current_prices: Dict[str, Decimal]) -> Result[Dict[str, Any], str]:
         """
         FP-compatible portfolio summary.
-        
+
         NEW: Comprehensive portfolio analysis with FP patterns.
         """
         from bot.fp.types.result import Result, Success, Failure
-        
+
         try:
             # Get P&L data
             pnl_result = self.calculate_total_pnl_fp(current_prices)
             if pnl_result.is_failure():
                 return pnl_result
-                
+
             pnl_data = pnl_result.success()
-            
+
             # Calculate exposure
             total_exposure = Decimal('0')
             position_count = 0
-            
+
             for position in self.positions.values():
                 if position.side != 'FLAT':
                     position_count += 1
                     exposure = abs(position.size * (position.entry_price or Decimal('0')))
                     total_exposure += exposure
-            
+
             # Build summary
             summary = {
                 'timestamp': datetime.now(),
@@ -522,21 +522,21 @@ class PositionManager:
                     if pos.side != 'FLAT'
                 ]
             }
-            
+
             return Success(summary)
-            
+
         except Exception as e:
             return Failure(f"Portfolio summary failed: {str(e)}")
-    
+
     # HELPER METHODS
     def _validate_position_data(self, data: dict) -> Result[bool, str]:
         """Validate position data structure"""
         required_fields = ['symbol', 'side', 'size']
         missing_fields = [field for field in required_fields if field not in data]
-        
+
         if missing_fields:
             return Failure(f"Missing required fields: {missing_fields}")
-            
+
         return Success(True)
 ```
 
@@ -549,33 +549,33 @@ class PositionManager:
 class FunctionalPositionManagerAdapter:
     """
     Enhanced position manager adapter.
-    
+
     ENHANCED: Updated to use new FP methods from PositionManager.
     """
-    
+
     def __init__(self, position_manager: PositionManager):
         self.position_manager = position_manager
-        
+
     def get_functional_position(self, symbol: str) -> Option[FunctionalPosition]:
         """Get position using FP types"""
         result = self.position_manager.get_position_fp(symbol)
-        
+
         if result.is_success() and result.success():
             # Convert to functional position
             return Some(self._convert_to_functional_position(result.success()))
         else:
             return Nothing()
-    
+
     def get_portfolio_snapshot(self, current_prices: Dict[str, Decimal]) -> IO[Result[PortfolioSnapshot, str]]:
         """Get comprehensive portfolio snapshot"""
         def _get_snapshot():
             summary_result = self.position_manager.get_portfolio_summary_fp(current_prices)
-            
+
             if summary_result.is_failure():
                 return summary_result
-                
+
             summary = summary_result.success()
-            
+
             # Convert to PortfolioSnapshot
             snapshot = PortfolioSnapshot(
                 timestamp=summary['timestamp'],
@@ -585,9 +585,9 @@ class FunctionalPositionManagerAdapter:
                 unrealized_pnl=summary['unrealized_pnl'],
                 total_pnl=summary['total_pnl']
             )
-            
+
             return Success(snapshot)
-            
+
         return IO(_get_snapshot)
 ```
 
@@ -630,10 +630,10 @@ python -m pytest tests/unit/fp/test_functional_position_management.py -v
 
 ## Order Manager
 
-**Priority:** HIGH  
-**Complexity:** MEDIUM  
-**Risk Level:** MEDIUM  
-**Estimated Time:** 2-3 hours  
+**Priority:** HIGH
+**Complexity:** MEDIUM
+**Risk Level:** MEDIUM
+**Estimated Time:** 2-3 hours
 
 ### Migration Steps
 
@@ -646,47 +646,47 @@ python -m pytest tests/unit/fp/test_functional_position_management.py -v
 class OrderManager:
     """
     Enhanced order manager with FP compatibility.
-    
+
     ENHANCED: Added FP methods for safe order management.
     """
-    
+
     def __init__(self, exchange_client):
         self.exchange_client = exchange_client
         self.active_orders = {}
         self.order_history = []
-        
+
     # NEW FP METHODS
     def place_order_fp(self, order_request: dict) -> IO[Result[OrderResult, str]]:
         """
         FP-compatible order placement.
-        
+
         NEW: Safe order placement with IO and Result monads.
         """
         from bot.fp.types.io import IO
         from bot.fp.types.result import Result, Success, Failure
-        
+
         def _place_order():
             try:
                 # Validate order request
                 validation_result = self._validate_order_request(order_request)
                 if validation_result.is_failure():
                     return validation_result
-                    
+
                 # Check for duplicate orders
                 duplicate_check = self._check_duplicate_order(order_request)
                 if duplicate_check.is_failure():
                     return duplicate_check
-                
+
                 # Place order with exchange
                 exchange_result = self.exchange_client.place_order(order_request)
-                
+
                 if exchange_result.get('success'):
-                    order_id = exchange_result['order_id'] 
-                    
+                    order_id = exchange_result['order_id']
+
                     # Store order
                     order = self._create_order_record(order_id, order_request, exchange_result)
                     self.active_orders[order_id] = order
-                    
+
                     return Success(OrderResult(
                         order_id=order_id,
                         status='PLACED',
@@ -694,35 +694,35 @@ class OrderManager:
                     ))
                 else:
                     return Failure(f"Exchange order placement failed: {exchange_result.get('error', 'Unknown error')}")
-                    
+
             except Exception as e:
                 return Failure(f"Order placement failed: {str(e)}")
-                
+
         return IO(_place_order)
-    
+
     def cancel_order_fp(self, order_id: str) -> IO[Result[CancelResult, str]]:
         """
         FP-compatible order cancellation.
-        
+
         NEW: Safe order cancellation with comprehensive error handling.
         """
         from bot.fp.types.io import IO
         from bot.fp.types.result import Result, Success, Failure
-        
+
         def _cancel_order():
             try:
                 if order_id not in self.active_orders:
                     return Failure(f"Order {order_id} not found in active orders")
-                
+
                 # Cancel with exchange
                 exchange_result = self.exchange_client.cancel_order(order_id)
-                
+
                 if exchange_result.get('success'):
                     # Update order status
                     if order_id in self.active_orders:
                         self.active_orders[order_id]['status'] = 'CANCELLED'
                         self._move_to_history(order_id)
-                    
+
                     return Success(CancelResult(
                         order_id=order_id,
                         success=True,
@@ -730,20 +730,20 @@ class OrderManager:
                     ))
                 else:
                     return Failure(f"Exchange order cancellation failed: {exchange_result.get('error', 'Unknown error')}")
-                    
+
             except Exception as e:
                 return Failure(f"Order cancellation failed: {str(e)}")
-                
+
         return IO(_cancel_order)
-    
+
     def get_order_status_fp(self, order_id: str) -> Result[OrderStatus, str]:
         """
         FP-compatible order status retrieval.
-        
+
         NEW: Safe order status checking with Result type.
         """
         from bot.fp.types.result import Result, Success, Failure
-        
+
         try:
             # Check active orders first
             if order_id in self.active_orders:
@@ -756,7 +756,7 @@ class OrderManager:
                     average_price=order.get('average_price'),
                     timestamp=order['timestamp']
                 ))
-            
+
             # Check order history
             for historical_order in self.order_history:
                 if historical_order['order_id'] == order_id:
@@ -768,23 +768,23 @@ class OrderManager:
                         average_price=historical_order.get('average_price'),
                         timestamp=historical_order['timestamp']
                     ))
-            
+
             return Failure(f"Order {order_id} not found")
-            
+
         except Exception as e:
             return Failure(f"Order status check failed: {str(e)}")
-    
+
     def get_active_orders_fp(self) -> Result[List[OrderSummary], str]:
         """
         FP-compatible active orders retrieval.
-        
+
         NEW: Safe active orders listing with comprehensive data.
         """
         from bot.fp.types.result import Result, Success, Failure
-        
+
         try:
             order_summaries = []
-            
+
             for order_id, order in self.active_orders.items():
                 summary = OrderSummary(
                     order_id=order_id,
@@ -798,9 +798,9 @@ class OrderManager:
                     timestamp=order['timestamp']
                 )
                 order_summaries.append(summary)
-            
+
             return Success(order_summaries)
-            
+
         except Exception as e:
             return Failure(f"Active orders retrieval failed: {str(e)}")
 ```
@@ -843,10 +843,10 @@ python -m pytest tests/unit/fp/test_functional_order_management.py -v
 
 ## Risk Manager
 
-**Priority:** HIGH  
-**Complexity:** MEDIUM  
-**Risk Level:** HIGH  
-**Estimated Time:** 3-4 hours  
+**Priority:** HIGH
+**Complexity:** MEDIUM
+**Risk Level:** HIGH
+**Estimated Time:** 3-4 hours
 
 ### Migration Steps
 
@@ -859,24 +859,24 @@ python -m pytest tests/unit/fp/test_functional_order_management.py -v
 class RiskManager:
     """
     Enhanced risk manager with FP compatibility.
-    
+
     ENHANCED: Added comprehensive FP risk validation methods.
     """
-    
+
     def __init__(self, config):
         self.config = config
         self.risk_limits = config.get('risk_limits', {})
         self.position_limits = config.get('position_limits', {})
-        
+
     # NEW FP METHODS
     def validate_trade_fp(self, trade_request: dict, current_positions: dict) -> Result[RiskAssessment, str]:
         """
         FP-compatible trade validation.
-        
+
         NEW: Comprehensive risk validation with detailed assessment.
         """
         from bot.fp.types.result import Result, Success, Failure
-        
+
         try:
             # Initialize risk assessment
             assessment = RiskAssessment(
@@ -886,81 +886,81 @@ class RiskManager:
                 blocking_issues=[],
                 recommendations=[]
             )
-            
+
             # Position size validation
             size_check = self._validate_position_size(trade_request)
             if size_check.is_failure():
                 assessment.blocking_issues.append(size_check.failure())
                 return Success(assessment)  # Return assessment even if blocked
-            
+
             # Leverage validation
             leverage_check = self._validate_leverage(trade_request, current_positions)
             if leverage_check.is_failure():
                 assessment.blocking_issues.append(leverage_check.failure())
                 return Success(assessment)
-            
+
             # Exposure validation
             exposure_check = self._validate_exposure(trade_request, current_positions)
             if exposure_check.is_failure():
                 assessment.warnings.append(exposure_check.failure())
                 assessment.risk_score += 0.2
-            
+
             # Correlation validation
             correlation_check = self._validate_correlation(trade_request, current_positions)
             if correlation_check.is_failure():
                 assessment.warnings.append(correlation_check.failure())
                 assessment.risk_score += 0.1
-            
+
             # Risk score calculation
             assessment.risk_score = min(assessment.risk_score + self._calculate_base_risk_score(trade_request), 1.0)
-            
+
             # Final approval decision
             assessment.approved = (
                 len(assessment.blocking_issues) == 0 and
                 assessment.risk_score <= self.risk_limits.get('max_risk_score', 0.8)
             )
-            
+
             # Add recommendations
             if assessment.risk_score > 0.6:
                 assessment.recommendations.append("Consider reducing position size")
             if assessment.risk_score > 0.8:
                 assessment.recommendations.append("High risk trade - ensure stop loss is set")
-            
+
             return Success(assessment)
-            
+
         except Exception as e:
             return Failure(f"Risk validation failed: {str(e)}")
-    
+
     def calculate_portfolio_risk_fp(self, positions: dict, market_data: dict) -> Result[PortfolioRisk, str]:
         """
         FP-compatible portfolio risk calculation.
-        
+
         NEW: Comprehensive portfolio risk assessment.
         """
         from bot.fp.types.result import Result, Success, Failure
-        
+
         try:
             # Calculate Value at Risk (VaR)
             var_result = self._calculate_var(positions, market_data)
             if var_result.is_failure():
                 return var_result
-                
+
             var_95 = var_result.success()
-            
+
             # Calculate maximum drawdown
             drawdown_result = self._calculate_max_drawdown(positions)
             if drawdown_result.is_failure():
                 return drawdown_result
-                
+
             max_drawdown = drawdown_result.success()
-            
+
             # Calculate portfolio beta
             beta_result = self._calculate_portfolio_beta(positions, market_data)
             beta = beta_result.success() if beta_result.is_success() else None
-            
+
             # Calculate concentration risk
             concentration_risk = self._calculate_concentration_risk(positions)
-            
+
             # Build portfolio risk assessment
             portfolio_risk = PortfolioRisk(
                 var_95=var_95,
@@ -970,37 +970,37 @@ class RiskManager:
                 risk_score=self._calculate_portfolio_risk_score(var_95, max_drawdown, concentration_risk),
                 timestamp=datetime.now()
             )
-            
+
             return Success(portfolio_risk)
-            
+
         except Exception as e:
             return Failure(f"Portfolio risk calculation failed: {str(e)}")
-    
+
     def check_margin_requirements_fp(self, trade_request: dict, account_balance: Decimal) -> Result[MarginCheck, str]:
         """
         FP-compatible margin requirement validation.
-        
+
         NEW: Comprehensive margin and leverage validation.
         """
         from bot.fp.types.result import Result, Success, Failure
-        
+
         try:
             symbol = trade_request['symbol']
             size = trade_request['size']
             price = trade_request.get('price', market_data.get(f'{symbol}_price', Decimal('0')))
             leverage = trade_request.get('leverage', 1)
-            
+
             # Calculate required margin
             position_value = size * price
             required_margin = position_value / leverage
-            
+
             # Add margin buffer
             margin_buffer = self.config.get('margin_buffer', 0.1)  # 10% buffer
             required_margin_with_buffer = required_margin * (1 + margin_buffer)
-            
+
             # Check available margin
             available_margin = account_balance * self.config.get('max_margin_usage', 0.8)  # Max 80% usage
-            
+
             margin_check = MarginCheck(
                 required_margin=required_margin,
                 required_margin_with_buffer=required_margin_with_buffer,
@@ -1010,9 +1010,9 @@ class RiskManager:
                 leverage_ratio=leverage,
                 position_value=position_value
             )
-            
+
             return Success(margin_check)
-            
+
         except Exception as e:
             return Failure(f"Margin requirement check failed: {str(e)}")
 ```
@@ -1056,10 +1056,10 @@ python -m pytest tests/unit/fp/test_functional_risk_management.py -v
 
 ## Paper Trading System
 
-**Priority:** HIGH  
-**Complexity:** HIGH  
-**Risk Level:** MEDIUM  
-**Estimated Time:** 4-5 hours  
+**Priority:** HIGH
+**Complexity:** HIGH
+**Risk Level:** MEDIUM
+**Estimated Time:** 4-5 hours
 
 ### Current Issue
 
@@ -1076,235 +1076,235 @@ python -m pytest tests/unit/fp/test_functional_risk_management.py -v
 class PaperTradingEngine:
     """
     Complete paper trading engine implementation.
-    
+
     NEW: This class was missing and causing integration failures.
     Provides comprehensive paper trading simulation with FP compatibility.
     """
-    
+
     def __init__(self, initial_balance: Decimal = Decimal("10000"), base_currency: str = "USD"):
         self.initial_balance = initial_balance
         self.base_currency = base_currency
-        
+
         # Trading state
         self.current_balance = initial_balance
         self.positions = {}
         self.open_orders = {}
         self.trade_history = []
         self.daily_pnl = []
-        
+
         # Performance tracking
         self.start_time = datetime.now()
         self.total_trades = 0
         self.winning_trades = 0
         self.losing_trades = 0
-        
+
         # Risk tracking
         self.max_balance = initial_balance
         self.max_drawdown = Decimal('0')
-        
+
     def execute_trade_fp(self, trade_request: dict) -> Result[TradeExecutionResult, str]:
         """
         FP-compatible trade execution.
-        
+
         NEW: Core paper trading functionality with comprehensive simulation.
         """
         from bot.fp.types.result import Result, Success, Failure
-        
+
         try:
             # Validate trade request
             validation_result = self._validate_trade_request(trade_request)
             if validation_result.is_failure():
                 return validation_result
-            
+
             symbol = trade_request['symbol']
             side = trade_request['side']  # BUY/SELL
             size = trade_request['size']
             price = trade_request.get('price')  # None for market orders
             order_type = trade_request.get('type', 'MARKET')
-            
+
             # Get current market price
             current_price = self._get_simulated_market_price(symbol, price)
             if current_price is None:
                 return Failure(f"Unable to get market price for {symbol}")
-            
+
             # Check if we have sufficient balance/position
             balance_check = self._check_balance_requirements(trade_request, current_price)
             if balance_check.is_failure():
                 return balance_check
-            
+
             # Calculate fees
             fee_result = self._calculate_trading_fees(size, current_price)
             if fee_result.is_failure():
                 return fee_result
             trading_fee = fee_result.success()
-            
+
             # Execute the trade
             if side == 'BUY':
                 execution_result = self._execute_buy_order(symbol, size, current_price, trading_fee)
             else:  # SELL
                 execution_result = self._execute_sell_order(symbol, size, current_price, trading_fee)
-            
+
             if execution_result.is_failure():
                 return execution_result
-                
+
             trade_result = execution_result.success()
-            
+
             # Record trade in history
             self._record_trade_execution(trade_result)
-            
+
             # Update performance metrics
             self._update_performance_metrics(trade_result)
-            
+
             return Success(trade_result)
-            
+
         except Exception as e:
             return Failure(f"Trade execution failed: {str(e)}")
-    
+
     def get_current_state_fp(self) -> Result[PaperTradingState, str]:
         """
         FP-compatible state retrieval.
-        
+
         NEW: Complete paper trading state with comprehensive metrics.
         """
         from bot.fp.types.result import Result, Success, Failure
-        
+
         try:
             # Calculate current portfolio value
             portfolio_value = self._calculate_portfolio_value()
-            
+
             # Calculate P&L
             total_pnl = portfolio_value - self.initial_balance
             total_return_pct = (total_pnl / self.initial_balance) * 100
-            
+
             # Calculate performance metrics
             win_rate = (self.winning_trades / max(self.total_trades, 1)) * 100
-            
+
             # Update max drawdown
             if portfolio_value > self.max_balance:
                 self.max_balance = portfolio_value
-            
+
             current_drawdown = (self.max_balance - portfolio_value) / self.max_balance * 100
             if current_drawdown > self.max_drawdown:
                 self.max_drawdown = current_drawdown
-            
+
             state = PaperTradingState(
                 # Account basics
                 initial_balance=self.initial_balance,
                 current_balance=self.current_balance,
                 portfolio_value=portfolio_value,
                 base_currency=self.base_currency,
-                
+
                 # P&L metrics
                 total_pnl=total_pnl,
                 total_return_pct=total_return_pct,
                 unrealized_pnl=self._calculate_unrealized_pnl(),
                 realized_pnl=total_pnl - self._calculate_unrealized_pnl(),
-                
+
                 # Trading metrics
                 total_trades=self.total_trades,
                 winning_trades=self.winning_trades,
                 losing_trades=self.losing_trades,
                 win_rate=win_rate,
-                
+
                 # Risk metrics
                 max_drawdown=self.max_drawdown,
                 current_drawdown=current_drawdown,
-                
+
                 # Positions
                 active_positions=len([p for p in self.positions.values() if p['size'] != 0]),
                 open_orders=len(self.open_orders),
-                
+
                 # Time
                 trading_duration=datetime.now() - self.start_time,
                 last_update=datetime.now()
             )
-            
+
             return Success(state)
-            
+
         except Exception as e:
             return Failure(f"State retrieval failed: {str(e)}")
-    
+
     def get_performance_report_fp(self, days: int = 30) -> Result[PerformanceReport, str]:
         """
         FP-compatible performance reporting.
-        
+
         NEW: Comprehensive performance analysis for paper trading.
         """
         from bot.fp.types.result import Result, Success, Failure
-        
+
         try:
             # Get current state
             state_result = self.get_current_state_fp()
             if state_result.is_failure():
                 return state_result
-                
+
             state = state_result.success()
-            
+
             # Calculate daily returns
             daily_returns = self._calculate_daily_returns(days)
-            
+
             # Calculate Sharpe ratio
             sharpe_ratio = self._calculate_sharpe_ratio(daily_returns)
-            
+
             # Calculate volatility
             volatility = self._calculate_volatility(daily_returns)
-            
+
             # Best and worst trades
             best_trade = max(self.trade_history, key=lambda t: t.get('pnl', 0)) if self.trade_history else None
             worst_trade = min(self.trade_history, key=lambda t: t.get('pnl', 0)) if self.trade_history else None
-            
+
             report = PerformanceReport(
                 # Basic metrics
                 total_return=state.total_return_pct,
                 total_pnl=state.total_pnl,
                 max_drawdown=state.max_drawdown,
-                
+
                 # Risk metrics
                 sharpe_ratio=sharpe_ratio,
                 volatility=volatility,
-                
+
                 # Trading metrics
                 total_trades=state.total_trades,
                 win_rate=state.win_rate,
                 avg_win=self._calculate_average_win(),
                 avg_loss=self._calculate_average_loss(),
                 profit_factor=self._calculate_profit_factor(),
-                
+
                 # Time-based metrics
                 daily_returns=daily_returns[-min(days, len(daily_returns)):],
                 trading_days=len(set(t['timestamp'].date() for t in self.trade_history)),
-                
+
                 # Best/worst
                 best_trade_pnl=best_trade['pnl'] if best_trade else Decimal('0'),
                 worst_trade_pnl=worst_trade['pnl'] if worst_trade else Decimal('0'),
-                
+
                 # Report metadata
                 report_period_days=days,
                 generated_at=datetime.now()
             )
-            
+
             return Success(report)
-            
+
         except Exception as e:
             return Failure(f"Performance report generation failed: {str(e)}")
-    
+
     # HELPER METHODS
     def _validate_trade_request(self, trade_request: dict) -> Result[bool, str]:
         """Validate trade request structure and values"""
         required_fields = ['symbol', 'side', 'size']
         missing_fields = [field for field in required_fields if field not in trade_request]
-        
+
         if missing_fields:
             return Failure(f"Missing required fields: {missing_fields}")
-        
+
         if trade_request['side'] not in ['BUY', 'SELL']:
             return Failure(f"Invalid side: {trade_request['side']}")
-            
+
         if trade_request['size'] <= 0:
             return Failure(f"Invalid size: {trade_request['size']}")
-            
+
         return Success(True)
-    
+
     def _get_simulated_market_price(self, symbol: str, limit_price: Optional[Decimal]) -> Optional[Decimal]:
         """Get simulated market price with realistic slippage"""
         # In a real implementation, this would connect to market data
@@ -1324,24 +1324,24 @@ class PaperTradingEngine:
             # Add some randomness (±1%)
             variation = Decimal(str(random.uniform(-0.01, 0.01)))
             return base_price * (Decimal('1') + variation)
-    
+
     def _execute_buy_order(self, symbol: str, size: Decimal, price: Decimal, fee: Decimal) -> Result[TradeExecutionResult, str]:
         """Execute buy order simulation"""
         total_cost = (size * price) + fee
-        
+
         if total_cost > self.current_balance:
             return Failure(f"Insufficient balance: need {total_cost}, have {self.current_balance}")
-        
+
         # Update balance
         self.current_balance -= total_cost
-        
+
         # Update position
         if symbol in self.positions:
             # Average up the position
             existing_pos = self.positions[symbol]
             total_size = existing_pos['size'] + size
             avg_price = ((existing_pos['size'] * existing_pos['avg_price']) + (size * price)) / total_size
-            
+
             self.positions[symbol] = {
                 'size': total_size,
                 'avg_price': avg_price,
@@ -1353,7 +1353,7 @@ class PaperTradingEngine:
                 'avg_price': price,
                 'side': 'LONG'
             }
-        
+
         return Success(TradeExecutionResult(
             symbol=symbol,
             side='BUY',
@@ -1364,24 +1364,24 @@ class PaperTradingEngine:
             timestamp=datetime.now(),
             position_after=self.positions[symbol].copy()
         ))
-    
+
     def _execute_sell_order(self, symbol: str, size: Decimal, price: Decimal, fee: Decimal) -> Result[TradeExecutionResult, str]:
         """Execute sell order simulation"""
         # Check if we have the position to sell
         if symbol not in self.positions or self.positions[symbol]['size'] < size:
             available_size = self.positions.get(symbol, {}).get('size', Decimal('0'))
             return Failure(f"Insufficient position: need {size}, have {available_size}")
-        
+
         total_proceeds = (size * price) - fee
-        
+
         # Calculate P&L for this trade
         position = self.positions[symbol]
         cost_basis = size * position['avg_price']
         trade_pnl = total_proceeds - cost_basis
-        
+
         # Update balance
         self.current_balance += total_proceeds
-        
+
         # Update position
         remaining_size = position['size'] - size
         if remaining_size <= Decimal('0'):
@@ -1392,7 +1392,7 @@ class PaperTradingEngine:
             # Partial close
             self.positions[symbol]['size'] = remaining_size
             position_after = self.positions[symbol].copy()
-        
+
         return Success(TradeExecutionResult(
             symbol=symbol,
             side='SELL',
@@ -1535,5 +1535,5 @@ This component migration guide provides detailed procedures for migrating each c
 
 ---
 
-*Component Migration Procedures v1.0 - Created by Agent 8: Migration Guides Specialist*  
+*Component Migration Procedures v1.0 - Created by Agent 8: Migration Guides Specialist*
 *For component-specific questions, refer to individual sections and validation procedures.*

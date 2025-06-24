@@ -74,12 +74,12 @@ check_system_resources() {
 
     # Check if required directories exist and are writable
     local required_dirs=("/app/logs" "/app/data")
-    
+
     # Add FP-specific directories if FP is enabled
     if [ "$FP_ENABLED" = "true" ]; then
         required_dirs+=("/app/logs/fp" "/app/data/fp_runtime")
     fi
-    
+
     for dir in "${required_dirs[@]}"; do
         if [ -d "$dir" ] && [ ! -w "$dir" ]; then
             error "Directory not writable: $dir"
@@ -128,28 +128,28 @@ sys.path.insert(0, '/app/bot/fp')
 try:
     from bot.fp.runtime.interpreter import get_interpreter
     from bot.fp.runtime.scheduler import get_scheduler
-    
+
     # Check interpreter status
     interpreter = get_interpreter()
     stats = interpreter.get_runtime_stats()
-    
+
     # Check if interpreter is responsive
     if stats.get('active_effects', 0) >= 0:  # Basic sanity check
         print('FP_INTERPRETER_OK')
     else:
         print('FP_INTERPRETER_ERROR')
         exit(1)
-    
+
     # Check scheduler if enabled
     scheduler = get_scheduler()
     scheduler_status = scheduler.get_status()
-    
+
     if scheduler_status.get('running', False) is not None:  # Check scheduler exists
         print('FP_SCHEDULER_OK')
     else:
         print('FP_SCHEDULER_ERROR')
         exit(1)
-        
+
     print('FP_RUNTIME_HEALTHY')
     exit(0)
 except Exception as e:
@@ -186,10 +186,10 @@ try:
     from bot.fp.adapters.compatibility_layer import CompatibilityLayer
     from bot.fp.adapters.exchange_adapter import ExchangeAdapter
     from bot.fp.adapters.strategy_adapter import StrategyAdapter
-    
+
     # Basic adapter health check
     compatibility = CompatibilityLayer()
-    
+
     print('FP_ADAPTERS_HEALTHY')
     exit(0)
 except Exception as e:
@@ -219,7 +219,7 @@ check_fp_persistence() {
 
     # Check if FP runtime directories are writable and accessible
     local fp_dirs=("/app/data/fp_runtime/effects" "/app/data/fp_runtime/scheduler" "/app/data/fp_runtime/metrics")
-    
+
     for dir in "${fp_dirs[@]}"; do
         if [ ! -d "$dir" ]; then
             if [ "$FP_DEBUG" = "true" ]; then

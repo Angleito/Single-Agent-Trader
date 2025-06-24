@@ -7,7 +7,7 @@ and immutable types from bot.fp.types.risk while preserving all safety mechanism
 
 The main RiskManager class acts as a thin adapter that:
 1. Maintains the exact same interface as the original imperative system
-2. Uses functional implementations internally for all calculations  
+2. Uses functional implementations internally for all calculations
 3. Preserves circuit breakers, emergency stops, and validation systems
 4. Ensures identical risk calculations and position sizing behavior
 """
@@ -19,9 +19,6 @@ from typing import TYPE_CHECKING, Any
 
 from bot.config import settings
 from bot.fee_calculator import fee_calculator
-from bot.trading_types import Position, RiskMetrics, TradeAction
-from bot.types.exceptions import BalanceValidationError
-from bot.validation.balance_validator import BalanceValidator
 
 # Import functional risk management components
 from bot.fp.strategies.risk_management import (
@@ -58,6 +55,9 @@ from bot.fp.types.risk import (
     check_risk_alerts,
     is_within_risk_limits,
 )
+from bot.trading_types import Position, RiskMetrics, TradeAction
+from bot.types.exceptions import BalanceValidationError
+from bot.validation.balance_validator import BalanceValidator
 
 # Import legacy risk components that still need imperative behavior
 from .api_protection import APIFailureProtection
@@ -74,19 +74,19 @@ logger = logging.getLogger(__name__)
 class RiskManager:
     """
     Functional Risk Management Adapter
-    
+
     This class maintains the exact same interface as the original imperative RiskManager
     while using functional implementations internally. It acts as an adapter that:
-    
+
     - Preserves all existing API methods and signatures
-    - Uses pure functional calculations where possible  
+    - Uses pure functional calculations where possible
     - Maintains stateful components only where absolutely necessary (circuit breakers, etc.)
     - Ensures identical risk calculations and safety behavior
     """
 
     def __init__(self, position_manager: "PositionManager | None" = None) -> None:
         """Initialize the functional risk manager with exact same interface."""
-        
+
         # Basic trading parameters
         self.max_size_pct = settings.trading.max_size_pct
         self.leverage = settings.trading.leverage
@@ -125,7 +125,7 @@ class RiskManager:
             stop_loss_pct=Decimal(str(self.stop_loss_percentage)),
             take_profit_pct=Decimal("4.0"),  # Default 2:1 risk/reward
         )
-        
+
         self._risk_limits = RiskLimits(
             daily_loss_limit=self.max_daily_loss,
             position_limit=self.max_concurrent_trades,
@@ -149,7 +149,7 @@ class RiskManager:
     ) -> tuple[bool, TradeAction, str]:
         """
         Comprehensive risk evaluation using functional risk management.
-        
+
         Maintains exact same signature and behavior as imperative version
         but uses functional calculations internally.
         """
@@ -182,7 +182,7 @@ class RiskManager:
         self, current_position: Position, current_price: Decimal
     ) -> tuple[bool, TradeAction, str] | None:
         """Evaluate critical safety checks (emergency stop, circuit breaker, etc.)."""
-        
+
         # 🚨 EMERGENCY STOP CHECK - Highest priority
         if self.emergency_stop.is_stopped:
             self.circuit_breaker.record_failure(
@@ -246,7 +246,7 @@ class RiskManager:
         current_price: Decimal,
     ) -> tuple[bool, TradeAction, str] | None:
         """Evaluate risk validations using functional calculations."""
-        
+
         # 🛡️ FUNCTIONAL: Validate stop loss using pure functions
         if not self._validate_mandatory_stop_loss_functionally(trade_action):
             self.circuit_breaker.record_failure(
@@ -278,11 +278,11 @@ class RiskManager:
         margin_info = self._get_current_margin_info_functionally()
         current_positions = self._get_current_positions_count()
         daily_pnl = self._get_daily_pnl_functionally()
-        
+
         risk_alerts = check_risk_alerts(
             margin_info, self._risk_limits, current_positions, daily_pnl
         )
-        
+
         if risk_alerts:
             alert_reasons = [self._format_risk_alert(alert) for alert in risk_alerts]
             return (
@@ -297,7 +297,7 @@ class RiskManager:
         self, trade_action: TradeAction, current_price: Decimal
     ) -> tuple[bool, TradeAction, str]:
         """Approve trade action using functional risk management calculations."""
-        
+
         # 📏 FUNCTIONAL: Validate and adjust position size using pure functions
         modified_action = self._validate_position_size_functionally(trade_action)
 
@@ -344,8 +344,10 @@ class RiskManager:
 
         # 💹 FUNCTIONAL: Validate trade profitability using functional calculations
         if modified_action.action not in ["HOLD", "CLOSE"]:
-            is_profitable, profit_reason = self._validate_trade_profitability_functionally(
-                modified_action, current_price, trade_fees
+            is_profitable, profit_reason = (
+                self._validate_trade_profitability_functionally(
+                    modified_action, current_price, trade_fees
+                )
             )
 
             if not is_profitable:
@@ -393,7 +395,9 @@ class RiskManager:
 
         return True, modified_action, "Functional risk checks passed"
 
-    def _validate_mandatory_stop_loss_functionally(self, trade_action: TradeAction) -> bool:
+    def _validate_mandatory_stop_loss_functionally(
+        self, trade_action: TradeAction
+    ) -> bool:
         """Validate mandatory stop loss using functional approach."""
         # Allow HOLD and CLOSE actions without stop loss validation
         if trade_action.action in ["HOLD", "CLOSE"]:
@@ -418,7 +422,8 @@ class RiskManager:
                 return False
 
             logger.info(
-                "✅ Functional stop loss validation passed: %s%", trade_action.stop_loss_pct
+                "✅ Functional stop loss validation passed: %s%",
+                trade_action.stop_loss_pct,
             )
             return True
 
@@ -427,7 +432,7 @@ class RiskManager:
     def _is_daily_loss_limit_reached_functionally(self) -> bool:
         """Check daily loss limit using functional calculations."""
         today = datetime.now(UTC).date()
-        
+
         if today not in self._daily_pnl:
             return False
 
@@ -441,7 +446,9 @@ class RiskManager:
 
         if total_pnl <= -max_loss_usd:
             logger.warning(
-                "Functional daily loss limit reached: %s <= -%s", total_pnl, max_loss_usd
+                "Functional daily loss limit reached: %s <= -%s",
+                total_pnl,
+                max_loss_usd,
             )
             return True
 
@@ -468,7 +475,7 @@ class RiskManager:
 
         # Get current position count functionally
         active_positions_count = self._get_current_positions_count()
-        
+
         if active_positions_count > 0:
             logger.warning(
                 "Cannot open new position - %s position(s) already exist",
@@ -479,16 +486,20 @@ class RiskManager:
         # No positions exist - can open one
         return True
 
-    def _validate_position_size_functionally(self, trade_action: TradeAction) -> TradeAction:
+    def _validate_position_size_functionally(
+        self, trade_action: TradeAction
+    ) -> TradeAction:
         """Validate and adjust position size using functional risk management."""
         modified = trade_action.copy()
 
         # Functional position size enforcement
         current_positions = self._get_current_positions_for_enforcement()
-        
+
         # Use functional risk limit enforcement
-        adjusted_size_usd = self._account_balance * (Decimal(str(modified.size_pct)) / 100)
-        
+        adjusted_size_usd = self._account_balance * (
+            Decimal(str(modified.size_pct)) / 100
+        )
+
         final_size_usd, reason = enforce_risk_limits(
             proposed_size=float(adjusted_size_usd),
             current_positions=current_positions,
@@ -496,10 +507,12 @@ class RiskManager:
             max_position_size_pct=self.max_size_pct,
             max_portfolio_heat_pct=6.0,  # 6% max portfolio heat
         )
-        
+
         # Convert back to percentage
-        final_size_pct = int((Decimal(str(final_size_usd)) / self._account_balance) * 100)
-        
+        final_size_pct = int(
+            (Decimal(str(final_size_usd)) / self._account_balance) * 100
+        )
+
         if final_size_pct != modified.size_pct:
             modified.size_pct = final_size_pct
             logger.warning("Functional position size adjustment: %s", reason)
@@ -520,16 +533,16 @@ class RiskManager:
 
             # Create functional margin info
             margin_info = self._get_current_margin_info_functionally()
-            
+
             # Calculate required margin functionally
             position_size = self._account_balance * (
                 Decimal(str(trade_action.size_pct)) / 100
             )
-            
+
             required_margin = calculate_required_margin(
                 position_size=position_size,
                 entry_price=current_price,
-                leverage=Decimal(str(self.leverage))
+                leverage=Decimal(str(self.leverage)),
             )
 
             # Check if we have sufficient free margin
@@ -539,7 +552,10 @@ class RiskManager:
                     f"Insufficient margin: required {required_margin + estimated_fees}, available {margin_info.free_margin}",
                 )
 
-            logger.debug("✅ Functional balance validation passed for %s trade", trade_action.action)
+            logger.debug(
+                "✅ Functional balance validation passed for %s trade",
+                trade_action.action,
+            )
             return True, "Functional balance validation successful"
 
         except Exception:
@@ -553,12 +569,12 @@ class RiskManager:
         position_value = self._account_balance * Decimal(
             str(trade_action.size_pct / 100)
         )
-        
+
         # Use fee calculator for profitability check (maintains existing behavior)
         is_profitable, profit_reason = fee_calculator.validate_trade_profitability(
             trade_action, position_value, current_price
         )
-        
+
         return is_profitable, profit_reason
 
     def _calculate_position_risk_functionally(
@@ -578,13 +594,13 @@ class RiskManager:
         stop_loss_price = calculate_stop_loss_price(
             entry_price=current_price,
             stop_loss_pct=Decimal(str(trade_action.stop_loss_pct)),
-            is_long=is_long
+            is_long=is_long,
         )
-        
+
         take_profit_price = calculate_take_profit_price(
             entry_price=current_price,
             take_profit_pct=Decimal(str(trade_action.take_profit_pct)),
-            is_long=is_long
+            is_long=is_long,
         )
 
         # Calculate functional position risk
@@ -592,9 +608,9 @@ class RiskManager:
         max_loss_usd = calculate_position_risk(
             position_size=position_size,
             entry_price=current_price,
-            stop_loss_price=stop_loss_price
+            stop_loss_price=stop_loss_price,
         )
-        
+
         # Calculate max gain
         price_diff_gain = abs(take_profit_price - current_price)
         max_gain_usd = position_size * price_diff_gain
@@ -691,7 +707,9 @@ class RiskManager:
 
                 # Functional P&L consistency check
                 if position.entry_price and position.side != "FLAT":
-                    expected_pnl = self._calculate_expected_pnl_functionally(position, market_price)
+                    expected_pnl = self._calculate_expected_pnl_functionally(
+                        position, market_price
+                    )
                     pnl_diff = abs(position.unrealized_pnl - expected_pnl)
                     tolerance = abs(expected_pnl * Decimal("0.1"))  # 10% tolerance
 
@@ -746,46 +764,51 @@ class RiskManager:
         used_margin = self._calculate_current_margin_usage()
         free_margin = calculate_free_margin(self._account_balance, used_margin)
         margin_ratio = calculate_margin_ratio(used_margin, self._account_balance)
-        
+
         return MarginInfo(
             total_balance=self._account_balance,
             used_margin=used_margin,
             free_margin=free_margin,
-            margin_ratio=margin_ratio
+            margin_ratio=margin_ratio,
         )
 
     def _get_current_positions_count(self) -> int:
         """Get current positions count functionally."""
         if self.position_manager:
-            return len([
-                p for p in self.position_manager.get_all_positions()
-                if p.side != "FLAT"
-            ])
+            return len(
+                [
+                    p
+                    for p in self.position_manager.get_all_positions()
+                    if p.side != "FLAT"
+                ]
+            )
         return 0
 
     def _get_current_positions_for_enforcement(self) -> list[dict[str, float]]:
         """Get current positions in format needed for functional risk enforcement."""
         positions = []
-        
+
         if self.position_manager:
             for pos in self.position_manager.get_all_positions():
                 if pos.side != "FLAT" and pos.entry_price:
-                    positions.append({
-                        "size": float(pos.size * pos.entry_price),
-                        "entry_price": float(pos.entry_price),
-                        "stop_loss": 0.0,  # Will be calculated from stop_loss_pct
-                        "is_long": pos.side == "LONG"
-                    })
-        
+                    positions.append(
+                        {
+                            "size": float(pos.size * pos.entry_price),
+                            "entry_price": float(pos.entry_price),
+                            "stop_loss": 0.0,  # Will be calculated from stop_loss_pct
+                            "is_long": pos.side == "LONG",
+                        }
+                    )
+
         return positions
 
     def _get_daily_pnl_functionally(self) -> Decimal:
         """Get daily P&L using functional calculation."""
         today = datetime.now(UTC).date()
-        
+
         if today not in self._daily_pnl:
             return Decimal(0)
-            
+
         daily_data = self._daily_pnl[today]
         return daily_data.realized_pnl + daily_data.unrealized_pnl
 
@@ -793,9 +816,9 @@ class RiskManager:
         """Format risk alert for display."""
         if isinstance(alert, PositionLimitExceeded):
             return f"Position limit exceeded: {alert.current_positions}/{alert.limit}"
-        elif isinstance(alert, MarginCall):
+        if isinstance(alert, MarginCall):
             return f"Margin call: {alert.margin_ratio:.2%} > {alert.threshold:.2%}"
-        elif isinstance(alert, DailyLossLimit):
+        if isinstance(alert, DailyLossLimit):
             return f"Daily loss limit: ${alert.current_loss} >= ${alert.limit}"
         return str(alert)
 
@@ -809,7 +832,7 @@ class RiskManager:
     ) -> tuple[bool, str]:
         """
         Validate account balance can support the proposed trade.
-        
+
         Maintains exact same interface while using functional calculations internally.
         """
         return self._validate_balance_for_trade_functionally(
@@ -830,7 +853,7 @@ class RiskManager:
                 margin_required = calculate_required_margin(
                     position_size=position.size,
                     entry_price=position.entry_price,
-                    leverage=Decimal(str(self.leverage))
+                    leverage=Decimal(str(self.leverage)),
                 )
                 total_margin += margin_required
 
@@ -893,7 +916,7 @@ class RiskManager:
     def _calculate_daily_loss_percentage_functionally(self) -> float:
         """Calculate daily loss as percentage of account using functional approach."""
         daily_pnl = self._get_daily_pnl_functionally()
-        
+
         if self._account_balance <= 0:
             return 0.0
 
@@ -1099,7 +1122,7 @@ class RiskManager:
 
         # Get position count functionally
         current_positions_count = self._get_current_positions_count()
-        
+
         # Update daily P&L with position manager data if available
         if self.position_manager:
             realized_pnl, unrealized_pnl = self.position_manager.calculate_total_pnl()
@@ -1145,17 +1168,15 @@ class RiskManager:
 __all__ = [
     # Main risk manager (functional implementation)
     "RiskManager",
-    
     # Legacy risk components (still imperative where needed)
     "APIFailureProtection",
-    "DailyPnL", 
+    "DailyPnL",
     "EmergencyStopManager",
     "FailureRecord",
     "TradingCircuitBreaker",
-    
     # Functional risk management functions
     "calculate_kelly_criterion",
-    "calculate_fixed_fractional_size", 
+    "calculate_fixed_fractional_size",
     "calculate_volatility_based_size",
     "calculate_atr_stop_loss",
     "calculate_percentage_stop_loss",
@@ -1167,16 +1188,14 @@ __all__ = [
     "calculate_correlation_adjustment",
     "calculate_optimal_leverage",
     "calculate_drawdown_adjusted_size",
-    
     # Functional risk types
     "RiskParameters",
-    "RiskLimits", 
+    "RiskLimits",
     "MarginInfo",
     "RiskAlert",
     "PositionLimitExceeded",
     "MarginCall",
     "DailyLossLimit",
-    
     # Functional risk calculations
     "calculate_position_size",
     "calculate_margin_ratio",

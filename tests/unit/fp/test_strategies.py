@@ -2,7 +2,7 @@
 
 This module tests:
 1. Each strategy type using actual FP types
-2. Strategy combinators with immutable data structures  
+2. Strategy combinators with immutable data structures
 3. Property-based testing for signal generation
 4. Backtest simulation with FP architecture
 5. Risk management validation with functional types
@@ -16,10 +16,6 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 from hypothesis.strategies import composite
-
-# Import actual FP types instead of mocks
-from bot.fp.types.trading import Long, Short, Hold, TradeSignal
-from bot.fp.types.market import MarketSnapshot
 
 # Import the actual FP strategies module
 from bot.fp.strategies.base import (
@@ -36,51 +32,35 @@ from bot.fp.strategies.base import (
     map_strategy,
     threshold_strategy,
 )
+from bot.fp.types.market import MarketSnapshot
+
+# Import actual FP types instead of mocks
+from bot.fp.types.trading import Hold, Long, Short, TradeSignal
 
 
 # Test Strategies using actual FP types
 def always_long_strategy(snapshot: MarketSnapshot) -> TradeSignal:
     """Strategy that always returns LONG signal."""
-    return Long(
-        confidence=0.8,
-        size=0.25,
-        reason="Always bullish"
-    )
+    return Long(confidence=0.8, size=0.25, reason="Always bullish")
 
 
 def always_short_strategy(snapshot: MarketSnapshot) -> TradeSignal:
     """Strategy that always returns SHORT signal."""
-    return Short(
-        confidence=0.8,
-        size=0.25,
-        reason="Always bearish"
-    )
+    return Short(confidence=0.8, size=0.25, reason="Always bearish")
 
 
 def always_hold_strategy(snapshot: MarketSnapshot) -> TradeSignal:
     """Strategy that always returns HOLD signal."""
-    return Hold(
-        reason="Always neutral"
-    )
+    return Hold(reason="Always neutral")
 
 
 def price_based_strategy(snapshot: MarketSnapshot) -> TradeSignal:
     """Strategy based on price level."""
-    if snapshot.price > Decimal("50000"):
-        return Short(
-            confidence=0.7,
-            size=0.2,
-            reason="Price too high"
-        )
-    if snapshot.price < Decimal("30000"):
-        return Long(
-            confidence=0.7,
-            size=0.2,
-            reason="Price too low"
-        )
-    return Hold(
-        reason="Price in range"
-    )
+    if snapshot.price > Decimal(50000):
+        return Short(confidence=0.7, size=0.2, reason="Price too high")
+    if snapshot.price < Decimal(30000):
+        return Long(confidence=0.7, size=0.2, reason="Price too low")
+    return Hold(reason="Price in range")
 
 
 class TestBasicStrategies:
@@ -100,7 +80,7 @@ class TestBasicStrategies:
             price=Decimal("40000.0"),
             volume=Decimal("1000.0"),
             bid=Decimal("39990.0"),
-            ask=Decimal("40010.0")
+            ask=Decimal("40010.0"),
         )
         signal = strategy(snapshot)
         assert isinstance(signal, Hold)
@@ -117,13 +97,13 @@ class TestBasicStrategies:
             price=Decimal("50000.0"),
             volume=Decimal("1000.0"),
             bid=Decimal("49990.0"),
-            ask=Decimal("50010.0")
+            ask=Decimal("50010.0"),
         )
-        
+
         # Test that we can create a strategy function
         strategy = create_momentum_strategy(lookback=20, threshold=0.02)
         signal = strategy(snapshot)
-        
+
         # Should return a valid TradeSignal
         assert isinstance(signal, (Long, Short, Hold))
 
@@ -142,13 +122,13 @@ class TestBasicStrategies:
             price=Decimal("50000.0"),
             volume=Decimal("1000.0"),
             bid=Decimal("49990.0"),
-            ask=Decimal("50010.0")
+            ask=Decimal("50010.0"),
         )
-        
+
         # Test that we can create a strategy function
         strategy = create_mean_reversion_strategy(lookback=20, z_score_threshold=1.5)
         signal = strategy(snapshot)
-        
+
         # Should return a valid TradeSignal
         assert isinstance(signal, (Long, Short, Hold))
 
@@ -170,7 +150,7 @@ class TestStrategyCombinators:
             price=Decimal("40000.0"),
             volume=Decimal("1000.0"),
             bid=Decimal("39990.0"),
-            ask=Decimal("40010.0")
+            ask=Decimal("40010.0"),
         )
         signal = combined(snapshot)
 
@@ -192,7 +172,7 @@ class TestStrategyCombinators:
             price=Decimal("40000.0"),
             volume=Decimal("1000.0"),
             bid=Decimal("39990.0"),
-            ask=Decimal("40010.0")
+            ask=Decimal("40010.0"),
         )
         signal = combined(snapshot)
 
@@ -216,7 +196,7 @@ class TestStrategyCombinators:
             price=Decimal("40000.0"),
             volume=Decimal("1000.0"),
             bid=Decimal("39990.0"),
-            ask=Decimal("40010.0")
+            ask=Decimal("40010.0"),
         )
 
         # Test unanimous agreement
@@ -236,7 +216,7 @@ class TestStrategyCombinators:
 
         # Only trade when volume is high
         def high_volume_condition(snapshot: MarketSnapshot) -> bool:
-            return snapshot.volume > Decimal("5000")
+            return snapshot.volume > Decimal(5000)
 
         filtered = filter_strategy(always_long_strategy, high_volume_condition)
 
@@ -247,7 +227,7 @@ class TestStrategyCombinators:
             price=Decimal("40000.0"),
             volume=Decimal("1000.0"),
             bid=Decimal("39990.0"),
-            ask=Decimal("40010.0")
+            ask=Decimal("40010.0"),
         )
         signal_low = filtered(low_vol_snapshot)
         assert isinstance(signal_low, Hold)
@@ -259,7 +239,7 @@ class TestStrategyCombinators:
             price=Decimal("40000.0"),
             volume=Decimal("10000.0"),
             bid=Decimal("39990.0"),
-            ask=Decimal("40010.0")
+            ask=Decimal("40010.0"),
         )
         signal_high = filtered(high_vol_snapshot)
         assert isinstance(signal_high, Long)
@@ -273,16 +253,15 @@ class TestStrategyCombinators:
                 return Short(
                     confidence=signal.confidence,
                     size=signal.size,
-                    reason=f"Inverted: {signal.reason}"
+                    reason=f"Inverted: {signal.reason}",
                 )
-            elif isinstance(signal, Short):
+            if isinstance(signal, Short):
                 return Long(
                     confidence=signal.confidence,
                     size=signal.size,
-                    reason=f"Inverted: {signal.reason}"
+                    reason=f"Inverted: {signal.reason}",
                 )
-            else:
-                return Hold(reason=f"Inverted: {signal.reason}")
+            return Hold(reason=f"Inverted: {signal.reason}")
 
         inverted = map_strategy(always_long_strategy, invert_signal)
 
@@ -292,7 +271,7 @@ class TestStrategyCombinators:
             price=Decimal("40000.0"),
             volume=Decimal("1000.0"),
             bid=Decimal("39990.0"),
-            ask=Decimal("40010.0")
+            ask=Decimal("40010.0"),
         )
         signal = inverted(snapshot)
 
@@ -312,7 +291,7 @@ class TestStrategyCombinators:
             price=Decimal("40000.0"),
             volume=Decimal("1000.0"),
             bid=Decimal("39990.0"),
-            ask=Decimal("40010.0")
+            ask=Decimal("40010.0"),
         )
         signal = chained(snapshot)
         assert isinstance(signal, Long)
@@ -327,11 +306,9 @@ class TestStrategyCombinators:
                 return Long(
                     confidence=confidence,
                     size=0.25,
-                    reason=f"High confidence {confidence:.2f}"
+                    reason=f"High confidence {confidence:.2f}",
                 )
-            return Hold(
-                reason=f"Low confidence {confidence:.2f}"
-            )
+            return Hold(reason=f"Low confidence {confidence:.2f}")
 
         thresholded = threshold_strategy(variable_strength_strategy, min_strength=0.7)
 
@@ -342,7 +319,7 @@ class TestStrategyCombinators:
             price=Decimal("40000.0"),
             volume=Decimal("1000.0"),
             bid=Decimal("39990.0"),
-            ask=Decimal("40010.0")
+            ask=Decimal("40010.0"),
         )
         signal_low = thresholded(low_price_snapshot)
         assert isinstance(signal_low, Hold)
@@ -354,7 +331,7 @@ class TestStrategyCombinators:
             price=Decimal("80000.0"),
             volume=Decimal("1000.0"),
             bid=Decimal("79990.0"),
-            ask=Decimal("80010.0")
+            ask=Decimal("80010.0"),
         )
         signal_high = thresholded(high_price_snapshot)
         assert isinstance(signal_high, Long)
@@ -382,7 +359,7 @@ class TestStrategyEvaluation:
             price=Decimal("40000.0"),
             volume=Decimal("1000.0"),
             bid=Decimal("39990.0"),
-            ask=Decimal("40010.0")
+            ask=Decimal("40010.0"),
         )
 
         result = evaluate_strategy(always_long_strategy, snapshot, metadata)
@@ -429,7 +406,7 @@ class TestStrategyEvaluation:
             price=Decimal("40000.0"),
             volume=Decimal("1000.0"),
             bid=Decimal("39990.0"),
-            ask=Decimal("40010.0")
+            ask=Decimal("40010.0"),
         )
 
         results = evaluate_multiple_strategies(strategies_with_metadata, snapshot)
@@ -452,7 +429,7 @@ class TestBacktesting:
                 price=Decimal(f"{40000.0 + i * 100}"),
                 volume=Decimal("1000.0"),
                 bid=Decimal(f"{40000.0 + i * 100 - 10}"),
-                ask=Decimal(f"{40000.0 + i * 100 + 10}")
+                ask=Decimal(f"{40000.0 + i * 100 + 10}"),
             )
             for i in range(10)
         ]
@@ -477,7 +454,7 @@ class TestBacktesting:
                 price=Decimal(str(price)),
                 volume=Decimal("1000.0"),
                 bid=Decimal(str(price - 10)),
-                ask=Decimal(str(price + 10))
+                ask=Decimal(str(price + 10)),
             )
             for price in prices
         ]
@@ -502,16 +479,8 @@ class TestBacktesting:
             # Trade based on price ending (odd/even)
             price_int = int(snapshot.price)
             if price_int % 2 == 0:
-                return Long(
-                    confidence=0.8,
-                    size=0.25,
-                    reason="Even price"
-                )
-            return Short(
-                confidence=0.8,
-                size=0.25,
-                reason="Odd price"
-            )
+                return Long(confidence=0.8, size=0.25, reason="Even price")
+            return Short(confidence=0.8, size=0.25, reason="Odd price")
 
         # Create price series with known outcomes
         prices = [40000.0, 40100.0, 39900.0, 40200.0, 39800.0]
@@ -522,7 +491,7 @@ class TestBacktesting:
                 price=Decimal(str(price)),
                 volume=Decimal("1000.0"),
                 bid=Decimal(str(price - 10)),
-                ask=Decimal(str(price + 10))
+                ask=Decimal(str(price + 10)),
             )
             for price in prices
         ]
@@ -541,7 +510,7 @@ def market_snapshot_strategy(draw):
     """Generate valid market snapshots for property testing."""
     price = draw(st.floats(min_value=1.0, max_value=100000.0))
     volume = draw(st.floats(min_value=0.0, max_value=1000000.0))
-    
+
     # Create spread around price
     spread_pct = draw(st.floats(min_value=0.001, max_value=0.01))  # 0.1% to 1% spread
     spread = price * spread_pct / 2
@@ -554,7 +523,7 @@ def market_snapshot_strategy(draw):
         price=Decimal(str(price)),
         volume=Decimal(str(volume)),
         bid=Decimal(str(bid)),
-        ask=Decimal(str(ask))
+        ask=Decimal(str(ask)),
     )
 
 
@@ -576,12 +545,12 @@ class TestPropertyBased:
         for strategy in strategies:
             signal = strategy(snapshot)
             assert isinstance(signal, (Long, Short, Hold))
-            
+
             # Test confidence for directional signals
             if isinstance(signal, (Long, Short)):
                 assert 0.0 <= signal.confidence <= 1.0
                 assert 0.0 < signal.size <= 1.0
-            
+
             assert isinstance(signal.reason, str)
 
     @given(market_snapshot_strategy())
@@ -597,7 +566,7 @@ class TestPropertyBased:
         for strategy in [filtered, mapped, thresholded]:
             signal = strategy(snapshot)
             assert isinstance(signal, (Long, Short, Hold))
-            
+
             # Check confidence for directional signals
             if isinstance(signal, (Long, Short)):
                 assert 0.0 <= signal.confidence <= 1.0
@@ -635,7 +604,7 @@ class TestRiskManagement:
             return Long(
                 confidence=0.8,
                 size=size,
-                reason=f"Risk-adjusted position, volatility: {volatility:.4f}"
+                reason=f"Risk-adjusted position, volatility: {volatility:.4f}",
             )
 
         # Low volatility (tight spread)
@@ -645,7 +614,7 @@ class TestRiskManagement:
             price=Decimal("40000.0"),
             volume=Decimal("1000.0"),
             bid=Decimal("39995.0"),  # 0.0125% spread
-            ask=Decimal("40005.0")
+            ask=Decimal("40005.0"),
         )
 
         # High volatility (wide spread)
@@ -655,7 +624,7 @@ class TestRiskManagement:
             price=Decimal("40000.0"),
             volume=Decimal("1000.0"),
             bid=Decimal("39900.0"),  # 0.25% spread
-            ask=Decimal("40100.0")
+            ask=Decimal("40100.0"),
         )
 
         low_vol_signal = risk_aware_strategy(low_vol_snapshot)
@@ -674,11 +643,11 @@ class TestRiskManagement:
             current_price = float(snapshot.price)
             stop_loss = current_price * 0.98  # 2% stop loss
             take_profit = current_price * 1.03  # 3% take profit
-            
+
             return Long(
                 confidence=0.7,
                 size=0.25,
-                reason=f"Risk managed entry - SL: {stop_loss:.2f}, TP: {take_profit:.2f}"
+                reason=f"Risk managed entry - SL: {stop_loss:.2f}, TP: {take_profit:.2f}",
             )
 
         snapshot = MarketSnapshot(
@@ -687,7 +656,7 @@ class TestRiskManagement:
             price=Decimal("40000.0"),
             volume=Decimal("1000.0"),
             bid=Decimal("39990.0"),
-            ask=Decimal("40010.0")
+            ask=Decimal("40010.0"),
         )
 
         signal = risk_managed_strategy(snapshot)
@@ -716,7 +685,7 @@ class TestPerformanceMetrics:
                     price=Decimal(str(price)),
                     volume=Decimal("1000.0"),
                     bid=Decimal(str(price - 10)),
-                    ask=Decimal(str(price + 10))
+                    ask=Decimal(str(price + 10)),
                 )
             )
 
@@ -738,7 +707,7 @@ class TestPerformanceMetrics:
                 price=Decimal(str(price)),
                 volume=Decimal("1000.0"),
                 bid=Decimal(str(price - 10)),
-                ask=Decimal(str(price + 10))
+                ask=Decimal(str(price + 10)),
             )
             for price in prices
         ]
@@ -758,16 +727,8 @@ class TestPerformanceMetrics:
             # Alternate between long and short based on integer price
             price_thousands = int(float(snapshot.price) / 1000)
             if price_thousands % 2 == 0:
-                return Long(
-                    confidence=0.8,
-                    size=0.25,
-                    reason="Even price bracket"
-                )
-            return Short(
-                confidence=0.8,
-                size=0.25,
-                reason="Odd price bracket"
-            )
+                return Long(confidence=0.8, size=0.25, reason="Even price bracket")
+            return Short(confidence=0.8, size=0.25, reason="Odd price bracket")
 
         # Prices that create 2 wins, 1 loss pattern
         prices = [40000, 41000, 42000, 41000, 43000, 44000]
@@ -778,7 +739,7 @@ class TestPerformanceMetrics:
                 price=Decimal(str(price)),
                 volume=Decimal("1000.0"),
                 bid=Decimal(str(price - 10)),
-                ask=Decimal(str(price + 10))
+                ask=Decimal(str(price + 10)),
             )
             for price in prices
         ]
@@ -811,7 +772,7 @@ class TestStrategyIntegration:
 
         # Combine with risk filters
         ensemble = combine_strategies(strategies, "weighted_average")
-        filtered = filter_strategy(ensemble, lambda s: s.volume > Decimal("500"))
+        filtered = filter_strategy(ensemble, lambda s: s.volume > Decimal(500))
         final_strategy = threshold_strategy(filtered, min_strength=0.5)
 
         # Create test data
@@ -821,7 +782,7 @@ class TestStrategyIntegration:
             price=Decimal("45000.0"),
             volume=Decimal("2000.0"),
             bid=Decimal("44990.0"),
-            ask=Decimal("45010.0")
+            ask=Decimal("45010.0"),
         )
 
         # Evaluate
@@ -871,7 +832,7 @@ class TestStrategyIntegration:
                     price=Decimal(str(price)),
                     volume=Decimal(str(1000.0 + i * 10)),
                     bid=Decimal(str(price - 10)),
-                    ask=Decimal(str(price + 10))
+                    ask=Decimal(str(price + 10)),
                 )
             )
 

@@ -63,19 +63,19 @@ update_migration_report() {
     local section="$1"
     local key="$2"
     local value="$3"
-    
+
     python3 -c "
 import json
 import sys
 try:
     with open('$MIGRATION_REPORT', 'r') as f:
         report = json.load(f)
-    
+
     if '$section' not in report:
         report['$section'] = {}
-    
+
     report['$section']['$key'] = '$value'
-    
+
     with open('$MIGRATION_REPORT', 'w') as f:
         json.dump(report, f, indent=2)
 except Exception as e:
@@ -87,7 +87,7 @@ except Exception as e:
 analyze_migration_readiness() {
     local file_path="$1"
     local analysis_output="$MIGRATION_LOG_DIR/analysis_$(basename "$file_path" .py).json"
-    
+
     python3 -c "
 import ast
 import json
@@ -99,7 +99,7 @@ def analyze_file(file_path):
         with open(file_path, 'r') as f:
             content = f.read()
             tree = ast.parse(content)
-        
+
         analysis = {
             'file': str(file_path),
             'migration_score': 0,
@@ -114,37 +114,37 @@ def analyze_file(file_path):
                 'mutable_operations': 0
             }
         }
-        
+
         # Analyze AST for migration complexity
         for node in ast.walk(tree):
             # Exception handling patterns
             if isinstance(node, ast.Raise):
                 analysis['patterns']['exceptions'] += 1
                 analysis['issues'].append('Uses exception raising (convert to Result type)')
-            
+
             if isinstance(node, ast.ExceptHandler):
                 analysis['issues'].append('Exception handling found (consider Result/Either)')
-            
+
             # Return None patterns
             if isinstance(node, ast.Return) and isinstance(node.value, ast.Constant) and node.value.value is None:
                 analysis['patterns']['none_returns'] += 1
                 analysis['issues'].append('Returns None (convert to Maybe type)')
-            
+
             # Async patterns
             if isinstance(node, ast.AsyncFunctionDef):
                 analysis['patterns']['async_functions'] += 1
                 analysis['issues'].append('Async function (convert to IO monad)')
-            
+
             # Side effects (print, file operations, etc.)
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
                 if node.func.id in ['print', 'open', 'input']:
                     analysis['patterns']['side_effects'] += 1
                     analysis['issues'].append(f'Side effect: {node.func.id} (wrap in IO)')
-            
+
             # Mutable operations
             if isinstance(node, (ast.Assign, ast.AugAssign)):
                 analysis['patterns']['mutable_operations'] += 1
-        
+
         # Calculate migration score
         total_issues = sum(analysis['patterns'].values())
         if total_issues == 0:
@@ -163,22 +163,22 @@ def analyze_file(file_path):
             analysis['migration_score'] = 20
             analysis['complexity'] = 'hard'
             analysis['recommendations'].append('Consider gradual migration with adapters')
-        
+
         # Specific recommendations
         if analysis['patterns']['exceptions'] > 0:
             analysis['recommendations'].append('Replace exceptions with Result[T, Error] types')
-        
+
         if analysis['patterns']['none_returns'] > 0:
             analysis['recommendations'].append('Replace None returns with Maybe[T] types')
-        
+
         if analysis['patterns']['async_functions'] > 0:
             analysis['recommendations'].append('Wrap async operations in IO monad')
-        
+
         if analysis['patterns']['side_effects'] > 0:
             analysis['recommendations'].append('Isolate side effects using IO and effects system')
-        
+
         return analysis
-    
+
     except Exception as e:
         return {
             'file': str(file_path),
@@ -214,7 +214,7 @@ else:
 generate_migration_suggestions() {
     local file_path="$1"
     local suggestions_file="$MIGRATION_LOG_DIR/suggestions_$(basename "$file_path" .py).py"
-    
+
     python3 -c "
 import ast
 import sys
@@ -224,7 +224,7 @@ def generate_fp_version(file_path):
     try:
         with open(file_path, 'r') as f:
             content = f.read()
-        
+
         # Generate FP version suggestions
         fp_suggestions = []
         fp_suggestions.append('# Functional Programming Migration Suggestions')
@@ -237,23 +237,23 @@ def generate_fp_version(file_path):
         fp_suggestions.append('from bot.fp.core.io import IO')
         fp_suggestions.append('from bot.fp.core.either import Either, Left, Right')
         fp_suggestions.append('')
-        
+
         # Analyze original code and suggest FP patterns
         tree = ast.parse(content)
-        
+
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef):
                 fp_suggestions.append(f'# Original function: {node.name}')
-                
+
                 # Check for exception patterns
                 has_raises = any(isinstance(n, ast.Raise) for n in ast.walk(node))
                 has_none_return = any(
-                    isinstance(n, ast.Return) and 
-                    isinstance(n.value, ast.Constant) and 
-                    n.value.value is None 
+                    isinstance(n, ast.Return) and
+                    isinstance(n.value, ast.Constant) and
+                    n.value.value is None
                     for n in ast.walk(node)
                 )
-                
+
                 if has_raises:
                     fp_suggestions.append(f'def {node.name}_fp(*args, **kwargs) -> Result[T, str]:')
                     fp_suggestions.append('    \"\"\"FP version using Result instead of exceptions.\"\"\"')
@@ -271,9 +271,9 @@ def generate_fp_version(file_path):
                     fp_suggestions.append(f'def {node.name}_fp(*args, **kwargs) -> IO[T]:')
                     fp_suggestions.append('    \"\"\"FP version wrapped in IO monad.\"\"\"')
                     fp_suggestions.append(f'    return IO.pure(original_{node.name}(*args, **kwargs))')
-                
+
                 fp_suggestions.append('')
-        
+
         # Additional migration patterns
         fp_suggestions.append('# Common migration patterns:')
         fp_suggestions.append('#')
@@ -291,9 +291,9 @@ def generate_fp_version(file_path):
         fp_suggestions.append('# 4. State mutations -> immutable data:')
         fp_suggestions.append('#    x = x + 1 -> new_x = x + 1')
         fp_suggestions.append('#    list.append(x) -> new_list = list + [x]')
-        
+
         return '\\n'.join(fp_suggestions)
-    
+
     except Exception as e:
         return f'# Error generating suggestions: {e}'
 
@@ -310,7 +310,7 @@ print(f'Suggestions saved to: $suggestions_file')
 create_backup() {
     local file_path="$1"
     local backup_path="$BACKUP_DIR/$(basename "$file_path")"
-    
+
     cp "$file_path" "$backup_path"
     print_status "INFO" "Backup created: $backup_path"
 }
@@ -318,52 +318,52 @@ create_backup() {
 # Main migration analysis function
 analyze_codebase() {
     print_status "ANALYZE" "Scanning codebase for migration candidates..."
-    
+
     # Find all Python files in bot/ excluding bot/fp/
     local candidates=()
     while IFS= read -r -d '' file; do
         candidates+=("$file")
     done < <(find bot/ -name "*.py" -not -path "bot/fp/*" -not -path "bot/__pycache__/*" -print0)
-    
+
     print_status "INFO" "Found ${#candidates[@]} Python files to analyze"
-    
+
     local easy_migrations=0
     local medium_migrations=0
     local hard_migrations=0
     local total_analyzed=0
-    
+
     echo "Migration Analysis Report" > "$MIGRATION_LOG_DIR/analysis_summary.txt"
     echo "========================" >> "$MIGRATION_LOG_DIR/analysis_summary.txt"
     echo "Generated: $(date)" >> "$MIGRATION_LOG_DIR/analysis_summary.txt"
     echo "" >> "$MIGRATION_LOG_DIR/analysis_summary.txt"
-    
+
     for file in "${candidates[@]}"; do
         if [[ "$file" == *"__init__.py" ]] || [[ "$file" == *"__pycache__"* ]]; then
             continue
         fi
-        
+
         print_status "ANALYZE" "Analyzing $(basename "$file")..."
-        
+
         if analyze_migration_readiness "$file"; then
             case $? in
-                0) 
+                0)
                     easy_migrations=$((easy_migrations + 1))
                     echo "EASY: $file" >> "$MIGRATION_LOG_DIR/analysis_summary.txt"
                     ;;
-                1) 
+                1)
                     medium_migrations=$((medium_migrations + 1))
                     echo "MEDIUM: $file" >> "$MIGRATION_LOG_DIR/analysis_summary.txt"
                     ;;
-                *) 
+                *)
                     hard_migrations=$((hard_migrations + 1))
                     echo "HARD: $file" >> "$MIGRATION_LOG_DIR/analysis_summary.txt"
                     ;;
             esac
         fi
-        
+
         total_analyzed=$((total_analyzed + 1))
     done
-    
+
     # Generate summary
     echo "" >> "$MIGRATION_LOG_DIR/analysis_summary.txt"
     echo "Summary:" >> "$MIGRATION_LOG_DIR/analysis_summary.txt"
@@ -371,25 +371,25 @@ analyze_codebase() {
     echo "Easy migrations: $easy_migrations" >> "$MIGRATION_LOG_DIR/analysis_summary.txt"
     echo "Medium complexity: $medium_migrations" >> "$MIGRATION_LOG_DIR/analysis_summary.txt"
     echo "Hard migrations: $hard_migrations" >> "$MIGRATION_LOG_DIR/analysis_summary.txt"
-    
+
     print_status "SUCCESS" "Analysis complete!"
     print_status "INFO" "Easy migrations: $easy_migrations"
     print_status "INFO" "Medium complexity: $medium_migrations"
     print_status "INFO" "Hard migrations: $hard_migrations"
-    
+
     # Update progress in main report
     python3 -c "
 import json
 try:
     with open('$MIGRATION_REPORT', 'r') as f:
         report = json.load(f)
-    
+
     report['progress']['total_files'] = $total_analyzed
     report['progress']['analyzed'] = $total_analyzed
     report['progress']['migration_ready'] = $easy_migrations
     report['progress']['complex_migrations'] = $medium_migrations
     report['progress']['blocked'] = $hard_migrations
-    
+
     with open('$MIGRATION_REPORT', 'w') as f:
         json.dump(report, f, indent=2)
 except Exception as e:
@@ -401,40 +401,40 @@ except Exception as e:
 migrate_file() {
     local file_path="$1"
     local force="$2"
-    
+
     if [ ! -f "$file_path" ]; then
         print_status "ERROR" "File not found: $file_path"
         return 1
     fi
-    
+
     print_status "MIGRATION" "Migrating $file_path..."
-    
+
     # Create backup
     create_backup "$file_path"
-    
+
     # Analyze migration readiness
     analyze_migration_readiness "$file_path"
     local complexity_exit_code=$?
-    
+
     if [ $complexity_exit_code -eq 2 ] && [ "$force" != "--force" ]; then
         print_status "WARNING" "File has high migration complexity. Use --force to proceed anyway."
         print_status "INFO" "Run: $0 migrate $file_path --force"
         return 1
     fi
-    
+
     # Generate migration suggestions
     generate_migration_suggestions "$file_path"
-    
+
     print_status "SUCCESS" "Migration analysis complete for $file_path"
     print_status "INFO" "Check logs/fp/migration/ for detailed analysis and suggestions"
-    
+
     return 0
 }
 
 # Interactive migration mode
 interactive_migration() {
     print_status "MIGRATION" "Starting interactive migration mode..."
-    
+
     # Get list of easy migration candidates
     local easy_files=()
     while IFS= read -r -d '' file; do
@@ -442,20 +442,20 @@ interactive_migration() {
             easy_files+=("$file")
         fi
     done < <(find bot/ -name "*.py" -not -path "bot/fp/*" -not -path "*__pycache__*" -print0)
-    
+
     if [ ${#easy_files[@]} -eq 0 ]; then
         print_status "INFO" "No easy migration candidates found. Run analysis first."
         return 0
     fi
-    
+
     print_status "INFO" "Found ${#easy_files[@]} easy migration candidates:"
     for i in "${!easy_files[@]}"; do
         echo "  $((i+1)). ${easy_files[$i]}"
     done
-    
+
     echo ""
     read -p "Select file to migrate (1-${#easy_files[@]}, 'a' for all, 'q' to quit): " choice
-    
+
     case "$choice" in
         q|Q)
             print_status "INFO" "Migration cancelled"

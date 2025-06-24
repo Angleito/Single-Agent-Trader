@@ -7,13 +7,10 @@ emergency stops, and comprehensive safety mechanisms.
 """
 
 from dataclasses import dataclass
-from datetime import datetime, date
+from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Union, Dict, List, Tuple, Optional
-
-from bot.fp.types.effects import Maybe, Some, Nothing
-from bot.fp.types.result import Result, Success, Failure
+from typing import Union
 
 
 @dataclass(frozen=True)
@@ -97,10 +94,11 @@ RiskAlert = Union[PositionLimitExceeded, MarginCall, DailyLossLimit]
 
 # Advanced Risk Management Types
 
+
 @dataclass(frozen=True)
 class FailureRecord:
     """Record of trading failures for circuit breaker."""
-    
+
     timestamp: datetime
     failure_type: str
     error_message: str
@@ -110,30 +108,30 @@ class FailureRecord:
 @dataclass(frozen=True)
 class CircuitBreakerState:
     """Circuit breaker state management."""
-    
+
     state: str  # "CLOSED", "OPEN", "HALF_OPEN"
     failure_count: int
     failure_threshold: int
     timeout_seconds: int
-    last_failure_time: Optional[datetime]
+    last_failure_time: datetime | None
     consecutive_successes: int
-    failure_history: Tuple[FailureRecord, ...]
-    
+    failure_history: tuple[FailureRecord, ...]
+
     @property
     def is_open(self) -> bool:
         """Check if circuit breaker is open."""
         return self.state == "OPEN"
-    
+
     @property
     def is_closed(self) -> bool:
         """Check if circuit breaker is closed."""
         return self.state == "CLOSED"
-    
+
     @property
     def is_half_open(self) -> bool:
         """Check if circuit breaker is half-open."""
         return self.state == "HALF_OPEN"
-    
+
     @property
     def can_execute(self) -> bool:
         """Check if trades can be executed."""
@@ -143,7 +141,7 @@ class CircuitBreakerState:
 @dataclass(frozen=True)
 class EmergencyStopReason:
     """Reason for emergency stop activation."""
-    
+
     reason_type: str
     description: str
     triggered_at: datetime
@@ -153,12 +151,12 @@ class EmergencyStopReason:
 @dataclass(frozen=True)
 class EmergencyStopState:
     """Emergency stop state management."""
-    
+
     is_stopped: bool
-    stop_reason: Optional[EmergencyStopReason]
-    stopped_at: Optional[datetime]
+    stop_reason: EmergencyStopReason | None
+    stopped_at: datetime | None
     manual_override: bool = False
-    
+
     @property
     def can_trade(self) -> bool:
         """Check if trading is allowed."""
@@ -168,19 +166,19 @@ class EmergencyStopState:
 @dataclass(frozen=True)
 class APIProtectionState:
     """API failure protection state."""
-    
+
     consecutive_failures: int
     max_retries: int
     base_delay: float
-    last_failure_time: Optional[datetime]
+    last_failure_time: datetime | None
     is_healthy: bool
     backoff_multiplier: float = 2.0
-    
+
     @property
     def next_retry_delay(self) -> float:
         """Calculate next retry delay with exponential backoff."""
-        return self.base_delay * (self.backoff_multiplier ** self.consecutive_failures)
-    
+        return self.base_delay * (self.backoff_multiplier**self.consecutive_failures)
+
     @property
     def can_retry(self) -> bool:
         """Check if API calls can be retried."""
@@ -190,13 +188,13 @@ class APIProtectionState:
 @dataclass(frozen=True)
 class DailyPnL:
     """Daily P&L tracking."""
-    
+
     date: date
     realized_pnl: Decimal = Decimal(0)
     unrealized_pnl: Decimal = Decimal(0)
     trades_count: int = 0
     max_drawdown: Decimal = Decimal(0)
-    
+
     @property
     def total_pnl(self) -> Decimal:
         """Calculate total P&L for the day."""
@@ -206,49 +204,49 @@ class DailyPnL:
 @dataclass(frozen=True)
 class RiskValidationResult:
     """Result of risk validation checks."""
-    
+
     is_valid: bool
     reason: str
     severity: str  # "low", "medium", "high", "critical"
     validation_type: str
     timestamp: datetime
-    additional_data: Dict[str, any] = None
-    
+    additional_data: dict[str, any] = None
+
     def __post_init__(self):
         if self.additional_data is None:
-            object.__setattr__(self, 'additional_data', {})
+            object.__setattr__(self, "additional_data", {})
 
 
 @dataclass(frozen=True)
 class PositionValidationResult:
     """Result of position validation checks."""
-    
+
     is_valid: bool
     symbol: str
     reason: str
     severity: str
-    validation_checks: Dict[str, bool]
+    validation_checks: dict[str, bool]
     position_size: Decimal
-    entry_price: Optional[Decimal]
-    current_price: Optional[Decimal]
+    entry_price: Decimal | None
+    current_price: Decimal | None
     timestamp: datetime
 
 
 @dataclass(frozen=True)
 class RiskLevelAssessment:
     """Overall risk level assessment."""
-    
+
     risk_level: str  # "LOW", "MEDIUM", "HIGH", "CRITICAL"
     score: float  # 0-100 risk score
-    contributing_factors: List[str]
-    recommendations: List[str]
+    contributing_factors: list[str]
+    recommendations: list[str]
     timestamp: datetime
-    
+
     @property
     def is_critical(self) -> bool:
         """Check if risk level is critical."""
         return self.risk_level == "CRITICAL"
-    
+
     @property
     def is_high(self) -> bool:
         """Check if risk level is high or critical."""
@@ -258,15 +256,15 @@ class RiskLevelAssessment:
 @dataclass(frozen=True)
 class PortfolioExposure:
     """Portfolio exposure analysis."""
-    
+
     total_exposure: Decimal
-    symbol_exposures: Dict[str, Decimal]
-    sector_exposures: Dict[str, Decimal]
+    symbol_exposures: dict[str, Decimal]
+    sector_exposures: dict[str, Decimal]
     correlation_risk: float
     concentration_risk: float
     max_single_position_pct: float
     portfolio_heat: float  # Total risk as percentage of account
-    
+
     @property
     def is_overexposed(self) -> bool:
         """Check if portfolio is overexposed."""
@@ -276,7 +274,7 @@ class PortfolioExposure:
 @dataclass(frozen=True)
 class LeverageAnalysis:
     """Leverage analysis and optimization."""
-    
+
     current_leverage: Decimal
     optimal_leverage: Decimal
     max_allowed_leverage: Decimal
@@ -289,11 +287,11 @@ class LeverageAnalysis:
 @dataclass(frozen=True)
 class CorrelationMatrix:
     """Correlation matrix for risk analysis."""
-    
-    symbols: Tuple[str, ...]
-    correlations: Dict[Tuple[str, str], float]
+
+    symbols: tuple[str, ...]
+    correlations: dict[tuple[str, str], float]
     timestamp: datetime
-    
+
     def get_correlation(self, symbol1: str, symbol2: str) -> float:
         """Get correlation between two symbols."""
         key1 = (symbol1, symbol2)
@@ -304,7 +302,7 @@ class CorrelationMatrix:
 @dataclass(frozen=True)
 class DrawdownAnalysis:
     """Drawdown analysis and tracking."""
-    
+
     current_drawdown_pct: float
     max_drawdown_pct: float
     drawdown_duration_hours: float
@@ -312,7 +310,7 @@ class DrawdownAnalysis:
     current_balance: Decimal
     is_in_drawdown: bool
     recovery_target: Decimal
-    
+
     @property
     def is_severe_drawdown(self) -> bool:
         """Check if drawdown is severe (>15%)."""
@@ -322,7 +320,7 @@ class DrawdownAnalysis:
 @dataclass(frozen=True)
 class RiskMetricsSnapshot:
     """Comprehensive risk metrics snapshot."""
-    
+
     timestamp: datetime
     account_balance: Decimal
     portfolio_exposure: PortfolioExposure
@@ -333,7 +331,7 @@ class RiskMetricsSnapshot:
     position_count: int
     consecutive_losses: int
     margin_usage_pct: float
-    
+
     @property
     def overall_risk_score(self) -> float:
         """Calculate overall risk score (0-100)."""
@@ -343,68 +341,75 @@ class RiskMetricsSnapshot:
         drawdown_weight = 0.25
         losses_weight = 0.15
         margin_weight = 0.1
-        
+
         exposure_score = min(self.portfolio_exposure.portfolio_heat * 2, 100)
         leverage_score = min(float(self.leverage_analysis.current_leverage) * 5, 100)
         drawdown_score = min(self.drawdown_analysis.current_drawdown_pct * 5, 100)
         losses_score = min(self.consecutive_losses * 20, 100)
         margin_score = self.margin_usage_pct
-        
+
         return (
-            exposure_score * exposure_weight +
-            leverage_score * leverage_weight +
-            drawdown_score * drawdown_weight +
-            losses_score * losses_weight +
-            margin_score * margin_weight
+            exposure_score * exposure_weight
+            + leverage_score * leverage_weight
+            + drawdown_score * drawdown_weight
+            + losses_score * losses_weight
+            + margin_score * margin_weight
         )
 
 
 @dataclass(frozen=True)
 class ComprehensiveRiskState:
     """Complete risk management state."""
-    
+
     circuit_breaker: CircuitBreakerState
     emergency_stop: EmergencyStopState
     api_protection: APIProtectionState
     risk_metrics: RiskMetricsSnapshot
     correlation_matrix: CorrelationMatrix
-    validation_history: Tuple[RiskValidationResult, ...]
-    
+    validation_history: tuple[RiskValidationResult, ...]
+
     @property
     def can_trade(self) -> bool:
         """Check if trading is allowed based on all risk factors."""
         return (
-            self.emergency_stop.can_trade and
-            self.circuit_breaker.can_execute and
-            self.api_protection.is_healthy and
-            not self.risk_metrics.risk_assessment.is_critical
+            self.emergency_stop.can_trade
+            and self.circuit_breaker.can_execute
+            and self.api_protection.is_healthy
+            and not self.risk_metrics.risk_assessment.is_critical
         )
-    
+
     @property
-    def trading_restrictions(self) -> List[str]:
+    def trading_restrictions(self) -> list[str]:
         """Get list of current trading restrictions."""
         restrictions = []
-        
+
         if not self.emergency_stop.can_trade:
-            restrictions.append(f"Emergency stop: {self.emergency_stop.stop_reason.description if self.emergency_stop.stop_reason else 'Unknown'}")
-        
+            restrictions.append(
+                f"Emergency stop: {self.emergency_stop.stop_reason.description if self.emergency_stop.stop_reason else 'Unknown'}"
+            )
+
         if not self.circuit_breaker.can_execute:
             restrictions.append(f"Circuit breaker {self.circuit_breaker.state}")
-        
+
         if not self.api_protection.is_healthy:
-            restrictions.append(f"API protection: {self.api_protection.consecutive_failures} failures")
-        
+            restrictions.append(
+                f"API protection: {self.api_protection.consecutive_failures} failures"
+            )
+
         if self.risk_metrics.risk_assessment.is_critical:
-            restrictions.append(f"Critical risk level: {self.risk_metrics.risk_assessment.risk_level}")
-        
+            restrictions.append(
+                f"Critical risk level: {self.risk_metrics.risk_assessment.risk_level}"
+            )
+
         return restrictions
 
 
 # Enhanced Risk Alert Types
 
+
 class AdvancedRiskAlertType(Enum):
     """Advanced risk alert types."""
-    
+
     CIRCUIT_BREAKER_OPEN = "circuit_breaker_open"
     EMERGENCY_STOP_TRIGGERED = "emergency_stop_triggered"
     API_FAILURES_EXCESSIVE = "api_failures_excessive"
@@ -418,7 +423,7 @@ class AdvancedRiskAlertType(Enum):
 @dataclass(frozen=True)
 class AdvancedRiskAlert:
     """Advanced risk alert with detailed information."""
-    
+
     alert_type: AdvancedRiskAlertType
     severity: str  # "low", "medium", "high", "critical"
     title: str
@@ -681,22 +686,22 @@ def record_circuit_breaker_failure(
     failure_type: str,
     error_message: str,
     severity: str = "medium",
-    timestamp: Optional[datetime] = None,
+    timestamp: datetime | None = None,
 ) -> CircuitBreakerState:
     """Record a failure in the circuit breaker."""
     if timestamp is None:
         timestamp = datetime.now()
-    
+
     failure_record = FailureRecord(
         timestamp=timestamp,
         failure_type=failure_type,
         error_message=error_message,
         severity=severity,
     )
-    
+
     new_failure_count = state.failure_count + 1
     new_state = "OPEN" if new_failure_count >= state.failure_threshold else state.state
-    
+
     return CircuitBreakerState(
         state=new_state,
         failure_count=new_failure_count,
@@ -711,13 +716,13 @@ def record_circuit_breaker_failure(
 def record_circuit_breaker_success(state: CircuitBreakerState) -> CircuitBreakerState:
     """Record a success in the circuit breaker."""
     new_successes = state.consecutive_successes + 1
-    
+
     # Transition to CLOSED if we have enough successes in HALF_OPEN state
     new_state = state.state
     if state.state == "HALF_OPEN" and new_successes >= 3:
         new_state = "CLOSED"
         new_successes = 0
-    
+
     return CircuitBreakerState(
         state=new_state,
         failure_count=state.failure_count,
@@ -730,17 +735,18 @@ def record_circuit_breaker_success(state: CircuitBreakerState) -> CircuitBreaker
 
 
 def update_circuit_breaker_state(
-    state: CircuitBreakerState, current_time: Optional[datetime] = None
+    state: CircuitBreakerState, current_time: datetime | None = None
 ) -> CircuitBreakerState:
     """Update circuit breaker state based on time elapsed."""
     if current_time is None:
         current_time = datetime.now()
-    
+
     # If OPEN and timeout has passed, transition to HALF_OPEN
     if (
         state.state == "OPEN"
         and state.last_failure_time
-        and (current_time - state.last_failure_time).total_seconds() >= state.timeout_seconds
+        and (current_time - state.last_failure_time).total_seconds()
+        >= state.timeout_seconds
     ):
         return CircuitBreakerState(
             state="HALF_OPEN",
@@ -751,7 +757,7 @@ def update_circuit_breaker_state(
             consecutive_successes=0,
             failure_history=state.failure_history,
         )
-    
+
     return state
 
 
@@ -769,19 +775,19 @@ def trigger_emergency_stop(
     state: EmergencyStopState,
     reason_type: str,
     description: str,
-    timestamp: Optional[datetime] = None,
+    timestamp: datetime | None = None,
 ) -> EmergencyStopState:
     """Trigger emergency stop with reason."""
     if timestamp is None:
         timestamp = datetime.now()
-    
+
     stop_reason = EmergencyStopReason(
         reason_type=reason_type,
         description=description,
         triggered_at=timestamp,
         severity="critical",
     )
-    
+
     return EmergencyStopState(
         is_stopped=True,
         stop_reason=stop_reason,
@@ -817,14 +823,14 @@ def create_api_protection_state(
 
 
 def record_api_failure(
-    state: APIProtectionState, timestamp: Optional[datetime] = None
+    state: APIProtectionState, timestamp: datetime | None = None
 ) -> APIProtectionState:
     """Record an API failure."""
     if timestamp is None:
         timestamp = datetime.now()
-    
+
     new_failures = state.consecutive_failures + 1
-    
+
     return APIProtectionState(
         consecutive_failures=new_failures,
         max_retries=state.max_retries,
@@ -848,7 +854,7 @@ def record_api_success(state: APIProtectionState) -> APIProtectionState:
 
 
 def calculate_portfolio_exposure(
-    positions: List[Dict[str, any]], account_balance: Decimal
+    positions: list[dict[str, any]], account_balance: Decimal
 ) -> PortfolioExposure:
     """Calculate portfolio exposure metrics."""
     if not positions or account_balance <= 0:
@@ -861,31 +867,39 @@ def calculate_portfolio_exposure(
             max_single_position_pct=0.0,
             portfolio_heat=0.0,
         )
-    
+
     symbol_exposures = {}
     total_exposure = Decimal(0)
     max_position_value = Decimal(0)
-    
+
     for position in positions:
         symbol = position.get("symbol", "")
         size = Decimal(str(position.get("size", 0)))
         price = Decimal(str(position.get("price", 0)))
-        
+
         if size > 0 and price > 0:
             position_value = size * price
             symbol_exposures[symbol] = position_value
             total_exposure += position_value
             max_position_value = max(max_position_value, position_value)
-    
+
     # Calculate metrics
-    max_single_position_pct = float(max_position_value / account_balance * 100) if account_balance > 0 else 0.0
-    portfolio_heat = float(total_exposure / account_balance * 100) if account_balance > 0 else 0.0
-    
+    max_single_position_pct = (
+        float(max_position_value / account_balance * 100)
+        if account_balance > 0
+        else 0.0
+    )
+    portfolio_heat = (
+        float(total_exposure / account_balance * 100) if account_balance > 0 else 0.0
+    )
+
     # Simplified correlation and concentration risk
     num_positions = len([p for p in positions if p.get("size", 0) > 0])
     concentration_risk = max_single_position_pct / 100.0 if num_positions > 0 else 0.0
-    correlation_risk = min(0.8, 1.0 / max(1, num_positions))  # Higher risk with fewer positions
-    
+    correlation_risk = min(
+        0.8, 1.0 / max(1, num_positions)
+    )  # Higher risk with fewer positions
+
     return PortfolioExposure(
         total_exposure=total_exposure,
         symbol_exposures=symbol_exposures,
@@ -910,13 +924,17 @@ def calculate_leverage_analysis(
     else:
         # Simplified optimal leverage calculation
         kelly_fraction = (win_rate * 2 - (1 - win_rate)) / 2  # Simplified Kelly
-        volatility_adjustment = max(0.1, 1.0 - volatility)  # Reduce leverage for high volatility
+        volatility_adjustment = max(
+            0.1, 1.0 - volatility
+        )  # Reduce leverage for high volatility
         optimal_leverage = min(
             max_leverage,
-            Decimal(str(kelly_fraction * volatility_adjustment * 5))  # Scale up Kelly result
+            Decimal(
+                str(kelly_fraction * volatility_adjustment * 5)
+            ),  # Scale up Kelly result
         )
         optimal_leverage = max(Decimal(1), optimal_leverage)  # Minimum 1x leverage
-    
+
     # Determine recommended action
     if current_leverage > optimal_leverage * Decimal("1.2"):
         recommended_action = "DECREASE"
@@ -924,7 +942,7 @@ def calculate_leverage_analysis(
         recommended_action = "INCREASE"
     else:
         recommended_action = "MAINTAIN"
-    
+
     return LeverageAnalysis(
         current_leverage=current_leverage,
         optimal_leverage=optimal_leverage,
@@ -939,34 +957,36 @@ def calculate_leverage_analysis(
 def calculate_drawdown_analysis(
     current_balance: Decimal,
     peak_balance: Decimal,
-    peak_time: Optional[datetime] = None,
-    current_time: Optional[datetime] = None,
+    peak_time: datetime | None = None,
+    current_time: datetime | None = None,
 ) -> DrawdownAnalysis:
     """Calculate drawdown analysis."""
     if current_time is None:
         current_time = datetime.now()
-    
+
     if peak_balance <= 0:
         peak_balance = current_balance
-    
+
     # Ensure peak is at least current balance
     actual_peak = max(peak_balance, current_balance)
-    
+
     # Calculate drawdown
     if actual_peak > 0:
-        current_drawdown_pct = float((actual_peak - current_balance) / actual_peak * 100)
+        current_drawdown_pct = float(
+            (actual_peak - current_balance) / actual_peak * 100
+        )
     else:
         current_drawdown_pct = 0.0
-    
+
     # Calculate duration
     if peak_time and current_drawdown_pct > 0:
         duration_hours = (current_time - peak_time).total_seconds() / 3600
     else:
         duration_hours = 0.0
-    
+
     # Recovery target (back to peak)
     recovery_target = actual_peak
-    
+
     return DrawdownAnalysis(
         current_drawdown_pct=current_drawdown_pct,
         max_drawdown_pct=current_drawdown_pct,  # Could be tracked over time
@@ -988,28 +1008,39 @@ def assess_risk_level(
     """Assess overall risk level."""
     risk_factors = []
     score = 0.0
-    
+
     # Portfolio heat risk
     if portfolio_exposure.portfolio_heat > 15.0:
-        risk_factors.append(f"High portfolio heat: {portfolio_exposure.portfolio_heat:.1f}%")
+        risk_factors.append(
+            f"High portfolio heat: {portfolio_exposure.portfolio_heat:.1f}%"
+        )
         score += 25
     elif portfolio_exposure.portfolio_heat > 10.0:
-        risk_factors.append(f"Elevated portfolio heat: {portfolio_exposure.portfolio_heat:.1f}%")
+        risk_factors.append(
+            f"Elevated portfolio heat: {portfolio_exposure.portfolio_heat:.1f}%"
+        )
         score += 15
-    
+
     # Leverage risk
-    if leverage_analysis.current_leverage > leverage_analysis.max_allowed_leverage * Decimal("0.8"):
+    if (
+        leverage_analysis.current_leverage
+        > leverage_analysis.max_allowed_leverage * Decimal("0.8")
+    ):
         risk_factors.append(f"High leverage: {leverage_analysis.current_leverage}x")
         score += 20
-    
+
     # Drawdown risk
     if drawdown_analysis.is_severe_drawdown:
-        risk_factors.append(f"Severe drawdown: {drawdown_analysis.current_drawdown_pct:.1f}%")
+        risk_factors.append(
+            f"Severe drawdown: {drawdown_analysis.current_drawdown_pct:.1f}%"
+        )
         score += 30
     elif drawdown_analysis.current_drawdown_pct > 10.0:
-        risk_factors.append(f"Significant drawdown: {drawdown_analysis.current_drawdown_pct:.1f}%")
+        risk_factors.append(
+            f"Significant drawdown: {drawdown_analysis.current_drawdown_pct:.1f}%"
+        )
         score += 20
-    
+
     # Consecutive losses risk
     if consecutive_losses >= 5:
         risk_factors.append(f"High consecutive losses: {consecutive_losses}")
@@ -1017,7 +1048,7 @@ def assess_risk_level(
     elif consecutive_losses >= 3:
         risk_factors.append(f"Multiple consecutive losses: {consecutive_losses}")
         score += 15
-    
+
     # Margin usage risk
     if margin_usage_pct > 80.0:
         risk_factors.append(f"High margin usage: {margin_usage_pct:.1f}%")
@@ -1025,21 +1056,33 @@ def assess_risk_level(
     elif margin_usage_pct > 60.0:
         risk_factors.append(f"Elevated margin usage: {margin_usage_pct:.1f}%")
         score += 10
-    
+
     # Determine risk level
     if score >= 70:
         risk_level = "CRITICAL"
-        recommendations = ["Stop all trading", "Review risk management", "Reduce position sizes"]
+        recommendations = [
+            "Stop all trading",
+            "Review risk management",
+            "Reduce position sizes",
+        ]
     elif score >= 50:
         risk_level = "HIGH"
-        recommendations = ["Reduce position sizes", "Lower leverage", "Increase stop losses"]
+        recommendations = [
+            "Reduce position sizes",
+            "Lower leverage",
+            "Increase stop losses",
+        ]
     elif score >= 25:
         risk_level = "MEDIUM"
-        recommendations = ["Monitor closely", "Consider reducing exposure", "Review strategy"]
+        recommendations = [
+            "Monitor closely",
+            "Consider reducing exposure",
+            "Review strategy",
+        ]
     else:
         risk_level = "LOW"
         recommendations = ["Continue normal operations", "Monitor market conditions"]
-    
+
     return RiskLevelAssessment(
         risk_level=risk_level,
         score=score,
@@ -1051,7 +1094,7 @@ def assess_risk_level(
 
 def create_comprehensive_risk_state(
     account_balance: Decimal,
-    positions: List[Dict[str, any]],
+    positions: list[dict[str, any]],
     current_leverage: Decimal,
     volatility: float,
     win_rate: float,
@@ -1064,23 +1107,21 @@ def create_comprehensive_risk_state(
     circuit_breaker = create_circuit_breaker_state()
     emergency_stop = create_emergency_stop_state()
     api_protection = create_api_protection_state()
-    
+
     # Calculate portfolio exposure
     portfolio_exposure = calculate_portfolio_exposure(positions, account_balance)
-    
+
     # Calculate leverage analysis
     leverage_analysis = calculate_leverage_analysis(
         current_leverage, volatility, win_rate
     )
-    
+
     # Calculate drawdown analysis
-    drawdown_analysis = calculate_drawdown_analysis(
-        account_balance, peak_balance
-    )
-    
+    drawdown_analysis = calculate_drawdown_analysis(account_balance, peak_balance)
+
     # Create daily P&L (simplified)
     daily_pnl = DailyPnL(date=datetime.now().date())
-    
+
     # Assess risk level
     risk_assessment = assess_risk_level(
         portfolio_exposure,
@@ -1089,7 +1130,7 @@ def create_comprehensive_risk_state(
         consecutive_losses,
         margin_usage_pct,
     )
-    
+
     # Create risk metrics snapshot
     risk_metrics = RiskMetricsSnapshot(
         timestamp=datetime.now(),
@@ -1103,7 +1144,7 @@ def create_comprehensive_risk_state(
         consecutive_losses=consecutive_losses,
         margin_usage_pct=margin_usage_pct,
     )
-    
+
     # Create correlation matrix (simplified)
     symbols = tuple(p.get("symbol", "") for p in positions if p.get("symbol"))
     correlation_matrix = CorrelationMatrix(
@@ -1111,7 +1152,7 @@ def create_comprehensive_risk_state(
         correlations={},  # Could be populated with real correlation data
         timestamp=datetime.now(),
     )
-    
+
     return ComprehensiveRiskState(
         circuit_breaker=circuit_breaker,
         emergency_stop=emergency_stop,
@@ -1124,102 +1165,126 @@ def create_comprehensive_risk_state(
 
 def check_advanced_risk_alerts(
     risk_state: ComprehensiveRiskState,
-) -> List[AdvancedRiskAlert]:
+) -> list[AdvancedRiskAlert]:
     """Check for advanced risk alerts."""
     alerts = []
     current_time = datetime.now()
-    
+
     # Circuit breaker alert
     if risk_state.circuit_breaker.is_open:
-        alerts.append(AdvancedRiskAlert(
-            alert_type=AdvancedRiskAlertType.CIRCUIT_BREAKER_OPEN,
-            severity="high",
-            title="Circuit Breaker Open",
-            description=f"Circuit breaker is open with {risk_state.circuit_breaker.failure_count} failures",
-            triggered_at=current_time,
-            metric_value=float(risk_state.circuit_breaker.failure_count),
-            threshold_value=float(risk_state.circuit_breaker.failure_threshold),
-            recommended_action="Wait for timeout or fix underlying issues",
-        ))
-    
+        alerts.append(
+            AdvancedRiskAlert(
+                alert_type=AdvancedRiskAlertType.CIRCUIT_BREAKER_OPEN,
+                severity="high",
+                title="Circuit Breaker Open",
+                description=f"Circuit breaker is open with {risk_state.circuit_breaker.failure_count} failures",
+                triggered_at=current_time,
+                metric_value=float(risk_state.circuit_breaker.failure_count),
+                threshold_value=float(risk_state.circuit_breaker.failure_threshold),
+                recommended_action="Wait for timeout or fix underlying issues",
+            )
+        )
+
     # Emergency stop alert
     if risk_state.emergency_stop.is_stopped:
-        alerts.append(AdvancedRiskAlert(
-            alert_type=AdvancedRiskAlertType.EMERGENCY_STOP_TRIGGERED,
-            severity="critical",
-            title="Emergency Stop Active",
-            description=risk_state.emergency_stop.stop_reason.description if risk_state.emergency_stop.stop_reason else "Emergency stop triggered",
-            triggered_at=current_time,
-            metric_value=1.0,
-            threshold_value=0.0,
-            recommended_action="Review emergency conditions and clear stop manually",
-        ))
-    
+        alerts.append(
+            AdvancedRiskAlert(
+                alert_type=AdvancedRiskAlertType.EMERGENCY_STOP_TRIGGERED,
+                severity="critical",
+                title="Emergency Stop Active",
+                description=(
+                    risk_state.emergency_stop.stop_reason.description
+                    if risk_state.emergency_stop.stop_reason
+                    else "Emergency stop triggered"
+                ),
+                triggered_at=current_time,
+                metric_value=1.0,
+                threshold_value=0.0,
+                recommended_action="Review emergency conditions and clear stop manually",
+            )
+        )
+
     # API protection alert
     if not risk_state.api_protection.is_healthy:
-        alerts.append(AdvancedRiskAlert(
-            alert_type=AdvancedRiskAlertType.API_FAILURES_EXCESSIVE,
-            severity="medium",
-            title="API Failures Excessive",
-            description=f"API protection engaged due to {risk_state.api_protection.consecutive_failures} consecutive failures",
-            triggered_at=current_time,
-            metric_value=float(risk_state.api_protection.consecutive_failures),
-            threshold_value=float(risk_state.api_protection.max_retries),
-            recommended_action="Check API connectivity and reduce request frequency",
-        ))
-    
+        alerts.append(
+            AdvancedRiskAlert(
+                alert_type=AdvancedRiskAlertType.API_FAILURES_EXCESSIVE,
+                severity="medium",
+                title="API Failures Excessive",
+                description=f"API protection engaged due to {risk_state.api_protection.consecutive_failures} consecutive failures",
+                triggered_at=current_time,
+                metric_value=float(risk_state.api_protection.consecutive_failures),
+                threshold_value=float(risk_state.api_protection.max_retries),
+                recommended_action="Check API connectivity and reduce request frequency",
+            )
+        )
+
     # Leverage alert
-    leverage_ratio = float(risk_state.risk_metrics.leverage_analysis.current_leverage / 
-                          risk_state.risk_metrics.leverage_analysis.optimal_leverage)
+    leverage_ratio = float(
+        risk_state.risk_metrics.leverage_analysis.current_leverage
+        / risk_state.risk_metrics.leverage_analysis.optimal_leverage
+    )
     if leverage_ratio > 1.5:
-        alerts.append(AdvancedRiskAlert(
-            alert_type=AdvancedRiskAlertType.LEVERAGE_EXCESSIVE,
-            severity="medium",
-            title="Leverage Excessive",
-            description=f"Current leverage {risk_state.risk_metrics.leverage_analysis.current_leverage}x exceeds optimal {risk_state.risk_metrics.leverage_analysis.optimal_leverage}x",
-            triggered_at=current_time,
-            metric_value=float(risk_state.risk_metrics.leverage_analysis.current_leverage),
-            threshold_value=float(risk_state.risk_metrics.leverage_analysis.optimal_leverage),
-            recommended_action="Reduce position sizes or close positions",
-        ))
-    
+        alerts.append(
+            AdvancedRiskAlert(
+                alert_type=AdvancedRiskAlertType.LEVERAGE_EXCESSIVE,
+                severity="medium",
+                title="Leverage Excessive",
+                description=f"Current leverage {risk_state.risk_metrics.leverage_analysis.current_leverage}x exceeds optimal {risk_state.risk_metrics.leverage_analysis.optimal_leverage}x",
+                triggered_at=current_time,
+                metric_value=float(
+                    risk_state.risk_metrics.leverage_analysis.current_leverage
+                ),
+                threshold_value=float(
+                    risk_state.risk_metrics.leverage_analysis.optimal_leverage
+                ),
+                recommended_action="Reduce position sizes or close positions",
+            )
+        )
+
     # Drawdown alert
     if risk_state.risk_metrics.drawdown_analysis.is_severe_drawdown:
-        alerts.append(AdvancedRiskAlert(
-            alert_type=AdvancedRiskAlertType.DRAWDOWN_SEVERE,
-            severity="high",
-            title="Severe Drawdown",
-            description=f"Current drawdown {risk_state.risk_metrics.drawdown_analysis.current_drawdown_pct:.1f}% is severe",
-            triggered_at=current_time,
-            metric_value=risk_state.risk_metrics.drawdown_analysis.current_drawdown_pct,
-            threshold_value=15.0,
-            recommended_action="Stop trading and review strategy",
-        ))
-    
+        alerts.append(
+            AdvancedRiskAlert(
+                alert_type=AdvancedRiskAlertType.DRAWDOWN_SEVERE,
+                severity="high",
+                title="Severe Drawdown",
+                description=f"Current drawdown {risk_state.risk_metrics.drawdown_analysis.current_drawdown_pct:.1f}% is severe",
+                triggered_at=current_time,
+                metric_value=risk_state.risk_metrics.drawdown_analysis.current_drawdown_pct,
+                threshold_value=15.0,
+                recommended_action="Stop trading and review strategy",
+            )
+        )
+
     # Portfolio overexposure alert
     if risk_state.risk_metrics.portfolio_exposure.is_overexposed:
-        alerts.append(AdvancedRiskAlert(
-            alert_type=AdvancedRiskAlertType.PORTFOLIO_OVEREXPOSED,
-            severity="medium",
-            title="Portfolio Overexposed",
-            description=f"Portfolio heat {risk_state.risk_metrics.portfolio_exposure.portfolio_heat:.1f}% exceeds safe levels",
-            triggered_at=current_time,
-            metric_value=risk_state.risk_metrics.portfolio_exposure.portfolio_heat,
-            threshold_value=10.0,
-            recommended_action="Reduce position sizes across portfolio",
-        ))
-    
+        alerts.append(
+            AdvancedRiskAlert(
+                alert_type=AdvancedRiskAlertType.PORTFOLIO_OVEREXPOSED,
+                severity="medium",
+                title="Portfolio Overexposed",
+                description=f"Portfolio heat {risk_state.risk_metrics.portfolio_exposure.portfolio_heat:.1f}% exceeds safe levels",
+                triggered_at=current_time,
+                metric_value=risk_state.risk_metrics.portfolio_exposure.portfolio_heat,
+                threshold_value=10.0,
+                recommended_action="Reduce position sizes across portfolio",
+            )
+        )
+
     # Consecutive losses alert
     if risk_state.risk_metrics.consecutive_losses >= 5:
-        alerts.append(AdvancedRiskAlert(
-            alert_type=AdvancedRiskAlertType.CONSECUTIVE_LOSSES_HIGH,
-            severity="high",
-            title="High Consecutive Losses",
-            description=f"{risk_state.risk_metrics.consecutive_losses} consecutive losses detected",
-            triggered_at=current_time,
-            metric_value=float(risk_state.risk_metrics.consecutive_losses),
-            threshold_value=5.0,
-            recommended_action="Stop trading and review strategy performance",
-        ))
-    
+        alerts.append(
+            AdvancedRiskAlert(
+                alert_type=AdvancedRiskAlertType.CONSECUTIVE_LOSSES_HIGH,
+                severity="high",
+                title="High Consecutive Losses",
+                description=f"{risk_state.risk_metrics.consecutive_losses} consecutive losses detected",
+                triggered_at=current_time,
+                metric_value=float(risk_state.risk_metrics.consecutive_losses),
+                threshold_value=5.0,
+                recommended_action="Stop trading and review strategy performance",
+            )
+        )
+
     return alerts

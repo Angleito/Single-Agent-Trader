@@ -267,7 +267,7 @@ class Log:
 @dataclass(frozen=True)
 class WebSocketConnection:
     """WebSocket connection state"""
-    
+
     websocket: Any  # WebSocket connection object
     config: Any  # Connection configuration
     is_connected: bool
@@ -277,7 +277,7 @@ class WebSocketConnection:
 @dataclass(frozen=True)
 class RateLimit:
     """Rate limiting configuration"""
-    
+
     requests_per_second: float
     max_burst: int = 10
 
@@ -285,7 +285,7 @@ class RateLimit:
 @dataclass(frozen=True)
 class RetryPolicy:
     """Retry policy configuration"""
-    
+
     max_attempts: int
     delay: float
     backoff_multiplier: float = 2.0
@@ -295,7 +295,7 @@ class RetryPolicy:
 @dataclass(frozen=True)
 class CancelResult:
     """Result of order cancellation"""
-    
+
     order_id: str
     success: bool
     message: str = ""
@@ -304,7 +304,7 @@ class CancelResult:
 @dataclass(frozen=True)
 class PositionUpdate:
     """Position update notification"""
-    
+
     symbol: str
     side: str
     size: Any  # Decimal

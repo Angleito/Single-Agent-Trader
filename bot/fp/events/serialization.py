@@ -19,9 +19,9 @@ from typing import Any, TypeVar, cast
 import msgpack
 from pydantic import BaseModel
 
-from bot.fp.events.base import Event
 from bot.fp.core.either import Either, Left, Right
-from bot.fp.core.option import Option, Some, Empty
+from bot.fp.core.option import Empty, Option, Some
+from bot.fp.events.base import Event
 
 T = TypeVar("T", bound=Event)
 
@@ -184,23 +184,21 @@ class EventSerializer:
             # Serialize Option types
             if value.is_some():
                 return {
-                    "_option_type": "Some", 
-                    "_option_value": self._serialize_value(cast("Some", value).value)
+                    "_option_type": "Some",
+                    "_option_value": self._serialize_value(cast("Some", value).value),
                 }
-            else:
-                return {"_option_type": "Empty"}
+            return {"_option_type": "Empty"}
         if isinstance(value, Either):
-            # Serialize Either types  
+            # Serialize Either types
             if value.is_right():
                 return {
                     "_either_type": "Right",
-                    "_either_value": self._serialize_value(cast("Right", value).value)
+                    "_either_value": self._serialize_value(cast("Right", value).value),
                 }
-            else:
-                return {
-                    "_either_type": "Left", 
-                    "_either_value": self._serialize_value(cast("Left", value).value)
-                }
+            return {
+                "_either_type": "Left",
+                "_either_value": self._serialize_value(cast("Left", value).value),
+            }
         if isinstance(value, BaseModel):
             return value.model_dump()
         if is_dataclass(value):
@@ -292,17 +290,15 @@ class EventDeserializer:
                 if value["_option_type"] == "Some":
                     inner_value = self._deserialize_value(value["_option_value"])
                     return Some(inner_value)
-                else:
-                    return Empty()
-            
+                return Empty()
+
             # Handle Either types
             if "_either_type" in value:
                 inner_value = self._deserialize_value(value["_either_value"])
                 if value["_either_type"] == "Right":
                     return Right(inner_value)
-                else:
-                    return Left(inner_value)
-        
+                return Left(inner_value)
+
         if type_hint and hasattr(type_hint, "__origin__"):
             # Handle generic types
             origin = type_hint.__origin__

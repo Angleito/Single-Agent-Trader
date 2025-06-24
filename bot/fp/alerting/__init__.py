@@ -7,10 +7,10 @@ notification management, and alert rule evaluation.
 
 from .functional_alerting import (
     AlertEvent,
-    AlertRule,
-    AlertSeverity,
     AlertingEngine,
     AlertingState,
+    AlertRule,
+    AlertSeverity,
     NotificationChannel,
     NotificationConfig,
     NotificationResult,
@@ -21,7 +21,7 @@ from .functional_alerting import (
 
 __all__ = [
     "AlertEvent",
-    "AlertRule", 
+    "AlertRule",
     "AlertSeverity",
     "AlertingEngine",
     "AlertingState",

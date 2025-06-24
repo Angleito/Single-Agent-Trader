@@ -13,8 +13,13 @@ from bot.data.dominance import DominanceData, DominanceDataProvider
 
 # Functional imports (added for migration to functional programming patterns)
 try:
-    from bot.fp.effects.market_data import fetch_candles, stream_market_data, ConnectionConfig
-    from bot.fp.types.market import MarketSnapshot, CandleData
+    from bot.fp.effects.market_data import (
+        ConnectionConfig,
+        fetch_candles,
+        stream_market_data,
+    )
+    from bot.fp.types.market import CandleData, MarketSnapshot
+
     FUNCTIONAL_DATA_AVAILABLE = True
 except ImportError:
     # Functional implementations not available, continue with legacy

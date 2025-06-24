@@ -69,7 +69,7 @@ create_debug_dir() {
 # FP Runtime diagnostic functions
 check_fp_environment() {
     header "FP Environment Variables"
-    
+
     docker exec "$CONTAINER_NAME" bash -c '
         echo "=== FP Runtime Configuration ==="
         env | grep -E "^FP_" | sort || echo "No FP environment variables found"
@@ -82,13 +82,13 @@ check_fp_environment() {
 try:
     import bot.fp
     print(\"✓ bot.fp module available\")
-    
+
     import bot.fp.runtime.interpreter
     print(\"✓ FP interpreter available\")
-    
+
     import bot.fp.runtime.scheduler
     print(\"✓ FP scheduler available\")
-    
+
     import bot.fp.adapters
     print(\"✓ FP adapters available\")
 except ImportError as e:
@@ -99,7 +99,7 @@ except ImportError as e:
 
 check_fp_runtime_stats() {
     header "FP Runtime Statistics"
-    
+
     docker exec "$CONTAINER_NAME" python -c "
 import sys
 sys.path.insert(0, '/app')
@@ -108,11 +108,11 @@ sys.path.insert(0, '/app/bot/fp')
 try:
     from bot.fp.runtime.interpreter import get_interpreter
     from bot.fp.runtime.scheduler import get_scheduler
-    
+
     print('=== Effect Interpreter Stats ===')
     interpreter = get_interpreter()
     stats = interpreter.get_runtime_stats()
-    
+
     for key, value in stats.items():
         if isinstance(value, dict):
             print(f'{key}:')
@@ -120,12 +120,12 @@ try:
                 print(f'  {k}: {v}')
         else:
             print(f'{key}: {value}')
-    
+
     print('')
     print('=== Scheduler Status ===')
     scheduler = get_scheduler()
     status = scheduler.get_status()
-    
+
     for key, value in status.items():
         if isinstance(value, dict):
             print(f'{key}:')
@@ -133,7 +133,7 @@ try:
                 print(f'  {k}: {v}')
         else:
             print(f'{key}: {value}')
-            
+
 except Exception as e:
     print(f'Error getting FP runtime stats: {e}')
     import traceback
@@ -143,7 +143,7 @@ except Exception as e:
 
 check_fp_adapters() {
     header "FP Adapter Status"
-    
+
     docker exec "$CONTAINER_NAME" python -c "
 import sys
 sys.path.insert(0, '/app')
@@ -151,7 +151,7 @@ sys.path.insert(0, '/app/bot/fp')
 
 try:
     print('=== Testing FP Adapters ===')
-    
+
     # Test compatibility layer
     try:
         from bot.fp.adapters.compatibility_layer import CompatibilityLayer
@@ -159,21 +159,21 @@ try:
         print('✓ CompatibilityLayer: Available')
     except Exception as e:
         print(f'✗ CompatibilityLayer: {e}')
-    
+
     # Test exchange adapter
     try:
         from bot.fp.adapters.exchange_adapter import ExchangeAdapter
         print('✓ ExchangeAdapter: Available')
     except Exception as e:
         print(f'✗ ExchangeAdapter: {e}')
-    
+
     # Test strategy adapter
     try:
         from bot.fp.adapters.strategy_adapter import StrategyAdapter
         print('✓ StrategyAdapter: Available')
     except Exception as e:
         print(f'✗ StrategyAdapter: {e}')
-        
+
     # Test other key adapters
     adapters = [
         'market_data_adapter',
@@ -181,14 +181,14 @@ try:
         'position_manager_adapter',
         'trading_type_adapter'
     ]
-    
+
     for adapter in adapters:
         try:
             module = __import__(f'bot.fp.adapters.{adapter}', fromlist=[adapter])
             print(f'✓ {adapter}: Available')
         except Exception as e:
             print(f'✗ {adapter}: {e}')
-            
+
 except Exception as e:
     print(f'Error checking FP adapters: {e}')
     import traceback
@@ -198,16 +198,16 @@ except Exception as e:
 
 check_fp_directories() {
     header "FP Directory Structure"
-    
+
     docker exec "$CONTAINER_NAME" bash -c '
         echo "=== FP Runtime Directories ==="
         ls -la /app/data/fp_runtime/ 2>/dev/null || echo "FP runtime data directory not found"
         echo ""
-        
+
         echo "=== FP Log Directories ==="
         ls -la /app/logs/fp/ 2>/dev/null || echo "FP log directory not found"
         echo ""
-        
+
         echo "=== FP Directory Permissions ==="
         for dir in "/app/data/fp_runtime" "/app/logs/fp"; do
             if [ -d "$dir" ]; then
@@ -222,10 +222,10 @@ check_fp_directories() {
 
 collect_fp_logs() {
     header "Collecting FP Logs"
-    
+
     local log_output="$DEBUG_OUTPUT_DIR/fp_logs_$(date +%Y%m%d_%H%M%S)"
     mkdir -p "$log_output"
-    
+
     # Copy FP logs from container
     if docker exec "$CONTAINER_NAME" test -d /app/logs/fp 2>/dev/null; then
         docker cp "$CONTAINER_NAME:/app/logs/fp" "$log_output/" 2>/dev/null || warn "Failed to copy some FP logs"
@@ -233,23 +233,23 @@ collect_fp_logs() {
     else
         warn "No FP logs directory found in container"
     fi
-    
+
     # Get recent FP-related container logs
     docker logs --tail=500 "$CONTAINER_NAME" 2>&1 | grep -i "fp\|effect\|interpreter\|scheduler" > "$log_output/container_fp_logs.txt" || true
-    
+
     # Get FP runtime state
     docker exec "$CONTAINER_NAME" bash -c '
         if [ -d "/app/data/fp_runtime" ]; then
             find /app/data/fp_runtime -type f -name "*.json" -o -name "*.txt" -o -name "*.log" 2>/dev/null
         fi
     ' > "$log_output/fp_runtime_files.txt" 2>/dev/null || true
-    
+
     info "Log collection completed: $log_output"
 }
 
 test_fp_effects() {
     header "Testing FP Effects"
-    
+
     docker exec "$CONTAINER_NAME" python -c "
 import sys
 sys.path.insert(0, '/app')
@@ -258,37 +258,37 @@ sys.path.insert(0, '/app/bot/fp')
 try:
     from bot.fp.effects.io import IO, AsyncIO
     from bot.fp.runtime.interpreter import get_interpreter
-    
+
     print('=== Testing Basic IO Effect ===')
-    
+
     # Test simple IO effect
     def simple_effect():
         return 'Hello from FP effect!'
-    
+
     io_effect = IO(simple_effect)
     interpreter = get_interpreter()
-    
+
     result = interpreter.run_effect(io_effect)
     print(f'Simple effect result: {result}')
-    
+
     print('')
     print('=== Testing Effect with Error Handling ===')
-    
+
     def error_effect():
         raise ValueError('Test error for debugging')
-    
+
     error_io = IO(error_effect)
-    
+
     try:
         interpreter.run_effect(error_io)
     except ValueError as e:
         print(f'Error effect handled correctly: {e}')
-    
+
     print('')
     print('=== Effect Interpreter Stats After Test ===')
     stats = interpreter.get_runtime_stats()
     print(f'Active effects: {stats.get(\"active_effects\", \"unknown\")}')
-    
+
 except Exception as e:
     print(f'Error testing FP effects: {e}')
     import traceback
@@ -298,13 +298,13 @@ except Exception as e:
 
 monitor_fp_performance() {
     header "FP Performance Monitoring"
-    
+
     local monitor_duration="${2:-30}"
     info "Monitoring FP performance for $monitor_duration seconds..."
-    
+
     # Create monitoring script
     local monitor_script="$DEBUG_OUTPUT_DIR/fp_monitor_$(date +%Y%m%d_%H%M%S).txt"
-    
+
     {
         echo "FP Performance Monitoring - $(date)"
         echo "Monitoring Duration: $monitor_duration seconds"
@@ -312,7 +312,7 @@ monitor_fp_performance() {
         echo "==============================================="
         echo ""
     } > "$monitor_script"
-    
+
     # Monitor in background
     (
         for i in $(seq 1 "$monitor_duration"); do
@@ -327,18 +327,18 @@ try:
     from bot.fp.runtime.interpreter import get_interpreter
     interpreter = get_interpreter()
     stats = interpreter.get_runtime_stats()
-    
+
     print(f'Active Effects: {stats.get(\"active_effects\", 0)}')
-    
+
     # Get system resource usage
     import psutil
     process = psutil.Process()
     memory_mb = process.memory_info().rss / 1024 / 1024
     cpu_percent = process.cpu_percent()
-    
+
     print(f'Memory Usage: {memory_mb:.1f} MB')
     print(f'CPU Usage: {cpu_percent:.1f}%')
-    
+
 except Exception as e:
     print(f'Monitoring error: {e}')
                 " 2>/dev/null || echo "Failed to get stats for sample $i"
@@ -347,23 +347,23 @@ except Exception as e:
             sleep 1
         done
     ) &
-    
+
     local monitor_pid=$!
-    
+
     # Wait for monitoring to complete
     wait $monitor_pid
-    
+
     info "Performance monitoring completed: $monitor_script"
 }
 
 # Interactive debugging functions
 interactive_fp_shell() {
     header "Interactive FP Debugging Shell"
-    
+
     info "Starting interactive Python shell with FP runtime loaded..."
     info "Available objects: interpreter, scheduler, CompatibilityLayer"
     info "Type 'exit()' to quit"
-    
+
     docker exec -it "$CONTAINER_NAME" python -c "
 import sys
 sys.path.insert(0, '/app')
@@ -375,22 +375,22 @@ try:
     from bot.fp.runtime.interpreter import get_interpreter
     from bot.fp.runtime.scheduler import get_scheduler
     from bot.fp.adapters.compatibility_layer import CompatibilityLayer
-    
+
     interpreter = get_interpreter()
     scheduler = get_scheduler()
     comp_layer = CompatibilityLayer()
-    
+
     print('FP runtime loaded successfully!')
     print('Available objects:')
     print('  - interpreter: Effect interpreter')
     print('  - scheduler: Task scheduler')
     print('  - comp_layer: Compatibility layer')
     print('')
-    
+
     # Start interactive session
     import code
     code.interact(local=locals())
-    
+
 except Exception as e:
     print(f'Error loading FP runtime: {e}')
     import traceback
@@ -401,16 +401,16 @@ except Exception as e:
 # Main functions
 run_full_diagnosis() {
     header "Full FP Container Diagnosis"
-    
+
     create_debug_dir
-    
+
     check_fp_environment
     check_fp_directories
     check_fp_adapters
     check_fp_runtime_stats
     test_fp_effects
     collect_fp_logs
-    
+
     info "Full diagnosis completed. Check $DEBUG_OUTPUT_DIR for detailed logs."
 }
 
@@ -441,19 +441,19 @@ show_usage() {
 # Main script execution
 main() {
     local command="${2:-full}"
-    
+
     check_docker
-    
+
     if [ "$command" = "help" ]; then
         show_usage
         exit 0
     fi
-    
+
     check_container
-    
+
     info "Running FP debug command: $command"
     info "Target container: $CONTAINER_NAME"
-    
+
     case "$command" in
         "full")
             run_full_diagnosis

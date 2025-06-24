@@ -129,7 +129,7 @@ from bot.fp.runtime.interpreter import run
 def my_strategy(snapshot: MarketSnapshot) -> TradeSignal:
     # Calculate indicators
     vumanchu_result = vumanchu_cipher(snapshot.ohlcv_data)
-    
+
     # Make decision based on signals
     if vumanchu_result.signal == "LONG":
         return Long(
@@ -376,11 +376,11 @@ def with_exchange_connection[T](operation: Callable[[Exchange], IO[T]]) -> IO[T]
             return operation(connection).run()
         finally:
             connection.close()
-    
+
     return IO.from_callable(resource_managed)
 
 # Usage
-result = with_exchange_connection(lambda exchange: 
+result = with_exchange_connection(lambda exchange:
     exchange.place_order_effect(order_request)
 )
 ```
@@ -393,11 +393,11 @@ def cached_indicator_calculation(data: MarketData, cache_key: str) -> IO[Indicat
         cached_result = cache.get(cache_key)
         if cached_result:
             return cached_result
-        
+
         result = calculate_indicators(data)
         cache.set(cache_key, result, ttl=60)
         return result
-    
+
     return IO.from_callable(calculate)
 ```
 
@@ -472,17 +472,17 @@ def timed_effect[T](label: str, effect: IO[T]) -> IO[T]:
         duration = time.time() - start_time
         record_duration(label, duration).run()
         return result
-    
+
     return IO.from_callable(timed)
 
 # Use for performance monitoring
-timed_calculation = timed_effect("indicator_calculation", 
+timed_calculation = timed_effect("indicator_calculation",
     calculate_vumanchu_indicators(market_data)
 )
 ```
 
 ---
 
-*Guide prepared by: Agent 1 - Architecture Documentation Specialist*  
-*Date: 2025-06-24*  
+*Guide prepared by: Agent 1 - Architecture Documentation Specialist*
+*Date: 2025-06-24*
 *Part of Batch 9 functional programming transformation*

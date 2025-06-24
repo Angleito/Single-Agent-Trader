@@ -3,11 +3,10 @@
 from dataclasses import dataclass, replace
 from datetime import datetime
 from decimal import Decimal
-from typing import Dict, Optional, Tuple
 from enum import Enum
 
-from bot.fp.types.base import Money, Percentage
-from bot.fp.types.result import Result, Success, Failure
+from bot.fp.types.base import Percentage
+from bot.fp.types.result import Failure, Result, Success
 
 
 @dataclass(frozen=True)
@@ -298,15 +297,18 @@ def calculate_portfolio_metrics(
 
 # Enhanced Portfolio Types for Asset Allocation and Balance Management
 
+
 class AccountType(Enum):
     """Account type enumeration."""
+
     SPOT = "SPOT"
-    FUTURES = "FUTURES" 
+    FUTURES = "FUTURES"
     MARGIN = "MARGIN"
 
 
 class BalanceType(Enum):
     """Balance type enumeration."""
+
     AVAILABLE = "AVAILABLE"
     LOCKED = "LOCKED"
     TOTAL = "TOTAL"
@@ -317,14 +319,14 @@ class BalanceType(Enum):
 @dataclass(frozen=True)
 class AssetBalance:
     """Immutable asset balance representation."""
-    
+
     asset: str
     available: Decimal
     locked: Decimal
     total: Decimal
     account_type: AccountType
     last_updated: datetime
-    
+
     def __post_init__(self) -> None:
         """Validate balance consistency."""
         if self.available < 0:
@@ -332,66 +334,64 @@ class AssetBalance:
         if self.locked < 0:
             raise ValueError(f"Locked balance cannot be negative: {self.locked}")
         if abs(self.total - (self.available + self.locked)) > Decimal("0.000001"):
-            raise ValueError(f"Total balance {self.total} does not equal available + locked {self.available + self.locked}")
-    
+            raise ValueError(
+                f"Total balance {self.total} does not equal available + locked {self.available + self.locked}"
+            )
+
     @property
     def utilization_ratio(self) -> Decimal:
         """Calculate balance utilization ratio (locked / total)."""
-        if self.total == Decimal("0"):
-            return Decimal("0")
+        if self.total == Decimal(0):
+            return Decimal(0)
         return self.locked / self.total
-    
+
     def with_available(self, new_available: Decimal) -> "AssetBalance":
         """Return new balance with updated available amount."""
         new_total = new_available + self.locked
         return replace(
-            self, 
-            available=new_available, 
-            total=new_total,
-            last_updated=datetime.now()
+            self, available=new_available, total=new_total, last_updated=datetime.now()
         )
-    
+
     def with_locked(self, new_locked: Decimal) -> "AssetBalance":
         """Return new balance with updated locked amount."""
         new_total = self.available + new_locked
         return replace(
-            self, 
-            locked=new_locked, 
-            total=new_total,
-            last_updated=datetime.now()
+            self, locked=new_locked, total=new_total, last_updated=datetime.now()
         )
-    
+
     def lock_amount(self, amount: Decimal) -> Result["AssetBalance", str]:
         """Lock specified amount from available balance."""
         if amount <= 0:
             return Failure("Lock amount must be positive")
         if amount > self.available:
-            return Failure(f"Insufficient available balance: {self.available} < {amount}")
-        
+            return Failure(
+                f"Insufficient available balance: {self.available} < {amount}"
+            )
+
         new_balance = AssetBalance(
             asset=self.asset,
             available=self.available - amount,
             locked=self.locked + amount,
             total=self.total,
             account_type=self.account_type,
-            last_updated=datetime.now()
+            last_updated=datetime.now(),
         )
         return Success(new_balance)
-    
+
     def unlock_amount(self, amount: Decimal) -> Result["AssetBalance", str]:
         """Unlock specified amount to available balance."""
         if amount <= 0:
             return Failure("Unlock amount must be positive")
         if amount > self.locked:
             return Failure(f"Insufficient locked balance: {self.locked} < {amount}")
-        
+
         new_balance = AssetBalance(
             asset=self.asset,
             available=self.available + amount,
             locked=self.locked - amount,
             total=self.total,
             account_type=self.account_type,
-            last_updated=datetime.now()
+            last_updated=datetime.now(),
         )
         return Success(new_balance)
 
@@ -399,13 +399,13 @@ class AssetBalance:
 @dataclass(frozen=True)
 class AssetAllocation:
     """Immutable asset allocation configuration."""
-    
+
     asset: str
     target_percentage: Percentage
     min_percentage: Percentage
     max_percentage: Percentage
     rebalance_threshold: Percentage
-    
+
     def __post_init__(self) -> None:
         """Validate allocation constraints."""
         if self.min_percentage.value > self.target_percentage.value:
@@ -414,14 +414,15 @@ class AssetAllocation:
             raise ValueError("Target percentage cannot exceed maximum percentage")
         if self.rebalance_threshold.value <= 0:
             raise ValueError("Rebalance threshold must be positive")
-    
+
     def is_within_bounds(self, current_percentage: Percentage) -> bool:
         """Check if current allocation is within bounds."""
         return (
-            self.min_percentage.value <= current_percentage.value <= 
-            self.max_percentage.value
+            self.min_percentage.value
+            <= current_percentage.value
+            <= self.max_percentage.value
         )
-    
+
     def needs_rebalancing(self, current_percentage: Percentage) -> bool:
         """Check if allocation needs rebalancing."""
         deviation = abs(current_percentage.value - self.target_percentage.value)
@@ -431,7 +432,7 @@ class AssetAllocation:
 @dataclass(frozen=True)
 class MarginInfo:
     """Immutable margin information for futures/margin accounts."""
-    
+
     initial_margin: Decimal
     maintenance_margin: Decimal
     margin_used: Decimal
@@ -441,139 +442,153 @@ class MarginInfo:
     margin_ratio: Decimal
     liquidation_threshold: Decimal
     last_updated: datetime
-    
+
     @property
     def is_healthy(self) -> bool:
         """Check if margin health is good."""
         return self.margin_ratio > self.liquidation_threshold * Decimal("1.5")
-    
+
     @property
     def is_warning(self) -> bool:
         """Check if margin is in warning zone."""
         return (
-            self.margin_ratio > self.liquidation_threshold and 
-            self.margin_ratio <= self.liquidation_threshold * Decimal("1.5")
+            self.margin_ratio > self.liquidation_threshold
+            and self.margin_ratio <= self.liquidation_threshold * Decimal("1.5")
         )
-    
+
     @property
     def is_critical(self) -> bool:
         """Check if margin is in critical zone."""
         return self.margin_ratio <= self.liquidation_threshold
-    
+
     def with_updated_equity(self, new_equity: Decimal) -> "MarginInfo":
         """Return new margin info with updated equity."""
-        new_margin_ratio = new_equity / self.margin_used if self.margin_used > 0 else Decimal("0")
+        new_margin_ratio = (
+            new_equity / self.margin_used if self.margin_used > 0 else Decimal(0)
+        )
         new_margin_available = new_equity - self.margin_used
-        
+
         return replace(
             self,
             equity=new_equity,
             margin_ratio=new_margin_ratio,
-            margin_available=max(Decimal("0"), new_margin_available),
-            last_updated=datetime.now()
+            margin_available=max(Decimal(0), new_margin_available),
+            last_updated=datetime.now(),
         )
 
 
 @dataclass(frozen=True)
 class AccountSnapshot:
     """Immutable account snapshot with balances and positions."""
-    
+
     account_type: AccountType
-    balances: Tuple[AssetBalance, ...]
+    balances: tuple[AssetBalance, ...]
     base_currency: str
     total_equity: Decimal
-    margin_info: Optional[MarginInfo]
+    margin_info: MarginInfo | None
     timestamp: datetime
-    
+
     @property
     def total_available_value(self) -> Decimal:
         """Calculate total available value across all assets."""
         # In a real implementation, this would need price conversion
         # For now, assuming base currency values
         return sum(
-            balance.available for balance in self.balances 
+            balance.available
+            for balance in self.balances
             if balance.asset == self.base_currency
         )
-    
+
     @property
     def total_locked_value(self) -> Decimal:
         """Calculate total locked value across all assets."""
         return sum(
-            balance.locked for balance in self.balances 
+            balance.locked
+            for balance in self.balances
             if balance.asset == self.base_currency
         )
-    
-    def get_balance(self, asset: str) -> Optional[AssetBalance]:
+
+    def get_balance(self, asset: str) -> AssetBalance | None:
         """Get balance for specific asset."""
         for balance in self.balances:
             if balance.asset == asset:
                 return balance
         return None
-    
+
     def with_updated_balance(self, updated_balance: AssetBalance) -> "AccountSnapshot":
         """Return new snapshot with updated balance."""
         new_balances = []
         found = False
-        
+
         for balance in self.balances:
             if balance.asset == updated_balance.asset:
                 new_balances.append(updated_balance)
                 found = True
             else:
                 new_balances.append(balance)
-        
+
         if not found:
             new_balances.append(updated_balance)
-        
+
         # Recalculate equity
-        new_equity = sum(balance.total for balance in new_balances if balance.asset == self.base_currency)
-        
+        new_equity = sum(
+            balance.total
+            for balance in new_balances
+            if balance.asset == self.base_currency
+        )
+
         return replace(
             self,
             balances=tuple(new_balances),
             total_equity=new_equity,
-            timestamp=datetime.now()
+            timestamp=datetime.now(),
         )
 
 
 @dataclass(frozen=True)
 class PortfolioAllocation:
     """Immutable portfolio allocation state."""
-    
-    allocations: Tuple[AssetAllocation, ...]
-    current_values: Dict[str, Decimal]
+
+    allocations: tuple[AssetAllocation, ...]
+    current_values: dict[str, Decimal]
     total_portfolio_value: Decimal
-    last_rebalance: Optional[datetime]
-    
-    def get_current_allocation(self, asset: str) -> Optional[Percentage]:
+    last_rebalance: datetime | None
+
+    def get_current_allocation(self, asset: str) -> Percentage | None:
         """Get current allocation percentage for asset."""
-        if self.total_portfolio_value == Decimal("0"):
+        if self.total_portfolio_value == Decimal(0):
             return None
-        
-        current_value = self.current_values.get(asset, Decimal("0"))
+
+        current_value = self.current_values.get(asset, Decimal(0))
         percentage_value = current_value / self.total_portfolio_value
-        return Percentage.create(float(percentage_value)).success() if percentage_value <= 1 else None
-    
-    def get_target_allocation(self, asset: str) -> Optional[AssetAllocation]:
+        return (
+            Percentage.create(float(percentage_value)).success()
+            if percentage_value <= 1
+            else None
+        )
+
+    def get_target_allocation(self, asset: str) -> AssetAllocation | None:
         """Get target allocation for asset."""
         for allocation in self.allocations:
             if allocation.asset == asset:
                 return allocation
         return None
-    
-    def calculate_rebalancing_needs(self) -> Dict[str, Decimal]:
+
+    def calculate_rebalancing_needs(self) -> dict[str, Decimal]:
         """Calculate rebalancing requirements for all assets."""
         rebalancing_needs = {}
-        
+
         for allocation in self.allocations:
             current_pct = self.get_current_allocation(allocation.asset)
             if current_pct and allocation.needs_rebalancing(current_pct):
-                target_value = self.total_portfolio_value * allocation.target_percentage.value
-                current_value = self.current_values.get(allocation.asset, Decimal("0"))
+                target_value = (
+                    self.total_portfolio_value * allocation.target_percentage.value
+                )
+                current_value = self.current_values.get(allocation.asset, Decimal(0))
                 rebalancing_needs[allocation.asset] = target_value - current_value
-        
+
         return rebalancing_needs
-    
+
     def is_rebalancing_needed(self) -> bool:
         """Check if any asset needs rebalancing."""
         return len(self.calculate_rebalancing_needs()) > 0
@@ -582,125 +597,127 @@ class PortfolioAllocation:
 @dataclass(frozen=True)
 class PerformanceSnapshot:
     """Immutable performance snapshot for a point in time."""
-    
+
     timestamp: datetime
     total_value: Decimal
     realized_pnl: Decimal
     unrealized_pnl: Decimal
-    daily_return: Optional[Decimal]
-    benchmark_return: Optional[Decimal]
+    daily_return: Decimal | None
+    benchmark_return: Decimal | None
     drawdown: Decimal
-    
+
     @property
     def total_pnl(self) -> Decimal:
         """Calculate total P&L."""
         return self.realized_pnl + self.unrealized_pnl
-    
+
     @property
     def total_return_pct(self) -> Decimal:
         """Calculate total return percentage."""
-        if self.total_value == Decimal("0"):
-            return Decimal("0")
+        if self.total_value == Decimal(0):
+            return Decimal(0)
         return (self.total_pnl / self.total_value) * 100
 
 
 @dataclass(frozen=True)
 class RiskMetrics:
     """Immutable risk metrics for portfolio."""
-    
+
     var_95: Decimal  # Value at Risk (95% confidence)
     max_drawdown: Decimal
     volatility: Decimal
     sharpe_ratio: Decimal
     sortino_ratio: Decimal
-    beta: Optional[Decimal]
-    correlation_to_benchmark: Optional[Decimal]
+    beta: Decimal | None
+    correlation_to_benchmark: Decimal | None
     concentration_risk: Decimal
     timestamp: datetime
-    
+
     @property
     def risk_score(self) -> int:
         """Calculate overall risk score (1-10 scale)."""
         # Simplified risk scoring
         score = 5  # Base score
-        
+
         # Adjust for volatility
         if self.volatility > Decimal("0.3"):
             score += 2
         elif self.volatility < Decimal("0.1"):
             score -= 1
-        
+
         # Adjust for max drawdown
         if self.max_drawdown > Decimal("0.2"):
             score += 2
         elif self.max_drawdown < Decimal("0.05"):
             score -= 1
-        
+
         # Adjust for Sharpe ratio
         if self.sharpe_ratio > Decimal("2.0"):
             score -= 2
         elif self.sharpe_ratio < Decimal("0.5"):
             score += 1
-        
+
         return max(1, min(10, score))
 
 
 # Factory functions for creating portfolio components
 
+
 def create_spot_account(
-    balances: Dict[str, Decimal], 
-    base_currency: str = "USD"
+    balances: dict[str, Decimal], base_currency: str = "USD"
 ) -> AccountSnapshot:
     """Create a spot trading account snapshot."""
     balance_objects = []
     for asset, amount in balances.items():
-        balance_objects.append(AssetBalance(
-            asset=asset,
-            available=amount,
-            locked=Decimal("0"),
-            total=amount,
-            account_type=AccountType.SPOT,
-            last_updated=datetime.now()
-        ))
-    
+        balance_objects.append(
+            AssetBalance(
+                asset=asset,
+                available=amount,
+                locked=Decimal(0),
+                total=amount,
+                account_type=AccountType.SPOT,
+                last_updated=datetime.now(),
+            )
+        )
+
     total_equity = sum(
-        balance.total for balance in balance_objects 
-        if balance.asset == base_currency
+        balance.total for balance in balance_objects if balance.asset == base_currency
     )
-    
+
     return AccountSnapshot(
         account_type=AccountType.SPOT,
         balances=tuple(balance_objects),
         base_currency=base_currency,
         total_equity=total_equity,
         margin_info=None,
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
 
 
 def create_futures_account(
-    balances: Dict[str, Decimal],
+    balances: dict[str, Decimal],
     margin_used: Decimal,
     leverage: Decimal,
-    base_currency: str = "USD"
+    base_currency: str = "USD",
 ) -> AccountSnapshot:
     """Create a futures trading account snapshot."""
     balance_objects = []
     for asset, amount in balances.items():
-        balance_objects.append(AssetBalance(
-            asset=asset,
-            available=amount,
-            locked=Decimal("0"),
-            total=amount,
-            account_type=AccountType.FUTURES,
-            last_updated=datetime.now()
-        ))
-    
+        balance_objects.append(
+            AssetBalance(
+                asset=asset,
+                available=amount,
+                locked=Decimal(0),
+                total=amount,
+                account_type=AccountType.FUTURES,
+                last_updated=datetime.now(),
+            )
+        )
+
     total_equity = sum(
-        balance.total for balance in balance_objects 
-        if balance.asset == base_currency
+        balance.total for balance in balance_objects if balance.asset == base_currency
     )
-    
+
     margin_info = MarginInfo(
         initial_margin=margin_used,
         maintenance_margin=margin_used * Decimal("0.8"),  # Simplified
@@ -708,39 +725,44 @@ def create_futures_account(
         margin_available=total_equity - margin_used,
         equity=total_equity,
         leverage=leverage,
-        margin_ratio=total_equity / margin_used if margin_used > 0 else Decimal("0"),
+        margin_ratio=total_equity / margin_used if margin_used > 0 else Decimal(0),
         liquidation_threshold=Decimal("1.1"),  # 110% margin ratio threshold
-        last_updated=datetime.now()
+        last_updated=datetime.now(),
     )
-    
+
     return AccountSnapshot(
         account_type=AccountType.FUTURES,
         balances=tuple(balance_objects),
         base_currency=base_currency,
         total_equity=total_equity,
         margin_info=margin_info,
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
 
 
 def create_balanced_allocation(
-    assets: Tuple[str, ...], 
-    rebalance_threshold: float = 0.05
-) -> Tuple[AssetAllocation, ...]:
+    assets: tuple[str, ...], rebalance_threshold: float = 0.05
+) -> tuple[AssetAllocation, ...]:
     """Create balanced allocation across multiple assets."""
     if not assets:
         return tuple()
-    
+
     equal_weight = 1.0 / len(assets)
     allocations = []
-    
+
     for asset in assets:
-        allocations.append(AssetAllocation(
-            asset=asset,
-            target_percentage=Percentage.create(equal_weight).success(),
-            min_percentage=Percentage.create(max(0.0, equal_weight - 0.1)).success(),
-            max_percentage=Percentage.create(min(1.0, equal_weight + 0.1)).success(),
-            rebalance_threshold=Percentage.create(rebalance_threshold).success()
-        ))
-    
+        allocations.append(
+            AssetAllocation(
+                asset=asset,
+                target_percentage=Percentage.create(equal_weight).success(),
+                min_percentage=Percentage.create(
+                    max(0.0, equal_weight - 0.1)
+                ).success(),
+                max_percentage=Percentage.create(
+                    min(1.0, equal_weight + 0.1)
+                ).success(),
+                rebalance_threshold=Percentage.create(rebalance_threshold).success(),
+            )
+        )
+
     return tuple(allocations)

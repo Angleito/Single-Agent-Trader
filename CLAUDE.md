@@ -143,12 +143,12 @@ services:
       - TRADING_MODE=paper
       - EXCHANGE_TYPE=coinbase
       - LOG_LEVEL=INFO
-      
+
       # Security (credentials from .env file)
       - COINBASE_API_KEY=${COINBASE_API_KEY}
       - COINBASE_PRIVATE_KEY=${COINBASE_PRIVATE_KEY}
       - LLM_OPENAI_API_KEY=${LLM_OPENAI_API_KEY}
-      
+
       # Feature flags
       - ENABLE_WEBSOCKET=true
       - ENABLE_RISK_MANAGEMENT=true
@@ -551,7 +551,7 @@ poetry run pytest --cov=bot
 ```bash
 # Essential Configuration
 STRATEGY_TYPE=llm                    # Strategy: momentum, mean_reversion, llm
-TRADING_MODE=paper                   # Mode: paper, live, backtest  
+TRADING_MODE=paper                   # Mode: paper, live, backtest
 EXCHANGE_TYPE=coinbase              # Exchange: coinbase, bluefin
 TRADING_PAIRS=BTC-USD               # Trading pairs (comma-separated)
 TRADING_INTERVAL=5m                 # Interval: 1m, 5m, 1h, etc.
@@ -580,7 +580,7 @@ ENABLE_METRICS=true                 # Performance metrics
 python -m bot.main live --profile conservative
 # Sets: leverage=2, max_size_pct=10, temperature=0.05
 
-# Aggressive Profile  
+# Aggressive Profile
 python -m bot.main live --profile aggressive
 # Sets: leverage=10, max_size_pct=50, temperature=0.2
 

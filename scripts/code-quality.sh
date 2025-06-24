@@ -72,7 +72,7 @@ poetry run pytest --cov=bot || echo "⚠️  Test failures found (non-blocking)"
 if [ "$FP_ENABLED" = true ]; then
     echo ""
     print_status "FP" "Running functional programming quality checks..."
-    
+
     # Run FP-specific code quality
     if [ -f "./scripts/fp-code-quality.sh" ]; then
         print_status "FP" "Running FP-specific quality pipeline..."
@@ -80,10 +80,10 @@ if [ "$FP_ENABLED" = true ]; then
     else
         print_status "WARNING" "FP code quality script not found"
     fi
-    
+
     # Additional FP integration checks
     print_status "FP" "Checking FP/imperative integration..."
-    
+
     # Check for mixed FP/imperative patterns
     python3 -c "
 import sys
@@ -92,7 +92,7 @@ from pathlib import Path
 
 def check_mixed_patterns():
     issues = []
-    
+
     # Check for imperative patterns in FP code
     fp_dir = Path('bot/fp')
     if fp_dir.exists():
@@ -100,16 +100,16 @@ def check_mixed_patterns():
             try:
                 with open(py_file, 'r') as f:
                     content = f.read()
-                
+
                 # Check for imperative patterns
                 if 'raise ' in content and 'Result' in content:
                     issues.append(f'Mixed exception/Result pattern in {py_file}')
-                
+
                 if 'return None' in content and 'Maybe' in content:
                     issues.append(f'Mixed None/Maybe pattern in {py_file}')
             except Exception:
                 continue
-    
+
     return issues
 
 issues = check_mixed_patterns()
@@ -129,10 +129,10 @@ else:
         IMPERATIVE_FILES=$(find bot/ -name "*.py" -not -path "bot/fp/*" | wc -l)
         FP_FILES=$(find bot/fp/ -name "*.py" 2>/dev/null | wc -l || echo "0")
         FP_TESTS=$(find tests/unit/fp/ -name "test_*.py" 2>/dev/null | wc -l || echo "0")
-        
+
         print_status "INFO" "Code distribution: ${IMPERATIVE_FILES} imperative, ${FP_FILES} FP files"
         print_status "INFO" "FP test files: ${FP_TESTS}"
-        
+
         if [ "$FP_FILES" -gt 0 ] && [ "$FP_TESTS" -eq 0 ]; then
             print_status "WARNING" "FP code exists but no FP tests found"
         elif [ "$FP_FILES" -gt 0 ] && [ "$FP_TESTS" -gt 0 ]; then
@@ -142,7 +142,7 @@ else:
     else
         print_status "WARNING" "No FP test directory found"
     fi
-    
+
     print_status "SUCCESS" "FP quality checks completed"
 fi
 

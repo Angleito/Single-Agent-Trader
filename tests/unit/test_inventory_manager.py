@@ -25,9 +25,10 @@ from bot.trading_types import Order, OrderStatus, Position
 
 # Functional imports (added for migration to functional programming patterns)
 try:
+    from bot.fp.strategies.execution import ExecutionResult, ExecutionStrategy
     from bot.fp.strategies.portfolio import PortfolioState, PositionAllocation
-    from bot.fp.strategies.execution import ExecutionStrategy, ExecutionResult
-    from bot.fp.types.trading import TradeSignal, Long, Short, Hold
+    from bot.fp.types.trading import Hold, Long, Short, TradeSignal
+
     FUNCTIONAL_STRATEGIES_AVAILABLE = True
 except ImportError:
     # Functional implementations not available, continue with legacy

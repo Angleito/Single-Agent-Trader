@@ -5,7 +5,8 @@ This module provides an IO type for wrapping side-effectful computations
 and composing them in a pure way.
 """
 
-from typing import Callable, Generic, TypeVar
+from collections.abc import Callable
+from typing import Generic, TypeVar
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -32,9 +33,11 @@ class IO(Generic[T]):
 
     def filter(self, predicate: Callable[[T], bool]) -> "IO[T | None]":
         """Filter IO value based on predicate."""
+
         def filtered_computation() -> T | None:
             value = self.run()
             return value if predicate(value) else None
+
         return IO(filtered_computation)
 
     def zip(self, other: "IO[U]") -> "IO[tuple[T, U]]":
@@ -42,7 +45,7 @@ class IO(Generic[T]):
         return IO(lambda: (self.run(), other.run()))
 
     def __str__(self) -> str:
-        return f"IO(<computation>)"
+        return "IO(<computation>)"
 
     def __repr__(self) -> str:
         return f"IO({self._computation})"
@@ -65,8 +68,10 @@ def delay(computation: Callable[[], T]) -> IO[T]:
 
 def sequence_io(ios: list[IO[T]]) -> IO[list[T]]:
     """Execute a list of IO computations and collect results."""
+
     def run_all() -> list[T]:
         return [io.run() for io in ios]
+
     return IO(run_all)
 
 
@@ -77,36 +82,44 @@ def traverse_io(items: list[T], func: Callable[[T], IO[U]]) -> IO[list[U]]:
 
 def for_each_io(items: list[T], action: Callable[[T], IO[None]]) -> IO[None]:
     """Execute an IO action for each item in the list."""
+
     def run_actions() -> None:
         for item in items:
             action(item).run()
+
     return IO(run_actions)
 
 
 def while_io(condition: IO[bool], action: IO[None]) -> IO[None]:
     """Repeat action while condition is true."""
+
     def loop() -> None:
         while condition.run():
             action.run()
+
     return IO(loop)
 
 
 def if_io(condition: IO[bool], then_action: IO[T], else_action: IO[T]) -> IO[T]:
     """Conditional IO execution."""
+
     def conditional() -> T:
         if condition.run():
             return then_action.run()
         return else_action.run()
+
     return IO(conditional)
 
 
 def try_io(io: IO[T], error_handler: Callable[[Exception], T]) -> IO[T]:
     """Try to run IO, handling exceptions."""
+
     def safe_run() -> T:
         try:
             return io.run()
         except Exception as e:
             return error_handler(e)
+
     return IO(safe_run)
 
 
@@ -145,16 +158,16 @@ def io_builder(initial: IO[T]) -> IOBuilder[T]:
 
 __all__ = [
     "IO",
-    "pure",
-    "unit", 
+    "IOBuilder",
     "delay",
+    "for_each_io",
+    "if_io",
+    "io_builder",
+    "pure",
     "sequence_io",
     "traverse_io",
-    "for_each_io",
-    "while_io",
-    "if_io",
     "try_io",
+    "unit",
     "unsafe_run_io_sync",
-    "IOBuilder",
-    "io_builder",
+    "while_io",
 ]

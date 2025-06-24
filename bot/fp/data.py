@@ -9,23 +9,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator, Callable
-from dataclasses import dataclass
+from collections.abc import Callable
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from .adapters.market_data_adapter import (
-    FunctionalMarketDataAdapter,
-    MarketDataConfig,
-    create_market_data_adapter,
-    create_coinbase_adapter,
-    create_bluefin_adapter,
-)
-from .effects.io import IO, IOEither, AsyncIO, from_try
-from .types.market import MarketSnapshot, OHLCV, OrderBook
 from ..config import settings
 from ..trading_types import MarketData
+from .adapters.market_data_adapter import (
+    create_market_data_adapter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +27,7 @@ class FunctionalMarketDataProvider:
     """
     Functional market data provider that maintains compatibility with the imperative interface
     while using functional effects internally.
-    
+
     This class acts as a bridge between the imperative API expected by the rest of the system
     and the functional effects-based implementation.
     """
@@ -43,37 +36,39 @@ class FunctionalMarketDataProvider:
         """Initialize functional market data provider"""
         self.symbol = symbol or settings.trading.symbol
         self.interval = interval or settings.trading.interval
-        
+
         # Create functional adapter
         self._adapter = create_market_data_adapter(
             exchange_type=settings.exchange.exchange_type,
             symbol=self.symbol,
-            interval=self.interval
+            interval=self.interval,
         )
-        
+
         # State tracking for compatibility
         self._connected = False
         self._subscribers: list[Callable[[MarketData], None]] = []
-        
-        logger.info(f"Initialized functional market data provider for {self.symbol} @ {self.interval}")
+
+        logger.info(
+            f"Initialized functional market data provider for {self.symbol} @ {self.interval}"
+        )
 
     async def connect(self, fetch_historical: bool = True) -> None:
         """Connect to market data feeds using functional effects"""
         try:
             # Use functional effect to connect
             result = self._adapter.connect().run()
-            
+
             if result.is_right():
                 self._connected = True
                 logger.info("Functional market data provider connected successfully")
-                
+
                 # Fetch initial historical data if requested
                 if fetch_historical:
                     await self._fetch_initial_data()
             else:
-                error = result.value if hasattr(result, 'value') else "Unknown error"
+                error = result.value if hasattr(result, "value") else "Unknown error"
                 raise Exception(f"Failed to connect: {error}")
-                
+
         except Exception as e:
             logger.error(f"Connection failed: {e}")
             raise
@@ -111,9 +106,9 @@ class FunctionalMarketDataProvider:
             result = self._adapter.fetch_historical_data(
                 start_time=start_time,
                 end_time=end_time,
-                limit=settings.data.candle_limit
+                limit=settings.data.candle_limit,
             ).run()
-            
+
             if result.is_right():
                 # Convert functional OHLCV to MarketData for compatibility
                 ohlcv_data = result.value
@@ -129,10 +124,9 @@ class FunctionalMarketDataProvider:
                     )
                     for candle in ohlcv_data
                 ]
-            else:
-                logger.error(f"Failed to fetch historical data: {result.value}")
-                return []
-                
+            logger.error(f"Failed to fetch historical data: {result.value}")
+            return []
+
         except Exception as e:
             logger.error(f"Error fetching historical data: {e}")
             return []
@@ -143,9 +137,8 @@ class FunctionalMarketDataProvider:
             result = self._adapter.get_latest_price().run()
             if result.is_right():
                 return result.value
-            else:
-                logger.warning(f"Failed to get latest price: {result.value}")
-                return None
+            logger.warning(f"Failed to get latest price: {result.value}")
+            return None
         except Exception as e:
             logger.error(f"Error fetching latest price: {e}")
             return None
@@ -161,9 +154,8 @@ class FunctionalMarketDataProvider:
                     "asks": orderbook.asks,
                     "timestamp": orderbook.timestamp,
                 }
-            else:
-                logger.warning(f"Failed to fetch orderbook: {result.value}")
-                return None
+            logger.warning(f"Failed to fetch orderbook: {result.value}")
+            return None
         except Exception as e:
             logger.error(f"Error fetching orderbook: {e}")
             return None
@@ -186,9 +178,8 @@ class FunctionalMarketDataProvider:
                     )
                     for candle in ohlcv_data
                 ]
-            else:
-                logger.warning(f"Failed to get cached OHLCV: {result.value}")
-                return []
+            logger.warning(f"Failed to get cached OHLCV: {result.value}")
+            return []
         except Exception as e:
             logger.error(f"Error getting cached OHLCV: {e}")
             return []
@@ -199,29 +190,30 @@ class FunctionalMarketDataProvider:
             result = self._adapter.get_latest_price().run()
             if result.is_right():
                 return result.value
-            else:
-                return None
+            return None
         except Exception:
             return None
 
     def to_dataframe(self, limit: int | None = None):
         """Convert OHLCV data to pandas DataFrame"""
         import pandas as pd
-        
+
         data = self.get_latest_ohlcv(limit)
         if not data:
             return pd.DataFrame()
 
         df_data = []
         for candle in data:
-            df_data.append({
-                "timestamp": candle.timestamp,
-                "open": float(candle.open),
-                "high": float(candle.high),
-                "low": float(candle.low),
-                "close": float(candle.close),
-                "volume": float(candle.volume),
-            })
+            df_data.append(
+                {
+                    "timestamp": candle.timestamp,
+                    "open": float(candle.open),
+                    "high": float(candle.high),
+                    "low": float(candle.low),
+                    "close": float(candle.close),
+                    "volume": float(candle.volume),
+                }
+            )
 
         market_df = pd.DataFrame(df_data)
         return market_df.set_index("timestamp")
@@ -230,7 +222,7 @@ class FunctionalMarketDataProvider:
         """Subscribe to real-time data updates"""
         self._subscribers.append(callback)
         logger.debug(f"Added subscriber: {callback.__name__}")
-        
+
         # Start real-time streaming if this is the first subscriber
         if len(self._subscribers) == 1:
             asyncio.create_task(self._start_real_time_streaming())
@@ -246,7 +238,7 @@ class FunctionalMarketDataProvider:
         try:
             # Get the market data stream using functional effects
             stream_result = await self._adapter.stream_market_data().run()
-            
+
             async for snapshot in stream_result:
                 # Convert functional MarketSnapshot to MarketData for compatibility
                 market_data = MarketData(
@@ -254,11 +246,11 @@ class FunctionalMarketDataProvider:
                     timestamp=snapshot.timestamp,
                     open=snapshot.price,  # For real-time, open == current price
                     high=snapshot.price,  # For real-time, high == current price
-                    low=snapshot.price,   # For real-time, low == current price
+                    low=snapshot.price,  # For real-time, low == current price
                     close=snapshot.price,
                     volume=snapshot.volume,
                 )
-                
+
                 # Notify all subscribers
                 for callback in self._subscribers:
                     try:
@@ -268,7 +260,7 @@ class FunctionalMarketDataProvider:
                             callback(market_data)
                     except Exception as e:
                         logger.error(f"Error in subscriber callback: {e}")
-                        
+
         except Exception as e:
             logger.error(f"Error in real-time streaming: {e}")
 
@@ -287,13 +279,14 @@ class FunctionalMarketDataProvider:
     async def wait_for_websocket_data(self, timeout: int = 30) -> bool:
         """Wait for WebSocket to start receiving data"""
         import time
+
         start_time = time.time()
-        
+
         while time.time() - start_time < timeout:
             if self.has_websocket_data():
                 return True
             await asyncio.sleep(0.1)
-        
+
         return False
 
     def get_data_status(self) -> dict[str, Any]:
@@ -332,7 +325,7 @@ class FunctionalMarketDataClient:
         self.provider = FunctionalMarketDataProvider(symbol, interval)
         self._initialized = False
 
-    async def __aenter__(self) -> "FunctionalMarketDataClient":
+    async def __aenter__(self) -> FunctionalMarketDataClient:
         """Async context manager entry"""
         await self.connect()
         return self
@@ -359,9 +352,8 @@ class FunctionalMarketDataClient:
         self, lookback_hours: int = 24, granularity: str | None = None
     ):
         """Get historical data as DataFrame"""
-        import pandas as pd
         from datetime import timedelta
-        
+
         if not self._initialized:
             await self.connect()
 
@@ -392,11 +384,15 @@ class FunctionalMarketDataClient:
         """Get latest OHLCV data as DataFrame"""
         return self.provider.to_dataframe(limit)
 
-    def subscribe_to_price_updates(self, callback: Callable[[MarketData], None]) -> None:
+    def subscribe_to_price_updates(
+        self, callback: Callable[[MarketData], None]
+    ) -> None:
         """Subscribe to real-time price updates"""
         self.provider.subscribe_to_updates(callback)
 
-    def unsubscribe_from_price_updates(self, callback: Callable[[MarketData], None]) -> None:
+    def unsubscribe_from_price_updates(
+        self, callback: Callable[[MarketData], None]
+    ) -> None:
         """Unsubscribe from real-time price updates"""
         self.provider.unsubscribe_from_updates(callback)
 
@@ -407,20 +403,22 @@ class FunctionalMarketDataClient:
     def _to_dataframe(self, data: list[MarketData]):
         """Convert MarketData to DataFrame"""
         import pandas as pd
-        
+
         if not data:
             return pd.DataFrame()
 
         df_data = []
         for candle in data:
-            df_data.append({
-                "timestamp": candle.timestamp,
-                "open": float(candle.open),
-                "high": float(candle.high),
-                "low": float(candle.low),
-                "close": float(candle.close),
-                "volume": float(candle.volume),
-            })
+            df_data.append(
+                {
+                    "timestamp": candle.timestamp,
+                    "open": float(candle.open),
+                    "high": float(candle.high),
+                    "low": float(candle.low),
+                    "close": float(candle.close),
+                    "volume": float(candle.volume),
+                }
+            )
 
         historical_df = pd.DataFrame(df_data)
         historical_df = historical_df.set_index("timestamp")
@@ -428,6 +426,7 @@ class FunctionalMarketDataClient:
 
 
 # Factory functions for compatibility
+
 
 def create_market_data_client(
     symbol: str | None = None, interval: str | None = None

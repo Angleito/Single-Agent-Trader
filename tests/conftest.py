@@ -725,11 +725,13 @@ def _cleanup_test_artifacts() -> Generator[None, None, None]:
 # FUNCTIONAL PROGRAMMING TEST FIXTURES
 # =============================================================================
 
+
 @pytest.fixture
 def fp_result_ok():
     """Fixture for Ok Result monad."""
     try:
         from bot.fp.types.effects import Ok
+
         return Ok(42)
     except ImportError:
         return None
@@ -740,6 +742,7 @@ def fp_result_err():
     """Fixture for Err Result monad."""
     try:
         from bot.fp.types.effects import Err
+
         return Err("Test error")
     except ImportError:
         return None
@@ -750,6 +753,7 @@ def fp_maybe_some():
     """Fixture for Some Maybe monad."""
     try:
         from bot.fp.types.effects import Some
+
         return Some(42)
     except ImportError:
         return None
@@ -760,6 +764,7 @@ def fp_maybe_nothing():
     """Fixture for Nothing Maybe monad."""
     try:
         from bot.fp.types.effects import Nothing
+
         return Nothing()
     except ImportError:
         return None
@@ -770,6 +775,7 @@ def fp_io_pure():
     """Fixture for pure IO monad."""
     try:
         from bot.fp.types.effects import IO
+
         return IO.pure(42)
     except ImportError:
         return None
@@ -779,10 +785,11 @@ def fp_io_pure():
 def fp_market_snapshot():
     """Fixture for FP MarketSnapshot."""
     try:
-        from bot.fp.types.market import MarketSnapshot
-        from decimal import Decimal
         from datetime import UTC, datetime
-        
+        from decimal import Decimal
+
+        from bot.fp.types.market import MarketSnapshot
+
         return MarketSnapshot(
             timestamp=datetime.now(UTC),
             symbol="BTC-USD",
@@ -799,9 +806,10 @@ def fp_market_snapshot():
 def fp_position():
     """Fixture for FP Position."""
     try:
-        from bot.fp.types.portfolio import Position
         from decimal import Decimal
-        
+
+        from bot.fp.types.portfolio import Position
+
         return Position(
             symbol="BTC-USD",
             side="LONG",
@@ -817,9 +825,10 @@ def fp_position():
 def fp_portfolio():
     """Fixture for FP Portfolio."""
     try:
-        from bot.fp.types.portfolio import Portfolio, Position
         from decimal import Decimal
-        
+
+        from bot.fp.types.portfolio import Portfolio, Position
+
         position = Position(
             symbol="BTC-USD",
             side="LONG",
@@ -827,7 +836,7 @@ def fp_portfolio():
             entry_price=Decimal("45000.00"),
             current_price=Decimal("50000.00"),
         )
-        
+
         return Portfolio(
             positions=(position,),
             cash_balance=Decimal("10000.00"),
@@ -841,11 +850,8 @@ def fp_trade_signal_long():
     """Fixture for FP Long trade signal."""
     try:
         from bot.fp.types.trading import Long
-        return Long(
-            confidence=0.8,
-            size=0.25,
-            reason="Strong uptrend detected"
-        )
+
+        return Long(confidence=0.8, size=0.25, reason="Strong uptrend detected")
     except ImportError:
         return None
 
@@ -855,11 +861,8 @@ def fp_trade_signal_short():
     """Fixture for FP Short trade signal."""
     try:
         from bot.fp.types.trading import Short
-        return Short(
-            confidence=0.7,
-            size=0.3,
-            reason="Bearish divergence detected"
-        )
+
+        return Short(confidence=0.7, size=0.3, reason="Bearish divergence detected")
     except ImportError:
         return None
 
@@ -869,6 +872,7 @@ def fp_trade_signal_hold():
     """Fixture for FP Hold trade signal."""
     try:
         from bot.fp.types.trading import Hold
+
         return Hold(reason="Market uncertainty")
     except ImportError:
         return None
@@ -879,6 +883,7 @@ def fp_market_make_signal():
     """Fixture for FP MarketMake trade signal."""
     try:
         from bot.fp.types.trading import MarketMake
+
         return MarketMake(
             bid_price=49900.0,
             ask_price=50100.0,
@@ -894,6 +899,7 @@ def fp_limit_order():
     """Fixture for FP LimitOrder."""
     try:
         from bot.fp.types.trading import LimitOrder
+
         return LimitOrder(
             symbol="BTC-USD",
             side="buy",
@@ -909,6 +915,7 @@ def fp_market_order():
     """Fixture for FP MarketOrder."""
     try:
         from bot.fp.types.trading import MarketOrder
+
         return MarketOrder(
             symbol="BTC-USD",
             side="buy",
@@ -922,9 +929,10 @@ def fp_market_order():
 def fp_base_types():
     """Fixture providing FP base types utilities."""
     try:
-        from bot.fp.types.base import Money, Percentage, Symbol, TimeInterval
         from decimal import Decimal
-        
+
+        from bot.fp.types.base import Money, Percentage, Symbol, TimeInterval
+
         return {
             "money": Money(amount=Decimal("1000.50"), currency="USD"),
             "percentage": Percentage(value=Decimal("0.15")),
@@ -939,15 +947,16 @@ def fp_base_types():
 def fp_config_types():
     """Fixture providing FP config types."""
     try:
-        from bot.fp.types.config import TradingConfig, ExchangeConfig, RiskConfig
-        from bot.fp.types.base import Symbol, TimeInterval, Percentage
         from decimal import Decimal
-        
+
+        from bot.fp.types.base import Percentage, Symbol, TimeInterval
+        from bot.fp.types.config import ExchangeConfig, RiskConfig, TradingConfig
+
         return {
             "trading_config": TradingConfig(
                 symbol=Symbol.create("BTC-USD").unwrap(),
                 interval=TimeInterval.create("1m").unwrap(),
-                leverage=Decimal("5"),
+                leverage=Decimal(5),
             ),
             "risk_config": RiskConfig(
                 max_position_size=Percentage.create(0.25).unwrap(),
@@ -963,20 +972,22 @@ def fp_config_types():
 # FP MOCK OBJECTS AND ADAPTERS
 # =============================================================================
 
+
 @pytest.fixture
 def fp_mock_exchange_adapter():
     """Mock FP exchange adapter for testing."""
     try:
-        from unittest.mock import Mock
-        from bot.fp.types.effects import Ok, IO
         from decimal import Decimal
-        
+        from unittest.mock import Mock
+
+        from bot.fp.types.effects import IO, Ok
+
         adapter = Mock()
         adapter.get_balance = Mock(return_value=IO.pure(Ok(Decimal("10000.00"))))
         adapter.place_order = Mock(return_value=IO.pure(Ok({"order_id": "test-123"})))
         adapter.get_market_data = Mock(return_value=IO.pure(Ok({})))
         adapter.supports_functional = Mock(return_value=True)
-        
+
         return adapter
     except ImportError:
         return Mock()
@@ -987,13 +998,16 @@ def fp_mock_strategy():
     """Mock FP strategy for testing."""
     try:
         from unittest.mock import Mock
+
         from bot.fp.types.effects import IO, Ok
         from bot.fp.types.trading import Hold
-        
+
         strategy = Mock()
-        strategy.generate_signal = Mock(return_value=IO.pure(Ok(Hold(reason="Test hold"))))
+        strategy.generate_signal = Mock(
+            return_value=IO.pure(Ok(Hold(reason="Test hold")))
+        )
         strategy.update_market_data = Mock(return_value=IO.pure(Ok(None)))
-        
+
         return strategy
     except ImportError:
         return Mock()
@@ -1004,13 +1018,14 @@ def fp_mock_risk_manager():
     """Mock FP risk manager for testing."""
     try:
         from unittest.mock import Mock
+
         from bot.fp.types.effects import IO, Ok
-        
+
         risk_manager = Mock()
         risk_manager.validate_trade = Mock(return_value=IO.pure(Ok(True)))
         risk_manager.calculate_position_size = Mock(return_value=IO.pure(Ok(0.1)))
         risk_manager.check_limits = Mock(return_value=IO.pure(Ok(True)))
-        
+
         return risk_manager
     except ImportError:
         return Mock()
@@ -1020,39 +1035,46 @@ def fp_mock_risk_manager():
 # FP TEST UTILITIES
 # =============================================================================
 
+
 @pytest.fixture
 def fp_test_utils():
     """FP test utilities and helpers."""
-    
+
     class FPTestUtils:
         """Utilities for testing FP patterns."""
-        
+
         @staticmethod
         def assert_result_ok(result, expected_value=None):
             """Assert Result is Ok and optionally check value."""
-            assert result.is_ok(), f"Expected Ok, got Err: {result.error if hasattr(result, 'error') else result}"
+            assert (
+                result.is_ok()
+            ), f"Expected Ok, got Err: {result.error if hasattr(result, 'error') else result}"
             if expected_value is not None:
                 assert result.unwrap() == expected_value
-        
+
         @staticmethod
         def assert_result_err(result, expected_error=None):
             """Assert Result is Err and optionally check error."""
-            assert result.is_err(), f"Expected Err, got Ok: {result.unwrap() if hasattr(result, 'unwrap') else result}"
+            assert (
+                result.is_err()
+            ), f"Expected Err, got Ok: {result.unwrap() if hasattr(result, 'unwrap') else result}"
             if expected_error is not None:
                 assert result.error == expected_error
-        
+
         @staticmethod
         def assert_maybe_some(maybe, expected_value=None):
             """Assert Maybe is Some and optionally check value."""
-            assert maybe.is_some(), f"Expected Some, got Nothing"
+            assert maybe.is_some(), "Expected Some, got Nothing"
             if expected_value is not None:
                 assert maybe.unwrap() == expected_value
-        
+
         @staticmethod
         def assert_maybe_nothing(maybe):
             """Assert Maybe is Nothing."""
-            assert maybe.is_nothing(), f"Expected Nothing, got Some: {maybe.unwrap() if hasattr(maybe, 'unwrap') else maybe}"
-        
+            assert (
+                maybe.is_nothing()
+            ), f"Expected Nothing, got Some: {maybe.unwrap() if hasattr(maybe, 'unwrap') else maybe}"
+
         @staticmethod
         def assert_io_result(io, expected_value=None):
             """Assert IO computation result."""
@@ -1060,15 +1082,16 @@ def fp_test_utils():
             if expected_value is not None:
                 assert result == expected_value
             return result
-        
+
         @staticmethod
         def create_test_market_data():
             """Create test market data in FP format."""
             try:
-                from bot.fp.types.market import MarketSnapshot, OHLCV
-                from decimal import Decimal
                 from datetime import UTC, datetime
-                
+                from decimal import Decimal
+
+                from bot.fp.types.market import OHLCV, MarketSnapshot
+
                 return MarketSnapshot(
                     timestamp=datetime.now(UTC),
                     symbol="BTC-USD",
@@ -1079,24 +1102,25 @@ def fp_test_utils():
                 )
             except ImportError:
                 return None
-        
+
         @staticmethod
         def create_test_ohlcv_series(length=100):
             """Create test OHLCV series in FP format."""
             try:
-                from bot.fp.types.market import OHLCV
-                from decimal import Decimal
-                from datetime import UTC, datetime, timedelta
                 import random
-                
+                from datetime import UTC, datetime, timedelta
+                from decimal import Decimal
+
+                from bot.fp.types.market import OHLCV
+
                 series = []
                 base_time = datetime.now(UTC)
                 base_price = 50000.0
-                
+
                 for i in range(length):
                     price_change = random.uniform(-0.02, 0.02)
                     current_price = base_price * (1 + price_change)
-                    
+
                     ohlcv = OHLCV(
                         timestamp=base_time + timedelta(minutes=i),
                         open=Decimal(str(current_price * 0.999)),
@@ -1107,11 +1131,11 @@ def fp_test_utils():
                     )
                     series.append(ohlcv)
                     base_price = current_price
-                
+
                 return series
             except ImportError:
                 return []
-    
+
     return FPTestUtils()
 
 
@@ -1119,16 +1143,19 @@ def fp_test_utils():
 def fp_property_strategies():
     """Property-based testing strategies for FP types."""
     try:
-        from hypothesis import strategies as st
-        from decimal import Decimal
         from datetime import UTC, datetime, timedelta
-        
+        from decimal import Decimal
+
+        from hypothesis import strategies as st
+
         @st.composite
         def fp_decimal_strategy(draw, min_value=0, max_value=1000000, places=8):
             """Strategy for generating Decimal values."""
-            value = draw(st.floats(min_value=min_value, max_value=max_value, allow_nan=False))
+            value = draw(
+                st.floats(min_value=min_value, max_value=max_value, allow_nan=False)
+            )
             return Decimal(str(round(value, places)))
-        
+
         @st.composite
         def fp_timestamp_strategy(draw):
             """Strategy for generating timestamps."""
@@ -1136,7 +1163,7 @@ def fp_property_strategies():
             delta_days = draw(st.integers(min_value=-365, max_value=1))
             delta_seconds = draw(st.integers(min_value=0, max_value=86400))
             return base + timedelta(days=delta_days, seconds=delta_seconds)
-        
+
         return {
             "decimal": fp_decimal_strategy,
             "timestamp": fp_timestamp_strategy,
@@ -1152,6 +1179,7 @@ def fp_property_strategies():
 # =============================================================================
 # ORIGINAL PARAMETRIZED FIXTURES (MAINTAINED FOR BACKWARD COMPATIBILITY)
 # =============================================================================
+
 
 @pytest.fixture(
     params=[
@@ -1192,10 +1220,10 @@ def market_scenario(request: pytest.FixtureRequest) -> dict[str, Any]:
     return scenarios[request.param]
 
 
-@pytest.fixture(
-    params=["fp_scenario", "imperative_scenario"]
-)
-def fp_migration_scenario(request: pytest.FixtureRequest, fp_market_snapshot, sample_price_data) -> dict[str, Any]:
+@pytest.fixture(params=["fp_scenario", "imperative_scenario"])
+def fp_migration_scenario(
+    request: pytest.FixtureRequest, fp_market_snapshot, sample_price_data
+) -> dict[str, Any]:
     """Parametrized scenarios for testing FP migration compatibility."""
     if request.param == "fp_scenario":
         return {
@@ -1203,12 +1231,11 @@ def fp_migration_scenario(request: pytest.FixtureRequest, fp_market_snapshot, sa
             "market_data": fp_market_snapshot,
             "is_fp": True,
         }
-    else:
-        return {
-            "type": "imperative",
-            "market_data": sample_price_data,
-            "is_fp": False,
-        }
+    return {
+        "type": "imperative",
+        "market_data": sample_price_data,
+        "is_fp": False,
+    }
 
 
 # Custom assertions

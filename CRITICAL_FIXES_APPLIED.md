@@ -38,7 +38,7 @@ class PositionUpdate:
 
 ### ✅ Functional Programming Core
 - Result monad: Working correctly
-- Maybe monad: Working correctly  
+- Maybe monad: Working correctly
 - IO monad: Working correctly
 - Effect types: Properly implemented
 

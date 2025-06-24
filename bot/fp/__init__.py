@@ -15,16 +15,16 @@ Key Components:
 Usage:
     # Create enhanced market data adapter
     from bot.fp.adapters.enhanced_market_data_adapter import create_enhanced_coinbase_adapter
-    
+
     adapter = create_enhanced_coinbase_adapter(
         symbol="BTC-USD",
-        interval="1m", 
+        interval="1m",
         performance_mode="balanced"
     )
-    
+
     # Initialize enhanced runtime
     from bot.fp.runtime.enhanced_data_runtime import create_and_initialize_runtime
-    
+
     runtime = await create_and_initialize_runtime(
         symbol="BTC-USD",
         performance_mode="low_latency"
@@ -32,35 +32,35 @@ Usage:
 """
 
 # Core functional types and effects
-from .types.result import Result, Ok, Err
-from .types.market import MarketSnapshot, OHLCV, OrderBook, Trade, Candle
 from .effects.io import IO, AsyncIO, IOEither
+from .types.market import OHLCV, Candle, MarketSnapshot, OrderBook, Trade
+from .types.result import Err, Ok, Result
 
 # Re-export standardized types for consistent usage
 try:
     from ..types import (
+        ConnectionState,
+        MarketDataStatus,
+        OrderId,
         Price,
         Quantity,
         Symbol,
-        OrderId,
-        MarketDataStatus,
-        ConnectionState,
         ValidationResult,
+        ensure_decimal,
         is_valid_price,
         is_valid_quantity,
-        ensure_decimal,
     )
 except ImportError:
     # Fallback if types module is not available
     from ..types.base_types import (
+        OrderId,
         Price,
         Quantity,
         Symbol,
-        OrderId,
     )
     from ..types.market_data import (
-        MarketDataStatus,
         ConnectionState,
+        MarketDataStatus,
     )
 
 # Enhanced data processing components
@@ -116,50 +116,58 @@ __version__ = "2.0.0"
 
 __all__ = [
     # Core types
-    "Result", "Ok", "Err",
-    "MarketSnapshot", "OHLCV", "OrderBook", "Trade", "Candle",
-    "IO", "AsyncIO", "IOEither",
-    
+    "Result",
+    "Ok",
+    "Err",
+    "MarketSnapshot",
+    "OHLCV",
+    "OrderBook",
+    "Trade",
+    "Candle",
+    "IO",
+    "AsyncIO",
+    "IOEither",
     # Standardized types (re-exported for FP usage)
-    "Price", "Quantity", "Symbol", "OrderId",
-    "MarketDataStatus", "ConnectionState", "ValidationResult",
-    "is_valid_price", "is_valid_quantity", "ensure_decimal",
-    
+    "Price",
+    "Quantity",
+    "Symbol",
+    "OrderId",
+    "MarketDataStatus",
+    "ConnectionState",
+    "ValidationResult",
+    "is_valid_price",
+    "is_valid_quantity",
+    "ensure_decimal",
     # Enhanced data processing
     "FunctionalDataPipeline",
     "create_market_data_pipeline",
-    "create_high_performance_pipeline", 
+    "create_high_performance_pipeline",
     "create_low_latency_pipeline",
-    
     # Real-time aggregation
     "RealTimeAggregator",
     "create_real_time_aggregator",
     "create_high_frequency_aggregator",
     "create_batch_aggregator",
-    
     # Enhanced WebSocket
     "EnhancedWebSocketManager",
     "create_enhanced_websocket_manager",
     "create_high_reliability_websocket_manager",
     "create_low_latency_websocket_manager",
-    
     # Enhanced adapters
     "EnhancedFunctionalMarketDataAdapter",
     "create_enhanced_coinbase_adapter",
-    "create_enhanced_bluefin_adapter", 
+    "create_enhanced_bluefin_adapter",
     "create_enhanced_market_data_adapter",
-    
     # Enhanced runtime
     "EnhancedDataRuntime",
     "create_and_initialize_runtime",
     "create_high_performance_runtime",
     "create_low_latency_runtime",
-    
     # Backward compatibility
     "FunctionalMarketDataAdapter",
     "create_coinbase_adapter",
     "create_bluefin_adapter",
-    "create_market_data_adapter"
+    "create_market_data_adapter",
 ]
 
 
@@ -175,7 +183,7 @@ def get_enhanced_capabilities() -> dict[str, bool]:
         "streaming_data_processing": True,
         "functional_error_handling": True,
         "memory_optimization": True,
-        "health_monitoring": True
+        "health_monitoring": True,
     }
 
 

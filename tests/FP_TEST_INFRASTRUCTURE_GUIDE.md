@@ -7,7 +7,7 @@ This guide provides comprehensive documentation for the functional programming (
 The FP test infrastructure provides:
 
 - **FP-compatible test fixtures** for Result/Maybe/IO monads
-- **Migration adapters** to transition imperative tests to FP patterns  
+- **Migration adapters** to transition imperative tests to FP patterns
 - **Specialized mock objects** for FP components
 - **Test base classes** with common FP testing patterns
 - **Property-based testing** utilities for FP types
@@ -38,11 +38,11 @@ class TestMyExchange(FPExchangeTestBase):
     def test_place_order_fp(self):
         # Setup
         adapter = self.create_mock_exchange_adapter()
-        
+
         # Test FP method
         result = adapter.place_order(order_data)
         order_result = self.run_io(result)
-        
+
         # Assert using FP assertions
         self.assert_result_ok(order_result, {"order_id": "test-123"})
 ```
@@ -54,7 +54,7 @@ def test_with_fp_fixtures(fp_result_ok, fp_market_snapshot, fp_test_utils):
     # Use FP fixtures directly
     assert fp_result_ok.is_ok()
     assert fp_market_snapshot.symbol == "BTC-USD"
-    
+
     # Use FP test utilities
     fp_test_utils.assert_result_ok(fp_result_ok, 42)
 ```
@@ -81,7 +81,7 @@ The FP test infrastructure provides comprehensive fixtures in `tests/conftest.py
 fp_result_ok          # Ok(42)
 fp_result_err         # Err("Test error")
 
-# Maybe monad fixtures  
+# Maybe monad fixtures
 fp_maybe_some         # Some(42)
 fp_maybe_nothing      # Nothing()
 
@@ -128,7 +128,7 @@ fp_mock_risk_manager     # Mock risk manager with FP methods
 fp_test_utils           # FP assertion helpers and utilities
 fp_property_strategies  # Property-based testing strategies
 
-# Migration support  
+# Migration support
 fp_migration_scenario   # Dual-mode test scenarios
 ```
 
@@ -146,7 +146,7 @@ class TestMyComponent(FPTestBase):
         # FP assertions available
         result = Ok(42)
         self.assert_result_ok(result, 42)
-        
+
         # Utility methods available
         io_result = self.run_io(IO.pure(100))
         assert io_result == 100
@@ -174,7 +174,7 @@ class TestExchangeAdapter(FPExchangeTestBase):
     def test_get_balance(self):
         adapter = self.create_mock_exchange_adapter(balance=Decimal("5000.00"))
         snapshot = self.create_test_market_snapshot(price=Decimal("60000.00"))
-        
+
         result = adapter.get_balance()
         self.assert_io_result(result, Ok(Decimal("5000.00")))
 ```
@@ -190,7 +190,7 @@ class TestTradingStrategy(FPStrategyTestBase):
     def test_generate_signal(self):
         strategy = self.create_mock_strategy()
         long_signal = self.create_test_long_signal(confidence=0.9)
-        
+
         self.assert_signal_type(long_signal, Long)
         self.assert_signal_confidence(long_signal, min_confidence=0.8)
 ```
@@ -206,7 +206,7 @@ class TestRiskManager(FPRiskTestBase):
     def test_validate_trade(self):
         risk_manager = self.create_mock_risk_manager()
         position = self.create_test_position(side="LONG")
-        
+
         # Test risk validation
         result = risk_manager.validate_trade(position)
         self.assert_io_result(result, Ok(True))
@@ -223,7 +223,7 @@ class TestVuManchuIndicator(FPIndicatorTestBase):
     def test_calculate_indicator(self):
         indicator = self.create_mock_indicator("vumanchu")
         ohlcv_data = self.create_test_ohlcv_data(count=50)
-        
+
         result = indicator.calculate(ohlcv_data)
         indicator_value = self.assert_result_ok(result)
         self.assert_indicator_value_range(indicator_value["rsi"], 0, 100)
@@ -335,7 +335,7 @@ Generate immutable test data:
 
 ```python
 from tests.data.fp_test_data_generator import (
-    FPTestDataConfig, 
+    FPTestDataConfig,
     FPMarketDataGenerator,
     FPPortfolioDataGenerator,
     FPTestScenarioGenerator
@@ -387,7 +387,7 @@ class TestWithProperties(FPTestBase):
     def test_decimal_operations(self, decimal_value):
         # Test with generated Decimal values
         assert decimal_value >= 0
-        
+
     @given(FPPropertyStrategies.fp_result_strategy())
     def test_result_operations(self, result):
         # Test with generated Result values
@@ -396,7 +396,7 @@ class TestWithProperties(FPTestBase):
             assert value is not None
         else:
             assert result.is_err()
-    
+
     @given(FPPropertyStrategies.fp_market_snapshot_strategy())
     def test_market_operations(self, snapshot):
         # Test with generated MarketSnapshot values
@@ -553,12 +553,12 @@ class TestExchangeClient:
     def setUp(self):
         self.client = ExchangeClient()
         self.mock_api = Mock()
-    
+
     async def test_get_balance(self):
         self.mock_api.get_account.return_value = {"balance": 1000.0}
         balance = await self.client.get_balance()
         assert balance == 1000.0
-    
+
     def test_invalid_symbol(self):
         with pytest.raises(ValueError):
             self.client.validate_symbol("INVALID")
@@ -571,13 +571,13 @@ class TestExchangeClientFP(FPExchangeTestBase):
     def setup_test_fixtures(self):
         super().setup_test_fixtures()
         self.adapter = self.create_mock_exchange_adapter()
-    
+
     def test_get_balance_fp(self):
         # FP version returns IO[Result[Decimal, str]]
         balance_io = self.adapter.get_balance()
         balance_result = self.run_io(balance_io)
         self.assert_result_ok(balance_result, Decimal("10000.00"))
-    
+
     def test_invalid_symbol_fp(self):
         # FP version returns Result instead of raising
         result = self.client.validate_symbol_fp("INVALID")
@@ -598,11 +598,11 @@ class TestMarketDataProperties(FPTestBase):
         assert snapshot.bid <= snapshot.price <= snapshot.ask
         assert snapshot.price > 0
         assert snapshot.volume >= 0
-        
+
         # Spread calculation
         spread = snapshot.ask - snapshot.bid
         assert spread >= 0
-    
+
     @given(
         FPPropertyStrategies.fp_decimal_strategy(min_value=1000, max_value=100000),
         FPPropertyStrategies.fp_decimal_strategy(min_value=0.01, max_value=1.0)
@@ -616,10 +616,10 @@ class TestMarketDataProperties(FPTestBase):
             entry_price=entry_price,
             current_price=entry_price * Decimal("1.05")  # 5% profit
         )
-        
+
         # P&L should be positive for profitable long position
         assert position.unrealized_pnl > 0
-        
+
         # P&L should be proportional to size
         expected_pnl = size * (position.current_price - entry_price)
         assert position.unrealized_pnl == expected_pnl
@@ -635,10 +635,10 @@ class TestStrategyDualMode(TestOriginalStrategy):
     - test_generate_signal_imperative()
     - test_generate_signal_fp()
     - test_generate_signal_compare()
-    
+
     The compare method validates that both modes produce equivalent results.
     """
-    
+
     def test_signal_generation_consistency(self):
         """Custom test to verify consistency between modes."""
         # This test will automatically be migrated to both modes
@@ -679,7 +679,7 @@ The FP test infrastructure provides comprehensive support for migrating from imp
 
 For questions or issues, refer to the source code in:
 - `tests/conftest.py` - Test fixtures
-- `tests/fp_test_base.py` - Base test classes  
+- `tests/fp_test_base.py` - Base test classes
 - `tests/fp_migration_adapters.py` - Migration utilities
 - `tests/unit/fp/test_fp_infrastructure.py` - FP test utilities
 - `tests/data/fp_test_data_generator.py` - Test data generation

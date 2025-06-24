@@ -11,7 +11,7 @@
    Error: NameError: name 'FPCandle' is not defined
    ```
    **Fix**: Add import for `FPCandle` or create alias from existing candle type
-   **Files to check**: 
+   **Files to check**:
    - `bot/fp/types/market.py` (look for candle definitions)
    - `bot/trading_types.py` (check existing candle types)
 
@@ -38,7 +38,7 @@
    - Ensure all combinators work with new signal types
    - File: `bot/fp/strategies/base.py`
 
-5. **Complete Risk Management Integration** 
+5. **Complete Risk Management Integration**
    - Ensure all risk types are properly exported
    - Fix risk strategy imports
    - Files: `bot/risk/__init__.py`, `bot/fp/strategies/risk_management.py`
@@ -91,7 +91,7 @@ from .market import (
 
 After each fix, verify:
 - [ ] `poetry run python -c "import bot"` works
-- [ ] `poetry run python -c "from bot.fp.types import *"` works  
+- [ ] `poetry run python -c "from bot.fp.types import *"` works
 - [ ] `poetry run pytest tests/unit/fp/ --collect-only` works
 - [ ] `poetry run pytest tests/unit/fp/test_types.py` passes
 
@@ -132,7 +132,7 @@ After each fix, verify:
 ## ESTIMATED TOTAL EFFORT
 
 - **Minimum Working System**: 8-12 hours
-- **Full FP Integration**: 20-30 hours  
+- **Full FP Integration**: 20-30 hours
 - **Production Ready**: 40-60 hours
 
 **Current State**: CRITICAL FAILURE - 0% functional

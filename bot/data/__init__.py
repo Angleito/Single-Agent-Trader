@@ -9,13 +9,14 @@ from .dominance import DominanceData, DominanceDataProvider
 #     # Also make the imperative version available for backward compatibility
 #     from .market import MarketDataProvider as ImperativeMarketDataProvider
 #     __all__ = [
-#         "DominanceData", 
-#         "DominanceDataProvider", 
-#         "MarketDataProvider", 
+#         "DominanceData",
+#         "DominanceDataProvider",
+#         "MarketDataProvider",
 #         "MarketDataClient",
 #         "ImperativeMarketDataProvider"
 #     ]
 # except ImportError:
 # Fallback to imperative version if functional version isn't available
 from .market import MarketDataProvider
+
 __all__ = ["DominanceData", "DominanceDataProvider", "MarketDataProvider"]

@@ -13,29 +13,21 @@ import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Protocol, Union
+from typing import Any, Protocol
 
+from ...system_monitor import (
+    ErrorRecoveryManager,
+    RecoveryStrategy,
+    SystemHealthMonitor,
+)
 from ..effects.io import IO
 from ..effects.monitoring import (
-    Alert,
-    AlertLevel,
     HealthCheck,
     HealthStatus,
-    MetricPoint,
     SystemMetrics,
     batch_health_checks,
     collect_system_metrics,
-    health_check,
-    record_gauge,
-    send_alert,
     system_health_check,
-)
-from ...system_monitor import (
-    ErrorRecoveryManager,
-    RecoveryAction,
-    RecoveryStrategy,
-    SystemHealthMonitor,
-    SystemMetrics as LegacySystemMetrics,
 )
 
 logger = logging.getLogger(__name__)
@@ -43,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 class RecoveryResult(Enum):
     """Recovery operation results"""
+
     SUCCESS = "success"
     FAILURE = "failure"
     PARTIAL = "partial"
@@ -52,39 +45,43 @@ class RecoveryResult(Enum):
 @dataclass(frozen=True)
 class RecoveryPlan:
     """Immutable recovery plan with pure functions"""
+
     component: str
     issue_type: str
-    strategies: List[RecoveryStrategy]
+    strategies: list[RecoveryStrategy]
     priority: int
     estimated_duration: float
-    prerequisites: List[str] = field(default_factory=list)
+    prerequisites: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class RecoveryExecution:
     """Immutable record of recovery execution"""
+
     plan: RecoveryPlan
     result: RecoveryResult
     executed_at: datetime
     duration_seconds: float
-    details: Dict[str, Any] = field(default_factory=dict)
-    error_message: Optional[str] = None
+    details: dict[str, Any] = field(default_factory=dict)
+    error_message: str | None = None
 
 
 @dataclass(frozen=True)
 class HealthState:
     """Immutable health state snapshot"""
+
     timestamp: datetime
-    component_health: Dict[str, HealthCheck]
+    component_health: dict[str, HealthCheck]
     system_metrics: SystemMetrics
-    recovery_history: List[RecoveryExecution]
+    recovery_history: list[RecoveryExecution]
     overall_health_score: float
-    critical_issues: List[str]
+    critical_issues: list[str]
 
 
 @dataclass(frozen=True)
 class MonitoringConfig:
     """Immutable monitoring configuration"""
+
     check_interval_seconds: float = 30.0
     recovery_cooldown_seconds: float = 300.0
     max_recovery_attempts: int = 3
@@ -94,7 +91,7 @@ class MonitoringConfig:
 
 class HealthCheckProvider(Protocol):
     """Protocol for health check providers"""
-    
+
     def check_health(self) -> IO[HealthCheck]:
         """Return health check result"""
         ...
@@ -102,8 +99,8 @@ class HealthCheckProvider(Protocol):
 
 class RecoveryProvider(Protocol):
     """Protocol for recovery providers"""
-    
-    def recover(self, context: Dict[str, Any]) -> IO[RecoveryResult]:
+
+    def recover(self, context: dict[str, Any]) -> IO[RecoveryResult]:
         """Execute recovery with given context"""
         ...
 
@@ -116,21 +113,21 @@ class FunctionalSystemMonitor:
 
     def __init__(
         self,
-        legacy_monitor: Optional[SystemHealthMonitor] = None,
-        error_recovery: Optional[ErrorRecoveryManager] = None,
-        config: Optional[MonitoringConfig] = None
+        legacy_monitor: SystemHealthMonitor | None = None,
+        error_recovery: ErrorRecoveryManager | None = None,
+        config: MonitoringConfig | None = None,
     ):
         """Initialize with optional legacy components and configuration"""
         self.legacy_monitor = legacy_monitor
         self.error_recovery = error_recovery
         self.config = config or MonitoringConfig()
-        
+
         # Functional state
-        self._health_providers: Dict[str, HealthCheckProvider] = {}
-        self._recovery_providers: Dict[str, RecoveryProvider] = {}
-        self._monitoring_history: List[HealthState] = []
-        self._recovery_plans: Dict[str, RecoveryPlan] = {}
-        
+        self._health_providers: dict[str, HealthCheckProvider] = {}
+        self._recovery_providers: dict[str, RecoveryProvider] = {}
+        self._monitoring_history: list[HealthState] = []
+        self._recovery_plans: dict[str, RecoveryPlan] = {}
+
         # Initialize default health checks and recovery plans
         self._initialize_default_providers()
 
@@ -140,55 +137,70 @@ class FunctionalSystemMonitor:
 
     def _initialize_default_providers(self) -> None:
         """Initialize default health check and recovery providers"""
-        
+
         # System resource health checks
-        self._health_providers.update({
-            "cpu": CPUHealthProvider(),
-            "memory": MemoryHealthProvider(),
-            "disk": DiskHealthProvider(),
-            "network": NetworkHealthProvider(),
-            "processes": ProcessHealthProvider(),
-        })
-        
+        self._health_providers.update(
+            {
+                "cpu": CPUHealthProvider(),
+                "memory": MemoryHealthProvider(),
+                "disk": DiskHealthProvider(),
+                "network": NetworkHealthProvider(),
+                "processes": ProcessHealthProvider(),
+            }
+        )
+
         # Recovery providers
-        self._recovery_providers.update({
-            "memory_cleanup": MemoryRecoveryProvider(),
-            "disk_cleanup": DiskRecoveryProvider(),
-            "service_restart": ServiceRecoveryProvider(),
-            "network_reset": NetworkRecoveryProvider(),
-        })
-        
+        self._recovery_providers.update(
+            {
+                "memory_cleanup": MemoryRecoveryProvider(),
+                "disk_cleanup": DiskRecoveryProvider(),
+                "service_restart": ServiceRecoveryProvider(),
+                "network_reset": NetworkRecoveryProvider(),
+            }
+        )
+
         # Default recovery plans
-        self._recovery_plans.update({
-            "high_memory": RecoveryPlan(
-                component="memory",
-                issue_type="high_usage",
-                strategies=[RecoveryStrategy.CLEAR_CACHE, RecoveryStrategy.RESTART_COMPONENT],
-                priority=1,
-                estimated_duration=30.0
-            ),
-            "high_cpu": RecoveryPlan(
-                component="cpu",
-                issue_type="high_usage",
-                strategies=[RecoveryStrategy.CIRCUIT_BREAKER, RecoveryStrategy.FALLBACK_MODE],
-                priority=2,
-                estimated_duration=15.0
-            ),
-            "disk_full": RecoveryPlan(
-                component="disk",
-                issue_type="space_exhausted",
-                strategies=[RecoveryStrategy.CLEAR_CACHE],
-                priority=1,
-                estimated_duration=60.0
-            ),
-            "network_failure": RecoveryPlan(
-                component="network",
-                issue_type="connectivity_lost",
-                strategies=[RecoveryStrategy.RESET_CONNECTION, RecoveryStrategy.RECONNECT_SERVICE],
-                priority=1,
-                estimated_duration=45.0
-            ),
-        })
+        self._recovery_plans.update(
+            {
+                "high_memory": RecoveryPlan(
+                    component="memory",
+                    issue_type="high_usage",
+                    strategies=[
+                        RecoveryStrategy.CLEAR_CACHE,
+                        RecoveryStrategy.RESTART_COMPONENT,
+                    ],
+                    priority=1,
+                    estimated_duration=30.0,
+                ),
+                "high_cpu": RecoveryPlan(
+                    component="cpu",
+                    issue_type="high_usage",
+                    strategies=[
+                        RecoveryStrategy.CIRCUIT_BREAKER,
+                        RecoveryStrategy.FALLBACK_MODE,
+                    ],
+                    priority=2,
+                    estimated_duration=15.0,
+                ),
+                "disk_full": RecoveryPlan(
+                    component="disk",
+                    issue_type="space_exhausted",
+                    strategies=[RecoveryStrategy.CLEAR_CACHE],
+                    priority=1,
+                    estimated_duration=60.0,
+                ),
+                "network_failure": RecoveryPlan(
+                    component="network",
+                    issue_type="connectivity_lost",
+                    strategies=[
+                        RecoveryStrategy.RESET_CONNECTION,
+                        RecoveryStrategy.RECONNECT_SERVICE,
+                    ],
+                    priority=1,
+                    estimated_duration=45.0,
+                ),
+            }
+        )
 
     def create_health_state(self) -> IO[HealthState]:
         """Create comprehensive health state snapshot"""
@@ -196,63 +208,65 @@ class FunctionalSystemMonitor:
         def create_state() -> HealthState:
             # Collect system metrics
             sys_metrics = collect_system_metrics().run()
-            
+
             # Run all health checks
             health_checks = self._run_all_health_checks().run()
-            
+
             # Calculate overall health score
             score = self._calculate_health_score(health_checks)
-            
+
             # Identify critical issues
             critical = self._identify_critical_issues(health_checks, sys_metrics)
-            
+
             # Get recent recovery history
             recent_history = self._get_recent_recovery_history()
-            
+
             return HealthState(
                 timestamp=datetime.now(UTC),
                 component_health=health_checks,
                 system_metrics=sys_metrics,
                 recovery_history=recent_history,
                 overall_health_score=score,
-                critical_issues=critical
+                critical_issues=critical,
             )
 
         return IO(create_state)
 
-    def _run_all_health_checks(self) -> IO[Dict[str, HealthCheck]]:
+    def _run_all_health_checks(self) -> IO[dict[str, HealthCheck]]:
         """Run all registered health checks"""
 
-        def run_checks() -> Dict[str, HealthCheck]:
+        def run_checks() -> dict[str, HealthCheck]:
             checks = []
-            
+
             # Add system health check
             checks.append(system_health_check())
-            
+
             # Add provider-based health checks
             for name, provider in self._health_providers.items():
                 try:
                     check = provider.check_health()
                     checks.append(check)
-                except Exception as e:
+                except Exception:
                     # Create failed health check
-                    failed_check = IO(lambda: HealthCheck(
-                        component=name,
-                        status=HealthStatus.UNHEALTHY,
-                        timestamp=datetime.now(UTC),
-                        details={"error": str(e)}
-                    ))
+                    failed_check = IO(
+                        lambda: HealthCheck(
+                            component=name,
+                            status=HealthStatus.UNHEALTHY,
+                            timestamp=datetime.now(UTC),
+                            details={"error": str(e)},
+                        )
+                    )
                     checks.append(failed_check)
-            
+
             return batch_health_checks(checks).run()
 
         return IO(run_checks)
 
-    def _calculate_health_score(self, health_checks: Dict[str, HealthCheck]) -> float:
+    def _calculate_health_score(self, health_checks: dict[str, HealthCheck]) -> float:
         """Calculate overall health score from component checks"""
         if not health_checks:
             return 0.0
-        
+
         total_score = 0.0
         for check in health_checks.values():
             if check.status == HealthStatus.HEALTHY:
@@ -261,35 +275,37 @@ class FunctionalSystemMonitor:
                 total_score += 60.0
             else:  # UNHEALTHY
                 total_score += 0.0
-        
+
         return total_score / len(health_checks)
 
     def _identify_critical_issues(
-        self, 
-        health_checks: Dict[str, HealthCheck], 
-        system_metrics: SystemMetrics
-    ) -> List[str]:
+        self, health_checks: dict[str, HealthCheck], system_metrics: SystemMetrics
+    ) -> list[str]:
         """Identify critical issues requiring immediate attention"""
         issues = []
-        
+
         # Check unhealthy components
         for name, check in health_checks.items():
             if check.status == HealthStatus.UNHEALTHY:
-                issues.append(f"Component '{name}' is unhealthy: {check.details.get('error', 'Unknown error')}")
-        
+                issues.append(
+                    f"Component '{name}' is unhealthy: {check.details.get('error', 'Unknown error')}"
+                )
+
         # Check critical system metrics
         if system_metrics.cpu_percent > 95.0:
             issues.append(f"Critical CPU usage: {system_metrics.cpu_percent:.1f}%")
-        
+
         if system_metrics.memory_percent > 95.0:
-            issues.append(f"Critical memory usage: {system_metrics.memory_percent:.1f}%")
-        
+            issues.append(
+                f"Critical memory usage: {system_metrics.memory_percent:.1f}%"
+            )
+
         if system_metrics.disk_percent > 98.0:
             issues.append(f"Critical disk usage: {system_metrics.disk_percent:.1f}%")
-        
+
         return issues
 
-    def _get_recent_recovery_history(self) -> List[RecoveryExecution]:
+    def _get_recent_recovery_history(self) -> list[RecoveryExecution]:
         """Get recent recovery executions from history"""
         # In a real implementation, this would pull from persistent storage
         # For now, return empty list as placeholder
@@ -300,49 +316,55 @@ class FunctionalSystemMonitor:
     # ==============================================================================
 
     def create_recovery_plan(
-        self, 
-        component: str, 
-        issue_type: str, 
-        health_state: HealthState
-    ) -> IO[Optional[RecoveryPlan]]:
+        self, component: str, issue_type: str, health_state: HealthState
+    ) -> IO[RecoveryPlan | None]:
         """Create a recovery plan based on current health state"""
 
-        def create_plan() -> Optional[RecoveryPlan]:
+        def create_plan() -> RecoveryPlan | None:
             # Check if we have a predefined plan
             plan_key = f"{component}_{issue_type}"
             if plan_key in self._recovery_plans:
                 return self._recovery_plans[plan_key]
-            
+
             # Check for generic component plans
             if component in self._recovery_plans:
                 return self._recovery_plans[component]
-            
+
             # Create dynamic plan based on issue type
             if issue_type == "high_usage":
                 return RecoveryPlan(
                     component=component,
                     issue_type=issue_type,
-                    strategies=[RecoveryStrategy.CLEAR_CACHE, RecoveryStrategy.RESTART_COMPONENT],
+                    strategies=[
+                        RecoveryStrategy.CLEAR_CACHE,
+                        RecoveryStrategy.RESTART_COMPONENT,
+                    ],
                     priority=2,
-                    estimated_duration=30.0
+                    estimated_duration=30.0,
                 )
-            elif issue_type == "connectivity":
+            if issue_type == "connectivity":
                 return RecoveryPlan(
                     component=component,
                     issue_type=issue_type,
-                    strategies=[RecoveryStrategy.RESET_CONNECTION, RecoveryStrategy.RECONNECT_SERVICE],
+                    strategies=[
+                        RecoveryStrategy.RESET_CONNECTION,
+                        RecoveryStrategy.RECONNECT_SERVICE,
+                    ],
                     priority=1,
-                    estimated_duration=45.0
+                    estimated_duration=45.0,
                 )
-            elif issue_type == "performance":
+            if issue_type == "performance":
                 return RecoveryPlan(
                     component=component,
                     issue_type=issue_type,
-                    strategies=[RecoveryStrategy.CIRCUIT_BREAKER, RecoveryStrategy.FALLBACK_MODE],
+                    strategies=[
+                        RecoveryStrategy.CIRCUIT_BREAKER,
+                        RecoveryStrategy.FALLBACK_MODE,
+                    ],
                     priority=3,
-                    estimated_duration=20.0
+                    estimated_duration=20.0,
                 )
-            
+
             return None
 
         return IO(create_plan)
@@ -352,7 +374,7 @@ class FunctionalSystemMonitor:
 
         def execute() -> RecoveryExecution:
             start_time = datetime.now(UTC)
-            
+
             try:
                 # Check prerequisites
                 if not self._check_prerequisites(plan.prerequisites):
@@ -361,31 +383,29 @@ class FunctionalSystemMonitor:
                         result=RecoveryResult.SKIPPED,
                         executed_at=start_time,
                         duration_seconds=0.0,
-                        details={"reason": "Prerequisites not met"}
+                        details={"reason": "Prerequisites not met"},
                     )
-                
+
                 # Execute recovery strategies in order
                 success_count = 0
                 total_strategies = len(plan.strategies)
                 execution_details = {}
-                
+
                 for i, strategy in enumerate(plan.strategies):
                     try:
                         strategy_result = self._execute_strategy(
-                            strategy, 
-                            plan.component, 
-                            {"plan": plan, "step": i}
+                            strategy, plan.component, {"plan": plan, "step": i}
                         )
-                        
+
                         if strategy_result:
                             success_count += 1
                             execution_details[f"strategy_{i}"] = "success"
                         else:
                             execution_details[f"strategy_{i}"] = "failed"
-                        
+
                     except Exception as e:
-                        execution_details[f"strategy_{i}"] = f"error: {str(e)}"
-                
+                        execution_details[f"strategy_{i}"] = f"error: {e!s}"
+
                 # Determine overall result
                 if success_count == total_strategies:
                     result = RecoveryResult.SUCCESS
@@ -393,105 +413,112 @@ class FunctionalSystemMonitor:
                     result = RecoveryResult.PARTIAL
                 else:
                     result = RecoveryResult.FAILURE
-                
+
                 end_time = datetime.now(UTC)
                 duration = (end_time - start_time).total_seconds()
-                
+
                 return RecoveryExecution(
                     plan=plan,
                     result=result,
                     executed_at=start_time,
                     duration_seconds=duration,
-                    details=execution_details
+                    details=execution_details,
                 )
-                
+
             except Exception as e:
                 end_time = datetime.now(UTC)
                 duration = (end_time - start_time).total_seconds()
-                
+
                 return RecoveryExecution(
                     plan=plan,
                     result=RecoveryResult.FAILURE,
                     executed_at=start_time,
                     duration_seconds=duration,
-                    error_message=str(e)
+                    error_message=str(e),
                 )
 
         return IO(execute)
 
-    def _check_prerequisites(self, prerequisites: List[str]) -> bool:
+    def _check_prerequisites(self, prerequisites: list[str]) -> bool:
         """Check if recovery prerequisites are met"""
         # In a real implementation, this would check system state
         # For now, always return True
         return True
 
     def _execute_strategy(
-        self, 
-        strategy: RecoveryStrategy, 
-        component: str, 
-        context: Dict[str, Any]
+        self, strategy: RecoveryStrategy, component: str, context: dict[str, Any]
     ) -> bool:
         """Execute a specific recovery strategy"""
         try:
             if strategy == RecoveryStrategy.CLEAR_CACHE:
                 return self._clear_cache_strategy(component, context)
-            elif strategy == RecoveryStrategy.RESTART_COMPONENT:
+            if strategy == RecoveryStrategy.RESTART_COMPONENT:
                 return self._restart_component_strategy(component, context)
-            elif strategy == RecoveryStrategy.RESET_CONNECTION:
+            if strategy == RecoveryStrategy.RESET_CONNECTION:
                 return self._reset_connection_strategy(component, context)
-            elif strategy == RecoveryStrategy.RECONNECT_SERVICE:
+            if strategy == RecoveryStrategy.RECONNECT_SERVICE:
                 return self._reconnect_service_strategy(component, context)
-            elif strategy == RecoveryStrategy.CIRCUIT_BREAKER:
+            if strategy == RecoveryStrategy.CIRCUIT_BREAKER:
                 return self._circuit_breaker_strategy(component, context)
-            elif strategy == RecoveryStrategy.FALLBACK_MODE:
+            if strategy == RecoveryStrategy.FALLBACK_MODE:
                 return self._fallback_mode_strategy(component, context)
-            else:
-                logger.warning(f"Unknown recovery strategy: {strategy}")
-                return False
+            logger.warning(f"Unknown recovery strategy: {strategy}")
+            return False
         except Exception as e:
             logger.error(f"Error executing strategy {strategy} for {component}: {e}")
             return False
 
-    def _clear_cache_strategy(self, component: str, context: Dict[str, Any]) -> bool:
+    def _clear_cache_strategy(self, component: str, context: dict[str, Any]) -> bool:
         """Execute cache clearing strategy"""
         logger.info(f"Executing cache clear strategy for {component}")
-        
+
         if component == "memory":
             import gc
+
             gc.collect()
             return True
-        elif component == "disk":
+        if component == "disk":
             # In real implementation, would clear temporary files
             logger.info("Clearing disk cache (simulated)")
             return True
-        
+
         return True
 
-    def _restart_component_strategy(self, component: str, context: Dict[str, Any]) -> bool:
+    def _restart_component_strategy(
+        self, component: str, context: dict[str, Any]
+    ) -> bool:
         """Execute component restart strategy"""
         logger.info(f"Executing restart strategy for {component} (simulated)")
         # In real implementation, would restart specific services
         return True
 
-    def _reset_connection_strategy(self, component: str, context: Dict[str, Any]) -> bool:
+    def _reset_connection_strategy(
+        self, component: str, context: dict[str, Any]
+    ) -> bool:
         """Execute connection reset strategy"""
         logger.info(f"Executing connection reset strategy for {component} (simulated)")
         # In real implementation, would reset network connections
         return True
 
-    def _reconnect_service_strategy(self, component: str, context: Dict[str, Any]) -> bool:
+    def _reconnect_service_strategy(
+        self, component: str, context: dict[str, Any]
+    ) -> bool:
         """Execute service reconnection strategy"""
-        logger.info(f"Executing service reconnection strategy for {component} (simulated)")
+        logger.info(
+            f"Executing service reconnection strategy for {component} (simulated)"
+        )
         # In real implementation, would reconnect to external services
         return True
 
-    def _circuit_breaker_strategy(self, component: str, context: Dict[str, Any]) -> bool:
+    def _circuit_breaker_strategy(
+        self, component: str, context: dict[str, Any]
+    ) -> bool:
         """Execute circuit breaker strategy"""
         logger.info(f"Executing circuit breaker strategy for {component} (simulated)")
         # In real implementation, would enable circuit breaker patterns
         return True
 
-    def _fallback_mode_strategy(self, component: str, context: Dict[str, Any]) -> bool:
+    def _fallback_mode_strategy(self, component: str, context: dict[str, Any]) -> bool:
         """Execute fallback mode strategy"""
         logger.info(f"Executing fallback mode strategy for {component} (simulated)")
         # In real implementation, would switch to fallback behavior
@@ -502,62 +529,63 @@ class FunctionalSystemMonitor:
     # ==============================================================================
 
     def analyze_health_trends(
-        self, 
-        duration: timedelta = timedelta(hours=1)
-    ) -> IO[Dict[str, Any]]:
+        self, duration: timedelta = timedelta(hours=1)
+    ) -> IO[dict[str, Any]]:
         """Analyze health trends over time"""
 
-        def analyze() -> Dict[str, Any]:
+        def analyze() -> dict[str, Any]:
             cutoff_time = datetime.now(UTC) - duration
             recent_states = [
-                state for state in self._monitoring_history
+                state
+                for state in self._monitoring_history
                 if state.timestamp >= cutoff_time
             ]
-            
+
             if not recent_states:
                 return {"message": "No recent health data available"}
-            
+
             # Health score trend
             health_scores = [state.overall_health_score for state in recent_states]
             health_trend = self._calculate_trend(health_scores)
-            
+
             # Component stability analysis
             component_stability = {}
             all_components = set()
             for state in recent_states:
                 all_components.update(state.component_health.keys())
-            
+
             for component in all_components:
                 statuses = []
                 for state in recent_states:
                     if component in state.component_health:
                         status = state.component_health[component].status
                         statuses.append(1 if status == HealthStatus.HEALTHY else 0)
-                
+
                 if statuses:
                     stability = sum(statuses) / len(statuses) * 100
                     component_stability[component] = stability
-            
+
             # Recovery effectiveness
             recoveries = []
             for state in recent_states:
                 recoveries.extend(state.recovery_history)
-            
+
             if recoveries:
                 successful_recoveries = sum(
-                    1 for r in recoveries 
-                    if r.result == RecoveryResult.SUCCESS
+                    1 for r in recoveries if r.result == RecoveryResult.SUCCESS
                 )
                 recovery_success_rate = successful_recoveries / len(recoveries) * 100
             else:
                 recovery_success_rate = 0.0
-            
+
             return {
                 "analysis_period": duration.total_seconds(),
                 "health_trend": {
                     "direction": health_trend,
                     "current_score": health_scores[-1] if health_scores else 0,
-                    "average_score": sum(health_scores) / len(health_scores) if health_scores else 0,
+                    "average_score": (
+                        sum(health_scores) / len(health_scores) if health_scores else 0
+                    ),
                     "min_score": min(health_scores) if health_scores else 0,
                     "max_score": max(health_scores) if health_scores else 0,
                 },
@@ -565,32 +593,34 @@ class FunctionalSystemMonitor:
                 "recovery_effectiveness": {
                     "total_recoveries": len(recoveries),
                     "success_rate": recovery_success_rate,
-                    "most_common_issues": self._get_most_common_issues(recoveries)
+                    "most_common_issues": self._get_most_common_issues(recoveries),
                 },
-                "critical_incidents": len([
-                    state for state in recent_states 
-                    if state.critical_issues
-                ])
+                "critical_incidents": len(
+                    [state for state in recent_states if state.critical_issues]
+                ),
             }
 
         return IO(analyze)
 
-    def _calculate_trend(self, values: List[float]) -> str:
+    def _calculate_trend(self, values: list[float]) -> str:
         """Calculate trend direction from values"""
         if len(values) < 2:
             return "stable"
-        
+
         # Simple trend based on first vs last values
-        change_percent = ((values[-1] - values[0]) / values[0] * 100) if values[0] != 0 else 0
-        
+        change_percent = (
+            ((values[-1] - values[0]) / values[0] * 100) if values[0] != 0 else 0
+        )
+
         if abs(change_percent) < 5:
             return "stable"
-        elif change_percent > 0:
+        if change_percent > 0:
             return "improving"
-        else:
-            return "declining"
+        return "declining"
 
-    def _get_most_common_issues(self, recoveries: List[RecoveryExecution]) -> List[Dict[str, Any]]:
+    def _get_most_common_issues(
+        self, recoveries: list[RecoveryExecution]
+    ) -> list[dict[str, Any]]:
         """Get most common recovery issues"""
         issue_counts = {}
         for recovery in recoveries:
@@ -598,10 +628,12 @@ class FunctionalSystemMonitor:
             if issue_type not in issue_counts:
                 issue_counts[issue_type] = 0
             issue_counts[issue_type] += 1
-        
+
         return [
             {"issue_type": issue, "count": count}
-            for issue, count in sorted(issue_counts.items(), key=lambda x: x[1], reverse=True)
+            for issue, count in sorted(
+                issue_counts.items(), key=lambda x: x[1], reverse=True
+            )
         ]
 
     # ==============================================================================
@@ -619,24 +651,26 @@ class FunctionalSystemMonitor:
 
         return IO(add)
 
-    async def start_functional_monitoring(self, interval_seconds: Optional[float] = None) -> None:
+    async def start_functional_monitoring(
+        self, interval_seconds: float | None = None
+    ) -> None:
         """Start functional monitoring loop"""
-        
+
         interval = interval_seconds or self.config.check_interval_seconds
-        
+
         async def monitoring_loop():
             while True:
                 try:
                     # Create health state
                     health_state = self.create_health_state().run()
-                    
+
                     # Add to history
                     self.add_to_history(health_state).run()
-                    
+
                     # Check for critical issues and trigger recovery
                     if health_state.critical_issues:
                         await self._handle_critical_issues(health_state)
-                    
+
                     # Log summary periodically
                     if len(self._monitoring_history) % 10 == 0:
                         logger.info(
@@ -644,20 +678,20 @@ class FunctionalSystemMonitor:
                             f"{len(health_state.critical_issues)} critical issues, "
                             f"{len(health_state.component_health)} components checked"
                         )
-                    
+
                     await asyncio.sleep(interval)
-                    
+
                 except Exception as e:
                     logger.error(f"Error in functional monitoring loop: {e}")
                     await asyncio.sleep(interval)
-        
+
         # Start the monitoring loop
         asyncio.create_task(monitoring_loop())
         logger.info(f"Started functional health monitoring with {interval}s interval")
 
     async def _handle_critical_issues(self, health_state: HealthState) -> None:
         """Handle critical issues by triggering appropriate recovery plans"""
-        
+
         for issue in health_state.critical_issues:
             try:
                 # Determine component and issue type from issue description
@@ -674,33 +708,39 @@ class FunctionalSystemMonitor:
                     issue_type = "health_failure"
                 else:
                     continue
-                
+
                 # Create and execute recovery plan
-                plan = self.create_recovery_plan(component, issue_type, health_state).run()
+                plan = self.create_recovery_plan(
+                    component, issue_type, health_state
+                ).run()
                 if plan:
-                    logger.info(f"Executing recovery plan for {component}: {issue_type}")
+                    logger.info(
+                        f"Executing recovery plan for {component}: {issue_type}"
+                    )
                     execution = self.execute_recovery_plan(plan).run()
-                    
+
                     if execution.result == RecoveryResult.SUCCESS:
                         logger.info(f"Recovery successful for {component}")
                     else:
-                        logger.warning(f"Recovery failed for {component}: {execution.error_message}")
-                
+                        logger.warning(
+                            f"Recovery failed for {component}: {execution.error_message}"
+                        )
+
             except Exception as e:
                 logger.error(f"Error handling critical issue '{issue}': {e}")
 
-    def get_latest_health_state(self) -> Optional[HealthState]:
+    def get_latest_health_state(self) -> HealthState | None:
         """Get the most recent health state"""
         return self._monitoring_history[-1] if self._monitoring_history else None
 
-    def export_health_summary(self) -> IO[Dict[str, Any]]:
+    def export_health_summary(self) -> IO[dict[str, Any]]:
         """Export comprehensive health summary"""
 
-        def export() -> Dict[str, Any]:
+        def export() -> dict[str, Any]:
             latest_state = self.get_latest_health_state()
             if not latest_state:
                 return {"message": "No health data available"}
-            
+
             return {
                 "timestamp": latest_state.timestamp.isoformat(),
                 "overall_health_score": latest_state.overall_health_score,
@@ -710,7 +750,7 @@ class FunctionalSystemMonitor:
                     name: {
                         "status": check.status.value,
                         "response_time_ms": check.response_time_ms,
-                        "details": check.details
+                        "details": check.details,
                     }
                     for name, check in latest_state.component_health.items()
                 },
@@ -722,7 +762,7 @@ class FunctionalSystemMonitor:
                     "uptime_seconds": latest_state.system_metrics.uptime_seconds,
                 },
                 "recent_recoveries": len(latest_state.recovery_history),
-                "monitoring_history_size": len(self._monitoring_history)
+                "monitoring_history_size": len(self._monitoring_history),
             }
 
         return IO(export)
@@ -732,121 +772,128 @@ class FunctionalSystemMonitor:
 # Health Check Provider Implementations
 # ==============================================================================
 
+
 class CPUHealthProvider(HealthCheckProvider):
     """CPU health check provider"""
-    
+
     def check_health(self) -> IO[HealthCheck]:
         def check() -> HealthCheck:
             try:
                 import psutil
+
                 cpu_percent = psutil.cpu_percent(interval=0.1)
-                
+
                 if cpu_percent < 80:
                     status = HealthStatus.HEALTHY
                 elif cpu_percent < 95:
                     status = HealthStatus.DEGRADED
                 else:
                     status = HealthStatus.UNHEALTHY
-                
+
                 return HealthCheck(
                     component="cpu",
                     status=status,
                     timestamp=datetime.now(UTC),
-                    details={"cpu_percent": cpu_percent}
+                    details={"cpu_percent": cpu_percent},
                 )
             except Exception as e:
                 return HealthCheck(
                     component="cpu",
                     status=HealthStatus.UNHEALTHY,
                     timestamp=datetime.now(UTC),
-                    details={"error": str(e)}
+                    details={"error": str(e)},
                 )
-        
+
         return IO(check)
 
 
 class MemoryHealthProvider(HealthCheckProvider):
     """Memory health check provider"""
-    
+
     def check_health(self) -> IO[HealthCheck]:
         def check() -> HealthCheck:
             try:
                 import psutil
+
                 memory = psutil.virtual_memory()
-                
+
                 if memory.percent < 80:
                     status = HealthStatus.HEALTHY
                 elif memory.percent < 95:
                     status = HealthStatus.DEGRADED
                 else:
                     status = HealthStatus.UNHEALTHY
-                
+
                 return HealthCheck(
                     component="memory",
                     status=status,
                     timestamp=datetime.now(UTC),
                     details={
                         "memory_percent": memory.percent,
-                        "available_mb": memory.available / 1024 / 1024
-                    }
+                        "available_mb": memory.available / 1024 / 1024,
+                    },
                 )
             except Exception as e:
                 return HealthCheck(
                     component="memory",
                     status=HealthStatus.UNHEALTHY,
                     timestamp=datetime.now(UTC),
-                    details={"error": str(e)}
+                    details={"error": str(e)},
                 )
-        
+
         return IO(check)
 
 
 class DiskHealthProvider(HealthCheckProvider):
     """Disk health check provider"""
-    
+
     def check_health(self) -> IO[HealthCheck]:
         def check() -> HealthCheck:
             try:
                 import psutil
-                disk = psutil.disk_usage('/')
-                
+
+                disk = psutil.disk_usage("/")
+
                 if disk.percent < 85:
                     status = HealthStatus.HEALTHY
                 elif disk.percent < 95:
                     status = HealthStatus.DEGRADED
                 else:
                     status = HealthStatus.UNHEALTHY
-                
+
                 return HealthCheck(
                     component="disk",
                     status=status,
                     timestamp=datetime.now(UTC),
                     details={
                         "disk_percent": disk.percent,
-                        "free_gb": disk.free / 1024 / 1024 / 1024
-                    }
+                        "free_gb": disk.free / 1024 / 1024 / 1024,
+                    },
                 )
             except Exception as e:
                 return HealthCheck(
                     component="disk",
                     status=HealthStatus.UNHEALTHY,
                     timestamp=datetime.now(UTC),
-                    details={"error": str(e)}
+                    details={"error": str(e)},
                 )
-        
+
         return IO(check)
 
 
 class NetworkHealthProvider(HealthCheckProvider):
     """Network health check provider"""
-    
+
     def check_health(self) -> IO[HealthCheck]:
         def check() -> HealthCheck:
             try:
                 import psutil
+
                 connections = psutil.net_connections()
-                active_connections = len([c for c in connections if c.status == 'ESTABLISHED'])
-                
+                active_connections = len(
+                    [c for c in connections if c.status == "ESTABLISHED"]
+                )
+
                 # Simple heuristic: too many or too few connections might indicate issues
                 if 5 <= active_connections <= 100:
                     status = HealthStatus.HEALTHY
@@ -854,33 +901,34 @@ class NetworkHealthProvider(HealthCheckProvider):
                     status = HealthStatus.DEGRADED
                 else:
                     status = HealthStatus.UNHEALTHY
-                
+
                 return HealthCheck(
                     component="network",
                     status=status,
                     timestamp=datetime.now(UTC),
-                    details={"active_connections": active_connections}
+                    details={"active_connections": active_connections},
                 )
             except Exception as e:
                 return HealthCheck(
                     component="network",
                     status=HealthStatus.UNHEALTHY,
                     timestamp=datetime.now(UTC),
-                    details={"error": str(e)}
+                    details={"error": str(e)},
                 )
-        
+
         return IO(check)
 
 
 class ProcessHealthProvider(HealthCheckProvider):
     """Process health check provider"""
-    
+
     def check_health(self) -> IO[HealthCheck]:
         def check() -> HealthCheck:
             try:
                 import psutil
+
                 process_count = len(psutil.pids())
-                
+
                 # Simple heuristic for process count health
                 if process_count < 500:
                     status = HealthStatus.HEALTHY
@@ -888,21 +936,21 @@ class ProcessHealthProvider(HealthCheckProvider):
                     status = HealthStatus.DEGRADED
                 else:
                     status = HealthStatus.UNHEALTHY
-                
+
                 return HealthCheck(
                     component="processes",
                     status=status,
                     timestamp=datetime.now(UTC),
-                    details={"process_count": process_count}
+                    details={"process_count": process_count},
                 )
             except Exception as e:
                 return HealthCheck(
                     component="processes",
                     status=HealthStatus.UNHEALTHY,
                     timestamp=datetime.now(UTC),
-                    details={"error": str(e)}
+                    details={"error": str(e)},
                 )
-        
+
         return IO(check)
 
 
@@ -910,27 +958,29 @@ class ProcessHealthProvider(HealthCheckProvider):
 # Recovery Provider Implementations
 # ==============================================================================
 
+
 class MemoryRecoveryProvider(RecoveryProvider):
     """Memory recovery provider"""
-    
-    def recover(self, context: Dict[str, Any]) -> IO[RecoveryResult]:
+
+    def recover(self, context: dict[str, Any]) -> IO[RecoveryResult]:
         def recover_memory() -> RecoveryResult:
             try:
                 import gc
+
                 gc.collect()
                 logger.info("Executed memory garbage collection")
                 return RecoveryResult.SUCCESS
             except Exception as e:
                 logger.error(f"Memory recovery failed: {e}")
                 return RecoveryResult.FAILURE
-        
+
         return IO(recover_memory)
 
 
 class DiskRecoveryProvider(RecoveryProvider):
     """Disk recovery provider"""
-    
-    def recover(self, context: Dict[str, Any]) -> IO[RecoveryResult]:
+
+    def recover(self, context: dict[str, Any]) -> IO[RecoveryResult]:
         def recover_disk() -> RecoveryResult:
             try:
                 # In real implementation, would clean temporary files
@@ -939,14 +989,14 @@ class DiskRecoveryProvider(RecoveryProvider):
             except Exception as e:
                 logger.error(f"Disk recovery failed: {e}")
                 return RecoveryResult.FAILURE
-        
+
         return IO(recover_disk)
 
 
 class ServiceRecoveryProvider(RecoveryProvider):
     """Service recovery provider"""
-    
-    def recover(self, context: Dict[str, Any]) -> IO[RecoveryResult]:
+
+    def recover(self, context: dict[str, Any]) -> IO[RecoveryResult]:
         def recover_service() -> RecoveryResult:
             try:
                 # In real implementation, would restart services
@@ -955,14 +1005,14 @@ class ServiceRecoveryProvider(RecoveryProvider):
             except Exception as e:
                 logger.error(f"Service recovery failed: {e}")
                 return RecoveryResult.FAILURE
-        
+
         return IO(recover_service)
 
 
 class NetworkRecoveryProvider(RecoveryProvider):
     """Network recovery provider"""
-    
-    def recover(self, context: Dict[str, Any]) -> IO[RecoveryResult]:
+
+    def recover(self, context: dict[str, Any]) -> IO[RecoveryResult]:
         def recover_network() -> RecoveryResult:
             try:
                 # In real implementation, would reset network connections
@@ -971,7 +1021,7 @@ class NetworkRecoveryProvider(RecoveryProvider):
             except Exception as e:
                 logger.error(f"Network recovery failed: {e}")
                 return RecoveryResult.FAILURE
-        
+
         return IO(recover_network)
 
 
@@ -979,10 +1029,11 @@ class NetworkRecoveryProvider(RecoveryProvider):
 # Factory Functions
 # ==============================================================================
 
+
 def create_functional_system_monitor(
-    legacy_monitor: Optional[SystemHealthMonitor] = None,
-    error_recovery: Optional[ErrorRecoveryManager] = None,
-    config: Optional[MonitoringConfig] = None
+    legacy_monitor: SystemHealthMonitor | None = None,
+    error_recovery: ErrorRecoveryManager | None = None,
+    config: MonitoringConfig | None = None,
 ) -> FunctionalSystemMonitor:
     """Factory function to create a functional system monitor"""
     return FunctionalSystemMonitor(legacy_monitor, error_recovery, config)
@@ -990,7 +1041,7 @@ def create_functional_system_monitor(
 
 def enhance_existing_system_monitor(
     system_monitor: SystemHealthMonitor,
-    error_recovery: Optional[ErrorRecoveryManager] = None
+    error_recovery: ErrorRecoveryManager | None = None,
 ) -> FunctionalSystemMonitor:
     """Enhance an existing system monitor with functional capabilities"""
     return FunctionalSystemMonitor(system_monitor, error_recovery)

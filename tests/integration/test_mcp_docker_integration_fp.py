@@ -13,19 +13,21 @@ import subprocess
 import time
 from datetime import datetime
 from decimal import Decimal
-from typing import List
 
 import httpx
 import pytest
 
-from bot.fp.types import (
-    Result, Success, Failure,
-    Maybe, Some, Nothing,
-    Symbol, ExperienceId, TradingExperienceFP, TradingOutcome,
-    MarketSnapshot, PatternTag, MemoryQueryFP, PatternStatistics,
-    LearningInsight, MemoryStorage,
-)
 from bot.fp.adapters.memory_adapter import MemoryAdapterFP
+from bot.fp.types import (
+    ExperienceId,
+    MarketSnapshot,
+    MemoryQueryFP,
+    MemoryStorage,
+    PatternTag,
+    Symbol,
+    TradingExperienceFP,
+    TradingOutcome,
+)
 from bot.mcp.memory_server import MCPMemoryServer
 
 # Configuration
@@ -62,11 +64,11 @@ def sample_market_snapshot_fp():
     """Create a sample FP market snapshot for testing."""
     symbol_result = Symbol.create("BTC-USD")
     assert symbol_result.is_success()
-    
+
     return MarketSnapshot(
         symbol=symbol_result.success(),
         timestamp=datetime.utcnow(),
-        price=Decimal("50000"),
+        price=Decimal(50000),
         indicators={
             "rsi": 45.0,
             "cipher_a_dot": 5.0,
@@ -81,7 +83,7 @@ def sample_market_snapshot_fp():
             "dominance_rsi": 40.0,
         },
         position_side="FLAT",
-        position_size=Decimal("0"),
+        position_size=Decimal(0),
     )
 
 
@@ -116,10 +118,11 @@ async def mcp_server_fp():
 async def memory_adapter_fp(mcp_server_fp):
     """Create FP memory adapter with MCP server."""
     adapter = MemoryAdapterFP(mcp_server_fp)
-    yield adapter
+    return adapter
 
 
 # Health and Connection Tests
+
 
 @pytest.mark.asyncio
 async def test_mcp_health_check_fp(ensure_mcp_running):
@@ -152,21 +155,24 @@ async def test_mcp_connection_fp(ensure_mcp_running):
 
 # Experience Storage and Retrieval Tests
 
+
 @pytest.mark.asyncio
 async def test_store_and_retrieve_experience_fp(
     ensure_mcp_running, memory_adapter_fp, sample_trading_experience_fp
 ):
     """Test storing and retrieving FP trading experiences."""
     # Store FP experience
-    store_result = await memory_adapter_fp.store_experience_fp(sample_trading_experience_fp)
-    
+    store_result = await memory_adapter_fp.store_experience_fp(
+        sample_trading_experience_fp
+    )
+
     assert store_result.is_success()
     experience_id = store_result.success()
     assert isinstance(experience_id, ExperienceId)
 
     # Query similar experiences (should be empty before outcome)
     query_result = MemoryQueryFP.create(
-        current_price=Decimal("50000"),
+        current_price=Decimal(50000),
         indicators={"rsi": 45.0, "cipher_a_dot": 5.0},
         max_results=5,
         min_similarity=0.7,
@@ -183,9 +189,9 @@ async def test_store_and_retrieve_experience_fp(
 
     # Add outcome to experience
     outcome_result = TradingOutcome.create(
-        pnl=Decimal("100"),
-        exit_price=Decimal("51000"),
-        entry_price=Decimal("50000"),
+        pnl=Decimal(100),
+        exit_price=Decimal(51000),
+        entry_price=Decimal(50000),
         duration_minutes=30.0,
     )
     assert outcome_result.is_success()
@@ -197,7 +203,7 @@ async def test_store_and_retrieve_experience_fp(
     assert update_result.is_success()
     updated_experience = update_result.success()
     assert updated_experience.outcome.is_some()
-    assert updated_experience.outcome.value.pnl == Decimal("100")
+    assert updated_experience.outcome.value.pnl == Decimal(100)
 
     # Now should find it in queries
     similar_result = await memory_adapter_fp.query_similar_experiences_fp(
@@ -221,11 +227,11 @@ async def test_memory_persistence_across_connections_fp(
     # Create and store FP experience
     eth_symbol_result = Symbol.create("ETH-USD")
     assert eth_symbol_result.is_success()
-    
+
     eth_snapshot = MarketSnapshot(
         symbol=eth_symbol_result.success(),
         timestamp=datetime.utcnow(),
-        price=Decimal("3000"),
+        price=Decimal(3000),
         indicators={
             "rsi": 60.0,
             "ema_fast": 2990.0,
@@ -236,7 +242,7 @@ async def test_memory_persistence_across_connections_fp(
         },
         dominance_data=None,
         position_side="FLAT",
-        position_size=Decimal("0"),
+        position_size=Decimal(0),
     )
 
     pattern_tags = [PatternTag.create("bullish_momentum").success()]
@@ -253,9 +259,9 @@ async def test_memory_persistence_across_connections_fp(
 
     # Add outcome
     outcome_result = TradingOutcome.create(
-        pnl=Decimal("150"),
-        exit_price=Decimal("3150"),
-        entry_price=Decimal("3000"),
+        pnl=Decimal(150),
+        exit_price=Decimal(3150),
+        entry_price=Decimal(3000),
         duration_minutes=45.0,
     )
     assert outcome_result.is_success()
@@ -276,7 +282,7 @@ async def test_memory_persistence_across_connections_fp(
 
     # Query for the stored experience
     query_result = MemoryQueryFP.create(
-        current_price=Decimal("3000"),
+        current_price=Decimal(3000),
         indicators={"rsi": 60.0},
         max_results=10,
         min_similarity=0.5,
@@ -290,11 +296,12 @@ async def test_memory_persistence_across_connections_fp(
 
     # Should find persisted data
     found = any(
-        exp.experience_id.value == experience_id.value for exp in experiences
-        if hasattr(exp, 'experience_id')
+        exp.experience_id.value == experience_id.value
+        for exp in experiences
+        if hasattr(exp, "experience_id")
     )
     # Note: May fail if conversion from imperative to FP fails
-    
+
     await server2.disconnect()
 
 
@@ -305,11 +312,11 @@ async def test_pattern_analysis_fp(
     """Test FP pattern analysis and statistics."""
     # Store multiple experiences with different patterns and outcomes
     pattern_data = [
-        ("oversold_rsi", Decimal("80"), True),    # Successful
-        ("oversold_rsi", Decimal("-40"), False),  # Failed
-        ("oversold_rsi", Decimal("120"), True),   # Successful
-        ("overbought_rsi", Decimal("-60"), False), # Failed
-        ("uptrend", Decimal("100"), True),        # Successful
+        ("oversold_rsi", Decimal(80), True),  # Successful
+        ("oversold_rsi", Decimal(-40), False),  # Failed
+        ("oversold_rsi", Decimal(120), True),  # Successful
+        ("overbought_rsi", Decimal(-60), False),  # Failed
+        ("uptrend", Decimal(100), True),  # Successful
     ]
 
     stored_experiences = []
@@ -333,11 +340,11 @@ async def test_pattern_analysis_fp(
         experience_id = store_result.success()
 
         # Add outcome
-        exit_price = Decimal("51000") if success else Decimal("49000")
+        exit_price = Decimal(51000) if success else Decimal(49000)
         outcome_result = TradingOutcome.create(
             pnl=pnl,
             exit_price=exit_price,
-            entry_price=Decimal("50000"),
+            entry_price=Decimal(50000),
             duration_minutes=30.0,
         )
         assert outcome_result.is_success()
@@ -374,7 +381,9 @@ async def test_pattern_analysis_fp(
 
 
 @pytest.mark.asyncio
-async def test_fp_memory_storage_operations(ensure_mcp_running, sample_trading_experience_fp):
+async def test_fp_memory_storage_operations(
+    ensure_mcp_running, sample_trading_experience_fp
+):
     """Test FP memory storage operations with real MCP server."""
     server = MCPMemoryServer(server_url=MCP_SERVER_URL)
     await server.connect()
@@ -403,9 +412,9 @@ async def test_fp_memory_storage_operations(ensure_mcp_running, sample_trading_e
 
     # Update experience with outcome
     outcome_result = TradingOutcome.create(
-        pnl=Decimal("200"),
-        exit_price=Decimal("52000"),
-        entry_price=Decimal("50000"),
+        pnl=Decimal(200),
+        exit_price=Decimal(52000),
+        entry_price=Decimal(50000),
         duration_minutes=60.0,
     )
     assert outcome_result.is_success()
@@ -417,15 +426,15 @@ async def test_fp_memory_storage_operations(ensure_mcp_running, sample_trading_e
     )
     assert update_result.is_success()
     updated_storage = update_result.success()
-    
+
     # Verify completion count updated
     assert updated_storage.completed_experiences == 1
-    
+
     # Get completed experiences
     completed = updated_storage.get_completed_experiences()
     assert len(completed) == 1
     assert completed[0].outcome.is_some()
-    assert completed[0].outcome.value.pnl == Decimal("200")
+    assert completed[0].outcome.value.pnl == Decimal(200)
 
     await server.disconnect()
 
@@ -451,15 +460,15 @@ async def test_fp_pattern_tag_indexing(ensure_mcp_running, memory_adapter_fp):
         # Create market snapshot with specific indicators
         symbol_result = Symbol.create("BTC-USD")
         assert symbol_result.is_success()
-        
+
         snapshot = MarketSnapshot(
             symbol=symbol_result.success(),
             timestamp=datetime.utcnow(),
-            price=Decimal("45000"),
+            price=Decimal(45000),
             indicators=indicators,
             dominance_data=None,
             position_side="FLAT",
-            position_size=Decimal("0"),
+            position_size=Decimal(0),
         )
 
         # Create experience
@@ -477,11 +486,15 @@ async def test_fp_pattern_tag_indexing(ensure_mcp_running, memory_adapter_fp):
         stored_experience_ids.append((experience_id, pattern))
 
         # Add outcome for pattern analysis
-        pnl = Decimal("50") if "oversold" in pattern_name or "divergence" in pattern_name else Decimal("-30")
+        pnl = (
+            Decimal(50)
+            if "oversold" in pattern_name or "divergence" in pattern_name
+            else Decimal(-30)
+        )
         outcome_result = TradingOutcome.create(
             pnl=pnl,
-            exit_price=Decimal("45500") if pnl > 0 else Decimal("44500"),
-            entry_price=Decimal("45000"),
+            exit_price=Decimal(45500) if pnl > 0 else Decimal(44500),
+            entry_price=Decimal(45000),
             duration_minutes=45.0,
         )
         assert outcome_result.is_success()
@@ -501,17 +514,17 @@ async def test_fp_pattern_tag_indexing(ensure_mcp_running, memory_adapter_fp):
         min_similarity=0.5,
     )
     assert oversold_query.is_success()
-    
+
     # Create test snapshot for query
     test_symbol = Symbol.create("BTC-USD").success()
     test_snapshot = MarketSnapshot(
         symbol=test_symbol,
         timestamp=datetime.utcnow(),
-        price=Decimal("45000"),
+        price=Decimal(45000),
         indicators={"rsi": 30.0},
         dominance_data=None,
         position_side="FLAT",
-        position_size=Decimal("0"),
+        position_size=Decimal(0),
     )
 
     oversold_result = await memory_adapter_fp.query_similar_experiences_fp(
@@ -562,7 +575,7 @@ async def test_container_resource_usage_fp(ensure_mcp_running):
             for i in range(10):
                 symbol_result = Symbol.create("BTC-USD")
                 assert symbol_result.is_success()
-                
+
                 snapshot = MarketSnapshot(
                     symbol=symbol_result.success(),
                     timestamp=datetime.utcnow(),
@@ -570,7 +583,7 @@ async def test_container_resource_usage_fp(ensure_mcp_running):
                     indicators={"rsi": 50.0 + i},
                     dominance_data=None,
                     position_side="FLAT",
-                    position_size=Decimal("0"),
+                    position_size=Decimal(0),
                 )
 
                 experience = TradingExperienceFP.create(

@@ -118,7 +118,7 @@ All existing imperative functionality remains unchanged:
 
 The functional layer adds new capabilities without disrupting existing code:
 
-1. **Performance Optimization**: 
+1. **Performance Optimization**:
    - Functional pipelines can process data 2-3x faster
    - Enhanced WebSocket reduces connection drops by 90%
    - Real-time aggregation provides sub-second candle updates
@@ -167,7 +167,7 @@ runtime_result = await create_and_initialize_runtime(
 
 if runtime_result.is_ok():
     runtime = runtime_result.value
-    
+
     # Stream enhanced market data
     async for snapshot in runtime.stream_market_data_enhanced():
         print(f"Price: {snapshot.price}, Volume: {snapshot.volume}")
@@ -217,7 +217,7 @@ config = EnhancedMarketDataConfig(
     enable_enhanced_websocket=True
 )
 
-# High Throughput Mode  
+# High Throughput Mode
 config = EnhancedMarketDataConfig(
     performance_mode="high_throughput",
     enable_real_time_aggregation=True,
@@ -237,7 +237,7 @@ coinbase_adapter = create_enhanced_coinbase_adapter(
 
 # Bluefin with trade aggregation
 bluefin_adapter = create_enhanced_bluefin_adapter(
-    symbol="SUI-PERP", 
+    symbol="SUI-PERP",
     interval="15s",  # Sub-minute intervals
     performance_mode="high_throughput"
 )
@@ -300,7 +300,7 @@ The system automatically falls back to imperative providers when functional comp
 Prevents cascade failures through circuit breaker implementation:
 
 - **Closed**: Normal operation
-- **Open**: Fast-fail when errors exceed threshold  
+- **Open**: Fast-fail when errors exceed threshold
 - **Half-Open**: Test recovery before fully reopening
 
 ## Migration Guide
