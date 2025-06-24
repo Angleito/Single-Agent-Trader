@@ -3,6 +3,8 @@ Price conversion utilities for handling 18-decimal format prices from Bluefin DE
 
 This module provides safe conversion functions that can detect if a price value
 is in 18-decimal format and convert it appropriately, with validation and logging.
+
+OPTIMIZED VERSION: Integrates with precision manager for minimal conversion overhead.
 """
 
 import logging
@@ -10,6 +12,19 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from math import isfinite, isnan
 from typing import Any
+
+# Import optimized precision manager
+try:
+    from .precision_manager import (
+        get_precision_manager, 
+        convert_price_optimized,
+        batch_convert_market_data,
+        format_price_for_display as _format_price_for_display,
+        PriceContext
+    )
+    PRECISION_MANAGER_AVAILABLE = True
+except ImportError:
+    PRECISION_MANAGER_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +143,9 @@ def convert_from_18_decimal(
     """
     Safely convert a value from 18-decimal format to regular decimal.
 
+    OPTIMIZED VERSION: Uses precision manager when available for better performance
+    and reduced precision loss. Falls back to original implementation for compatibility.
+
     Enhanced with circuit breaker functionality and fallback mechanisms.
     When consecutive conversion failures occur, the circuit breaker opens
     and fallback to last known good prices is used.
@@ -146,6 +164,22 @@ def convert_from_18_decimal(
     """
     if value is None:
         return Decimal(0)
+
+    # OPTIMIZATION: Use precision manager for better performance and accuracy
+    if PRECISION_MANAGER_AVAILABLE and symbol and field_name:
+        try:
+            return convert_price_optimized(
+                value=value,
+                symbol=symbol,
+                field_name=field_name,
+                source_format=None  # Auto-detect
+            )
+        except Exception as e:
+            logger.debug(
+                "Precision manager conversion failed for %s:%s, falling back to legacy: %s",
+                symbol, field_name, str(e)
+            )
+            # Fall through to legacy implementation
 
     # Pre-processing data sanitization
     sanitized_value = _sanitize_price_input(value)
@@ -321,6 +355,8 @@ def convert_candle_data(candle: list, symbol: str | None = None) -> list:
     """
     Convert candle data from 18-decimal format to regular decimal.
 
+    OPTIMIZED VERSION: Uses batch conversion for better performance.
+
     Args:
         candle: List containing [timestamp, open, high, low, close, volume]
         symbol: Trading symbol for validation
@@ -332,14 +368,36 @@ def convert_candle_data(candle: list, symbol: str | None = None) -> list:
         raise ValueError(f"Invalid candle format: {candle}")
 
     try:
-        converted_candle = [
-            int(candle[0]) if candle[0] else 0,  # timestamp
-            float(convert_from_18_decimal(candle[1], symbol, "open")),  # open
-            float(convert_from_18_decimal(candle[2], symbol, "high")),  # high
-            float(convert_from_18_decimal(candle[3], symbol, "low")),  # low
-            float(convert_from_18_decimal(candle[4], symbol, "close")),  # close
-            float(convert_from_18_decimal(candle[5], symbol, "volume")),  # volume
-        ]
+        # OPTIMIZATION: Use batch conversion if precision manager available
+        if PRECISION_MANAGER_AVAILABLE and symbol:
+            ohlcv_dict = {
+                "open": candle[1],
+                "high": candle[2], 
+                "low": candle[3],
+                "close": candle[4],
+                "volume": candle[5]
+            }
+            
+            converted_dict = batch_convert_market_data(ohlcv_dict, symbol)
+            
+            converted_candle = [
+                int(candle[0]) if candle[0] else 0,  # timestamp
+                float(converted_dict.get("open", 0)),
+                float(converted_dict.get("high", 0)),
+                float(converted_dict.get("low", 0)),
+                float(converted_dict.get("close", 0)),
+                float(converted_dict.get("volume", 0)),
+            ]
+        else:
+            # Legacy conversion for compatibility
+            converted_candle = [
+                int(candle[0]) if candle[0] else 0,  # timestamp
+                float(convert_from_18_decimal(candle[1], symbol, "open")),  # open
+                float(convert_from_18_decimal(candle[2], symbol, "high")),  # high
+                float(convert_from_18_decimal(candle[3], symbol, "low")),  # low
+                float(convert_from_18_decimal(candle[4], symbol, "close")),  # close
+                float(convert_from_18_decimal(candle[5], symbol, "volume")),  # volume
+            ]
 
         logger.debug(
             "Converted candle for %s: OHLCV = %s", symbol, converted_candle[1:6]
@@ -357,6 +415,8 @@ def convert_ticker_price(
     """
     Convert ticker price data from 18-decimal format.
 
+    OPTIMIZED VERSION: Uses batch conversion for better performance.
+
     Args:
         price_data: Dictionary containing price information
         symbol: Trading symbol for validation
@@ -365,7 +425,39 @@ def convert_ticker_price(
         Dict: Converted price data
     """
     converted_data = {}
+    
+    # OPTIMIZATION: Use batch conversion if precision manager available
+    if PRECISION_MANAGER_AVAILABLE and symbol:
+        try:
+            # Extract price fields for batch conversion
+            price_fields = [
+                "price", "lastPrice", "bestBid", "bestAsk", 
+                "high", "low", "open", "close"
+            ]
+            
+            price_subset = {k: v for k, v in price_data.items() if k in price_fields}
+            if price_subset:
+                converted_prices = batch_convert_market_data(price_subset, symbol)
+                
+                # Convert back to strings and update result
+                for key, decimal_value in converted_prices.items():
+                    converted_data[key] = str(decimal_value)
+            
+            # Copy non-price fields directly
+            for key, value in price_data.items():
+                if key not in price_fields:
+                    converted_data[key] = value
+            
+            return converted_data
+            
+        except Exception as e:
+            logger.debug(
+                "Batch ticker conversion failed for %s, falling back to legacy: %s",
+                symbol, str(e)
+            )
+            # Fall through to legacy implementation
 
+    # Legacy conversion for compatibility
     for key, value in price_data.items():
         if key in [
             "price",
@@ -424,6 +516,8 @@ def format_price_for_display(
     """
     Format a price value for display in logs or UI.
 
+    OPTIMIZED VERSION: Uses precision manager for better formatting without precision loss.
+
     This function ensures prices are displayed in human-readable format,
     automatically detecting and converting 18-decimal values.
 
@@ -439,7 +533,30 @@ def format_price_for_display(
         return "$N/A"
 
     try:
-        # Convert to Decimal for precision
+        # OPTIMIZATION: Use precision manager formatting if available
+        if PRECISION_MANAGER_AVAILABLE and symbol:
+            try:
+                # Convert to Decimal if needed
+                if not isinstance(price, Decimal):
+                    price_decimal = convert_price_optimized(
+                        value=price,
+                        symbol=symbol,
+                        field_name="display_price"
+                    )
+                else:
+                    price_decimal = price
+                
+                # Use optimized display formatting
+                return _format_price_for_display(price_decimal, symbol, decimals)
+                
+            except Exception as e:
+                logger.debug(
+                    "Optimized display formatting failed for %s, falling back: %s",
+                    symbol, str(e)
+                )
+                # Fall through to legacy implementation
+
+        # Legacy formatting for compatibility
         price_decimal = Decimal(str(price))
 
         # Check if conversion from 18-decimal is needed

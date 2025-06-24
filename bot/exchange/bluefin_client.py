@@ -1726,13 +1726,27 @@ class BluefinServiceClient:
     async def place_order(self, order_data: dict[str, Any]) -> dict[str, Any]:
         """
         Place an order through the Bluefin service with enhanced reliability.
+        
+        Supports both signed (live trading) and unsigned (paper trading) orders.
 
         Args:
             order_data: Order details including symbol, side, quantity, etc.
+                       For live trading, includes signature, publicKey, orderHash, etc.
 
         Returns:
             Order response dictionary
         """
+        # Log order signature status
+        has_signature = all(key in order_data for key in ['signature', 'publicKey', 'orderHash'])
+        if has_signature:
+            logger.debug(
+                "🔐 Placing SIGNED order - Hash: %s, PublicKey: %s",
+                order_data.get("orderHash", "")[:16] + "...",
+                order_data.get("publicKey", "")[:16] + "..."
+            )
+        else:
+            logger.debug("📊 Placing UNSIGNED order (paper trading)")
+        
         try:
             result = await self._make_request_with_retry(
                 method="POST",

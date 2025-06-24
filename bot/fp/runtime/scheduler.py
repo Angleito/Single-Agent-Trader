@@ -191,8 +191,12 @@ class TradingScheduler:
     async def run_health_check(self) -> None:
         """Run system health checks"""
         try:
-            # Check scheduler health
-            status = health_check("scheduler").run()
+            # Check scheduler health with proper check function
+            def scheduler_check() -> bool:
+                # Scheduler is healthy if it's running and has enabled tasks
+                return self.running and any(task.enabled for task in self.tasks.values())
+            
+            status = health_check("scheduler", scheduler_check).run()
 
             # Check active tasks
             active_tasks = sum(1 for task in self.tasks.values() if task.enabled)
@@ -200,7 +204,7 @@ class TradingScheduler:
             info(
                 "Health check completed",
                 {
-                    "status": status.value,
+                    "status": status.status.value,
                     "active_tasks": active_tasks,
                     "total_tasks": len(self.tasks),
                 },

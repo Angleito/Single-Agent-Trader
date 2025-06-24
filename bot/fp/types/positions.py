@@ -836,3 +836,64 @@ def update_position_with_funding(
         next_funding_time=Some(next_funding_time),
         last_update=datetime.now(),
     )
+
+
+@dataclass(frozen=True)
+class TradeResult:
+    """Result of a trade execution."""
+    
+    position_id: str
+    symbol: str
+    side: PositionSide
+    size: Decimal
+    price: Decimal
+    timestamp: datetime
+    fee: Decimal = Decimal("0")
+    success: bool = True
+    error_message: str = ""
+    
+    @classmethod
+    def success_trade(
+        cls,
+        position_id: str,
+        symbol: str,
+        side: PositionSide,
+        size: Decimal,
+        price: Decimal,
+        fee: Decimal = Decimal("0")
+    ) -> TradeResult:
+        """Create a successful trade result."""
+        return cls(
+            position_id=position_id,
+            symbol=symbol,
+            side=side,
+            size=size,
+            price=price,
+            timestamp=datetime.now(),
+            fee=fee,
+            success=True,
+            error_message=""
+        )
+    
+    @classmethod
+    def failed_trade(
+        cls,
+        position_id: str,
+        symbol: str,
+        side: PositionSide,
+        size: Decimal,
+        price: Decimal,
+        error_message: str
+    ) -> TradeResult:
+        """Create a failed trade result."""
+        return cls(
+            position_id=position_id,
+            symbol=symbol,
+            side=side,
+            size=size,
+            price=price,
+            timestamp=datetime.now(),
+            fee=Decimal("0"),
+            success=False,
+            error_message=error_message
+        )

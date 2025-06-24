@@ -36,6 +36,30 @@ from .base import (
 )
 from .bluefin_fee_calculator import BluefinFeeCalculator, BluefinFees
 
+# Import order signature system
+try:
+    from .bluefin_order_signature import (
+        BluefinOrderSignatureManager,
+        OrderSignatureError,
+    )
+    ORDER_SIGNATURE_AVAILABLE = True
+except ImportError:
+    # Fallback if signature system is not available
+    class BluefinOrderSignatureManager:  # type: ignore[misc]
+        def __init__(self, private_key_hex: str):
+            pass
+        def sign_market_order(self, *args, **kwargs):
+            return {}
+        def sign_limit_order(self, *args, **kwargs):
+            return {}
+        def sign_stop_order(self, *args, **kwargs):
+            return {}
+    
+    class OrderSignatureError(Exception):  # type: ignore[misc]
+        """Fallback exception if signature system not available."""
+    
+    ORDER_SIGNATURE_AVAILABLE = False
+
 # Use the service client instead of direct SDK
 try:
     from .bluefin_client import BluefinServiceClient, BluefinServiceConnectionError
@@ -223,6 +247,20 @@ class BluefinClient(BaseExchange):
 
         # Initialize fee calculator for market making
         self._fee_calculator = BluefinFeeCalculator()
+        
+        # Initialize order signature manager for live trading
+        self._signature_manager: BluefinOrderSignatureManager | None = None
+        if not actual_dry_run and self.private_key and ORDER_SIGNATURE_AVAILABLE:
+            try:
+                self._signature_manager = BluefinOrderSignatureManager(self.private_key)
+                logger.info("✅ Order signature system initialized for live trading")
+            except OrderSignatureError as e:
+                logger.error("❌ Failed to initialize order signature system: %s", e)
+                raise ExchangeAuthError(f"Order signature initialization failed: {e}") from e
+        elif not actual_dry_run and not ORDER_SIGNATURE_AVAILABLE:
+            logger.warning("⚠️ Order signature system not available - install cryptography package")
+        else:
+            logger.info("📊 Paper trading mode - order signatures not required")
 
         # Initialize monitoring
         self.monitoring_enabled = MONITORING_AVAILABLE
@@ -940,22 +978,48 @@ class BluefinClient(BaseExchange):
                 notional_value,
             )
 
-            # Prepare order data
-            order_data = {
-                "symbol": symbol,
-                "price": float(current_price),
-                "quantity": float(quantity),
-                "side": side,
-                "orderType": "MARKET",
-                "estimated_fee": float(fees.taker_fee),
-            }
+            # Sign the order if in live trading mode
+            if self._signature_manager:
+                try:
+                    # Sign the market order
+                    signed_order_data = self._signature_manager.sign_market_order(
+                        symbol=symbol,
+                        side=side,
+                        quantity=quantity,
+                        estimated_fee=fees.taker_fee
+                    )
+                    
+                    # Add current price for market orders
+                    signed_order_data["price"] = float(current_price)
+                    
+                    logger.info(
+                        "✍️ Market order signed - Hash: %s, Public Key: %s",
+                        signed_order_data.get("orderHash", "")[:16] + "...",
+                        signed_order_data.get("publicKey", "")[:16] + "..."
+                    )
+                    order_data = signed_order_data
+                    
+                except OrderSignatureError as e:
+                    logger.error("❌ Failed to sign market order: %s", e)
+                    _raise_order_placement_error(f"Order signature failed: {e}")
+            else:
+                # Prepare unsigned order data for paper trading
+                order_data = {
+                    "symbol": symbol,
+                    "price": float(current_price),
+                    "quantity": float(quantity),
+                    "side": side,
+                    "orderType": "MARKET",
+                    "estimated_fee": float(fees.taker_fee),
+                }
 
             logger.info(
-                "Placing %s market order: %s %s (est. fee: $%.6f)",
+                "Placing %s market order: %s %s (est. fee: $%.6f) %s",
                 side,
                 quantity,
                 symbol,
                 fees.taker_fee,
+                "🔐 [SIGNED]" if self._signature_manager else "📊 [UNSIGNED]"
             )
 
             # Post order via service
@@ -1044,23 +1108,47 @@ class BluefinClient(BaseExchange):
                 notional_value,
             )
 
-            # Prepare order data
-            order_data = {
-                "symbol": symbol,
-                "price": float(price),
-                "quantity": float(quantity),
-                "side": side,
-                "orderType": "LIMIT",
-                "estimated_fee": float(fees.maker_fee),
-            }
+            # Sign the order if in live trading mode
+            if self._signature_manager:
+                try:
+                    # Sign the limit order
+                    signed_order_data = self._signature_manager.sign_limit_order(
+                        symbol=symbol,
+                        side=side,
+                        quantity=quantity,
+                        price=price,
+                        estimated_fee=fees.maker_fee
+                    )
+                    
+                    logger.info(
+                        "✍️ Limit order signed - Hash: %s, Public Key: %s",
+                        signed_order_data.get("orderHash", "")[:16] + "...",
+                        signed_order_data.get("publicKey", "")[:16] + "..."
+                    )
+                    order_data = signed_order_data
+                    
+                except OrderSignatureError as e:
+                    logger.error("❌ Failed to sign limit order: %s", e)
+                    _raise_limit_order_placement_error(f"Order signature failed: {e}")
+            else:
+                # Prepare unsigned order data for paper trading
+                order_data = {
+                    "symbol": symbol,
+                    "price": float(price),
+                    "quantity": float(quantity),
+                    "side": side,
+                    "orderType": "LIMIT",
+                    "estimated_fee": float(fees.maker_fee),
+                }
 
             logger.info(
-                "Placing %s limit order: %s %s @ %s (est. fee: $%.6f)",
+                "Placing %s limit order: %s %s @ %s (est. fee: $%.6f) %s",
                 side,
                 quantity,
                 symbol,
                 price,
                 fees.maker_fee,
+                "🔐 [SIGNED]" if self._signature_manager else "📊 [UNSIGNED]"
             )
 
             # Post order via service
@@ -1276,16 +1364,34 @@ class BluefinClient(BaseExchange):
                 is_likely_18_decimal,
             )
 
-            # Check if balance needs conversion from 18-decimal format
-            if is_likely_18_decimal(balance_value):
-                raw_balance = convert_from_18_decimal(balance_value, "USDC", "balance")
-                logger.info(
-                    "Converted astronomical balance from 18-decimal: %s -> %s",
+            # OPTIMIZATION: Try precision manager first for better performance
+            try:
+                from bot.utils.precision_manager import convert_price_optimized
+                # Use optimized conversion for better precision handling
+                raw_balance = convert_price_optimized(
+                    value=balance_value,
+                    symbol="USDC",
+                    field_name="balance"
+                )
+            except ImportError:
+                # Fallback to legacy conversion
+                if is_likely_18_decimal(balance_value):
+                    raw_balance = convert_from_18_decimal(balance_value, "USDC", "balance")
+                    logger.info(
+                        "Converted astronomical balance from 18-decimal: %s -> %s",
+                        balance_value,
+                        raw_balance,
+                    )
+                else:
+                    raw_balance = Decimal(str(balance_value))
+            
+            # Log successful conversion if precision manager was used
+            if 'convert_price_optimized' in locals():
+                logger.debug(
+                    "Used optimized precision conversion for balance: %s -> %s",
                     balance_value,
                     raw_balance,
                 )
-            else:
-                raw_balance = Decimal(str(balance_value))
 
         except (ValueError, TypeError, decimal.InvalidOperation) as decimal_err:
             raise BalanceValidationError(
@@ -1494,13 +1600,12 @@ class BluefinClient(BaseExchange):
             return True
 
         try:
-            logger.info("Cancelling order: %s", order_id)
+            logger.info("Cancelling order: %s %s", order_id, "🔐 [SIGNED]" if self._signature_manager else "📊 [UNSIGNED]")
 
-            # Cancel order via service (would need to implement in service)
-            # For now, simulate success
-            response = {"status": "success"}
+            # Cancel order via service
+            success = await self._service_client.cancel_order(order_id)
 
-            if response.get("status") == "success":
+            if success:
                 logger.info("Order %s cancelled successfully", order_id)
                 return True
             logger.warning("Order %s cancellation failed", order_id)

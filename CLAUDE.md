@@ -23,8 +23,22 @@ poetry shell
 ```
 
 ### Running the Bot
+
+#### Configuration Validation (FP System)
 ```bash
-# Paper trading mode (safe - no real money)
+# Validate FP configuration before running
+python -c "from bot.fp.types.config import Config; result = Config.from_env(); print('✅ Config valid' if result.is_success() else f'❌ Config error: {result.failure()}')"
+
+# Validate specific components
+python -c "from bot.fp.types.config import build_exchange_config_from_env; result = build_exchange_config_from_env(); print('✅ Exchange valid' if result.is_success() else f'❌ Exchange error: {result.failure()}')"
+```
+
+#### Paper Trading (Recommended)
+```bash
+# Paper trading mode (safe - no real money) - FP Configuration
+TRADING_MODE=paper python -m bot.main live
+
+# Paper trading mode - Legacy Configuration  
 python -m bot.main live
 poetry run ai-trading-bot live
 
@@ -35,12 +49,24 @@ python -m bot.main live
 # Configure with environment file
 cp .env.example .env
 python -m bot.main live
+```
 
-# Live trading with real money (dangerous)
+#### Live Trading (Use with Caution)
+```bash
+# Live trading with real money (dangerous) - FP Configuration
+TRADING_MODE=live python -m bot.main live
+
+# Live trading - Legacy Configuration
 # Set SYSTEM__DRY_RUN=false in .env first!
 python -m bot.main live
+```
 
-# Backtesting
+#### Backtesting
+```bash
+# Backtesting with FP Configuration
+TRADING_MODE=backtest python -m bot.main backtest --from 2024-01-01 --to 2024-12-31
+
+# Legacy backtesting
 poetry run ai-trading-bot backtest --from 2024-01-01 --to 2024-12-31
 poetry run ai-trading-bot backtest --symbol ETH-USD
 ```

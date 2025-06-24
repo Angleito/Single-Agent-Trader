@@ -31,6 +31,27 @@ from .exceptions import (
     TradingBotError,
     ValidationError,
 )
+
+# Import order-related types from FP module
+try:
+    from ..fp.orders import OrderSide, OrderStatus, OrderType
+except ImportError:
+    # Fallback if FP module is not available
+    from enum import Enum
+    
+    class OrderSide(Enum):
+        BUY = "BUY"
+        SELL = "SELL"
+    
+    class OrderStatus(Enum):
+        PENDING = "PENDING"
+        OPEN = "OPEN"
+        FILLED = "FILLED"
+        CANCELLED = "CANCELLED"
+    
+    class OrderType(Enum):
+        MARKET = "MARKET"
+        LIMIT = "LIMIT"
 from .guards import (
     ensure_decimal,
     ensure_positive_decimal,

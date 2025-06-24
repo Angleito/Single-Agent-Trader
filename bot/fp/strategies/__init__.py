@@ -38,12 +38,18 @@ from .llm_functional import (
     validate_llm_decision,
 )
 
-# Import FunctionalLLMStrategy from strategy_adapter
-try:
-    from ..adapters.strategy_adapter import FunctionalLLMStrategy
-except ImportError:
-    # Define a placeholder if import fails
-    FunctionalLLMStrategy = None
+# Lazy loading for FunctionalLLMStrategy to avoid circular imports
+def get_functional_llm_strategy():
+    """Get FunctionalLLMStrategy class (lazy loaded to avoid circular imports)"""
+    try:
+        from ..adapters.strategy_adapter import FunctionalLLMStrategy
+        return FunctionalLLMStrategy
+    except ImportError:
+        # Return placeholder if import fails
+        return None
+
+# Runtime fallback for compatibility
+FunctionalLLMStrategy = None
 
 # Market making strategies
 from .market_making import (
@@ -66,7 +72,7 @@ __all__ = [
     "StrategyComposition",
     # LLM strategies
     "LLMConfig",
-    "FunctionalLLMStrategy",
+    "get_functional_llm_strategy",  # Lazy loaded to avoid circular imports
     # Market making
     "MarketMakingConfig",
     "FunctionalMarketMakingStrategy",

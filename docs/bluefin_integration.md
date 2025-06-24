@@ -32,20 +32,57 @@ First, you need a Sui wallet:
 
 ### 2. Bot Configuration
 
+The bot now supports both legacy and functional programming (FP) configuration patterns. The FP system provides enhanced type safety, security, and error handling.
+
+#### Functional Programming Configuration (Recommended)
+
 Add these settings to your `.env` file:
 
 ```bash
-# Exchange Selection
+# Exchange Selection (FP Format - Enhanced Security)
+EXCHANGE_TYPE=bluefin  # FP format with validation
+
+# Bluefin Configuration (FP Format with Opaque Types)
+BLUEFIN_PRIVATE_KEY=your_sui_wallet_private_key_here  # Automatically masked in logs
+BLUEFIN_NETWORK=mainnet  # or testnet for testing
+BLUEFIN_RPC_URL=https://sui-mainnet.bluefin.io  # optional custom RPC
+
+# Rate Limiting (FP Configuration)
+RATE_LIMIT_RPS=10      # Requests per second
+RATE_LIMIT_RPM=100     # Requests per minute  
+RATE_LIMIT_RPH=1000    # Requests per hour
+
+# Trading Mode and Strategy (FP Format)
+TRADING_MODE=paper     # paper, live, or backtest
+STRATEGY_TYPE=llm      # llm, momentum, or mean_reversion
+TRADING_PAIRS=SUI-PERP # Comma-separated list
+TRADING_INTERVAL=5m    # Validated interval
+```
+
+#### Legacy Configuration (Backward Compatible)
+
+```bash
+# Exchange Selection (Legacy Format)
 EXCHANGE__EXCHANGE_TYPE=bluefin
 
-# Bluefin Configuration
+# Bluefin Configuration (Legacy Format)
 EXCHANGE__BLUEFIN_PRIVATE_KEY=your_sui_wallet_private_key_here
 EXCHANGE__BLUEFIN_NETWORK=mainnet  # or testnet for testing
 EXCHANGE__BLUEFIN_RPC_URL=https://sui-mainnet.nodeinfra.com  # optional custom RPC
 
-# Disable Coinbase futures if using Bluefin
+# Legacy Trading Configuration
 TRADING__ENABLE_FUTURES=true  # Bluefin only supports futures
+SYSTEM__DRY_RUN=true          # Paper trading mode
 ```
+
+#### Configuration Security Features
+
+The new FP configuration system provides:
+
+- **Opaque Types**: Private keys are automatically masked in logs (`PrivateKey(***)`)
+- **Result-based Validation**: Configuration errors provide detailed feedback
+- **Type Safety**: Prevents common configuration mistakes
+- **Comprehensive Validation**: All parameters are validated before startup
 
 ### 3. Install Dependencies
 
@@ -104,12 +141,27 @@ TRADING__MAX_FUTURES_LEVERAGE=20
 
 ## Running the Bot
 
+### Configuration Validation
+
+Before running the bot, validate your configuration:
+
+```bash
+# Validate FP configuration
+python -c "from bot.fp.types.config import Config; result = Config.from_env(); print('✅ Config valid' if result.is_success() else f'❌ Config error: {result.failure()}')"
+
+# Check specific exchange configuration
+python -c "from bot.fp.types.config import build_exchange_config_from_env; result = build_exchange_config_from_env(); print('✅ Exchange config valid' if result.is_success() else f'❌ Exchange error: {result.failure()}')"
+```
+
 ### Paper Trading (Recommended First)
 
 Test with paper trading first:
 
 ```bash
-# Paper trading with Bluefin
+# Paper trading with Bluefin (FP Configuration)
+TRADING_MODE=paper python -m bot.main live
+
+# Paper trading with legacy configuration
 python -m bot.main live --dry-run
 ```
 
@@ -118,10 +170,16 @@ python -m bot.main live --dry-run
 ⚠️ **WARNING**: This uses real money on Bluefin!
 
 ```bash
-# Live trading on Bluefin mainnet
+# Live trading on Bluefin mainnet (FP Configuration)
+TRADING_MODE=live python -m bot.main live
+
+# Legacy live trading on Bluefin mainnet
 python -m bot.main live
 
-# Or use testnet first
+# Use testnet first for testing (FP Configuration)
+BLUEFIN_NETWORK=testnet TRADING_MODE=paper python -m bot.main live
+
+# Legacy testnet configuration
 EXCHANGE__BLUEFIN_NETWORK=testnet python -m bot.main live
 ```
 
@@ -149,6 +207,14 @@ EXCHANGE__BLUEFIN_NETWORK=testnet python -m bot.main live
 - Network congestion possible during high activity
 - No customer support (decentralized)
 
+### 5. **Functional Programming Enhancements**
+- **Enhanced Security**: Private keys are never logged or exposed
+- **Result-based Error Handling**: Clear error messages for configuration issues
+- **Type Safety**: Prevents configuration mistakes at runtime
+- **Automatic Validation**: All parameters validated before trading begins
+- **Rate Limiting**: Built-in protection against API abuse
+- **Compatibility**: Both FP and legacy configurations work seamlessly
+
 ## Monitoring Your Trades
 
 ### 1. **Bluefin Web Interface**
@@ -164,6 +230,26 @@ Exchange (Bluefin)    ✓ Connected    mainnet network (Sui)
 ```
 
 ## Troubleshooting
+
+### Configuration Issues (FP System)
+
+1. **"Config validation failed"**
+   ```bash
+   # Check specific configuration issue
+   python -c "from bot.fp.types.config import Config; result = Config.from_env(); print(result.failure() if result.is_failure() else 'Config OK')"
+   ```
+
+2. **"Invalid private key: too short"**
+   - Ensure your private key starts with `0x` and has 64 hex characters
+   - Export fresh private key from your Sui wallet
+
+3. **"BLUEFIN_PRIVATE_KEY not set"**
+   - Set the environment variable in your `.env` file
+   - Ensure no typos in the variable name
+
+4. **"Invalid Bluefin network"**
+   - Use either `mainnet` or `testnet`
+   - Check spelling and case sensitivity
 
 ### Connection Issues
 
@@ -187,6 +273,16 @@ If you experience slow performance, try alternative RPC endpoints:
 - `https://fullnode.mainnet.sui.io`
 - `https://sui-rpc.publicnode.com`
 - `https://mainnet.suiet.app`
+
+### FP Configuration Migration Issues
+
+1. **"Configuration loading failed"**
+   - Check both FP and legacy variables aren't set simultaneously
+   - Use `build_exchange_config_from_env()` to debug specific exchange config
+
+2. **"Rate limit validation failed"**
+   - Ensure rate limits are positive integers and consistent
+   - Default values: RPS=10, RPM=100, RPH=1000
 
 ## Security Best Practices
 

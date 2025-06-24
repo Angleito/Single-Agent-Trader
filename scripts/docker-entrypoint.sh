@@ -94,7 +94,7 @@ display_banner() {
     log_info "=================================="
 }
 
-# Check if running as correct user
+# Check if running as correct user and fix permission conflicts
 check_user() {
     local current_uid=$(id -u)
     local current_gid=$(id -g)
@@ -102,15 +102,68 @@ check_user() {
 
     log_info "Running as user ${current_user} (${current_uid}:${current_gid})"
 
+    # Update runtime user information
+    readonly RUNTIME_UID=${current_uid}
+    readonly RUNTIME_GID=${current_gid}
+
+    # Check for user permission conflicts
     if [[ "${current_uid}" != "${APP_UID}" ]] || [[ "${current_gid}" != "${APP_GID}" ]]; then
-        log_info "Running as UID:GID ${current_uid}:${current_gid}, expected ${APP_UID}:${APP_GID}"
-        log_info "This is normal when using Docker Compose user mapping"
+        log_info "User mapping detected: running as ${current_uid}:${current_gid}, container built for ${APP_UID}:${APP_GID}"
+        
+        # This is normal for Docker Compose user mapping, but we should verify permissions
+        if [[ "${current_uid}" -eq 0 ]]; then
+            log_warning "Running as root - this can cause permission issues with volume mounts"
+            log_warning "Consider using HOST_UID and HOST_GID environment variables"
+        else
+            log_success "User mapping is appropriate for volume permissions"
+        fi
+        
+        # Check if we can fix ownership of critical files if running as root
+        if [[ "${current_uid}" -eq 0 ]]; then
+            log_info "Attempting to fix ownership conflicts as root user..."
+            fix_ownership_conflicts
+        fi
     else
         log_success "Running as correct user: ${APP_USER}:${APP_GROUP} (${APP_UID}:${APP_GID})"
     fi
 
-    # Always succeed - user check is informational only
     return 0
+}
+
+# Fix ownership conflicts when running as root
+fix_ownership_conflicts() {
+    log_info "Fixing ownership conflicts for volume mounts..."
+    
+    # Get HOST_UID and HOST_GID from environment if available
+    local target_uid="${HOST_UID:-${RUNTIME_UID}}"
+    local target_gid="${HOST_GID:-${RUNTIME_GID}}"
+    
+    # Critical directories that need proper ownership
+    local ownership_dirs=("/app/logs" "/app/data" "/app/tmp")
+    
+    for dir in "${ownership_dirs[@]}"; do
+        if [[ -d "${dir}" ]]; then
+            log_debug "Fixing ownership for ${dir} to ${target_uid}:${target_gid}"
+            if chown -R "${target_uid}:${target_gid}" "${dir}" 2>/dev/null; then
+                log_success "Fixed ownership for ${dir}"
+            else
+                log_warning "Could not fix ownership for ${dir} (may not be necessary)"
+            fi
+        fi
+    done
+    
+    # Fix permissions for writable directories
+    for dir in "${ownership_dirs[@]}"; do
+        if [[ -d "${dir}" ]]; then
+            if chmod -R 775 "${dir}" 2>/dev/null; then
+                log_debug "Fixed permissions for ${dir}"
+            else
+                log_warning "Could not fix permissions for ${dir}"
+            fi
+        fi
+    done
+    
+    log_success "Ownership conflict resolution completed"
 }
 
 # Verify and prepare directory (simplified approach)
@@ -451,6 +504,111 @@ setup_environment() {
     return 0
 }
 
+# Validate API key configurations
+validate_api_keys() {
+    log_info "Validating API key configurations for exchange: ${EXCHANGE_TYPE}"
+
+    local api_key_errors=()
+    local api_key_warnings=()
+
+    # Validate LLM API key (required for all exchanges)
+    if [[ -z "${LLM__OPENAI_API_KEY:-}" ]]; then
+        api_key_errors+=("LLM__OPENAI_API_KEY is required for AI trading decisions")
+    else
+        # Check if the API key looks valid (starts with sk- and has reasonable length)
+        if [[ "${LLM__OPENAI_API_KEY}" =~ ^sk-[A-Za-z0-9]{48,}$ ]]; then
+            log_success "OpenAI API key format appears valid"
+        else
+            api_key_warnings+=("OpenAI API key format may be invalid (should start with 'sk-')")
+        fi
+    fi
+
+    # Exchange-specific API key validation
+    case "${EXCHANGE_TYPE}" in
+        "coinbase")
+            log_info "Validating Coinbase API configuration..."
+            if [[ -z "${EXCHANGE__CDP_API_KEY_NAME:-}" ]]; then
+                api_key_errors+=("EXCHANGE__CDP_API_KEY_NAME is required for Coinbase")
+            else
+                log_success "Coinbase API key name configured"
+            fi
+
+            if [[ -z "${EXCHANGE__CDP_PRIVATE_KEY:-}" ]]; then
+                api_key_errors+=("EXCHANGE__CDP_PRIVATE_KEY is required for Coinbase")
+            else
+                # Check if the private key looks like a valid PEM format
+                if [[ "${EXCHANGE__CDP_PRIVATE_KEY}" =~ "BEGIN EC PRIVATE KEY" ]]; then
+                    log_success "Coinbase private key format appears valid (PEM)"
+                else
+                    api_key_warnings+=("Coinbase private key may not be in PEM format")
+                fi
+            fi
+            ;;
+        "bluefin")
+            log_info "Validating Bluefin API configuration..."
+            if [[ -z "${EXCHANGE__BLUEFIN_PRIVATE_KEY:-}" ]]; then
+                api_key_errors+=("EXCHANGE__BLUEFIN_PRIVATE_KEY is required for Bluefin")
+            else
+                # Check if the private key looks like a valid hex key
+                if [[ "${EXCHANGE__BLUEFIN_PRIVATE_KEY}" =~ ^(0x)?[a-fA-F0-9]{64}$ ]]; then
+                    log_success "Bluefin private key format appears valid (64-character hex)"
+                else
+                    api_key_warnings+=("Bluefin private key may not be in valid hex format")
+                fi
+            fi
+
+            if [[ -z "${BLUEFIN_SERVICE_API_KEY:-}" ]]; then
+                api_key_warnings+=("BLUEFIN_SERVICE_API_KEY not set - Bluefin service may not be available")
+            else
+                log_success "Bluefin service API key configured"
+            fi
+
+            # Validate Bluefin network setting
+            local bluefin_network="${EXCHANGE__BLUEFIN_NETWORK:-mainnet}"
+            if [[ "${bluefin_network}" != "mainnet" && "${bluefin_network}" != "testnet" ]]; then
+                api_key_errors+=("EXCHANGE__BLUEFIN_NETWORK must be 'mainnet' or 'testnet', got: ${bluefin_network}")
+            else
+                log_success "Bluefin network configuration valid: ${bluefin_network}"
+            fi
+            ;;
+        *)
+            api_key_warnings+=("Unknown exchange type: ${EXCHANGE_TYPE} - cannot validate API keys")
+            ;;
+    esac
+
+    # Safety check for dry run mode
+    if [[ "${DRY_RUN}" != "true" ]]; then
+        if [[ ${#api_key_errors[@]} -gt 0 ]]; then
+            api_key_errors+=("CRITICAL: Live trading mode with missing API keys - this will cause failures")
+        else
+            log_warning "LIVE TRADING MODE: API keys validated but trading with real money!"
+        fi
+    fi
+
+    # Report results
+    local error_count=${#api_key_errors[@]}
+    local warning_count=${#api_key_warnings[@]}
+
+    if [[ ${error_count} -gt 0 ]]; then
+        log_error "API key validation failed with ${error_count} error(s):"
+        for error in "${api_key_errors[@]}"; do
+            log_error "  - ${error}"
+        done
+        return 1
+    fi
+
+    if [[ ${warning_count} -gt 0 ]]; then
+        log_warning "API key validation completed with ${warning_count} warning(s):"
+        for warning in "${api_key_warnings[@]}"; do
+            log_warning "  - ${warning}"
+        done
+    else
+        log_success "All API keys validated successfully"
+    fi
+
+    return 0
+}
+
 # Enhanced startup validation
 perform_startup_validation() {
     log_info "Performing comprehensive startup validation..."
@@ -488,6 +646,17 @@ EOF
         fi
     done
 
+    # Validate critical trading environment variables
+    local trading_env_vars=("EXCHANGE__EXCHANGE_TYPE" "SYSTEM__DRY_RUN")
+    for env_var in "${trading_env_vars[@]}"; do
+        if [[ -n "${!env_var:-}" ]]; then
+            log_debug "✓ ${env_var}=${!env_var}"
+        else
+            log_error "Critical trading environment variable not set: ${env_var}"
+            validation_errors+=("Missing critical environment variable: ${env_var}")
+        fi
+    done
+
     # Check for configuration files
     local config_files=("config/development.json" "config/production.json" "prompts")
     for config_path in "${config_files[@]}"; do
@@ -499,6 +668,11 @@ EOF
             validation_warnings+=("Missing configuration: ${config_path}")
         fi
     done
+
+    # Validate API keys
+    if ! validate_api_keys; then
+        validation_errors+=("API key validation failed")
+    fi
 
     # Summary
     local error_count=${#validation_errors[@]}

@@ -17,11 +17,13 @@ All functions are pure and composable for maximum reliability and testability.
 import math
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 from bot.fp.core import MarketState, Signal, SignalType, Strategy
 from bot.fp.indicators.volatility import (
     calculate_bollinger_bands,
 )
+from .base import BaseStrategy, StrategyConfig, StrategyMetadata, StrategyResult
 
 # ============================================================================
 # ENHANCED SPREAD CALCULATION MODELS
@@ -788,3 +790,178 @@ def adaptive_market_maker(
         return signal
 
     return strategy
+
+
+# ============================================================================
+# FUNCTIONAL PROGRAMMING STRATEGY CLASSES
+# ============================================================================
+
+
+@dataclass(frozen=True)
+class MarketMakingConfig(StrategyConfig):
+    """Configuration for functional market making strategy."""
+    
+    spread_factor: float = 0.002
+    inventory_limit: float = 10000.0
+    skew_factor: float = 0.3
+    volatility_lookback: int = 20
+    min_spread: float = 0.001
+    max_spread: float = 0.02
+    competitive_factor: float = 0.95
+    imbalance_threshold: float = 0.6
+    quote_size: float = 100.0
+    adaptation_rate: float = 0.1
+    stop_loss_pct: float = 0.02
+    daily_loss_limit: float = 1000.0
+    position_limit: float = 50000.0
+    
+    def __post_init__(self) -> None:
+        """Validate market making configuration."""
+        super().__post_init__()
+        
+        if self.spread_factor <= 0:
+            raise ValueError(f"Spread factor must be positive: {self.spread_factor}")
+        if self.inventory_limit <= 0:
+            raise ValueError(f"Inventory limit must be positive: {self.inventory_limit}")
+        if not 0 <= self.skew_factor <= 1:
+            raise ValueError(f"Skew factor must be between 0 and 1: {self.skew_factor}")
+        if self.min_spread >= self.max_spread:
+            raise ValueError(f"Min spread must be less than max spread: {self.min_spread} >= {self.max_spread}")
+        if not 0 < self.competitive_factor <= 1:
+            raise ValueError(f"Competitive factor must be between 0 and 1: {self.competitive_factor}")
+
+
+class FunctionalMarketMakingStrategy(BaseStrategy):
+    """Functional market making strategy that wraps pure functions in a class interface."""
+    
+    def __init__(self, config: MarketMakingConfig):
+        """Initialize functional market making strategy."""
+        # Create strategy metadata
+        metadata = StrategyMetadata(
+            name="functional_market_making",
+            version="1.0.0",
+            description="Functional programming-based market making strategy with advanced spread calculation and inventory management",
+            parameters={
+                "spread_factor": config.spread_factor,
+                "inventory_limit": config.inventory_limit,
+                "skew_factor": config.skew_factor,
+                "volatility_lookback": config.volatility_lookback,
+                "min_spread": config.min_spread,
+                "max_spread": config.max_spread,
+                "competitive_factor": config.competitive_factor,
+                "imbalance_threshold": config.imbalance_threshold,
+                "quote_size": config.quote_size,
+            },
+            risk_level=config.risk_level,
+            expected_frequency="scalping",
+            created_at=datetime.now(),
+            tags=["market_making", "functional", "inventory_management", "spread_optimization"],
+        )
+        
+        # Create the functional strategy
+        base_strategy = market_maker_strategy(
+            spread_factor=config.spread_factor,
+            inventory_limit=config.inventory_limit,
+            skew_factor=config.skew_factor,
+            volatility_lookback=config.volatility_lookback,
+            min_spread=config.min_spread,
+            max_spread=config.max_spread,
+            competitive_factor=config.competitive_factor,
+            imbalance_threshold=config.imbalance_threshold,
+            quote_size=config.quote_size,
+        )
+        
+        # Add risk management if configured
+        if config.stop_loss_pct > 0 or config.daily_loss_limit > 0 or config.position_limit > 0:
+            strategy_func = market_maker_with_stops(
+                base_strategy=base_strategy,
+                stop_loss_pct=config.stop_loss_pct,
+                daily_loss_limit=config.daily_loss_limit,
+                position_limit=config.position_limit,
+            )
+        else:
+            strategy_func = base_strategy
+            
+        # Initialize base class
+        super().__init__(
+            config=config,
+            strategy_func=strategy_func,
+            metadata=metadata,
+        )
+    
+    def evaluate_with_timing(self, market_state: MarketState) -> StrategyResult:
+        """Evaluate strategy with detailed timing and metadata."""
+        import time
+        
+        start_time = time.time()
+        signal = self.evaluate(market_state)
+        end_time = time.time()
+        
+        return StrategyResult(
+            signal=signal,
+            metadata=self.metadata,
+            computation_time_ms=(end_time - start_time) * 1000,
+        )
+    
+    def create_adaptive_version(self) -> "FunctionalMarketMakingStrategy":
+        """Create an adaptive version of this strategy."""
+        # Create adaptive config
+        adaptive_config = MarketMakingConfig(
+            name=f"{self.config.name}_adaptive",
+            spread_factor=self.config.spread_factor,
+            inventory_limit=self.config.inventory_limit,
+            skew_factor=self.config.skew_factor,
+            volatility_lookback=self.config.volatility_lookback,
+            min_spread=self.config.min_spread,
+            max_spread=self.config.max_spread,
+            competitive_factor=self.config.competitive_factor,
+            imbalance_threshold=self.config.imbalance_threshold,
+            quote_size=self.config.quote_size,
+            adaptation_rate=0.1,  # Enable adaptation
+            stop_loss_pct=self.config.stop_loss_pct,
+            daily_loss_limit=self.config.daily_loss_limit,
+            position_limit=self.config.position_limit,
+            risk_level=self.config.risk_level,
+            max_position_size=self.config.max_position_size,
+            stop_loss_percentage=self.config.stop_loss_percentage,
+            take_profit_percentage=self.config.take_profit_percentage,
+            enabled=self.config.enabled,
+            parameters=self.config.parameters,
+        )
+        
+        # Create new strategy with adaptive functionality
+        adaptive_strategy = FunctionalMarketMakingStrategy(adaptive_config)
+        
+        # Replace the strategy function with the adaptive version
+        adaptive_func = adaptive_market_maker(
+            base_spread=adaptive_config.spread_factor,
+            min_spread=adaptive_config.min_spread,
+            max_spread=adaptive_config.max_spread,
+            adaptation_rate=adaptive_config.adaptation_rate,
+        )
+        
+        adaptive_strategy.strategy_func = adaptive_func
+        
+        return adaptive_strategy
+    
+    def get_current_spread_model(self) -> SpreadModel:
+        """Get the current spread model configuration."""
+        return SpreadModel(
+            base_spread=self.config.spread_factor,
+            min_spread=self.config.min_spread,
+            max_spread=self.config.max_spread,
+            volatility_factor=2.0,
+            liquidity_factor=1.0,
+            inventory_factor=self.config.skew_factor,
+            skew_factor=self.config.skew_factor,
+        )
+    
+    def get_inventory_policy(self) -> InventoryPolicy:
+        """Get the current inventory management policy."""
+        return InventoryPolicy(
+            max_position_ratio=self.config.max_position_size,
+            target_turn_rate=8.0,
+            skew_factor=self.config.skew_factor,
+            urgency_threshold=0.8,
+            timeout_hours=4.0,
+        )

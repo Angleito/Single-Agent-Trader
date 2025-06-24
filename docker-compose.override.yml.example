@@ -1,0 +1,128 @@
+# ==================================================================================
+# Docker Compose Override Examples
+# ==================================================================================
+# Copy this file to docker-compose.override.yml and configure for your exchange
+# This file provides quick configuration examples for different exchanges
+# ==================================================================================
+
+# ==================================================================================
+# BLUEFIN EXCHANGE CONFIGURATION (Default)
+# ==================================================================================
+# For Bluefin DEX trading on Sui blockchain
+# Uncomment and modify the configuration below:
+
+# services:
+#   ai-trading-bot:
+#     build:
+#       args:
+#         EXCHANGE_TYPE: bluefin
+#     image: ai-trading-bot:bluefin-latest
+#     environment:
+#       # Exchange Configuration
+#       - EXCHANGE__EXCHANGE_TYPE=bluefin
+#       - TRADING__SYMBOL=SUI-PERP
+#       - TRADING__INTERVAL=1m
+#       - TRADING__LEVERAGE=5
+#       # Bluefin Specific
+#       - EXCHANGE__BLUEFIN_NETWORK=mainnet
+#       - BLUEFIN_SERVICE_URL=http://bluefin-service:8080
+#       # Safety Settings
+#       - SYSTEM__DRY_RUN=true
+
+# ==================================================================================
+# COINBASE EXCHANGE CONFIGURATION
+# ==================================================================================
+# For Coinbase centralized exchange trading
+# Uncomment and modify the configuration below:
+
+services:
+  ai-trading-bot:
+    build:
+      args:
+        EXCHANGE_TYPE: coinbase
+    image: ai-trading-bot:coinbase-latest
+    environment:
+      # Exchange Configuration
+      - EXCHANGE__EXCHANGE_TYPE=coinbase
+      - TRADING__SYMBOL=BTC-USD
+      - TRADING__INTERVAL=1m
+      - TRADING__LEVERAGE=1
+      # Coinbase Specific
+      - EXCHANGE__CB_SANDBOX=true
+      # Safety Settings
+      - SYSTEM__DRY_RUN=true
+    depends_on:
+      # Remove Bluefin service dependency for Coinbase
+      - mcp-memory
+      - mcp-omnisearch
+
+  # For Coinbase, you may want to disable the Bluefin service
+  # bluefin-service:
+  #   profiles:
+  #     - bluefin
+
+  # Dashboard configuration for Coinbase
+  dashboard-backend:
+    environment:
+      - EXCHANGE__EXCHANGE_TYPE=coinbase
+
+# ==================================================================================
+# DEVELOPMENT OVERRIDES
+# ==================================================================================
+# Additional overrides for development environments
+# Uncomment to enable enhanced debugging and testing features:
+
+#   ai-trading-bot:
+#     environment:
+#       # Enhanced Debugging
+#       - LOG_LEVEL=DEBUG
+#       - FP_DEBUG_MODE=true
+#       - FP_INTERPRETER_STATS=true
+#       # Development Safety
+#       - SYSTEM__DRY_RUN=true
+#       - SYSTEM__ENVIRONMENT=development
+#       # Reduced Resource Usage for Development
+#       - FP_MAX_CONCURRENT_EFFECTS=50
+#       - FP_EFFECT_TIMEOUT=60.0
+#     volumes:
+#       # Enable code mounting for development
+#       - .:/app:delegated
+
+# ==================================================================================
+# PRODUCTION OVERRIDES
+# ==================================================================================
+# Additional overrides for production environments
+# Uncomment to enable production-optimized settings:
+
+#   ai-trading-bot:
+#     environment:
+#       # Production Settings
+#       - SYSTEM__ENVIRONMENT=production
+#       - LOG_LEVEL=INFO
+#       - FP_DEBUG_MODE=false
+#       # Enhanced Performance
+#       - FP_MAX_CONCURRENT_EFFECTS=200
+#       - FP_EFFECT_TIMEOUT=30.0
+#       - FP_SCHEDULER_ENABLED=true
+#     deploy:
+#       resources:
+#         limits:
+#           memory: 2G
+#           cpus: '1.0'
+#         reservations:
+#           memory: 1G
+#           cpus: '0.5'
+
+# ==================================================================================
+# USAGE INSTRUCTIONS
+# ==================================================================================
+#
+# 1. Copy this file: cp docker-compose.override.yml.example docker-compose.override.yml
+# 2. Uncomment and modify the configuration for your exchange
+# 3. Ensure your .env file matches the exchange configuration
+# 4. Run: docker-compose up
+#
+# The override file will automatically merge with docker-compose.yml
+# Environment variables in .env take precedence over these settings
+#
+# ==================================================================================

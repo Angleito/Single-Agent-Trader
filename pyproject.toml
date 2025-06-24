@@ -70,6 +70,8 @@ prometheus-client = ">=0.22.0"
 python-json-logger = ">=3.0.0"
 # Bluefin DEX Support (optional - install manually if needed)
 # bluefin-v2-client = "^4.2.13"  # Commented out due to build complexity - install separately in Docker
+# Cryptographic dependencies for order signatures
+cryptography = ">=42.0.0"
 anyio = ">=4.0.0"
 
 [tool.poetry.group.dev.dependencies]

@@ -368,6 +368,14 @@ class ExchangeSettings:
     def __init__(
         self, functional_config: Optional["ExchangeConfig"] = None, **kwargs
     ) -> None:
+        # Initialize credentials to None first
+        self.cb_api_key: SecretStr | None = None
+        self.cb_api_secret: SecretStr | None = None
+        self.cb_passphrase: SecretStr | None = None
+        self.cdp_api_key_name: SecretStr | None = None
+        self.cdp_private_key: SecretStr | None = None
+        self.bluefin_private_key: SecretStr | None = None
+        
         if functional_config:
             self._from_functional_config(functional_config)
         else:
@@ -391,18 +399,18 @@ class ExchangeSettings:
             self.bluefin_network: str = kwargs.get("bluefin_network") or os.getenv(
                 "EXCHANGE__BLUEFIN_NETWORK", "mainnet"
             )
+            
+            # WebSocket settings
+            self.websocket_reconnect_attempts: int = parse_int_env(
+                "EXCHANGE__WEBSOCKET_RECONNECT_ATTEMPTS", 
+                kwargs.get("websocket_reconnect_attempts", 5)
+            )
+            self.websocket_timeout: int = parse_int_env(
+                "EXCHANGE__WEBSOCKET_TIMEOUT", 
+                kwargs.get("websocket_timeout", 30)
+            )
 
-            # Coinbase credentials
-            self.cb_api_key: SecretStr | None = None
-            self.cb_api_secret: SecretStr | None = None
-            self.cb_passphrase: SecretStr | None = None
-            self.cdp_api_key_name: SecretStr | None = None
-            self.cdp_private_key: SecretStr | None = None
-
-            # Bluefin credentials
-            self.bluefin_private_key: SecretStr | None = None
-
-            # Load from environment
+            # Load credentials from environment
             if os.getenv("EXCHANGE__CB_API_KEY"):
                 self.cb_api_key = SecretStr(os.getenv("EXCHANGE__CB_API_KEY"))
             if os.getenv("EXCHANGE__CB_API_SECRET"):
@@ -527,6 +535,18 @@ class DataSettings:
         self.backup_enabled: bool = parse_bool_env(
             "DATA__BACKUP_ENABLED", kwargs.get("backup_enabled", True)
         )
+        self.candle_limit: int = parse_int_env(
+            "DATA__CANDLE_LIMIT", kwargs.get("candle_limit", 1000)
+        )
+        self.indicator_warmup: int = parse_int_env(
+            "DATA__INDICATOR_WARMUP", kwargs.get("indicator_warmup", 100)
+        )
+        self.data_cache_ttl_seconds: int = parse_int_env(
+            "DATA__DATA_CACHE_TTL_SECONDS", kwargs.get("data_cache_ttl_seconds", 30)
+        )
+        self.use_real_data: bool = parse_bool_env(
+            "DATA__USE_REAL_DATA", kwargs.get("use_real_data", True)
+        )
 
 
 @dataclass
@@ -567,6 +587,31 @@ class SystemSettings:
                 "SYSTEM__UPDATE_FREQUENCY_SECONDS",
                 kwargs.get("update_frequency_seconds", 30.0),
             )
+            
+            # Add missing logging attributes
+            self.log_to_console: bool = parse_bool_env(
+                "SYSTEM__LOG_TO_CONSOLE",
+                kwargs.get("log_to_console", True),
+            )
+            self.log_to_file: bool = parse_bool_env(
+                "SYSTEM__LOG_TO_FILE",
+                kwargs.get("log_to_file", True),
+            )
+            self.log_file_path: str = kwargs.get("log_file_path") or os.getenv(
+                "SYSTEM__LOG_FILE_PATH", "logs/bot.log"
+            )
+            self.max_log_size_mb: int = int(
+                parse_float_env(
+                    "SYSTEM__MAX_LOG_SIZE_MB",
+                    kwargs.get("max_log_size_mb", 100),
+                )
+            )
+            self.log_backup_count: int = int(
+                parse_float_env(
+                    "SYSTEM__LOG_BACKUP_COUNT",
+                    kwargs.get("log_backup_count", 5),
+                )
+            )
 
     def _from_functional_config(self, config: "SystemConfig") -> None:
         """Extract settings from functional configuration."""
@@ -576,6 +621,13 @@ class SystemSettings:
         )
         self.log_level = config.log_level.value
         self.update_frequency_seconds = 30.0  # Default
+        
+        # Add missing logging attributes with functional config defaults
+        self.log_to_console = True  # Default for functional config
+        self.log_to_file = True     # Default for functional config
+        self.log_file_path = "logs/bot.log"  # Default
+        self.max_log_size_mb = 100  # Default
+        self.log_backup_count = 5   # Default
 
 
 @dataclass

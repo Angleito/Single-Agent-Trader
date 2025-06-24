@@ -2388,6 +2388,7 @@ class BluefinMarketDataProvider:
                 on_candle_update=self._on_websocket_candle,
                 network=self.network,
                 use_trade_aggregation=self.use_trade_aggregation,
+                # auth_token automatically loaded from BLUEFIN_AUTH_TOKEN env var
             )
 
             # Log WebSocket client initialization with trade aggregation settings

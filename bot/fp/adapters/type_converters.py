@@ -468,3 +468,242 @@ def convert_position(position: CurrentPosition) -> FPPosition:
 def convert_trade_action(action: CurrentTradeAction) -> TradeSignal:
     """Convert trade action to functional signal - convenience function."""
     return trade_action_to_fp_signal(action)
+
+
+# ============================================================================
+# MISSING FACTORY FUNCTIONS FOR MARKET DATA ADAPTER
+# ============================================================================
+
+from ..types.market import (
+    ConnectionState,
+    ConnectionStatus,
+    DataQuality,
+    MarketDataStream,
+    OrderBookMessage,
+    RealtimeUpdate,
+    TickerMessage,
+    TradeMessage,
+)
+
+
+def create_connection_state(
+    url: str, 
+    status: str = "CONNECTING"
+) -> ConnectionState:
+    """Create initial connection state."""
+    try:
+        connection_status = ConnectionStatus(status)
+    except ValueError:
+        connection_status = ConnectionStatus.CONNECTING
+        
+    return ConnectionState(
+        status=connection_status,
+        url=url,
+        reconnect_attempts=0,
+        last_error=None,
+        connected_at=None,
+        last_message_at=None,
+    )
+
+
+def create_data_quality(
+    messages_received: int = 0,
+    messages_processed: int = 0,
+    validation_failures: int = 0,
+    average_latency_ms: float | None = None,
+) -> DataQuality:
+    """Create initial data quality metrics."""
+    return DataQuality(
+        timestamp=datetime.now(UTC),
+        messages_received=messages_received,
+        messages_processed=messages_processed,
+        validation_failures=validation_failures,
+        average_latency_ms=average_latency_ms,
+    )
+
+
+def create_market_data_stream(
+    symbol: str, 
+    exchanges: list[str]
+) -> MarketDataStream:
+    """Create initial market data stream."""
+    # Create initial connection states for all exchanges
+    connection_states = {
+        exchange: create_connection_state(f"wss://{exchange}.example.com")
+        for exchange in exchanges
+    }
+    
+    # Create initial data quality
+    data_quality = create_data_quality()
+    
+    return MarketDataStream(
+        symbol=symbol,
+        exchanges=exchanges,
+        connection_states=connection_states,
+        data_quality=data_quality,
+        active=True,
+    )
+
+
+def create_realtime_update(
+    symbol: str,
+    update_type: str,
+    data: dict[str, Any],
+    exchange: str | None = None,
+    latency_ms: float | None = None,
+) -> RealtimeUpdate:
+    """Create real-time update from data."""
+    return RealtimeUpdate(
+        symbol=symbol,
+        timestamp=datetime.now(UTC),
+        update_type=update_type,
+        data=data,
+        exchange=exchange,
+        latency_ms=latency_ms,
+    )
+
+
+def create_ticker_message_from_data(
+    message: dict[str, Any], 
+    symbol: str
+) -> TickerMessage:
+    """Create ticker message from WebSocket data."""
+    # Extract price from various possible fields
+    price = None
+    for price_field in ["price", "last", "last_price", "close"]:
+        if price_field in message:
+            try:
+                price = Decimal(str(message[price_field]))
+                break
+            except (ValueError, TypeError):
+                continue
+    
+    if price is None:
+        raise TypeConversionError(f"No valid price found in ticker message: {message}")
+    
+    # Extract volume (optional)
+    volume_24h = None
+    for volume_field in ["volume", "volume_24h", "base_volume", "volume_24hr"]:
+        if volume_field in message:
+            try:
+                volume_24h = Decimal(str(message[volume_field]))
+                break
+            except (ValueError, TypeError):
+                continue
+    
+    # Extract channel
+    channel = message.get("channel", message.get("type", "ticker"))
+    
+    # Extract message ID
+    message_id = message.get("id", message.get("message_id"))
+    
+    return TickerMessage(
+        channel=channel,
+        timestamp=datetime.now(UTC),
+        data=message,
+        price=price,
+        volume_24h=volume_24h,
+        message_id=message_id,
+    )
+
+
+def create_trade_message_from_data(
+    message: dict[str, Any], 
+    symbol: str
+) -> TradeMessage:
+    """Create trade message from WebSocket data."""
+    # Extract trade ID
+    trade_id = message.get("trade_id", message.get("id", message.get("tradeId")))
+    
+    # Extract price
+    price = None
+    for price_field in ["price", "last", "last_price"]:
+        if price_field in message:
+            try:
+                price = Decimal(str(message[price_field]))
+                break
+            except (ValueError, TypeError):
+                continue
+    
+    # Extract size
+    size = None
+    for size_field in ["size", "amount", "quantity", "vol"]:
+        if size_field in message:
+            try:
+                size = Decimal(str(message[size_field]))
+                break
+            except (ValueError, TypeError):
+                continue
+    
+    # Extract side
+    side = None
+    for side_field in ["side", "type", "taker_side"]:
+        if side_field in message:
+            raw_side = str(message[side_field]).upper()
+            if raw_side in ["BUY", "SELL", "B", "S"]:
+                side = "BUY" if raw_side in ["BUY", "B"] else "SELL"
+                break
+    
+    # Extract channel
+    channel = message.get("channel", message.get("type", "trades"))
+    
+    # Extract message ID
+    message_id = message.get("id", message.get("message_id"))
+    
+    return TradeMessage(
+        channel=channel,
+        timestamp=datetime.now(UTC),
+        data=message,
+        message_id=message_id,
+        trade_id=trade_id,
+        price=price,
+        size=size,
+        side=side,
+    )
+
+
+def create_orderbook_message_from_data(
+    message: dict[str, Any], 
+    symbol: str
+) -> OrderBookMessage:
+    """Create orderbook message from WebSocket data."""
+    # Extract bids and asks
+    bids = None
+    asks = None
+    
+    # Try to extract bids
+    if "bids" in message:
+        try:
+            bids = [
+                (Decimal(str(bid[0])), Decimal(str(bid[1])))
+                for bid in message["bids"]
+                if len(bid) >= 2
+            ]
+        except (ValueError, TypeError, IndexError):
+            bids = None
+    
+    # Try to extract asks
+    if "asks" in message:
+        try:
+            asks = [
+                (Decimal(str(ask[0])), Decimal(str(ask[1])))
+                for ask in message["asks"] 
+                if len(ask) >= 2
+            ]
+        except (ValueError, TypeError, IndexError):
+            asks = None
+    
+    # Extract channel
+    channel = message.get("channel", message.get("type", "orderbook"))
+    
+    # Extract message ID
+    message_id = message.get("id", message.get("message_id"))
+    
+    return OrderBookMessage(
+        channel=channel,
+        timestamp=datetime.now(UTC),
+        data=message,
+        message_id=message_id,
+        bids=bids,
+        asks=asks,
+    )

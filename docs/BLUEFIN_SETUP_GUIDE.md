@@ -101,13 +101,85 @@ cp .env.bluefin.example .env
 cp .env.example .env
 ```
 
-### 2. Essential Configuration
+### 2. Configuration Options
 
-Edit your `.env` file with required settings:
+The bot now supports **two configuration systems**:
+
+#### A. Functional Programming Configuration (Recommended)
+
+**Enhanced Security, Type Safety, and Validation**
+
+Edit your `.env` file with FP settings:
 
 ```bash
 # ===================
-# EXCHANGE CONFIGURATION
+# EXCHANGE CONFIGURATION (FP FORMAT)
+# ===================
+EXCHANGE_TYPE=bluefin  # FP format with validation
+
+# Your Sui wallet private key (automatically masked in logs)
+BLUEFIN_PRIVATE_KEY=0x1234567890abcdef...  # Shows as PrivateKey(***)
+
+# Network selection (validated)
+BLUEFIN_NETWORK=mainnet  # or testnet for testing
+BLUEFIN_RPC_URL=https://sui-mainnet.bluefin.io  # optional custom RPC
+
+# Rate limiting (FP configuration)
+RATE_LIMIT_RPS=10      # Requests per second
+RATE_LIMIT_RPM=100     # Requests per minute  
+RATE_LIMIT_RPH=1000    # Requests per hour
+
+# ===================
+# TRADING CONFIGURATION (FP FORMAT)
+# ===================
+# Trading mode (validated)
+TRADING_MODE=paper     # paper, live, or backtest
+
+# Strategy selection (validated)
+STRATEGY_TYPE=llm      # llm, momentum, or mean_reversion
+
+# Trading pairs (comma-separated, validated)
+TRADING_PAIRS=SUI-PERP  # Options: BTC-PERP, ETH-PERP, SOL-PERP, etc.
+
+# Candle interval (validated)
+TRADING_INTERVAL=5m    # Supported: 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d, 1w, 1M
+
+# Risk management (FP validation)
+MAX_CONCURRENT_POSITIONS=3      # Maximum simultaneous positions
+DEFAULT_POSITION_SIZE=0.1       # Position size as decimal (10%)
+
+# ===================
+# LLM CONFIGURATION (FP FORMAT)
+# ===================
+LLM_OPENAI_API_KEY=sk-...your-openai-api-key...  # Automatically masked
+LLM_MODEL=gpt-4o                # Validated model name
+LLM_TEMPERATURE=0.7             # Validated range 0.0-2.0
+LLM_MAX_CONTEXT=4000            # Context length validation
+LLM_USE_MEMORY=false            # Memory features
+LLM_CONFIDENCE_THRESHOLD=0.7    # Confidence threshold (0.0-1.0)
+
+# ===================
+# SYSTEM CONFIGURATION (FP FORMAT)
+# ===================
+LOG_LEVEL=INFO                  # Validated log level
+
+# Feature flags (FP validation)
+ENABLE_WEBSOCKET=true          # Real-time data
+ENABLE_MEMORY=false            # Learning features
+ENABLE_RISK_MANAGEMENT=true    # Risk controls
+ENABLE_METRICS=true           # Performance metrics
+ENABLE_PAPER_TRADING=true     # Paper trading mode
+ENABLE_BACKTESTING=true       # Backtesting capabilities
+ENABLE_NOTIFICATIONS=false    # Notifications
+```
+
+#### B. Legacy Configuration (Backward Compatible)
+
+**Original Configuration Format**
+
+```bash
+# ===================
+# EXCHANGE CONFIGURATION (LEGACY FORMAT)
 # ===================
 EXCHANGE__EXCHANGE_TYPE=bluefin
 
@@ -118,7 +190,7 @@ EXCHANGE__BLUEFIN_PRIVATE_KEY=0x1234567890abcdef...
 EXCHANGE__BLUEFIN_NETWORK=mainnet  # or testnet for testing
 
 # ===================
-# TRADING CONFIGURATION
+# TRADING CONFIGURATION (LEGACY FORMAT)
 # ===================
 # Safety first - keep true for paper trading
 SYSTEM__DRY_RUN=true
@@ -134,31 +206,39 @@ TRADING__MAX_FUTURES_LEVERAGE=10
 TRADING__INTERVAL=1m  # Supported: 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d, 1w, 1M
 
 # ===================
-# LLM CONFIGURATION
+# LLM CONFIGURATION (LEGACY FORMAT)
 # ===================
 LLM__OPENAI_API_KEY=sk-...your-openai-api-key...
 LLM__MODEL_NAME=gpt-4o  # or gpt-4o-mini for lower cost
 LLM__PROVIDER=openai
 
 # ===================
-# BLUEFIN SERVICE
-# ===================
-# Internal service communication (usually defaults work)
-BLUEFIN_SERVICE_URL=http://bluefin-service:8080
-BLUEFIN_SERVICE_API_KEY=trading-bot-secret
-
-# ===================
-# PAPER TRADING
-# ===================
-PAPER_TRADING__STARTING_BALANCE=10000
-PAPER_TRADING__FEE_RATE=0.0015  # 0.15% (realistic Bluefin fees)
-
-# ===================
-# LOGGING
+# SYSTEM CONFIGURATION (LEGACY FORMAT)
 # ===================
 LOG_LEVEL=INFO
 SYSTEM__ENABLE_WEBSOCKET_PUBLISHING=true
 SYSTEM__ENABLE_PERFORMANCE_MONITORING=true
+```
+
+### 3. Configuration Validation
+
+**For FP Configuration**, validate your setup:
+
+```bash
+# Validate complete configuration
+python -c "from bot.fp.types.config import Config; result = Config.from_env(); print('✅ Config valid' if result.is_success() else f'❌ Config error: {result.failure()}')"
+
+# Validate specific components
+python -c "from bot.fp.types.config import build_exchange_config_from_env; result = build_exchange_config_from_env(); print('✅ Exchange config valid' if result.is_success() else f'❌ Exchange error: {result.failure()}')"
+
+python -c "from bot.fp.types.config import build_strategy_config_from_env; result = build_strategy_config_from_env(); print('✅ Strategy config valid' if result.is_success() else f'❌ Strategy error: {result.failure()}')"
+```
+
+**For Legacy Configuration**, use existing validation:
+
+```bash
+# Validate legacy configuration
+python -c "from bot.config import settings; print('✅ Legacy config loaded successfully')"
 ```
 
 ### 3. Optional Advanced Settings
@@ -310,18 +390,48 @@ TRADING__ADDITIONAL_SYMBOLS=BTC-PERP,ETH-PERP
 
 ### 1. Environment Validation
 
-```bash
-# Validate configuration
-python -c "from bot.config import settings; print('✓ Config loaded successfully')"
+**For FP Configuration:**
 
-# Check Bluefin connection
+```bash
+# Validate complete FP configuration
+python -c "from bot.fp.types.config import Config; result = Config.from_env(); print('✅ Config valid' if result.is_success() else f'❌ Config error: {result.failure()}')"
+
+# Validate exchange configuration only
+python -c "from bot.fp.types.config import build_exchange_config_from_env; result = build_exchange_config_from_env(); print('✅ Exchange config valid' if result.is_success() else f'❌ Exchange error: {result.failure()}')"
+
+# Check specific validation errors
+python -c "from bot.fp.types.config import validate_config, Config; config = Config.from_env(); print(validate_config(config.success()).failure() if config.is_success() and validate_config(config.success()).is_failure() else '✅ Full validation passed')"
+```
+
+**For Legacy Configuration:**
+
+```bash
+# Validate legacy configuration
+python -c "from bot.config import settings; print('✅ Legacy config loaded successfully')"
+
+# Check Bluefin connection (if available)
 python scripts/verify_exchange_config.py
 ```
 
 ### 2. Paper Trading Test
 
+**Using FP Configuration:**
+
 ```bash
-# Start paper trading
+# Start paper trading with FP config
+TRADING_MODE=paper docker-compose -f docker-compose.bluefin.yml up ai-trading-bot-bluefin
+
+# Look for success messages:
+# ✅ FP Config loaded and validated
+# ✓ Bluefin Service    Connected    mainnet
+# ✓ Exchange (Bluefin) Connected    mainnet network (Sui)
+# 🎯 PAPER TRADING MODE - No real trades will be executed
+```
+
+**Using Legacy Configuration:**
+
+```bash
+# Start paper trading with legacy config
 docker-compose -f docker-compose.bluefin.yml up ai-trading-bot-bluefin
 
 # Look for success messages:
