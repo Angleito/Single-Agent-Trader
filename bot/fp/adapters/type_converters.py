@@ -437,3 +437,19 @@ def validate_connection_health(connection: ConnectionState) -> bool:
 def validate_data_quality(quality: DataQuality, min_success_rate: float = 95.0) -> bool:
     """Validate data quality meets requirements."""
     return quality.success_rate >= min_success_rate and quality.error_rate <= 5.0
+
+
+# Convenience functions for __init__.py imports
+def convert_market_data(market_data: CurrentMarketData) -> FPCandle:
+    """Convert market data to functional candle - convenience function."""
+    return current_market_data_to_fp_candle(market_data)
+
+
+def convert_position(position: CurrentPosition) -> FPPosition:
+    """Convert position to functional position - convenience function."""
+    return current_position_to_fp_position(position)
+
+
+def convert_trade_action(action: CurrentTradeAction) -> TradeSignal:
+    """Convert trade action to functional signal - convenience function."""
+    return trade_action_to_fp_signal(action)
