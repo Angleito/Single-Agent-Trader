@@ -7,7 +7,6 @@ import pytest
 
 from bot.config import settings
 from bot.learning.experience_manager import ExperienceManager
-from bot.learning.self_improvement import SelfImprovementEngine
 from bot.mcp.memory_server import MCPMemoryServer
 from bot.strategy.memory_enhanced_agent import MemoryEnhancedLLMAgent
 from bot.trading_types import (
@@ -36,12 +35,6 @@ async def experience_manager(memory_server):
     await manager.start()
     yield manager
     await manager.stop()
-
-
-@pytest.fixture
-def self_improvement_engine(memory_server):
-    """Create a self-improvement engine instance."""
-    return SelfImprovementEngine(memory_server)
 
 
 @pytest.fixture
@@ -158,52 +151,7 @@ async def test_experience_manager_lifecycle(
     assert summary["active_count"] == 0  # No active trades yet
 
 
-@pytest.mark.asyncio
-async def test_self_improvement_analysis(
-    self_improvement_engine, memory_server, sample_market_state
-):
-    """Test self-improvement engine analysis."""
-    # Store some sample experiences
-    for i in range(5):
-        trade_action = TradeAction(
-            action="LONG" if i % 2 == 0 else "SHORT",
-            size_pct=10 + i,
-            take_profit_pct=2.0,
-            stop_loss_pct=1.0,
-            leverage=2,
-            rationale=f"Test trade {i}",
-        )
-
-        exp_id = await memory_server.store_experience(sample_market_state, trade_action)
-
-        # Update with outcome
-        await memory_server.update_experience_outcome(
-            exp_id,
-            pnl=Decimal(50) if i % 2 == 0 else Decimal(-30),
-            exit_price=Decimal(51000) if i % 2 == 0 else Decimal(49000),
-            duration_minutes=30.0 + i * 10,
-        )
-
-    # Analyze performance
-    analysis = await self_improvement_engine.analyze_recent_performance(hours=1)
-
-    assert "total_trades" in analysis
-    assert analysis["total_trades"] == 5
-    assert "success_rate" in analysis
-    assert "pattern_performance" in analysis
-
-    # Get recommendations
-    recommendations = await self_improvement_engine.get_recommendations_for_market(
-        sample_market_state.indicators.__dict__,
-        (
-            sample_market_state.dominance_data.__dict__
-            if sample_market_state.dominance_data
-            else None
-        ),
-    )
-
-    assert "suggested_actions" in recommendations
-    assert "confidence_factors" in recommendations
+# Self-improvement engine tests removed - using MCP memory server for learning instead
 
 
 @pytest.mark.asyncio

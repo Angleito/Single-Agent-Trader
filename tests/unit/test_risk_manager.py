@@ -10,8 +10,24 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import Mock
 
+from bot.fp.types import Position, TradeAction
+
+# Legacy imports (maintained for compatibility)
 from bot.risk import DailyPnL, FailureRecord, RiskManager, TradingCircuitBreaker
-from bot.trading_types import Position, TradeAction
+
+# Functional imports (added for migration to functional programming patterns)
+try:
+    from bot.fp.strategies.risk_management import (
+        PositionSizeCalculation,
+        RiskAssessment,
+        RiskLevel,
+    )
+    from bot.fp.types.risk import DrawdownProtection, RiskMetrics
+
+    FUNCTIONAL_RISK_AVAILABLE = True
+except ImportError:
+    # Functional implementations not available, continue with legacy
+    FUNCTIONAL_RISK_AVAILABLE = False
 
 
 class TestDailyPnL(unittest.TestCase):

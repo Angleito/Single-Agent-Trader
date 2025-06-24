@@ -56,7 +56,7 @@ class RecoveryAction:
 
     name: str
     strategy: RecoveryStrategy
-    action: Callable
+    action: Callable[[], None]
     max_attempts: int = 3
     cooldown_seconds: int = 60
     last_attempt: datetime | None = None
@@ -76,9 +76,9 @@ class SystemHealthMonitor:
         self.check_interval = check_interval
         self.component_health: dict[str, ServiceHealth] = {}
         self.recovery_actions: dict[str, list[RecoveryAction]] = {}
-        self.health_checks: dict[str, Callable] = {}
+        self.health_checks: dict[str, Callable[[], bool]] = {}
         self.system_metrics: list[SystemMetrics] = []
-        self.monitoring_task: asyncio.Task | None = None
+        self.monitoring_task: asyncio.Task[None] | None = None
         self.is_monitoring = False
         self.alert_thresholds = {
             "cpu_percent": 80.0,

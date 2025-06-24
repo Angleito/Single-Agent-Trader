@@ -20,9 +20,9 @@ from .config import settings
 from .error_handling import (
     exception_handler,
 )
+from .fp.types import Order, Position
 from .paper_trading import PaperTradingAccount
 from .trading.fifo_position_manager import FIFOPositionManager
-from .trading_types import Order, Position
 from .utils.path_utils import get_data_directory, get_data_file_path
 
 logger = logging.getLogger(__name__)

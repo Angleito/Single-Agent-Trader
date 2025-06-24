@@ -12,6 +12,9 @@ from pydantic import Field, model_validator
 from bot.trading_types import MarketData as BaseMarketData
 from bot.types.market_data import is_valid_price, is_valid_volume
 
+# Type alias to resolve import conflicts
+ValidatedMarketData = BaseMarketData
+
 
 class EnhancedMarketData(BaseMarketData):
     """

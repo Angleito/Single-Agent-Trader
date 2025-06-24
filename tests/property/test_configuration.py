@@ -18,7 +18,7 @@ import pytest
 from hypothesis import given, settings
 from pydantic import ValidationError
 
-# Import configuration classes - adjust based on project structure
+# Legacy configuration imports (maintained for compatibility)
 from bot.config import (
     Environment,
     RiskSettings,
@@ -26,6 +26,22 @@ from bot.config import (
     SystemSettings,
     TradingSettings,
 )
+
+# Functional configuration imports (added for migration to functional programming patterns)
+try:
+    from bot.fp.types.config import (
+        Config,
+        ExchangeConfig,
+        StrategyConfig,
+        SystemConfig,
+        build_system_config_from_env,
+        validate_config,
+    )
+
+    FUNCTIONAL_CONFIG_AVAILABLE = True
+except ImportError:
+    # Functional implementations not available, continue with legacy
+    FUNCTIONAL_CONFIG_AVAILABLE = False
 
 
 class TestPaperTradingDefaults:

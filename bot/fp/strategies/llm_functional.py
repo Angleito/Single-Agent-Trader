@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from ...types import Signal
-from ..indicators.vumanchu_functional import VuManchuState
 from ..types import MarketState, TradingParams
+from ..types.indicators import VuManchuState
+from ..types.trading import TradeSignal as Signal
 
 
 class LLMProvider(Enum):

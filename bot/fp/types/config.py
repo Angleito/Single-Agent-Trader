@@ -12,10 +12,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Literal, Union
 
-from returns.result import Failure, Result, Success
-
-from bot.fp.types.base import Money, Percentage, Symbol, TimeInterval
-from bot.fp.types.trading import TradingMode
+from bot.fp.types.base import Money, Percentage, Symbol, TimeInterval, TradingMode
+from bot.fp.types.result import Failure, Result, Success
 
 
 # Opaque types for sensitive data
@@ -189,6 +187,24 @@ class ExchangeType(Enum):
     COINBASE = "coinbase"
     BLUEFIN = "bluefin"
     BINANCE = "binance"
+
+
+class AccountType(Enum):
+    """Account types for trading."""
+
+    CFM = "CFM"  # Coinbase futures margin account
+    CBI = "CBI"  # Coinbase instant account
+    SPOT = "SPOT"  # Spot trading account
+    FUTURES = "FUTURES"  # Futures trading account
+
+
+class Environment(Enum):
+    """Environment types for configuration."""
+
+    DEVELOPMENT = "development"
+    STAGING = "staging"
+    PRODUCTION = "production"
+    TESTING = "testing"
 
 
 @dataclass(frozen=True)
@@ -814,11 +830,13 @@ def validate_config(config: Config) -> Result[Config, str]:
 # Export main types
 __all__ = [
     "APIKey",
+    "AccountType",
     "BacktestConfig",
     "BinanceExchangeConfig",
     "BluefinExchangeConfig",
     "CoinbaseExchangeConfig",
     "Config",
+    "Environment",
     "ExchangeConfig",
     "ExchangeType",
     "FeatureFlags",

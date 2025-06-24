@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING, Any
 
 from bot.config import settings
 from bot.fee_calculator import fee_calculator
-from bot.trading_types import Position, RiskMetrics, TradeAction
+from bot.fp.types import Position, TradeAction
+from bot.fp.types.risk import RiskMetrics
 from bot.types.exceptions import BalanceValidationError
 from bot.validation.balance_validator import BalanceValidator
 

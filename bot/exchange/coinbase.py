@@ -103,16 +103,20 @@ except ImportError:
         COINBASE_AVAILABLE = False
 
 from bot.config import settings
-from bot.trading_types import (
+from bot.fp.types import (
     AccountType,
-    CashTransferRequest,
-    FuturesAccountInfo,
     MarginHealthStatus,
     MarginInfo,
     Order,
     OrderStatus,
     Position,
     TradeAction,
+)
+
+# Backward compatibility imports for types not yet in functional system
+from bot.trading_types import (
+    CashTransferRequest,
+    FuturesAccountInfo,
 )
 
 from .base import (
@@ -127,6 +131,17 @@ from .base import (
     ExchangeOrderError,
 )
 from .futures_utils import FuturesContractManager
+
+# Functional programming imports
+try:
+    from bot.fp.adapters.coinbase_adapter import CoinbaseExchangeAdapter
+    from bot.fp.adapters.exchange_adapter import register_exchange_adapter
+
+    FP_ADAPTERS_AVAILABLE = True
+except ImportError:
+    # Fallback when FP adapters are not available
+    FP_ADAPTERS_AVAILABLE = False
+    CoinbaseExchangeAdapter = None  # type: ignore[assignment,misc]
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +167,7 @@ class CoinbaseResponseValidator:
         self.validation_failures = 0
         self.failure_callback = failure_callback
 
-    def validate_account_response(self, response: dict) -> bool:
+    def validate_account_response(self, response: dict[str, Any]) -> bool:
         """
         Validate account response structure.
 
@@ -228,7 +243,7 @@ class CoinbaseResponseValidator:
 
         return self._validate_balance_value(balance_data.value)
 
-    def _validate_dict_balance_response(self, response: dict) -> bool:
+    def _validate_dict_balance_response(self, response: dict[str, Any]) -> bool:
         """Validate dict format balance response."""
         if "balance" not in response:
             logger.warning("Balance response missing 'balance' field")
@@ -311,7 +326,7 @@ class CoinbaseResponseValidator:
         else:
             return True
 
-    def validate_position_response(self, response: dict | object) -> bool:
+    def validate_position_response(self, response: dict[str, Any] | object) -> bool:
         """
         Validate positions response structure.
 
@@ -351,7 +366,7 @@ class CoinbaseResponseValidator:
         else:
             return True
 
-    def _validate_account_data(self, account: dict) -> bool:
+    def _validate_account_data(self, account: dict[str, Any]) -> bool:
         """
         Validate individual account data.
 
@@ -398,7 +413,7 @@ class CoinbaseResponseValidator:
         else:
             return True
 
-    def _validate_position_data(self, position: dict | object) -> bool:
+    def _validate_position_data(self, position: dict[str, Any] | object) -> bool:
         """
         Validate individual position data.
 
@@ -470,7 +485,7 @@ class CoinbaseResponseValidator:
             "success_rate_pct": success_rate,
         }
 
-    def _validate_exchange_response(self, response: dict | object) -> bool:
+    def _validate_exchange_response(self, response: dict[str, Any] | object) -> bool:
         """
         Validate generic exchange response for data integrity.
 
@@ -831,6 +846,18 @@ class CoinbaseClient(BaseExchange):
         )
         logger.debug("  Max retries: %s", self._max_retries)
         logger.debug("  Has credentials: %s", bool(self.auth_method != "none"))
+
+        # Initialize functional adapter for side-effect-free operations
+        self._fp_adapter: CoinbaseExchangeAdapter | None = None
+        if FP_ADAPTERS_AVAILABLE:
+            try:
+                self._fp_adapter = CoinbaseExchangeAdapter(self)
+                # Register with unified adapter system
+                register_exchange_adapter("coinbase", self._fp_adapter)
+                logger.debug("✅ Functional adapter initialized for Coinbase")
+            except Exception as e:
+                logger.warning("Failed to initialize functional adapter: %s", e)
+                self._fp_adapter = None
 
         # Log warning if in live trading mode
         if not self.dry_run:
@@ -3479,3 +3506,57 @@ class CoinbaseClient(BaseExchange):
     def enable_futures(self) -> bool:
         """Check if futures trading is enabled for this exchange instance."""
         return self._enable_futures
+
+    # Functional Programming Interface
+
+    def get_functional_adapter(self) -> "CoinbaseExchangeAdapter | None":
+        """
+        Get the functional adapter for side-effect-free operations.
+
+        Returns:
+            CoinbaseExchangeAdapter instance or None if not available
+        """
+        return self._fp_adapter
+
+    def supports_functional_operations(self) -> bool:
+        """
+        Check if functional programming operations are supported.
+
+        Returns:
+            True if functional adapter is available
+        """
+        return self._fp_adapter is not None
+
+    async def place_order_functional(self, order: Order) -> dict[str, Any] | None:
+        """
+        Place order using functional adapter (demonstration method).
+
+        Args:
+            order: Order to place
+
+        Returns:
+            Order result or None if functional adapter not available
+        """
+        if not self._fp_adapter:
+            logger.warning(
+                "Functional adapter not available, falling back to imperative method"
+            )
+            return None
+
+        # This demonstrates how the functional adapter can be used
+        # In practice, you'd convert the Order to the FP type first
+        try:
+            from bot.fp.adapters.type_converters import current_order_to_fp_order
+
+            fp_order = current_order_to_fp_order(order)
+            result = self._fp_adapter.place_order_impl(fp_order)
+
+            # Execute the IOEither and handle the result
+            either_result = result.run()
+            if either_result.is_right():
+                return either_result.value
+            logger.error("Functional order placement failed: %s", either_result.value)
+            return None
+        except Exception as e:
+            logger.error("Error in functional order placement: %s", e)
+            return None

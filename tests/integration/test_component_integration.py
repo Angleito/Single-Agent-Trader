@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bot.data.market import MarketDataProvider
+from bot.data import MarketDataProvider
 from bot.exchange.coinbase import CoinbaseClient
 from bot.indicators.vumanchu import VuManChuIndicators
 from bot.order_manager import OrderManager

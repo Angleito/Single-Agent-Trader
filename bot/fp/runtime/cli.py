@@ -27,6 +27,19 @@ class CLIConfig:
     config_path: str | None = None
     log_level: LogLevel = LogLevel.INFO
 
+    # Enhanced options for compatibility with original CLI
+    dry_run: bool | None = None
+    symbol: str = "BTC-USD"
+    interval: str = "1m"
+    force: bool = False
+    skip_health_check: bool = False
+    market_making: bool | None = None
+    mm_symbol: str | None = None
+    mm_profile: str | None = None
+    start_date: str = "2024-01-01"
+    end_date: str = "2024-12-31"
+    initial_balance: float = 10000.0
+
 
 class FunctionalCLI:
     """Functional command-line interface"""
@@ -34,6 +47,31 @@ class FunctionalCLI:
     def __init__(self):
         self.interpreter = get_interpreter()
         self.scheduler = get_scheduler()
+
+    def parse_args_from_dict(self, args_dict: dict[str, Any]) -> CLIConfig:
+        """Parse arguments from a dictionary (for integration with Click)"""
+        command = args_dict.get("command", "help")
+
+        # Extract all the options and map them to CLIConfig fields
+        config_options = CLIConfig(
+            command=command,
+            options=args_dict,
+            config_path=args_dict.get("config"),
+            log_level=LogLevel.DEBUG if args_dict.get("debug") else LogLevel.INFO,
+            dry_run=args_dict.get("dry_run"),
+            symbol=args_dict.get("symbol", "BTC-USD"),
+            interval=args_dict.get("interval", "1m"),
+            force=args_dict.get("force", False),
+            skip_health_check=args_dict.get("skip_health_check", False),
+            market_making=args_dict.get("market_making"),
+            mm_symbol=args_dict.get("mm_symbol"),
+            mm_profile=args_dict.get("mm_profile"),
+            start_date=args_dict.get("start_date", "2024-01-01"),
+            end_date=args_dict.get("end_date", "2024-12-31"),
+            initial_balance=args_dict.get("initial_balance", 10000.0),
+        )
+
+        return config_options
 
     def parse_args(self, args: list[str]) -> CLIConfig:
         """Parse command line arguments"""
@@ -43,27 +81,33 @@ class FunctionalCLI:
         command = args[0]
         options = {}
 
-        # Simple argument parsing
+        # Enhanced argument parsing with support for complex options
         i = 1
         while i < len(args):
             if args[i].startswith("--"):
-                key = args[i][2:]
+                key = args[i][2:].replace("-", "_")  # Convert kebab-case to snake_case
+
+                # Handle boolean flags and options with values
                 if i + 1 < len(args) and not args[i + 1].startswith("--"):
                     value = args[i + 1]
+                    # Convert string values to appropriate types
+                    if value.lower() in ("true", "false"):
+                        value = value.lower() == "true"
+                    elif value.replace(".", "").replace("-", "").isdigit():
+                        value = float(value) if "." in value else int(value)
+
+                    options[key] = value
                     i += 2
                 else:
-                    value = True
+                    options[key] = True
                     i += 1
-                options[key] = value
             else:
                 i += 1
 
-        return CLIConfig(
-            command=command,
-            options=options,
-            config_path=options.get("config"),
-            log_level=LogLevel.DEBUG if options.get("debug") else LogLevel.INFO,
-        )
+        # Handle special cases for backward compatibility
+        options["command"] = command
+
+        return self.parse_args_from_dict(options)
 
     def initialize_system(self, cli_config: CLIConfig) -> IO[None]:
         """Initialize the system"""
@@ -90,11 +134,32 @@ class FunctionalCLI:
 
         return IO(init)
 
-    def run_live_trading(self, options: dict[str, Any]) -> IO[None]:
+    def run_live_trading(self, cli_config: CLIConfig) -> IO[None]:
         """Run live trading mode"""
 
         def run():
-            info("Starting live trading mode", options).run()
+            info(
+                "Starting live trading mode",
+                {
+                    "symbol": cli_config.symbol,
+                    "interval": cli_config.interval,
+                    "dry_run": cli_config.dry_run,
+                    "market_making": cli_config.market_making,
+                    "mm_symbol": cli_config.mm_symbol,
+                    "mm_profile": cli_config.mm_profile,
+                },
+            ).run()
+
+            # TODO: Implement actual live trading logic using the functional runtime
+            # For now, print the configuration that would be used
+            print("Live trading configuration:")
+            print(f"  Symbol: {cli_config.symbol}")
+            print(f"  Interval: {cli_config.interval}")
+            print(f"  Dry run: {cli_config.dry_run}")
+            print(f"  Market making: {cli_config.market_making}")
+            if cli_config.market_making:
+                print(f"  MM Symbol: {cli_config.mm_symbol}")
+                print(f"  MM Profile: {cli_config.mm_profile}")
 
             # Start the scheduler
             loop = asyncio.new_event_loop()
@@ -110,18 +175,33 @@ class FunctionalCLI:
 
         return IO(run)
 
-    def run_backtest(self, options: dict[str, Any]) -> IO[None]:
+    def run_backtest(self, cli_config: CLIConfig) -> IO[None]:
         """Run backtesting mode"""
 
         def run():
-            info("Starting backtest mode", options).run()
+            info(
+                "Starting backtest mode",
+                {
+                    "symbol": cli_config.symbol,
+                    "start_date": cli_config.start_date,
+                    "end_date": cli_config.end_date,
+                    "initial_balance": cli_config.initial_balance,
+                    "market_making": cli_config.market_making,
+                    "mm_symbol": cli_config.mm_symbol,
+                    "mm_profile": cli_config.mm_profile,
+                },
+            ).run()
 
-            # Implement backtesting logic
-            from_date = options.get("from")
-            to_date = options.get("to")
-            symbol = options.get("symbol", "BTC-USD")
-
-            print(f"Backtesting {symbol} from {from_date} to {to_date}")
+            # TODO: Implement actual backtesting logic using the functional runtime
+            # For now, print the configuration that would be used
+            print("Backtesting configuration:")
+            print(f"  Symbol: {cli_config.symbol}")
+            print(f"  Period: {cli_config.start_date} to {cli_config.end_date}")
+            print(f"  Initial balance: ${cli_config.initial_balance:,.2f}")
+            print(f"  Market making: {cli_config.market_making}")
+            if cli_config.market_making:
+                print(f"  MM Symbol: {cli_config.mm_symbol}")
+                print(f"  MM Profile: {cli_config.mm_profile}")
 
         return IO(run)
 
@@ -186,9 +266,9 @@ Examples:
 
                 # Execute command
                 if cli_config.command == "live":
-                    self.run_live_trading(cli_config.options).run()
+                    self.run_live_trading(cli_config).run()
                 elif cli_config.command == "backtest":
-                    self.run_backtest(cli_config.options).run()
+                    self.run_backtest(cli_config).run()
                 elif cli_config.command == "status":
                     self.show_status().run()
                 elif cli_config.command == "help":
@@ -204,6 +284,62 @@ Examples:
                 return 1
 
         return IO(execute)
+
+    def execute_live_command(
+        self,
+        dry_run: bool | None = None,
+        symbol: str = "BTC-USD",
+        interval: str = "1m",
+        config: str | None = None,
+        force: bool = False,
+        skip_health_check: bool = False,
+        market_making: bool | None = None,
+        mm_symbol: str | None = None,
+        mm_profile: str | None = None,
+    ) -> int:
+        """Execute live trading command with all parameters"""
+        cli_config = self.parse_args_from_dict(
+            {
+                "command": "live",
+                "dry_run": dry_run,
+                "symbol": symbol,
+                "interval": interval,
+                "config": config,
+                "force": force,
+                "skip_health_check": skip_health_check,
+                "market_making": market_making,
+                "mm_symbol": mm_symbol,
+                "mm_profile": mm_profile,
+            }
+        )
+
+        return self.execute_command(cli_config).run()
+
+    def execute_backtest_command(
+        self,
+        start_date: str = "2024-01-01",
+        end_date: str = "2024-12-31",
+        symbol: str = "BTC-USD",
+        initial_balance: float = 10000.0,
+        market_making: bool = False,
+        mm_symbol: str | None = None,
+        mm_profile: str = "moderate",
+    ) -> int:
+        """Execute backtest command with all parameters"""
+        cli_config = self.parse_args_from_dict(
+            {
+                "command": "backtest",
+                "start_date": start_date,
+                "end_date": end_date,
+                "symbol": symbol,
+                "initial_balance": initial_balance,
+                "market_making": market_making,
+                "mm_symbol": mm_symbol,
+                "mm_profile": mm_profile,
+            }
+        )
+
+        return self.execute_command(cli_config).run()
 
 
 def main(args: list[str] | None = None) -> int:

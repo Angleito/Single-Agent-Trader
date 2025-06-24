@@ -7,10 +7,27 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import SecretStr
 
+# Legacy imports (maintained for compatibility)
 from bot.exchange.base import BaseExchange
 from bot.exchange.bluefin import BluefinClient
 from bot.exchange.coinbase import CoinbaseClient
 from bot.exchange.factory import ExchangeFactory
+
+# Functional imports (added for migration to functional programming patterns)
+try:
+    from bot.fp.adapters.exchange_adapter import ExchangeAdapter
+    from bot.fp.effects.exchange import (
+        cancel_order,
+        get_balance,
+        get_positions,
+        place_order,
+    )
+    from bot.fp.types.trading import OrderSide, OrderType
+
+    FUNCTIONAL_EXCHANGE_AVAILABLE = True
+except ImportError:
+    # Functional implementations not available, continue with legacy
+    FUNCTIONAL_EXCHANGE_AVAILABLE = False
 
 
 def generate_fake_test_credentials():

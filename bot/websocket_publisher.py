@@ -52,15 +52,21 @@ class TradingJSONEncoder(json.JSONEncoder):
 class WebSocketPublisher:
     """Publishes real-time trading data to dashboard via WebSocket."""
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings | None = None):
         """Initialize WebSocket publisher with settings."""
-        self.settings = settings
+        # Use provided settings or import default settings
+        if settings is None:
+            from .config import settings as default_settings
+
+            self.settings = default_settings
+        else:
+            self.settings = settings
 
         # Get configured URLs
         configured_url = getattr(
-            settings.system, "websocket_dashboard_url", "ws://localhost:8000/ws"
+            self.settings.system, "websocket_dashboard_url", "ws://localhost:8000/ws"
         )
-        fallback_urls_str = getattr(settings.system, "websocket_fallback_urls", "")
+        fallback_urls_str = getattr(self.settings.system, "websocket_fallback_urls", "")
 
         # Build intelligent fallback chain based on environment
         self.dashboard_url, self.fallback_urls = self._build_url_chain(

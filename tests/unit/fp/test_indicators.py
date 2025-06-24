@@ -160,9 +160,7 @@ class IndicatorConfig:
 
 # Import indicator functions from fp.indicators modules
 from bot.fp.indicators.moving_averages import (
-    calculate_ema,
-    calculate_sma,
-    calculate_wma,
+    sma,
 )
 from bot.fp.indicators.oscillators import (
     calculate_rsi,
@@ -183,6 +181,28 @@ from bot.fp.indicators.vumanchu import (
     calculate_vumanchu,
     interpret_vumanchu_signal,
 )
+from bot.fp.indicators.vumanchu_functional import (
+    analyze_diamond_patterns,
+    calculate_ema,
+    calculate_hlc3,
+    calculate_sma,
+    calculate_wavetrend_oscillator,
+    create_default_vumanchu_config,
+    detect_crossovers,
+    determine_signal,
+    vumanchu_cipher,
+    vumanchu_cipher_series,
+    vumanchu_comprehensive_analysis,
+)
+from bot.fp.types.indicators import (
+    CompositeSignal,
+    DiamondPattern,
+    IndicatorConfig,
+    VuManchuResult,
+    VuManchuSignalSet,
+)
+
+# Import legacy implementation for comparison
 
 
 # Strategy for generating price data
@@ -299,15 +319,16 @@ class TestMovingAverages:
     def test_sma_mathematical_properties(self, prices):
         """Test SMA mathematical properties."""
         period = min(20, len(prices))
-        result = calculate_sma(prices, period)
+        prices_array = np.array(prices, dtype=np.float64)
+        result = sma(prices_array, period, datetime.now())
 
         if result is not None:
             # SMA should be within price range
-            assert min(prices[-period:]) <= result <= max(prices[-period:])
+            assert min(prices[-period:]) <= result.value <= max(prices[-period:])
 
             # SMA should equal arithmetic mean
             expected = sum(prices[-period:]) / period
-            assert abs(result - expected) < 1e-10
+            assert abs(result.value - expected) < 1e-10
 
     @given(price_data(min_length=20))
     def test_ema_convergence(self, prices):
@@ -467,12 +488,42 @@ class TestBollingerBands:
             assert result.is_squeeze(threshold=0.1) == (width_ratio < 0.1)
 
 
-class TestVuManchu:
-    """Test VuManchu Cipher calculations."""
+class TestVuManChuFunctional:
+    """Test VuManchu Cipher functional implementations."""
+
+    @pytest.fixture
+    def sample_ohlcv_array(self):
+        """Generate sample OHLCV data as numpy array."""
+        np.random.seed(42)
+        n = 100
+        base = 100.0
+
+        ohlcv = np.zeros((n, 5))
+
+        for i in range(n):
+            open_price = base
+            close_price = base * (1 + np.random.normal(0.001, 0.02))
+            high_price = max(open_price, close_price) * (
+                1 + abs(np.random.normal(0, 0.01))
+            )
+            low_price = min(open_price, close_price) * (
+                1 - abs(np.random.normal(0, 0.01))
+            )
+            volume = np.random.uniform(1000, 10000)
+
+            ohlcv[i] = [open_price, high_price, low_price, close_price, volume]
+            base = close_price
+
+        return ohlcv
+
+    @pytest.fixture
+    def sample_vumanchu_config(self):
+        """Generate sample VuManChu configuration."""
+        return create_default_vumanchu_config()
 
     @given(price_data(min_length=30))
-    def test_vumanchu_waves(self, prices):
-        """Test VuManchu wave calculations."""
+    def test_vumanchu_waves_legacy_simple(self, prices):
+        """Test VuManchu wave calculations (legacy simple version)."""
         wave_a, wave_b = calculate_vumanchu(prices)
 
         if wave_a is not None:
@@ -480,8 +531,8 @@ class TestVuManchu:
             assert -50 <= wave_a <= 50
             assert -50 <= wave_b <= 50
 
-    def test_vumanchu_signals(self, timestamp):
-        """Test VuManchu signal generation."""
+    def test_vumanchu_signals_legacy_simple(self, timestamp):
+        """Test VuManchu signal generation (legacy simple version)."""
         # Create prices that should generate signals
         prices = [100.0] * 20 + [95.0] * 10  # Sharp drop
         wave_a, wave_b = calculate_vumanchu(prices)
@@ -491,6 +542,242 @@ class TestVuManchu:
 
             # Check signal determination
             assert result.signal in ["LONG", "SHORT", "NEUTRAL"]
+
+    def test_vumanchu_cipher_functional(self, sample_ohlcv_array, timestamp):
+        """Test functional VuManChu cipher calculation."""
+        result = vumanchu_cipher(sample_ohlcv_array, timestamp=timestamp)
+
+        assert isinstance(result, VuManchuResult)
+        assert result.timestamp == timestamp
+        assert isinstance(result.wave_a, float)
+        assert isinstance(result.wave_b, float)
+        assert result.signal in ["LONG", "SHORT", "NEUTRAL"]
+
+        # Waves should be within reasonable bounds for normal market data
+        assert -100 <= result.wave_a <= 100
+        assert -100 <= result.wave_b <= 100
+
+    def test_vumanchu_cipher_series(self, sample_ohlcv_array):
+        """Test VuManChu cipher calculation for entire series."""
+        results = vumanchu_cipher_series(sample_ohlcv_array)
+
+        assert isinstance(results, list)
+        assert len(results) == len(sample_ohlcv_array)
+
+        for result in results:
+            assert isinstance(result, VuManchuResult)
+            assert result.signal in ["LONG", "SHORT", "NEUTRAL"]
+
+    def test_wavetrend_oscillator_calculation(self, sample_ohlcv_array):
+        """Test WaveTrend oscillator calculation."""
+        high = sample_ohlcv_array[:, 1]
+        low = sample_ohlcv_array[:, 2]
+        close = sample_ohlcv_array[:, 3]
+
+        hlc3 = calculate_hlc3(high, low, close)
+        wt1, wt2 = calculate_wavetrend_oscillator(hlc3, 9, 18, 3)
+
+        assert len(wt1) == len(sample_ohlcv_array)
+        assert len(wt2) == len(sample_ohlcv_array)
+
+        # Check that later values are not NaN (after warm-up period)
+        assert not np.isnan(wt1[-1])
+        assert not np.isnan(wt2[-1])
+
+        # WaveTrend values should be within reasonable bounds
+        valid_wt1 = wt1[~np.isnan(wt1)]
+        valid_wt2 = wt2[~np.isnan(wt2)]
+
+        if len(valid_wt1) > 0:
+            assert np.min(valid_wt1) >= -100 and np.max(valid_wt1) <= 100
+        if len(valid_wt2) > 0:
+            assert np.min(valid_wt2) >= -100 and np.max(valid_wt2) <= 100
+
+    def test_crossover_detection(self, sample_ohlcv_array):
+        """Test crossover detection between waves."""
+        high = sample_ohlcv_array[:, 1]
+        low = sample_ohlcv_array[:, 2]
+        close = sample_ohlcv_array[:, 3]
+
+        hlc3 = calculate_hlc3(high, low, close)
+        wt1, wt2 = calculate_wavetrend_oscillator(hlc3, 9, 18, 3)
+
+        bullish_cross, bearish_cross = detect_crossovers(wt1, wt2)
+
+        assert len(bullish_cross) == len(wt1)
+        assert len(bearish_cross) == len(wt1)
+
+        # Crossovers should be boolean arrays
+        assert bullish_cross.dtype == bool
+        assert bearish_cross.dtype == bool
+
+        # Can't have both bullish and bearish crossover at same time
+        assert not np.any(bullish_cross & bearish_cross)
+
+    def test_diamond_pattern_analysis(self, sample_ohlcv_array):
+        """Test diamond pattern analysis."""
+        high = sample_ohlcv_array[:, 1]
+        low = sample_ohlcv_array[:, 2]
+        close = sample_ohlcv_array[:, 3]
+
+        hlc3 = calculate_hlc3(high, low, close)
+        wt1, wt2 = calculate_wavetrend_oscillator(hlc3, 9, 18, 3)
+
+        patterns = analyze_diamond_patterns(wt1, wt2)
+
+        assert isinstance(patterns, list)
+
+        for pattern in patterns:
+            assert isinstance(pattern, DiamondPattern)
+            assert pattern.pattern_type in ["red_diamond", "green_diamond"]
+            assert 0 <= pattern.strength <= 1.0
+            assert isinstance(pattern.wt1_cross_condition, bool)
+            assert isinstance(pattern.wt2_cross_condition, bool)
+
+    def test_comprehensive_analysis(self, sample_ohlcv_array, timestamp):
+        """Test comprehensive VuManChu analysis."""
+        signal_set = vumanchu_comprehensive_analysis(
+            sample_ohlcv_array, timestamp=timestamp
+        )
+
+        assert isinstance(signal_set, VuManchuSignalSet)
+        assert signal_set.timestamp == timestamp
+
+        # Check core VuManChu result
+        assert isinstance(signal_set.vumanchu_result, VuManchuResult)
+
+        # Check pattern lists
+        assert isinstance(signal_set.diamond_patterns, list)
+        assert isinstance(signal_set.yellow_cross_signals, list)
+        assert isinstance(signal_set.candle_patterns, list)
+        assert isinstance(signal_set.divergence_patterns, list)
+
+        # Check composite signal
+        if signal_set.composite_signal is not None:
+            assert isinstance(signal_set.composite_signal, CompositeSignal)
+            assert signal_set.composite_signal.signal_direction in [-1, 0, 1]
+
+    def test_signal_strength_calculation(self, sample_ohlcv_array):
+        """Test signal strength calculation."""
+        high = sample_ohlcv_array[:, 1]
+        low = sample_ohlcv_array[:, 2]
+        close = sample_ohlcv_array[:, 3]
+
+        hlc3 = calculate_hlc3(high, low, close)
+        wt1, wt2 = calculate_wavetrend_oscillator(hlc3, 9, 18, 3)
+
+        # Test signal determination
+        if not np.isnan(wt1[-1]) and not np.isnan(wt2[-1]):
+            signal = determine_signal(wt1[-1], wt2[-1])
+            assert signal in ["LONG", "SHORT", "NEUTRAL"]
+
+    @pytest.mark.parametrize(
+        "channel_length,average_length,ma_length",
+        [
+            (6, 8, 3),  # Scalping optimized
+            (9, 13, 3),  # Standard Pine Script
+            (10, 21, 4),  # Alternative settings
+        ],
+    )
+    def test_vumanchu_different_parameters(
+        self, sample_ohlcv_array, channel_length, average_length, ma_length
+    ):
+        """Test VuManChu with different parameter sets."""
+        result = vumanchu_cipher(
+            sample_ohlcv_array,
+            channel_length=channel_length,
+            average_length=average_length,
+            ma_length=ma_length,
+        )
+
+        assert isinstance(result, VuManchuResult)
+        assert result.signal in ["LONG", "SHORT", "NEUTRAL"]
+
+        # Results should be reasonable regardless of parameters
+        assert (
+            -200 <= result.wave_a <= 200
+        )  # Allow wider bounds for different parameters
+        assert -200 <= result.wave_b <= 200
+
+    def test_vumanchu_signal_interpretation(self, timestamp):
+        """Test VuManChu signal interpretation logic."""
+        # Test bullish crossover
+        signal = interpret_vumanchu_signal(
+            wave_a=-10, wave_b=-15, prev_wave_a=-15, prev_wave_b=-10
+        )
+        assert signal == "LONG"
+
+        # Test bearish crossover
+        signal = interpret_vumanchu_signal(
+            wave_a=10, wave_b=15, prev_wave_a=15, prev_wave_b=10
+        )
+        assert signal == "SHORT"
+
+        # Test extreme oversold
+        signal = interpret_vumanchu_signal(wave_a=-35, wave_b=-35)
+        assert signal == "LONG"
+
+        # Test extreme overbought
+        signal = interpret_vumanchu_signal(wave_a=35, wave_b=35)
+        assert signal == "SHORT"
+
+        # Test neutral
+        signal = interpret_vumanchu_signal(wave_a=5, wave_b=5)
+        assert signal == "NEUTRAL"
+
+    def test_helper_functions(self, sample_ohlcv_array):
+        """Test helper calculation functions."""
+        high = sample_ohlcv_array[:, 1]
+        low = sample_ohlcv_array[:, 2]
+        close = sample_ohlcv_array[:, 3]
+
+        # Test HLC3 calculation
+        hlc3 = calculate_hlc3(high, low, close)
+        assert len(hlc3) == len(high)
+
+        # HLC3 should be between high and low
+        for i in range(len(hlc3)):
+            assert low[i] <= hlc3[i] <= high[i]
+
+        # Test EMA calculation
+        ema_values = calculate_ema(close, 20)
+        assert len(ema_values) == len(close)
+
+        # Test SMA calculation
+        sma_values = calculate_sma(close, 20)
+        assert len(sma_values) == len(close)
+
+        # After warm-up period, values should not be NaN
+        assert not np.isnan(ema_values[-1])
+        assert not np.isnan(sma_values[-1])
+
+    def test_vumanchu_config_immutability(self):
+        """Test that VuManChu configuration is immutable."""
+        config = create_default_vumanchu_config()
+        original_channel_length = config["channel_length"]
+
+        # Try to modify config
+        config["channel_length"] = 999
+
+        # Create new config and verify original isn't affected
+        new_config = create_default_vumanchu_config()
+        assert new_config["channel_length"] == original_channel_length
+
+    @pytest.mark.parametrize("insufficient_length", [0, 1, 5, 8])
+    def test_vumanchu_insufficient_data(self, insufficient_length):
+        """Test VuManChu with insufficient data."""
+        if insufficient_length == 0:
+            ohlcv = np.array([]).reshape(0, 5)
+        else:
+            ohlcv = np.random.rand(insufficient_length, 5) * 100
+
+        result = vumanchu_cipher(ohlcv)
+
+        # Should handle gracefully with default values
+        assert isinstance(result, VuManchuResult)
+        assert result.signal == "NEUTRAL"
+        assert result.wave_a == 0.0
+        assert result.wave_b == 0.0
 
 
 class TestEdgeCases:

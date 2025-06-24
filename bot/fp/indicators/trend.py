@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import datetime
 
-from bot.fp.indicators.moving_averages import calculate_ema
+from bot.fp.indicators.vumanchu import calculate_ema_simple as calculate_ema
 from bot.fp.types.indicators import MACDResult
 
 

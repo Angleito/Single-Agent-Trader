@@ -8,7 +8,22 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+# Legacy imports (maintained for compatibility)
 from bot.data.dominance import DominanceData, DominanceDataProvider
+
+# Functional imports (added for migration to functional programming patterns)
+try:
+    from bot.fp.effects.market_data import (
+        ConnectionConfig,
+        fetch_candles,
+        stream_market_data,
+    )
+    from bot.fp.types.market import CandleData, MarketSnapshot
+
+    FUNCTIONAL_DATA_AVAILABLE = True
+except ImportError:
+    # Functional implementations not available, continue with legacy
+    FUNCTIONAL_DATA_AVAILABLE = False
 
 
 @pytest.fixture

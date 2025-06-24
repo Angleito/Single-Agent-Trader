@@ -17,10 +17,11 @@ from ..effects.logging import error, info, warn
 from ..effects.monitoring import (
     AlertLevel,
     HealthStatus,
-    alert,
+    create_alert,
     health_check,
     record_gauge,
     record_histogram,
+    send_alert,
 )
 from ..effects.time import now
 
@@ -146,7 +147,8 @@ class MonitoringRuntime:
         last_alert = self.last_alerts.get(alert_type)
 
         if last_alert is None or current_time - last_alert > self.config.alert_cooldown:
-            alert(level, message).run()
+            alert_obj = create_alert(level, message).run()
+            send_alert(alert_obj).run()
             self.last_alerts[alert_type] = current_time
 
     def run_health_checks(self) -> IO[dict[str, HealthStatus]]:
@@ -221,10 +223,11 @@ class MonitoringRuntime:
                         ]
 
                         if critical_issues:
-                            alert(
+                            alert_obj = create_alert(
                                 AlertLevel.CRITICAL,
                                 f"Critical health issues: {', '.join(critical_issues)}",
                             ).run()
+                            send_alert(alert_obj).run()
 
                         last_health_check = current_time
 

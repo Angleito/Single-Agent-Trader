@@ -109,6 +109,17 @@ except ImportError as e:
 # Initialize console early for error reporting
 console = Console()
 
+# Import functional CLI for delegation
+try:
+    from bot.fp.runtime.cli import FunctionalCLI
+
+    _functional_cli = FunctionalCLI()
+except ImportError:
+    _functional_cli = None
+    console.print(
+        "⚠️  Functional CLI not available, using fallback implementation", style="yellow"
+    )
+
 # Startup diagnostics
 _startup_errors: list[str] = []
 _startup_warnings: list[str] = []
@@ -153,7 +164,10 @@ def _safe_import(
 # Core imports (required for basic functionality)
 try:
     from .config import Settings, create_settings
-    from .trading_types import MarketState, Position, TradeAction
+    from .fp.types import Position, TradeAction
+    from .trading_types import (
+        MarketState,  # Keep legacy import until functional equivalent available
+    )
     from .utils import setup_warnings_suppression
     from .validator import TradeValidator
 except ImportError as e:
@@ -171,8 +185,8 @@ except ImportError as e:
     console.print(f"❌ Essential trading component missing: {e}", style="red")
     _startup_errors.append(f"Essential trading component missing: {e}")
 
-# Market data providers
-MarketDataProvider = _safe_import(".data.market", "MarketDataProvider", required=True)
+# Market data providers - Using functional data layer
+MarketDataProvider = _safe_import(".fp.data", "MarketDataProvider", required=True)
 DominanceDataProvider = _safe_import(
     ".data.dominance", "DominanceDataProvider", required=False
 )
@@ -194,6 +208,24 @@ else:
     MarketDataProviderType = None
 
 import contextlib
+
+# Functional programming imports (added for migration to functional programming patterns)
+# These provide alternative implementations using pure functional programming patterns
+try:
+    from .fp.adapters.strategy_adapter import LLMAgentAdapter
+    from .fp.strategies.llm_functional import LLMConfig, LLMResponse
+    from .fp.types.config import Config as FunctionalConfig
+    from .fp.types.trading import Hold, Long, Short, TradeSignal
+
+    FUNCTIONAL_COMPONENTS_AVAILABLE = True
+    console.print("✅ Functional programming components available", style="green")
+except ImportError:
+    # Functional implementations not available, continue with legacy only
+    FUNCTIONAL_COMPONENTS_AVAILABLE = False
+    console.print(
+        "⚠️  Functional programming components not available, using legacy implementations",
+        style="yellow",
+    )
 
 # Lazy loading for heavy components
 _lazy_imports = {
@@ -3888,7 +3920,7 @@ class TradingEngine:
             # Publish position update to dashboard
             if self.websocket_publisher:
                 # Create position object for the update
-                from .trading_types import Position
+                from .fp.types import Position
 
                 position_update = Position(
                     symbol=self.actual_trading_symbol,
@@ -3930,7 +3962,7 @@ class TradingEngine:
                 self._last_position_log_time = datetime.now(UTC)
         elif self.websocket_publisher:
             # Create flat position object for the update
-            from .trading_types import Position
+            from .fp.types import Position
 
             flat_position = Position(
                 symbol=self.actual_trading_symbol,
@@ -4934,6 +4966,30 @@ def live(
         # Live trading (requires --force for safety)
         ai-trading-bot live --no-dry-run --force
     """
+    # Delegate to functional CLI if available, otherwise fallback to original implementation
+    if _functional_cli is not None:
+        try:
+            exit_code = _functional_cli.execute_live_command(
+                dry_run=dry_run,
+                symbol=symbol,
+                interval=interval,
+                config=config,
+                force=force,
+                skip_health_check=skip_health_check,
+                market_making=market_making,
+                mm_symbol=mm_symbol,
+                mm_profile=mm_profile,
+            )
+            if exit_code != 0:
+                sys.exit(exit_code)
+            return
+        except Exception as e:
+            console.print(
+                f"⚠️  Functional CLI failed: {e}, falling back to original implementation",
+                style="yellow",
+            )
+
+    # Original implementation as fallback
     try:
         # Perform startup health checks unless skipped
         if not skip_health_check:
@@ -5064,6 +5120,28 @@ def backtest(
     mm_profile: str,
 ) -> None:
     """Run strategy backtest on historical data."""
+    # Delegate to functional CLI if available, otherwise fallback to original implementation
+    if _functional_cli is not None:
+        try:
+            exit_code = _functional_cli.execute_backtest_command(
+                start_date=start_date,
+                end_date=end_date,
+                symbol=symbol,
+                initial_balance=initial_balance,
+                market_making=market_making,
+                mm_symbol=mm_symbol,
+                mm_profile=mm_profile,
+            )
+            if exit_code != 0:
+                sys.exit(exit_code)
+            return
+        except Exception as e:
+            console.print(
+                f"⚠️  Functional CLI failed: {e}, falling back to original implementation",
+                style="yellow",
+            )
+
+    # Original implementation as fallback
     mm_info = ""
     if market_making:
         mm_symbol_display = mm_symbol or "SUI-PERP"

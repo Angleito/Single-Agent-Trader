@@ -19,14 +19,18 @@ from bot.error_handling import (
     exception_handler,
     graceful_degradation,
 )
-from bot.system_monitor import error_recovery_manager
-from bot.trading_types import (
+from bot.fp.types import (
     AccountType,
-    FuturesAccountInfo,
     MarginInfo,
     Order,
     Position,
     TradeAction,
+)
+from bot.system_monitor import error_recovery_manager
+
+# Backward compatibility imports for types not yet in functional system
+from bot.trading_types import (
+    FuturesAccountInfo,
 )
 
 # Validation functionality is implemented inline in this module
@@ -596,7 +600,9 @@ class BaseExchange(ABC):
             "validation_method": "inline_validation_with_balance_exceptions",
         }
 
-    async def _exchange_error_fallback(self, error: Exception, _context: dict) -> None:
+    async def _exchange_error_fallback(
+        self, error: Exception, _context: dict[str, Any]
+    ) -> None:
         """Fallback behavior for exchange errors."""
         logger.warning("Exchange error fallback triggered: %s", error)
 
