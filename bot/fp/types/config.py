@@ -12,9 +12,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Literal, Union
 
-from bot.fp.types.result import Failure, Result, Success
-
 from bot.fp.types.base import Money, Percentage, Symbol, TimeInterval, TradingMode
+from bot.fp.types.result import Failure, Result, Success
 
 
 # Opaque types for sensitive data
@@ -192,7 +191,7 @@ class ExchangeType(Enum):
 
 class AccountType(Enum):
     """Account types for trading."""
-    
+
     CFM = "CFM"  # Coinbase futures margin account
     CBI = "CBI"  # Coinbase instant account
     SPOT = "SPOT"  # Spot trading account
@@ -201,7 +200,7 @@ class AccountType(Enum):
 
 class Environment(Enum):
     """Environment types for configuration."""
-    
+
     DEVELOPMENT = "development"
     STAGING = "staging"
     PRODUCTION = "production"
