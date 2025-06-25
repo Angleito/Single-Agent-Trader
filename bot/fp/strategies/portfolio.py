@@ -150,10 +150,7 @@ def optimize_risk_parity(
             )
 
             if result.success:
-                weights_dict = {
-                    strategy: weight
-                    for strategy, weight in zip(strategies, result.x, strict=False)
-                }
+                weights_dict = dict(zip(strategies, result.x, strict=False))
                 return Success(weights_dict)
             return Failure(f"Optimization failed: {result.message}")
 
@@ -206,10 +203,7 @@ def optimize_mean_variance(
             )
 
             if result.success:
-                weights_dict = {
-                    strategy: weight
-                    for strategy, weight in zip(strategies, result.x, strict=False)
-                }
+                weights_dict = dict(zip(strategies, result.x, strict=False))
                 return Success(weights_dict)
             return Failure(f"Optimization failed: {result.message}")
 
@@ -262,10 +256,7 @@ def optimize_max_sharpe(
             )
 
             if result.success:
-                weights_dict = {
-                    strategy: weight
-                    for strategy, weight in zip(strategies, result.x, strict=False)
-                }
+                weights_dict = dict(zip(strategies, result.x, strict=False))
                 return Success(weights_dict)
             return Failure(f"Optimization failed: {result.message}")
 
@@ -525,15 +516,24 @@ def optimize_and_analyze(
     """Optimize portfolio and provide full analysis."""
     # Select optimization method
     if optimization_method == "risk_parity":
-        optimize_fn = lambda r: optimize_risk_parity(r, kwargs.get("constraints"))
+
+        def optimize_fn(r):
+            return optimize_risk_parity(r, kwargs.get("constraints"))
+
     elif optimization_method == "mean_variance":
-        optimize_fn = lambda r: optimize_mean_variance(
-            r, kwargs.get("risk_aversion", 1.0), kwargs.get("constraints")
-        )
+
+        def optimize_fn(r):
+            return optimize_mean_variance(
+                r, kwargs.get("risk_aversion", 1.0), kwargs.get("constraints")
+            )
+
     elif optimization_method == "max_sharpe":
-        optimize_fn = lambda r: optimize_max_sharpe(
-            r, kwargs.get("risk_free_rate", 0.0), kwargs.get("constraints")
-        )
+
+        def optimize_fn(r):
+            return optimize_max_sharpe(
+                r, kwargs.get("risk_free_rate", 0.0), kwargs.get("constraints")
+            )
+
     else:
         return Failure(f"Unknown optimization method: {optimization_method}")
 

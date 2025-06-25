@@ -70,7 +70,7 @@ def get_logs_directory() -> Path:
         default_logs_dir.mkdir(parents=True, exist_ok=True)
 
         # Test write permissions by creating a temporary file
-        test_file = default_logs_dir / (".write_test_%s" % os.getpid())
+        test_file = default_logs_dir / (f".write_test_{os.getpid()}")
         test_file.write_text("test")
         test_file.unlink()  # Remove test file
 
@@ -91,7 +91,7 @@ def get_logs_directory() -> Path:
             fallback_path.mkdir(parents=True, exist_ok=True)
 
             # Test write permissions
-            test_file = fallback_path / (".write_test_%s" % os.getpid())
+            test_file = fallback_path / (f".write_test_{os.getpid()}")
             test_file.write_text("test")
             test_file.unlink()  # Remove test file
 
@@ -111,9 +111,7 @@ def get_logs_directory() -> Path:
     # Last resort: use a temporary directory
     import tempfile
 
-    temp_logs_dir = Path(tempfile.gettempdir()) / (
-        "ai_trading_bot_logs_%s" % os.getpid()
-    )
+    temp_logs_dir = Path(tempfile.gettempdir()) / (f"ai_trading_bot_logs_{os.getpid()}")
     temp_logs_dir.mkdir(parents=True, exist_ok=True)
 
     logging.getLogger(__name__).warning(

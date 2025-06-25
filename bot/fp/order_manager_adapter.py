@@ -14,9 +14,10 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Literal
 
-from ..config import settings
-from ..trading_types import Order, OrderStatus
-from ..utils.path_utils import get_data_directory, get_data_file_path
+from bot.config import settings
+from bot.trading_types import Order, OrderStatus
+from bot.utils.path_utils import get_data_directory, get_data_file_path
+
 from .orders import (
     FunctionalOrderManager,
     OrderFill,
@@ -146,7 +147,7 @@ class CompatibilityOrderManager:
             updated_manager, new_order = creation_result.run()
             self._functional_manager = updated_manager
         except Exception as e:
-            logger.error("Failed to create order: %s", str(e))
+            logger.exception("Failed to create order: %s", str(e))
             raise ValueError(f"Order creation failed: {e!s}")
 
         # Set up timeout if specified
@@ -242,7 +243,7 @@ class CompatibilityOrderManager:
             try:
                 self._functional_manager = fill_result.run()
             except Exception as e:
-                logger.error("Failed to process fill: %s", str(e))
+                logger.exception("Failed to process fill: %s", str(e))
                 return None
         else:
             # Simple status update
@@ -393,7 +394,7 @@ class CompatibilityOrderManager:
             logger.info("Order %s cancelled", order_id)
             return True
         except Exception as e:
-            logger.error("Failed to cancel order %s: %s", order_id, str(e))
+            logger.exception("Failed to cancel order %s: %s", order_id, str(e))
             return False
 
     def cancel_all_orders(
@@ -430,7 +431,7 @@ class CompatibilityOrderManager:
                     self._functional_manager = cancel_result.run()
                     cancelled_count += 1
                 except Exception as e:
-                    logger.error("Failed to cancel order %s: %s", order.id, str(e))
+                    logger.exception("Failed to cancel order %s: %s", order.id, str(e))
 
         logger.info(
             "Cancelled %s orders%s",
@@ -560,7 +561,7 @@ class CompatibilityOrderManager:
         # Update with legacy order data
         from .orders import replace
 
-        order = replace(
+        return replace(
             order,
             id=OrderId(legacy_order.id),
             status=self._convert_status_to_functional(legacy_order.status),
@@ -568,8 +569,6 @@ class CompatibilityOrderManager:
             updated_at=legacy_order.timestamp,
             filled_quantity=legacy_order.filled_quantity,
         )
-
-        return order
 
     def _convert_status_to_functional(self, legacy_status: OrderStatus):
         """Convert legacy OrderStatus to functional OrderStatus."""
@@ -639,7 +638,9 @@ class CompatibilityOrderManager:
                         self._functional_manager = timeout_result.run()
                         self._trigger_callbacks(order_id, "EXPIRED")
                     except Exception as e:
-                        logger.error("Failed to timeout order %s: %s", order_id, str(e))
+                        logger.exception(
+                            "Failed to timeout order %s: %s", order_id, str(e)
+                        )
 
             except asyncio.CancelledError:
                 pass  # Expected when order completes before timeout
@@ -751,7 +752,7 @@ class CompatibilityOrderManager:
                 with self.orders_file.open() as f:
                     orders_data = json.load(f)
 
-                for order_id, order_data in orders_data.items():
+                for _order_id, order_data in orders_data.items():
                     legacy_order = Order(
                         id=order_data["id"],
                         symbol=order_data["symbol"],

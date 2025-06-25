@@ -93,7 +93,7 @@ def integrate_vumanchu_with_indicators(
     high = ohlcv[:, 1]
     low = ohlcv[:, 2]
     close = ohlcv[:, 3]
-    volume = ohlcv[:, 4] if ohlcv.shape[1] > 4 else np.ones_like(close)
+    ohlcv[:, 4] if ohlcv.shape[1] > 4 else np.ones_like(close)
 
     # Get VuManChu analysis
     vumanchu_signal_set = vumanchu_comprehensive_analysis(
@@ -152,9 +152,7 @@ def integrate_vumanchu_with_indicators(
     )
 
     # Update composite signal to include additional indicators
-    enhanced_signal_set = _enhance_composite_signal(enhanced_signal_set, timestamp)
-
-    return enhanced_signal_set
+    return _enhance_composite_signal(enhanced_signal_set, timestamp)
 
 
 def _enhance_composite_signal(
@@ -293,7 +291,7 @@ def _calculate_enhanced_composite_signal(
 
     # Calculate metrics
     component_count = len(components)
-    avg_strength = total_strength / max(component_count, 1)
+    total_strength / max(component_count, 1)
     avg_confidence = total_confidence / max(component_count, 1)
     weighted_avg_strength = weighted_strength / max(total_weight, 1)
 

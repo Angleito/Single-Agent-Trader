@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from bot.fp.types.portfolio import (
     AccountSnapshot,
@@ -23,7 +24,9 @@ from bot.fp.types.positions import (
 from bot.fp.types.positions import TradeResult as FunctionalTradeResult
 from bot.fp.types.result import Failure, Result, Success
 from bot.paper_trading import PaperTradingAccount
-from bot.trading_types import TradeAction
+
+if TYPE_CHECKING:
+    from bot.trading_types import TradeAction
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +106,7 @@ class FunctionalPaperTradingAdapter:
             return functional_trades
 
         except Exception as e:
-            logger.error(f"Failed to get functional trades: {e}")
+            logger.exception(f"Failed to get functional trades: {e}")
             return []
 
     def calculate_functional_performance(
@@ -560,14 +563,12 @@ class FunctionalPaperTradingAdapter:
             exit_time_str = trade_data.get("exit_time")
 
             if isinstance(entry_time_str, str):
-                entry_time = datetime.fromisoformat(
-                    entry_time_str.replace("Z", "+00:00")
-                )
+                entry_time = datetime.fromisoformat(entry_time_str)
             else:
                 entry_time = entry_time_str or datetime.now()
 
             if isinstance(exit_time_str, str):
-                exit_time = datetime.fromisoformat(exit_time_str.replace("Z", "+00:00"))
+                exit_time = datetime.fromisoformat(exit_time_str)
             else:
                 exit_time = exit_time_str or entry_time
 
@@ -586,7 +587,7 @@ class FunctionalPaperTradingAdapter:
             )
 
         except Exception as e:
-            logger.error(f"Failed to convert trade to functional: {e}")
+            logger.exception(f"Failed to convert trade to functional: {e}")
             return None
 
 
@@ -646,11 +647,8 @@ def validate_paper_trading_migration(
 
         # Test report generation
         report_result = adapter.generate_functional_report()
-        if report_result.is_failure():
-            return False
-
-        return True
+        return not report_result.is_failure()
 
     except Exception as e:
-        logger.error(f"Paper trading migration validation failed: {e}")
+        logger.exception(f"Paper trading migration validation failed: {e}")
         return False

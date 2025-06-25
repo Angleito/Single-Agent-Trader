@@ -10,10 +10,9 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import Mock
 
-from bot.fp.types import Position, TradeAction
-
 # Legacy imports (maintained for compatibility)
 from bot.risk import DailyPnL, FailureRecord, RiskManager, TradingCircuitBreaker
+from bot.trading_types import Position, TradeAction
 
 # Functional imports (added for migration to functional programming patterns)
 try:

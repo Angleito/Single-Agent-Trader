@@ -19,7 +19,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from .config import settings
-from .fp.types import Position, TradeAction
+from .trading_types import Position, TradeAction
 
 # Enhanced functional validation imports
 try:
@@ -721,7 +721,7 @@ class TradeValidator:
                     "integrity_level": str(self.integrity_validator.level),
                     "pipeline_steps": len(self.validation_pipeline.steps),
                     "pipeline_stages": list(
-                        set(step.stage.value for step in self.validation_pipeline.steps)
+                        {step.stage.value for step in self.validation_pipeline.steps}
                     ),
                 }
             )

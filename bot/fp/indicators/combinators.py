@@ -82,7 +82,7 @@ def smooth(
     def _smooth(indicator: Indicator) -> Indicator:
         def smoothed_indicator(data: TimeSeries) -> Signal:
             # Get original signal
-            signal = indicator(data)
+            indicator(data)
 
             # Apply smoothing to the time series
             if method == "sma":

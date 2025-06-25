@@ -48,9 +48,9 @@ class BluefinDataFixes:
         # Handle different message types
         if "type" in message:
             msg_type = message.get("type")
-            if msg_type == "trade" or msg_type == "tick":
+            if msg_type in {"trade", "tick"}:
                 return all(field in message for field in required_fields)
-            if msg_type == "kline" or msg_type == "candle":
+            if msg_type in {"kline", "candle"}:
                 return all(
                     field in message
                     for field in [
@@ -82,7 +82,7 @@ class BluefinDataFixes:
             # Convert from 18 decimal places
             return price_value / Decimal(1000000000000000000)
         except:
-            logger.error(f"Failed to convert price: {price_str}")
+            logger.exception(f"Failed to convert price: {price_str}")
             return Decimal(0)
 
     @staticmethod
@@ -129,7 +129,7 @@ class BluefinDataFixes:
             )
 
         except Exception as e:
-            logger.error(f"Failed to parse candle data: {e}")
+            logger.exception(f"Failed to parse candle data: {e}")
             return None
 
     @staticmethod
@@ -289,7 +289,7 @@ class BluefinDataFixes:
 
             # Get time boundaries
             first_trade = sorted_trades[0]
-            last_trade = sorted_trades[-1]
+            sorted_trades[-1]
 
             # Calculate OHLC
             prices = [
@@ -338,7 +338,7 @@ class BluefinDataFixes:
             )
 
         except Exception as e:
-            logger.error(f"Failed to create candle from trades: {e}")
+            logger.exception(f"Failed to create candle from trades: {e}")
             return None
 
 

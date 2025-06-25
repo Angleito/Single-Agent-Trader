@@ -6,14 +6,17 @@ import math
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from bot.fp.types.base import Maybe, Nothing
-from bot.fp.types.positions import (
-    FunctionalPosition,
-    LotSale,
-    PositionSnapshot,
-)
 from bot.fp.types.result import Failure, Result, Success
+
+if TYPE_CHECKING:
+    from bot.fp.types.positions import (
+        FunctionalPosition,
+        LotSale,
+        PositionSnapshot,
+    )
 
 
 @dataclass(frozen=True)

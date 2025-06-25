@@ -8,7 +8,9 @@ This module implements various mean reversion strategies including:
 """
 
 from dataclasses import dataclass
+from decimal import Decimal
 from enum import Enum
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -108,8 +110,8 @@ def bollinger_band_reversal(
         current_low = low.iloc[i]
 
         # Calculate position relative to bands
-        upper_dist = upper.iloc[i] - current_close
-        lower_dist = current_close - lower.iloc[i]
+        upper.iloc[i] - current_close
+        current_close - lower.iloc[i]
         band_range = upper.iloc[i] - lower.iloc[i]
 
         # Long signal: Price near/below lower band
@@ -541,7 +543,7 @@ def mean_reversion_exit_signals(
 
         future_prices = close[mask]
 
-        for i, (timestamp, price) in enumerate(future_prices.items()):
+        for _i, (timestamp, price) in enumerate(future_prices.items()):
             # Calculate progress toward reversion target
             if entry.signal_type == SignalType.LONG:
                 reversion_progress = (price - entry.price) / (
@@ -581,3 +583,135 @@ def mean_reversion_exit_signals(
                     break
 
     return exit_signals
+
+
+# Compatibility functions for test suites and other modules
+# --------------------------------------------------------
+
+
+def calculate_mean_reversion_signal(
+    market_snapshot: "MarketSnapshot", config: dict[str, Any] | None = None
+) -> MeanReversionSignal:
+    """
+    Calculate mean reversion signal from a market snapshot.
+
+    This function provides compatibility with existing test suites and modules
+    that expect a simple calculate_mean_reversion_signal function.
+
+    Args:
+        market_snapshot: Market data snapshot with prices and indicators
+        config: Optional configuration dict with parameters
+
+    Returns:
+        MeanReversionSignal with trade decision and metadata
+    """
+    # Import here to avoid circular imports
+    from bot.fp.types.market import MarketSnapshot
+
+    if not isinstance(market_snapshot, MarketSnapshot):
+        raise ValueError(f"Expected MarketSnapshot, got {type(market_snapshot)}")
+
+    # Extract configuration parameters
+    config = config or {}
+    z_score_threshold = config.get("z_score_threshold", 2.0)
+    entry_threshold = config.get("entry_threshold", 0.95)
+    exit_threshold = config.get("exit_threshold", 0.5)
+
+    current_price = float(market_snapshot.price)
+    current_time = market_snapshot.timestamp
+
+    # If we have SMA and high/low data, calculate z-score
+    if (
+        market_snapshot.sma_20 is not None
+        and market_snapshot.high_20 is not None
+        and market_snapshot.low_20 is not None
+    ):
+        sma_20 = float(market_snapshot.sma_20)
+        high_20 = float(market_snapshot.high_20)
+        low_20 = float(market_snapshot.low_20)
+
+        # Calculate approximate standard deviation from range
+        price_range = high_20 - low_20
+        approx_std = price_range / 4.0  # Approximation: range ≈ 4 * std
+
+        if approx_std > 0:
+            # Calculate z-score
+            z_score = (current_price - sma_20) / approx_std
+            deviation_from_mean = (current_price - sma_20) / sma_20
+
+            # Strong mean reversion signals
+            if z_score > z_score_threshold:  # Overbought
+                return MeanReversionSignal(
+                    signal_type=SignalType.SHORT,
+                    strength=min(abs(z_score) / 3.0, 1.0),
+                    timestamp=current_time,
+                    price=Decimal(str(current_price)),
+                    reason=f"Overbought: z-score {z_score:.2f} above threshold {z_score_threshold}",
+                    deviation_from_mean=deviation_from_mean,
+                    mean_price=sma_20,
+                    zscore=z_score,
+                    reversion_target=sma_20
+                    * (1 + exit_threshold * abs(deviation_from_mean)),
+                    risk_adjusted_size=min(abs(z_score) / z_score_threshold, 2.0),
+                )
+            if z_score < -z_score_threshold:  # Oversold
+                return MeanReversionSignal(
+                    signal_type=SignalType.LONG,
+                    strength=min(abs(z_score) / 3.0, 1.0),
+                    timestamp=current_time,
+                    price=Decimal(str(current_price)),
+                    reason=f"Oversold: z-score {z_score:.2f} below threshold {-z_score_threshold}",
+                    deviation_from_mean=deviation_from_mean,
+                    mean_price=sma_20,
+                    zscore=z_score,
+                    reversion_target=sma_20
+                    * (1 - exit_threshold * abs(deviation_from_mean)),
+                    risk_adjusted_size=min(abs(z_score) / z_score_threshold, 2.0),
+                )
+
+    # Fallback: simple deviation from SMA
+    elif market_snapshot.sma_20 is not None:
+        sma_20 = float(market_snapshot.sma_20)
+        deviation = (current_price - sma_20) / sma_20
+
+        # Strong deviation signals
+        if deviation > 0.1:  # 10% above mean
+            return MeanReversionSignal(
+                signal_type=SignalType.SHORT,
+                strength=min(abs(deviation) * 5, 1.0),
+                timestamp=current_time,
+                price=Decimal(str(current_price)),
+                reason=f"Price {deviation:.1%} above SMA - mean reversion expected",
+                deviation_from_mean=deviation,
+                mean_price=sma_20,
+                zscore=deviation * 5,  # Approximate z-score
+                reversion_target=sma_20 * 1.05,  # Target 5% above mean
+                risk_adjusted_size=min(abs(deviation) * 5, 1.5),
+            )
+        if deviation < -0.1:  # 10% below mean
+            return MeanReversionSignal(
+                signal_type=SignalType.LONG,
+                strength=min(abs(deviation) * 5, 1.0),
+                timestamp=current_time,
+                price=Decimal(str(current_price)),
+                reason=f"Price {deviation:.1%} below SMA - mean reversion expected",
+                deviation_from_mean=deviation,
+                mean_price=sma_20,
+                zscore=deviation * 5,  # Approximate z-score
+                reversion_target=sma_20 * 0.95,  # Target 5% below mean
+                risk_adjusted_size=min(abs(deviation) * 5, 1.5),
+            )
+
+    # Default to hold if no clear mean reversion opportunity
+    return MeanReversionSignal(
+        signal_type=SignalType.HOLD,
+        strength=0.0,
+        timestamp=current_time,
+        price=Decimal(str(current_price)),
+        reason="No clear mean reversion signal detected",
+        deviation_from_mean=0.0,
+        mean_price=market_snapshot.sma_20 or current_price,
+        zscore=0.0,
+        reversion_target=current_price,
+        risk_adjusted_size=0.0,
+    )

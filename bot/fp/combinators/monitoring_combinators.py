@@ -11,18 +11,16 @@ from __future__ import annotations
 import statistics
 import time
 from collections import defaultdict
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import reduce
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
-from ..effects.io import IO
-from ..effects.monitoring import (
-    HealthCheck,
-    HealthStatus,
-    MetricPoint,
-)
+from bot.fp.effects.io import IO
+from bot.fp.effects.monitoring import HealthCheck, HealthStatus, MetricPoint
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 A = TypeVar("A")
 B = TypeVar("B")
@@ -66,7 +64,7 @@ class MonitoringPipeline:
 # ==============================================================================
 
 
-def map_io(f: Callable[[A], B]) -> Callable[[IO[A]], IO[B]]:
+def map_io[A, B](f: Callable[[A], B]) -> Callable[[IO[A]], IO[B]]:
     """Map a pure function over an IO operation"""
 
     def mapper(io_a: IO[A]) -> IO[B]:
@@ -79,7 +77,7 @@ def map_io(f: Callable[[A], B]) -> Callable[[IO[A]], IO[B]]:
     return mapper
 
 
-def sequence_io(io_operations: list[IO[A]]) -> IO[list[A]]:
+def sequence_io[A](io_operations: list[IO[A]]) -> IO[list[A]]:
     """Sequence a list of IO operations into a single IO operation"""
 
     def sequenced_operation() -> list[A]:
@@ -92,7 +90,7 @@ def sequence_io(io_operations: list[IO[A]]) -> IO[list[A]]:
     return IO(sequenced_operation)
 
 
-def parallel_io(io_operations: list[IO[A]]) -> IO[list[A]]:
+def parallel_io[A](io_operations: list[IO[A]]) -> IO[list[A]]:
     """Execute IO operations in parallel (simulation for sync operations)"""
 
     def parallel_operation() -> list[A]:
@@ -122,7 +120,9 @@ def chain_io(io_a: IO[A], f: Callable[[A], IO[B]]) -> IO[B]:
     return IO(chained_operation)
 
 
-def filter_io(predicate: Callable[[A], bool]) -> Callable[[IO[list[A]]], IO[list[A]]]:
+def filter_io[A](
+    predicate: Callable[[A], bool],
+) -> Callable[[IO[list[A]]], IO[list[A]]]:
     """Filter results of an IO operation"""
 
     def filter_operation(io_list: IO[list[A]]) -> IO[list[A]]:
@@ -422,7 +422,7 @@ def rolling_window_metric(
         current_metric = metric.run()
 
         # Add current metric to history and maintain window size
-        updated_history = history + [current_metric]
+        updated_history = [*history, current_metric]
         if len(updated_history) > window_size:
             updated_history = updated_history[-window_size:]
 
@@ -538,7 +538,9 @@ def threshold_metric(
 # ==============================================================================
 
 
-def monitoring_pipeline(stages: list[Callable[[A], IO[B]]]) -> Callable[[A], IO[B]]:
+def monitoring_pipeline[A, B](
+    stages: list[Callable[[A], IO[B]]],
+) -> Callable[[A], IO[B]]:
     """Create a monitoring pipeline from a list of transformation stages"""
 
     def pipeline(initial_input: A) -> IO[B]:
@@ -556,7 +558,7 @@ def monitoring_pipeline(stages: list[Callable[[A], IO[B]]]) -> Callable[[A], IO[
     return pipeline
 
 
-def circuit_breaker_monitoring(
+def circuit_breaker_monitoring[A](
     operation: IO[A],
     failure_threshold: int = 5,
     recovery_timeout_seconds: float = 60.0,
@@ -815,7 +817,7 @@ def create_health_checker(
     return IO(health_check)
 
 
-def create_monitoring_scheduler(
+def create_monitoring_scheduler[A](
     operations: list[IO[A]], interval_seconds: float = 30.0
 ) -> IO[None]:
     """Create a simple monitoring scheduler (returns immediately)"""

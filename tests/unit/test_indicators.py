@@ -32,9 +32,11 @@ class TestCipherA:
 
         # Test default parameters - these may vary based on actual implementation
         assert hasattr(cipher_a, "wt_ma_length")
-        assert hasattr(cipher_a, "wt_signal_length")
+        assert hasattr(cipher_a, "wt_channel_length")
+        assert hasattr(cipher_a, "wt_average_length")
         assert cipher_a.wt_ma_length > 0
-        assert cipher_a.wt_signal_length > 0
+        assert cipher_a.wt_channel_length > 0
+        assert cipher_a.wt_average_length > 0
 
     def test_cipher_a_with_sample_data(self) -> None:
         """Test Cipher A calculation with sample data."""
@@ -56,11 +58,11 @@ class TestCipherA:
         result = cipher_a.calculate(data)
 
         # Check that new columns are added
-        assert "ema_fast" in result.columns
-        assert "ema_slow" in result.columns
+        assert "wt1" in result.columns
+        assert "wt2" in result.columns
         assert "rsi" in result.columns
-        assert "trend_dot" in result.columns
         assert "cipher_a_signal" in result.columns
+        assert "cipher_a_confidence" in result.columns
 
     def test_cipher_a_insufficient_data(self) -> None:
         """Test Cipher A with insufficient data."""
@@ -89,10 +91,9 @@ class TestCipherB:
         """Test Cipher B initialization with default parameters."""
         cipher_b = CipherB()
 
-        assert cipher_b.vwap_length == 14
-        assert cipher_b.mfi_length == 14
-        assert cipher_b.wave_length == 10
-        assert cipher_b.wave_mult == 3.7
+        assert cipher_b.vwap_length == 20
+        assert cipher_b.mf_length == 9
+        assert cipher_b.signal_sensitivity == 1.0
 
     def test_cipher_b_with_sample_data(self) -> None:
         """Test Cipher B calculation with sample data."""
@@ -115,9 +116,9 @@ class TestCipherB:
 
         # Check that new columns are added
         assert "vwap" in result.columns
-        assert "money_flow" in result.columns
-        assert "wave" in result.columns
-        assert "cipher_b_signal" in result.columns
+        assert "cipher_b_money_flow" in result.columns
+        assert "cipher_b_wave" in result.columns
+        assert "cipher_b_buy_signal" in result.columns
 
 
 class TestVuManChuIndicators:
@@ -151,17 +152,17 @@ class TestVuManChuIndicators:
 
         # Should have all indicator columns
         expected_columns = [
-            "ema_fast",
-            "ema_slow",
+            "wt1",
+            "wt2",
             "rsi",
-            "trend_dot",
             "cipher_a_signal",
+            "cipher_a_confidence",
             "vwap",
-            "money_flow",
-            "wave",
-            "cipher_b_signal",
-            "ema_200",
-            "atr",
+            "cipher_b_money_flow",
+            "cipher_b_wave",
+            "cipher_b_buy_signal",
+            "combined_signal",
+            "combined_confidence",
         ]
 
         for col in expected_columns:
@@ -188,6 +189,7 @@ class TestVuManChuIndicators:
         latest_state = calc.get_latest_state(result)
 
         # Should have latest values
-        assert "close" in latest_state
-        assert "volume" in latest_state
+        assert "rsi" in latest_state
+        assert "vwap" in latest_state
+        assert "cipher_a_signal" in latest_state
         assert isinstance(latest_state, dict)

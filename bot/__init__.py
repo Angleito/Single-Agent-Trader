@@ -200,10 +200,6 @@ def check_startup_health() -> tuple[bool, list[str]]:
 
 
 __all__ = [
-    # Core exports
-    "settings",
-    "get_startup_diagnostics",
-    "check_startup_health",
     # Component classes (may be fallback classes if dependencies missing)
     "BacktestEngine",
     "BacktestResults",
@@ -224,4 +220,8 @@ __all__ = [
     "TradeAction",
     "TradeValidator",
     "VuManChuIndicators",
+    "check_startup_health",
+    "get_startup_diagnostics",
+    # Core exports
+    "settings",
 ]

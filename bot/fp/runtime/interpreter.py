@@ -10,11 +10,13 @@ from __future__ import annotations
 import asyncio
 import traceback
 from dataclasses import dataclass
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
-from ..effects.io import IO, AsyncIO, IOEither
-from ..effects.logging import error, info
-from ..effects.monitoring import increment_counter, record_gauge
+from bot.fp.effects.logging import error, info
+from bot.fp.effects.monitoring import increment_counter, record_gauge
+
+if TYPE_CHECKING:
+    from bot.fp.effects.io import IO, AsyncIO, IOEither
 
 A = TypeVar("A")
 
@@ -79,7 +81,7 @@ class EffectInterpreter:
                     },
                 ).run()
 
-            raise e
+            raise
 
         finally:
             self.context.decrement_active()
@@ -130,7 +132,7 @@ class EffectInterpreter:
                     },
                 ).run()
 
-            raise e
+            raise
 
         finally:
             self.context.decrement_active()
@@ -163,10 +165,10 @@ class EffectInterpreter:
 
             return result.value
 
-        except Exception as e:
+        except Exception:
             if self.config.metrics_enabled:
                 increment_counter("either_effects.error").run()
-            raise e
+            raise
 
         finally:
             self.context.decrement_active()
@@ -204,16 +206,16 @@ def get_interpreter() -> EffectInterpreter:
     return _interpreter
 
 
-def run(effect: IO[A]) -> A:
+def run[A](effect: IO[A]) -> A:
     """Run an effect using the global interpreter"""
     return get_interpreter().run_effect(effect)
 
 
-async def run_async(effect: AsyncIO[A]) -> A:
+async def run_async[A](effect: AsyncIO[A]) -> A:
     """Run an async effect using the global interpreter"""
     return await get_interpreter().run_async_effect(effect)
 
 
-def run_either(effect: IOEither[Exception, A]) -> A:
+def run_either[A](effect: IOEither[Exception, A]) -> A:
     """Run an IOEither effect using the global interpreter"""
     return get_interpreter().run_either_effect(effect)

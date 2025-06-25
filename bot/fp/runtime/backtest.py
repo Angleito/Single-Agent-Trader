@@ -12,9 +12,9 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
-from ..effects.io import IO
-from ..effects.logging import info, warn
-from ..effects.persistence import Event, save_event
+from bot.fp.effects.io import IO
+from bot.fp.effects.logging import info, warn
+from bot.fp.effects.persistence import Event, save_event
 
 
 @dataclass
@@ -297,7 +297,7 @@ class BacktestEngine:
             max_value = self.config.initial_balance
             max_drawdown = Decimal(0)
 
-            for timestamp, value in self.portfolio_values:
+            for _timestamp, value in self.portfolio_values:
                 max_value = max(max_value, value)
 
                 drawdown = (

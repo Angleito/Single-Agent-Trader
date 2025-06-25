@@ -152,8 +152,7 @@ def calculate_regime_stability(
     if current_state in ["trending_up", "trending_down"]:
         # For trends, check consistency of direction
         expected_sign = 1 if current_state == "trending_up" else -1
-        consistent_returns = np.sum(np.sign(returns) == expected_sign) / len(returns)
-        return consistent_returns
+        return np.sum(np.sign(returns) == expected_sign) / len(returns)
 
     if current_state == "ranging":
         # For ranging, check mean reversion
@@ -170,10 +169,7 @@ def calculate_regime_stability(
         [np.var(returns[i : i + 5]) for i in range(len(returns) - 4)]
     )
     if len(rolling_vars) > 0:
-        high_var_ratio = np.sum(rolling_vars > np.median(rolling_vars)) / len(
-            rolling_vars
-        )
-        return high_var_ratio
+        return np.sum(rolling_vars > np.median(rolling_vars)) / len(rolling_vars)
     return 0.5
 
 

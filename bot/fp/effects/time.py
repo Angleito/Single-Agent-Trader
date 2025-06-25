@@ -30,7 +30,7 @@ def delay(duration: timedelta) -> IO[None]:
     return IO(sleep)
 
 
-def timeout(duration: timedelta, effect: IO[A]) -> IO[A | None]:
+def timeout[A](duration: timedelta, effect: IO[A]) -> IO[A | None]:
     """Apply timeout to effect"""
 
     def timed():
@@ -43,7 +43,7 @@ def timeout(duration: timedelta, effect: IO[A]) -> IO[A | None]:
     return IO(timed)
 
 
-def measure_time(effect: IO[A]) -> IO[tuple[A, timedelta]]:
+def measure_time[A](effect: IO[A]) -> IO[tuple[A, timedelta]]:
     """Measure execution time"""
 
     def measured():

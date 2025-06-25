@@ -60,12 +60,26 @@ class StrategyConfig:
 
 
 @dataclass(frozen=True)
+class StrategyMetadata:
+    """Metadata for a trading strategy."""
+
+    name: str
+    version: str
+    description: str
+    parameters: dict[str, Any]
+    risk_level: str  # "low", "medium", "high"
+    expected_frequency: str  # "scalping", "intraday", "swing"
+    created_at: datetime
+    tags: list[str]
+
+
+@dataclass(frozen=True)
 class BaseStrategy:
     """Base strategy class."""
 
     config: StrategyConfig
     strategy_func: Strategy
-    metadata: "StrategyMetadata"
+    metadata: StrategyMetadata
 
     def evaluate(self, snapshot: MarketSnapshot) -> TradeSignal:
         """Evaluate strategy with market data."""
@@ -90,20 +104,6 @@ class StrategyComposition:
             raise ValueError("Number of weights must match number of strategies")
         elif abs(sum(self.weights) - 1.0) > 0.001:
             raise ValueError("Weights must sum to 1.0")
-
-
-@dataclass(frozen=True)
-class StrategyMetadata:
-    """Metadata for a trading strategy."""
-
-    name: str
-    version: str
-    description: str
-    parameters: dict[str, Any]
-    risk_level: str  # "low", "medium", "high"
-    expected_frequency: str  # "scalping", "intraday", "swing"
-    created_at: datetime
-    tags: list[str]
 
 
 @dataclass(frozen=True)
@@ -231,7 +231,7 @@ def threshold_strategy(strategy: Strategy, min_strength: float = 0.7) -> Strateg
     def thresholded_strategy(snapshot: MarketSnapshot) -> TradeSignal:
         signal = strategy(snapshot)
         # For directional signals, check their strength/confidence
-        if isinstance(signal, (Long, Short)):
+        if isinstance(signal, Long | Short):
             if signal.confidence >= min_strength:
                 return signal
             return Hold(

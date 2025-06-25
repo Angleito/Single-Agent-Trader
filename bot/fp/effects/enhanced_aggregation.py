@@ -8,20 +8,24 @@ vectorized operations, and adaptive performance tuning.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from collections import deque
-from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from ..types.optimized_market import (
+from bot.fp.types.optimized_market import (
     OptimizedDataFactory,
     OptimizedOHLCV,
     OptimizedTrade,
 )
+
 from .io import IO, AsyncIO
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -134,17 +138,13 @@ class EnhancedRealTimeAggregator:
         # Cancel background tasks
         if self._cleanup_task and not self._cleanup_task.done():
             self._cleanup_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._cleanup_task
-            except asyncio.CancelledError:
-                pass
 
         if self._metrics_task and not self._metrics_task.done():
             self._metrics_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._metrics_task
-            except asyncio.CancelledError:
-                pass
 
         logger.info("Enhanced aggregator stopped")
 
@@ -383,7 +383,7 @@ class EnhancedRealTimeAggregator:
             try:
                 callback(candle)
             except Exception as e:
-                logger.error(f"Error in candle subscriber: {e}")
+                logger.exception(f"Error in candle subscriber: {e}")
 
     def _notify_metrics_subscribers(self, metrics: AggregationMetrics) -> None:
         """Notify all metrics subscribers"""
@@ -391,7 +391,7 @@ class EnhancedRealTimeAggregator:
             try:
                 callback(metrics)
             except Exception as e:
-                logger.error(f"Error in metrics subscriber: {e}")
+                logger.exception(f"Error in metrics subscriber: {e}")
 
     def _adjust_batch_size(self, processing_time_ms: float, batch_size: int) -> None:
         """Adjust batch size based on performance"""
@@ -452,7 +452,7 @@ class EnhancedRealTimeAggregator:
         )
 
         # Calculate cache hit rate
-        cache_stats = self.data_factory.get_cache_stats()
+        self.data_factory.get_cache_stats()
         cache_hit_rate = 0.0  # Would need to track actual hits/misses
 
         self._metrics = AggregationMetrics(
@@ -495,7 +495,7 @@ class EnhancedRealTimeAggregator:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error in periodic cleanup: {e}")
+                logger.exception(f"Error in periodic cleanup: {e}")
 
     async def _update_metrics(self) -> None:
         """Periodic metrics update"""
@@ -506,7 +506,7 @@ class EnhancedRealTimeAggregator:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error in metrics update: {e}")
+                logger.exception(f"Error in metrics update: {e}")
 
 
 @dataclass

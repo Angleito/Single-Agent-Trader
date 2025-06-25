@@ -11,16 +11,18 @@ import logging
 import warnings
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from bot.fp.adapters.paper_trading_adapter import FunctionalPaperTradingAdapter
 from bot.fp.adapters.position_manager_adapter import FunctionalPositionManagerAdapter
 from bot.fp.types.portfolio import AccountSnapshot, PerformanceSnapshot, RiskMetrics
-from bot.fp.types.positions import FunctionalPosition, PositionSnapshot
 from bot.fp.types.result import Failure, Result, Success
-from bot.paper_trading import PaperTradingAccount
-from bot.position_manager import PositionManager
 from bot.trading_types import Position as LegacyPosition
+
+if TYPE_CHECKING:
+    from bot.fp.types.positions import FunctionalPosition, PositionSnapshot
+    from bot.paper_trading import PaperTradingAccount
+    from bot.position_manager import PositionManager
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +153,7 @@ class FunctionalPortfolioManager:
             warnings.warn(
                 "Functional features not enabled. Use get_position() for legacy interface.",
                 UserWarning,
+                stacklevel=2,
             )
             return None
 
@@ -167,6 +170,7 @@ class FunctionalPortfolioManager:
             warnings.warn(
                 "Functional features not enabled. Use get_position_summary() for legacy interface.",
                 UserWarning,
+                stacklevel=2,
             )
             return None
 

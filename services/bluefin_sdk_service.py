@@ -12,9 +12,23 @@ IMPORTANT INTERVAL LIMITATIONS:
 - All interval conversions are logged with warnings to alert users of data granularity changes
 """
 
+# CRITICAL: Suppress Bluefin SDK v2 SyntaxWarning BEFORE any imports
+import os
+import warnings
+
+# Set environment variable to suppress warnings at the Python level
+os.environ.setdefault("PYTHONWARNINGS", "ignore::SyntaxWarning")
+
+# Add specific filter for the Bluefin v2 SDK SyntaxWarning
+warnings.filterwarnings(
+    "ignore", message=r'.*"is not" with.*str.*literal.*', category=SyntaxWarning
+)
+warnings.filterwarnings(
+    "ignore", message=r".*contentType is not.*", category=SyntaxWarning
+)
+
 import asyncio
 import logging
-import os
 import secrets
 import sys
 import time

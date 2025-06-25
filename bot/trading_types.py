@@ -5,16 +5,12 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Import proper types to replace Any
-if TYPE_CHECKING:
-    from .types.base_types import DominanceCandleData
-else:
-    # For runtime, we need to import the type as well
-    from .types.base_types import DominanceCandleData
+from .types.base_types import DominanceCandleData
 
 
 class TradeAction(BaseModel):

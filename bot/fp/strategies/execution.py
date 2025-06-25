@@ -303,7 +303,7 @@ def update_execution_state(
     new_pending = [
         o for o in state.pending_orders if o.order_id != filled_order.order_id
     ]
-    new_completed = state.completed_orders + [filled_order]
+    new_completed = [*state.completed_orders, filled_order]
 
     return ExecutionState(
         original_order=state.original_order,
@@ -463,7 +463,7 @@ class FunctionalExecutionEngine:
         signal: Signal,
         position_size: Decimal,
         market_context: MarketContext,
-        venues: list[Venue] = None,
+        venues: list[Venue] | None = None,
     ) -> Either[str, ExecutionResult]:
         """Execute a trading signal using functional execution algorithms."""
         try:

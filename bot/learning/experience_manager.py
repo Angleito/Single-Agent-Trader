@@ -215,7 +215,7 @@ class ExperienceManager:
             return None
 
         # Create active trade tracking
-        trade_id = "trade_%s" % uuid4().hex[:8]
+        trade_id = f"trade_{uuid4().hex[:8]}"
         active_trade = ActiveTrade(
             trade_id=trade_id,
             experience_id=experience_id,
@@ -527,13 +527,13 @@ class ExperienceManager:
         if trade.max_adverse_excursion < -100:  # Significant drawdown
             if trade.realized_pnl and trade.realized_pnl > 0:
                 insights.append(
-                    "Endured $%.2f drawdown before profit - "
-                    "high risk tolerance paid off" % abs(trade.max_adverse_excursion)
+                    f"Endured ${abs(trade.max_adverse_excursion):.2f} drawdown before profit - "
+                    "high risk tolerance paid off"
                 )
             else:
                 insights.append(
-                    "Large drawdown of $%.2f - "
-                    "consider tighter stops" % abs(trade.max_adverse_excursion)
+                    f"Large drawdown of ${abs(trade.max_adverse_excursion):.2f} - "
+                    "consider tighter stops"
                 )
 
         # Analyze hold duration

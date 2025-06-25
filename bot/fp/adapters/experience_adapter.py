@@ -151,7 +151,7 @@ class ExperienceManagerFP:
 
         except Exception as e:
             error_msg = f"Failed to record FP trading decision: {e}"
-            logger.error(error_msg)
+            logger.exception(error_msg)
             return Failure(error_msg)
 
     def link_order_to_experience_fp(
@@ -184,7 +184,7 @@ class ExperienceManagerFP:
 
         except Exception as e:
             error_msg = f"Failed to link FP order to experience: {e}"
-            logger.error(error_msg)
+            logger.exception(error_msg)
             return Failure(error_msg)
 
     def start_tracking_trade_fp(
@@ -243,7 +243,7 @@ class ExperienceManagerFP:
 
         except Exception as e:
             error_msg = f"Failed to start FP trade tracking: {e}"
-            logger.error(error_msg)
+            logger.exception(error_msg)
             return Failure(error_msg)
 
     async def update_trade_progress_fp(
@@ -311,7 +311,7 @@ class ExperienceManagerFP:
 
         except Exception as e:
             error_msg = f"Failed to update FP trade progress: {e}"
-            logger.error(error_msg)
+            logger.exception(error_msg)
             return Failure(error_msg)
 
     async def complete_trade_fp(
@@ -386,7 +386,7 @@ class ExperienceManagerFP:
 
         except Exception as e:
             error_msg = f"Failed to complete FP trade: {e}"
-            logger.error(error_msg)
+            logger.exception(error_msg)
             return Failure(error_msg)
 
     def get_active_trades_fp(self) -> list[ActiveTradeFP]:
@@ -464,7 +464,7 @@ class ExperienceManagerFP:
 
         except Exception as e:
             error_msg = f"Failed to analyze FP active trades: {e}"
-            logger.error(error_msg)
+            logger.exception(error_msg)
             return Failure(error_msg)
 
     async def cleanup_stale_trades_fp(
@@ -506,7 +506,7 @@ class ExperienceManagerFP:
 
         except Exception as e:
             error_msg = f"Failed to cleanup FP stale trades: {e}"
-            logger.error(error_msg)
+            logger.exception(error_msg)
             return Failure(error_msg)
 
     # Helper methods for conversion between FP and imperative types

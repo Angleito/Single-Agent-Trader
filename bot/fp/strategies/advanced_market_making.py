@@ -169,9 +169,7 @@ def _calculate_market_impact(
         return 1.0  # High impact if can't fill
 
     avg_price = total_cost / size
-    impact = abs(avg_price - reference_price) / reference_price
-
-    return impact
+    return abs(avg_price - reference_price) / reference_price
 
 
 # ============================================================================

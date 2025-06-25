@@ -263,24 +263,24 @@ ImmediateOrder = MarketOrder  # Orders executed immediately
 # Helper functions for pattern matching
 def is_directional_signal(signal: TradeSignal) -> bool:
     """Check if signal is directional (Long or Short)."""
-    return isinstance(signal, (Long, Short))
+    return isinstance(signal, Long | Short)
 
 
 def is_pending_order(order: Order) -> bool:
     """Check if order is pending execution."""
-    return isinstance(order, (LimitOrder, StopOrder))
+    return isinstance(order, LimitOrder | StopOrder)
 
 
 def get_signal_confidence(signal: TradeSignal) -> float:
     """Get confidence from signal if available, 0 otherwise."""
-    if isinstance(signal, (Long, Short)):
+    if isinstance(signal, Long | Short):
         return signal.confidence
     return 0.0
 
 
 def get_signal_size(signal: TradeSignal) -> float:
     """Get position size from signal if available, 0 otherwise."""
-    if isinstance(signal, (Long, Short)):
+    if isinstance(signal, Long | Short):
         return signal.size
     if isinstance(signal, MarketMake):
         return max(signal.bid_size, signal.ask_size)

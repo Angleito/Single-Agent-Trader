@@ -1204,8 +1204,7 @@ class CoinbaseClient(BaseExchange):
                     if (
                         "futures" in portfolio_name
                         or "cfm" in portfolio_name
-                        or portfolio_type == "futures"
-                        or portfolio_type == "cfm"
+                        or portfolio_type in {"futures", "cfm"}
                     ):
                         self._futures_portfolio_id = portfolio_id
                         logger.debug("Found futures portfolio: %s", portfolio_id)
@@ -3558,5 +3557,5 @@ class CoinbaseClient(BaseExchange):
             logger.error("Functional order placement failed: %s", either_result.value)
             return None
         except Exception as e:
-            logger.error("Error in functional order placement: %s", e)
+            logger.exception("Error in functional order placement: %s", e)
             return None

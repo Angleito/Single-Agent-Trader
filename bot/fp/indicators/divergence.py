@@ -9,10 +9,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 import numpy as np
-from numpy.typing import NDArray
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 
 class DivergenceType(Enum):
@@ -89,7 +91,7 @@ def find_fractals(
         return []
 
     fractals: list[Fractal] = []
-    window_size = lookback_left + lookback_right + 1
+    lookback_left + lookback_right + 1
 
     # Vectorized approach for finding local extrema
     for i in range(lookback_left, len(data) - lookback_right):

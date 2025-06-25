@@ -7,11 +7,10 @@ replacing the 97 scattered error classes found across the codebase.
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import TypeAlias
 
 # Type alias for error context data
-ErrorContextData: TypeAlias = str | int | float | bool | Decimal | datetime | None
-ErrorContextDict: TypeAlias = dict[str, ErrorContextData]
+type ErrorContextData = str | int | float | bool | Decimal | datetime | None
+type ErrorContextDict = dict[str, ErrorContextData]
 
 
 class TradingBotError(Exception):

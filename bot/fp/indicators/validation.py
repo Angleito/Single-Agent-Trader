@@ -9,7 +9,7 @@ types maintains mathematical accuracy and signal integrity.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -19,7 +19,9 @@ from bot.fp.indicators.vumanchu_functional import (
     calculate_wavetrend_oscillator,
     vumanchu_cipher,
 )
-from bot.fp.types.indicators import VuManchuResult, VuManchuSignalSet
+
+if TYPE_CHECKING:
+    from bot.fp.types.indicators import VuManchuResult, VuManchuSignalSet
 
 
 def generate_test_ohlcv_data(length: int = 100, seed: int = 42) -> np.ndarray:
@@ -171,11 +173,11 @@ def validate_vumanchu_result_structure(result: VuManchuResult) -> dict[str, Any]
             validation_result["errors"].append(f"Missing attribute: {attr}")
 
     # Check data types
-    if hasattr(result, "wave_a") and not isinstance(result.wave_a, (int, float)):
+    if hasattr(result, "wave_a") and not isinstance(result.wave_a, int | float):
         validation_result["passed"] = False
         validation_result["errors"].append(f"wave_a type error: {type(result.wave_a)}")
 
-    if hasattr(result, "wave_b") and not isinstance(result.wave_b, (int, float)):
+    if hasattr(result, "wave_b") and not isinstance(result.wave_b, int | float):
         validation_result["passed"] = False
         validation_result["errors"].append(f"wave_b type error: {type(result.wave_b)}")
 
@@ -389,10 +391,12 @@ def validate_integration_accuracy(
 
 
 def run_comprehensive_validation(
-    test_lengths: list[int] = [50, 100, 200],
+    test_lengths: list[int] | None = None,
     tolerance: float = 1e-10,
 ) -> dict[str, Any]:
     """Run comprehensive validation suite."""
+    if test_lengths is None:
+        test_lengths = [50, 100, 200]
     validation_suite = {
         "test_summary": {
             "total_tests": 0,

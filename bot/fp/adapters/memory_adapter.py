@@ -87,7 +87,7 @@ class MemoryAdapterFP:
 
         except Exception as e:
             error_msg = f"Failed to store FP experience: {e}"
-            logger.error(error_msg)
+            logger.exception(error_msg)
             return Failure(error_msg)
 
     async def update_experience_outcome_fp(
@@ -153,7 +153,7 @@ class MemoryAdapterFP:
 
         except Exception as e:
             error_msg = f"Failed to update FP experience outcome: {e}"
-            logger.error(error_msg)
+            logger.exception(error_msg)
             return Failure(error_msg)
 
     async def query_similar_experiences_fp(
@@ -221,7 +221,7 @@ class MemoryAdapterFP:
 
         except Exception as e:
             error_msg = f"Failed to query similar FP experiences: {e}"
-            logger.error(error_msg)
+            logger.exception(error_msg)
             return Failure(error_msg)
 
     async def get_pattern_statistics_fp(
@@ -276,7 +276,7 @@ class MemoryAdapterFP:
 
         except Exception as e:
             error_msg = f"Failed to get FP pattern statistics: {e}"
-            logger.error(error_msg)
+            logger.exception(error_msg)
             return Failure(error_msg)
 
     async def generate_learning_insights_fp(
@@ -320,7 +320,7 @@ class MemoryAdapterFP:
 
         except Exception as e:
             error_msg = f"Failed to generate FP learning insights: {e}"
-            logger.error(error_msg)
+            logger.exception(error_msg)
             return Failure(error_msg)
 
     def get_memory_storage(self) -> MemoryStorage:
@@ -342,7 +342,7 @@ class MemoryAdapterFP:
 
         except Exception as e:
             error_msg = f"Failed to sync with MCP server: {e}"
-            logger.error(error_msg)
+            logger.exception(error_msg)
             return Failure(error_msg)
 
     def _fp_to_market_state(self, snapshot: MarketSnapshot) -> MarketState:

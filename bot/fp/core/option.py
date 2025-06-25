@@ -133,7 +133,7 @@ class Empty(Option[T]):
 
 
 # Utility functions for creating Option instances
-def some(value: T) -> Option[T]:
+def some[T](value: T) -> Option[T]:
     """Create a Some Option."""
     return Some(value)
 
@@ -143,12 +143,12 @@ def empty() -> Option[T]:
     return Empty()
 
 
-def option_from_nullable(value: T | None) -> Option[T]:
+def option_from_nullable[T](value: T | None) -> Option[T]:
     """Create Option from potentially null value."""
     return Some(value) if value is not None else Empty()
 
 
-def try_option(func: Callable[[], T]) -> Option[T]:
+def try_option[T](func: Callable[[], T]) -> Option[T]:
     """Try to execute a function, catching exceptions as Empty."""
     try:
         result = func()
@@ -157,7 +157,7 @@ def try_option(func: Callable[[], T]) -> Option[T]:
         return Empty()
 
 
-def sequence_option(options: list[Option[T]]) -> Option[list[T]]:
+def sequence_option[T](options: list[Option[T]]) -> Option[list[T]]:
     """Transform a list of Options into an Option of list.
 
     Returns Empty if any option is Empty, otherwise Some with all values.
@@ -175,7 +175,7 @@ def traverse_option(items: list[T], func: Callable[[T], Option[U]]) -> Option[li
     return sequence_option([func(item) for item in items])
 
 
-def first_some(options: list[Option[T]]) -> Option[T]:
+def first_some[T](options: list[Option[T]]) -> Option[T]:
     """Return the first Some option, or Empty if all are Empty."""
     for option in options:
         if option.is_some():
@@ -194,7 +194,7 @@ def combine_options(
     return Empty()
 
 
-class OptionalChain(Generic[T]):
+class OptionalChain[T]:
     """Builder for chaining optional operations."""
 
     def __init__(self, option: Option[T]) -> None:
@@ -221,7 +221,7 @@ class OptionalChain(Generic[T]):
         return self._option
 
 
-def optional_chain(option: Option[T]) -> OptionalChain[T]:
+def optional_chain[T](option: Option[T]) -> OptionalChain[T]:
     """Create an optional chain for fluent composition."""
     return OptionalChain(option)
 

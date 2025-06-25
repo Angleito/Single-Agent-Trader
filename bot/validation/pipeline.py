@@ -70,8 +70,7 @@ class PipelineStep:
     def execute(self, data: Any) -> FPResult[Any, ValidatorError]:
         """Execute this pipeline step."""
         try:
-            result = self.validator(data)
-            return result
+            return self.validator(data)
         except Exception as e:
             return FPFailure(
                 FieldError(
@@ -158,7 +157,7 @@ class FunctionalValidationPipeline:
         stage: PipelineStage = PipelineStage.BUSINESS_RULES,
         description: str = "",
         optional: bool = False,
-        dependencies: list[str] = None,
+        dependencies: list[str] | None = None,
         timeout_seconds: float | None = None,
     ) -> "FunctionalValidationPipeline":
         """Add a validation step to the pipeline."""
@@ -174,7 +173,7 @@ class FunctionalValidationPipeline:
 
         # Create new pipeline with added step
         new_pipeline = FunctionalValidationPipeline(self.name, self.mode)
-        new_pipeline.steps = self.steps + [step]
+        new_pipeline.steps = [*self.steps, step]
         new_pipeline.conditional_steps = self.conditional_steps.copy()
         new_pipeline.parallel_groups = self.parallel_groups.copy()
 
@@ -207,7 +206,7 @@ class FunctionalValidationPipeline:
         new_pipeline = FunctionalValidationPipeline(self.name, self.mode)
         new_pipeline.steps = self.steps.copy()
         new_pipeline.conditional_steps = self.conditional_steps.copy()
-        new_pipeline.parallel_groups = self.parallel_groups + [step_names]
+        new_pipeline.parallel_groups = [*self.parallel_groups, step_names]
 
         return new_pipeline
 
@@ -226,7 +225,7 @@ class FunctionalValidationPipeline:
         stages = self._group_steps_by_stage()
 
         # Execute stages in order
-        for stage, stage_steps in stages.items():
+        for _stage, stage_steps in stages.items():
             stage_start = datetime.now()
 
             if self.mode == ExecutionMode.PARALLEL:
@@ -297,7 +296,7 @@ class FunctionalValidationPipeline:
         stages = self._group_steps_by_stage()
 
         # Execute stages asynchronously
-        for stage, stage_steps in stages.items():
+        for _stage, stage_steps in stages.items():
             stage_start = datetime.now()
 
             # Execute all steps in stage concurrently
@@ -651,15 +650,15 @@ def create_market_data_pipeline() -> FunctionalValidationPipeline:
 
 # Export pipeline system
 __all__ = [
-    # Core types
-    "PipelineStage",
     "ExecutionMode",
-    "PipelineStep",
-    "PipelineMetrics",
-    "PipelineResult",
     # Main pipeline class
     "FunctionalValidationPipeline",
+    "PipelineMetrics",
+    "PipelineResult",
+    # Core types
+    "PipelineStage",
+    "PipelineStep",
+    "create_market_data_pipeline",
     # Factory functions
     "create_trade_action_pipeline",
-    "create_market_data_pipeline",
 ]

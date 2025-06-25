@@ -259,7 +259,9 @@ class BluefinClient(BaseExchange):
                 self._signature_manager = BluefinOrderSignatureManager(self.private_key)
                 logger.info("✅ Order signature system initialized for live trading")
             except OrderSignatureError as e:
-                logger.error("❌ Failed to initialize order signature system: %s", e)
+                logger.exception(
+                    "❌ Failed to initialize order signature system: %s", e
+                )
                 raise ExchangeAuthError(
                     f"Order signature initialization failed: {e}"
                 ) from e
@@ -1008,7 +1010,7 @@ class BluefinClient(BaseExchange):
                     order_data = signed_order_data
 
                 except OrderSignatureError as e:
-                    logger.error("❌ Failed to sign market order: %s", e)
+                    logger.exception("❌ Failed to sign market order: %s", e)
                     _raise_order_placement_error(f"Order signature failed: {e}")
             else:
                 # Prepare unsigned order data for paper trading
@@ -1136,7 +1138,7 @@ class BluefinClient(BaseExchange):
                     order_data = signed_order_data
 
                 except OrderSignatureError as e:
-                    logger.error("❌ Failed to sign limit order: %s", e)
+                    logger.exception("❌ Failed to sign limit order: %s", e)
                     _raise_limit_order_placement_error(f"Order signature failed: {e}")
             else:
                 # Prepare unsigned order data for paper trading
@@ -2946,5 +2948,5 @@ class BluefinClient(BaseExchange):
             logger.error("Functional order placement failed: %s", either_result.value)
             return None
         except Exception as e:
-            logger.error("Error in functional order placement: %s", e)
+            logger.exception("Error in functional order placement: %s", e)
             return None

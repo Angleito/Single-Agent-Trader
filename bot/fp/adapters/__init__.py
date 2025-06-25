@@ -39,14 +39,14 @@ __all__ = [
     # Exchange adapters
     "BluefinExchangeAdapter",
     "CoinbaseExchangeAdapter",
+    "EnhancedFunctionalMarketDataAdapter",
+    # Strategy adapters
+    "FunctionalLLMStrategy",
     # Data adapters
     "FunctionalMarketDataAdapter",
-    "EnhancedFunctionalMarketDataAdapter",
     # Monitoring adapters
     "FunctionalPerformanceMonitor",
     "FunctionalSystemMonitor",
-    # Strategy adapters
-    "FunctionalLLMStrategy",
     "LLMAgentAdapter",
     "MemoryEnhancedLLMAgentAdapter",
 ]

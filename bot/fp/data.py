@@ -9,16 +9,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
 from datetime import datetime
-from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from ..config import settings
-from ..trading_types import MarketData
+from bot.config import settings
+from bot.trading_types import MarketData
+
 from .adapters.market_data_adapter import (
     create_market_data_adapter,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +73,7 @@ class FunctionalMarketDataProvider:
                 raise Exception(f"Failed to connect: {error}")
 
         except Exception as e:
-            logger.error(f"Connection failed: {e}")
+            logger.exception(f"Connection failed: {e}")
             raise
 
     async def _fetch_initial_data(self) -> None:
@@ -88,12 +91,12 @@ class FunctionalMarketDataProvider:
     async def disconnect(self) -> None:
         """Disconnect from market data feeds"""
         try:
-            result = self._adapter.disconnect().run()
+            self._adapter.disconnect().run()
             self._connected = False
             self._subscribers.clear()
             logger.info("Functional market data provider disconnected")
         except Exception as e:
-            logger.error(f"Disconnect error: {e}")
+            logger.exception(f"Disconnect error: {e}")
 
     async def fetch_historical_data(
         self,
@@ -128,7 +131,7 @@ class FunctionalMarketDataProvider:
             return []
 
         except Exception as e:
-            logger.error(f"Error fetching historical data: {e}")
+            logger.exception(f"Error fetching historical data: {e}")
             return []
 
     async def fetch_latest_price(self) -> Decimal | None:
@@ -140,7 +143,7 @@ class FunctionalMarketDataProvider:
             logger.warning(f"Failed to get latest price: {result.value}")
             return None
         except Exception as e:
-            logger.error(f"Error fetching latest price: {e}")
+            logger.exception(f"Error fetching latest price: {e}")
             return None
 
     async def fetch_orderbook(self, level: int = 2) -> dict[str, Any] | None:
@@ -157,7 +160,7 @@ class FunctionalMarketDataProvider:
             logger.warning(f"Failed to fetch orderbook: {result.value}")
             return None
         except Exception as e:
-            logger.error(f"Error fetching orderbook: {e}")
+            logger.exception(f"Error fetching orderbook: {e}")
             return None
 
     def get_latest_ohlcv(self, limit: int | None = None) -> list[MarketData]:
@@ -181,7 +184,7 @@ class FunctionalMarketDataProvider:
             logger.warning(f"Failed to get cached OHLCV: {result.value}")
             return []
         except Exception as e:
-            logger.error(f"Error getting cached OHLCV: {e}")
+            logger.exception(f"Error getting cached OHLCV: {e}")
             return []
 
     def get_latest_price(self) -> Decimal | None:
@@ -259,10 +262,10 @@ class FunctionalMarketDataProvider:
                         else:
                             callback(market_data)
                     except Exception as e:
-                        logger.error(f"Error in subscriber callback: {e}")
+                        logger.exception(f"Error in subscriber callback: {e}")
 
         except Exception as e:
-            logger.error(f"Error in real-time streaming: {e}")
+            logger.exception(f"Error in real-time streaming: {e}")
 
     def is_connected(self) -> bool:
         """Check if provider is connected"""

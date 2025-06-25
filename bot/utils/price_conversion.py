@@ -315,7 +315,7 @@ def convert_from_18_decimal(
         if use_circuit_breaker:
             _record_conversion_failure(circuit_key)
             if _should_open_circuit_breaker(circuit_key):
-                logger.error(
+                logger.exception(
                     "Opening circuit breaker for %s after conversion error", circuit_key
                 )
                 _open_circuit_breaker(circuit_key)
@@ -661,7 +661,7 @@ def _sanitize_price_input(value: Any) -> Any:
             return cleaned
 
         # Handle numeric values with enhanced validation
-        if isinstance(value, (int, float, Decimal)):
+        if isinstance(value, int | float | Decimal):
             # Check for NaN, infinity, or obviously corrupted values
             if isinstance(value, float) and (not isfinite(value) or isnan(value)):
                 return None

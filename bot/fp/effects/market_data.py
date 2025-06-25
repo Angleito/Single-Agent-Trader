@@ -9,18 +9,21 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import aiohttp
 import websockets
 
-from ..types.effects import RateLimit, RetryPolicy, WebSocketConnection
-from ..types.market import Candle, MarketDataStream, OrderBook, Subscription, Trade
+from bot.fp.types.effects import RateLimit, RetryPolicy, WebSocketConnection
+from bot.fp.types.market import Candle, MarketDataStream, OrderBook, Subscription, Trade
+
 from .io import IO, AsyncIO, IOEither, from_try
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 
 @dataclass
@@ -42,6 +45,21 @@ class APIConfig:
     headers: dict[str, str]
     rate_limit: RateLimit
     timeout: int = 30
+
+
+@dataclass
+class StreamingConfig:
+    """Configuration for market data streaming"""
+
+    enabled: bool = True
+    max_connections: int = 10
+    reconnect_interval: int = 30
+    buffer_size: int = 1000
+    timeout: int = 60
+    ping_interval: int = 20
+    pong_timeout: int = 10
+    retry_policy: RetryPolicy | None = None
+    rate_limit: RateLimit | None = None
 
 
 # WebSocket Effects
@@ -140,10 +158,10 @@ def reconnect_websocket(
                         retry_policy.delay * (2**attempts)
                     )  # Exponential backoff
 
-            except Exception as e:
+            except Exception:
                 attempts += 1
                 if attempts >= retry_policy.max_attempts:
-                    raise e
+                    raise
 
         raise ConnectionError(
             f"Failed to reconnect after {retry_policy.max_attempts} attempts"
@@ -164,26 +182,28 @@ def fetch_candles(
         url = f"{api_config.base_url}/candles"
         params = {"symbol": symbol, "interval": interval, "limit": limit}
 
-        async with aiohttp.ClientSession(
-            headers=api_config.headers,
-            timeout=aiohttp.ClientTimeout(total=api_config.timeout),
-        ) as session:
-            async with session.get(url, params=params) as response:
-                if response.status != 200:
-                    raise Exception(f"API error: {response.status}")
+        async with (
+            aiohttp.ClientSession(
+                headers=api_config.headers,
+                timeout=aiohttp.ClientTimeout(total=api_config.timeout),
+            ) as session,
+            session.get(url, params=params) as response,
+        ):
+            if response.status != 200:
+                raise Exception(f"API error: {response.status}")
 
-                data = await response.json()
-                return [
-                    Candle(
-                        timestamp=datetime.fromisoformat(item["timestamp"]),
-                        open=Decimal(item["open"]),
-                        high=Decimal(item["high"]),
-                        low=Decimal(item["low"]),
-                        close=Decimal(item["close"]),
-                        volume=Decimal(item["volume"]),
-                    )
-                    for item in data
-                ]
+            data = await response.json()
+            return [
+                Candle(
+                    timestamp=datetime.fromisoformat(item["timestamp"]),
+                    open=Decimal(item["open"]),
+                    high=Decimal(item["high"]),
+                    low=Decimal(item["low"]),
+                    close=Decimal(item["close"]),
+                    volume=Decimal(item["volume"]),
+                )
+                for item in data
+            ]
 
     return from_try(lambda: asyncio.run(fetch()))
 
@@ -197,21 +217,23 @@ def fetch_orderbook(
         url = f"{api_config.base_url}/orderbook"
         params = {"symbol": symbol, "depth": depth}
 
-        async with aiohttp.ClientSession(
-            headers=api_config.headers,
-            timeout=aiohttp.ClientTimeout(total=api_config.timeout),
-        ) as session:
-            async with session.get(url, params=params) as response:
-                if response.status != 200:
-                    raise Exception(f"API error: {response.status}")
+        async with (
+            aiohttp.ClientSession(
+                headers=api_config.headers,
+                timeout=aiohttp.ClientTimeout(total=api_config.timeout),
+            ) as session,
+            session.get(url, params=params) as response,
+        ):
+            if response.status != 200:
+                raise Exception(f"API error: {response.status}")
 
-                data = await response.json()
-                return OrderBook(
-                    symbol=symbol,
-                    timestamp=datetime.utcnow(),
-                    bids=[(Decimal(p), Decimal(s)) for p, s in data["bids"]],
-                    asks=[(Decimal(p), Decimal(s)) for p, s in data["asks"]],
-                )
+            data = await response.json()
+            return OrderBook(
+                symbol=symbol,
+                timestamp=datetime.utcnow(),
+                bids=[(Decimal(p), Decimal(s)) for p, s in data["bids"]],
+                asks=[(Decimal(p), Decimal(s)) for p, s in data["asks"]],
+            )
 
     return from_try(lambda: asyncio.run(fetch()))
 
@@ -225,25 +247,27 @@ def fetch_recent_trades(
         url = f"{api_config.base_url}/trades"
         params = {"symbol": symbol, "limit": limit}
 
-        async with aiohttp.ClientSession(
-            headers=api_config.headers,
-            timeout=aiohttp.ClientTimeout(total=api_config.timeout),
-        ) as session:
-            async with session.get(url, params=params) as response:
-                if response.status != 200:
-                    raise Exception(f"API error: {response.status}")
+        async with (
+            aiohttp.ClientSession(
+                headers=api_config.headers,
+                timeout=aiohttp.ClientTimeout(total=api_config.timeout),
+            ) as session,
+            session.get(url, params=params) as response,
+        ):
+            if response.status != 200:
+                raise Exception(f"API error: {response.status}")
 
-                data = await response.json()
-                return [
-                    Trade(
-                        id=item["id"],
-                        timestamp=datetime.fromisoformat(item["timestamp"]),
-                        price=Decimal(item["price"]),
-                        size=Decimal(item["size"]),
-                        side=item["side"],
-                    )
-                    for item in data
-                ]
+            data = await response.json()
+            return [
+                Trade(
+                    id=item["id"],
+                    timestamp=datetime.fromisoformat(item["timestamp"]),
+                    price=Decimal(item["price"]),
+                    size=Decimal(item["size"]),
+                    side=item["side"],
+                )
+                for item in data
+            ]
 
     return from_try(lambda: asyncio.run(fetch()))
 
@@ -334,11 +358,13 @@ def check_api_health(api_config: APIConfig) -> IOEither[Exception, bool]:
     async def check():
         url = f"{api_config.base_url}/health"
 
-        async with aiohttp.ClientSession(
-            headers=api_config.headers, timeout=aiohttp.ClientTimeout(total=5)
-        ) as session:
-            async with session.get(url) as response:
-                return response.status == 200
+        async with (
+            aiohttp.ClientSession(
+                headers=api_config.headers, timeout=aiohttp.ClientTimeout(total=5)
+            ) as session,
+            session.get(url) as response,
+        ):
+            return response.status == 200
 
     return from_try(lambda: asyncio.run(check()))
 

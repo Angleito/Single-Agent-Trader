@@ -460,8 +460,7 @@ def calculate_position_size(
         return Decimal(0)
 
     risk_amount = balance * risk_per_trade / Decimal(100)
-    position_size = risk_amount / (stop_loss_pct / Decimal(100))
-    return position_size
+    return risk_amount / (stop_loss_pct / Decimal(100))
 
 
 def calculate_margin_ratio(used_margin: Decimal, total_balance: Decimal) -> Decimal:
@@ -709,7 +708,7 @@ def record_circuit_breaker_failure(
         timeout_seconds=state.timeout_seconds,
         last_failure_time=timestamp,
         consecutive_successes=0,
-        failure_history=state.failure_history + (failure_record,),
+        failure_history=(*state.failure_history, failure_record),
     )
 
 
@@ -1288,3 +1287,227 @@ def check_advanced_risk_alerts(
         )
 
     return alerts
+
+
+# Additional Factory Functions for Test Compatibility
+
+
+def create_risk_parameters(
+    max_position_size: Decimal = Decimal("25.0"),
+    max_leverage: Decimal = Decimal("5.0"),
+    stop_loss_pct: Decimal = Decimal("2.0"),
+    take_profit_pct: Decimal = Decimal("4.0"),
+) -> RiskParameters:
+    """Create risk parameters with default values."""
+    return RiskParameters(
+        max_position_size=max_position_size,
+        max_leverage=max_leverage,
+        stop_loss_pct=stop_loss_pct,
+        take_profit_pct=take_profit_pct,
+    )
+
+
+def create_risk_state(
+    account_balance: Decimal = Decimal("10000.0"),
+    positions: list[dict[str, any]] | None = None,
+    current_leverage: Decimal = Decimal("1.0"),
+    volatility: float = 0.02,
+    win_rate: float = 0.6,
+    consecutive_losses: int = 0,
+    margin_usage_pct: float = 0.0,
+    peak_balance: Decimal | None = None,
+) -> ComprehensiveRiskState:
+    """Create a comprehensive risk state for testing."""
+    if positions is None:
+        positions = []
+    if peak_balance is None:
+        peak_balance = account_balance
+
+    return create_comprehensive_risk_state(
+        account_balance=account_balance,
+        positions=positions,
+        current_leverage=current_leverage,
+        volatility=volatility,
+        win_rate=win_rate,
+        consecutive_losses=consecutive_losses,
+        margin_usage_pct=margin_usage_pct,
+        peak_balance=peak_balance,
+    )
+
+
+def create_circuit_breaker(
+    failure_threshold: int = 5,
+    timeout_seconds: int = 300,
+) -> CircuitBreakerState:
+    """Create a circuit breaker with specified configuration."""
+    return create_circuit_breaker_state(
+        failure_threshold=failure_threshold,
+        timeout_seconds=timeout_seconds,
+    )
+
+
+def validate_position_risk(
+    position_size: Decimal,
+    entry_price: Decimal,
+    stop_loss_price: Decimal,
+    account_balance: Decimal,
+    max_risk_pct: Decimal = Decimal("2.0"),
+) -> tuple[bool, str]:
+    """
+    Validate position risk against account balance and risk limits.
+
+    Args:
+        position_size: Size of the position
+        entry_price: Entry price of the position
+        stop_loss_price: Stop loss price
+        account_balance: Account balance
+        max_risk_pct: Maximum risk percentage allowed
+
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    try:
+        if position_size <= 0:
+            return False, "Position size must be positive"
+
+        if entry_price <= 0:
+            return False, "Entry price must be positive"
+
+        if stop_loss_price <= 0:
+            return False, "Stop loss price must be positive"
+
+        if account_balance <= 0:
+            return False, "Account balance must be positive"
+
+        # Calculate risk amount
+        risk_amount = position_size * abs(entry_price - stop_loss_price)
+
+        # Calculate risk percentage
+        risk_percentage = (risk_amount / account_balance) * Decimal("100.0")
+
+        if risk_percentage > max_risk_pct:
+            return (
+                False,
+                f"Risk {risk_percentage:.2f}% exceeds maximum allowed {max_risk_pct}%",
+            )
+
+        return True, "Position risk validated successfully"
+
+    except Exception as e:
+        return False, f"Risk validation error: {e}"
+
+
+def check_emergency_conditions(
+    risk_state: ComprehensiveRiskState,
+    emergency_thresholds: dict[str, float] | None = None,
+) -> tuple[bool, list[str]]:
+    """
+    Check for emergency conditions that would trigger automatic trading stops.
+
+    Args:
+        risk_state: Current comprehensive risk state
+        emergency_thresholds: Custom emergency thresholds
+
+    Returns:
+        Tuple of (should_trigger_emergency_stop, list_of_reasons)
+    """
+    if emergency_thresholds is None:
+        emergency_thresholds = {
+            "max_drawdown_pct": 20.0,  # 20% max drawdown
+            "max_leverage": 15.0,  # 15x max leverage
+            "max_portfolio_heat": 20.0,  # 20% max portfolio heat
+            "max_consecutive_losses": 7,  # 7 consecutive losses
+            "max_margin_usage": 95.0,  # 95% margin usage
+            "critical_risk_score": 80.0,  # Risk score threshold
+        }
+
+    emergency_reasons = []
+
+    # Check drawdown
+    if (
+        risk_state.risk_metrics.drawdown_analysis.current_drawdown_pct
+        > emergency_thresholds["max_drawdown_pct"]
+    ):
+        emergency_reasons.append(
+            f"Excessive drawdown: {risk_state.risk_metrics.drawdown_analysis.current_drawdown_pct:.1f}% > {emergency_thresholds['max_drawdown_pct']}%"
+        )
+
+    # Check leverage
+    current_leverage = float(risk_state.risk_metrics.leverage_analysis.current_leverage)
+    if current_leverage > emergency_thresholds["max_leverage"]:
+        emergency_reasons.append(
+            f"Excessive leverage: {current_leverage:.1f}x > {emergency_thresholds['max_leverage']}x"
+        )
+
+    # Check portfolio heat
+    if (
+        risk_state.risk_metrics.portfolio_exposure.portfolio_heat
+        > emergency_thresholds["max_portfolio_heat"]
+    ):
+        emergency_reasons.append(
+            f"Excessive portfolio heat: {risk_state.risk_metrics.portfolio_exposure.portfolio_heat:.1f}% > {emergency_thresholds['max_portfolio_heat']}%"
+        )
+
+    # Check consecutive losses
+    if (
+        risk_state.risk_metrics.consecutive_losses
+        > emergency_thresholds["max_consecutive_losses"]
+    ):
+        emergency_reasons.append(
+            f"Too many consecutive losses: {risk_state.risk_metrics.consecutive_losses} > {emergency_thresholds['max_consecutive_losses']}"
+        )
+
+    # Check margin usage
+    if (
+        risk_state.risk_metrics.margin_usage_pct
+        > emergency_thresholds["max_margin_usage"]
+    ):
+        emergency_reasons.append(
+            f"Excessive margin usage: {risk_state.risk_metrics.margin_usage_pct:.1f}% > {emergency_thresholds['max_margin_usage']}%"
+        )
+
+    # Check overall risk score
+    overall_risk_score = risk_state.risk_metrics.overall_risk_score
+    if overall_risk_score > emergency_thresholds["critical_risk_score"]:
+        emergency_reasons.append(
+            f"Critical risk score: {overall_risk_score:.1f} > {emergency_thresholds['critical_risk_score']}"
+        )
+
+    # Check if emergency stop is already triggered
+    if risk_state.emergency_stop.is_stopped:
+        emergency_reasons.append("Emergency stop already active")
+
+    # Check if circuit breaker is open
+    if risk_state.circuit_breaker.is_open:
+        emergency_reasons.append("Circuit breaker is open")
+
+    # Check if API protection is unhealthy
+    if not risk_state.api_protection.is_healthy:
+        emergency_reasons.append("API protection is unhealthy")
+
+    should_trigger = len(emergency_reasons) > 0
+    return should_trigger, emergency_reasons
+
+
+# Additional Types for Test Compatibility
+
+
+@dataclass(frozen=True)
+class DrawdownLimits:
+    """Drawdown limits for risk management."""
+
+    max_daily_drawdown_pct: float = 5.0
+    max_total_drawdown_pct: float = 15.0
+    max_consecutive_losses: int = 5
+    recovery_threshold_pct: float = 2.0  # Required recovery before resuming
+
+    def __post_init__(self):
+        """Validate drawdown limits."""
+        if self.max_daily_drawdown_pct <= 0 or self.max_daily_drawdown_pct > 50:
+            raise ValueError("Max daily drawdown must be between 0 and 50%")
+        if self.max_total_drawdown_pct <= 0 or self.max_total_drawdown_pct > 90:
+            raise ValueError("Max total drawdown must be between 0 and 90%")
+        if self.max_consecutive_losses < 1 or self.max_consecutive_losses > 20:
+            raise ValueError("Max consecutive losses must be between 1 and 20")
+        if self.recovery_threshold_pct < 0 or self.recovery_threshold_pct > 10:
+            raise ValueError("Recovery threshold must be between 0 and 10%")

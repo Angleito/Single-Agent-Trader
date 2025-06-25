@@ -544,9 +544,7 @@ class BalanceOperationMonitor:
             self.cross_component_errors = [
                 correlation
                 for correlation in self.cross_component_errors
-                if datetime.fromisoformat(
-                    correlation["detected_at"].replace("Z", "+00:00")
-                ).timestamp()
+                if datetime.fromisoformat(correlation["detected_at"]).timestamp()
                 > cutoff_time
             ]
 

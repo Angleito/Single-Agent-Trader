@@ -12,8 +12,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Literal, Union
 
-from bot.fp.types.base import Money, Percentage, Symbol, TimeInterval, TradingMode
-from bot.fp.types.result import Failure, Result, Success
+from .base import Money, Percentage, Symbol, TimeInterval, TradingMode
+from .result import Failure, Result, Success
 
 
 # Opaque types for sensitive data
@@ -476,7 +476,7 @@ def parse_bool_env(key: str, default: bool = False) -> bool:
 def parse_int_env(key: str, default: int) -> Result[int, str]:
     """Parse integer environment variable."""
     value = parse_env_var(key)
-    if value is None:
+    if value is None or value == "":
         return Success(default)
     try:
         return Success(int(value))
@@ -487,7 +487,7 @@ def parse_int_env(key: str, default: int) -> Result[int, str]:
 def parse_float_env(key: str, default: float) -> Result[float, str]:
     """Parse float environment variable."""
     value = parse_env_var(key)
-    if value is None:
+    if value is None or value == "":
         return Success(default)
     try:
         return Success(float(value))
@@ -591,11 +591,11 @@ def build_exchange_config_from_env() -> Result[ExchangeConfig, str]:
     if isinstance(rps, Failure):
         return rps
 
-    rpm = parse_int_env("RATE_LIMIT_RPM", 100)
+    rpm = parse_int_env("RATE_LIMIT_RPM", 600)
     if isinstance(rpm, Failure):
         return rpm
 
-    rph = parse_int_env("RATE_LIMIT_RPH", 1000)
+    rph = parse_int_env("RATE_LIMIT_RPH", 36000)
     if isinstance(rph, Failure):
         return rph
 
@@ -813,12 +813,10 @@ def validate_config(config: Config) -> Result[Config, str]:
             )
 
     # Check exchange-specific validations
-    if isinstance(config.exchange, BluefinExchangeConfig):
-        if (
-            config.exchange.network == "testnet"
-            and config.system.mode == TradingMode.LIVE
-        ):
-            return Failure("Cannot use testnet for live trading")
+    if isinstance(config.exchange, BluefinExchangeConfig) and (
+        config.exchange.network == "testnet" and config.system.mode == TradingMode.LIVE
+    ):
+        return Failure("Cannot use testnet for live trading")
 
     # Check backtest validations
     if config.backtest and config.system.mode != TradingMode.BACKTEST:

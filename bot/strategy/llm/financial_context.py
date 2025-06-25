@@ -107,7 +107,7 @@ class FinancialContextProvider:
             return "No financial context available from OmniSearch"
 
         except Exception as e:
-            logger.error(f"Error getting financial context: {e}")
+            logger.exception(f"Error getting financial context: {e}")
             return f"Error retrieving financial context: {e!s}"
 
     async def _get_crypto_sentiment(self, base_symbol: str) -> str:

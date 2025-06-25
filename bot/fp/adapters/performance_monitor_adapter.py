@@ -10,16 +10,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
-from ...performance_monitor import (
-    PerformanceMonitor,
-)
-from ..effects.io import IO
-from ..effects.monitoring import (
+from bot.fp.effects.io import IO
+from bot.fp.effects.monitoring import (
     Alert,
     HealthCheck,
     MetricPoint,
@@ -35,6 +31,11 @@ from ..effects.monitoring import (
     send_alert,
     system_health_check,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from bot.performance_monitor import PerformanceMonitor
 
 logger = logging.getLogger(__name__)
 
@@ -675,7 +676,7 @@ class FunctionalPerformanceMonitor:
                     await asyncio.sleep(interval_seconds)
 
                 except Exception as e:
-                    logger.error(f"Error in functional monitoring loop: {e}")
+                    logger.exception(f"Error in functional monitoring loop: {e}")
                     await asyncio.sleep(interval_seconds)
 
         # Start the monitoring loop

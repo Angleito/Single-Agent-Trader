@@ -11,7 +11,7 @@ class LoggerProtocol(Protocol):
     def __call__(self, msg: str, *args: Any) -> None: ...
 
 
-def ensure_numeric(*indices: int):
+def ensure_numeric(*indices: int) -> Any:
     """Decorator to ensure arguments at specific indices are numeric."""
 
     def decorator(func: LoggerProtocol) -> LoggerProtocol:

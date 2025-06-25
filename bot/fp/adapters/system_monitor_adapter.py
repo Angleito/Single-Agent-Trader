@@ -15,19 +15,19 @@ from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any, Protocol
 
-from ...system_monitor import (
-    ErrorRecoveryManager,
-    RecoveryStrategy,
-    SystemHealthMonitor,
-)
-from ..effects.io import IO
-from ..effects.monitoring import (
+from bot.fp.effects.io import IO
+from bot.fp.effects.monitoring import (
     HealthCheck,
     HealthStatus,
     SystemMetrics,
     batch_health_checks,
     collect_system_metrics,
     system_health_check,
+)
+from bot.system_monitor import (
+    ErrorRecoveryManager,
+    RecoveryStrategy,
+    SystemHealthMonitor,
 )
 
 logger = logging.getLogger(__name__)
@@ -465,7 +465,9 @@ class FunctionalSystemMonitor:
             logger.warning(f"Unknown recovery strategy: {strategy}")
             return False
         except Exception as e:
-            logger.error(f"Error executing strategy {strategy} for {component}: {e}")
+            logger.exception(
+                f"Error executing strategy {strategy} for {component}: {e}"
+            )
             return False
 
     def _clear_cache_strategy(self, component: str, context: dict[str, Any]) -> bool:
@@ -682,7 +684,7 @@ class FunctionalSystemMonitor:
                     await asyncio.sleep(interval)
 
                 except Exception as e:
-                    logger.error(f"Error in functional monitoring loop: {e}")
+                    logger.exception(f"Error in functional monitoring loop: {e}")
                     await asyncio.sleep(interval)
 
         # Start the monitoring loop
@@ -727,7 +729,7 @@ class FunctionalSystemMonitor:
                         )
 
             except Exception as e:
-                logger.error(f"Error handling critical issue '{issue}': {e}")
+                logger.exception(f"Error handling critical issue '{issue}': {e}")
 
     def get_latest_health_state(self) -> HealthState | None:
         """Get the most recent health state"""
@@ -971,7 +973,7 @@ class MemoryRecoveryProvider(RecoveryProvider):
                 logger.info("Executed memory garbage collection")
                 return RecoveryResult.SUCCESS
             except Exception as e:
-                logger.error(f"Memory recovery failed: {e}")
+                logger.exception(f"Memory recovery failed: {e}")
                 return RecoveryResult.FAILURE
 
         return IO(recover_memory)
@@ -987,7 +989,7 @@ class DiskRecoveryProvider(RecoveryProvider):
                 logger.info("Executed disk cleanup (simulated)")
                 return RecoveryResult.SUCCESS
             except Exception as e:
-                logger.error(f"Disk recovery failed: {e}")
+                logger.exception(f"Disk recovery failed: {e}")
                 return RecoveryResult.FAILURE
 
         return IO(recover_disk)
@@ -1003,7 +1005,7 @@ class ServiceRecoveryProvider(RecoveryProvider):
                 logger.info("Executed service restart (simulated)")
                 return RecoveryResult.SUCCESS
             except Exception as e:
-                logger.error(f"Service recovery failed: {e}")
+                logger.exception(f"Service recovery failed: {e}")
                 return RecoveryResult.FAILURE
 
         return IO(recover_service)
@@ -1019,7 +1021,7 @@ class NetworkRecoveryProvider(RecoveryProvider):
                 logger.info("Executed network reset (simulated)")
                 return RecoveryResult.SUCCESS
             except Exception as e:
-                logger.error(f"Network recovery failed: {e}")
+                logger.exception(f"Network recovery failed: {e}")
                 return RecoveryResult.FAILURE
 
         return IO(recover_network)

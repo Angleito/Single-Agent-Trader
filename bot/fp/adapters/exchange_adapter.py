@@ -9,10 +9,11 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
-from ..effects.io import IOEither
-from ..types.trading import AccountBalance, Order, OrderResult, Position
+if TYPE_CHECKING:
+    from bot.fp.effects.io import IOEither
+    from bot.fp.types.trading import AccountBalance, Order, OrderResult, Position
 
 
 class ExchangeAdapter(Protocol):

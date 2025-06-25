@@ -8,19 +8,22 @@ functional data layer capabilities alongside the existing imperative system.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
-from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from ...config import settings
-from ..adapters.enhanced_market_data_adapter import (
+from bot.config import settings
+from bot.fp.adapters.enhanced_market_data_adapter import (
     EnhancedFunctionalMarketDataAdapter,
     create_enhanced_market_data_adapter,
 )
-from ..types.market import Candle, MarketSnapshot
-from ..types.result import Result
+from bot.fp.types.market import Candle, MarketSnapshot
+from bot.fp.types.result import Result
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 logger = logging.getLogger(__name__)
 
@@ -98,20 +101,20 @@ class EnhancedDataRuntime:
             return Result.ok(True)
 
         except Exception as e:
-            logger.error(f"Failed to initialize enhanced data runtime: {e}")
+            logger.exception(f"Failed to initialize enhanced data runtime: {e}")
             return Result.error(str(e))
 
     async def _setup_fallback_provider(self) -> None:
         """Set up fallback imperative provider"""
         try:
             if self.config.exchange_type == "bluefin":
-                from ...data.bluefin_market import BluefinMarketDataProvider
+                from bot.data.bluefin_market import BluefinMarketDataProvider
 
                 self._fallback_provider = BluefinMarketDataProvider(
                     symbol=self.config.symbol, interval=self.config.interval
                 )
             else:
-                from ...data.market import MarketDataProvider
+                from bot.data.market import MarketDataProvider
 
                 self._fallback_provider = MarketDataProvider(
                     symbol=self.config.symbol, interval=self.config.interval
@@ -121,7 +124,7 @@ class EnhancedDataRuntime:
             logger.info("Fallback provider connected successfully")
 
         except Exception as e:
-            logger.error(f"Failed to setup fallback provider: {e}")
+            logger.exception(f"Failed to setup fallback provider: {e}")
 
     async def shutdown(self) -> None:
         """Shutdown the enhanced data runtime"""
@@ -132,10 +135,8 @@ class EnhancedDataRuntime:
         # Cancel background tasks
         if self._optimization_task and not self._optimization_task.done():
             self._optimization_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._optimization_task
-            except asyncio.CancelledError:
-                pass
 
         # Disconnect adapters
         if self._enhanced_adapter:
@@ -180,7 +181,7 @@ class EnhancedDataRuntime:
             return Result.error("No data providers available")
 
         except Exception as e:
-            logger.error(f"Error getting historical data: {e}")
+            logger.exception(f"Error getting historical data: {e}")
             return Result.error(str(e))
 
     async def stream_market_data_enhanced(self) -> AsyncIterator[MarketSnapshot]:
@@ -196,7 +197,7 @@ class EnhancedDataRuntime:
                     yield snapshot
 
             except Exception as e:
-                logger.error(f"Enhanced stream failed: {e}")
+                logger.exception(f"Enhanced stream failed: {e}")
 
                 # Fallback to imperative stream if available
                 if self._fallback_provider:
@@ -233,7 +234,7 @@ class EnhancedDataRuntime:
                     logger.warning("Fallback stream queue full")
 
             except Exception as e:
-                logger.error(f"Error in fallback stream: {e}")
+                logger.exception(f"Error in fallback stream: {e}")
 
         self._fallback_provider.subscribe_to_updates(on_fallback_update)
 
@@ -246,7 +247,7 @@ class EnhancedDataRuntime:
                     break
                 continue
             except Exception as e:
-                logger.error(f"Error in fallback streaming: {e}")
+                logger.exception(f"Error in fallback streaming: {e}")
                 break
 
     def get_aggregated_candles_enhanced(
@@ -283,7 +284,7 @@ class EnhancedDataRuntime:
             return Result.error("No aggregation providers available")
 
         except Exception as e:
-            logger.error(f"Error getting aggregated candles: {e}")
+            logger.exception(f"Error getting aggregated candles: {e}")
             return Result.error(str(e))
 
     # Performance Monitoring and Optimization
@@ -297,7 +298,7 @@ class EnhancedDataRuntime:
                     await self._collect_performance_metrics()
                     await asyncio.sleep(30)  # Monitor every 30 seconds
                 except Exception as e:
-                    logger.error(f"Performance monitoring error: {e}")
+                    logger.exception(f"Performance monitoring error: {e}")
                     await asyncio.sleep(60)  # Wait longer on error
 
         asyncio.create_task(monitor_performance())
@@ -314,7 +315,7 @@ class EnhancedDataRuntime:
                     )
                     await self._run_automatic_optimization()
                 except Exception as e:
-                    logger.error(f"Automatic optimization error: {e}")
+                    logger.exception(f"Automatic optimization error: {e}")
 
         self._optimization_task = asyncio.create_task(optimize_performance())
         logger.info("Automatic optimization started")
@@ -366,7 +367,7 @@ class EnhancedDataRuntime:
             await self._check_performance_mode_optimization()
 
         except Exception as e:
-            logger.error(f"Automatic optimization failed: {e}")
+            logger.exception(f"Automatic optimization failed: {e}")
 
     async def _check_performance_mode_optimization(self) -> None:
         """Check if performance mode should be optimized based on metrics"""
@@ -391,7 +392,7 @@ class EnhancedDataRuntime:
                 )
 
         except Exception as e:
-            logger.error(f"Performance mode optimization check failed: {e}")
+            logger.exception(f"Performance mode optimization check failed: {e}")
 
     # Status and Diagnostics
 

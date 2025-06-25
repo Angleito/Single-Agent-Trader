@@ -60,39 +60,39 @@ try:
 
     # Enhanced export list with functional components
     __all__ = [
+        # Status flag
+        "FUNCTIONAL_VALIDATION_AVAILABLE",
         # Legacy validation (preserved)
         "BalanceValidationError",
         "BalanceValidator",
+        "CrossFieldRule",
+        "ExecutionMode",
+        # Data integrity
+        "FunctionalIntegrityValidator",
+        # Validation pipelines
+        "FunctionalValidationPipeline",
+        "IntegrityLevel",
+        "IntegrityRule",
+        "IntegrityViolationType",
+        "PipelineMetrics",
+        "PipelineResult",
+        "PipelineStage",
+        "create_market_data_pipeline",
+        "create_trade_action_pipeline",
+        "functional_balance_validator",
+        "functional_chain_validator",
+        "functional_percentage_validator",
+        "functional_pipeline_validator",
+        "functional_position_validator",
+        "functional_trade_action_validator",
+        # Enhanced functional validation
+        "functional_validator",
         "validate_balance",
         "validate_percentage",
         "validate_position",
-        "validate_trade_action",
-        # Enhanced functional validation
-        "functional_validator",
-        "functional_chain_validator",
-        "functional_balance_validator",
-        "functional_trade_action_validator",
-        "functional_position_validator",
-        "functional_percentage_validator",
-        "functional_pipeline_validator",
-        # Data integrity
-        "FunctionalIntegrityValidator",
-        "IntegrityLevel",
-        "IntegrityViolationType",
-        "IntegrityRule",
-        "CrossFieldRule",
-        "validate_temporal_sequence",
         "validate_temporal_gaps",
-        # Validation pipelines
-        "FunctionalValidationPipeline",
-        "PipelineStage",
-        "ExecutionMode",
-        "PipelineResult",
-        "PipelineMetrics",
-        "create_trade_action_pipeline",
-        "create_market_data_pipeline",
-        # Status flag
-        "FUNCTIONAL_VALIDATION_AVAILABLE",
+        "validate_temporal_sequence",
+        "validate_trade_action",
     ]
 
 except ImportError:

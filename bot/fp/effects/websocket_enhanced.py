@@ -10,16 +10,18 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import websockets
 from websockets.exceptions import ConnectionClosed
 
 from .io import IO, AsyncIO, IOEither, from_try
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -163,8 +165,8 @@ class EnhancedWebSocketManager:
                     self._metrics = self._metrics._replace(
                         connection_state=ConnectionState.FAILED
                     )
-                    logger.error(f"Failed to establish WebSocket connection: {e}")
-                    raise e
+                    logger.exception(f"Failed to establish WebSocket connection: {e}")
+                    raise
 
         return from_try(lambda: asyncio.run(establish_connection()))
 
@@ -262,11 +264,11 @@ class EnhancedWebSocketManager:
                 return True
 
             except TimeoutError:
-                logger.error("Message send timeout")
+                logger.exception("Message send timeout")
                 raise TimeoutError("Message send timeout")
             except Exception as e:
-                logger.error(f"Failed to send message: {e}")
-                raise e
+                logger.exception(f"Failed to send message: {e}")
+                raise
 
         return from_try(lambda: asyncio.run(send()))
 
@@ -317,7 +319,7 @@ class EnhancedWebSocketManager:
                     except TimeoutError:
                         continue
                     except Exception as e:
-                        logger.error(f"Error in message stream: {e}")
+                        logger.exception(f"Error in message stream: {e}")
                         break
 
             return message_stream()
@@ -359,7 +361,7 @@ class EnhancedWebSocketManager:
                 except json.JSONDecodeError as e:
                     logger.warning(f"Failed to parse message: {e}")
                 except Exception as e:
-                    logger.error(f"Error processing message: {e}")
+                    logger.exception(f"Error processing message: {e}")
 
         except ConnectionClosed:
             logger.warning("WebSocket connection closed, attempting reconnection")
@@ -367,7 +369,7 @@ class EnhancedWebSocketManager:
                 # Attempt automatic reconnection
                 asyncio.create_task(self._auto_reconnect())
         except Exception as e:
-            logger.error(f"Message processor error: {e}")
+            logger.exception(f"Message processor error: {e}")
 
     async def _auto_reconnect(self) -> None:
         """Automatic reconnection handler"""
@@ -385,7 +387,7 @@ class EnhancedWebSocketManager:
                 try:
                     callback(message)
                 except Exception as e:
-                    logger.error(f"Error in message callback: {e}")
+                    logger.exception(f"Error in message callback: {e}")
 
     def _generate_message_id(self) -> str:
         """Generate unique message ID"""

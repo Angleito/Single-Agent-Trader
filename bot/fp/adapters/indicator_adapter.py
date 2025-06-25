@@ -11,10 +11,7 @@ from collections.abc import Callable
 
 import pandas as pd
 
-from bot.indicators.vumanchu import VuManchuCipher
-from bot.trading_types import IndicatorData as CurrentIndicatorData
-
-from ..types.indicators import (
+from bot.fp.types.indicators import (
     BollingerBandsResult,
     IndicatorConfig,
     IndicatorResult,
@@ -26,7 +23,10 @@ from ..types.indicators import (
     TimeSeries,
     VuManchuResult,
 )
-from ..types.market import Candle as FPCandle
+from bot.fp.types.market import Candle as FPCandle
+from bot.indicators.vumanchu import VuManchuCipher
+from bot.trading_types import IndicatorData as CurrentIndicatorData
+
 from .type_converters import (
     convert_fp_candle_list_to_current,
 )
@@ -141,7 +141,7 @@ class FunctionalIndicatorProcessor:
             return results
 
         except Exception as e:
-            logger.error(f"Error processing indicators: {e}")
+            logger.exception(f"Error processing indicators: {e}")
             return {}
 
     def _create_dataframe(self, candles) -> pd.DataFrame:
@@ -163,7 +163,7 @@ class FunctionalIndicatorProcessor:
             )
 
         df = pd.DataFrame(data)
-        df.set_index("timestamp", inplace=True)
+        df = df.set_index("timestamp")
         return df.sort_index()
 
     def _calculate_vumanchu(self, df: pd.DataFrame) -> VuManchuResult | None:
@@ -186,7 +186,7 @@ class FunctionalIndicatorProcessor:
             )
 
         except Exception as e:
-            logger.error(f"Error calculating VuManchu: {e}")
+            logger.exception(f"Error calculating VuManchu: {e}")
             return None
 
     def _calculate_moving_average(self, df: pd.DataFrame) -> MovingAverageResult | None:
@@ -212,7 +212,7 @@ class FunctionalIndicatorProcessor:
             )
 
         except Exception as e:
-            logger.error(f"Error calculating Moving Average: {e}")
+            logger.exception(f"Error calculating Moving Average: {e}")
             return None
 
     def _calculate_rsi(self, df: pd.DataFrame) -> RSIResult | None:
@@ -248,7 +248,7 @@ class FunctionalIndicatorProcessor:
             )
 
         except Exception as e:
-            logger.error(f"Error calculating RSI: {e}")
+            logger.exception(f"Error calculating RSI: {e}")
             return None
 
     def _calculate_macd(self, df: pd.DataFrame) -> MACDResult | None:
@@ -279,7 +279,7 @@ class FunctionalIndicatorProcessor:
             )
 
         except Exception as e:
-            logger.error(f"Error calculating MACD: {e}")
+            logger.exception(f"Error calculating MACD: {e}")
             return None
 
     def _calculate_bollinger_bands(
@@ -311,7 +311,7 @@ class FunctionalIndicatorProcessor:
             )
 
         except Exception as e:
-            logger.error(f"Error calculating Bollinger Bands: {e}")
+            logger.exception(f"Error calculating Bollinger Bands: {e}")
             return None
 
     def _calculate_stochastic(self, df: pd.DataFrame) -> StochasticResult | None:
@@ -347,7 +347,7 @@ class FunctionalIndicatorProcessor:
             )
 
         except Exception as e:
-            logger.error(f"Error calculating Stochastic: {e}")
+            logger.exception(f"Error calculating Stochastic: {e}")
             return None
 
     def _calculate_roc(self, df: pd.DataFrame) -> ROCResult | None:
@@ -372,7 +372,7 @@ class FunctionalIndicatorProcessor:
             )
 
         except Exception as e:
-            logger.error(f"Error calculating ROC: {e}")
+            logger.exception(f"Error calculating ROC: {e}")
             return None
 
     def _store_result(self, indicator_name: str, result: IndicatorResult) -> None:
@@ -394,7 +394,7 @@ class FunctionalIndicatorProcessor:
             try:
                 callback(indicator_name, result)
             except Exception as e:
-                logger.error(f"Error in indicator callback: {e}")
+                logger.exception(f"Error in indicator callback: {e}")
 
     # Callback management
 
@@ -464,7 +464,7 @@ def convert_to_current_indicators(
     vumanchu = fp_results.get("vumanchu")
     ma = fp_results.get("moving_average")
     rsi = fp_results.get("rsi")
-    macd = fp_results.get("macd")
+    fp_results.get("macd")
 
     return CurrentIndicatorData(
         timestamp=datetime.now(UTC),

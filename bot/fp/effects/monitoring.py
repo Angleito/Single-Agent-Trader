@@ -9,16 +9,18 @@ All operations are pure functions that return IO effects for execution.
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import psutil
 
 from .io import IO
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 A = TypeVar("A")
 B = TypeVar("B")

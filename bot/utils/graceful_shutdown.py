@@ -41,7 +41,7 @@ class GracefulShutdown:
             self.exchange = await exchange_factory.create()
             logger.info(f"Connected to {self.config.exchange.exchange_type} exchange")
         except Exception as e:
-            logger.error(f"Failed to initialize exchange: {e}")
+            logger.exception(f"Failed to initialize exchange: {e}")
             raise
 
     async def get_open_positions(self) -> list:
@@ -51,7 +51,7 @@ class GracefulShutdown:
             logger.info(f"Found {len(positions)} open positions")
             return positions
         except Exception as e:
-            logger.error(f"Failed to get open positions: {e}")
+            logger.exception(f"Failed to get open positions: {e}")
             return []
 
     async def close_position(self, position: dict[str, Any]) -> bool:
@@ -83,7 +83,7 @@ class GracefulShutdown:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to close position {position}: {e}")
+            logger.exception(f"Failed to close position {position}: {e}")
             return False
 
     async def save_state(self, positions: list):
@@ -106,7 +106,7 @@ class GracefulShutdown:
             logger.info(f"State saved to {self.state_file}")
 
         except Exception as e:
-            logger.error(f"Failed to save state: {e}")
+            logger.exception(f"Failed to save state: {e}")
 
     async def cancel_open_orders(self) -> int:
         """Cancel all open orders."""
@@ -122,13 +122,13 @@ class GracefulShutdown:
                         cancelled += 1
                         logger.info(f"Cancelled order: {order_id}")
                 except Exception as e:
-                    logger.error(f"Failed to cancel order {order}: {e}")
+                    logger.exception(f"Failed to cancel order {order}: {e}")
 
             logger.info(f"Cancelled {cancelled} open orders")
             return cancelled
 
         except Exception as e:
-            logger.error(f"Failed to get/cancel open orders: {e}")
+            logger.exception(f"Failed to get/cancel open orders: {e}")
             return 0
 
     async def shutdown(self) -> bool:
@@ -173,7 +173,7 @@ class GracefulShutdown:
             return failed == 0
 
         except Exception as e:
-            logger.error(f"Graceful shutdown failed: {e}")
+            logger.exception(f"Graceful shutdown failed: {e}")
             return False
         finally:
             # Cleanup

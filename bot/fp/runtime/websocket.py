@@ -13,15 +13,15 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from ..effects.error import RetryPolicy, retry
-from ..effects.io import IO, AsyncIO
-from ..effects.logging import error, info, warn
-from ..effects.market_data import (
+from bot.fp.effects.error import RetryPolicy, retry
+from bot.fp.effects.io import IO, AsyncIO
+from bot.fp.effects.logging import error, info, warn
+from bot.fp.effects.market_data import (
     ConnectionConfig,
     connect_websocket,
     subscribe_to_symbol,
 )
-from ..effects.monitoring import increment_counter
+from bot.fp.effects.monitoring import increment_counter
 
 
 @dataclass
@@ -61,7 +61,7 @@ class WebSocketManager:
         """Connect all configured WebSocket connections"""
 
         def connect():
-            for name, conn_info in self.connections.items():
+            for name, _conn_info in self.connections.items():
                 try:
                     self.connect_single(name).run()
                 except Exception as e:
@@ -205,7 +205,7 @@ class WebSocketManager:
 
             # Resubscribe to channels
             if connection_name in self.subscriptions:
-                for channel in self.subscriptions[connection_name]:
+                for _channel in self.subscriptions[connection_name]:
                     # Re-subscribe logic would go here
                     pass
 
@@ -306,7 +306,7 @@ class WebSocketManager:
             info("WebSocket manager stop requested").run()
 
             # Close all connections
-            for name, conn_info in self.connections.items():
+            for _name, conn_info in self.connections.items():
                 if conn_info["connection"]:
                     connection = conn_info["connection"]
                     if connection.websocket and not connection.websocket.closed:

@@ -5,8 +5,8 @@ from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 
-from bot.fp.types.base import Percentage
-from bot.fp.types.result import Failure, Result, Success
+from .base import Percentage
+from .result import Failure, Result, Success
 
 
 @dataclass(frozen=True)
@@ -159,7 +159,7 @@ class Portfolio:
         cash_adjustment = position.value if position.side != "FLAT" else Decimal(0)
         return replace(
             self,
-            positions=existing_positions + (position,),
+            positions=(*existing_positions, position),
             cash_balance=self.cash_balance - cash_adjustment,
         )
 
@@ -287,6 +287,8 @@ class PortfolioMetrics:
                 avg_win=Decimal(0),
                 avg_loss=Decimal(0),
                 profit_factor=0.0,
+                gross_profit=Decimal(0),
+                gross_loss=Decimal(0),
             )
 
         # Calculate basic metrics
@@ -909,7 +911,7 @@ def create_balanced_allocation(
 ) -> tuple[AssetAllocation, ...]:
     """Create balanced allocation across multiple assets."""
     if not assets:
-        return tuple()
+        return ()
 
     equal_weight = 1.0 / len(assets)
     allocations = []

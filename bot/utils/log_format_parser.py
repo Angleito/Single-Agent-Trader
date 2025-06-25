@@ -25,7 +25,6 @@ class FormatSpec:
         Returns:
             List of expected types in order
         """
-        types = []
         # Track position in string to maintain order
         format_positions = []
 
@@ -35,9 +34,7 @@ class FormatSpec:
 
         # Sort by position to maintain order
         format_positions.sort(key=lambda x: x[0])
-        types = [typ for _, typ in format_positions]
-
-        return types
+        return [typ for _, typ in format_positions]
 
     @classmethod
     def convert_args(cls, fmt: str, args: tuple[Any, ...]) -> tuple[Any, ...]:
@@ -52,7 +49,7 @@ class FormatSpec:
             Tuple of converted arguments
         """
         expected_types = cls.parse_format(fmt)
-        converted = []
+        converted: list[Any] = []
 
         # Convert each argument to its expected type
         for i, arg in enumerate(args):

@@ -90,7 +90,7 @@ ARG FP_RUNTIME_MODE=hybrid
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/app/.venv/bin:$PATH" \
-    PYTHONPATH="/app:/app/bot/fp" \
+    PYTHONPATH="/app" \
     APP_VERSION=${VERSION} \
     EXCHANGE__EXCHANGE_TYPE=${EXCHANGE_TYPE} \
     # Functional Programming Runtime

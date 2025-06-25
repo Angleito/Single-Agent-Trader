@@ -7,24 +7,24 @@ generic Any types throughout the codebase for improved type safety.
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal, NotRequired, TypeAlias, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 # Type aliases for common types
-Price: TypeAlias = Decimal
-Quantity: TypeAlias = Decimal
-Percentage: TypeAlias = float
-Timestamp: TypeAlias = datetime
-Symbol: TypeAlias = str
-OrderId: TypeAlias = str
-AccountId: TypeAlias = str
+type Price = Decimal
+type Quantity = Decimal
+type Percentage = float
+type Timestamp = datetime
+type Symbol = str
+type OrderId = str
+type AccountId = str
 
 # Type for validation details
-ValidationDetail: TypeAlias = str | int | float | bool | Decimal | datetime | list[str]
-ValidationDetails: TypeAlias = dict[str, ValidationDetail]
+type ValidationDetail = str | int | float | bool | Decimal | datetime | list[str]
+type ValidationDetails = dict[str, ValidationDetail]
 
 # Type for error details
-ErrorDetail: TypeAlias = str | int | float | bool | list[str] | dict[str, str]
-ErrorDetails: TypeAlias = dict[str, ErrorDetail]
+type ErrorDetail = str | int | float | bool | list[str] | dict[str, str]
+type ErrorDetails = dict[str, ErrorDetail]
 
 
 class MarketDataDict(TypedDict):

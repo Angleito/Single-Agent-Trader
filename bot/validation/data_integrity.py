@@ -334,10 +334,7 @@ def create_position_balance_rule() -> CrossFieldRule:
             return False
 
         # Available balance should be sufficient for margin
-        if available_balance < margin_used:
-            return False
-
-        return True
+        return not available_balance < margin_used
 
     return CrossFieldRule(
         name="position_balance_consistency",
@@ -368,7 +365,8 @@ class FunctionalIntegrityValidator:
         basic_rules = [create_position_size_rule(), create_price_sanity_rule()]
 
         # Strict level rules
-        strict_rules = basic_rules + [
+        strict_rules = [
+            *basic_rules,
             create_balance_consistency_rule(),
             create_timestamp_consistency_rule(),
         ]
@@ -393,7 +391,7 @@ class FunctionalIntegrityValidator:
 
     def add_rule(self, rule: IntegrityRule) -> "FunctionalIntegrityValidator":
         """Add a custom integrity rule."""
-        new_rules = self.rules + [rule]
+        new_rules = [*self.rules, rule]
         validator = FunctionalIntegrityValidator(self.level)
         validator.rules = new_rules
         validator.cross_field_rules = self.cross_field_rules
@@ -403,7 +401,7 @@ class FunctionalIntegrityValidator:
         self, rule: CrossFieldRule
     ) -> "FunctionalIntegrityValidator":
         """Add a custom cross-field integrity rule."""
-        new_cross_rules = self.cross_field_rules + [rule]
+        new_cross_rules = [*self.cross_field_rules, rule]
         validator = FunctionalIntegrityValidator(self.level)
         validator.rules = self.rules
         validator.cross_field_rules = new_cross_rules
@@ -601,21 +599,21 @@ def validate_temporal_gaps(
 
 # Export functional data integrity validators
 __all__ = [
-    # Core types
-    "IntegrityLevel",
-    "IntegrityViolationType",
-    "IntegrityRule",
     "CrossFieldRule",
     # Main validator
     "FunctionalIntegrityValidator",
+    # Core types
+    "IntegrityLevel",
+    "IntegrityRule",
+    "IntegrityViolationType",
     # Rule creators
     "create_balance_consistency_rule",
+    "create_position_balance_rule",
     "create_position_size_rule",
     "create_price_sanity_rule",
     "create_timestamp_consistency_rule",
     "create_trade_action_risk_rule",
-    "create_position_balance_rule",
+    "validate_temporal_gaps",
     # Temporal validators
     "validate_temporal_sequence",
-    "validate_temporal_gaps",
 ]

@@ -11,9 +11,9 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import uuid4
 
-from bot.fp.types.base import Maybe, Nothing, Some, Symbol
-from bot.fp.types.result import Failure, Result, Success
-from bot.fp.types.trading import TradeDecision
+from .base import Maybe, Nothing, Some, Symbol
+from .result import Failure, Result, Success
+from .trading import TradeDecision
 
 
 @dataclass(frozen=True)
@@ -425,7 +425,7 @@ class MemoryStorage:
 
     def add_experience(self, experience: TradingExperienceFP) -> "MemoryStorage":
         """Add experience to storage (returns new storage)."""
-        new_experiences = self.experiences + [experience]
+        new_experiences = [*self.experiences, experience]
 
         # Update pattern index
         new_pattern_index = dict(self.pattern_index)

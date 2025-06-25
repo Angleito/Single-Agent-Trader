@@ -5,9 +5,9 @@ from __future__ import annotations
 import asyncio
 from abc import abstractmethod
 from collections import defaultdict
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import (
+    TYPE_CHECKING,
     Any,
     Protocol,
     TypeVar,
@@ -18,6 +18,9 @@ from bot.fp.core.either import Either, Left, Right
 from bot.fp.core.io import IO
 from bot.fp.core.option import Empty, Option, Some
 from bot.fp.events.base import Event
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 T = TypeVar("T")
 E = TypeVar("E", bound=Event)
@@ -256,7 +259,9 @@ class EventDispatcher:
 
 
 # Handler composition utilities
-def compose_handlers(*handlers: EventHandler[E, Any]) -> EventHandler[E, list[Any]]:
+def compose_handlers[E: Event](
+    *handlers: EventHandler[E, Any],
+) -> EventHandler[E, list[Any]]:
     """Compose multiple handlers into one."""
 
     class ComposedHandler:

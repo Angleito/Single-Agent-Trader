@@ -15,10 +15,12 @@ from datetime import UTC, datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from enum import Enum
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
-from ..effects.io import IO
-from ..effects.monitoring import HealthCheck, MetricPoint
+from bot.fp.effects.io import IO
+
+if TYPE_CHECKING:
+    from bot.fp.effects.monitoring import HealthCheck, MetricPoint
 
 logger = logging.getLogger(__name__)
 
@@ -287,9 +289,9 @@ class AlertingEngine:
                     continue
 
                 # Check if rule applies to this health check
-                if not (
-                    rule.metric_name == "health_status"
-                    or rule.metric_name == f"health_{health_check.component}"
+                if rule.metric_name not in (
+                    "health_status",
+                    f"health_{health_check.component}",
                 ):
                     continue
 
@@ -321,7 +323,7 @@ class AlertingEngine:
 
     def _health_status_to_value(self, status) -> float:
         """Convert health status to numeric value for evaluation"""
-        from ..effects.monitoring import HealthStatus
+        from bot.fp.effects.monitoring import HealthStatus
 
         if status == HealthStatus.HEALTHY:
             return 1.0
@@ -493,7 +495,7 @@ class AlertingEngine:
                             )
 
                 except Exception as e:
-                    logger.error(f"Error processing metric {metric.name}: {e}")
+                    logger.exception(f"Error processing metric {metric.name}: {e}")
 
             # Add to alert history
             self._alert_history.extend(alert_events)
@@ -534,7 +536,7 @@ class AlertingEngine:
                             )
 
                 except Exception as e:
-                    logger.error(
+                    logger.exception(
                         f"Error processing health check {health_check.component}: {e}"
                     )
 
@@ -777,10 +779,10 @@ class EmailNotificationProvider(NotificationProvider):
         def send_email() -> NotificationResult:
             try:
                 # Extract email configuration
-                smtp_server = config.config.get("smtp_server", "localhost")
-                smtp_port = config.config.get("smtp_port", 587)
-                username = config.config.get("username", "")
-                password = config.config.get("password", "")
+                config.config.get("smtp_server", "localhost")
+                config.config.get("smtp_port", 587)
+                config.config.get("username", "")
+                config.config.get("password", "")
                 from_email = config.config.get("from_email", "alerts@example.com")
                 to_emails = config.config.get("to_emails", [])
 
@@ -869,7 +871,7 @@ class SlackNotificationProvider(NotificationProvider):
                     AlertSeverity.CRITICAL: "danger",
                 }.get(alert_event.rule.severity, "warning")
 
-                payload = {
+                {
                     "channel": channel,
                     "username": "AlertBot",
                     "attachments": [
@@ -939,7 +941,7 @@ class WebhookNotificationProvider(NotificationProvider):
             try:
                 url = config.config.get("url", "")
                 method = config.config.get("method", "POST")
-                headers = config.config.get("headers", {})
+                config.config.get("headers", {})
 
                 if not url:
                     return NotificationResult(
@@ -951,7 +953,7 @@ class WebhookNotificationProvider(NotificationProvider):
                     )
 
                 # Create webhook payload
-                payload = {
+                {
                     "alert_id": alert_event.id,
                     "rule_name": alert_event.rule.name,
                     "severity": alert_event.rule.severity.value,
@@ -1100,7 +1102,7 @@ class SMSNotificationProvider(NotificationProvider):
                     )
 
                 # Create SMS message
-                sms_message = (
+                (
                     f"ALERT [{alert_event.rule.severity.value.upper()}] "
                     f"{alert_event.rule.name}: {alert_event.message}"
                 )

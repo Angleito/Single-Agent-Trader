@@ -57,6 +57,10 @@ except ImportError:
         max_position_size: float = 0.25
 
 
+# Add Signal type alias for compatibility
+Signal = TradeSignal
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -127,7 +131,7 @@ class TypeConverter:
             stop_loss_pct = 1.0
 
         # Create TradeAction
-        trade_action = TradeAction(
+        return TradeAction(
             action=cast("Any", action),
             size_pct=min(size_pct, settings.trading.max_size_pct),  # Respect max size
             take_profit_pct=take_profit_pct,
@@ -136,8 +140,6 @@ class TypeConverter:
             leverage=settings.trading.leverage,
             reduce_only=False,
         )
-
-        return trade_action
 
     @staticmethod
     def create_trading_params() -> TradingParams:
@@ -209,14 +211,10 @@ class FunctionalLLMStrategy:
                 )
 
             # Adjust confidence based on market conditions
-            adjusted_response = adjust_confidence_by_market_conditions(
-                llm_response, market_state
-            )
-
-            return adjusted_response
+            return adjust_confidence_by_market_conditions(llm_response, market_state)
 
         except Exception as e:
-            logger.error(f"Error in functional LLM strategy: {e}")
+            logger.exception(f"Error in functional LLM strategy: {e}")
             # Return safe HOLD response
             return LLMResponse(
                 signal=Hold(reason=f"Strategy error: {e!s}"),
@@ -341,7 +339,7 @@ class LLMAgentAdapter:
             return trade_action
 
         except Exception as e:
-            logger.error(f"Error in functional LLM strategy adapter: {e}")
+            logger.exception(f"Error in functional LLM strategy adapter: {e}")
             # Return safe default action
             return TradeAction(
                 action="HOLD",
@@ -490,7 +488,9 @@ class MemoryEnhancedLLMAgentAdapter:
             return trade_action
 
         except Exception as e:
-            logger.error(f"Error in memory-enhanced functional strategy adapter: {e}")
+            logger.exception(
+                f"Error in memory-enhanced functional strategy adapter: {e}"
+            )
             # Return safe default action
             return TradeAction(
                 action="HOLD",
@@ -555,7 +555,7 @@ class MemoryEnhancedLLMAgentAdapter:
 
     def get_status(self) -> dict[str, Any]:
         """Get status including memory availability."""
-        status = {
+        return {
             "model_provider": self.model_provider,
             "model_name": self.model_name,
             "strategy_type": "functional_memory_enhanced",
@@ -567,5 +567,3 @@ class MemoryEnhancedLLMAgentAdapter:
             ),
             "available": True,
         }
-
-        return status

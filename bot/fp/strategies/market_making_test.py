@@ -4,6 +4,7 @@ This module contains basic tests to ensure all enhanced market making
 features work correctly and that existing APIs are preserved.
 """
 
+import sys
 from datetime import datetime
 from decimal import Decimal
 
@@ -178,7 +179,8 @@ def test_enhanced_inventory_management():
     bid_size, ask_size = optimize_inventory_exposure(
         state=state, market_conditions=conditions, target_notional=1000.0
     )
-    assert bid_size > 0 and ask_size > 0
+    assert bid_size > 0
+    assert ask_size > 0
     print(f"✓ Inventory optimization: bid_size={bid_size:.0f}, ask_size={ask_size:.0f}")
 
 
@@ -297,4 +299,4 @@ def run_all_tests():
 
 if __name__ == "__main__":
     success = run_all_tests()
-    exit(0 if success else 1)
+    sys.exit(0 if success else 1)

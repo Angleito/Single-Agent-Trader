@@ -9,9 +9,9 @@ import re
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum
-from typing import Generic, NewType, TypeVar
+from typing import NewType, TypeVar
 
-from bot.fp.types.result import Failure, Result, Success
+from .result import Failure, Result, Success
 
 T = TypeVar("T")
 
@@ -170,7 +170,7 @@ class TradingMode(Enum):
 
 
 # Maybe types for optional values
-class Maybe(Generic[T]):
+class Maybe[T]:
     """Base class for Maybe monad (Option type)."""
 
     def __init__(self, value: T | None = None) -> None:

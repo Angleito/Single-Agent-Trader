@@ -8,28 +8,31 @@ with enhanced aggregation and real-time streaming capabilities.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
-from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from ...trading_types import MarketData as LegacyMarketData
-from ..core.either import Either, Left, Right
-from ..effects.enhanced_aggregation import (
+from bot.fp.core.either import Either, Left, Right
+from bot.fp.effects.enhanced_aggregation import (
     AggregationMetrics,
     create_enhanced_aggregator,
     create_high_performance_aggregator,
     create_low_latency_aggregator,
 )
-from ..effects.io import IO, AsyncIO
-from ..types.optimized_market import (
+from bot.fp.effects.io import IO, AsyncIO
+from bot.fp.types.optimized_market import (
     OptimizedDataFactory,
     OptimizedOHLCV,
     create_optimized_ohlcv,
     create_optimized_trade,
 )
+from bot.trading_types import MarketData as LegacyMarketData
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +131,7 @@ class OptimizedMarketDataAdapter:
             return Right(True)
 
         except Exception as e:
-            logger.error(f"Failed to connect adapter: {e}")
+            logger.exception(f"Failed to connect adapter: {e}")
             return Left(str(e))
 
     async def disconnect(self) -> Either[str, bool]:
@@ -140,17 +143,13 @@ class OptimizedMarketDataAdapter:
             # Stop background tasks
             if self._streaming_task and not self._streaming_task.done():
                 self._streaming_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await self._streaming_task
-                except asyncio.CancelledError:
-                    pass
 
             if self._cleanup_task and not self._cleanup_task.done():
                 self._cleanup_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await self._cleanup_task
-                except asyncio.CancelledError:
-                    pass
 
             # Stop aggregator
             await self.aggregator.stop()
@@ -163,7 +162,7 @@ class OptimizedMarketDataAdapter:
             return Right(True)
 
         except Exception as e:
-            logger.error(f"Failed to disconnect adapter: {e}")
+            logger.exception(f"Failed to disconnect adapter: {e}")
             return Left(str(e))
 
     def fetch_historical_data(
@@ -221,7 +220,7 @@ class OptimizedMarketDataAdapter:
                 return Right(optimized_data)
 
             except Exception as e:
-                logger.error(f"Error fetching historical data: {e}")
+                logger.exception(f"Error fetching historical data: {e}")
                 return Left(str(e))
 
         return IO(fetch)
@@ -236,7 +235,7 @@ class OptimizedMarketDataAdapter:
                 candles = self.aggregator.get_completed_candles(limit).run()
                 return Right(candles)
             except Exception as e:
-                logger.error(f"Error getting latest OHLCV: {e}")
+                logger.exception(f"Error getting latest OHLCV: {e}")
                 return Left(str(e))
 
         return IO(get_latest)
@@ -249,7 +248,7 @@ class OptimizedMarketDataAdapter:
                 candles = self.aggregator.get_active_candles().run()
                 return Right(candles)
             except Exception as e:
-                logger.error(f"Error getting active candles: {e}")
+                logger.exception(f"Error getting active candles: {e}")
                 return Left(str(e))
 
         return IO(get_active)
@@ -272,7 +271,7 @@ class OptimizedMarketDataAdapter:
                 return Left("No price data available")
 
             except Exception as e:
-                logger.error(f"Error getting latest price: {e}")
+                logger.exception(f"Error getting latest price: {e}")
                 return Left(str(e))
 
         return IO(get_price)
@@ -307,7 +306,7 @@ class OptimizedMarketDataAdapter:
                     except TimeoutError:
                         continue
                     except Exception as e:
-                        logger.error(f"Error in candle stream: {e}")
+                        logger.exception(f"Error in candle stream: {e}")
                         break
 
             return candle_stream()
@@ -349,7 +348,7 @@ class OptimizedMarketDataAdapter:
                     )
                     callback(legacy_data)
                 except Exception as e:
-                    logger.error(f"Error in legacy callback: {e}")
+                    logger.exception(f"Error in legacy callback: {e}")
 
             # Subscribe wrapper to aggregator
             self.aggregator.subscribe_to_candles(legacy_wrapper).run()
@@ -365,7 +364,7 @@ class OptimizedMarketDataAdapter:
                 metrics = self.aggregator.get_metrics().run()
                 return Right(metrics)
             except Exception as e:
-                logger.error(f"Error getting metrics: {e}")
+                logger.exception(f"Error getting metrics: {e}")
                 return Left(str(e))
 
         return IO(get_metrics)
@@ -398,7 +397,7 @@ class OptimizedMarketDataAdapter:
                 return Right(optimization_results)
 
             except Exception as e:
-                logger.error(f"Error optimizing performance: {e}")
+                logger.exception(f"Error optimizing performance: {e}")
                 return Left(str(e))
 
         return IO(optimize)
@@ -431,7 +430,7 @@ class OptimizedMarketDataAdapter:
                     },
                 }
             except Exception as e:
-                logger.error(f"Error getting connection status: {e}")
+                logger.exception(f"Error getting connection status: {e}")
                 return {"error": str(e)}
 
         return IO(get_status)
@@ -468,7 +467,7 @@ class OptimizedMarketDataAdapter:
                     self.aggregator.aggregate_trades_batch([trade]).run()
 
                 except Exception as e:
-                    logger.error(f"Error processing legacy update: {e}")
+                    logger.exception(f"Error processing legacy update: {e}")
 
             # Subscribe to legacy provider
             if hasattr(self._legacy_provider, "subscribe_to_updates"):
@@ -477,7 +476,7 @@ class OptimizedMarketDataAdapter:
             logger.info("Legacy integration set up successfully")
 
         except Exception as e:
-            logger.error(f"Failed to set up legacy integration: {e}")
+            logger.exception(f"Failed to set up legacy integration: {e}")
 
     def _parse_interval(self, interval: str) -> timedelta:
         """Parse interval string to timedelta"""

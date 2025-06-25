@@ -16,7 +16,8 @@ WS_URL="${VITE_WS_URL:-$DEFAULT_WS_URL}"
 DOCKER_ENV="${VITE_DOCKER_ENV:-$DEFAULT_DOCKER_ENV}"
 
 # Path to the main JavaScript bundle (adjust as needed)
-MAIN_JS_PATH="/usr/share/nginx/html/assets"
+MAIN_JS_PATH="/tmp/html/assets"
+HTML_DIR="/tmp/html"
 
 echo "🚀 Injecting runtime environment variables..."
 echo "   API_URL: ${API_URL}"
@@ -34,22 +35,24 @@ window.__RUNTIME_CONFIG__ = {
 "
 
 # Inject into index.html
-if [ -f "/usr/share/nginx/html/index.html" ]; then
+if [ -f "${HTML_DIR}/index.html" ]; then
   # Create the environment script
-  echo "${ENV_JS}" > /usr/share/nginx/html/runtime-env.js
+  echo "${ENV_JS}" > ${HTML_DIR}/runtime-env.js
 
   # Inject script tag into index.html if not already present
-  if ! grep -q "runtime-env.js" /usr/share/nginx/html/index.html; then
-    sed -i 's|<head>|<head><script src="/runtime-env.js"></script>|' /usr/share/nginx/html/index.html
+  if ! grep -q "runtime-env.js" ${HTML_DIR}/index.html; then
+    sed -i 's|<head>|<head><script src="/runtime-env.js"></script>|' ${HTML_DIR}/index.html
   fi
 
   echo "✅ Environment variables injected successfully"
 else
-  echo "❌ index.html not found, skipping injection"
+  echo "❌ index.html not found at ${HTML_DIR}/index.html, skipping injection"
 fi
 
 # Set global variables for the JavaScript to access (multiple naming patterns for compatibility)
-cat > /usr/share/nginx/html/env-config.js << EOF
+# Ensure the directory exists before writing the file
+mkdir -p ${HTML_DIR}
+cat > ${HTML_DIR}/env-config.js << EOF
 // Runtime environment configuration with multiple naming patterns
 window.__API_URL__ = '${API_URL}';
 window.__API_BASE_URL__ = '${API_URL}';

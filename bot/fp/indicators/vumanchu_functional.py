@@ -468,7 +468,7 @@ def determine_signal(
         ("overbought", overbought),
         ("oversold", oversold),
     ]:
-        if not isinstance(value, (int, float)):
+        if not isinstance(value, int | float):
             raise TypeError(f"{name} must be numeric, got {type(value)}")
 
     if overbought <= oversold:
@@ -610,7 +610,7 @@ def vumanchu_cipher(
                 f"{param_name} must be a positive integer, got {param_value}"
             )
 
-    if not isinstance(mult, (int, float)) or mult <= 0:
+    if not isinstance(mult, int | float) or mult <= 0:
         raise ValueError(f"Multiplier must be positive, got {mult}")
 
     if overbought <= oversold:
@@ -1004,7 +1004,7 @@ def create_composite_signal(
     total_confidence = 0.0
     component_count = 0
 
-    for name, component in components.items():
+    for _name, component in components.items():
         if hasattr(component, "is_bullish") and component.is_bullish():
             bullish_count += 1
         elif hasattr(component, "is_bearish") and component.is_bearish():
@@ -1223,45 +1223,45 @@ def calculate_all(
 
 # Export all public functions and types for external use
 __all__ = [
-    # Core VuManChu functions
-    "vumanchu_cipher",
-    "vumanchu_cipher_series",
-    "vumanchu_comprehensive_analysis",
-    "calculate_all",
-    # Core calculation functions
-    "calculate_hlc3",
-    "calculate_ema",
-    "calculate_sma",
-    "calculate_wavetrend_oscillator",
-    # Signal analysis functions
-    "detect_crossovers",
-    "determine_signal",
-    "calculate_divergence",
-    # Pattern analysis functions
-    "analyze_diamond_patterns",
-    "analyze_yellow_cross_signals",
-    # Signal creation functions
-    "create_diamond_pattern",
-    "create_yellow_cross_signal",
-    "create_candle_pattern",
-    "create_composite_signal",
-    "create_vumanchu_signal_set",
-    # Helper functions
-    "is_overbought",
-    "is_oversold",
-    "calculate_signal_strength",
-    "filter_high_confidence_signals",
-    "count_signal_types",
-    "create_default_vumanchu_config",
+    "CandlePattern",
+    "CompositeSignal",
+    "DiamondPattern",
+    "DivergencePattern",
+    "MarketStructure",
+    "VolumeProfile",
     # Types (for backward compatibility)
     "VuManchuResult",
     "VuManchuSignalSet",
     "VuManchuState",  # Alias for VuManchuSignalSet
-    "DiamondPattern",
     "YellowCrossSignal",
-    "CandlePattern",
-    "DivergencePattern",
-    "CompositeSignal",
-    "MarketStructure",
-    "VolumeProfile",
+    # Pattern analysis functions
+    "analyze_diamond_patterns",
+    "analyze_yellow_cross_signals",
+    "calculate_all",
+    "calculate_divergence",
+    "calculate_ema",
+    # Core calculation functions
+    "calculate_hlc3",
+    "calculate_signal_strength",
+    "calculate_sma",
+    "calculate_wavetrend_oscillator",
+    "count_signal_types",
+    "create_candle_pattern",
+    "create_composite_signal",
+    "create_default_vumanchu_config",
+    # Signal creation functions
+    "create_diamond_pattern",
+    "create_vumanchu_signal_set",
+    "create_yellow_cross_signal",
+    # Signal analysis functions
+    "detect_crossovers",
+    "determine_signal",
+    "filter_high_confidence_signals",
+    # Helper functions
+    "is_overbought",
+    "is_oversold",
+    # Core VuManChu functions
+    "vumanchu_cipher",
+    "vumanchu_cipher_series",
+    "vumanchu_comprehensive_analysis",
 ]

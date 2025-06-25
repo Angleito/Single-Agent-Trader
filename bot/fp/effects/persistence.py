@@ -8,10 +8,12 @@ event sourcing, and caching.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from .io import IO, from_try
+
+if TYPE_CHECKING:
+    from datetime import datetime
 
 A = TypeVar("A")
 
@@ -83,7 +85,7 @@ def load_state(key: str) -> IO[State | None]:
     return IO(load)
 
 
-def transaction(effects: list[IO[A]]) -> IO[list[A]]:
+def transaction[A](effects: list[IO[A]]) -> IO[list[A]]:
     """Execute effects in a transaction"""
 
     def trans():
@@ -95,7 +97,7 @@ def transaction(effects: list[IO[A]]) -> IO[list[A]]:
     return IO(trans)
 
 
-def cache(key: str, ttl: int, effect: IO[A]) -> IO[A]:
+def cache[A](key: str, ttl: int, effect: IO[A]) -> IO[A]:
     """Cache effect result"""
 
     def cached():

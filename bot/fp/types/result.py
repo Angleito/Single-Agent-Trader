@@ -5,14 +5,14 @@ This provides a basic Result type without requiring external dependencies.
 """
 
 from collections.abc import Callable
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 T = TypeVar("T")
 E = TypeVar("E")
 U = TypeVar("U")
 
 
-class Result(Generic[T, E]):
+class Result[T, E]:
     """Base class for Result monad."""
 
     def __init__(self) -> None:
@@ -91,12 +91,12 @@ class Failure(Result[T, E]):
 
 
 # Type aliases for convenience
-def Ok(value: T) -> Success[T, E]:
+def Ok[T](value: T) -> Success[T, E]:
     """Create a success result."""
     return Success(value)
 
 
-def Err(error: E) -> Failure[T, E]:
+def Err[E](error: E) -> Failure[T, E]:
     """Create a failure result."""
     return Failure(error)
 

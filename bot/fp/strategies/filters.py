@@ -59,7 +59,7 @@ def trading_hours_filter(
             return failure("No timestamp in data")
 
         # Convert to target timezone
-        if isinstance(timestamp, (int, float)):
+        if isinstance(timestamp, int | float):
             dt = datetime.fromtimestamp(timestamp, tz=UTC)
         else:
             dt = timestamp
@@ -97,7 +97,7 @@ def market_session_filter(sessions: list[str]) -> Filter:
             return failure("No timestamp in data")
 
         # Convert to UTC
-        if isinstance(timestamp, (int, float)):
+        if isinstance(timestamp, int | float):
             dt = datetime.fromtimestamp(timestamp, tz=UTC)
         else:
             dt = timestamp.astimezone(UTC)
@@ -142,7 +142,7 @@ def news_blackout_filter(
             return failure("No timestamp in data")
 
         # Convert to datetime
-        if isinstance(timestamp, (int, float)):
+        if isinstance(timestamp, int | float):
             dt = datetime.fromtimestamp(timestamp, tz=UTC)
         else:
             dt = timestamp
@@ -153,7 +153,7 @@ def news_blackout_filter(
             if not event_time:
                 continue
 
-            if isinstance(event_time, (int, float)):
+            if isinstance(event_time, int | float):
                 event_dt = datetime.fromtimestamp(event_time, tz=UTC)
             else:
                 event_dt = event_time
@@ -191,7 +191,7 @@ def trend_regime_filter(
         if prices is None:
             return failure(f"No {price_key} prices in data")
 
-        if isinstance(prices, (list, np.ndarray)):
+        if isinstance(prices, list | np.ndarray):
             prices = np.array(prices)
         elif isinstance(prices, pd.Series):
             prices = prices.values
@@ -255,7 +255,7 @@ def volatility_filter(
         if prices is None:
             return failure(f"No {price_key} prices in data")
 
-        if isinstance(prices, (list, np.ndarray)):
+        if isinstance(prices, list | np.ndarray):
             prices = np.array(prices)
         elif isinstance(prices, pd.Series):
             prices = prices.values
@@ -355,7 +355,7 @@ def volume_filter(
         if volumes is None:
             return failure(f"No {volume_key} data")
 
-        if isinstance(volumes, (list, np.ndarray)):
+        if isinstance(volumes, list | np.ndarray):
             volumes = np.array(volumes)
         elif isinstance(volumes, pd.Series):
             volumes = volumes.values
@@ -422,12 +422,12 @@ def correlation_filter(
             return failure(f"No {reference_symbol} prices in data")
 
         # Convert to arrays
-        if isinstance(prices, (list, np.ndarray)):
+        if isinstance(prices, list | np.ndarray):
             prices = np.array(prices)
         elif isinstance(prices, pd.Series):
             prices = prices.values
 
-        if isinstance(ref_prices, (list, np.ndarray)):
+        if isinstance(ref_prices, list | np.ndarray):
             ref_prices = np.array(ref_prices)
         elif isinstance(ref_prices, pd.Series):
             ref_prices = ref_prices.values

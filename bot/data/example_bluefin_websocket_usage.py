@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 
 import aiohttp
 
@@ -40,7 +41,9 @@ async def main():
         candle_limit=500,
         on_candle_update=on_new_candle,
         network="mainnet",  # or "testnet" for staging environment
-        auth_token="your_auth_token_here",  # Optional: for Socket.IO subscriptions
+        auth_token=os.getenv(
+            "BLUEFIN_AUTH_TOKEN"
+        ),  # Optional: for Socket.IO subscriptions
     )
 
     try:

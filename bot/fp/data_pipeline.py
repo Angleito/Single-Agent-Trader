@@ -7,14 +7,16 @@ offering enhanced performance and composability alongside the existing imperativ
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 from .effects.io import IO, AsyncIO
 from .types.market import OHLCV, Candle, Trade
 from .types.result import Err, Ok, Result
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Callable, Sequence
 
 T = TypeVar("T")
 U = TypeVar("U")

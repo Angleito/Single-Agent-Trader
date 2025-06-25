@@ -2233,7 +2233,7 @@ class BluefinMarketDataProvider:
             return candles
 
         except Exception as e:
-            logger.error("Failed to generate fallback data for %s: %s", symbol, e)
+            logger.exception("Failed to generate fallback data for %s: %s", symbol, e)
             # Return minimal data
             minimal_candles = []
             current_time = datetime.now(UTC)
@@ -3146,7 +3146,7 @@ class BluefinMarketDataProvider:
 
             # Validate each field using the enhanced validation from price_conversion
             field_names = ["timestamp", "open", "high", "low", "close", "volume"]
-            for i, (value, field_name) in enumerate(
+            for _i, (value, field_name) in enumerate(
                 zip(converted_data[:6], field_names, strict=False)
             ):
                 # Use enhanced sanitization and validation

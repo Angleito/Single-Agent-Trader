@@ -223,7 +223,7 @@ class PaperTradingAccountState:
         """Add a new trade to the account (pure function)."""
         return replace(
             self,
-            open_trades=self.open_trades + (trade,),
+            open_trades=(*self.open_trades, trade),
             trade_counter=self.trade_counter + 1,
         )
 
@@ -251,7 +251,7 @@ class PaperTradingAccountState:
         remaining_open = tuple(
             trade for trade in self.open_trades if trade.id != trade_id
         )
-        updated_closed = self.closed_trades + (closed_trade,)
+        updated_closed = (*self.closed_trades, closed_trade)
 
         # Update balance and margin
         realized_pnl = closed_trade.realized_pnl or Decimal(0)

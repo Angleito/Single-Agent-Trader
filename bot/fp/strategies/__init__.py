@@ -43,7 +43,7 @@ from .llm_functional import (
 def get_functional_llm_strategy():
     """Get FunctionalLLMStrategy class (lazy loaded to avoid circular imports)"""
     try:
-        from ..adapters.strategy_adapter import FunctionalLLMStrategy
+        from bot.fp.adapters.strategy_adapter import FunctionalLLMStrategy
 
         return FunctionalLLMStrategy
     except ImportError:
@@ -68,27 +68,27 @@ from .risk_management import (
 )
 
 __all__ = [
-    # Base components
-    "StrategyConfig",
-    "StrategyResult",
     "BaseStrategy",
-    "StrategyComposition",
-    # LLM strategies
-    "LLMConfig",
-    "get_functional_llm_strategy",  # Lazy loaded to avoid circular imports
-    # Market making
-    "MarketMakingConfig",
-    "FunctionalMarketMakingStrategy",
-    # Risk management
-    "RiskConfig",
-    "RiskResult",
-    "FunctionalRiskManager",
     # Execution
     "ExecutionConfig",
     "ExecutionResult",
-    "FunctionalExecutionEngine",
     # Filters
     "FilterConfig",
     "FilterResult",
+    "FunctionalExecutionEngine",
+    "FunctionalMarketMakingStrategy",
+    "FunctionalRiskManager",
+    # LLM strategies
+    "LLMConfig",
+    # Market making
+    "MarketMakingConfig",
+    # Risk management
+    "RiskConfig",
+    "RiskResult",
+    "StrategyComposition",
+    # Base components
+    "StrategyConfig",
     "StrategyFilter",
+    "StrategyResult",
+    "get_functional_llm_strategy",  # Lazy loaded to avoid circular imports
 ]

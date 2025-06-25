@@ -11,9 +11,10 @@ import sys
 from dataclasses import dataclass
 from typing import Any
 
-from ..effects.config import ConfigSource, load_config, validate_config
-from ..effects.io import IO
-from ..effects.logging import LogConfig, LogLevel, configure_logging, error, info
+from bot.fp.effects.config import ConfigSource, load_config, validate_config
+from bot.fp.effects.io import IO
+from bot.fp.effects.logging import LogConfig, LogLevel, configure_logging, error, info
+
 from .interpreter import get_interpreter
 from .scheduler import get_scheduler
 
@@ -53,7 +54,7 @@ class FunctionalCLI:
         command = args_dict.get("command", "help")
 
         # Extract all the options and map them to CLIConfig fields
-        config_options = CLIConfig(
+        return CLIConfig(
             command=command,
             options=args_dict,
             config_path=args_dict.get("config"),
@@ -70,8 +71,6 @@ class FunctionalCLI:
             end_date=args_dict.get("end_date", "2024-12-31"),
             initial_balance=args_dict.get("initial_balance", 10000.0),
         )
-
-        return config_options
 
     def parse_args(self, args: list[str]) -> CLIConfig:
         """Parse command line arguments"""

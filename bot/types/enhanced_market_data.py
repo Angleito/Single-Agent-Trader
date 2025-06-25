@@ -140,10 +140,7 @@ class EnhancedMarketData(BaseMarketData):
 
         # Upper wick should be small
         upper_wick = self.high - max(self.open, self.close)
-        if upper_wick > body_size:
-            return False
-
-        return True
+        return not upper_wick > body_size
 
     def is_shooting_star(
         self, body_ratio: float = 0.3, wick_ratio: float = 2.0
@@ -176,10 +173,7 @@ class EnhancedMarketData(BaseMarketData):
 
         # Lower wick should be small
         lower_wick = min(self.open, self.close) - self.low
-        if lower_wick > body_size:
-            return False
-
-        return True
+        return not lower_wick > body_size
 
     def get_momentum(self) -> Decimal:
         """

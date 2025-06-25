@@ -229,8 +229,7 @@ class EnhancedPaperTradingAccount:
             return []
 
         try:
-            trades_result = self._fp_engine.get_trade_history().run()
-            return trades_result
+            return self._fp_engine.get_trade_history().run()
         except Exception:
             logger.exception("Error getting trade history")
             return []

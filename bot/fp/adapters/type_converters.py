@@ -9,6 +9,20 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, Literal
 
+from bot.fp.types import FPCandle
+from bot.fp.types.market import (
+    ConnectionState,
+    ConnectionStatus,
+    DataQuality,
+    Subscription,
+)
+from bot.fp.types.market import Trade as FPTrade
+from bot.fp.types.portfolio import Position as FPPosition
+from bot.fp.types.trading import LimitOrder as FPLimitOrder
+from bot.fp.types.trading import MarketOrder as FPMarketOrder
+from bot.fp.types.trading import Order as FPOrder
+from bot.fp.types.trading import StopOrder as FPStopOrder
+from bot.fp.types.trading import TradeSignal
 from bot.trading_types import MarketData as CurrentMarketData
 
 # Use standardized imports from bot.types when available
@@ -17,26 +31,6 @@ from bot.trading_types import Order as CurrentOrder
 from bot.trading_types import Position as CurrentPosition
 from bot.trading_types import TradeAction as CurrentTradeAction
 from bot.types.market_data import CandleData
-
-from ..types import FPCandle
-from ..types.market import ConnectionState, ConnectionStatus, DataQuality, Subscription
-from ..types.market import Trade as FPTrade
-from ..types.portfolio import Position as FPPosition
-from ..types.trading import (
-    LimitOrder as FPLimitOrder,
-)
-from ..types.trading import (
-    MarketOrder as FPMarketOrder,
-)
-from ..types.trading import (
-    Order as FPOrder,
-)
-from ..types.trading import (
-    StopOrder as FPStopOrder,
-)
-from ..types.trading import (
-    TradeSignal,
-)
 
 
 class TypeConversionError(Exception):
@@ -105,7 +99,7 @@ def current_position_to_fp_position(position: CurrentPosition) -> FPPosition:
 
 def trade_action_to_fp_signal(action: CurrentTradeAction) -> TradeSignal:
     """Convert current TradeAction to functional TradeSignal."""
-    from ..types.trading import Hold, Long, Short
+    from bot.fp.types.trading import Hold, Long, Short
 
     if action.action == "LONG":
         return Long(
@@ -425,9 +419,7 @@ def validate_functional_candle(candle: FPCandle) -> bool:
         # Additional business logic validation can be added here
         if candle.price_range < 0:
             return False
-        if candle.body_size < 0:
-            return False
-        return True
+        return not candle.body_size < 0
     except Exception:
         return False
 
@@ -437,9 +429,7 @@ def validate_functional_trade(trade: FPTrade) -> bool:
     try:
         # Basic validation is handled by __post_init__
         # Additional business logic validation can be added here
-        if trade.value <= 0:
-            return False
-        return True
+        return not trade.value <= 0
     except Exception:
         return False
 
@@ -474,7 +464,7 @@ def convert_trade_action(action: CurrentTradeAction) -> TradeSignal:
 # MISSING FACTORY FUNCTIONS FOR MARKET DATA ADAPTER
 # ============================================================================
 
-from ..types.market import (
+from bot.fp.types.market import (
     ConnectionState,
     DataQuality,
     MarketDataStream,
@@ -697,3 +687,201 @@ def create_orderbook_message_from_data(
         bids=bids,
         asks=asks,
     )
+
+
+# Additional functions for test compatibility
+
+
+def convert_legacy_market_data_to_fp(legacy_data: Any) -> "FunctionalMarketData":
+    """Convert legacy market data to functional programming type."""
+    from bot.fp.types.market import FunctionalMarketData
+
+    try:
+        # Handle different legacy formats
+        if hasattr(legacy_data, "symbol"):
+            # Legacy object with attributes
+            return FunctionalMarketData(
+                symbol=legacy_data.symbol,
+                timestamp=getattr(legacy_data, "timestamp", datetime.now(UTC)),
+                price=Decimal(str(legacy_data.price)),
+                volume=Decimal(str(getattr(legacy_data, "volume", 0))),
+                bid=(
+                    Decimal(str(legacy_data.bid))
+                    if hasattr(legacy_data, "bid") and legacy_data.bid
+                    else None
+                ),
+                ask=(
+                    Decimal(str(legacy_data.ask))
+                    if hasattr(legacy_data, "ask") and legacy_data.ask
+                    else None
+                ),
+            )
+        if isinstance(legacy_data, dict):
+            # Legacy dict format
+            return FunctionalMarketData(
+                symbol=legacy_data.get("symbol", "UNKNOWN"),
+                timestamp=legacy_data.get("timestamp", datetime.now(UTC)),
+                price=Decimal(str(legacy_data.get("price", 0))),
+                volume=Decimal(str(legacy_data.get("volume", 0))),
+                bid=(
+                    Decimal(str(legacy_data["bid"])) if legacy_data.get("bid") else None
+                ),
+                ask=(
+                    Decimal(str(legacy_data["ask"])) if legacy_data.get("ask") else None
+                ),
+            )
+        raise TypeConversionError(
+            f"Unsupported legacy market data type: {type(legacy_data)}"
+        )
+    except Exception as e:
+        raise TypeConversionError(f"Failed to convert legacy market data: {e}")
+
+
+def convert_fp_market_data_to_legacy(fp_data: "FunctionalMarketData") -> dict[str, Any]:
+    """Convert functional market data to legacy format."""
+    try:
+        legacy_data = {
+            "symbol": fp_data.symbol,
+            "timestamp": fp_data.timestamp,
+            "price": float(fp_data.price),
+            "volume": float(fp_data.volume),
+        }
+
+        if fp_data.bid is not None:
+            legacy_data["bid"] = float(fp_data.bid)
+        if fp_data.ask is not None:
+            legacy_data["ask"] = float(fp_data.ask)
+        if fp_data.exchange is not None:
+            legacy_data["exchange"] = fp_data.exchange
+
+        return legacy_data
+    except Exception as e:
+        raise TypeConversionError(f"Failed to convert functional market data: {e}")
+
+
+def convert_legacy_order_to_fp(legacy_order: Any) -> dict[str, Any]:
+    """Convert legacy order to functional programming type."""
+    try:
+        # Stub implementation for order conversion
+        if hasattr(legacy_order, "symbol"):
+            fp_order = {
+                "symbol": legacy_order.symbol,
+                "side": getattr(legacy_order, "side", "BUY"),
+                "type": getattr(legacy_order, "type", "MARKET"),
+                "quantity": Decimal(str(getattr(legacy_order, "quantity", 0))),
+                "price": (
+                    Decimal(str(legacy_order.price))
+                    if hasattr(legacy_order, "price") and legacy_order.price
+                    else None
+                ),
+                "id": getattr(legacy_order, "id", None),
+                "timestamp": getattr(legacy_order, "timestamp", datetime.now(UTC)),
+            }
+            return fp_order
+        if isinstance(legacy_order, dict):
+            fp_order = {
+                "symbol": legacy_order.get("symbol", "UNKNOWN"),
+                "side": legacy_order.get("side", "BUY"),
+                "type": legacy_order.get("type", "MARKET"),
+                "quantity": Decimal(str(legacy_order.get("quantity", 0))),
+                "price": (
+                    Decimal(str(legacy_order["price"]))
+                    if legacy_order.get("price")
+                    else None
+                ),
+                "id": legacy_order.get("id"),
+                "timestamp": legacy_order.get("timestamp", datetime.now(UTC)),
+            }
+            return fp_order
+        raise TypeConversionError(
+            f"Unsupported legacy order type: {type(legacy_order)}"
+        )
+    except Exception as e:
+        raise TypeConversionError(f"Failed to convert legacy order: {e}")
+
+
+def convert_fp_order_to_legacy(fp_order: dict[str, Any]) -> dict[str, Any]:
+    """Convert functional order to legacy format."""
+    try:
+        legacy_order = {
+            "symbol": fp_order.get("symbol"),
+            "side": fp_order.get("side"),
+            "type": fp_order.get("type"),
+            "quantity": float(fp_order.get("quantity", 0)),
+            "id": fp_order.get("id"),
+            "timestamp": fp_order.get("timestamp"),
+        }
+
+        if fp_order.get("price") is not None:
+            legacy_order["price"] = float(fp_order["price"])
+
+        return legacy_order
+    except Exception as e:
+        raise TypeConversionError(f"Failed to convert functional order: {e}")
+
+
+def convert_legacy_position_to_fp(legacy_position: Any) -> dict[str, Any]:
+    """Convert legacy position to functional programming type."""
+    try:
+        if hasattr(legacy_position, "symbol"):
+            fp_position = {
+                "symbol": legacy_position.symbol,
+                "side": getattr(legacy_position, "side", "FLAT"),
+                "size": Decimal(str(getattr(legacy_position, "size", 0))),
+                "entry_price": (
+                    Decimal(str(legacy_position.entry_price))
+                    if hasattr(legacy_position, "entry_price")
+                    and legacy_position.entry_price
+                    else None
+                ),
+                "unrealized_pnl": Decimal(
+                    str(getattr(legacy_position, "unrealized_pnl", 0))
+                ),
+                "realized_pnl": Decimal(
+                    str(getattr(legacy_position, "realized_pnl", 0))
+                ),
+                "timestamp": getattr(legacy_position, "timestamp", datetime.now(UTC)),
+            }
+            return fp_position
+        if isinstance(legacy_position, dict):
+            fp_position = {
+                "symbol": legacy_position.get("symbol", "UNKNOWN"),
+                "side": legacy_position.get("side", "FLAT"),
+                "size": Decimal(str(legacy_position.get("size", 0))),
+                "entry_price": (
+                    Decimal(str(legacy_position["entry_price"]))
+                    if legacy_position.get("entry_price")
+                    else None
+                ),
+                "unrealized_pnl": Decimal(
+                    str(legacy_position.get("unrealized_pnl", 0))
+                ),
+                "realized_pnl": Decimal(str(legacy_position.get("realized_pnl", 0))),
+                "timestamp": legacy_position.get("timestamp", datetime.now(UTC)),
+            }
+            return fp_position
+        raise TypeConversionError(
+            f"Unsupported legacy position type: {type(legacy_position)}"
+        )
+    except Exception as e:
+        raise TypeConversionError(f"Failed to convert legacy position: {e}")
+
+
+def convert_fp_position_to_legacy(fp_position: dict[str, Any]) -> dict[str, Any]:
+    """Convert functional position to legacy format."""
+    try:
+        legacy_position = {
+            "symbol": fp_position.get("symbol"),
+            "side": fp_position.get("side"),
+            "size": float(fp_position.get("size", 0)),
+            "unrealized_pnl": float(fp_position.get("unrealized_pnl", 0)),
+            "realized_pnl": float(fp_position.get("realized_pnl", 0)),
+            "timestamp": fp_position.get("timestamp"),
+        }
+
+        if fp_position.get("entry_price") is not None:
+            legacy_position["entry_price"] = float(fp_position["entry_price"])
+
+        return legacy_position
+    except Exception as e:
+        raise TypeConversionError(f"Failed to convert functional position: {e}")

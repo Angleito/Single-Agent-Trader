@@ -9,9 +9,9 @@ import logging
 from typing import Any
 
 from bot.exchange.coinbase import CoinbaseClient
+from bot.fp.effects.io import IOEither, Left, Right
+from bot.fp.types.trading import Order, OrderResult, Position
 
-from ..effects.io import IOEither, Left, Right
-from ..types.trading import Order, OrderResult, Position
 from .type_converters import (
     create_fp_account_balance,
     create_order_result,
@@ -61,11 +61,10 @@ class CoinbaseExchangeAdapter:
                     raise Exception("Order placement failed - no result returned")
 
                 # Convert result to functional OrderResult
-                order_result = create_order_result(result, success=True)
-                return order_result
+                return create_order_result(result, success=True)
 
             except Exception as e:
-                self._logger.error(f"Order placement failed: {e}")
+                self._logger.exception(f"Order placement failed: {e}")
                 return e
 
         def safe_place_order():
@@ -87,7 +86,7 @@ class CoinbaseExchangeAdapter:
                 result = self.client.cancel_order(order_id)
                 return result if result is not None else False
             except Exception as e:
-                self._logger.error(f"Order cancellation failed: {e}")
+                self._logger.exception(f"Order cancellation failed: {e}")
                 return e
 
         def safe_cancel_order():
@@ -125,7 +124,7 @@ class CoinbaseExchangeAdapter:
                 return fp_positions
 
             except Exception as e:
-                self._logger.error(f"Failed to get positions: {e}")
+                self._logger.exception(f"Failed to get positions: {e}")
                 return e
 
         def safe_get_positions():
@@ -148,11 +147,10 @@ class CoinbaseExchangeAdapter:
                 balance = self.client.get_account_balance()
 
                 # Convert to functional AccountBalance format
-                fp_balance = create_fp_account_balance(balance)
-                return fp_balance
+                return create_fp_account_balance(balance)
 
             except Exception as e:
-                self._logger.error(f"Failed to get balance: {e}")
+                self._logger.exception(f"Failed to get balance: {e}")
                 return e
 
         def safe_get_balance():
@@ -174,7 +172,7 @@ class CoinbaseExchangeAdapter:
                 result = self.client.connect()
                 return result if result is not None else False
             except Exception as e:
-                self._logger.error(f"Connection failed: {e}")
+                self._logger.exception(f"Connection failed: {e}")
                 return e
 
         def safe_connect():
@@ -196,7 +194,7 @@ class CoinbaseExchangeAdapter:
                 self.client.disconnect()
                 return True
             except Exception as e:
-                self._logger.error(f"Disconnection failed: {e}")
+                self._logger.exception(f"Disconnection failed: {e}")
                 return e
 
         def safe_disconnect():
@@ -234,7 +232,7 @@ class CoinbaseExchangeAdapter:
                 return fp_positions
 
             except Exception as e:
-                self._logger.error(f"Failed to get futures positions: {e}")
+                self._logger.exception(f"Failed to get futures positions: {e}")
                 return e
 
         def safe_get_futures_positions():
@@ -273,11 +271,10 @@ class CoinbaseExchangeAdapter:
                     )
 
                 # Convert result to functional OrderResult
-                order_result = create_order_result(result, success=True)
-                return order_result
+                return create_order_result(result, success=True)
 
             except Exception as e:
-                self._logger.error(f"Futures order placement failed: {e}")
+                self._logger.exception(f"Futures order placement failed: {e}")
                 return e
 
         def safe_place_futures_order():

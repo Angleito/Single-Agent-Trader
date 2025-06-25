@@ -373,8 +373,7 @@ def store_alert(
             return Left(EventStorageError(alert_result.failure()))
 
         alert_event = alert_result.success()
-        store_result = store.store_event(alert_event).run()
-        return store_result
+        return store.store_event(alert_event).run()
 
     return IO(_store_alert)
 
@@ -397,8 +396,7 @@ def store_audit_entry(
             return Left(EventStorageError(audit_result.failure()))
 
         audit_event = audit_result.success()
-        store_result = store.store_event(audit_event).run()
-        return store_result
+        return store.store_event(audit_event).run()
 
     return IO(_store_audit)
 

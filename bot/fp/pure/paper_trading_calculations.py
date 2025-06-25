@@ -3,8 +3,8 @@
 from datetime import datetime
 from decimal import Decimal
 
-from ..types.effects import Err, Ok, Result
-from ..types.paper_trading import (
+from bot.fp.types.effects import Err, Ok, Result
+from bot.fp.types.paper_trading import (
     PaperTradingAccountState,
     TradeExecution,
     apply_slippage,
@@ -12,7 +12,7 @@ from ..types.paper_trading import (
     calculate_trade_fees,
     create_paper_trade,
 )
-from ..types.portfolio import PortfolioMetrics
+from bot.fp.types.portfolio import PortfolioMetrics
 
 
 def calculate_position_size(

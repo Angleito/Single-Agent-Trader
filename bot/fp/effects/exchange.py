@@ -11,8 +11,15 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from ..types.effects import CancelResult, PositionUpdate
-from ..types.trading import AccountBalance, Order, OrderResult, OrderStatus, Position
+from bot.fp.types.effects import CancelResult, PositionUpdate
+from bot.fp.types.trading import (
+    AccountBalance,
+    Order,
+    OrderResult,
+    OrderStatus,
+    Position,
+)
+
 from .io import AsyncIO, IOEither, from_try
 
 
@@ -27,7 +34,7 @@ def place_order(order: Order) -> IOEither[Exception, OrderResult]:
             raise ValueError("Limit orders must have positive price")
 
         # Simulate order placement
-        result = OrderResult(
+        return OrderResult(
             order_id=f"order_{datetime.utcnow().timestamp()}",
             status=OrderStatus.PENDING,
             filled_size=Decimal(0),
@@ -35,7 +42,6 @@ def place_order(order: Order) -> IOEither[Exception, OrderResult]:
             fees=Decimal(0),
             created_at=datetime.utcnow(),
         )
-        return result
 
     return from_try(place)
 

@@ -320,9 +320,7 @@ class BluefinWebSocketAuthenticator:
         """
         auth_token = self.get_auth_token()
 
-        subscription = {"e": channel, "t": auth_token, **params}
-
-        return subscription
+        return {"e": channel, "t": auth_token, **params}
 
     def refresh_token(self) -> str:
         """
@@ -370,7 +368,7 @@ class BluefinWebSocketAuthenticator:
             )
 
         except Exception as e:
-            logger.error("Failed to generate new auth token: %s", e)
+            logger.exception("Failed to generate new auth token: %s", e)
             raise BluefinWebSocketAuthError(f"Token generation failed: {e}") from e
 
     def _should_refresh_token(self) -> bool:

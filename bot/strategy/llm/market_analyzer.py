@@ -8,10 +8,12 @@ to provide a focused, reusable market state preparation interface.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from ...config import settings
-from ...trading_types import IndicatorData, MarketState
+from bot.config import settings
+
+if TYPE_CHECKING:
+    from bot.trading_types import IndicatorData, MarketState
 
 logger = logging.getLogger(__name__)
 

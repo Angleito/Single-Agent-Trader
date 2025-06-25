@@ -98,7 +98,7 @@ class WebSocketMessageValidator:
 
             # Validate timestamp
             try:
-                datetime.fromisoformat(message["timestamp"].replace("Z", "+00:00"))
+                datetime.fromisoformat(message["timestamp"])
             except (ValueError, AttributeError) as e:
                 logger.warning("Invalid ticker timestamp: %s", e)
                 return False
@@ -375,7 +375,7 @@ class WebSocketMessageValidator:
             if not timestamp_str:
                 return True  # No timestamp to validate
 
-            message_time = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+            message_time = datetime.fromisoformat(timestamp_str)
             current_time = datetime.now(UTC)
 
             # Check for messages from the future (more than 5 seconds)
@@ -1358,9 +1358,7 @@ class MarketDataProvider:
         try:
             # Advanced Trading API format: events array with tickers
             events = message.get("events", [])
-            timestamp = datetime.fromisoformat(
-                message.get("timestamp", "").replace("Z", "+00:00")
-            )
+            timestamp = datetime.fromisoformat(message.get("timestamp", ""))
 
             for event in events:
                 event_type = event.get("type")
@@ -1436,9 +1434,7 @@ class MarketDataProvider:
         try:
             # Advanced Trading API format: events array with trades
             events = message.get("events", [])
-            timestamp = datetime.fromisoformat(
-                message.get("timestamp", "").replace("Z", "+00:00")
-            )
+            timestamp = datetime.fromisoformat(message.get("timestamp", ""))
 
             for event in events:
                 event_type = event.get("type")
@@ -1453,9 +1449,7 @@ class MarketDataProvider:
                             "size": Decimal(trade["size"]),
                             "side": trade["side"],
                             "timestamp": datetime.fromisoformat(
-                                trade.get("time", timestamp.isoformat()).replace(
-                                    "Z", "+00:00"
-                                )
+                                trade.get("time", timestamp.isoformat())
                             ),
                             "trade_id": trade.get("trade_id", ""),
                         }
@@ -2330,7 +2324,7 @@ class MarketDataFeed:
                 return await self._client.get_candles_range(start_time, end_time)
             return await self._client.get_candles(limit)
         except Exception as e:
-            logging.getLogger(__name__).error(
+            logging.getLogger(__name__).exception(
                 "Failed to fetch historical data for %s: %s", self.symbol, e
             )
             # Return empty DataFrame with expected structure
@@ -2346,7 +2340,9 @@ class MarketDataFeed:
             try:
                 callback(market_data)
             except Exception as e:
-                logging.getLogger(__name__).error("Market data callback failed: %s", e)
+                logging.getLogger(__name__).exception(
+                    "Market data callback failed: %s", e
+                )
 
     async def _simulate_data_feed(self) -> None:
         """Simulate market data updates for testing/dry-run mode."""
@@ -2377,7 +2373,9 @@ class MarketDataFeed:
                 await asyncio.sleep(1.0)
 
             except Exception as e:
-                logging.getLogger(__name__).error("Error in simulated data feed: %s", e)
+                logging.getLogger(__name__).exception(
+                    "Error in simulated data feed: %s", e
+                )
                 await asyncio.sleep(5.0)
 
     async def _start_websocket_feed(self) -> None:
@@ -2390,7 +2388,7 @@ class MarketDataFeed:
                 break
 
             except Exception as e:
-                logging.getLogger(__name__).error("WebSocket feed error: %s", e)
+                logging.getLogger(__name__).exception("WebSocket feed error: %s", e)
                 await asyncio.sleep(5.0)
 
     async def _poll_data_feed(self) -> None:
@@ -2413,7 +2411,9 @@ class MarketDataFeed:
                 await asyncio.sleep(5.0)
 
             except Exception as e:
-                logging.getLogger(__name__).error("Error in polling data feed: %s", e)
+                logging.getLogger(__name__).exception(
+                    "Error in polling data feed: %s", e
+                )
                 await asyncio.sleep(10.0)
 
     def is_running(self) -> bool:

@@ -9,25 +9,23 @@ while adding functional programming capabilities.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from ...monitoring.performance_metrics import PerformanceMetricsCollector
-from ...performance_monitor import PerformanceMonitor, get_performance_monitor
-from ...system_monitor import SystemHealthMonitor, system_monitor
-from ..adapters.performance_monitor_adapter import (
+from bot.fp.adapters.performance_monitor_adapter import (
     FunctionalPerformanceMonitor,
     MonitoringSnapshot,
     enhance_existing_monitor,
 )
-from ..adapters.system_monitor_adapter import (
+from bot.fp.adapters.system_monitor_adapter import (
     FunctionalSystemMonitor,
     HealthState,
     enhance_existing_system_monitor,
 )
-from ..alerting.functional_alerting import (
+from bot.fp.alerting.functional_alerting import (
     AlertEvent,
     AlertingEngine,
     AlertRule,
@@ -37,11 +35,13 @@ from ..alerting.functional_alerting import (
     create_alerting_engine,
     create_simple_threshold_rule,
 )
-from ..effects.io import IO
-from ..effects.monitoring import (
-    MetricPoint,
-    collect_system_metrics,
-)
+from bot.fp.effects.io import IO
+from bot.fp.effects.monitoring import MetricPoint, collect_system_metrics
+from bot.performance_monitor import PerformanceMonitor, get_performance_monitor
+from bot.system_monitor import SystemHealthMonitor, system_monitor
+
+if TYPE_CHECKING:
+    from bot.monitoring.performance_metrics import PerformanceMetricsCollector
 
 logger = logging.getLogger(__name__)
 
@@ -213,7 +213,7 @@ class UnifiedMonitoringSystem:
                         self.functional_performance.create_monitoring_snapshot().run()
                     )
                 except Exception as e:
-                    logger.error(f"Error creating performance snapshot: {e}")
+                    logger.exception(f"Error creating performance snapshot: {e}")
 
             # Collect system health state
             system_health_state = None
@@ -223,7 +223,7 @@ class UnifiedMonitoringSystem:
                         self.functional_system.create_health_state().run()
                     )
                 except Exception as e:
-                    logger.error(f"Error creating system health state: {e}")
+                    logger.exception(f"Error creating system health state: {e}")
 
             # Collect active alerts
             active_alerts = []
@@ -231,7 +231,7 @@ class UnifiedMonitoringSystem:
                 try:
                     active_alerts = self.alerting_engine.get_active_alerts().run()
                 except Exception as e:
-                    logger.error(f"Error getting active alerts: {e}")
+                    logger.exception(f"Error getting active alerts: {e}")
 
             # Collect functional metrics
             functional_metrics = []
@@ -260,7 +260,7 @@ class UnifiedMonitoringSystem:
                     ]
                 )
             except Exception as e:
-                logger.error(f"Error collecting functional metrics: {e}")
+                logger.exception(f"Error collecting functional metrics: {e}")
 
             # Calculate system health score
             system_health_score = 100.0
@@ -306,7 +306,7 @@ class UnifiedMonitoringSystem:
             try:
                 return self.alerting_engine.process_metrics_batch(metrics).run()
             except Exception as e:
-                logger.error(f"Error processing metrics with alerting: {e}")
+                logger.exception(f"Error processing metrics with alerting: {e}")
                 return []
 
         return IO(process_metrics)
@@ -364,7 +364,7 @@ class UnifiedMonitoringSystem:
                 status["integration_info"] = latest_state.integration_status
 
             except Exception as e:
-                logger.error(f"Error getting comprehensive health status: {e}")
+                logger.exception(f"Error getting comprehensive health status: {e}")
                 status["error"] = str(e)
 
             return status
@@ -410,7 +410,7 @@ class UnifiedMonitoringSystem:
             }
 
         except Exception as e:
-            logger.error(f"Error getting performance summary: {e}")
+            logger.exception(f"Error getting performance summary: {e}")
             return {"error": str(e), "timestamp": datetime.now(UTC).isoformat()}
 
     def get_system_status(self) -> dict[str, Any]:
@@ -434,7 +434,7 @@ class UnifiedMonitoringSystem:
             }
 
         except Exception as e:
-            logger.error(f"Error getting system status: {e}")
+            logger.exception(f"Error getting system status: {e}")
             return {"error": str(e), "timestamp": datetime.now(UTC).isoformat()}
 
     # ==============================================================================
@@ -452,7 +452,7 @@ class UnifiedMonitoringSystem:
             logger.info(f"Added custom alert rule: {rule.name}")
             return True
         except Exception as e:
-            logger.error(f"Error adding alert rule: {e}")
+            logger.exception(f"Error adding alert rule: {e}")
             return False
 
     def configure_notification_channel(
@@ -468,7 +468,7 @@ class UnifiedMonitoringSystem:
             logger.info(f"Configured notification channel: {channel.value}")
             return True
         except Exception as e:
-            logger.error(f"Error configuring notification channel: {e}")
+            logger.exception(f"Error configuring notification channel: {e}")
             return False
 
     def get_monitoring_trends(
@@ -518,7 +518,7 @@ class UnifiedMonitoringSystem:
             }
 
         except Exception as e:
-            logger.error(f"Error getting monitoring trends: {e}")
+            logger.exception(f"Error getting monitoring trends: {e}")
             return {"error": str(e), "timestamp": datetime.now(UTC).isoformat()}
 
     # ==============================================================================
@@ -560,13 +560,13 @@ class UnifiedMonitoringSystem:
             try:
                 await self.legacy_performance_monitor.start_monitoring()
             except Exception as e:
-                logger.error(f"Error starting legacy performance monitor: {e}")
+                logger.exception(f"Error starting legacy performance monitor: {e}")
 
         if self.legacy_system_monitor:
             try:
                 await self.legacy_system_monitor.start_monitoring()
             except Exception as e:
-                logger.error(f"Error starting legacy system monitor: {e}")
+                logger.exception(f"Error starting legacy system monitor: {e}")
 
         logger.info("Started unified monitoring system")
 
@@ -577,10 +577,8 @@ class UnifiedMonitoringSystem:
         # Cancel monitoring tasks
         for task in self.monitoring_tasks:
             task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass
 
         self.monitoring_tasks.clear()
 
@@ -589,13 +587,13 @@ class UnifiedMonitoringSystem:
             try:
                 await self.legacy_performance_monitor.stop_monitoring()
             except Exception as e:
-                logger.error(f"Error stopping legacy performance monitor: {e}")
+                logger.exception(f"Error stopping legacy performance monitor: {e}")
 
         if self.legacy_system_monitor:
             try:
                 await self.legacy_system_monitor.stop_monitoring()
             except Exception as e:
-                logger.error(f"Error stopping legacy system monitor: {e}")
+                logger.exception(f"Error stopping legacy system monitor: {e}")
 
         logger.info("Stopped unified monitoring system")
 
@@ -637,7 +635,7 @@ class UnifiedMonitoringSystem:
                 await asyncio.sleep(self.config.alerting_evaluation_interval)
 
             except Exception as e:
-                logger.error(f"Error in unified monitoring loop: {e}")
+                logger.exception(f"Error in unified monitoring loop: {e}")
                 await asyncio.sleep(self.config.alerting_evaluation_interval)
 
     def get_latest_monitoring_state(self) -> MonitoringState | None:
@@ -689,7 +687,7 @@ class UnifiedMonitoringSystem:
             return f"Unsupported export format: {format_type}"
 
         except Exception as e:
-            logger.error(f"Error exporting monitoring data: {e}")
+            logger.exception(f"Error exporting monitoring data: {e}")
             return f"Export failed: {e!s}"
 
 

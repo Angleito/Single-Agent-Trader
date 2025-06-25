@@ -9,17 +9,19 @@ from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
-from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Generic, TypeVar
+from typing import TYPE_CHECKING, Generic, TypeVar
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 A = TypeVar("A")
 B = TypeVar("B")
 E = TypeVar("E")
 
 
-class IO(Generic[A]):
+class IO[A]:
     """IO monad for lazy evaluation of side effects"""
 
     def __init__(self, computation: Callable[[], A]):
@@ -56,7 +58,7 @@ class IO(Generic[A]):
         return IO(f)
 
 
-class AsyncIO(Generic[A]):
+class AsyncIO[A]:
     """Async IO monad for asynchronous effects"""
 
     def __init__(self, computation: Callable[[], asyncio.Task[A]]):
@@ -150,7 +152,7 @@ class Right(Either[E, A]):
         return f(self.value)
 
 
-class IOEither(Generic[E, A]):
+class IOEither[E, A]:
     """IO that can fail with error type E"""
 
     def __init__(self, computation: Callable[[], Either[E, A]]):
@@ -200,7 +202,7 @@ class IOEither(Generic[E, A]):
 # Effect Combinators
 
 
-def sequence(ios: list[IO[A]]) -> IO[list[A]]:
+def sequence[A](ios: list[IO[A]]) -> IO[list[A]]:
     """Execute IOs in sequence, collect results"""
 
     def sequenced():
@@ -217,7 +219,7 @@ def traverse(items: list[A], f: Callable[[A], IO[B]]) -> IO[list[B]]:
     return sequence([f(item) for item in items])
 
 
-def parallel(ios: list[IO[A]], max_workers: int = 4) -> IO[list[A]]:
+def parallel[A](ios: list[IO[A]], max_workers: int = 4) -> IO[list[A]]:
     """Execute IOs in parallel using ThreadPoolExecutor"""
 
     def paralleled():
@@ -228,13 +230,13 @@ def parallel(ios: list[IO[A]], max_workers: int = 4) -> IO[list[A]]:
     return IO(paralleled)
 
 
-async def async_parallel(async_ios: list[AsyncIO[A]]) -> list[A]:
+async def async_parallel[A](async_ios: list[AsyncIO[A]]) -> list[A]:
     """Execute AsyncIOs in parallel"""
     tasks = [aio.run() for aio in async_ios]
     return await asyncio.gather(*tasks)
 
 
-def race(ios: list[AsyncIO[A]]) -> AsyncIO[A]:
+def race[A](ios: list[AsyncIO[A]]) -> AsyncIO[A]:
     """Race multiple AsyncIOs, return first to complete"""
 
     async def raced():
@@ -242,7 +244,7 @@ def race(ios: list[AsyncIO[A]]) -> AsyncIO[A]:
         done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         for task in pending:
             task.cancel()
-        return list(done)[0].result()
+        return next(iter(done)).result()
 
     return AsyncIO(lambda: asyncio.create_task(raced()))
 
@@ -250,7 +252,7 @@ def race(ios: list[AsyncIO[A]]) -> AsyncIO[A]:
 # Lifting Utilities
 
 
-def from_try(f: Callable[[], A]) -> IOEither[Exception, A]:
+def from_try[A](f: Callable[[], A]) -> IOEither[Exception, A]:
     """Lift function that may throw into IOEither"""
 
     def safe():
@@ -262,14 +264,14 @@ def from_try(f: Callable[[], A]) -> IOEither[Exception, A]:
     return IOEither(safe)
 
 
-def from_option(option: A | None, error: E) -> IOEither[E, A]:
+def from_option[A, E](option: A | None, error: E) -> IOEither[E, A]:
     """Convert Option to IOEither"""
     if option is None:
         return IOEither.left(error)
     return IOEither.pure(option)
 
 
-def from_future(future: asyncio.Future[A]) -> AsyncIO[A]:
+def from_future[A](future: asyncio.Future[A]) -> AsyncIO[A]:
     """Convert Future to AsyncIO"""
     return AsyncIO(lambda: future)
 
@@ -277,18 +279,18 @@ def from_future(future: asyncio.Future[A]) -> AsyncIO[A]:
 # Utility Functions
 
 
-def void(io: IO[A]) -> IO[None]:
+def void[A](io: IO[A]) -> IO[None]:
     """Discard the result of an IO"""
     return io.map(lambda _: None)
 
 
-def when(condition: bool, io: IO[A]) -> IO[A | None]:
+def when[A](condition: bool, io: IO[A]) -> IO[A | None]:
     """Execute IO only if condition is true"""
     if condition:
         return io.map(lambda x: x)
     return IO.pure(None)
 
 
-def unless(condition: bool, io: IO[A]) -> IO[A | None]:
+def unless[A](condition: bool, io: IO[A]) -> IO[A | None]:
     """Execute IO only if condition is false"""
     return when(not condition, io)

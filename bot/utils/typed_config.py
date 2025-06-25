@@ -32,7 +32,7 @@ def get_typed(
 ) -> str: ...
 
 
-def get_typed(
+def get_typed[T](
     obj: dict[str, ConfigValue] | DictLike | object, attr: str, default: T
 ) -> T:
     """
@@ -75,8 +75,13 @@ def get_typed(
             return bool(value)  # type: ignore[return-value]
         if target_type == str:
             return str(value)  # type: ignore[return-value]
-        # For other types, try direct conversion
-        return target_type(value)  # type: ignore[return-value]
+        # For other types, try direct conversion (skip object and type)
+        if callable(target_type) and target_type.__name__ not in ("object", "type"):
+            try:
+                return target_type(value)  # type: ignore[call-arg]
+            except (ValueError, TypeError):
+                return default
+        return default
     except (ValueError, TypeError):
         return default
 
@@ -93,7 +98,7 @@ def ensure_int(value: ConfigValue, default: int = 0) -> int:
 
 def ensure_float(value: ConfigValue, default: float = 0.0) -> float:
     """Ensure a value is a float."""
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return float(value)
     try:
         return float(str(value))

@@ -6,13 +6,13 @@ and composing them in a pure way.
 """
 
 from collections.abc import Callable
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 T = TypeVar("T")
 U = TypeVar("U")
 
 
-class IO(Generic[T]):
+class IO[T]:
     """IO monad for wrapping side-effectful computations."""
 
     def __init__(self, computation: Callable[[], T]) -> None:
@@ -51,7 +51,7 @@ class IO(Generic[T]):
         return f"IO({self._computation})"
 
 
-def pure(value: T) -> IO[T]:
+def pure[T](value: T) -> IO[T]:
     """Create an IO that returns the given value."""
     return IO(lambda: value)
 
@@ -61,12 +61,12 @@ def unit() -> IO[None]:
     return IO(lambda: None)
 
 
-def delay(computation: Callable[[], T]) -> IO[T]:
+def delay[T](computation: Callable[[], T]) -> IO[T]:
     """Delay a computation by wrapping it in IO."""
     return IO(computation)
 
 
-def sequence_io(ios: list[IO[T]]) -> IO[list[T]]:
+def sequence_io[T](ios: list[IO[T]]) -> IO[list[T]]:
     """Execute a list of IO computations and collect results."""
 
     def run_all() -> list[T]:
@@ -123,12 +123,12 @@ def try_io(io: IO[T], error_handler: Callable[[Exception], T]) -> IO[T]:
     return IO(safe_run)
 
 
-def unsafe_run_io_sync(io: IO[T]) -> T:
+def unsafe_run_io_sync[T](io: IO[T]) -> T:
     """Unsafely run IO synchronously - use sparingly."""
     return io.run()
 
 
-class IOBuilder(Generic[T]):
+class IOBuilder[T]:
     """Builder for composing IO operations."""
 
     def __init__(self, initial: IO[T]) -> None:
@@ -151,7 +151,7 @@ class IOBuilder(Generic[T]):
         return self._io
 
 
-def io_builder(initial: IO[T]) -> IOBuilder[T]:
+def io_builder[T](initial: IO[T]) -> IOBuilder[T]:
     """Create an IO builder for fluent composition."""
     return IOBuilder(initial)
 

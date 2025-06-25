@@ -11,11 +11,13 @@ from typing import Any, Literal, cast
 
 from bot.config import settings
 from bot.error_handling import ErrorBoundary
-from bot.fp.types import TradeAction
+
+# Removed: from bot.fp.types import TradeAction  # This imports Union type, not BaseModel
 from bot.system_monitor import error_recovery_manager, system_monitor
 from bot.trading_types import (  # Keep legacy imports until functional equivalents available
     IndicatorData,
     MarketState,
+    TradeAction,  # Import the Pydantic BaseModel, not the FP Union type
 )
 
 logger = logging.getLogger(__name__)

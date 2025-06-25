@@ -150,7 +150,7 @@ class BluefinWebSocketClient:
                 self._authenticator = create_websocket_authenticator(private_key_hex)
                 logger.info("Initialized WebSocket authenticator for private channels")
             except Exception as e:
-                logger.error("Failed to initialize WebSocket authenticator: %s", e)
+                logger.exception("Failed to initialize WebSocket authenticator: %s", e)
                 self.enable_private_channels = False
         elif enable_private_channels:
             logger.warning(
@@ -300,7 +300,7 @@ class BluefinWebSocketClient:
 
             elif "id" in data:
                 # JSON-RPC response validation
-                if not isinstance(data.get("id"), (int, str)):
+                if not isinstance(data.get("id"), int | str):
                     self._log_invalid_message(
                         "invalid_id_field", f"Invalid ID field: {data.get('id')}"
                     )
@@ -962,7 +962,7 @@ class BluefinWebSocketClient:
             )
 
         except BluefinWebSocketAuthError as e:
-            logger.error("Authentication error subscribing to userUpdates: %s", e)
+            logger.exception("Authentication error subscribing to userUpdates: %s", e)
             raise
         except Exception as e:
             exception_handler.log_exception_with_context(
@@ -1355,7 +1355,7 @@ class BluefinWebSocketClient:
                     else:
                         self.on_account_update(data)
                 except Exception as e:
-                    logger.error("Error in account update callback: %s", e)
+                    logger.exception("Error in account update callback: %s", e)
 
         except Exception as e:
             exception_handler.log_exception_with_context(
@@ -1383,7 +1383,7 @@ class BluefinWebSocketClient:
                     else:
                         self.on_position_update(data)
                 except Exception as e:
-                    logger.error("Error in position update callback: %s", e)
+                    logger.exception("Error in position update callback: %s", e)
 
         except Exception as e:
             exception_handler.log_exception_with_context(
@@ -1411,7 +1411,7 @@ class BluefinWebSocketClient:
                     else:
                         self.on_order_update(data)
                 except Exception as e:
-                    logger.error("Error in order update callback: %s", e)
+                    logger.exception("Error in order update callback: %s", e)
 
         except Exception as e:
             exception_handler.log_exception_with_context(
@@ -2238,7 +2238,7 @@ class BluefinWebSocketClient:
                 logger.info("Token refresh handler cancelled")
                 break
             except Exception as e:
-                logger.error("Error in token refresh handler: %s", e)
+                logger.exception("Error in token refresh handler: %s", e)
                 # Continue running even if there's an error
                 await asyncio.sleep(60)  # Wait 1 minute before retry
 
@@ -2419,7 +2419,7 @@ class BluefinWebSocketClient:
                         if "timestamp" in data:
                             try:
                                 ts = data["timestamp"]
-                                if isinstance(ts, (int, float)):
+                                if isinstance(ts, int | float):
                                     # Convert from milliseconds if needed
                                     if ts > 1e10:
                                         ts = ts / 1000
@@ -2428,7 +2428,7 @@ class BluefinWebSocketClient:
                                 pass
 
                         # Create simplified market data for price update
-                        market_data = MarketData(
+                        MarketData(
                             symbol=self.symbol,
                             timestamp=timestamp,
                             open=price_decimal,
@@ -2731,7 +2731,7 @@ class BluefinWebSocketClient:
             return True
 
         except Exception as e:
-            logger.error("Failed to refresh WebSocket authentication: %s", e)
+            logger.exception("Failed to refresh WebSocket authentication: %s", e)
             return False
 
     async def _handle_authentication_error(self, error_data: dict[str, Any]) -> None:
@@ -2764,7 +2764,7 @@ class BluefinWebSocketClient:
                 self.enable_private_channels = False
 
         except Exception as e:
-            logger.error("Error handling authentication error: %s", e)
+            logger.exception("Error handling authentication error: %s", e)
             self.enable_private_channels = False
 
     def is_authenticated(self) -> bool:
@@ -2926,7 +2926,7 @@ class BluefinWebSocketClient:
         if isinstance(ts, str):
             try:
                 # Try ISO format
-                return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                return datetime.fromisoformat(ts)
             except (ValueError, TypeError):
                 pass
 

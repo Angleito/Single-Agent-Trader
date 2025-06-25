@@ -6,10 +6,13 @@ Pure functions for calculating RSI, Stochastic, and other oscillators.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from bot.fp.types.indicators import RSIResult
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 def calculate_rsi(prices: Sequence[float], period: int = 14) -> float | None:
@@ -47,9 +50,7 @@ def calculate_rsi(prices: Sequence[float], period: int = 14) -> float | None:
         return 100.0
 
     rs = avg_gain / avg_loss
-    rsi = 100 - (100 / (1 + rs))
-
-    return rsi
+    return 100 - (100 / (1 + rs))
 
 
 def calculate_stochastic(
@@ -248,9 +249,7 @@ def calculate_mfi(
         return 100.0
 
     money_ratio = positive_flow / negative_flow
-    mfi = 100 - (100 / (1 + money_ratio))
-
-    return mfi
+    return 100 - (100 / (1 + money_ratio))
 
 
 def create_rsi_result(

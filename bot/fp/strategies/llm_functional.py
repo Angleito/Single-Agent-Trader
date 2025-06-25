@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from ..types import MarketState, TradingParams
-from ..types.indicators import VuManchuState
-from ..types.trading import Hold, Long, Short, TradeSignal
+from bot.fp.types import MarketState, TradingParams
+from bot.fp.types.indicators import VuManchuState
+from bot.fp.types.trading import Hold, Long, Short, TradeSignal
 
 
 class LLMProvider(Enum):
@@ -57,7 +57,7 @@ class LLMResponse:
 def create_market_context(
     market_state: MarketState,
     vumanchu_state: VuManchuState,
-    recent_trades: list[dict[str, Any]] = None,
+    recent_trades: list[dict[str, Any]] | None = None,
     lookback_periods: int = 20,
 ) -> LLMContext:
     """Create context for LLM from market state and indicators."""

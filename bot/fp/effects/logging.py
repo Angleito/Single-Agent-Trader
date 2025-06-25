@@ -9,13 +9,15 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .io import IO
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class LogLevel(Enum):

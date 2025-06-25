@@ -166,7 +166,7 @@ class PrecisionManager:
             return converted
 
         except (ValueError, TypeError, ArithmeticError) as e:
-            logger.error(
+            logger.exception(
                 "Precision conversion failed for %s.%s: %s",
                 context.symbol,
                 context.field_name,
@@ -249,7 +249,7 @@ class PrecisionManager:
             timestamp = datetime.now(UTC)
 
         converted = {}
-        base_context = PriceContext(
+        PriceContext(
             symbol=symbol,
             field_name="",
             source_format="raw",
@@ -337,7 +337,7 @@ class PrecisionManager:
             return float(price)
 
         except Exception as e:
-            logger.error("API formatting failed for %s: %s", symbol, str(e))
+            logger.exception("API formatting failed for %s: %s", symbol, str(e))
             raise ValueError(f"Cannot format price {price} for API") from e
 
     def get_precision_stats(self) -> dict[str, Any]:

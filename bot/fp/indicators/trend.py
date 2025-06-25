@@ -6,11 +6,14 @@ Pure functions for calculating MACD, ADX, and other trend indicators.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from bot.fp.indicators.vumanchu import calculate_ema_simple as calculate_ema
 from bot.fp.types.indicators import MACDResult
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 def calculate_macd(
@@ -147,8 +150,7 @@ def calculate_adx(
     if len(dx_values) < period:
         return None
 
-    adx = sum(dx_values[-period:]) / period
-    return adx
+    return sum(dx_values[-period:]) / period
 
 
 def calculate_psar(

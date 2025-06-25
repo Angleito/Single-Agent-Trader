@@ -12,8 +12,9 @@ from typing import Any, ClassVar
 from uuid import UUID, uuid4
 
 from bot.fp.core.option import Empty, Option, Some
-from bot.fp.types.result import Failure, Result, Success
 from bot.types import OrderType, TradeSide
+
+from .result import Failure, Result, Success
 
 
 @dataclass(frozen=True)

@@ -8,6 +8,58 @@ from typing import Any, Protocol, runtime_checkable
 
 
 @dataclass(frozen=True)
+class FPCandle:
+    """Functional programming candle data structure."""
+
+    timestamp: datetime
+    open: Decimal
+    high: Decimal
+    low: Decimal
+    close: Decimal
+    volume: Decimal
+    symbol: str = ""
+
+    def __post_init__(self) -> None:
+        """Validate candle data."""
+        if self.high < self.low:
+            raise ValueError(f"High ({self.high}) cannot be less than low ({self.low})")
+        if self.open < 0 or self.high < 0 or self.low < 0 or self.close < 0:
+            raise ValueError("OHLC prices cannot be negative")
+        if self.volume < 0:
+            raise ValueError("Volume cannot be negative")
+
+    @property
+    def hlc3(self) -> Decimal:
+        """Calculate HLC3 (typical price)."""
+        return (self.high + self.low + self.close) / 3
+
+    @property
+    def body_size(self) -> Decimal:
+        """Calculate the size of the candle body."""
+        return abs(self.close - self.open)
+
+    @property
+    def upper_shadow(self) -> Decimal:
+        """Calculate upper shadow size."""
+        return self.high - max(self.open, self.close)
+
+    @property
+    def lower_shadow(self) -> Decimal:
+        """Calculate lower shadow size."""
+        return min(self.open, self.close) - self.low
+
+    @property
+    def is_bullish(self) -> bool:
+        """Check if candle is bullish (close > open)."""
+        return self.close > self.open
+
+    @property
+    def is_bearish(self) -> bool:
+        """Check if candle is bearish (close < open)."""
+        return self.close < self.open
+
+
+@dataclass(frozen=True)
 class MarketSnapshot:
     """Immutable representation of market state at a specific point in time.
 
@@ -19,6 +71,10 @@ class MarketSnapshot:
         bid: Best bid price
         ask: Best ask price
         spread: Calculated spread between bid and ask
+        current_price: Alias for price (backward compatibility)
+        high_20: 20-period high
+        low_20: 20-period low
+        sma_20: 20-period simple moving average
     """
 
     timestamp: datetime
@@ -28,6 +84,11 @@ class MarketSnapshot:
     bid: Decimal
     ask: Decimal
     spread: Decimal = field(init=False)
+
+    # Technical indicator fields for strategy compatibility
+    high_20: Decimal | None = None
+    low_20: Decimal | None = None
+    sma_20: Decimal | None = None
 
     def __post_init__(self) -> None:
         """Calculate derived fields and validate data."""
@@ -43,6 +104,26 @@ class MarketSnapshot:
             raise ValueError("Bid and ask prices must be positive")
         if self.bid > self.ask:
             raise ValueError(f"Bid {self.bid} cannot be greater than ask {self.ask}")
+
+        # Validate technical indicators if provided
+        if self.high_20 is not None and self.high_20 <= 0:
+            raise ValueError(f"High_20 must be positive, got {self.high_20}")
+        if self.low_20 is not None and self.low_20 <= 0:
+            raise ValueError(f"Low_20 must be positive, got {self.low_20}")
+        if self.sma_20 is not None and self.sma_20 <= 0:
+            raise ValueError(f"SMA_20 must be positive, got {self.sma_20}")
+
+        # Validate relationship between high_20 and low_20 if both are provided
+        if self.high_20 is not None and self.low_20 is not None:
+            if self.high_20 < self.low_20:
+                raise ValueError(
+                    f"High_20 {self.high_20} cannot be less than low_20 {self.low_20}"
+                )
+
+    @property
+    def current_price(self) -> Decimal:
+        """Alias for price for backward compatibility."""
+        return self.price
 
 
 @dataclass(frozen=True)
@@ -789,7 +870,63 @@ class MarketData:
         )
 
 
+# Enhanced functional market data class
+@dataclass(frozen=True)
+class FunctionalMarketData:
+    """Functional market data with enhanced features for FP patterns"""
+
+    symbol: str
+    timestamp: datetime
+    price: Decimal
+    volume: Decimal
+    bid: Decimal | None = None
+    ask: Decimal | None = None
+
+    # Additional metadata
+    exchange: str | None = None
+    data_source: str = "market_data"
+    confidence_score: float = 1.0
+
+    def __post_init__(self) -> None:
+        """Validate functional market data."""
+        if self.price <= 0:
+            raise ValueError(f"Price must be positive, got {self.price}")
+        if self.volume < 0:
+            raise ValueError(f"Volume cannot be negative, got {self.volume}")
+        if self.confidence_score < 0 or self.confidence_score > 1:
+            raise ValueError(
+                f"Confidence score must be between 0 and 1, got {self.confidence_score}"
+            )
+
+    @property
+    def spread(self) -> Decimal | None:
+        """Calculate bid-ask spread"""
+        if self.bid is not None and self.ask is not None:
+            return self.ask - self.bid
+        return None
+
+    @property
+    def mid_price(self) -> Decimal:
+        """Calculate mid-point price or return current price"""
+        if self.bid is not None and self.ask is not None:
+            return (self.bid + self.ask) / 2
+        return self.price
+
+    @classmethod
+    def from_market_data(cls, market_data: MarketData) -> "FunctionalMarketData":
+        """Convert from legacy MarketData to FunctionalMarketData"""
+        return cls(
+            symbol=market_data.symbol,
+            timestamp=market_data.timestamp,
+            price=market_data.price,
+            volume=market_data.volume,
+            bid=market_data.bid,
+            ask=market_data.ask,
+        )
+
+
 # Type aliases for functional market data
 MarketDataMessage = WebSocketMessage | TickerMessage | TradeMessage | OrderBookMessage
 PriceData = Candle | Trade | Ticker
 StreamingData = RealtimeUpdate | AggregatedData
+FunctionalPriceData = FunctionalMarketData | Candle | Trade

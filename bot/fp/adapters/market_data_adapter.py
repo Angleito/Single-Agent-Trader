@@ -11,9 +11,7 @@ from collections.abc import Callable
 from typing import Any
 
 from bot.data.market import MarketDataProvider
-from bot.trading_types import MarketData as CurrentMarketData
-
-from ..types.market import (
+from bot.fp.types.market import (
     Candle,
     ConnectionState,
     DataQuality,
@@ -24,6 +22,7 @@ from ..types.market import (
     TickerMessage,
     TradeMessage,
 )
+from bot.trading_types import MarketData as CurrentMarketData
 
 # Type alias for backward compatibility
 FPCandle = Candle
@@ -187,7 +186,7 @@ class FunctionalMarketDataProcessor:
             self._notify_stream_callbacks(self._stream)
 
         except Exception as e:
-            logger.error(f"Error processing market data update: {e}")
+            logger.exception(f"Error processing market data update: {e}")
 
             # Update data quality with failure
             self._data_quality = update_data_quality(
@@ -217,7 +216,7 @@ class FunctionalMarketDataProcessor:
                 logger.debug(f"Unhandled WebSocket channel: {channel}")
 
         except Exception as e:
-            logger.error(f"Error processing WebSocket message: {e}")
+            logger.exception(f"Error processing WebSocket message: {e}")
 
             # Update data quality with failure
             self._data_quality = update_data_quality(
@@ -246,7 +245,7 @@ class FunctionalMarketDataProcessor:
             logger.debug(f"Processed ticker: {ticker_msg.price}")
 
         except Exception as e:
-            logger.error(f"Error processing ticker message: {e}")
+            logger.exception(f"Error processing ticker message: {e}")
 
     def _process_trade_message(self, message: dict[str, Any]) -> None:
         """Process trade message using functional types."""
@@ -267,7 +266,7 @@ class FunctionalMarketDataProcessor:
             logger.debug(f"Processed trade: {trade_msg.price} x {trade_msg.size}")
 
         except Exception as e:
-            logger.error(f"Error processing trade message: {e}")
+            logger.exception(f"Error processing trade message: {e}")
 
     def _process_orderbook_message(self, message: dict[str, Any]) -> None:
         """Process order book message using functional types."""
@@ -290,7 +289,7 @@ class FunctionalMarketDataProcessor:
             )
 
         except Exception as e:
-            logger.error(f"Error processing orderbook message: {e}")
+            logger.exception(f"Error processing orderbook message: {e}")
 
     # Callback management
 
@@ -331,7 +330,7 @@ class FunctionalMarketDataProcessor:
             try:
                 callback(candle)
             except Exception as e:
-                logger.error(f"Error in candle callback: {e}")
+                logger.exception(f"Error in candle callback: {e}")
 
     def _notify_update_callbacks(self, update: RealtimeUpdate) -> None:
         """Notify all update callbacks."""
@@ -339,7 +338,7 @@ class FunctionalMarketDataProcessor:
             try:
                 callback(update)
             except Exception as e:
-                logger.error(f"Error in update callback: {e}")
+                logger.exception(f"Error in update callback: {e}")
 
     def _notify_stream_callbacks(self, stream: MarketDataStream) -> None:
         """Notify all stream callbacks."""
@@ -347,7 +346,7 @@ class FunctionalMarketDataProcessor:
             try:
                 callback(stream)
             except Exception as e:
-                logger.error(f"Error in stream callback: {e}")
+                logger.exception(f"Error in stream callback: {e}")
 
     # State access
 

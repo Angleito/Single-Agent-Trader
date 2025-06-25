@@ -8,12 +8,14 @@ global state in a functional way.
 from __future__ import annotations
 
 import copy
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from threading import Lock
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
-from ..effects.io import IO
+from bot.fp.effects.io import IO
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 T = TypeVar("T")
 
@@ -104,7 +106,7 @@ def get_state_manager() -> StateManager:
     return _state_manager
 
 
-def create_state(key: str, initial_value: T) -> STMRef:
+def create_state[T](key: str, initial_value: T) -> STMRef:
     """Create global state"""
     return _state_manager.create_ref(key, initial_value)
 

@@ -7,10 +7,12 @@ indicator results and configurations.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Generic, TypeVar
+from typing import TYPE_CHECKING, TypeVar
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 T = TypeVar("T")
 
@@ -511,7 +513,7 @@ class ROCResult(IndicatorResult):
 
 
 @dataclass(frozen=True)
-class TimeSeries(Generic[T]):
+class TimeSeries[T]:
     """Immutable time series container for historical indicator data."""
 
     data: Sequence[T]

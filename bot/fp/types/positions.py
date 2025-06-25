@@ -7,8 +7,8 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
-from bot.fp.types.effects import Maybe, Nothing, Some
-from bot.fp.types.result import Failure, Result, Success
+from .base import Maybe, Nothing, Some
+from .result import Failure, Result, Success
 
 
 # Core Position Types
@@ -244,7 +244,7 @@ class FunctionalPosition:
                 )
 
             new_position = replace(
-                self, side=new_side, lots=self.lots + (new_lot,), last_update=timestamp
+                self, side=new_side, lots=(*self.lots, new_lot), last_update=timestamp
             )
 
             return Success(new_position)
@@ -797,7 +797,6 @@ def calculate_liquidation_price(
     if position.is_flat or position.margin_info.is_nothing():
         return Nothing()
 
-    margin_info = position.margin_info.value
     avg_price = position.average_price
 
     if avg_price.is_nothing():
@@ -805,7 +804,6 @@ def calculate_liquidation_price(
 
     try:
         entry_price = avg_price.value
-        quantity = position.total_quantity
 
         if position.side.is_long():
             # For long positions: liquidation_price = entry_price * (1 - 1/leverage + maintenance_margin_ratio)

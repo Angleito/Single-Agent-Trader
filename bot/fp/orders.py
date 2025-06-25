@@ -11,12 +11,14 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from decimal import Decimal
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from .effects import IO, AsyncIO, IOEither
 from .types.base import Percentage, Symbol
 from .types.result import Failure, Result, Success
+
+if TYPE_CHECKING:
+    from .effects import IO, AsyncIO, IOEither
 
 
 class OrderSide(Enum):
@@ -233,7 +235,7 @@ class OrderState:
 
     def with_fill(self, fill: OrderFill) -> OrderState:
         """Create new order state with additional fill."""
-        new_fills = self.fills + [fill]
+        new_fills = [*self.fills, fill]
         new_filled_quantity = self.filled_quantity + fill.quantity
         new_total_fees = self.total_fees + (fill.fee or Decimal(0))
 
@@ -456,7 +458,7 @@ class OrderManagerState:
             timestamp=order.created_at,
         )
 
-        new_events = self.order_events + [creation_event]
+        new_events = [*self.order_events, creation_event]
 
         # Update statistics
         all_orders = list(new_active_orders.values()) + self.completed_orders
@@ -714,7 +716,7 @@ def process_order_timeout(
 
     new_state = replace(
         new_state,
-        order_events=new_state.order_events + [timeout_event],
+        order_events=[*new_state.order_events, timeout_event],
     )
 
     return Success(new_state)
@@ -749,8 +751,7 @@ def place_order_effect(order: OrderState) -> IOEither[OrderExecutionError, Order
             )
 
         # Simulate successful order placement
-        placed_order = transition_order_status(order, OrderStatus.OPEN)
-        return placed_order
+        return transition_order_status(order, OrderStatus.OPEN)
 
     from .effects.io import from_try
 
@@ -769,8 +770,7 @@ def cancel_order_effect(
             )
 
         # Simulate order cancellation
-        cancelled_order = transition_order_status(order, OrderStatus.CANCELLED)
-        return cancelled_order
+        return transition_order_status(order, OrderStatus.CANCELLED)
 
     from .effects.io import from_try
 
@@ -1983,9 +1983,9 @@ def with_order_timeout(
             raise OrderExecutionError(
                 f"Timeout during {operation} for order {order_id}: {e!s}", order_id
             )
-        except Exception as e:
+        except Exception:
             signal.signal(signal.SIGALRM, old_handler)
-            raise e
+            raise
 
     from .effects.io import from_try
 
@@ -2112,7 +2112,7 @@ def with_circuit_breaker(
 
             return result
 
-        except OrderExecutionError as e:
+        except OrderExecutionError:
             # Record failure
             state["failure_count"] += 1
             state["last_failure_time"] = current_time
@@ -2122,7 +2122,7 @@ def with_circuit_breaker(
                 state["state"] = "OPEN"
                 print(f"Circuit breaker opened after {failure_threshold} failures")
 
-            raise e
+            raise
 
     from .effects.io import from_try
 
@@ -2157,7 +2157,7 @@ def with_order_monitoring(
             )
 
             # Record failure metrics
-            raise e
+            raise
 
     from .effects.io import from_try
 

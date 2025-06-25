@@ -127,17 +127,17 @@ class Right(Either[E, T]):
 
 
 # Utility functions for creating Either instances
-def left(value: E) -> Either[E, T]:
+def left[E](value: E) -> Either[E, T]:
     """Create a Left Either."""
     return Left(value)
 
 
-def right(value: T) -> Either[E, T]:
+def right[T](value: T) -> Either[E, T]:
     """Create a Right Either."""
     return Right(value)
 
 
-def try_either(func: Callable[[], T]) -> Either[str, T]:
+def try_either[T](func: Callable[[], T]) -> Either[str, T]:
     """Try to execute a function, catching exceptions as Left."""
     try:
         return Right(func())
@@ -145,7 +145,7 @@ def try_either(func: Callable[[], T]) -> Either[str, T]:
         return Left(str(e))
 
 
-def sequence_either(eithers: list[Either[E, T]]) -> Either[E, list[T]]:
+def sequence_either[E, T](eithers: list[Either[E, T]]) -> Either[E, list[T]]:
     """Transform a list of Eithers into an Either of list.
 
     Returns Left with the first error found, or Right with all values.

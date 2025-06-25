@@ -12,9 +12,9 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
-from ..effects.io import IO
-from ..effects.logging import error, info, warn
-from ..effects.monitoring import (
+from bot.fp.effects.io import IO
+from bot.fp.effects.logging import error, info, warn
+from bot.fp.effects.monitoring import (
     AlertLevel,
     HealthStatus,
     create_alert,
@@ -23,7 +23,7 @@ from ..effects.monitoring import (
     record_histogram,
     send_alert,
 )
-from ..effects.time import now
+from bot.fp.effects.time import now
 
 
 @dataclass

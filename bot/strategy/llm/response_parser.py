@@ -77,10 +77,10 @@ class ResponseParser:
             return self._extract_fields_manually(response_content)
 
         except json.JSONDecodeError as e:
-            logger.error(f"JSON decode error: {e}")
+            logger.exception(f"JSON decode error: {e}")
             return self._get_safe_default_action("JSON parsing error")
         except Exception as e:
-            logger.error(f"Unexpected error parsing response: {e}")
+            logger.exception(f"Unexpected error parsing response: {e}")
             return self._get_safe_default_action("Unexpected parsing error")
 
     def _extract_fields_manually(self, response_content: str) -> dict[str, Any]:
@@ -176,10 +176,10 @@ class ResponseParser:
             return trade_action
 
         except ValueError as e:
-            logger.error(f"Validation error creating TradeAction: {e}")
+            logger.exception(f"Validation error creating TradeAction: {e}")
             return None
         except Exception as e:
-            logger.error(f"Unexpected error creating TradeAction: {e}")
+            logger.exception(f"Unexpected error creating TradeAction: {e}")
             return None
 
     def handle_parsing_errors(

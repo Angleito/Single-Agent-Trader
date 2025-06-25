@@ -9,9 +9,9 @@ import logging
 from typing import Any
 
 from bot.exchange.bluefin import BluefinClient
+from bot.fp.effects.io import IOEither, Left, Right
+from bot.fp.types.trading import Order, OrderResult, Position
 
-from ..effects.io import IOEither, Left, Right
-from ..types.trading import Order, OrderResult, Position
 from .type_converters import (
     create_fp_account_balance,
     create_order_result,
@@ -63,11 +63,10 @@ class BluefinExchangeAdapter:
                     raise Exception("Order placement failed - no result returned")
 
                 # Convert result to functional OrderResult
-                order_result = create_order_result(result, success=True)
-                return order_result
+                return create_order_result(result, success=True)
 
             except Exception as e:
-                self._logger.error(f"Bluefin order placement failed: {e}")
+                self._logger.exception(f"Bluefin order placement failed: {e}")
                 return e
 
         def safe_place_order():
@@ -89,7 +88,7 @@ class BluefinExchangeAdapter:
                 result = self.client.cancel_order(order_id)
                 return result if result is not None else False
             except Exception as e:
-                self._logger.error(f"Bluefin order cancellation failed: {e}")
+                self._logger.exception(f"Bluefin order cancellation failed: {e}")
                 return e
 
         def safe_cancel_order():
@@ -127,7 +126,7 @@ class BluefinExchangeAdapter:
                 return fp_positions
 
             except Exception as e:
-                self._logger.error(f"Failed to get Bluefin positions: {e}")
+                self._logger.exception(f"Failed to get Bluefin positions: {e}")
                 return e
 
         def safe_get_positions():
@@ -150,11 +149,10 @@ class BluefinExchangeAdapter:
                 balance = self.client.get_account_balance()
 
                 # Convert to functional AccountBalance format
-                fp_balance = create_fp_account_balance(balance)
-                return fp_balance
+                return create_fp_account_balance(balance)
 
             except Exception as e:
-                self._logger.error(f"Failed to get Bluefin balance: {e}")
+                self._logger.exception(f"Failed to get Bluefin balance: {e}")
                 return e
 
         def safe_get_balance():
@@ -176,7 +174,7 @@ class BluefinExchangeAdapter:
                 result = self.client.connect()
                 return result if result is not None else False
             except Exception as e:
-                self._logger.error(f"Bluefin connection failed: {e}")
+                self._logger.exception(f"Bluefin connection failed: {e}")
                 return e
 
         def safe_connect():
@@ -198,7 +196,7 @@ class BluefinExchangeAdapter:
                 self.client.disconnect()
                 return True
             except Exception as e:
-                self._logger.error(f"Bluefin disconnection failed: {e}")
+                self._logger.exception(f"Bluefin disconnection failed: {e}")
                 return e
 
         def safe_disconnect():
@@ -222,7 +220,7 @@ class BluefinExchangeAdapter:
                 result = self.client.cancel_all_orders(symbol=symbol)
                 return result if result is not None else False
             except Exception as e:
-                self._logger.error(f"Bluefin cancel all orders failed: {e}")
+                self._logger.exception(f"Bluefin cancel all orders failed: {e}")
                 return e
 
         def safe_cancel_all_orders():
@@ -253,10 +251,9 @@ class BluefinExchangeAdapter:
 
         def _get_trading_symbol() -> str | Exception:
             try:
-                result = self.client.get_trading_symbol(symbol)
-                return result
+                return self.client.get_trading_symbol(symbol)
             except Exception as e:
-                self._logger.error(f"Failed to get Bluefin trading symbol: {e}")
+                self._logger.exception(f"Failed to get Bluefin trading symbol: {e}")
                 return e
 
         def safe_get_trading_symbol():

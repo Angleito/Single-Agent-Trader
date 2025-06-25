@@ -7,6 +7,7 @@ exact API compatibility for all exchange operations.
 
 import asyncio
 import logging
+import sys
 from decimal import Decimal
 
 from bot.exchange.bluefin import BluefinClient
@@ -60,7 +61,7 @@ async def test_coinbase_compatibility():
         return True
 
     except Exception as e:
-        logger.error(f"❌ Coinbase compatibility test failed: {e}")
+        logger.exception(f"❌ Coinbase compatibility test failed: {e}")
         return False
 
 
@@ -96,7 +97,7 @@ async def test_bluefin_compatibility():
         logger.info("✅ Bluefin connection status method works")
 
         # Test futures property
-        assert client.enable_futures == True, "Bluefin should enable futures"
+        assert client.enable_futures, "Bluefin should enable futures"
         logger.info("✅ Bluefin futures property works")
 
         # Test balance method exists (will fail gracefully in dry run without credentials)
@@ -112,7 +113,7 @@ async def test_bluefin_compatibility():
         return True
 
     except Exception as e:
-        logger.error(f"❌ Bluefin compatibility test failed: {e}")
+        logger.exception(f"❌ Bluefin compatibility test failed: {e}")
         return False
 
 
@@ -131,7 +132,7 @@ async def test_functional_adapter_registration():
         return True
 
     except Exception as e:
-        logger.error(f"❌ Functional adapter registration test failed: {e}")
+        logger.exception(f"❌ Functional adapter registration test failed: {e}")
         return False
 
 
@@ -168,7 +169,7 @@ async def test_type_conversion():
         return True
 
     except Exception as e:
-        logger.error(f"❌ Type conversion test failed: {e}")
+        logger.exception(f"❌ Type conversion test failed: {e}")
         return False
 
 
@@ -207,4 +208,4 @@ async def run_compatibility_tests():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     success = asyncio.run(run_compatibility_tests())
-    exit(0 if success else 1)
+    sys.exit(0 if success else 1)

@@ -243,9 +243,7 @@ class CipherA:
         """
         try:
             if len(df) < max(
-                self.wt_channel_length,
-                self.wt_average_length,
-                max(self.ema_ribbon_lengths),
+                self.wt_channel_length, self.wt_average_length, *self.ema_ribbon_lengths
             ):
                 logger.warning("Insufficient data for Cipher A calculation")
                 return self._add_cipher_a_fallbacks(df)
@@ -259,9 +257,7 @@ class CipherA:
                 result = self._calculate_with_original_implementation(result)
 
             # Add signal interpretations
-            result = self._add_signal_analysis(result)
-
-            return result
+            return self._add_signal_analysis(result)
 
         except Exception:
             logger.exception("Error in Cipher A calculation")
@@ -520,9 +516,7 @@ class CipherB:
             result = self.cipher_b_signals.generate_signals(result, self)
 
             # Detect divergences
-            result = self.divergence_detector.detect_cipher_b_divergences(result)
-
-            return result
+            return self.divergence_detector.detect_cipher_b_divergences(result)
 
         except Exception:
             logger.exception("Error in Cipher B calculation")
@@ -1045,22 +1039,27 @@ async def calculate_vumanchu_async(
 # Import VuManchuState for backward compatibility export
 from bot.fp.types.indicators import VuManchuState
 
+# Add VuManchuCipher alias for backward compatibility
+VuManchuCipher = VuManChuIndicators
+
 # Export all classes and functions for backward compatibility
 __all__ = [
     # Original classes (preserved)
     "CipherA",
     "CipherB",
+    # Backward compatibility alias
+    "VuManchuCipher",
+    # Functional enhancements (new)
+    "VuManChuFunctional",
     "VuManChuIndicators",
     # State classes for compatibility
     "VuManchuState",
-    # Functional enhancements (new)
-    "VuManChuFunctional",
-    # Factory functions (preserved)
-    "create_vumanchu_indicators",
-    "calculate_vumanchu_async",
+    "calculate_ema_functional",
     # Functional utilities (new)
     "calculate_hlc3_functional",
-    "calculate_ema_functional",
-    "calculate_wavetrend_functional",
     "calculate_sma_functional",
+    "calculate_vumanchu_async",
+    "calculate_wavetrend_functional",
+    # Factory functions (preserved)
+    "create_vumanchu_indicators",
 ]

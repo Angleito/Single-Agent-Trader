@@ -6,11 +6,14 @@ Pure functions for calculating VuManchu Cipher A and B.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from bot.fp.indicators.oscillators import calculate_rsi, calculate_stochastic
 from bot.fp.types.indicators import VuManchuResult
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 def calculate_vumanchu(

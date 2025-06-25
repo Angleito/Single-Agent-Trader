@@ -60,7 +60,6 @@ from typing import (
     Literal,
     NotRequired,
     Protocol,
-    TypeAlias,
     TypedDict,
     TypeGuard,
     Union,
@@ -69,10 +68,10 @@ from typing import (
 )
 
 # Type aliases for common metadata and auth types
-ServiceMetadata: TypeAlias = dict[str, str | int | float | bool | list[str]]
-AuthConfig: TypeAlias = dict[str, str | int | bool]
-HeaderConfig: TypeAlias = dict[str, str]
-EnvironmentVars: TypeAlias = dict[str, str]
+type ServiceMetadata = dict[str, str | int | float | bool | list[str]]
+type AuthConfig = dict[str, str | int | bool]
+type HeaderConfig = dict[str, str]
+type EnvironmentVars = dict[str, str]
 
 
 # Service Status Types
@@ -329,15 +328,12 @@ def is_valid_endpoint(value: Any) -> TypeGuard[ServiceEndpoint]:
 
     # Validate optional fields if present
     if "timeout_seconds" in value and (
-        not isinstance(value["timeout_seconds"], (int, float))
+        not isinstance(value["timeout_seconds"], int | float)
         or value["timeout_seconds"] <= 0
     ):
         return False
 
-    if "headers" in value and not isinstance(value["headers"], dict):
-        return False
-
-    return True
+    return not ("headers" in value and not isinstance(value["headers"], dict))
 
 
 def is_healthy_service(health: Any) -> TypeGuard[ServiceHealth]:
@@ -417,15 +413,14 @@ def validate_service_config(config: Any) -> ServiceConfig:
         raise ValueError("Invalid service endpoint configuration")
 
     # Validate optional fields
-    if "startup_delay" in config:
-        if (
-            not isinstance(config["startup_delay"], (int, float))
-            or config["startup_delay"] < 0
-        ):
-            raise ValueError("Startup delay must be a non-negative number")
+    if "startup_delay" in config and (
+        not isinstance(config["startup_delay"], int | float)
+        or config["startup_delay"] < 0
+    ):
+        raise ValueError("Startup delay must be a non-negative number")
 
     if "max_wait" in config:
-        if not isinstance(config["max_wait"], (int, float)) or config["max_wait"] <= 0:
+        if not isinstance(config["max_wait"], int | float) or config["max_wait"] <= 0:
             raise ValueError("Max wait must be a positive number")
 
     if "dependencies" in config:

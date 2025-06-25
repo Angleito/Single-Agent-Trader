@@ -9,15 +9,17 @@ This module provides fundamental monadic types for handling effects in a pure fu
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import (
+    TYPE_CHECKING,
     Any,
-    Generic,
     TypeVar,
     Union,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -33,7 +35,7 @@ F = TypeVar("F")
 
 
 @dataclass(frozen=True)
-class Ok(Generic[T, E]):
+class Ok[T, E]:
     """Successful result containing a value."""
 
     value: T
@@ -68,7 +70,7 @@ class Ok(Generic[T, E]):
 
 
 @dataclass(frozen=True)
-class Err(Generic[T, E]):
+class Err[T, E]:
     """Failed result containing an error."""
 
     error: E
@@ -114,7 +116,7 @@ Result = Union[Ok[T, E], Err[T, E]]
 
 
 @dataclass(frozen=True)
-class Some(Generic[T]):
+class Some[T]:
     """Value is present."""
 
     value: T
@@ -149,7 +151,7 @@ class Some(Generic[T]):
 
 
 @dataclass(frozen=True)
-class Nothing(Generic[T]):
+class Nothing[T]:
     """No value is present."""
 
     def map(self, f: Callable[[T], U]) -> Maybe[U]:
@@ -193,7 +195,7 @@ Maybe = Union[Some[T], Nothing[T]]
 
 
 @dataclass(frozen=True)
-class IO(Generic[T]):
+class IO[T]:
     """Wrapper for side-effectful computations."""
 
     _computation: Callable[[], T]
@@ -320,17 +322,17 @@ Effect = Union[ReadFile, WriteFile, HttpRequest, DbQuery, Log]
 # Helper Functions
 
 
-def lift(value: T) -> Result[T, Any]:
+def lift[T](value: T) -> Result[T, Any]:
     """Lift a value into the Result monad as Ok."""
     return Ok(value)
 
 
-def lift_maybe(value: T | None) -> Maybe[T]:
+def lift_maybe[T](value: T | None) -> Maybe[T]:
     """Convert an Optional to Maybe."""
     return Some(value) if value is not None else Nothing()
 
 
-def sequence_results(results: list[Result[T, E]]) -> Result[list[T], E]:
+def sequence_results[T, E](results: list[Result[T, E]]) -> Result[list[T], E]:
     """Convert a list of Results to a Result of list.
 
     Returns Ok with all values if all are Ok, otherwise returns the first Err.
@@ -344,7 +346,7 @@ def sequence_results(results: list[Result[T, E]]) -> Result[list[T], E]:
     return Ok(values)
 
 
-def sequence_maybes(maybes: list[Maybe[T]]) -> Maybe[list[T]]:
+def sequence_maybes[T](maybes: list[Maybe[T]]) -> Maybe[list[T]]:
     """Convert a list of Maybes to a Maybe of list.
 
     Returns Some with all values if all are Some, otherwise returns Nothing.
@@ -358,7 +360,7 @@ def sequence_maybes(maybes: list[Maybe[T]]) -> Maybe[list[T]]:
     return Some(values)
 
 
-def sequence_io(ios: list[IO[T]]) -> IO[list[T]]:
+def sequence_io[T](ios: list[IO[T]]) -> IO[list[T]]:
     """Convert a list of IO computations to an IO of list."""
     return IO(lambda: [io.run() for io in ios])
 

@@ -471,8 +471,8 @@ def validate_decimal(value: any) -> Result[Decimal, str]:
 def validate_positive(value: any) -> Result[Decimal, str]:
     """Validate that value is positive."""
     result = validate_decimal(value)
-    if result.is_success():
-        decimal_val = result.success()
+    if isinstance(result, Success):
+        decimal_val = result.unwrap()
         if decimal_val > 0:
             return Success(decimal_val)
         return Failure(f"Value must be positive: {decimal_val}")
@@ -482,8 +482,8 @@ def validate_positive(value: any) -> Result[Decimal, str]:
 def validate_non_negative(value: any) -> Result[Decimal, str]:
     """Validate that value is non-negative."""
     result = validate_decimal(value)
-    if result.is_success():
-        decimal_val = result.success()
+    if isinstance(result, Success):
+        decimal_val = result.unwrap()
         if decimal_val >= 0:
             return Success(decimal_val)
         return Failure(f"Value must be non-negative: {decimal_val}")
@@ -493,7 +493,7 @@ def validate_non_negative(value: any) -> Result[Decimal, str]:
 def validate_timestamp(value: any) -> Result[int, str]:
     """Validate timestamp value."""
     try:
-        if isinstance(value, (int, float)):
+        if isinstance(value, int | float):
             return Success(int(value))
         if isinstance(value, str):
             return Success(int(float(value)))

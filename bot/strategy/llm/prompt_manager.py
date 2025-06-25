@@ -31,7 +31,7 @@ class PromptManager:
         # Try to load from file first
         if self.prompt_file_path is None:
             try:
-                from ...utils.path_utils import get_project_root
+                from bot.utils.path_utils import get_project_root
 
                 self.prompt_file_path = (
                     get_project_root() / "prompts" / "trade_action.txt"
@@ -75,7 +75,7 @@ class PromptManager:
             logger.info(f"Loaded prompt template from: {file_path}")
             return template
         except Exception as e:
-            logger.error(f"Error reading prompt file: {e}")
+            logger.exception(f"Error reading prompt file: {e}")
             raise OSError(f"Failed to read prompt file: {e}")
 
     def get_default_prompt(self) -> str:
@@ -235,13 +235,12 @@ FINANCIAL INTELLIGENCE INTEGRATION:
             raise ValueError("Prompt template not loaded")
 
         try:
-            formatted_prompt = self._prompt_template.format(**kwargs)
-            return formatted_prompt
+            return self._prompt_template.format(**kwargs)
         except KeyError as e:
-            logger.error(f"Missing required template variable: {e}")
+            logger.exception(f"Missing required template variable: {e}")
             raise KeyError(f"Missing required template variable: {e}")
         except Exception as e:
-            logger.error(f"Error formatting prompt: {e}")
+            logger.exception(f"Error formatting prompt: {e}")
             raise ValueError(f"Failed to format prompt: {e}")
 
     def get_template_variables(self) -> set:

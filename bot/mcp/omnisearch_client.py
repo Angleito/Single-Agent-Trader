@@ -300,12 +300,25 @@ class OmniSearchClient:
 
         logger.info("🔍 OmniSearch Client: Initialized for %s", self.server_url)
 
+    async def __aenter__(self):
+        """Async context manager entry."""
+        await self.connect()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.disconnect()
+
     async def connect(self) -> bool:
         """Connect to the OmniSearch service."""
         try:
-            if self._session is None:
-                timeout = aiohttp.ClientTimeout(total=30)
-                self._session = aiohttp.ClientSession(timeout=timeout)
+            # Close existing session if it exists
+            if self._session and not self._session.closed:
+                await self._session.close()
+
+            # Create new session
+            timeout = aiohttp.ClientTimeout(total=30)
+            self._session = aiohttp.ClientSession(timeout=timeout)
 
             # Test connection with a simple health check
             headers = self._get_headers()
@@ -318,19 +331,34 @@ class OmniSearchClient:
                     logger.info("✅ OmniSearch: Successfully connected")
                     return True
                 logger.warning("OmniSearch server returned status %s", response.status)
+                # Keep session open for potential retry, but mark as not connected
+                self._connected = False
                 return False
 
         except Exception:
             logger.exception("Failed to connect to OmniSearch service")
+            # Clean up session on connection failure
+            if self._session and not self._session.closed:
+                try:
+                    await self._session.close()
+                except Exception:
+                    logger.debug("Error closing session during cleanup")
+                finally:
+                    self._session = None
             # Set connected to False but don't raise - allows graceful degradation
             self._connected = False
             return False
 
     async def disconnect(self) -> None:
         """Disconnect from the OmniSearch service."""
-        if self._session:
-            await self._session.close()
-            self._session = None
+        if self._session and not self._session.closed:
+            try:
+                await self._session.close()
+            except Exception:
+                logger.debug("Error closing session during disconnect")
+            finally:
+                self._session = None
+
         self._connected = False
 
         # Clean up expired cache entries
@@ -757,6 +785,19 @@ class OmniSearchClient:
                 crypto_base, nasdaq_base, timeframe
             )
 
+    async def _ensure_session(self) -> None:
+        """Ensure we have a valid session."""
+        if not self._session or self._session.closed:
+            logger.debug("Creating new session")
+            if self._session and not self._session.closed:
+                try:
+                    await self._session.close()
+                except Exception:
+                    logger.debug("Error closing existing session")
+
+            timeout = aiohttp.ClientTimeout(total=30)
+            self._session = aiohttp.ClientSession(timeout=timeout)
+
     def _get_headers(self) -> dict[str, str]:
         """Get HTTP headers for API requests."""
         headers = {
@@ -782,13 +823,21 @@ class OmniSearchClient:
         Returns:
             Search results or fallback data
         """
-        if not self._connected or not self._session:
-            raise OmniSearchConnectionError("Not connected to OmniSearch service")
+        # Ensure we have a valid session
+        await self._ensure_session()
+
+        if not self._session:
+            raise OmniSearchConnectionError("Failed to create session")
 
         url = f"{self.server_url}/{endpoint}"
         headers = self._get_headers()
 
         try:
+            # Double-check session is still valid
+            if self._session.closed:
+                logger.warning("Session was closed during request, recreating")
+                await self._ensure_session()
+
             async with self._session.get(
                 url, headers=headers, params=params
             ) as response:
@@ -940,16 +989,8 @@ class OmniSearchClient:
 # Example usage and testing
 async def main():
     """Example usage of the OmniSearchClient."""
-    client = OmniSearchClient()
-
-    try:
-        # Connect to service
-        connected = await client.connect()
-        if not connected:
-            logger.warning(
-                "Could not connect to OmniSearch service, using fallback mode"
-            )
-
+    # Use context manager for proper resource management
+    async with OmniSearchClient() as client:
         # Test financial news search
         news_results = await client.search_financial_news(
             "Bitcoin ETF approval", limit=3
@@ -977,9 +1018,6 @@ async def main():
         # Health check
         health = await client.health_check()
         print(f"Client health: {health}")
-
-    finally:
-        await client.disconnect()
 
 
 if __name__ == "__main__":

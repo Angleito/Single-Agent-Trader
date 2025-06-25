@@ -76,7 +76,7 @@ class TradingTypeAdapter:
             raise ValueError(f"Unsupported market data format: {type(legacy_data)}")
 
         except Exception as e:
-            logger.error(f"Failed to adapt market data: {e}")
+            logger.exception(f"Failed to adapt market data: {e}")
             raise ValueError(f"Market data adaptation failed: {e}")
 
     @staticmethod
@@ -114,7 +114,7 @@ class TradingTypeAdapter:
             raise ValueError(f"Unsupported position format: {type(legacy_position)}")
 
         except Exception as e:
-            logger.error(f"Failed to adapt position: {e}")
+            logger.exception(f"Failed to adapt position: {e}")
             raise ValueError(f"Position adaptation failed: {e}")
 
     @staticmethod
@@ -133,7 +133,7 @@ class TradingTypeAdapter:
         try:
             return convert_order_to_functional(legacy_order)
         except Exception as e:
-            logger.error(f"Failed to adapt order: {e}")
+            logger.exception(f"Failed to adapt order: {e}")
             raise ValueError(f"Order adaptation failed: {e}")
 
     @staticmethod
@@ -182,7 +182,7 @@ class TradingTypeAdapter:
             )
 
         except Exception as e:
-            logger.error(f"Failed to adapt indicators: {e}")
+            logger.exception(f"Failed to adapt indicators: {e}")
             raise ValueError(f"Indicators adaptation failed: {e}")
 
     @staticmethod
@@ -232,7 +232,7 @@ class TradingTypeAdapter:
             return FuturesMarketOrder(**common_fields)
 
         except Exception as e:
-            logger.error(f"Failed to create futures order: {e}")
+            logger.exception(f"Failed to create futures order: {e}")
             raise ValueError(f"Futures order creation failed: {e}")
 
     @staticmethod
@@ -305,7 +305,7 @@ class TradingTypeAdapter:
             )
 
         except Exception as e:
-            logger.error(f"Failed to adapt account balance: {e}")
+            logger.exception(f"Failed to adapt account balance: {e}")
             raise ValueError(f"Account balance adaptation failed: {e}")
 
     @staticmethod
@@ -353,7 +353,7 @@ class TradingTypeAdapter:
             )
 
         except Exception as e:
-            logger.error(f"Failed to create functional market state: {e}")
+            logger.exception(f"Failed to create functional market state: {e}")
             raise ValueError(f"Market state creation failed: {e}")
 
     @staticmethod
@@ -408,7 +408,7 @@ class TradingTypeAdapter:
             }
 
         except Exception as e:
-            logger.error(f"Failed to convert functional state to legacy: {e}")
+            logger.exception(f"Failed to convert functional state to legacy: {e}")
             raise ValueError(f"Legacy conversion failed: {e}")
 
 
@@ -459,7 +459,7 @@ class OrderExecutionAdapter:
             return base_order
 
         except Exception as e:
-            logger.error(f"Failed to prepare order for execution: {e}")
+            logger.exception(f"Failed to prepare order for execution: {e}")
             raise ValueError(f"Order preparation failed: {e}")
 
     @staticmethod
@@ -544,7 +544,7 @@ class RiskAdapterMixin:
             )
 
         except Exception as e:
-            logger.error(f"Failed to adapt risk metrics: {e}")
+            logger.exception(f"Failed to adapt risk metrics: {e}")
             raise ValueError(f"Risk metrics adaptation failed: {e}")
 
     @staticmethod
@@ -603,7 +603,7 @@ class RiskAdapterMixin:
             }
 
         except Exception as e:
-            logger.error(f"Risk validation failed: {e}")
+            logger.exception(f"Risk validation failed: {e}")
             return {
                 "compliant": False,
                 "violations": [f"Validation error: {e}"],
@@ -656,7 +656,7 @@ class FunctionalTradingIntegration(TradingTypeAdapter, RiskAdapterMixin):
                 self.conversion_stats["market_data_conversions"] += 1
 
             except Exception as e:
-                self.logger.error(f"Failed to convert legacy data item: {e}")
+                self.logger.exception(f"Failed to convert legacy data item: {e}")
                 self.conversion_stats["failures"] += 1
 
         return functional_states

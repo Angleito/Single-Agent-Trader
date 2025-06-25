@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from bot.fp.strategies.position_calculations import (
     PositionPerformance,
@@ -24,18 +25,17 @@ from bot.fp.types.portfolio import (
     create_spot_account,
 )
 from bot.fp.types.positions import (
-    FLAT,
-    LONG,
-    SHORT,
     FunctionalPosition,
     PositionSnapshot,
     create_empty_position,
     create_position_from_lot,
 )
 from bot.fp.types.result import Failure, Result, Success
-from bot.position_manager import PositionManager
-from bot.trading_types import Order
-from bot.trading_types import Position as LegacyPosition
+
+if TYPE_CHECKING:
+    from bot.position_manager import PositionManager
+    from bot.trading_types import Order
+    from bot.trading_types import Position as LegacyPosition
 
 logger = logging.getLogger(__name__)
 
@@ -344,12 +344,10 @@ class FunctionalPositionManagerAdapter:
             )
 
         # Convert side to functional type
-        if legacy_position.side == "LONG":
-            side = LONG
-        elif legacy_position.side == "SHORT":
-            side = SHORT
+        if legacy_position.side in {"LONG", "SHORT"}:
+            pass
         else:
-            side = FLAT
+            pass
 
         # Create functional position with a single lot
         if legacy_position.entry_price is not None and legacy_position.size > 0:
@@ -509,5 +507,5 @@ def validate_functional_migration(
         return consistency.get("overall_consistent", False)
 
     except Exception as e:
-        logger.error(f"Functional migration validation failed: {e}")
+        logger.exception(f"Functional migration validation failed: {e}")
         return False

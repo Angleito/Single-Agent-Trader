@@ -12,10 +12,11 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
-from ..effects.io import IO
-from ..effects.logging import error, info
-from ..effects.monitoring import health_check, increment_counter
-from ..effects.time import now
+from bot.fp.effects.io import IO
+from bot.fp.effects.logging import error, info
+from bot.fp.effects.monitoring import health_check, increment_counter
+from bot.fp.effects.time import now
+
 from .interpreter import get_interpreter
 
 

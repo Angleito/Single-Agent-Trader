@@ -260,6 +260,7 @@ class BluefinServiceClient:
                     continue
 
                 raise BluefinServiceError(f"Unexpected error: {e!s}") from e
+        return None
 
     async def get_balance(self, address: str) -> dict[str, Any]:
         """Get balance from Bluefin service."""

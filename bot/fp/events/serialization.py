@@ -16,7 +16,26 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any, TypeVar, cast
 
-import msgpack
+try:
+    import msgpack
+
+    MSGPACK_AVAILABLE = True
+except ImportError:
+    MSGPACK_AVAILABLE = False
+
+    # Create a stub msgpack module for graceful degradation
+    class msgpack:
+        @staticmethod
+        def packb(data, **kwargs):
+            """Fallback serialization using JSON."""
+            return json.dumps(data).encode("utf-8")
+
+        @staticmethod
+        def unpackb(data, **kwargs):
+            """Fallback deserialization using JSON."""
+            return json.loads(data.decode("utf-8"))
+
+
 from pydantic import BaseModel
 
 from bot.fp.core.either import Either, Left, Right
@@ -172,7 +191,7 @@ class EventSerializer:
 
     def _serialize_value(self, value: Any) -> Any:
         """Serialize a single value."""
-        if isinstance(value, (str, int, float, bool, type(None))):
+        if isinstance(value, str | int | float | bool | type(None)):
             return value
         if isinstance(value, Decimal):
             return str(value)
@@ -205,7 +224,7 @@ class EventSerializer:
             return asdict(value)
         if isinstance(value, dict):
             return {k: self._serialize_value(v) for k, v in value.items()}
-        if isinstance(value, (list, tuple)):
+        if isinstance(value, list | tuple):
             return [self._serialize_value(v) for v in value]
         return str(value)
 

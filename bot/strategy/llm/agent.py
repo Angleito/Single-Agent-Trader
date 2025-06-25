@@ -4,8 +4,9 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from ...config import settings
-from ...trading_types import MarketState, TradeAction
+from bot.config import settings
+from bot.trading_types import MarketState, TradeAction
+
 from .market_analyzer import MarketAnalyzer
 from .prompt_manager import PromptManager
 from .response_parser import ResponseParser

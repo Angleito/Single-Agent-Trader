@@ -8,12 +8,14 @@ retry logic, and circuit breaker patterns.
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 from .io import IO
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 A = TypeVar("A")
 E = TypeVar("E")
@@ -81,7 +83,7 @@ class DataError(ExchangeError):
     """Data-related error."""
 
 
-def retry(policy: RetryPolicy, effect: IO[A]) -> IO[A]:
+def retry[A](policy: RetryPolicy, effect: IO[A]) -> IO[A]:
     """Retry effect with policy"""
 
     def retried():
@@ -89,10 +91,10 @@ def retry(policy: RetryPolicy, effect: IO[A]) -> IO[A]:
         while attempts < policy.max_attempts:
             try:
                 return effect.run()
-            except Exception as e:
+            except Exception:
                 attempts += 1
                 if attempts >= policy.max_attempts:
-                    raise e
+                    raise
 
                 if policy.strategy == RetryStrategy.EXPONENTIAL:
                     delay = min(policy.delay * (2**attempts), policy.max_delay)
@@ -162,9 +164,9 @@ def with_circuit_breaker(config: CircuitConfig):
         def wrapper(*args, **kwargs):
             try:
                 return func(*args, **kwargs)
-            except Exception as e:
+            except Exception:
                 # In a real implementation, this would track failures and open/close the circuit
-                raise e
+                raise
 
         return wrapper
 

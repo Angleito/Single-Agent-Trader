@@ -136,6 +136,7 @@ def parse_float_env(key: str, default: float) -> float:
 
 
 # Environment enumeration
+import contextlib
 from enum import Enum
 
 
@@ -936,8 +937,7 @@ def load_settings_from_file(file_path: str | Path) -> Settings:
             functional_config = None
 
         # Create settings with functional config or fallback to compatibility mode
-        settings = Settings(functional_config, **config_data)
-        return settings
+        return Settings(functional_config, **config_data)
 
     except Exception:
         # Fallback to default settings on any error
@@ -1116,17 +1116,15 @@ def benchmark_config_loading(iterations: int = 100) -> dict[str, float]:
     # Test file loading performance
     start_time = time.time()
     for _ in range(iterations):
-        try:
+        with contextlib.suppress(Exception):
             settings = load_settings_from_file("config/development.json")
-        except:
-            pass
     file_time = time.time() - start_time
 
     # Test validation performance
     settings = create_settings()
     start_time = time.time()
     for _ in range(iterations):
-        validation_result = validate_settings(settings)
+        validate_settings(settings)
     validation_time = time.time() - start_time
 
     return {

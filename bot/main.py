@@ -113,7 +113,7 @@ console = Console()
 try:
     from bot.fp.runtime.cli import FunctionalCLI
 
-    _functional_cli = FunctionalCLI()
+    _functional_cli: FunctionalCLI | None = FunctionalCLI()
 except ImportError:
     _functional_cli = None
     console.print(
@@ -164,9 +164,10 @@ def _safe_import(
 # Core imports (required for basic functionality)
 try:
     from .config import Settings, create_settings
-    from .fp.types import Position, TradeAction
     from .trading_types import (
         MarketState,  # Keep legacy import until functional equivalent available
+        Position,  # Use legacy Position for callable constructor
+        TradeAction,  # Use legacy TradeAction for callable constructor
     )
     from .utils import setup_warnings_suppression
     from .validator import TradeValidator
@@ -375,12 +376,14 @@ class TradingEngine:
         self.paper_account = None
         if self.dry_run:
             balance = self.settings.paper_trading.starting_balance
-            self.paper_account = PaperTradingAccount(starting_balance=balance)
+            self.paper_account = PaperTradingAccount(
+                starting_balance=Decimal(str(balance))
+            )
 
     def _initialize_core_components(self) -> None:
         """Initialize core trading components with error handling."""
         # Initialize components (market data will be initialized after exchange connection)
-        self.market_data: MarketDataProviderType = None
+        self.market_data = None
 
         # Initialize VuManChu indicators with lazy loading
         self.logger.debug("About to initialize VuManChu indicators...")
@@ -3379,17 +3382,16 @@ class TradingEngine:
         console.print(f"[red]Loop error ({error_category}): {error}[/red]")
 
         # Record failure in circuit breaker if it's a critical error
-        if self._is_critical_error_basic(error, error_category):
-            if (
-                hasattr(self, "risk_manager")
-                and self.risk_manager
-                and hasattr(self.risk_manager, "circuit_breaker")
-            ):
-                self.risk_manager.circuit_breaker.record_failure(
-                    failure_type=error_category,
-                    error_message=str(error),
-                    severity="high" if consecutive_errors > 5 else "medium",
-                )
+        if self._is_critical_error_basic(error, error_category) and (
+            hasattr(self, "risk_manager")
+            and self.risk_manager
+            and hasattr(self.risk_manager, "circuit_breaker")
+        ):
+            self.risk_manager.circuit_breaker.record_failure(
+                failure_type=error_category,
+                error_message=str(error),
+                severity="high" if consecutive_errors > 5 else "medium",
+            )
 
         # Category-specific recovery delay
         recovery_delay = await self._get_recovery_delay_basic(
@@ -3526,7 +3528,7 @@ class TradingEngine:
                 console.print("[yellow]Attempting to close open positions...[/yellow]")
                 await self._emergency_close_positions()
         except Exception as e:
-            self.logger.error("Emergency position closure failed: %s", e)
+            self.logger.exception("Emergency position closure failed: %s", e)
 
         # Extended pause before attempting to continue
         emergency_pause = min(
@@ -3920,7 +3922,7 @@ class TradingEngine:
             # Publish position update to dashboard
             if self.websocket_publisher:
                 # Create position object for the update
-                from .fp.types import Position
+                from .trading_types import Position
 
                 position_update = Position(
                     symbol=self.actual_trading_symbol,

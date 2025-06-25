@@ -6,13 +6,16 @@ Pure functions for calculating Bollinger Bands, ATR, and other volatility measur
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from bot.fp.indicators.moving_averages import sma
 from bot.fp.types.indicators import BollingerBandsResult
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 def _calculate_sma_simple(prices: Sequence[float], period: int) -> float | None:
@@ -201,9 +204,7 @@ def calculate_standard_deviation(
 
     # Calculate standard deviation
     variance = sum((price - mean) ** 2 for price in recent_prices) / period
-    std_dev = variance**0.5
-
-    return std_dev
+    return variance**0.5
 
 
 def calculate_historical_volatility(
@@ -240,9 +241,7 @@ def calculate_historical_volatility(
     std_dev = variance**0.5
 
     # Annualize
-    volatility = std_dev * (annualization_factor**0.5) * 100
-
-    return volatility
+    return std_dev * (annualization_factor**0.5) * 100
 
 
 def create_bollinger_bands_result(

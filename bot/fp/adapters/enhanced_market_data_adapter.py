@@ -9,24 +9,26 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from ...config import settings
-from ..data_pipeline import FunctionalDataPipeline, create_market_data_pipeline
-from ..effects.io import IO, AsyncIO, IOEither, from_try
-from ..effects.market_data_aggregation import (
+from bot.config import settings
+from bot.fp.data_pipeline import FunctionalDataPipeline, create_market_data_pipeline
+from bot.fp.effects.io import IO, AsyncIO, IOEither, from_try
+from bot.fp.effects.market_data_aggregation import (
     RealTimeAggregator,
     create_real_time_aggregator,
 )
-from ..effects.websocket_enhanced import (
+from bot.fp.effects.websocket_enhanced import (
     EnhancedWebSocketManager,
     create_enhanced_websocket_manager,
 )
-from ..types.market import OHLCV, Candle, MarketSnapshot, Trade
+from bot.fp.types.market import OHLCV, Candle, MarketSnapshot, Trade
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 logger = logging.getLogger(__name__)
 
@@ -112,21 +114,21 @@ class EnhancedFunctionalMarketDataAdapter:
                 return True
 
             except Exception as e:
-                logger.error(f"Enhanced connection failed: {e}")
-                raise e
+                logger.exception(f"Enhanced connection failed: {e}")
+                raise
 
         return from_try(lambda: asyncio.run(enhanced_connect()))
 
     async def _connect_imperative_provider(self) -> None:
         """Connect the underlying imperative provider"""
         if self.config.exchange_type == "bluefin":
-            from ...data.bluefin_market import BluefinMarketDataProvider
+            from bot.data.bluefin_market import BluefinMarketDataProvider
 
             self._imperative_provider = BluefinMarketDataProvider(
                 symbol=self.config.symbol, interval=self.config.interval
             )
         else:
-            from ...data.market import MarketDataProvider
+            from bot.data.market import MarketDataProvider
 
             self._imperative_provider = MarketDataProvider(
                 symbol=self.config.symbol, interval=self.config.interval
@@ -154,7 +156,7 @@ class EnhancedFunctionalMarketDataAdapter:
         interval = self._parse_interval_to_timedelta(self.config.interval)
 
         if self.config.performance_mode == "low_latency":
-            from ..effects.market_data_aggregation import (
+            from bot.fp.effects.market_data_aggregation import (
                 AggregationConfig,
                 RealTimeAggregator,
             )
@@ -168,7 +170,7 @@ class EnhancedFunctionalMarketDataAdapter:
             )
             return RealTimeAggregator(config)
         if self.config.performance_mode == "high_throughput":
-            from ..effects.market_data_aggregation import (
+            from bot.fp.effects.market_data_aggregation import (
                 AggregationConfig,
                 RealTimeAggregator,
             )
@@ -193,13 +195,13 @@ class EnhancedFunctionalMarketDataAdapter:
             raise ValueError("WebSocket URL required for enhanced WebSocket mode")
 
         if self.config.performance_mode == "low_latency":
-            from ..effects.websocket_enhanced import (
+            from bot.fp.effects.websocket_enhanced import (
                 create_low_latency_websocket_manager,
             )
 
             return create_low_latency_websocket_manager(self.config.websocket_url)
         if self.config.performance_mode == "high_throughput":
-            from ..effects.websocket_enhanced import (
+            from bot.fp.effects.websocket_enhanced import (
                 create_high_reliability_websocket_manager,
             )
 
@@ -233,7 +235,7 @@ class EnhancedFunctionalMarketDataAdapter:
                         logger.debug(f"Functional aggregator produced candle: {candle}")
 
             except Exception as e:
-                logger.error(f"Error in data flow integration: {e}")
+                logger.exception(f"Error in data flow integration: {e}")
 
         # Subscribe to imperative provider updates
         self._imperative_provider.subscribe_to_updates(on_market_update)
@@ -357,7 +359,7 @@ class EnhancedFunctionalMarketDataAdapter:
                         logger.warning("Enhanced stream queue full, dropping update")
 
                 except Exception as e:
-                    logger.error(f"Error in enhanced stream processing: {e}")
+                    logger.exception(f"Error in enhanced stream processing: {e}")
 
             # Subscribe to updates
             self._imperative_provider.subscribe_to_updates(on_enhanced_update)
@@ -375,7 +377,7 @@ class EnhancedFunctionalMarketDataAdapter:
                             break
                         continue
                     except Exception as e:
-                        logger.error(f"Error in enhanced stream: {e}")
+                        logger.exception(f"Error in enhanced stream: {e}")
                         break
 
             return enhanced_stream()
