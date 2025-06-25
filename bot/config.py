@@ -23,20 +23,8 @@ else:
     try:
         from bot.fp.types.result import Failure, Result, Success
     except ImportError:
-        # Fallback classes if fp types are not available
-        class Success:
-            def __init__(self, value):
-                self._value = value
-
-            def success(self):
-                return self._value
-
-        class Failure:
-            def __init__(self, error):
-                self._error = error
-
-        class Result:
-            pass
+        # Minimal fallback for missing dependencies
+        Success, Failure, Result = None, None, None
 
     try:
         from bot.fp.types.base import (
@@ -60,48 +48,23 @@ else:
             Config as FunctionalConfig,
         )
     except ImportError:
-        # Fallback classes if fp types are not available
-        class Money:
-            pass
-
-        class Percentage:
-            pass
-
-        class Symbol:
-            pass
-
-        class TimeInterval:
-            pass
-
-        class TradingMode:
-            pass
-
-        class APIKey:
-            pass
-
-        class BacktestConfig:
-            pass
-
-        class FunctionalConfig:
-            pass
-
-        class ExchangeConfig:
-            pass
-
-        class FeatureFlags:
-            pass
-
-        class LogLevel:
-            pass
-
-        class PrivateKey:
-            pass
-
-        class StrategyConfig:
-            pass
-
-        class SystemConfig:
-            pass
+        # Minimal fallback for missing dependencies
+        (
+            Money,
+            Percentage,
+            Symbol,
+            TimeInterval,
+            TradingMode,
+            APIKey,
+            BacktestConfig,
+            ExchangeConfig,
+            FeatureFlags,
+            LogLevel,
+            PrivateKey,
+            StrategyConfig,
+            SystemConfig,
+            FunctionalConfig,
+        ) = (None,) * 14
 
 
 # Local implementations to avoid imports during normal usage
@@ -135,8 +98,6 @@ def parse_float_env(key: str, default: float) -> float:
         return default
 
 
-# Environment enumeration
-import contextlib
 from enum import Enum
 
 
@@ -163,37 +124,15 @@ def parse_env_var(key: str, default: str | None = None) -> str | None:
     return os.environ.get(key, default)
 
 
-# Cached lazy loading for functional config
-_functional_config_cache = None
-
-
 def _get_functional_config():
-    """Lazy load functional configuration types with caching."""
-    global _functional_config_cache
-
-    if _functional_config_cache is not None:
-        return _functional_config_cache
-
+    """Lazy load functional configuration types."""
     try:
         from bot.fp.types.config import Config as FunctionalConfig
         from bot.fp.types.result import Failure, Result, Success
 
-        _functional_config_cache = (FunctionalConfig, Success, Failure, Result)
-        return _functional_config_cache
+        return (FunctionalConfig, Success, Failure, Result)
     except ImportError:
-        _functional_config_cache = (None, None, None, None)
-        return _functional_config_cache
-
-
-# Environment variable cache for performance
-_env_cache = {}
-
-
-def parse_env_var_cached(key: str, default: str | None = None) -> str | None:
-    """Parse environment variable with caching for performance."""
-    if key not in _env_cache:
-        _env_cache[key] = os.environ.get(key, default)
-    return _env_cache[key]
+        return (None, None, None, None)
 
 
 class ConfigError(Exception):
@@ -1160,46 +1099,6 @@ def validate_settings(settings: Settings) -> str | None:
     return "; ".join(warnings) if warnings else None
 
 
-def validate_settings_functional(settings: Settings) -> Settings | str:
-    """Validate settings and return either valid settings or error message."""
-    validation_result = validate_settings(settings)
-    if validation_result:
-        return f"Configuration validation failed: {validation_result}"
-    return settings
-
-
-def benchmark_config_loading(iterations: int = 100) -> dict[str, float]:
-    """Benchmark configuration loading performance."""
-    import time
-
-    # Test create_settings performance
-    start_time = time.time()
-    for _ in range(iterations):
-        settings = create_settings()
-    create_time = time.time() - start_time
-
-    # Test file loading performance
-    start_time = time.time()
-    for _ in range(iterations):
-        with contextlib.suppress(Exception):
-            settings = load_settings_from_file("config/development.json")
-    file_time = time.time() - start_time
-
-    # Test validation performance
-    settings = create_settings()
-    start_time = time.time()
-    for _ in range(iterations):
-        validate_settings(settings)
-    validation_time = time.time() - start_time
-
-    return {
-        "create_settings_ms": (create_time / iterations) * 1000,
-        "load_from_file_ms": (file_time / iterations) * 1000,
-        "validation_ms": (validation_time / iterations) * 1000,
-        "total_iterations": iterations,
-    }
-
-
 # Global settings instance with functional programming backend
 settings = create_settings()
 
@@ -1319,7 +1218,6 @@ __all__ = [
     "Settings",
     "SystemSettings",
     "TradingSettings",
-    "benchmark_config_loading",
     "create_settings",
     "get_config",
     "get_config_template",
@@ -1327,7 +1225,4 @@ __all__ = [
     "load_settings_from_file",
     "settings",
     "validate_settings",
-    "validate_settings_functional",
-    # Functional programming exports (lazy-loaded)
-    # These are available when fp types are loaded
 ]

@@ -123,17 +123,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /tmp/* /var/tmp/*
 
-# Create non-root user with dynamic UID/GID - Handle UID conflicts gracefully
-# Skip user creation if USER_ID is 0 (root) to avoid conflicts
-RUN if [ "${USER_ID}" != "0" ]; then \
-        # Create group if it doesn't already exist
-        (groupadd --gid ${GROUP_ID} botuser || true) && \
-        # Create user if it doesn't already exist
-        (useradd --uid ${USER_ID} --gid ${GROUP_ID} --create-home --shell /bin/bash botuser || \
-         echo "User with UID ${USER_ID} already exists, skipping creation"); \
-    else \
-        echo "Using root user (UID=0) - skipping user creation"; \
-    fi
+# Create non-root user with fixed UID/GID (1000:1000)
+RUN groupadd --gid 1000 botuser && \
+    useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash botuser
 
 # Set work directory
 WORKDIR /app
@@ -168,13 +160,9 @@ RUN echo "Creating application directories..." \
     && mkdir -p /app/data/fp_runtime/config /app/data/fp_runtime/adapters \
     # FP debugging and development support
     && mkdir -p /app/logs/fp/effects /app/logs/fp/scheduler /app/logs/fp/interpreter \
-    # Set ownership conditionally - only if not running as root
-    && echo "Setting directory ownership to (${USER_ID}:${GROUP_ID})..." \
-    && if [ "${USER_ID}" != "0" ]; then \
-        chown -R ${USER_ID}:${GROUP_ID} /app; \
-    else \
-        echo "Running as root - skipping ownership change"; \
-    fi \
+    # Set ownership to non-root user (1000:1000)
+    && echo "Setting directory ownership to (1000:1000)..." \
+    && chown -R 1000:1000 /app \
     # Set base directory permissions (755 - read/execute for all, write for owner)
     && echo "Setting directory permissions..." \
     && chmod 755 /app \
@@ -200,26 +188,15 @@ COPY prompts/*.txt ./prompts/
 # Copy health check script
 COPY healthcheck.sh /app/healthcheck.sh
 RUN chmod +x /app/healthcheck.sh && \
-    if [ "${USER_ID}" != "0" ]; then \
-        chown ${USER_ID}:${GROUP_ID} /app/healthcheck.sh; \
-    fi
+    chown 1000:1000 /app/healthcheck.sh
 
 # Copy Docker entrypoint script
 COPY scripts/docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh && \
-    if [ "${USER_ID}" != "0" ]; then \
-        chown ${USER_ID}:${GROUP_ID} /app/docker-entrypoint.sh; \
-    fi
+    chown 1000:1000 /app/docker-entrypoint.sh
 
-# Switch to appropriate user - stay as root if USER_ID=0, otherwise use created user
-RUN if [ "${USER_ID}" != "0" ]; then \
-        echo "Switching to user: botuser (${USER_ID}:${GROUP_ID})"; \
-    else \
-        echo "Staying as root user for container execution"; \
-    fi
-
-# Use conditional USER directive - stay as root if USER_ID=0
-USER ${USER_ID}:${GROUP_ID}
+# Switch to non-root user (1000:1000)
+USER 1000:1000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
