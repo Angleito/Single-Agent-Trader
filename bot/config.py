@@ -424,9 +424,10 @@ class ExchangeSettings:
             if os.getenv("EXCHANGE__CDP_PRIVATE_KEY"):
                 self.cdp_private_key = SecretStr(os.getenv("EXCHANGE__CDP_PRIVATE_KEY"))
             if os.getenv("EXCHANGE__BLUEFIN_PRIVATE_KEY"):
-                self.bluefin_private_key = SecretStr(
-                    os.getenv("EXCHANGE__BLUEFIN_PRIVATE_KEY")
-                )
+                # Auto-convert Sui private key format if needed
+                raw_key = os.getenv("EXCHANGE__BLUEFIN_PRIVATE_KEY")
+                converted_key = self._convert_sui_private_key_legacy(raw_key)
+                self.bluefin_private_key = SecretStr(converted_key)
 
     def _from_functional_config(self, config: "ExchangeConfig") -> None:
         """Extract settings from functional configuration."""
@@ -490,6 +491,70 @@ class ExchangeSettings:
         self.cdp_api_key_name = self.cdp_api_key_name or None
         self.cdp_private_key = self.cdp_private_key or None
         self.bluefin_private_key = self.bluefin_private_key or None
+
+    def _convert_sui_private_key_legacy(self, private_key_str: str) -> str:
+        """Convert Sui private key from any format to hex format for legacy config.
+
+        Args:
+            private_key_str: Private key in any supported format
+
+        Returns:
+            Hex format private key
+
+        Raises:
+            ValueError: If the key format is invalid or cannot be converted
+        """
+        try:
+            # Import the converter utility
+            from bot.utils.sui_key_converter import auto_convert_private_key
+
+            converted_key, format_detected, message = auto_convert_private_key(
+                private_key_str
+            )
+
+            if converted_key is None:
+                raise ValueError(f"Invalid Sui private key format: {message}")
+
+            return converted_key
+        except ImportError:
+            # Fallback implementation if converter module is not available
+            private_key_str = private_key_str.strip()
+
+            # Check if already in hex format
+            if private_key_str.startswith("0x") and len(private_key_str) == 66:
+                return private_key_str
+            if len(private_key_str) == 64 and all(
+                c in "0123456789abcdefABCDEF" for c in private_key_str
+            ):
+                return f"0x{private_key_str}"
+
+            # Check if bech32 format
+            if private_key_str.startswith("suiprivkey"):
+                raise ValueError(
+                    "Bech32 format detected (suiprivkey...). Please convert to hex format:\n"
+                    "1. Open your Sui wallet → Settings → Export Private Key\n"
+                    "2. Choose 'Raw Private Key' or 'Hex Format'\n"
+                    "3. Copy the hex string (should start with 0x)\n"
+                    "4. Update your EXCHANGE__BLUEFIN_PRIVATE_KEY in .env with the hex format"
+                )
+
+            # Check if mnemonic format
+            words = private_key_str.split()
+            if len(words) in [12, 24] and all(word.isalpha() for word in words):
+                raise ValueError(
+                    "Mnemonic phrase detected. Please convert to private key:\n"
+                    '1. Use Sui CLI: sui keytool import "<your mnemonic>" ed25519\n'
+                    "2. Then export as hex: sui keytool export <address> --key-scheme ed25519\n"
+                    "3. Update your EXCHANGE__BLUEFIN_PRIVATE_KEY in .env with the hex format"
+                )
+
+            # Unknown format
+            raise ValueError(
+                "Unknown private key format. Supported formats:\n"
+                "• Hex: 0x1234...abcd (64 hex characters with 0x prefix)\n"
+                "• Bech32: suiprivkey... (Sui wallet export format)\n"
+                "• Mnemonic: 12 or 24 word seed phrase"
+            )
 
 
 @dataclass

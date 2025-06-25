@@ -52,14 +52,14 @@ log "Using Docker Compose command: $DOCKER_COMPOSE"
 # Check memory and add swap if needed
 check_memory() {
     log "Checking system memory..."
-    
+
     # Get available memory in MB
     AVAILABLE_MEM=$(free -m | awk 'NR==2{print $7}')
     TOTAL_MEM=$(free -m | awk 'NR==2{print $2}')
     SWAP_MEM=$(free -m | awk 'NR==3{print $2}')
-    
+
     log "Total Memory: ${TOTAL_MEM}MB, Available: ${AVAILABLE_MEM}MB, Swap: ${SWAP_MEM}MB"
-    
+
     # If total memory is less than 2GB and no swap, recommend adding swap
     if [ "$TOTAL_MEM" -lt 2048 ] && [ "$SWAP_MEM" -eq 0 ]; then
         warning "Low memory detected (${TOTAL_MEM}MB). Consider adding swap:"
@@ -78,16 +78,16 @@ check_memory() {
 # Clean up any existing containers/images to free memory
 cleanup_docker() {
     log "Cleaning up Docker to free memory..."
-    
+
     # Stop all containers
     $DOCKER_COMPOSE down --remove-orphans 2>/dev/null || true
-    
+
     # Remove unused containers, networks, images
     docker system prune -f 2>/dev/null || true
-    
+
     # Remove dangling images
     docker image prune -f 2>/dev/null || true
-    
+
     success "Docker cleanup completed"
 }
 
@@ -95,32 +95,32 @@ cleanup_docker() {
 build_service() {
     local service_name=$1
     log "Building service: $service_name"
-    
+
     # Monitor memory before build
     local mem_before=$(free -m | awk 'NR==2{print $3}')
-    
+
     # Build the service with limited resources
     if $DOCKER_COMPOSE build \
         --parallel 1 \
         --memory 512m \
         "$service_name" 2>&1 | tee "build_${service_name}.log"; then
-        
+
         success "Successfully built $service_name"
-        
+
         # Clean up build logs older than 1 day
         find . -name "build_*.log" -mtime +1 -delete 2>/dev/null || true
-        
+
     else
         error "Failed to build $service_name"
         error "Check build_${service_name}.log for details"
         return 1
     fi
-    
+
     # Monitor memory after build
     local mem_after=$(free -m | awk 'NR==2{print $3}')
     local mem_used=$((mem_after - mem_before))
     log "Memory used for $service_name build: ${mem_used}MB"
-    
+
     # Brief pause to let memory settle
     sleep 5
 }
@@ -142,30 +142,30 @@ get_services() {
 # Main build sequence
 main() {
     log "Starting sequential Docker build process..."
-    
+
     # Check if we're in the right directory
     if [ ! -f "docker-compose.yml" ]; then
         error "docker-compose.yml not found. Please run this script from the project root."
         exit 1
     fi
-    
+
     # Check system resources
     check_memory
-    
+
     # Clean up Docker to free memory
     cleanup_docker
-    
+
     # Get list of services
     log "Detecting services from docker-compose.yml..."
     services=$(get_services)
-    
+
     if [ -z "$services" ]; then
         error "No services found in docker-compose.yml"
         exit 1
     fi
-    
+
     log "Found services: $(echo $services | tr '\n' ' ')"
-    
+
     # Build services one by one in optimal order
     # Core services first, then optional services
     declare -a build_order=(
@@ -176,15 +176,15 @@ main() {
         "mcp-memory"          # Memory service
         "mcp-omnisearch"      # Search service (largest build)
     )
-    
+
     local built_count=0
     local total_services=$(echo "$services" | wc -l)
-    
+
     # Build services in order of priority
     for service in "${build_order[@]}"; do
         if echo "$services" | grep -q "^${service}$"; then
             log "Building service $((built_count + 1))/$total_services: $service"
-            
+
             if build_service "$service"; then
                 built_count=$((built_count + 1))
                 success "Progress: $built_count/$total_services services built"
@@ -192,17 +192,17 @@ main() {
                 error "Build failed for $service. Stopping."
                 exit 1
             fi
-            
+
             # Clean up Docker layers between builds to save memory
             docker builder prune -f 2>/dev/null || true
         fi
     done
-    
+
     # Build any remaining services not in the priority list
     for service in $services; do
         if ! printf '%s\n' "${build_order[@]}" | grep -q "^${service}$"; then
             log "Building remaining service: $service"
-            
+
             if build_service "$service"; then
                 built_count=$((built_count + 1))
                 success "Progress: $built_count/$total_services services built"
@@ -211,21 +211,21 @@ main() {
             fi
         fi
     done
-    
+
     success "All Docker services built successfully!"
     log "Starting services..."
-    
+
     # Start the services
     if $DOCKER_COMPOSE up -d; then
         success "All services started successfully!"
-        
+
         # Show status
         log "Service status:"
         $DOCKER_COMPOSE ps
-        
+
         log "To view logs: $DOCKER_COMPOSE logs -f"
         log "To stop services: $DOCKER_COMPOSE down"
-        
+
     else
         error "Failed to start services"
         exit 1

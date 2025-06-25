@@ -52,25 +52,25 @@ fi
 add_swap_if_needed() {
     local total_mem=$(free -m | awk 'NR==2{print $2}')
     local swap_mem=$(free -m | awk 'NR==3{print $2}')
-    
+
     if [ "$total_mem" -lt 2048 ] && [ "$swap_mem" -eq 0 ]; then
         log "Low memory detected (${total_mem}MB). Adding 2GB swap..."
-        
+
         # Check if swap file already exists
         if [ ! -f /swapfile ]; then
             sudo fallocate -l 2G /swapfile
             sudo chmod 600 /swapfile
             sudo mkswap /swapfile
         fi
-        
+
         # Enable swap
         sudo swapon /swapfile 2>/dev/null || true
-        
+
         # Make permanent if not already in fstab
         if ! grep -q '/swapfile' /etc/fstab; then
             echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
         fi
-        
+
         success "Swap added successfully"
         free -h
     fi
@@ -79,14 +79,14 @@ add_swap_if_needed() {
 # Choose deployment mode based on available memory
 choose_deployment_mode() {
     local total_mem=$(free -m | awk 'NR==2{print $2}')
-    
+
     echo ""
     log "Available deployment modes:"
     echo "  1) Essential only (ai-trading-bot + bluefin-service) - 512MB RAM"
     echo "  2) Core services (+ dashboard-backend) - 768MB RAM"
     echo "  3) Full services (+ dashboard-frontend + MCP) - 1GB+ RAM"
     echo ""
-    
+
     if [ "$total_mem" -lt 1024 ]; then
         warning "Low memory detected (${total_mem}MB). Recommending Essential mode."
         echo "1" > /tmp/deployment_mode
@@ -100,7 +100,7 @@ choose_deployment_mode() {
 # Start services based on deployment mode
 start_services() {
     local mode=$(cat /tmp/deployment_mode 2>/dev/null || echo "2")
-    
+
     case $mode in
         1)
             log "Starting Essential services..."
@@ -124,13 +124,13 @@ start_services() {
 # Main execution
 main() {
     log "🚀 Starting AI Trading Bot deployment..."
-    
+
     # Add swap if needed
     add_swap_if_needed
-    
+
     # Choose deployment mode
     choose_deployment_mode
-    
+
     # Use sequential build script if available
     if [ -f "scripts/sequential-docker-build.sh" ]; then
         log "Using sequential build process..."
@@ -140,24 +140,24 @@ main() {
         # Build with limited parallelism
         docker compose build --parallel 1
     fi
-    
+
     # Start services
     start_services
-    
+
     # Show status
     echo ""
     success "Services started successfully!"
-    
+
     log "Service status:"
     docker compose ps
-    
+
     echo ""
     log "Useful commands:"
     echo "  View logs:     docker compose logs -f"
     echo "  Stop services: docker compose down"
     echo "  Restart:       docker compose restart"
     echo "  Update:        git pull && ./start-trading-bot.sh"
-    
+
     # Show access URLs
     echo ""
     log "Access URLs:"
@@ -167,7 +167,7 @@ main() {
     if docker compose ps | grep -q dashboard-frontend; then
         echo "  Web Dashboard: http://$(hostname -I | awk '{print $1}'):3000"
     fi
-    
+
     # Show logs for main service
     echo ""
     log "Following AI Trading Bot logs (Ctrl+C to exit):"
