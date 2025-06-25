@@ -330,9 +330,9 @@ class TradingEngine:
         self._shutdown_requested = False
         self._memory_available = False  # Initialize early to prevent AttributeError
         self._last_position_log_time: datetime | None = None
-        self._background_tasks: list[asyncio.Task[Any]] = (
-            []
-        )  # Track background tasks for cleanup
+        self._background_tasks: list[
+            asyncio.Task[Any]
+        ] = []  # Track background tasks for cleanup
 
         # Initialize market making integrator (will be set up after LLM agent)
         self.market_making_integrator: Any | None = None
@@ -1248,12 +1248,88 @@ class TradingEngine:
 
         return True
 
+    def _is_running_in_container(self) -> bool:
+        """Detect if running in a Docker container or Ubuntu environment."""
+        try:
+            # Check for Docker-specific indicators
+            docker_indicators = [
+                Path("/.dockerenv").exists(),
+                Path("/proc/1/cgroup").exists()
+                and "docker" in Path("/proc/1/cgroup").read_text(),
+                os.getenv("DOCKER_CONTAINER") == "true",
+                os.getenv("KUBERNETES_SERVICE_HOST") is not None,
+            ]
+
+            # Check for Ubuntu container-specific paths
+            ubuntu_container_indicators = [
+                Path("/app").exists() and Path("/app/.venv").exists(),
+                os.getenv("FP_RUNTIME_ENABLED") == "true",
+                Path("/etc/os-release").exists()
+                and "ubuntu" in Path("/etc/os-release").read_text().lower(),
+            ]
+
+            return any(docker_indicators) or any(ubuntu_container_indicators)
+        except OSError:
+            return False
+
+    def _get_container_safe_home(self) -> Path:
+        """Get container-safe home directory path."""
+        if self._is_running_in_container():
+            # In container, prefer app directory over home
+            container_homes = [
+                Path("/app"),
+                Path("/home/botuser"),
+                Path("/tmp"),
+                Path.cwd(),
+            ]
+
+            for home_path in container_homes:
+                if home_path.exists() and os.access(home_path, os.W_OK):
+                    return home_path
+
+            # Fallback to temp if nothing is writable
+            return Path(tempfile.gettempdir())
+        # On host system, use actual home
+        try:
+            return Path.home()
+        except (OSError, RuntimeError):
+            return Path.cwd()
+
+    def _load_env_with_fallbacks(self) -> None:
+        """Load .env file with container-aware fallback paths."""
+        env_search_paths = [
+            Path.cwd() / ".env",  # Current directory (primary)
+            Path("/app/.env"),  # Container app directory
+            Path("/config/.env"),  # Container config directory
+            self._get_container_safe_home() / ".env",  # Container-safe home
+            Path("/tmp/.env"),  # Emergency fallback
+        ]
+
+        env_loaded = False
+        for env_path in env_search_paths:
+            if env_path.exists() and env_path.is_file():
+                try:
+                    load_dotenv(env_path)
+                    console.print(f"[green]Loaded environment from: {env_path}[/green]")
+                    env_loaded = True
+                    break
+                except Exception as e:
+                    console.print(f"[yellow]Failed to load {env_path}: {e}[/yellow]")
+                    continue
+
+        if not env_loaded:
+            # Load without specific path (uses default behavior)
+            load_dotenv()
+            console.print(
+                "[yellow]Using default .env loading (no specific file found)[/yellow]"
+            )
+
     def _load_configuration(
         self, config_file: str | None, dry_run: bool | None
     ) -> Settings:
         """Load and validate configuration with enhanced dotenv support."""
-        # Always load .env file first to ensure environment variables are available
-        load_dotenv()
+        # Load .env file with container-aware fallback paths
+        self._load_env_with_fallbacks()
 
         # Check for CONFIG_FILE environment variable if no config_file provided
         if not config_file:
@@ -1363,13 +1439,16 @@ class TradingEngine:
         if not self.settings.system.log_file_path:
             return None
 
-        # List of paths to try in order of preference
+        # List of paths to try in order of preference with container awareness
         temp_dir = Path(tempfile.gettempdir())
         fallback_paths = [
             self.settings.system.log_file_path,  # Original path
             temp_dir / "bot.log",  # Container fallback using secure temp dir
-            Path.home() / "bot.log",  # User home fallback
+            self._get_container_safe_home()
+            / "bot.log",  # Container-aware home fallback
             Path.cwd() / "bot.log",  # Current directory fallback
+            Path("/app/logs") / "bot.log",  # Container logs directory
+            Path("/tmp") / "bot.log",  # System temp fallback
         ]
 
         for log_path in fallback_paths:
@@ -5333,7 +5412,89 @@ def daily_report(date: str | None) -> None:
 
 @cli.command()
 def init() -> None:
-    """Initialize project configuration."""
+    """Initialize project configuration with container awareness."""
+
+    # Detect container environment
+    is_container = _is_container_environment()
+
+    if is_container:
+        console.print("[blue]🐳 Container environment detected[/blue]")
+        _init_container_environment()
+    else:
+        console.print("[green]🖥️  Host environment detected[/green]")
+        _init_host_environment()
+
+
+def _is_container_environment() -> bool:
+    """Detect if running in a container environment."""
+    try:
+        container_indicators = [
+            Path("/.dockerenv").exists(),
+            Path("/proc/1/cgroup").exists()
+            and "docker" in Path("/proc/1/cgroup").read_text(),
+            os.getenv("DOCKER_CONTAINER") == "true",
+            Path("/app").exists() and Path("/app/.venv").exists(),
+        ]
+        return any(container_indicators)
+    except OSError:
+        return False
+
+
+def _init_container_environment() -> None:
+    """Initialize configuration in container environment."""
+    # Container-specific paths
+    container_paths = [
+        Path("/app/.env"),
+        Path("/config/.env"),
+        Path("/app/config/.env"),
+    ]
+
+    example_paths = [
+        Path("/app/.env.example"),
+        Path("/config/.env.example"),
+        Path(".env.example"),
+    ]
+
+    # Find existing .env file
+    existing_env = None
+    for env_path in container_paths:
+        if env_path.exists():
+            existing_env = env_path
+            break
+
+    if existing_env:
+        console.print(f"✅ .env file already exists at: {existing_env}")
+        _validate_container_directories()
+        return
+
+    # Find .env.example file
+    example_file = None
+    for example_path in example_paths:
+        if example_path.exists():
+            example_file = example_path
+            break
+
+    if example_file:
+        # Create .env in the same directory as .env.example
+        target_env = example_file.parent / ".env"
+        try:
+            example_file.rename(target_env)
+            console.print(f"✅ Created .env file from {example_file} -> {target_env}")
+            console.print(
+                "🔧 Please configure environment variables for container deployment"
+            )
+        except OSError as e:
+            console.print(f"❌ Failed to create .env file: {e}", style="red")
+    else:
+        # Create minimal .env template for container
+        target_env = Path("/app/.env")
+        _create_container_env_template(target_env)
+
+    _validate_container_directories()
+
+
+def _init_host_environment() -> None:
+    """Initialize configuration in host environment."""
     env_file = Path(".env")
     env_example = Path(".env.example")
 
@@ -5349,10 +5510,123 @@ def init() -> None:
         console.print("❌ .env.example file not found", style="red")
 
 
+def _create_container_env_template(target_path: Path) -> None:
+    """Create a minimal .env template for container deployment."""
+    template_content = """# AI Trading Bot Configuration - Container Template
+# Ubuntu Docker Optimized Configuration
+
+# Trading Mode (IMPORTANT: Use paper for safety)
+SYSTEM__DRY_RUN=true
+TRADING_MODE=paper
+
+# Exchange Configuration
+EXCHANGE__EXCHANGE_TYPE=coinbase
+EXCHANGE_TYPE=coinbase
+
+# Trading Pair and Settings
+TRADING__SYMBOL=BTC-USD
+TRADING_PAIRS=BTC-USD
+TRADING__INTERVAL=5m
+TRADING_INTERVAL=5m
+
+# LLM Configuration (Required)
+LLM__OPENAI_API_KEY=your_openai_api_key_here
+LLM_OPENAI_API_KEY=your_openai_api_key_here
+
+# Coinbase Configuration (for live trading)
+COINBASE_API_KEY=your_coinbase_api_key
+COINBASE_PRIVATE_KEY=your_coinbase_private_key
+
+# Container-specific Settings
+LOG_LEVEL=INFO
+ENABLE_WEBSOCKET=true
+ENABLE_RISK_MANAGEMENT=true
+
+# Functional Programming Runtime
+FP_RUNTIME_ENABLED=true
+FP_RUNTIME_MODE=hybrid
+"""
+
+    try:
+        target_path.write_text(template_content)
+        console.print(f"✅ Created container .env template at: {target_path}")
+        console.print("🔧 Please edit the .env file with your API keys")
+        console.print(
+            "⚠️  IMPORTANT: Keep SYSTEM__DRY_RUN=true for paper trading safety"
+        )
+    except OSError as e:
+        console.print(f"❌ Failed to create .env template: {e}", style="red")
+
+
+def _validate_container_directories() -> None:
+    """Validate container directory structure and permissions."""
+    console.print("\n🔍 Validating container environment...")
+
+    required_dirs = [
+        "/app/logs",
+        "/app/data",
+        "/app/data/paper_trading",
+        "/app/data/positions",
+        "/app/data/orders",
+        "/app/tmp",
+    ]
+
+    optional_dirs = [
+        "/app/data/fp_runtime",
+        "/app/logs/fp",
+        "/app/data/mcp_memory",
+        "/app/logs/mcp",
+    ]
+
+    validation_results = []
+
+    for dir_path in required_dirs:
+        path = Path(dir_path)
+        exists = path.exists()
+        writable = exists and os.access(path, os.W_OK)
+
+        if exists and writable:
+            status = "✅"
+        elif exists and not writable:
+            status = "⚠️ "
+        else:
+            status = "❌"
+
+        validation_results.append((dir_path, status, exists, writable))
+
+    # Display results
+    for dir_path, status, exists, writable in validation_results:
+        console.print(
+            f"{status} {dir_path}: {'exists' if exists else 'missing'}{', writable' if writable else ', read-only' if exists else ''}"
+        )
+
+    # Check optional directories
+    console.print("\n📋 Optional directories:")
+    for dir_path in optional_dirs:
+        path = Path(dir_path)
+        if path.exists():
+            writable = os.access(path, os.W_OK)
+            console.print(
+                f"✅ {dir_path}: available{', writable' if writable else ', read-only'}"
+            )
+
+    console.print("\n🐳 Container environment validation complete")
+
+
 @cli.command()
 def diagnose() -> None:
     """Run startup diagnostics and component health checks."""
     console.print("🔍 Running startup diagnostics...", style="cyan bold")
+
+    # Check if running in container and run container-specific diagnostics
+    if _is_container_environment():
+        console.print(
+            "🐳 Container environment detected - running container diagnostics",
+            style="blue",
+        )
+        _run_container_diagnostics()
+    else:
+        console.print("🖥️  Host environment detected", style="green")
 
     # Check startup health
     _check_startup_health()
@@ -5385,6 +5659,191 @@ def diagnose() -> None:
     except Exception as e:
         console.print(f"❌ Failed to run diagnostics: {e}", style="red")
         console.print("This may indicate critical import failures", style="red")
+
+
+def _run_container_diagnostics() -> None:
+    """Run container-specific diagnostic checks."""
+    console.print("\n🔍 Container Environment Diagnostics", style="cyan bold")
+    console.print("=" * 50)
+
+    # Check container environment variables
+    container_env_vars = [
+        ("FP_RUNTIME_ENABLED", "Functional Programming Runtime"),
+        ("PYTHONPATH", "Python Path"),
+        ("VIRTUAL_ENV", "Virtual Environment"),
+        ("PATH", "System Path"),
+    ]
+
+    console.print("\n🌍 Environment Variables:")
+    for env_var, description in container_env_vars:
+        value = os.getenv(env_var)
+        if value:
+            # Truncate long paths for display
+            display_value = value if len(value) < 60 else f"{value[:60]}..."
+            console.print(f"  ✅ {description}: {display_value}")
+        else:
+            console.print(f"  ❌ {description}: Not set")
+
+    # Check Ubuntu-specific paths
+    ubuntu_paths = [
+        ("/app", "Application Directory"),
+        ("/app/.venv", "Virtual Environment"),
+        ("/app/logs", "Logs Directory"),
+        ("/app/data", "Data Directory"),
+        ("/etc/os-release", "OS Information"),
+    ]
+
+    console.print("\n📁 Ubuntu Container Paths:")
+    for path_str, description in ubuntu_paths:
+        path = Path(path_str)
+        if path.exists():
+            readable = os.access(path, os.R_OK)
+            writable = os.access(path, os.W_OK) if path.is_dir() else False
+            permissions = []
+            if readable:
+                permissions.append("read")
+            if writable:
+                permissions.append("write")
+            perm_str = f" ({', '.join(permissions)})" if permissions else " (no access)"
+            console.print(f"  ✅ {description}: {path}{perm_str}")
+        else:
+            console.print(f"  ❌ {description}: Missing")
+
+    # Check Docker-specific indicators
+    docker_indicators = [
+        ("/.dockerenv", "Docker Environment File"),
+        ("/proc/1/cgroup", "Container Process Group"),
+    ]
+
+    console.print("\n🐳 Docker Indicators:")
+    for path_str, description in docker_indicators:
+        path = Path(path_str)
+        if path.exists():
+            console.print(f"  ✅ {description}: Present")
+            if path_str == "/proc/1/cgroup":
+                try:
+                    content = path.read_text()
+                    if "docker" in content:
+                        console.print("    🔍 Docker container confirmed")
+                    else:
+                        console.print("    ❓ Non-Docker container detected")
+                except Exception:
+                    console.print("    ❓ Unable to read cgroup information")
+        else:
+            console.print(f"  ❌ {description}: Not found")
+
+    # Check user and permissions
+    console.print("\n👤 User and Permissions:")
+    try:
+        import pwd
+
+        user_info = pwd.getpwuid(os.getuid())
+        console.print(f"  ✅ Running as user: {user_info.pw_name} (UID: {os.getuid()})")
+        console.print(f"  ✅ Home directory: {user_info.pw_dir}")
+        console.print(f"  ✅ Working directory: {Path.cwd()}")
+    except Exception as e:
+        console.print(f"  ❌ Failed to get user info: {e}")
+
+    # Check Python environment
+    console.print("\n🐍 Python Environment:")
+    console.print(f"  ✅ Python version: {sys.version.split()[0]}")
+    console.print(f"  ✅ Python executable: {sys.executable}")
+    console.print(
+        f"  ✅ Virtual environment: {os.getenv('VIRTUAL_ENV', 'Not detected')}"
+    )
+
+    # Check if running as expected user (1000:1000)
+    if os.getuid() == 1000 and os.getgid() == 1000:
+        console.print("  ✅ Running as expected container user (1000:1000)")
+    else:
+        console.print(
+            f"  ⚠️  Running as {os.getuid()}:{os.getgid()} (expected 1000:1000)"
+        )
+
+    console.print("\n🐳 Container diagnostics complete")
+
+
+@cli.command()
+def container_diagnose() -> None:
+    """Run comprehensive container environment diagnostics."""
+    console.print("🐳 Container Environment Diagnostics", style="cyan bold")
+    console.print("=" * 60)
+
+    if not _is_container_environment():
+        console.print("❌ Not running in a container environment", style="red")
+        console.print(
+            "This command is designed for Docker/container environments", style="yellow"
+        )
+        return
+
+    # Run comprehensive container diagnostics
+    _run_container_diagnostics()
+
+    # Additional container-specific checks
+    console.print("\n🔧 Container Configuration Validation", style="cyan bold")
+    _validate_container_directories()
+
+    # Test .env file loading
+    console.print("\n📁 Environment File Loading Test", style="cyan bold")
+    _test_container_env_loading()
+
+    # Test log file creation
+    console.print("\n📝 Log File Creation Test", style="cyan bold")
+    _test_container_log_creation()
+
+    console.print("\n✅ Container diagnostics complete", style="green bold")
+
+
+def _test_container_env_loading() -> None:
+    """Test environment file loading in container."""
+    test_paths = [
+        Path("/app/.env"),
+        Path("/config/.env"),
+        Path("/app/config/.env"),
+        Path.cwd() / ".env",
+    ]
+
+    for env_path in test_paths:
+        if env_path.exists():
+            console.print(f"  ✅ Found .env file: {env_path}")
+            try:
+                with env_path.open() as f:
+                    line_count = sum(1 for _ in f)
+                console.print(f"    📊 Contains {line_count} lines")
+            except Exception as e:
+                console.print(f"    ❌ Cannot read file: {e}")
+        else:
+            console.print(f"  ❌ Not found: {env_path}")
+
+
+def _test_container_log_creation() -> None:
+    """Test log file creation in container."""
+    test_log_paths = [
+        Path("/app/logs/test_container.log"),
+        Path("/tmp/test_container.log"),
+        Path("/app/tmp/test_container.log"),
+    ]
+
+    for log_path in test_log_paths:
+        try:
+            # Create parent directory if needed
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Test write access
+            test_content = f"Container log test - {datetime.now().isoformat()}\n"
+            log_path.write_text(test_content)
+
+            # Verify we can read it back
+            read_content = log_path.read_text()
+            if read_content == test_content:
+                console.print(f"  ✅ Log creation successful: {log_path}")
+                # Clean up test file
+                log_path.unlink()
+            else:
+                console.print(f"  ⚠️  Log write/read mismatch: {log_path}")
+
+        except Exception as e:
+            console.print(f"  ❌ Log creation failed: {log_path} - {e}")
 
 
 @cli.command()

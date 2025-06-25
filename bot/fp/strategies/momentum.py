@@ -463,7 +463,9 @@ def breakout_momentum_strategy(
             "breakout_distance": (
                 abs(current_price - recent_high)
                 if breakout_up
-                else abs(current_price - recent_low) if breakout_down else 0.0
+                else abs(current_price - recent_low)
+                if breakout_down
+                else 0.0
             ),
         }
 

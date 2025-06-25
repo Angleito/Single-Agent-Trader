@@ -118,9 +118,9 @@ class TestWebSocketPerformance(unittest.TestCase):
         notification_time = time.time() - start_time
 
         # Should complete immediately (tasks run in background)
-        assert (
-            notification_time < 0.005
-        ), "Subscriber notification should be non-blocking"
+        assert notification_time < 0.005, (
+            "Subscriber notification should be non-blocking"
+        )
 
         # Wait a bit for background tasks to complete
         await asyncio.sleep(0.01)

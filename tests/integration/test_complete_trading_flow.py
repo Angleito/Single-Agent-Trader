@@ -639,12 +639,12 @@ class TestCompleteTradingFlow:
 
             for i, expected in enumerate(expected_progression):
                 actual = position_states[i]
-                assert (
-                    actual["position_side"] == expected["position_side"]
-                ), f"Cycle {i} position mismatch"
-                assert (
-                    actual["trade_count"] == expected["trade_count"]
-                ), f"Cycle {i} trade count mismatch"
+                assert actual["position_side"] == expected["position_side"], (
+                    f"Cycle {i} position mismatch"
+                )
+                assert actual["trade_count"] == expected["trade_count"], (
+                    f"Cycle {i} trade count mismatch"
+                )
 
     @pytest.mark.asyncio
     async def test_graceful_shutdown_integration(self, mock_market_data):

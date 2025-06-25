@@ -52,17 +52,17 @@ class TestPaperTradingDefaults:
         # Clear any existing DRY_RUN environment variable
         with patch.dict(os.environ, {}, clear=True):
             system_settings = SystemSettings()
-            assert (
-                system_settings.dry_run is True
-            ), "System must default to paper trading"
+            assert system_settings.dry_run is True, (
+                "System must default to paper trading"
+            )
 
     def test_paper_trading_default_empty_env(self):
         """System must default to paper trading when DRY_RUN is empty."""
         with patch.dict(os.environ, {"SYSTEM__DRY_RUN": ""}):
             system_settings = SystemSettings()
-            assert (
-                system_settings.dry_run is True
-            ), "Empty DRY_RUN must default to paper trading"
+            assert system_settings.dry_run is True, (
+                "Empty DRY_RUN must default to paper trading"
+            )
 
     @given(
         env_value=st.text(
@@ -75,9 +75,9 @@ class TestPaperTradingDefaults:
             try:
                 settings = Settings()
                 # Most values should result in dry_run=True
-                assert (
-                    settings.system.dry_run is True
-                ), f"Value '{env_value}' should enable paper trading"
+                assert settings.system.dry_run is True, (
+                    f"Value '{env_value}' should enable paper trading"
+                )
             except ValidationError:
                 # Some random text might cause validation errors, which is safe
                 pass
@@ -98,9 +98,9 @@ class TestPaperTradingDefaults:
                 },
             ):
                 settings = Settings()
-                assert (
-                    settings.system.dry_run is False
-                ), f"Value '{value}' should disable paper trading"
+                assert settings.system.dry_run is False, (
+                    f"Value '{value}' should disable paper trading"
+                )
 
     def test_development_enforces_dry_run(self):
         """Development environment must enforce dry-run mode."""
@@ -457,31 +457,31 @@ class TestDefaultValueSafety:
 
         # System defaults
         assert settings.system.dry_run is True, "Must default to paper trading"
-        assert (
-            settings.system.environment == Environment.DEVELOPMENT
-        ), "Must default to development"
+        assert settings.system.environment == Environment.DEVELOPMENT, (
+            "Must default to development"
+        )
 
         # Trading defaults
         assert settings.trading.leverage <= 10, "Default leverage must be conservative"
-        assert (
-            settings.trading.max_size_pct <= 25.0
-        ), "Default position size must be conservative"
+        assert settings.trading.max_size_pct <= 25.0, (
+            "Default position size must be conservative"
+        )
 
         # Risk defaults
-        assert (
-            settings.risk.max_position_risk_pct <= 2.0
-        ), "Default position risk must be conservative"
-        assert (
-            settings.risk.max_daily_loss_pct <= 10.0
-        ), "Default daily loss must be reasonable"
-        assert (
-            settings.risk.default_stop_loss_pct >= 1.0
-        ), "Default stop loss must be reasonable"
+        assert settings.risk.max_position_risk_pct <= 2.0, (
+            "Default position risk must be conservative"
+        )
+        assert settings.risk.max_daily_loss_pct <= 10.0, (
+            "Default daily loss must be reasonable"
+        )
+        assert settings.risk.default_stop_loss_pct >= 1.0, (
+            "Default stop loss must be reasonable"
+        )
 
         # Paper trading defaults
-        assert (
-            settings.paper_trading.starting_balance >= 10000
-        ), "Paper trading should have reasonable starting balance"
+        assert settings.paper_trading.starting_balance >= 10000, (
+            "Paper trading should have reasonable starting balance"
+        )
 
     @given(
         dry_run=st.just(None),  # Simulate missing value
@@ -538,9 +538,9 @@ class TestCriticalSafetyInvariants:
                         pytest.fail("Development environment allowed dry_run=false")
                 else:
                     # All other values should result in dry_run=true
-                    assert (
-                        settings.system.dry_run is True
-                    ), f"Value '{dry_run_value}' should not disable paper trading"
+                    assert settings.system.dry_run is True, (
+                        f"Value '{dry_run_value}' should not disable paper trading"
+                    )
             except ValidationError as e:
                 # Validation errors are acceptable
                 error_message = str(e)

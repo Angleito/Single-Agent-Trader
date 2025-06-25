@@ -98,9 +98,9 @@ class FPTestCase(ABC):
 
     def assert_result_ok(self, result: Result[T, E], expected_value: T = None) -> T:
         """Assert Result is Ok and optionally check value."""
-        assert (
-            result.is_ok()
-        ), f"Expected Ok, got Err: {result.error if hasattr(result, 'error') else result}"
+        assert result.is_ok(), (
+            f"Expected Ok, got Err: {result.error if hasattr(result, 'error') else result}"
+        )
         value = result.unwrap()
         if expected_value is not None:
             assert value == expected_value
@@ -108,9 +108,9 @@ class FPTestCase(ABC):
 
     def assert_result_err(self, result: Result[T, E], expected_error: E = None) -> E:
         """Assert Result is Err and optionally check error."""
-        assert (
-            result.is_err()
-        ), f"Expected Err, got Ok: {result.unwrap() if hasattr(result, 'unwrap') else result}"
+        assert result.is_err(), (
+            f"Expected Err, got Ok: {result.unwrap() if hasattr(result, 'unwrap') else result}"
+        )
         error = result.error
         if expected_error is not None:
             assert error == expected_error
@@ -126,9 +126,9 @@ class FPTestCase(ABC):
 
     def assert_maybe_nothing(self, maybe: Maybe[T]) -> None:
         """Assert Maybe is Nothing."""
-        assert (
-            maybe.is_nothing()
-        ), f"Expected Nothing, got Some: {maybe.unwrap() if hasattr(maybe, 'unwrap') else maybe}"
+        assert maybe.is_nothing(), (
+            f"Expected Nothing, got Some: {maybe.unwrap() if hasattr(maybe, 'unwrap') else maybe}"
+        )
 
     def assert_io_result(self, io: IO[T], expected_value: T = None) -> T:
         """Assert IO computation result."""

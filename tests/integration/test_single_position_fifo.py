@@ -126,9 +126,9 @@ class SinglePositionFIFOTest:
 
         assert not approved2, "Should NOT be able to open another LONG"
         assert modified2.action == "HOLD", "Action should be changed to HOLD"
-        assert (
-            "one position" in reason2.lower()
-        ), "Reason should mention single position rule"
+        assert "one position" in reason2.lower(), (
+            "Reason should mention single position rule"
+        )
 
         # Test 3: Try to open SHORT while LONG exists
         short_action = self.create_trade_action("SHORT", 10)
@@ -230,9 +230,9 @@ class SinglePositionFIFOTest:
         logger.info("  Validated action: %s", validated.action)
         logger.info("  Rationale: %s", validated.rationale)
 
-        assert (
-            validated.action == "HOLD"
-        ), "Validator should change LONG to HOLD when position exists"
+        assert validated.action == "HOLD", (
+            "Validator should change LONG to HOLD when position exists"
+        )
 
         # Close position
         sell_order = self.create_test_order(

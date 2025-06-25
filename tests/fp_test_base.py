@@ -134,9 +134,9 @@ class FPTestBase(ABC):
 
     def assert_result_ok(self, result: Result[T, E], expected_value: T = None) -> T:
         """Assert Result is Ok and optionally check value."""
-        assert (
-            hasattr(result, "is_ok") and result.is_ok()
-        ), f"Expected Ok, got Err: {getattr(result, 'error', result)}"
+        assert hasattr(result, "is_ok") and result.is_ok(), (
+            f"Expected Ok, got Err: {getattr(result, 'error', result)}"
+        )
         value = result.unwrap()
         if expected_value is not None:
             assert value == expected_value, f"Expected {expected_value}, got {value}"
@@ -144,21 +144,21 @@ class FPTestBase(ABC):
 
     def assert_result_err(self, result: Result[T, E], expected_error: E = None) -> E:
         """Assert Result is Err and optionally check error."""
-        assert (
-            hasattr(result, "is_err") and result.is_err()
-        ), f"Expected Err, got Ok: {getattr(result, 'value', result)}"
+        assert hasattr(result, "is_err") and result.is_err(), (
+            f"Expected Err, got Ok: {getattr(result, 'value', result)}"
+        )
         error = getattr(result, "error", result)
         if expected_error is not None:
-            assert (
-                error == expected_error
-            ), f"Expected error {expected_error}, got {error}"
+            assert error == expected_error, (
+                f"Expected error {expected_error}, got {error}"
+            )
         return error
 
     def assert_maybe_some(self, maybe: Maybe[T], expected_value: T = None) -> T:
         """Assert Maybe is Some and optionally check value."""
-        assert (
-            hasattr(maybe, "is_some") and maybe.is_some()
-        ), "Expected Some, got Nothing"
+        assert hasattr(maybe, "is_some") and maybe.is_some(), (
+            "Expected Some, got Nothing"
+        )
         value = maybe.unwrap()
         if expected_value is not None:
             assert value == expected_value, f"Expected {expected_value}, got {value}"
@@ -166,9 +166,9 @@ class FPTestBase(ABC):
 
     def assert_maybe_nothing(self, maybe: Maybe[T]) -> None:
         """Assert Maybe is Nothing."""
-        assert (
-            hasattr(maybe, "is_nothing") and maybe.is_nothing()
-        ), f"Expected Nothing, got Some: {getattr(maybe, 'value', maybe)}"
+        assert hasattr(maybe, "is_nothing") and maybe.is_nothing(), (
+            f"Expected Nothing, got Some: {getattr(maybe, 'value', maybe)}"
+        )
 
     def assert_io_result(self, io: IO[T], expected_value: T = None) -> T:
         """Assert IO computation result."""
@@ -179,9 +179,9 @@ class FPTestBase(ABC):
 
     def assert_fp_result_success(self, fp_result, expected_value: Any = None) -> Any:
         """Assert FPResult is success."""
-        assert (
-            hasattr(fp_result, "is_success") and fp_result.is_success()
-        ), f"Expected FPSuccess, got FPFailure: {getattr(fp_result, 'failure', fp_result)}"
+        assert hasattr(fp_result, "is_success") and fp_result.is_success(), (
+            f"Expected FPSuccess, got FPFailure: {getattr(fp_result, 'failure', fp_result)}"
+        )
         value = fp_result.success()
         if expected_value is not None:
             assert value == expected_value, f"Expected {expected_value}, got {value}"
@@ -189,14 +189,14 @@ class FPTestBase(ABC):
 
     def assert_fp_result_failure(self, fp_result, expected_error: Any = None) -> Any:
         """Assert FPResult is failure."""
-        assert (
-            hasattr(fp_result, "is_failure") and fp_result.is_failure()
-        ), f"Expected FPFailure, got FPSuccess: {getattr(fp_result, 'success', fp_result)}"
+        assert hasattr(fp_result, "is_failure") and fp_result.is_failure(), (
+            f"Expected FPFailure, got FPSuccess: {getattr(fp_result, 'success', fp_result)}"
+        )
         error = fp_result.failure()
         if expected_error is not None:
-            assert (
-                error == expected_error
-            ), f"Expected error {expected_error}, got {error}"
+            assert error == expected_error, (
+                f"Expected error {expected_error}, got {error}"
+            )
         return error
 
     # =============================================================================
@@ -415,9 +415,9 @@ class FPExchangeTestBase(FPTestBase):
         if expected_symbol:
             call_args = mock_adapter.place_order.call_args
             # Check if symbol is in the call arguments
-            assert expected_symbol in str(
-                call_args
-            ), f"Expected symbol {expected_symbol} in order call"
+            assert expected_symbol in str(call_args), (
+                f"Expected symbol {expected_symbol} in order call"
+            )
 
 
 class FPStrategyTestBase(FPTestBase):
@@ -476,18 +476,18 @@ class FPStrategyTestBase(FPTestBase):
 
     def assert_signal_type(self, signal: Any, expected_type: type):
         """Assert signal is of expected type."""
-        assert isinstance(
-            signal, expected_type
-        ), f"Expected {expected_type.__name__}, got {type(signal).__name__}"
+        assert isinstance(signal, expected_type), (
+            f"Expected {expected_type.__name__}, got {type(signal).__name__}"
+        )
 
     def assert_signal_confidence(
         self, signal: Any, min_confidence: float = 0.0, max_confidence: float = 1.0
     ):
         """Assert signal confidence is within range."""
         if hasattr(signal, "confidence"):
-            assert (
-                min_confidence <= signal.confidence <= max_confidence
-            ), f"Signal confidence {signal.confidence} not in range [{min_confidence}, {max_confidence}]"
+            assert min_confidence <= signal.confidence <= max_confidence, (
+                f"Signal confidence {signal.confidence} not in range [{min_confidence}, {max_confidence}]"
+            )
 
 
 class FPRiskTestBase(FPTestBase):
@@ -532,9 +532,9 @@ class FPRiskTestBase(FPTestBase):
     ):
         """Assert risk metrics are within acceptable limits."""
         risk_score = risk_metrics.get("risk_score", 0)
-        assert (
-            0 <= risk_score <= max_risk
-        ), f"Risk score {risk_score} exceeds limit {max_risk}"
+        assert 0 <= risk_score <= max_risk, (
+            f"Risk score {risk_score} exceeds limit {max_risk}"
+        )
 
 
 class FPIndicatorTestBase(FPTestBase):
@@ -586,9 +586,9 @@ class FPIndicatorTestBase(FPTestBase):
         self, value: float, min_val: float, max_val: float
     ):
         """Assert indicator value is within expected range."""
-        assert (
-            min_val <= value <= max_val
-        ), f"Indicator value {value} not in range [{min_val}, {max_val}]"
+        assert min_val <= value <= max_val, (
+            f"Indicator value {value} not in range [{min_val}, {max_val}]"
+        )
 
 
 # =============================================================================

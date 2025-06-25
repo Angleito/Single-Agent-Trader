@@ -131,9 +131,9 @@ class FunctionalPaperTradingEngine:
         5. Log the execution
         """
 
-        def execute_operation() -> (
-            Either[str, tuple[TradeExecution, PaperTradingAccountState]]
-        ):
+        def execute_operation() -> Either[
+            str, tuple[TradeExecution, PaperTradingAccountState]
+        ]:
             try:
                 current_state = self._current_state
 

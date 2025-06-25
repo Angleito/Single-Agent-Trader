@@ -317,15 +317,69 @@ setup_directories() {
 setup_python_environment() {
     log_info "Setting up Python environment..."
 
-    # Set Python environment variables
+    # CRITICAL: Change to app directory before any Python operations
+    if ! cd "${PYTHON_PATH}" 2>/dev/null; then
+        log_error "Failed to change to Python path directory: ${PYTHON_PATH}"
+        return 1
+    fi
+    log_success "Changed to working directory: $(pwd)"
+
+    # Ubuntu-optimized Poetry virtual environment activation
+    if [[ -f "/app/.venv/bin/python" ]]; then
+        log_info "Configuring Poetry virtual environment for Ubuntu..."
+        
+        # Verify virtual environment is functional
+        if "/app/.venv/bin/python" --version >/dev/null 2>&1; then
+            export VIRTUAL_ENV="/app/.venv"
+            export PATH="/app/.venv/bin:${PATH}"
+            log_success "Virtual environment activated: ${VIRTUAL_ENV}"
+            
+            # Test critical dependencies
+            local deps=("pydantic" "pandas" "numpy")
+            for dep in "${deps[@]}"; do
+                if "/app/.venv/bin/python" -c "import ${dep}" >/dev/null 2>&1; then
+                    log_debug "✓ ${dep} available in virtual environment"
+                else
+                    log_warning "✗ ${dep} not available in virtual environment"
+                fi
+            done
+            
+            # Use Poetry's Python interpreter
+            export PYTHON_EXECUTABLE="/app/.venv/bin/python"
+        else
+            log_error "Virtual environment Python is not functional"
+            return 1
+        fi
+    elif [[ -f "/app/.venv/bin/activate" ]]; then
+        log_info "Activating Poetry virtual environment via activate script..."
+        # shellcheck disable=SC1091
+        source "/app/.venv/bin/activate" 2>/dev/null || {
+            log_warning "Failed to activate virtual environment, using direct path"
+            export PATH="/app/.venv/bin:${PATH}"
+        }
+        export PYTHON_EXECUTABLE="/app/.venv/bin/python"
+    else
+        log_warning "No Poetry virtual environment found, using system Python"
+        export PYTHON_EXECUTABLE="python"
+    fi
+
+    # Set Ubuntu-optimized Python environment variables
     export PYTHONPATH="${PYTHON_PATH}"
     export PYTHONUNBUFFERED=1
     export PYTHONDONTWRITEBYTECODE=1
+    export PYTHONHASHSEED=random
+    export PYTHONIOENCODING=utf-8
+    # Ubuntu-specific optimizations
+    export LANG=C.UTF-8
+    export LC_ALL=C.UTF-8
 
-    log_success "Python environment variables set:"
+    log_success "Ubuntu-optimized Python environment configured:"
     log_info "  PYTHONPATH=${PYTHONPATH}"
     log_info "  PYTHONUNBUFFERED=${PYTHONUNBUFFERED}"
     log_info "  PYTHONDONTWRITEBYTECODE=${PYTHONDONTWRITEBYTECODE}"
+    log_info "  PYTHON_EXECUTABLE=${PYTHON_EXECUTABLE:-python}"
+    log_info "  VIRTUAL_ENV=${VIRTUAL_ENV:-'not set'}"
+    log_info "  Working Directory: $(pwd)"
 
     return 0
 }
@@ -426,6 +480,17 @@ check_python_dependencies() {
 validate_bot_module() {
     log_info "Validating bot module can be imported..."
 
+    # CRITICAL: Ensure we're in the correct working directory
+    local current_dir=$(pwd)
+    if [[ "${current_dir}" != "${PYTHON_PATH}" ]]; then
+        log_warning "Working directory mismatch: ${current_dir} != ${PYTHON_PATH}"
+        if ! cd "${PYTHON_PATH}" 2>/dev/null; then
+            log_error "Failed to change to Python path directory: ${PYTHON_PATH}"
+            return 1
+        fi
+        log_success "Changed to correct working directory: $(pwd)"
+    fi
+
     # Check if bot module directory exists
     if [[ ! -d "${PYTHON_PATH}/${BOT_MODULE}" ]]; then
         log_error "Bot module directory not found: ${PYTHON_PATH}/${BOT_MODULE}"
@@ -434,36 +499,100 @@ validate_bot_module() {
         log_error "  ├── ${BOT_MODULE}/"
         log_error "  │   ├── __init__.py"
         log_error "  │   └── main.py"
+        
+        # Additional Ubuntu debugging info
+        log_error "Current directory contents:"
+        ls -la "${PYTHON_PATH}" 2>/dev/null | head -10 | while IFS= read -r line; do
+            log_error "  ${line}"
+        done
         return 1
     fi
 
     # Check if __init__.py exists
     if [[ ! -f "${PYTHON_PATH}/${BOT_MODULE}/__init__.py" ]]; then
         log_error "Bot module __init__.py not found: ${PYTHON_PATH}/${BOT_MODULE}/__init__.py"
-        return 1
-    fi
-
-    # Try to import the bot module
-    if ! python -c "import ${BOT_MODULE}" 2>/dev/null; then
-        log_error "Failed to import bot module"
-        log_error "Python import error details:"
-        python -c "import ${BOT_MODULE}" 2>&1 | while IFS= read -r line; do
+        log_error "Bot directory contents:"
+        ls -la "${PYTHON_PATH}/${BOT_MODULE}" 2>/dev/null | head -10 | while IFS= read -r line; do
             log_error "  ${line}"
         done
         return 1
     fi
 
-    log_success "Bot module imported successfully"
+    # Ubuntu-specific import validation with detailed error reporting
+    log_info "Testing Python import from directory: $(pwd)"
+    log_info "Using Python: $(which python)"
+    log_info "Python version: $(python --version 2>&1)"
+    
+    # Create a temporary test script for better error isolation
+    local test_script="/tmp/import_test_$$.py"
+    cat > "${test_script}" << EOF
+import sys
+import os
+print(f"Python executable: {sys.executable}")
+print(f"Working directory: {os.getcwd()}")
+print(f"Python path: {sys.path}")
+try:
+    import ${BOT_MODULE}
+    print("SUCCESS: Bot module imported")
+    try:
+        import ${BOT_MODULE}.main
+        print("SUCCESS: Bot main module imported")
+    except Exception as e:
+        print(f"WARNING: Bot main module import failed: {e}")
+except Exception as e:
+    print(f"ERROR: Bot module import failed: {e}")
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
+EOF
 
-    # Check if main module exists and can be imported
-    if python -c "import ${BOT_MODULE}.main" 2>/dev/null; then
-        log_success "Bot main module validated"
+    # Run the test script with comprehensive error capture
+    local import_result
+    import_result=$(python "${test_script}" 2>&1)
+    local import_exit_code=$?
+    
+    # Clean up test script
+    rm -f "${test_script}"
+    
+    # Process results
+    if [[ ${import_exit_code} -eq 0 ]]; then
+        log_success "Bot module validation successful"
+        echo "${import_result}" | while IFS= read -r line; do
+            if [[ "${line}" =~ ^SUCCESS ]]; then
+                log_success "  ${line}"
+            elif [[ "${line}" =~ ^WARNING ]]; then
+                log_warning "  ${line}"
+            else
+                log_debug "  ${line}"
+            fi
+        done
+        return 0
     else
-        log_warning "Bot main module could not be imported"
-        log_warning "This may cause issues when starting the application"
+        log_error "Bot module import validation failed"
+        log_error "Import test results:"
+        echo "${import_result}" | while IFS= read -r line; do
+            log_error "  ${line}"
+        done
+        
+        # Fallback import strategies for Ubuntu compatibility
+        log_info "Attempting fallback import strategies..."
+        
+        # Strategy 1: Try with explicit PYTHONPATH
+        if PYTHONPATH="${PYTHON_PATH}:${PYTHONPATH}" python -c "import ${BOT_MODULE}" 2>/dev/null; then
+            log_success "Fallback import successful with explicit PYTHONPATH"
+            export PYTHONPATH="${PYTHON_PATH}:${PYTHONPATH}"
+            return 0
+        fi
+        
+        # Strategy 2: Try from absolute path
+        if python -c "import sys; sys.path.insert(0, '${PYTHON_PATH}'); import ${BOT_MODULE}" 2>/dev/null; then
+            log_success "Fallback import successful with sys.path insertion"
+            return 0
+        fi
+        
+        log_error "All import strategies failed - bot module cannot be loaded"
+        return 1
     fi
-
-    return 0
 }
 
 # Setup environment-specific configuration
@@ -916,6 +1045,16 @@ main() {
 
     # Log the final command being executed
     log_info "Executing: $*"
+    
+    # CRITICAL: Ensure we're in the correct working directory for execution
+    if [[ "$(pwd)" != "${PYTHON_PATH}" ]]; then
+        log_warning "Final working directory check - changing to: ${PYTHON_PATH}"
+        cd "${PYTHON_PATH}" || {
+            log_error "CRITICAL: Failed to change to working directory before execution"
+            return 1
+        }
+        log_success "Final working directory: $(pwd)"
+    fi
 
     # Execute the original command
     exec "$@"

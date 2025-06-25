@@ -339,9 +339,9 @@ class TestDockerServiceProperties:
             for response in health_responses:
                 assert isinstance(response, dict)
                 for key in config["expected_health_keys"]:
-                    assert (
-                        key in response
-                    ), f"Missing expected key '{key}' in health response"
+                    assert key in response, (
+                        f"Missing expected key '{key}' in health response"
+                    )
 
     @given(
         service_name=service_names(),
@@ -386,9 +386,9 @@ class TestDockerServiceProperties:
                 time.sleep(1)
                 container.reload()
 
-            assert (
-                recovered
-            ), f"Service {service_name} did not recover within {max_recovery_time}s"
+            assert recovered, (
+                f"Service {service_name} did not recover within {max_recovery_time}s"
+            )
 
             # Verify health endpoint works after restart
             if config.get("health_endpoint"):
@@ -501,9 +501,9 @@ class TestDockerServiceProperties:
 
             for stats in stats_samples:
                 memory_usage = stats["memory_usage"]
-                assert (
-                    memory_usage <= max_memory_bytes
-                ), f"Memory usage {memory_usage} exceeds limit {max_memory_bytes}"
+                assert memory_usage <= max_memory_bytes, (
+                    f"Memory usage {memory_usage} exceeds limit {max_memory_bytes}"
+                )
 
                 # Verify CPU usage is reasonable (not pegged at 100%)
                 cpu_percent = stats["cpu_percent"]
@@ -589,9 +589,9 @@ class DockerServiceStateMachine(RuleBasedStateMachine):
             time.sleep(0.2)
 
         # All checks should have same result (all healthy or all unhealthy)
-        assert (
-            len(set(results)) <= 1
-        ), f"Inconsistent health check results for {service}: {results}"
+        assert len(set(results)) <= 1, (
+            f"Inconsistent health check results for {service}: {results}"
+        )
 
     @rule(service=services)
     def verify_network_connectivity(self, service):
@@ -630,9 +630,9 @@ class DockerServiceStateMachine(RuleBasedStateMachine):
         # Error rate should be low
         if requests_made > 0:
             error_rate = errors / requests_made
-            assert (
-                error_rate < 0.1
-            ), f"High error rate {error_rate} for {service} under load"
+            assert error_rate < 0.1, (
+                f"High error rate {error_rate} for {service} under load"
+            )
 
     @rule(service1=services, service2=services)
     def verify_service_dependencies(self, service1, service2):
@@ -759,9 +759,9 @@ def test_failure_recovery_integration(failure_scenario):
             if config.get("health_endpoint"):
                 current_health = service_monitor.check_service_health(service)
                 if initial_states[service]["health"] is not None:
-                    assert (
-                        current_health is not None
-                    ), f"Service {service} health not restored"
+                    assert current_health is not None, (
+                        f"Service {service} health not restored"
+                    )
 
         except docker.errors.NotFound:
             pytest.fail(f"Service {service} did not recover from {scenario_type}")
@@ -817,9 +817,9 @@ def test_concurrent_health_check_performance(concurrent_services, check_interval
     max_response_time = max(response_times)
 
     # Max should not be more than 2x average (indicates degradation)
-    assert (
-        max_response_time < avg_response_time * 2
-    ), f"Performance degradation detected: avg={avg_response_time:.2f}s, max={max_response_time:.2f}s"
+    assert max_response_time < avg_response_time * 2, (
+        f"Performance degradation detected: avg={avg_response_time:.2f}s, max={max_response_time:.2f}s"
+    )
 
 
 # Helper functions

@@ -183,12 +183,12 @@ class TestComponentIntegration:
             # Test validator handling of LLM output
             validated_action = validator.validate(case["llm_output"])
 
-            assert (
-                validated_action.action == case["expected_action"]
-            ), f"Case {i}: action mismatch"
-            assert (
-                validated_action.size_pct == case["expected_size"]
-            ), f"Case {i}: size mismatch"
+            assert validated_action.action == case["expected_action"], (
+                f"Case {i}: action mismatch"
+            )
+            assert validated_action.size_pct == case["expected_size"], (
+                f"Case {i}: size mismatch"
+            )
 
             # Ensure all required fields are present and valid
             assert validated_action.take_profit_pct > 0
@@ -362,18 +362,18 @@ class TestComponentIntegration:
             )
 
             if scenario["should_approve"]:
-                assert (
-                    approved
-                ), f"Scenario '{scenario['name']}' should be approved: {reason}"
+                assert approved, (
+                    f"Scenario '{scenario['name']}' should be approved: {reason}"
+                )
             elif approved:
                 # If approved, should be significantly modified
-                assert (
-                    final_action.size_pct < scenario["action"].size_pct
-                ), f"Scenario '{scenario['name']}' should be modified"
+                assert final_action.size_pct < scenario["action"].size_pct, (
+                    f"Scenario '{scenario['name']}' should be modified"
+                )
             else:
-                assert (
-                    not approved
-                ), f"Scenario '{scenario['name']}' should be rejected: {reason}"
+                assert not approved, (
+                    f"Scenario '{scenario['name']}' should be rejected: {reason}"
+                )
 
     @pytest.mark.asyncio
     async def test_exchange_client_order_flow_integration(self):

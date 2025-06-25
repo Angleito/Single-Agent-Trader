@@ -87,9 +87,9 @@ class TestBalanceValidation:
 
         for input_val, expected in precision_test_cases:
             result = account._normalize_balance(input_val)
-            assert (
-                result == expected
-            ), f"Input {input_val} should normalize to {expected}, got {result}"
+            assert result == expected, (
+                f"Input {input_val} should normalize to {expected}, got {result}"
+            )
 
     def test_crypto_precision_validation(self, account):
         """Test crypto amount precision validation (8 decimal places)."""

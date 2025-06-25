@@ -379,33 +379,33 @@ class TestClassMigrationAdapter:
 
         def assert_result_ok(self, result: Result, expected_value: Any = None):
             """Assert Result is Ok and optionally check value."""
-            assert (
-                hasattr(result, "is_ok") and result.is_ok()
-            ), f"Expected Ok, got Err: {getattr(result, 'error', result)}"
+            assert hasattr(result, "is_ok") and result.is_ok(), (
+                f"Expected Ok, got Err: {getattr(result, 'error', result)}"
+            )
             if expected_value is not None:
                 assert result.unwrap() == expected_value
 
         def assert_result_err(self, result: Result, expected_error: Any = None):
             """Assert Result is Err and optionally check error."""
-            assert (
-                hasattr(result, "is_err") and result.is_err()
-            ), f"Expected Err, got Ok: {getattr(result, 'value', result)}"
+            assert hasattr(result, "is_err") and result.is_err(), (
+                f"Expected Err, got Ok: {getattr(result, 'value', result)}"
+            )
             if expected_error is not None:
                 assert result.error == expected_error
 
         def assert_maybe_some(self, maybe: Maybe, expected_value: Any = None):
             """Assert Maybe is Some and optionally check value."""
-            assert (
-                hasattr(maybe, "is_some") and maybe.is_some()
-            ), "Expected Some, got Nothing"
+            assert hasattr(maybe, "is_some") and maybe.is_some(), (
+                "Expected Some, got Nothing"
+            )
             if expected_value is not None:
                 assert maybe.unwrap() == expected_value
 
         def assert_maybe_nothing(self, maybe: Maybe):
             """Assert Maybe is Nothing."""
-            assert (
-                hasattr(maybe, "is_nothing") and maybe.is_nothing()
-            ), f"Expected Nothing, got Some: {getattr(maybe, 'value', maybe)}"
+            assert hasattr(maybe, "is_nothing") and maybe.is_nothing(), (
+                f"Expected Nothing, got Some: {getattr(maybe, 'value', maybe)}"
+            )
 
         def run_io(self, io: IO):
             """Run IO computation and return result."""

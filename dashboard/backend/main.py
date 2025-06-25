@@ -239,9 +239,7 @@ class ConnectionManager:
         }
 
         # Connection tracking for personalized replay
-        self.connection_metadata = (
-            {}
-        )  # websocket -> {connected_at, last_message_id, categories}
+        self.connection_metadata = {}  # websocket -> {connected_at, last_message_id, categories}
 
         # Performance tracking
         self.stats = {

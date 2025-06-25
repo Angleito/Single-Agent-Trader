@@ -413,9 +413,9 @@ class TestBalanceIntegration:
 
         # Allow for small rounding differences
         balance_diff = abs(expected_balance - actual_balance)
-        assert balance_diff < Decimal(
-            "0.01"
-        ), f"Balance mismatch: expected {expected_balance}, got {actual_balance}"
+        assert balance_diff < Decimal("0.01"), (
+            f"Balance mismatch: expected {expected_balance}, got {actual_balance}"
+        )
 
         # Verify account status consistency
         account_status = account.get_account_status(current_prices)
@@ -513,12 +513,12 @@ class TestBalanceIntegration:
         performance_metrics["state_load"] = load_time
 
         # Performance assertions (reasonable thresholds)
-        assert (
-            performance_metrics["account_status_100_calls"] < 1000
-        ), "Account status calls too slow"
-        assert (
-            performance_metrics["trade_execution_10_trades"] < 2000
-        ), "Trade execution too slow"
+        assert performance_metrics["account_status_100_calls"] < 1000, (
+            "Account status calls too slow"
+        )
+        assert performance_metrics["trade_execution_10_trades"] < 2000, (
+            "Trade execution too slow"
+        )
         assert performance_metrics["state_save"] < 500, "State save too slow"
         assert performance_metrics["state_load"] < 500, "State load too slow"
 
@@ -579,9 +579,9 @@ class TestBalanceIntegration:
         for key, value in account_status.items():
             if isinstance(value, float):
                 # Check that float values have reasonable precision
-                assert (
-                    abs(value - round(value, 8)) < 1e-6
-                ), f"Excessive precision in {key}: {value}"
+                assert abs(value - round(value, 8)) < 1e-6, (
+                    f"Excessive precision in {key}: {value}"
+                )
 
     def _create_mock_dataframe(self, market_data):
         """Convert market data to DataFrame for testing."""
