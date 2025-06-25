@@ -190,7 +190,9 @@ def mnemonic_to_hex(mnemonic: str) -> str | None:
         return None
 
 
-def _mnemonic_to_seed(mnemonic: str, passphrase: str = "") -> bytes | None:  # nosec B107
+def _mnemonic_to_seed(
+    mnemonic: str, passphrase: str = ""
+) -> bytes | None:  # nosec B107
     """
     Convert mnemonic phrase to seed using BIP39 standard.
 
