@@ -1046,18 +1046,18 @@ def fp_test_utils():
         @staticmethod
         def assert_result_ok(result, expected_value=None):
             """Assert Result is Ok and optionally check value."""
-            assert result.is_ok(), (
-                f"Expected Ok, got Err: {result.error if hasattr(result, 'error') else result}"
-            )
+            assert (
+                result.is_ok()
+            ), f"Expected Ok, got Err: {result.error if hasattr(result, 'error') else result}"
             if expected_value is not None:
                 assert result.unwrap() == expected_value
 
         @staticmethod
         def assert_result_err(result, expected_error=None):
             """Assert Result is Err and optionally check error."""
-            assert result.is_err(), (
-                f"Expected Err, got Ok: {result.unwrap() if hasattr(result, 'unwrap') else result}"
-            )
+            assert (
+                result.is_err()
+            ), f"Expected Err, got Ok: {result.unwrap() if hasattr(result, 'unwrap') else result}"
             if expected_error is not None:
                 assert result.error == expected_error
 
@@ -1071,9 +1071,9 @@ def fp_test_utils():
         @staticmethod
         def assert_maybe_nothing(maybe):
             """Assert Maybe is Nothing."""
-            assert maybe.is_nothing(), (
-                f"Expected Nothing, got Some: {maybe.unwrap() if hasattr(maybe, 'unwrap') else maybe}"
-            )
+            assert (
+                maybe.is_nothing()
+            ), f"Expected Nothing, got Some: {maybe.unwrap() if hasattr(maybe, 'unwrap') else maybe}"
 
         @staticmethod
         def assert_io_result(io, expected_value=None):

@@ -54,9 +54,9 @@ info() {
 # Cleanup function
 cleanup() {
     local exit_code=$?
-    
+
     log "Starting cleanup process..."
-    
+
     # Stop and remove test containers
     for container in "${CLEANUP_CONTAINERS[@]}"; do
         if docker ps -a --format "table {{.Names}}" | grep -q "^${container}$"; then
@@ -65,7 +65,7 @@ cleanup() {
             docker rm "$container" >/dev/null 2>&1 || true
         fi
     done
-    
+
     # Remove test networks
     for network in "${CLEANUP_NETWORKS[@]}"; do
         if docker network ls --format "table {{.Name}}" | grep -q "^${network}$"; then
@@ -73,7 +73,7 @@ cleanup() {
             docker network rm "$network" >/dev/null 2>&1 || true
         fi
     done
-    
+
     # Remove test volumes
     for volume in "${CLEANUP_VOLUMES[@]}"; do
         if docker volume ls --format "table {{.Name}}" | grep -q "^${volume}$"; then
@@ -81,19 +81,19 @@ cleanup() {
             docker volume rm "$volume" >/dev/null 2>&1 || true
         fi
     done
-    
+
     # Remove temporary directory
     if [[ -d "$TEMP_DIR" ]]; then
         log "Removing temporary directory: $TEMP_DIR"
         rm -rf "$TEMP_DIR"
     fi
-    
+
     if [[ $exit_code -eq 0 ]]; then
         success "Cleanup completed successfully"
     else
         warning "Cleanup completed with some errors (exit code: $exit_code)"
     fi
-    
+
     exit $exit_code
 }
 
@@ -103,13 +103,13 @@ trap cleanup EXIT INT TERM
 # Initialize test environment
 initialize_test_environment() {
     log "Initializing Ubuntu deployment test environment..."
-    
+
     # Create temporary directory
     mkdir -p "$TEMP_DIR"
-    
+
     # Ensure log directory exists
     mkdir -p "$(dirname "$LOG_FILE")"
-    
+
     # Check if running on Ubuntu (informational)
     if [[ -f /etc/os-release ]] && grep -q "ID=ubuntu" /etc/os-release; then
         local ubuntu_version
@@ -118,17 +118,17 @@ initialize_test_environment() {
     else
         warning "Not running on Ubuntu - testing Docker Ubuntu containers only"
     fi
-    
+
     # Create test environment files
     create_test_env_file
-    
+
     success "Test environment initialized"
 }
 
 # Create test environment file
 create_test_env_file() {
     log "Creating test environment configuration..."
-    
+
     cat > "$TEMP_DIR/.env.test" << EOF
 # Ubuntu Deployment Test Configuration
 SYSTEM__DRY_RUN=true
@@ -172,55 +172,55 @@ EOF
 # Check prerequisites
 check_prerequisites() {
     log "Checking prerequisites for Ubuntu deployment testing..."
-    
+
     # Check Docker
     if ! command -v docker >/dev/null 2>&1; then
         error "Docker is not installed or not in PATH"
         return 1
     fi
-    
+
     local docker_version
     docker_version=$(docker --version | cut -d' ' -f3 | cut -d',' -f1)
     info "Docker version: $docker_version"
-    
+
     # Check Docker Compose
     if ! command -v docker-compose >/dev/null 2>&1 && ! docker compose version >/dev/null 2>&1; then
         error "Docker Compose is not installed"
         return 1
     fi
-    
+
     # Check Docker daemon
     if ! docker info >/dev/null 2>&1; then
         error "Docker daemon is not running or not accessible"
         return 1
     fi
-    
+
     # Check disk space (need at least 2GB free)
     local available_space
     available_space=$(df "$PROJECT_ROOT" | tail -1 | awk '{print $4}')
     if [[ $available_space -lt 2097152 ]]; then  # 2GB in KB
         warning "Low disk space - may affect Docker operations"
     fi
-    
+
     # Check if we can build Ubuntu images
     if ! docker run --rm ubuntu:22.04 echo "Ubuntu test successful" >/dev/null 2>&1; then
         error "Cannot run Ubuntu containers - check Docker and network connectivity"
         return 1
     fi
-    
+
     success "Prerequisites check passed"
 }
 
 # Test Docker build process
 test_docker_build() {
     log "Testing Docker build process with Ubuntu optimizations..."
-    
+
     cd "$PROJECT_ROOT"
-    
+
     # Test build with Ubuntu platform
     local build_start
     build_start=$(date +%s)
-    
+
     info "Building Ubuntu-optimized trading bot image..."
     if timeout $CONTAINER_START_TIMEOUT docker build \
         --platform linux/amd64 \
@@ -230,15 +230,15 @@ test_docker_build() {
         --build-arg FP_RUNTIME_MODE=hybrid \
         -t "ai-trading-bot:ubuntu-test-${TEST_TIMESTAMP}" \
         -f Dockerfile . > "$TEMP_DIR/build.log" 2>&1; then
-        
+
         local build_end
         build_end=$(date +%s)
         local build_time=$((build_end - build_start))
         success "Docker build completed in ${build_time} seconds"
-        
+
         # Add image to cleanup
         CLEANUP_CONTAINERS+=("ai-trading-bot-ubuntu-test-${TEST_TIMESTAMP}")
-        
+
         return 0
     else
         error "Docker build failed"
@@ -250,9 +250,9 @@ test_docker_build() {
 # Test container startup
 test_container_startup() {
     log "Testing container startup and initialization..."
-    
+
     local container_name="ubuntu-test-bot-${TEST_TIMESTAMP}"
-    
+
     # Start container with test configuration
     info "Starting test container with Ubuntu optimizations..."
     if docker run -d \
@@ -265,14 +265,14 @@ test_container_startup() {
         -v "$TEMP_DIR/logs:/app/logs" \
         -v "$TEMP_DIR/data:/app/data" \
         "ai-trading-bot:ubuntu-test-${TEST_TIMESTAMP}" > "$TEMP_DIR/container_id" 2>&1; then
-        
+
         CLEANUP_CONTAINERS+=("$container_name")
         success "Container started successfully"
     else
         error "Failed to start container"
         return 1
     fi
-    
+
     # Wait for container to initialize
     info "Waiting for container initialization..."
     local retry_count=0
@@ -281,7 +281,7 @@ test_container_startup() {
             success "Container is running"
             break
         fi
-        
+
         retry_count=$((retry_count + 1))
         if [[ $retry_count -lt $MAX_RETRIES ]]; then
             warning "Container not yet running, retrying... ($retry_count/$MAX_RETRIES)"
@@ -292,16 +292,16 @@ test_container_startup() {
             return 1
         fi
     done
-    
+
     return 0
 }
 
 # Test bot module imports
 test_module_imports() {
     log "Testing bot module imports and dependencies..."
-    
+
     local container_name="ubuntu-test-bot-${TEST_TIMESTAMP}"
-    
+
     # Test basic module imports
     info "Testing core module imports..."
     if docker exec "$container_name" python -c "
@@ -324,7 +324,7 @@ except ImportError as e:
 print('CORE_IMPORTS_OK')
 " > "$TEMP_DIR/import_test.log" 2>&1; then
         success "Module imports test passed"
-        
+
         # Check if FP imports worked
         if grep -q "FP_IMPORTS_OK" "$TEMP_DIR/import_test.log"; then
             success "Functional Programming imports working"
@@ -336,16 +336,16 @@ print('CORE_IMPORTS_OK')
         cat "$TEMP_DIR/import_test.log"
         return 1
     fi
-    
+
     return 0
 }
 
 # Test configuration loading
 test_configuration_loading() {
     log "Testing configuration loading and validation..."
-    
+
     local container_name="ubuntu-test-bot-${TEST_TIMESTAMP}"
-    
+
     # Test configuration loading
     info "Testing configuration system..."
     if docker exec "$container_name" python -c "
@@ -361,13 +361,13 @@ os.environ['TESTING'] = 'true'
 try:
     from bot.config import load_settings
     settings = load_settings()
-    
+
     # Verify critical settings
     assert settings.system.dry_run == True
     assert settings.exchange.exchange_type == 'bluefin'
-    
+
     print('CONFIG_LOADING_OK')
-    
+
     # Test FP configuration if enabled
     try:
         from bot.fp.types.config import Config
@@ -378,13 +378,13 @@ try:
             print(f'FP_CONFIG_WARNING: {fp_result.failure()}')
     except ImportError:
         print('FP_CONFIG_NOT_AVAILABLE')
-    
+
 except Exception as e:
     print(f'CONFIG_ERROR: {e}')
     exit(1)
 " > "$TEMP_DIR/config_test.log" 2>&1; then
         success "Configuration loading test passed"
-        
+
         # Check FP configuration
         if grep -q "FP_CONFIG_OK" "$TEMP_DIR/config_test.log"; then
             success "FP configuration system working"
@@ -396,20 +396,20 @@ except Exception as e:
         cat "$TEMP_DIR/config_test.log"
         return 1
     fi
-    
+
     return 0
 }
 
 # Test health checks
 test_health_checks() {
     log "Testing container health checks..."
-    
+
     local container_name="ubuntu-test-bot-${TEST_TIMESTAMP}"
-    
+
     # Wait for health check to be ready
     info "Waiting for health check system to be ready..."
     sleep 15
-    
+
     # Test basic health check
     info "Testing basic health check..."
     if docker exec "$container_name" /app/healthcheck.sh quick > "$TEMP_DIR/health_test.log" 2>&1; then
@@ -418,7 +418,7 @@ test_health_checks() {
         warning "Basic health check failed (container may still be initializing)"
         cat "$TEMP_DIR/health_test.log"
     fi
-    
+
     # Test FP health check if enabled
     info "Testing FP runtime health check..."
     if docker exec "$container_name" /app/healthcheck.sh fp-debug > "$TEMP_DIR/fp_health_test.log" 2>&1; then
@@ -427,54 +427,54 @@ test_health_checks() {
         warning "FP health check failed (this may be expected in test mode)"
         cat "$TEMP_DIR/fp_health_test.log" | tail -10
     fi
-    
+
     return 0
 }
 
 # Test log file creation
 test_log_file_creation() {
     log "Testing log file creation and permissions..."
-    
+
     local container_name="ubuntu-test-bot-${TEST_TIMESTAMP}"
-    
+
     # Check if logs directory exists and is writable
     info "Checking log directory structure..."
     if docker exec "$container_name" sh -c "
         # Test basic log directory
         test -d /app/logs && echo 'LOGS_DIR_OK' || echo 'LOGS_DIR_MISSING'
         test -w /app/logs && echo 'LOGS_WRITABLE_OK' || echo 'LOGS_NOT_WRITABLE'
-        
+
         # Test FP log directories
         test -d /app/logs/fp && echo 'FP_LOGS_DIR_OK' || echo 'FP_LOGS_DIR_MISSING'
-        
+
         # Test data directory
         test -d /app/data && echo 'DATA_DIR_OK' || echo 'DATA_DIR_MISSING'
         test -w /app/data && echo 'DATA_WRITABLE_OK' || echo 'DATA_NOT_WRITABLE'
-        
+
         # Test FP data directories
         test -d /app/data/fp_runtime && echo 'FP_DATA_DIR_OK' || echo 'FP_DATA_DIR_MISSING'
-        
+
         # Create test log file
         echo 'Test log entry' > /app/logs/test.log && echo 'LOG_WRITE_OK' || echo 'LOG_WRITE_FAILED'
-        
+
         # Create test FP log file
         echo 'Test FP log entry' > /app/logs/fp/test.log && echo 'FP_LOG_WRITE_OK' || echo 'FP_LOG_WRITE_FAILED'
-        
+
     " > "$TEMP_DIR/log_test.log" 2>&1; then
-        
+
         # Check results
-        if grep -q "LOGS_DIR_OK" "$TEMP_DIR/log_test.log" && 
-           grep -q "LOGS_WRITABLE_OK" "$TEMP_DIR/log_test.log" && 
-           grep -q "DATA_DIR_OK" "$TEMP_DIR/log_test.log" && 
+        if grep -q "LOGS_DIR_OK" "$TEMP_DIR/log_test.log" &&
+           grep -q "LOGS_WRITABLE_OK" "$TEMP_DIR/log_test.log" &&
+           grep -q "DATA_DIR_OK" "$TEMP_DIR/log_test.log" &&
            grep -q "LOG_WRITE_OK" "$TEMP_DIR/log_test.log"; then
             success "Log file creation test passed"
         else
             warning "Some log directory issues detected"
             cat "$TEMP_DIR/log_test.log"
         fi
-        
+
         # Check FP logging
-        if grep -q "FP_LOGS_DIR_OK" "$TEMP_DIR/log_test.log" && 
+        if grep -q "FP_LOGS_DIR_OK" "$TEMP_DIR/log_test.log" &&
            grep -q "FP_LOG_WRITE_OK" "$TEMP_DIR/log_test.log"; then
             success "FP logging system working"
         else
@@ -484,35 +484,35 @@ test_log_file_creation() {
         error "Log file creation test failed"
         return 1
     fi
-    
+
     return 0
 }
 
 # Test virtual environment activation
 test_virtual_environment() {
     log "Testing Python virtual environment activation..."
-    
+
     local container_name="ubuntu-test-bot-${TEST_TIMESTAMP}"
-    
+
     # Test virtual environment
     info "Testing virtual environment..."
     if docker exec "$container_name" sh -c "
         # Check if virtual environment exists
         test -d /app/.venv && echo 'VENV_EXISTS_OK' || echo 'VENV_MISSING'
-        
+
         # Test Python activation
         /app/.venv/bin/python --version && echo 'VENV_PYTHON_OK' || echo 'VENV_PYTHON_FAILED'
-        
+
         # Test pip functionality
         /app/.venv/bin/pip list --format=freeze | head -5 && echo 'VENV_PIP_OK' || echo 'VENV_PIP_FAILED'
-        
+
         # Test that we can run our application
         /app/.venv/bin/python -c 'import sys; print(f\"Python path: {sys.path[0]}\")' && echo 'VENV_APP_OK' || echo 'VENV_APP_FAILED'
-        
+
     " > "$TEMP_DIR/venv_test.log" 2>&1; then
-        
-        if grep -q "VENV_EXISTS_OK" "$TEMP_DIR/venv_test.log" && 
-           grep -q "VENV_PYTHON_OK" "$TEMP_DIR/venv_test.log" && 
+
+        if grep -q "VENV_EXISTS_OK" "$TEMP_DIR/venv_test.log" &&
+           grep -q "VENV_PYTHON_OK" "$TEMP_DIR/venv_test.log" &&
            grep -q "VENV_PIP_OK" "$TEMP_DIR/venv_test.log"; then
             success "Virtual environment test passed"
         else
@@ -524,21 +524,21 @@ test_virtual_environment() {
         cat "$TEMP_DIR/venv_test.log"
         return 1
     fi
-    
+
     return 0
 }
 
 # Test simple Docker Compose configuration
 test_simple_compose() {
     log "Testing simple Docker Compose configuration..."
-    
+
     cd "$PROJECT_ROOT"
-    
+
     # Copy test environment file
     cp "$TEMP_DIR/.env.test" .env.test
-    
+
     local compose_project="ubuntu-test-simple-${TEST_TIMESTAMP}"
-    
+
     # Start simple compose
     info "Starting simple Docker Compose configuration..."
     if timeout $CONTAINER_START_TIMEOUT docker-compose \
@@ -546,7 +546,7 @@ test_simple_compose() {
         -p "$compose_project" \
         --env-file .env.test \
         up -d > "$TEMP_DIR/simple_compose.log" 2>&1; then
-        
+
         success "Simple compose started successfully"
         CLEANUP_CONTAINERS+=("${compose_project}-ai-trading-bot-1" "${compose_project}-bluefin-service-1")
         CLEANUP_NETWORKS+=("${compose_project}_trading-network")
@@ -555,11 +555,11 @@ test_simple_compose() {
         cat "$TEMP_DIR/simple_compose.log"
         return 1
     fi
-    
+
     # Wait for services to be healthy
     info "Waiting for services to be ready..."
     sleep 30
-    
+
     # Check if containers are running
     if docker-compose -f docker-compose.simple.yml -p "$compose_project" ps | grep -q "Up"; then
         success "Simple compose services are running"
@@ -567,7 +567,7 @@ test_simple_compose() {
         warning "Some simple compose services may not be running"
         docker-compose -f docker-compose.simple.yml -p "$compose_project" ps
     fi
-    
+
     # Test basic functionality
     local main_container="${compose_project}-ai-trading-bot-1"
     if docker exec "$main_container" /app/healthcheck.sh quick > "$TEMP_DIR/simple_health.log" 2>&1; then
@@ -576,34 +576,34 @@ test_simple_compose() {
         warning "Simple compose health check failed"
         cat "$TEMP_DIR/simple_health.log"
     fi
-    
+
     # Stop simple compose
     docker-compose -f docker-compose.simple.yml -p "$compose_project" down >/dev/null 2>&1 || true
-    
+
     # Clean up test env file
     rm -f .env.test
-    
+
     return 0
 }
 
 # Test full Docker Compose configuration
 test_full_compose() {
     log "Testing full Docker Compose configuration..."
-    
+
     cd "$PROJECT_ROOT"
-    
+
     # Copy test environment file
     cp "$TEMP_DIR/.env.test" .env.test
-    
+
     local compose_project="ubuntu-test-full-${TEST_TIMESTAMP}"
-    
+
     # Start only core services to avoid complexity
     info "Starting core services from full Docker Compose..."
     if timeout $CONTAINER_START_TIMEOUT docker-compose \
         -p "$compose_project" \
         --env-file .env.test \
         up -d ai-trading-bot bluefin-service > "$TEMP_DIR/full_compose.log" 2>&1; then
-        
+
         success "Full compose core services started"
         CLEANUP_CONTAINERS+=("${compose_project}-ai-trading-bot-1" "${compose_project}-bluefin-service-1")
         CLEANUP_NETWORKS+=("${compose_project}_trading-network")
@@ -612,16 +612,16 @@ test_full_compose() {
         cat "$TEMP_DIR/full_compose.log"
         return 1
     fi
-    
+
     # Wait for services to be ready
     info "Waiting for full compose services to be ready..."
     sleep 45
-    
+
     # Check service status
     local main_container="${compose_project}-ai-trading-bot-1"
     if docker ps --format "table {{.Names}}\t{{.Status}}" | grep -q "$main_container.*Up"; then
         success "Full compose main service is running"
-        
+
         # Test health check
         if docker exec "$main_container" /app/healthcheck.sh fp-debug > "$TEMP_DIR/full_health.log" 2>&1; then
             success "Full compose health check passed"
@@ -633,48 +633,48 @@ test_full_compose() {
         warning "Full compose main service may not be running properly"
         docker-compose -p "$compose_project" ps
     fi
-    
+
     # Stop full compose
     docker-compose -p "$compose_project" down >/dev/null 2>&1 || true
-    
+
     # Clean up test env file
     rm -f .env.test
-    
+
     return 0
 }
 
 # Test API connectivity (if possible)
 test_api_connectivity() {
     log "Testing API connectivity and network functionality..."
-    
+
     local container_name="ubuntu-test-bot-${TEST_TIMESTAMP}"
-    
+
     # Test external network connectivity
     info "Testing external network connectivity..."
     if docker exec "$container_name" sh -c "
         # Test DNS resolution
         nslookup google.com >/dev/null 2>&1 && echo 'DNS_OK' || echo 'DNS_FAILED'
-        
+
         # Test HTTPS connectivity
         curl -s --connect-timeout 10 --max-time 15 https://httpbin.org/ip >/dev/null 2>&1 && echo 'HTTPS_OK' || echo 'HTTPS_FAILED'
-        
+
         # Test if we can reach typical trading APIs (without authentication)
         curl -s --connect-timeout 5 --max-time 10 -I https://api.coinbase.com/v2/time >/dev/null 2>&1 && echo 'COINBASE_API_REACHABLE' || echo 'COINBASE_API_UNREACHABLE'
-        
+
     " > "$TEMP_DIR/api_test.log" 2>&1; then
-        
+
         if grep -q "DNS_OK" "$TEMP_DIR/api_test.log"; then
             success "DNS resolution working"
         else
             warning "DNS resolution issues"
         fi
-        
+
         if grep -q "HTTPS_OK" "$TEMP_DIR/api_test.log"; then
             success "HTTPS connectivity working"
         else
             warning "HTTPS connectivity issues"
         fi
-        
+
         if grep -q "COINBASE_API_REACHABLE" "$TEMP_DIR/api_test.log"; then
             success "External trading APIs reachable"
         else
@@ -684,16 +684,16 @@ test_api_connectivity() {
         warning "API connectivity test failed"
         cat "$TEMP_DIR/api_test.log"
     fi
-    
+
     return 0
 }
 
 # Generate test report
 generate_test_report() {
     log "Generating comprehensive test report..."
-    
+
     local report_file="${PROJECT_ROOT}/logs/ubuntu_deployment_test_report_${TEST_TIMESTAMP}.md"
-    
+
     cat > "$report_file" << EOF
 # Ubuntu Docker Deployment Test Report
 
@@ -772,13 +772,13 @@ EOF
 main() {
     local test_start_time
     test_start_time=$(date +%s)
-    
+
     log "Starting Ubuntu Docker Deployment Test Suite"
     log "================================================"
-    
+
     # Initialize
     initialize_test_environment
-    
+
     # Run tests in sequence
     local test_functions=(
         "check_prerequisites"
@@ -793,11 +793,11 @@ main() {
         "test_full_compose"
         "test_api_connectivity"
     )
-    
+
     local passed_tests=0
     local total_tests=${#test_functions[@]}
     local failed_tests=()
-    
+
     for test_func in "${test_functions[@]}"; do
         log "Running test: $test_func"
         if $test_func; then
@@ -809,15 +809,15 @@ main() {
         fi
         log "----------------------------------------"
     done
-    
+
     # Generate report
     generate_test_report
-    
+
     # Final summary
     log "Test Suite Completed"
     log "===================="
     success "Passed: $passed_tests/$total_tests tests"
-    
+
     if [[ ${#failed_tests[@]} -gt 0 ]]; then
         error "Failed tests: ${failed_tests[*]}"
         warning "Some tests failed - review logs and report for details"

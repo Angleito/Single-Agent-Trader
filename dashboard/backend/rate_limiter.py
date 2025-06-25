@@ -32,9 +32,9 @@ class RateLimiter:
         self.block_duration = block_duration
 
         # Token buckets per IP
-        self.buckets: dict[
-            str, tuple[float, float, float]
-        ] = {}  # ip -> (tokens, last_update, blocked_until)
+        self.buckets: dict[str, tuple[float, float, float]] = (
+            {}
+        )  # ip -> (tokens, last_update, blocked_until)
 
         # Request history for pattern detection
         self.request_history: dict[str, deque] = defaultdict(lambda: deque(maxlen=100))

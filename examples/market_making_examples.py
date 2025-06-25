@@ -1165,9 +1165,7 @@ class PaperTradingSimulation:
                     "side": (
                         "LONG"
                         if self.paper_position > 0
-                        else "SHORT"
-                        if self.paper_position < 0
-                        else "NONE"
+                        else "SHORT" if self.paper_position < 0 else "NONE"
                     ),
                 }
 

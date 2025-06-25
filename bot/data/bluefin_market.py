@@ -1087,9 +1087,7 @@ class BluefinMarketDataProvider:
         status["data_quality"] = (
             "excellent"
             if total_cached_candles >= 200
-            else "good"
-            if total_cached_candles >= 100
-            else "insufficient"
+            else "good" if total_cached_candles >= 100 else "insufficient"
         )
 
         return status

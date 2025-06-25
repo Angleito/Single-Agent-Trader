@@ -24,20 +24,20 @@ async def test_coinbase_compatibility():
         client = CoinbaseClient(dry_run=True)
 
         # Test that the client initializes correctly
-        assert hasattr(client, "_fp_adapter"), (
-            "Functional adapter should be initialized"
-        )
+        assert hasattr(
+            client, "_fp_adapter"
+        ), "Functional adapter should be initialized"
 
         # Test functional adapter methods exist
-        assert hasattr(client, "get_functional_adapter"), (
-            "get_functional_adapter method missing"
-        )
-        assert hasattr(client, "supports_functional_operations"), (
-            "supports_functional_operations method missing"
-        )
-        assert hasattr(client, "place_order_functional"), (
-            "place_order_functional method missing"
-        )
+        assert hasattr(
+            client, "get_functional_adapter"
+        ), "get_functional_adapter method missing"
+        assert hasattr(
+            client, "supports_functional_operations"
+        ), "supports_functional_operations method missing"
+        assert hasattr(
+            client, "place_order_functional"
+        ), "place_order_functional method missing"
 
         # Test adapter availability
         supports_fp = client.supports_functional_operations()
@@ -72,20 +72,20 @@ async def test_bluefin_compatibility():
         client = BluefinClient(dry_run=True)
 
         # Test that the client initializes correctly
-        assert hasattr(client, "_fp_adapter"), (
-            "Functional adapter should be initialized"
-        )
+        assert hasattr(
+            client, "_fp_adapter"
+        ), "Functional adapter should be initialized"
 
         # Test functional adapter methods exist
-        assert hasattr(client, "get_functional_adapter"), (
-            "get_functional_adapter method missing"
-        )
-        assert hasattr(client, "supports_functional_operations"), (
-            "supports_functional_operations method missing"
-        )
-        assert hasattr(client, "place_order_functional"), (
-            "place_order_functional method missing"
-        )
+        assert hasattr(
+            client, "get_functional_adapter"
+        ), "get_functional_adapter method missing"
+        assert hasattr(
+            client, "supports_functional_operations"
+        ), "supports_functional_operations method missing"
+        assert hasattr(
+            client, "place_order_functional"
+        ), "place_order_functional method missing"
 
         # Test adapter availability
         supports_fp = client.supports_functional_operations()

@@ -359,7 +359,7 @@ python -c "from bot.config import load_settings; print(load_settings())"
 - name: Test Ubuntu Deployment
   run: |
     ./scripts/test-ubuntu-deployment.sh quick
-    
+
 - name: Archive test results
   uses: actions/upload-artifact@v3
   with:

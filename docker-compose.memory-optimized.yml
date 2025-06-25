@@ -55,10 +55,12 @@ services:
     container_name: bluefin-service
     restart: unless-stopped
     ports:
-      - "${BLUEFIN_SERVICE_PORT:-8080}:8080"
+      - "${BLUEFIN_SERVICE_PORT:-8082}:8080"
     environment:
+      - BLUEFIN_PRIVATE_KEY=${EXCHANGE__BLUEFIN_PRIVATE_KEY:-0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
       - BLUEFIN_SERVICE_API_KEY=${BLUEFIN_SERVICE_API_KEY}
-      - EXCHANGE__BLUEFIN_NETWORK=${EXCHANGE__BLUEFIN_NETWORK:-mainnet}
+      - EXCHANGE__BLUEFIN_NETWORK=${EXCHANGE__BLUEFIN_NETWORK:-testnet}
+      - SYSTEM__DRY_RUN=${SYSTEM__DRY_RUN:-true}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       - ./logs/bluefin:/app/logs:rw
@@ -98,13 +100,13 @@ services:
       - ./data:/app/data:ro
     networks:
       - trading-network
-    # Minimal memory for API
+    # Increased memory for API to prevent exhaustion
     deploy:
       resources:
         limits:
-          memory: 128M
+          memory: 256M
         reservations:
-          memory: 64M
+          memory: 128M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -169,7 +171,7 @@ services:
   # MCP OmniSearch Service (optional - memory intensive)
   mcp-omnisearch:
     build:
-      context: ./bot/mcp/omnisearch
+      context: ./bot/mcp/omnisearch-server
       dockerfile: Dockerfile
     image: mcp-omnisearch:latest
     container_name: mcp-omnisearch

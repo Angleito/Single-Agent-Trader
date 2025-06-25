@@ -356,15 +356,15 @@ class TestBluefinBalanceServiceIntegration:
         performance_metrics["health_check_50_calls"] = health_time
 
         # Performance assertions (reasonable thresholds for mocked operations)
-        assert performance_metrics["balance_retrieval_10_calls"] < 1000, (
-            "Balance retrieval too slow"
-        )
-        assert performance_metrics["positions_retrieval_10_calls"] < 1000, (
-            "Position retrieval too slow"
-        )
-        assert performance_metrics["health_check_50_calls"] < 500, (
-            "Health checks too slow"
-        )
+        assert (
+            performance_metrics["balance_retrieval_10_calls"] < 1000
+        ), "Balance retrieval too slow"
+        assert (
+            performance_metrics["positions_retrieval_10_calls"] < 1000
+        ), "Position retrieval too slow"
+        assert (
+            performance_metrics["health_check_50_calls"] < 500
+        ), "Health checks too slow"
 
         # Log performance metrics
         print("\nBluefin Service Performance Metrics:")

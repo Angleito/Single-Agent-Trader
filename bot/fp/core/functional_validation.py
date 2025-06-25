@@ -389,9 +389,9 @@ class ValidationPipeline:
     """Functional validation pipeline for composable validation chains."""
 
     def __init__(self):
-        self.steps: list[
-            tuple[str, Callable[[Any], FPResult[Any, ValidatorError]]]
-        ] = []
+        self.steps: list[tuple[str, Callable[[Any], FPResult[Any, ValidatorError]]]] = (
+            []
+        )
 
     def add_step(
         self, name: str, validator: Callable[[Any], FPResult[Any, ValidatorError]]

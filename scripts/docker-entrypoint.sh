@@ -327,13 +327,13 @@ setup_python_environment() {
     # Ubuntu-optimized Poetry virtual environment activation
     if [[ -f "/app/.venv/bin/python" ]]; then
         log_info "Configuring Poetry virtual environment for Ubuntu..."
-        
+
         # Verify virtual environment is functional
         if "/app/.venv/bin/python" --version >/dev/null 2>&1; then
             export VIRTUAL_ENV="/app/.venv"
             export PATH="/app/.venv/bin:${PATH}"
             log_success "Virtual environment activated: ${VIRTUAL_ENV}"
-            
+
             # Test critical dependencies
             local deps=("pydantic" "pandas" "numpy")
             for dep in "${deps[@]}"; do
@@ -343,7 +343,7 @@ setup_python_environment() {
                     log_warning "✗ ${dep} not available in virtual environment"
                 fi
             done
-            
+
             # Use Poetry's Python interpreter
             export PYTHON_EXECUTABLE="/app/.venv/bin/python"
         else
@@ -499,7 +499,7 @@ validate_bot_module() {
         log_error "  ├── ${BOT_MODULE}/"
         log_error "  │   ├── __init__.py"
         log_error "  │   └── main.py"
-        
+
         # Additional Ubuntu debugging info
         log_error "Current directory contents:"
         ls -la "${PYTHON_PATH}" 2>/dev/null | head -10 | while IFS= read -r line; do
@@ -522,7 +522,7 @@ validate_bot_module() {
     log_info "Testing Python import from directory: $(pwd)"
     log_info "Using Python: $(which python)"
     log_info "Python version: $(python --version 2>&1)"
-    
+
     # Create a temporary test script for better error isolation
     local test_script="/tmp/import_test_$$.py"
     cat > "${test_script}" << EOF
@@ -550,10 +550,10 @@ EOF
     local import_result
     import_result=$(python "${test_script}" 2>&1)
     local import_exit_code=$?
-    
+
     # Clean up test script
     rm -f "${test_script}"
-    
+
     # Process results
     if [[ ${import_exit_code} -eq 0 ]]; then
         log_success "Bot module validation successful"
@@ -573,23 +573,23 @@ EOF
         echo "${import_result}" | while IFS= read -r line; do
             log_error "  ${line}"
         done
-        
+
         # Fallback import strategies for Ubuntu compatibility
         log_info "Attempting fallback import strategies..."
-        
+
         # Strategy 1: Try with explicit PYTHONPATH
         if PYTHONPATH="${PYTHON_PATH}:${PYTHONPATH}" python -c "import ${BOT_MODULE}" 2>/dev/null; then
             log_success "Fallback import successful with explicit PYTHONPATH"
             export PYTHONPATH="${PYTHON_PATH}:${PYTHONPATH}"
             return 0
         fi
-        
+
         # Strategy 2: Try from absolute path
         if python -c "import sys; sys.path.insert(0, '${PYTHON_PATH}'); import ${BOT_MODULE}" 2>/dev/null; then
             log_success "Fallback import successful with sys.path insertion"
             return 0
         fi
-        
+
         log_error "All import strategies failed - bot module cannot be loaded"
         return 1
     fi
@@ -1045,7 +1045,7 @@ main() {
 
     # Log the final command being executed
     log_info "Executing: $*"
-    
+
     # CRITICAL: Ensure we're in the correct working directory for execution
     if [[ "$(pwd)" != "${PYTHON_PATH}" ]]; then
         log_warning "Final working directory check - changing to: ${PYTHON_PATH}"

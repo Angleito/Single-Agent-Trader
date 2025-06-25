@@ -305,9 +305,7 @@ class RealTimePerformanceMonitor:
         drawdown_status = (
             "🟢"
             if self.max_drawdown < 50
-            else "🟡"
-            if self.max_drawdown < 100
-            else "🔴"
+            else "🟡" if self.max_drawdown < 100 else "🔴"
         )
         table.add_row("Max Drawdown", f"${self.max_drawdown:.2f}", drawdown_status, "⚠️")
 
@@ -336,9 +334,7 @@ class RealTimePerformanceMonitor:
         alert_status = (
             "🔴"
             if any(a["severity"] == "CRITICAL" for a in recent_alerts)
-            else "🟡"
-            if recent_alerts
-            else "🟢"
+            else "🟡" if recent_alerts else "🟢"
         )
         table.add_row("Recent Alerts", str(len(recent_alerts)), alert_status, "🚨")
 
