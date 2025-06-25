@@ -35,7 +35,7 @@ services:
   # Bluefin Service - Required for DEX trading
   bluefin-service:
     build:
-      context: .
+      context: ./services
       dockerfile: Dockerfile.bluefin
       args:
         USER_ID: "${HOST_UID:-1000}"
