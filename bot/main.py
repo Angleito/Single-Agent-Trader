@@ -213,12 +213,17 @@ import contextlib
 # Functional programming imports (added for migration to functional programming patterns)
 # These provide alternative implementations using pure functional programming patterns
 try:
-    from .fp.adapters.strategy_adapter import LLMAgentAdapter
-    from .fp.strategies.llm_functional import LLMConfig, LLMResponse
-    from .fp.types.config import Config as FunctionalConfig
-    from .fp.types.trading import Hold, Long, Short, TradeSignal
+    # Test if FP modules are available without importing unused symbols
+    import importlib.util
 
-    FUNCTIONAL_COMPONENTS_AVAILABLE = True
+    fp_available = (
+        importlib.util.find_spec("bot.fp.adapters.strategy_adapter") is not None
+        and importlib.util.find_spec("bot.fp.strategies.llm_functional") is not None
+        and importlib.util.find_spec("bot.fp.types.config") is not None
+        and importlib.util.find_spec("bot.fp.types.trading") is not None
+    )
+
+    FUNCTIONAL_COMPONENTS_AVAILABLE = fp_available
     console.print("✅ Functional programming components available", style="green")
 except ImportError:
     # Functional implementations not available, continue with legacy only
@@ -330,9 +335,9 @@ class TradingEngine:
         self._shutdown_requested = False
         self._memory_available = False  # Initialize early to prevent AttributeError
         self._last_position_log_time: datetime | None = None
-        self._background_tasks: list[
-            asyncio.Task[Any]
-        ] = []  # Track background tasks for cleanup
+        self._background_tasks: list[asyncio.Task[Any]] = (
+            []
+        )  # Track background tasks for cleanup
 
         # Initialize market making integrator (will be set up after LLM agent)
         self.market_making_integrator: Any | None = None
@@ -1279,7 +1284,7 @@ class TradingEngine:
             container_homes = [
                 Path("/app"),
                 Path("/home/botuser"),
-                Path("/tmp"),
+                Path(tempfile.gettempdir()),  # System temp directory  # nosec B108
                 Path.cwd(),
             ]
 
@@ -1302,7 +1307,7 @@ class TradingEngine:
             Path("/app/.env"),  # Container app directory
             Path("/config/.env"),  # Container config directory
             self._get_container_safe_home() / ".env",  # Container-safe home
-            Path("/tmp/.env"),  # Emergency fallback
+            Path(tempfile.gettempdir()) / ".env",  # Emergency fallback  # nosec B108
         ]
 
         env_loaded = False
@@ -1448,7 +1453,8 @@ class TradingEngine:
             / "bot.log",  # Container-aware home fallback
             Path.cwd() / "bot.log",  # Current directory fallback
             Path("/app/logs") / "bot.log",  # Container logs directory
-            Path("/tmp") / "bot.log",  # System temp fallback
+            Path(tempfile.gettempdir())
+            / "bot.log",  # System temp fallback  # nosec B108
         ]
 
         for log_path in fallback_paths:
@@ -5820,7 +5826,7 @@ def _test_container_log_creation() -> None:
     """Test log file creation in container."""
     test_log_paths = [
         Path("/app/logs/test_container.log"),
-        Path("/tmp/test_container.log"),
+        Path(tempfile.gettempdir()) / "test_container.log",  # nosec B108
         Path("/app/tmp/test_container.log"),
     ]
 
@@ -5848,7 +5854,7 @@ def _test_container_log_creation() -> None:
 
 @cli.command()
 @click.option("--symbol", default=None, help="Symbol to check market making status for")
-def mm_status(_symbol: str | None) -> None:
+def mm_status(symbol: str | None) -> None:
     """Show market making configuration and status."""
     try:
         console.print("🔍 Market Making Status", style="cyan bold")

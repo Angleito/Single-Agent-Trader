@@ -32,7 +32,7 @@
   },
 
   "orders": {
-    "order_update_interval_seconds": 1.0,
+    "order_update_interval_seconds": 0.3,
     "order_timeout_seconds": 30,
     "price_update_threshold_bps": 2,
     "spread_update_threshold_bps": 3,

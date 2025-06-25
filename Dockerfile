@@ -72,42 +72,56 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /tmp/* /var/tmp/* \
     && ldconfig
 
-# Install Poetry with Ubuntu-optimized settings
+# Install Poetry with Ubuntu-optimized settings and efficient caching
 ENV POETRY_HOME="/opt/poetry" \
     POETRY_VENV_IN_PROJECT=true \
     POETRY_NO_INTERACTION=1 \
-    POETRY_CACHE_DIR=/tmp/poetry_cache \
+    POETRY_CACHE_DIR=/opt/poetry-cache \
     POETRY_VIRTUALENVS_CREATE=true \
-    POETRY_VIRTUALENVS_IN_PROJECT=true
+    POETRY_VIRTUALENVS_IN_PROJECT=true \
+    POETRY_VIRTUALENVS_PATH=/opt/poetry-venvs \
+    POETRY_INSTALLER_PARALLEL=true \
+    POETRY_INSTALLER_MAX_WORKERS=10
 
 # Set working directory early for consistency
 WORKDIR /app
 
-# Install Poetry with error handling
+# Install Poetry with error handling and optimized caching
 RUN curl -sSL https://install.python-poetry.org | python3 - --version=${POETRY_VERSION} \
     && ln -s /opt/poetry/bin/poetry /usr/local/bin/poetry \
     && poetry --version
 
 ENV PATH="$POETRY_HOME/bin:$PATH"
 
-# Copy dependency files
+# Copy dependency files first for better layer caching
 COPY pyproject.toml poetry.lock* ./
 
-# Ubuntu-optimized Poetry dependency installation with better error handling
-RUN echo "Configuring Poetry for Ubuntu environment..." \
+# Configure Poetry for optimal performance and caching
+RUN echo "Configuring Poetry for optimized Ubuntu environment..." \
     && poetry config virtualenvs.create true \
     && poetry config virtualenvs.in-project true \
     && poetry config cache-dir $POETRY_CACHE_DIR \
-    && echo "Installing dependencies..." \
+    && poetry config installer.parallel true \
+    && poetry config installer.max-workers 10 \
+    && poetry config virtualenvs.path $POETRY_VIRTUALENVS_PATH \
+    && echo "Poetry configured successfully"
+
+# Install dependencies with enhanced caching and error handling
+RUN --mount=type=cache,target=/opt/poetry-cache \
+    echo "Installing dependencies with cache optimization..." \
     && (poetry install --only=main --no-root --no-dev || \
         (echo "Lock file out of sync, regenerating for Ubuntu..." && \
          poetry lock --no-update && \
          poetry install --only=main --no-root --no-dev)) \
     && echo "Verifying virtual environment..." \
     && ls -la /app/.venv/lib/python*/site-packages/ \
-    && echo "Cleaning up build cache..." \
-    && rm -rf $POETRY_CACHE_DIR \
     && echo "Poetry installation completed successfully"
+
+# Clean up Poetry cache in final build step (keeping Docker layer cache)
+RUN echo "Cleaning up build artifacts..." \
+    && find /app/.venv -name "*.pyc" -delete \
+    && find /app/.venv -name "__pycache__" -type d -exec rm -rf {} + || true \
+    && echo "Build artifacts cleaned up"
 
 # Note: bluefin-v2-client can be installed at runtime if live trading is needed
 # For paper trading mode, the bot works without it
@@ -206,9 +220,23 @@ RUN echo "Creating application directory structure..." \
     # Create all required directories in a single command for efficiency
     && mkdir -p \
         /app/config \
-        /app/logs/{mcp,bluefin,trades,fp/{effects,scheduler,interpreter}} \
-        /app/data/{mcp_memory,orders,paper_trading,positions,bluefin,omnisearch_cache} \
-        /app/data/fp_runtime/{effects,scheduler,metrics,config,adapters} \
+        /app/logs/mcp \
+        /app/logs/bluefin \
+        /app/logs/trades \
+        /app/logs/fp/effects \
+        /app/logs/fp/scheduler \
+        /app/logs/fp/interpreter \
+        /app/data/mcp_memory \
+        /app/data/orders \
+        /app/data/paper_trading \
+        /app/data/positions \
+        /app/data/bluefin \
+        /app/data/omnisearch_cache \
+        /app/data/fp_runtime/effects \
+        /app/data/fp_runtime/scheduler \
+        /app/data/fp_runtime/metrics \
+        /app/data/fp_runtime/config \
+        /app/data/fp_runtime/adapters \
         /app/prompts \
         /app/tmp \
     # Set ownership to the application user in single operation
@@ -218,7 +246,6 @@ RUN echo "Creating application directory structure..." \
     && echo "Setting Ubuntu-compatible permissions..." \
     && find /app -type d -exec chmod 755 {} + \
     && chmod 775 /app/logs /app/data /app/tmp \
-    && chmod -R 775 /app/logs/* /app/data/* 2>/dev/null || true \
     # Verify critical directory structure exists
     && echo "Verifying directory structure..." \
     && test -d /app/config && test -d /app/logs && test -d /app/data \
