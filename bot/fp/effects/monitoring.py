@@ -705,7 +705,7 @@ def monitoring_context(name: str) -> Callable[[IO[A]], IO[A]]:
 
 
 def periodic_metrics_collection(
-    metrics_fn: Callable[[], IO[list[MetricPoint]]], interval_seconds: float = 30.0
+    _metrics_fn: Callable[[], IO[list[MetricPoint]]], interval_seconds: float = 30.0
 ) -> IO[None]:
     """Set up periodic metrics collection (returns immediately)"""
 

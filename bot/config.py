@@ -9,6 +9,7 @@ All configuration now uses functional programming types with proper validation.
 import json
 import os
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
 # Import functional programming types with lazy loading to avoid circular imports
@@ -96,9 +97,6 @@ def parse_float_env(key: str, default: float) -> float:
         return float(value)
     except ValueError:
         return default
-
-
-from enum import Enum
 
 
 class Environment(Enum):
@@ -217,7 +215,7 @@ class TradingSettings:
                 kwargs.get("max_futures_leverage", 20),
             )
 
-    def _from_functional_config(self, config: Any) -> None:
+    def _from_functional_config(self, _config: Any) -> None:
         """Extract settings from functional configuration."""
         # Set defaults compatible with existing interface
         self.symbol = "BTC-USD"
@@ -475,7 +473,7 @@ class ExchangeSettings:
                     "2. Choose 'Raw Private Key' or 'Hex Format'\n"
                     "3. Copy the hex string (should start with 0x)\n"
                     "4. Update your EXCHANGE__BLUEFIN_PRIVATE_KEY in .env with the hex format"
-                )
+                ) from None
 
             # Check if mnemonic format
             words = private_key_str.split()
@@ -485,7 +483,7 @@ class ExchangeSettings:
                     '1. Use Sui CLI: sui keytool import "<your mnemonic>" ed25519\n'
                     "2. Then export as hex: sui keytool export <address> --key-scheme ed25519\n"
                     "3. Update your EXCHANGE__BLUEFIN_PRIVATE_KEY in .env with the hex format"
-                )
+                ) from None
 
             # Unknown format
             raise ValueError(
@@ -493,7 +491,7 @@ class ExchangeSettings:
                 "• Hex: 0x1234...abcd (64 hex characters with 0x prefix)\n"
                 "• Bech32: suiprivkey... (Sui wallet export format)\n"
                 "• Mnemonic: 12 or 24 word seed phrase"
-            )
+            ) from None
 
 
 @dataclass
@@ -908,12 +906,6 @@ def create_settings(
     if profile:
         settings = settings.apply_profile(profile)
 
-    # Validate settings using functional patterns (placeholder for future implementation)
-    # validation_result = validate_settings(settings)
-    # if validation_result:
-    #     # Log warnings but don't fail
-    #     print(f"Configuration validation warnings: {validation_result}")
-
     return settings
 
 
@@ -1198,7 +1190,7 @@ def get_config_template() -> dict[str, Any]:
 
 # Add missing load_from_file method to Settings class for compatibility
 Settings.load_from_file = classmethod(
-    lambda cls, file_path: load_settings_from_file(file_path)
+    lambda _cls, file_path: load_settings_from_file(file_path)
 )
 
 

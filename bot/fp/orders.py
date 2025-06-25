@@ -1045,7 +1045,7 @@ def with_timeout_effect(
         class TimeoutError(Exception):
             pass
 
-        def timeout_handler(signum, frame):
+        def timeout_handler(_signum, _frame):
             raise TimeoutError("Operation timed out")
 
         # Set up timeout
@@ -1956,7 +1956,7 @@ def with_order_timeout(
         import signal
         import time
 
-        def timeout_handler(signum, frame):
+        def timeout_handler(_signum, _frame):
             raise TimeoutError(
                 f"Order {operation} timed out after {timeout_config.initial_timeout_seconds}s"
             )

@@ -341,7 +341,7 @@ def enforce_risk_limits(
     max_position_size_pct: float = 10.0,
     max_portfolio_heat_pct: float = 6.0,
     max_correlated_exposure_pct: float = 15.0,
-    correlation_threshold: float = 0.7,  # TODO: Implement correlation analysis
+    _correlation_threshold: float = 0.7,  # TODO: Implement correlation analysis
 ) -> tuple[float, str]:
     """Enforce risk limits on proposed position.
 

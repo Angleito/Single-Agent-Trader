@@ -51,7 +51,7 @@ def detect_key_format(private_key: Any) -> str:
     return "unknown"
 
 
-def bech32_to_hex(bech32_key: str) -> str | None:
+def bech32_to_hex(_bech32_key: str) -> str | None:
     """
     Convert Sui bech32 private key to hex format.
 
@@ -68,7 +68,7 @@ def bech32_to_hex(bech32_key: str) -> str | None:
     return None
 
 
-def mnemonic_to_hex(mnemonic: str) -> str | None:
+def mnemonic_to_hex(_mnemonic: str) -> str | None:
     """
     Convert mnemonic phrase to hex private key.
 
@@ -269,16 +269,15 @@ def auto_convert_private_key(private_key: str) -> tuple[str | None, str, str]:
     )
 
 
-def get_conversion_instructions(format_type: str) -> str:
+def get_conversion_instructions(_format_type: str) -> str:
     """Get conversion instructions for each format type."""
-    base_instruction = (
+    return (
         "Use Sui CLI for conversion:\n"
         "1. Install Sui CLI: https://docs.sui.io/build/install\n"
         "2. For bech32: sui keytool import 'suiprivkey...' ed25519\n"
         "3. For mnemonic: sui keytool import '<words>' ed25519\n"
         "4. Export as hex: sui keytool export <address> --key-scheme ed25519"
     )
-    return base_instruction
 
 
 # Export main functions

@@ -54,8 +54,8 @@ def calculate_vumanchu_cipher_a(
     closes: Sequence[float],
     hlc3_period: int = 9,
     stoch_k_period: int = 116,
-    stoch_d_period: int = 3,
-    k_smooth: int = 3,
+    _stoch_d_period: int = 3,
+    _k_smooth: int = 3,
 ) -> tuple[float | None, float | None, float | None]:
     """
     Calculate VuManchu Cipher A components.
@@ -109,7 +109,7 @@ def calculate_vumanchu_cipher_b(
     lows: Sequence[float],
     closes: Sequence[float],
     wt_period: int = 10,
-    wt_ma_period: int = 21,  # Used in wave trend calculation
+    _wt_ma_period: int = 21,  # Used in wave trend calculation
     rsi_period: int = 14,
     stoch_period: int = 14,
 ) -> dict[str, float | None]:

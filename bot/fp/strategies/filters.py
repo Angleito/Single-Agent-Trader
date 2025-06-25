@@ -38,7 +38,7 @@ def trading_hours_filter(
     start_minute: int = 30,
     end_hour: int = 16,
     end_minute: int = 0,
-    timezone_str: str = "US/Eastern",  # TODO: Implement timezone handling
+    _timezone_str: str = "US/Eastern",  # TODO: Implement timezone handling
 ) -> Filter:
     """Filter signals based on trading hours.
 

@@ -465,7 +465,7 @@ def rolling_window_metric(
 def rate_of_change_metric(
     current_metric: IO[MetricPoint],
     previous_metric: MetricPoint | None = None,
-    time_window_seconds: float = 60.0,
+    _time_window_seconds: float = 60.0,
 ) -> IO[MetricPoint]:
     """Calculate rate of change for a metric"""
 
