@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # Core AI Trading Bot - Main service
+  ai-trading-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        USER_ID: "${HOST_UID:-1000}"
+        GROUP_ID: "${HOST_GID:-1000}"
+    container_name: ai-trading-bot
+    env_file: ".env"
+    environment:
+      - SYSTEM__DRY_RUN=true
+      - LOG_LEVEL=INFO
+      - EXCHANGE__EXCHANGE_TYPE=bluefin
+      - TRADING__SYMBOL=SUI-PERP
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./config:/app/config
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    networks:
+      - trading-network
+    healthcheck:
+      test: ["CMD", "/app/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Bluefin Service - Required for DEX trading
+  bluefin-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.bluefin
+      args:
+        USER_ID: "${HOST_UID:-1000}"
+        GROUP_ID: "${HOST_GID:-1000}"
+    container_name: bluefin-service
+    env_file: ".env"
+    environment:
+      - BLUEFIN_SERVICE_API_KEY=${BLUEFIN_SERVICE_API_KEY:-secure-api-key}
+      - EXCHANGE__BLUEFIN_NETWORK=${EXCHANGE__BLUEFIN_NETWORK:-testnet}
+    ports:
+      - "8081:8080"
+    restart: unless-stopped
+    networks:
+      - trading-network
+    volumes:
+      - ./logs/bluefin:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  trading-network:
+    driver: bridge
+
+volumes:
+  trading-logs:
+  trading-data:
