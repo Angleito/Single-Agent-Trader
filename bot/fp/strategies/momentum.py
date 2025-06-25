@@ -5,7 +5,7 @@ principles. All functions are pure, deterministic, and side-effect free.
 """
 
 from collections.abc import Callable
-from typing import Literal, NamedTuple
+from typing import Any, Literal, NamedTuple
 
 import numpy as np
 from numpy.typing import NDArray
@@ -567,3 +567,125 @@ def rsi_reversal_strategy(
         )
 
     return strategy
+
+
+# Compatibility functions for test suites and other modules
+# --------------------------------------------------------
+
+
+def calculate_momentum_signal(
+    market_snapshot: "MarketSnapshot", config: dict[str, Any] | None = None
+) -> MomentumSignal:
+    """
+    Calculate momentum signal from a market snapshot.
+
+    This function provides compatibility with existing test suites and modules
+    that expect a simple calculate_momentum_signal function.
+
+    Args:
+        market_snapshot: Market data snapshot with prices and indicators
+        config: Optional configuration dict with parameters
+
+    Returns:
+        MomentumSignal with trade decision and metadata
+    """
+    # Import here to avoid circular imports
+    from bot.fp.types.market import MarketSnapshot
+
+    if not isinstance(market_snapshot, MarketSnapshot):
+        raise ValueError(f"Expected MarketSnapshot, got {type(market_snapshot)}")
+
+    # Extract configuration parameters
+    config = config or {}
+    lookback_short = config.get("lookback_short", 10)
+    lookback_long = config.get("lookback_long", 20)
+    rsi_period = config.get("rsi_period", 14)
+    rsi_oversold = config.get("rsi_oversold", 30.0)
+    rsi_overbought = config.get("rsi_overbought", 70.0)
+    volume_multiplier = config.get("volume_multiplier", 1.5)
+    breakout_threshold = config.get("breakout_threshold", 0.02)
+
+    # For simplified calculation with snapshot data, use basic momentum
+    current_price = float(market_snapshot.price)
+
+    # If we have technical indicators, use them
+    if market_snapshot.high_20 is not None and market_snapshot.low_20 is not None:
+        high_20 = float(market_snapshot.high_20)
+        low_20 = float(market_snapshot.low_20)
+
+        # Calculate price position in range
+        price_range = high_20 - low_20
+        if price_range > 0:
+            price_position = (current_price - low_20) / price_range
+
+            # Strong momentum signals
+            if price_position > 0.8:  # Near high
+                return MomentumSignal(
+                    signal="LONG",
+                    strength=price_position,
+                    reason=f"Strong upward momentum (price position: {price_position:.2f})",
+                    indicators={
+                        "price_position": price_position,
+                        "high_20": high_20,
+                        "low_20": low_20,
+                        "current_price": current_price,
+                    },
+                )
+            if price_position < 0.2:  # Near low
+                return MomentumSignal(
+                    signal="SHORT",
+                    strength=1 - price_position,
+                    reason=f"Strong downward momentum (price position: {price_position:.2f})",
+                    indicators={
+                        "price_position": price_position,
+                        "high_20": high_20,
+                        "low_20": low_20,
+                        "current_price": current_price,
+                    },
+                )
+
+    # If we have SMA, use it for trend determination
+    if market_snapshot.sma_20 is not None:
+        sma_20 = float(market_snapshot.sma_20)
+        price_vs_sma = (current_price - sma_20) / sma_20
+
+        # Trend momentum
+        if price_vs_sma > 0.05:  # 5% above SMA
+            return MomentumSignal(
+                signal="LONG",
+                strength=min(abs(price_vs_sma) * 10, 1.0),
+                reason=f"Price above SMA trend (deviation: {price_vs_sma:.1%})",
+                indicators={
+                    "price_vs_sma": price_vs_sma,
+                    "sma_20": sma_20,
+                    "current_price": current_price,
+                },
+            )
+        if price_vs_sma < -0.05:  # 5% below SMA
+            return MomentumSignal(
+                signal="SHORT",
+                strength=min(abs(price_vs_sma) * 10, 1.0),
+                reason=f"Price below SMA trend (deviation: {price_vs_sma:.1%})",
+                indicators={
+                    "price_vs_sma": price_vs_sma,
+                    "sma_20": sma_20,
+                    "current_price": current_price,
+                },
+            )
+
+    # Default to hold if no clear momentum
+    return MomentumSignal(
+        signal="HOLD",
+        strength=0.0,
+        reason="No clear momentum signal detected",
+        indicators={
+            "current_price": current_price,
+            "has_technical_data": any(
+                [
+                    market_snapshot.high_20 is not None,
+                    market_snapshot.low_20 is not None,
+                    market_snapshot.sma_20 is not None,
+                ]
+            ),
+        },
+    )

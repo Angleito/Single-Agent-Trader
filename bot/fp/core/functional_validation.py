@@ -220,15 +220,22 @@ def validate_enum(
 
 def chain_validators(
     *validators: Callable[[T], FPResult[T, E]],
-) -> Callable[[T], FPResult[T, list[E]]]:
+) -> Callable[[T, str], FPResult[T, list[E]]]:
     """Chain multiple validators, collecting all errors."""
 
-    def chained_validator(value: T) -> FPResult[T, list[E]]:
+    def chained_validator(value: T, field_name: str = "value") -> FPResult[T, list[E]]:
         errors = []
         current_value = value
 
         for validator in validators:
-            result = validator(current_value)
+            # Handle validators that accept field_name parameter
+            try:
+                # Try calling with field_name parameter first
+                result = validator(current_value, field_name)
+            except TypeError:
+                # If that fails, call with just the value
+                result = validator(current_value)
+
             if result.is_failure():
                 errors.append(result.failure())
             else:
@@ -254,7 +261,12 @@ def validate_all(
             if field_name in data:
                 result = field_validator(data[field_name], field_name)
                 if result.is_failure():
-                    errors.append(result.failure())
+                    failure = result.failure()
+                    # Handle cases where validators return a list of errors (e.g., chain_validators)
+                    if isinstance(failure, list):
+                        errors.extend(failure)
+                    else:
+                        errors.append(failure)
                 else:
                     validated_data[field_name] = result.success()
             else:
@@ -560,15 +572,22 @@ def validate_batch_parallel(
 
 def compose_validators(
     *validators: Callable[[T], FPResult[T, E]],
-) -> Callable[[T], FPResult[T, list[E]]]:
+) -> Callable[[T, str], FPResult[T, list[E]]]:
     """Compose multiple validators using function composition."""
 
-    def composed(value: T) -> FPResult[T, list[E]]:
+    def composed(value: T, field_name: str = "value") -> FPResult[T, list[E]]:
         errors = []
         current_value = value
 
         for validator in validators:
-            result = validator(current_value)
+            # Handle validators that accept field_name parameter
+            try:
+                # Try calling with field_name parameter first
+                result = validator(current_value, field_name)
+            except TypeError:
+                # If that fails, call with just the value
+                result = validator(current_value)
+
             if result.is_failure():
                 errors.append(result.failure())
             else:
@@ -583,13 +602,20 @@ def compose_validators(
 
 def any_validator(
     *validators: Callable[[T], FPResult[T, E]],
-) -> Callable[[T], FPResult[T, list[E]]]:
+) -> Callable[[T, str], FPResult[T, list[E]]]:
     """Validator that succeeds if any of the provided validators succeed."""
 
-    def any_valid(value: T) -> FPResult[T, list[E]]:
+    def any_valid(value: T, field_name: str = "value") -> FPResult[T, list[E]]:
         errors = []
         for validator in validators:
-            result = validator(value)
+            # Handle validators that accept field_name parameter
+            try:
+                # Try calling with field_name parameter first
+                result = validator(value, field_name)
+            except TypeError:
+                # If that fails, call with just the value
+                result = validator(value)
+
             if result.is_success():
                 return FPSuccess(result.success())
             errors.append(result.failure())
@@ -600,12 +626,19 @@ def any_validator(
 
 def conditional_validator(
     condition: Callable[[T], bool], validator: Callable[[T], FPResult[T, E]]
-) -> Callable[[T], FPResult[T, E | None]]:
+) -> Callable[[T, str], FPResult[T, E | None]]:
     """Apply validator only if condition is met."""
 
-    def conditional(value: T) -> FPResult[T, E | None]:
+    def conditional(value: T, field_name: str = "value") -> FPResult[T, E | None]:
         if condition(value):
-            result = validator(value)
+            # Handle validators that accept field_name parameter
+            try:
+                # Try calling with field_name parameter first
+                result = validator(value, field_name)
+            except TypeError:
+                # If that fails, call with just the value
+                result = validator(value)
+
             if result.is_success():
                 return FPSuccess(result.success())
             return FPFailure(result.failure())
@@ -682,6 +715,131 @@ def validate_cross_field_constraints(
     return FPSuccess(data)
 
 
+# Market Data Validation Functions
+
+
+def validate_aggregation_window(
+    window_config: dict[str, Any],
+) -> FPResult[dict[str, Any], SchemaError]:
+    """Validate aggregation window configuration for market data."""
+    validators = {
+        "interval": validate_enum(
+            {
+                "1s",
+                "5s",
+                "15s",
+                "30s",
+                "1m",
+                "3m",
+                "5m",
+                "15m",
+                "30m",
+                "1h",
+                "4h",
+                "1d",
+            },
+            case_sensitive=False,
+        ),
+        "size": chain_validators(validate_positive, validate_range(1, 10000)),
+        "overlap": optional_field(
+            chain_validators(validate_positive, validate_range(0, 0.9)), 0.0
+        ),
+        "buffer_size": optional_field(
+            chain_validators(validate_positive, validate_range(1, 1000)), 100
+        ),
+    }
+
+    return validate_all(validators)(window_config)
+
+
+def validate_streaming_config(
+    streaming_config: dict[str, Any],
+) -> FPResult[dict[str, Any], SchemaError]:
+    """Validate streaming configuration for market data."""
+    validators = {
+        "enabled": lambda x: FPSuccess(bool(x)),
+        "max_connections": chain_validators(validate_positive, validate_range(1, 100)),
+        "reconnect_interval": chain_validators(
+            validate_positive, validate_range(1, 300)
+        ),
+        "buffer_size": chain_validators(validate_positive, validate_range(100, 100000)),
+        "timeout": chain_validators(validate_positive, validate_range(5, 300)),
+    }
+
+    return validate_all(validators)(streaming_config)
+
+
+def validate_market_data_request(
+    request_data: dict[str, Any],
+) -> FPResult[dict[str, Any], SchemaError]:
+    """Validate market data request parameters."""
+    validators = {
+        "symbol": validate_string_length(min_len=1, max_len=20),
+        "interval": validate_enum(
+            {
+                "1s",
+                "5s",
+                "15s",
+                "30s",
+                "1m",
+                "3m",
+                "5m",
+                "15m",
+                "30m",
+                "1h",
+                "4h",
+                "1d",
+            },
+            case_sensitive=False,
+        ),
+        "limit": optional_field(
+            chain_validators(validate_positive, validate_range(1, 5000)), 1000
+        ),
+        "start_time": optional_field(lambda x: FPSuccess(x)),
+        "end_time": optional_field(lambda x: FPSuccess(x)),
+    }
+
+    return validate_all(validators)(request_data)
+
+
+def validate_configuration_constraints(
+    config_data: dict[str, Any],
+) -> FPResult[dict[str, Any], SchemaError]:
+    """Validate configuration constraints and dependencies."""
+    errors = []
+
+    # Cross-field validations
+    if "max_leverage" in config_data and "position_size" in config_data:
+        max_leverage = config_data["max_leverage"]
+        position_size = config_data["position_size"]
+
+        if max_leverage * position_size > 100:  # Risk check
+            errors.append(
+                FieldError(
+                    field="leverage_position_constraint",
+                    message=f"Leverage ({max_leverage}) * Position size ({position_size}) exceeds safe limit (100)",
+                    validation_rule="cross_field_constraint",
+                )
+            )
+
+    # API key validation
+    if "api_key" in config_data:
+        api_key = config_data["api_key"]
+        if isinstance(api_key, str) and len(api_key) < 10:
+            errors.append(
+                FieldError(
+                    field="api_key",
+                    message="API key appears too short to be valid",
+                    validation_rule="configuration_constraint",
+                )
+            )
+
+    if errors:
+        return FPFailure(SchemaError(schema="configuration_constraints", errors=errors))
+
+    return FPSuccess(config_data)
+
+
 # Export enhanced validation functions
 __all__ = [
     "ConversionError",
@@ -718,4 +876,9 @@ __all__ = [
     "validate_string_length",
     # Trading-specific validators
     "validate_trade_action_functional",
+    # Market data validators
+    "validate_aggregation_window",
+    "validate_streaming_config",
+    "validate_market_data_request",
+    "validate_configuration_constraints",
 ]
