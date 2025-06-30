@@ -1,0 +1,244 @@
+# Log Validation Rules Configuration
+# Defines rules and thresholds for log quality validation
+
+# Required loggers that should be present in logs
+required_loggers:
+  - bot
+  - trading
+  - exchange
+  - llm
+  - dashboard
+  - monitor
+  - performance
+
+# Keywords that indicate error conditions
+error_keywords:
+  - error
+  - exception
+  - failed
+  - failure
+  - timeout
+  - crash
+  - abort
+  - critical
+  - fatal
+  - panic
+  - emergency
+
+# Warning keywords that indicate potential issues
+warning_keywords:
+  - warning
+  - warn
+  - deprecated
+  - retry
+  - fallback
+  - throttle
+  - limit
+  - threshold
+  - high
+  - low
+
+# Performance thresholds for alerting
+performance_thresholds:
+  cpu_usage: 85.0          # CPU usage percentage
+  memory_usage: 90.0       # Memory usage percentage
+  disk_usage: 95.0         # Disk usage percentage
+  response_time_ms: 5000.0 # Response time in milliseconds
+  error_rate: 5.0          # Error rate percentage
+  throughput_rps: 100.0    # Minimum requests per second
+
+# Test validation rules
+test_validation:
+  coverage_threshold: 80.0  # Minimum test coverage percentage
+  max_test_duration: 300.0  # Maximum test duration in seconds
+  required_test_patterns:
+    - test_
+    - setup
+    - teardown
+    - integration
+    - unit
+  critical_test_failures:   # Tests that should never fail
+    - test_configuration
+    - test_database_connection
+    - test_api_authentication
+    - test_basic_functionality
+
+# Log quality rules
+log_quality:
+  max_log_gaps_minutes: 5    # Maximum gap between log entries
+  min_entries_per_hour: 60   # Minimum log entries per hour
+  max_error_ratio: 0.10      # Maximum ratio of error entries
+  max_warning_ratio: 0.20    # Maximum ratio of warning entries
+  required_log_levels:       # Required log levels to be present
+    - INFO
+    - WARNING
+    - ERROR
+
+# Container-specific rules
+container_rules:
+  ai-trading-bot:
+    required_loggers:
+      - bot.main
+      - bot.strategy
+      - bot.exchange
+      - bot.indicators
+    critical_errors:
+      - "failed to connect to exchange"
+      - "authentication failed"
+      - "invalid configuration"
+    performance_metrics:
+      - trading_latency
+      - decision_time
+      - market_data_lag
+  
+  dashboard:
+    required_loggers:
+      - dashboard.app
+      - dashboard.api
+      - dashboard.websocket
+    critical_errors:
+      - "database connection failed"
+      - "websocket connection failed"
+    performance_metrics:
+      - response_time
+      - concurrent_users
+  
+  mcp-memory:
+    required_loggers:
+      - mcp.memory
+      - mcp.server
+    critical_errors:
+      - "memory storage failed"
+      - "experience saving failed"
+    performance_metrics:
+      - memory_retrieval_time
+      - storage_latency
+
+# Security validation rules
+security_rules:
+  sensitive_data_patterns:
+    - api_key
+    - private_key
+    - password
+    - secret
+    - token
+    - credential
+  redaction_verification:
+    - "[REDACTED"
+    - "***"
+    - "[MASKED"
+  suspicious_patterns:
+    - "sql injection"
+    - "unauthorized access"
+    - "privilege escalation"
+    - "buffer overflow"
+
+# Performance monitoring rules
+monitoring_rules:
+  resource_thresholds:
+    cpu_warning: 70.0
+    cpu_critical: 85.0
+    memory_warning: 75.0
+    memory_critical: 90.0
+    disk_warning: 80.0
+    disk_critical: 95.0
+    network_warning_mbps: 50.0
+    network_critical_mbps: 100.0
+  
+  alert_frequencies:
+    max_alerts_per_minute: 10
+    alert_cooldown_seconds: 300
+    escalation_threshold: 5
+  
+  metric_validation:
+    required_metrics:
+      - cpu_percent
+      - memory_percent
+      - disk_usage_percent
+      - network_rx_bytes
+      - network_tx_bytes
+    metric_freshness_seconds: 60
+
+# Test execution monitoring
+test_monitoring:
+  test_timeouts:
+    unit_test_timeout: 30.0
+    integration_test_timeout: 300.0
+    load_test_timeout: 1800.0
+  
+  test_patterns:
+    start_patterns:
+      - "test started"
+      - "running test"
+      - "executing test"
+    end_patterns:
+      - "test completed"
+      - "test finished"
+      - "test passed"
+      - "test failed"
+    error_patterns:
+      - "test error"
+      - "assertion failed"
+      - "test timeout"
+  
+  coverage_requirements:
+    min_line_coverage: 80.0
+    min_branch_coverage: 70.0
+    critical_modules:
+      - bot.strategy
+      - bot.exchange
+      - bot.risk
+      - bot.validator
+
+# Log retention and cleanup rules
+retention_rules:
+  log_file_max_size_mb: 100
+  log_file_max_age_days: 30
+  backup_count: 5
+  compression_enabled: true
+  cleanup_schedule: "daily"
+
+# Alerting configuration
+alerting:
+  channels:
+    - console
+    - file
+    - webhook
+  
+  severity_levels:
+    INFO: 0
+    WARNING: 1
+    ERROR: 2
+    CRITICAL: 3
+  
+  escalation_rules:
+    - condition: "error_count > 10"
+      action: "notify_admin"
+    - condition: "critical_error"
+      action: "immediate_alert"
+    - condition: "test_failure_rate > 0.2"
+      action: "notify_dev_team"
+
+# Output formatting rules
+output_formatting:
+  timestamp_format: "%Y-%m-%d %H:%M:%S"
+  timezone: "UTC"
+  decimal_precision: 2
+  percentage_precision: 1
+  
+  report_sections:
+    - executive_summary
+    - container_analysis
+    - test_results
+    - performance_metrics
+    - quality_issues
+    - recommendations
+    - appendices
+
+# Validation scoring weights
+scoring_weights:
+  log_coverage: 30
+  error_ratio: 25
+  test_results: 20
+  performance_metrics: 15
+  security_compliance: 10

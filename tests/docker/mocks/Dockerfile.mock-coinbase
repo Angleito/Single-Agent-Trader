@@ -1,0 +1,69 @@
+# Mock Coinbase Service Dockerfile
+# 
+# Creates a mock Coinbase Advanced Trade API service for testing orderbook functionality
+# Simulates real Coinbase API endpoints and WebSocket feeds
+#
+# Build: docker build -t mock-coinbase-service -f tests/docker/mocks/Dockerfile.mock-coinbase .
+
+FROM python:3.12-slim-bullseye
+
+# Metadata
+LABEL maintainer="AI Trading Bot Team"
+LABEL description="Mock Coinbase Advanced Trade API service for orderbook testing"
+LABEL service="mock-coinbase"
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    netcat \
+    jq \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+RUN pip install --no-cache-dir \
+    fastapi==0.104.1 \
+    uvicorn==0.24.0 \
+    websockets==12.0 \
+    pydantic==2.5.0 \
+    aiohttp==3.9.1 \
+    python-json-logger==2.0.7 \
+    faker==20.1.0 \
+    cryptography==41.0.7
+
+# Create mock service user
+RUN useradd -m -s /bin/bash mockuser
+
+# Set working directory
+WORKDIR /app
+
+# Copy mock service implementation
+COPY tests/docker/mocks/coinbase_mock_service.py /app/coinbase_mock_service.py
+COPY tests/docker/mocks/common/ /app/common/
+
+# Create necessary directories
+RUN mkdir -p /app/data /app/logs && \
+    chown -R mockuser:mockuser /app
+
+# Switch to mock user
+USER mockuser
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    MOCK_SERVICE_PORT=8081 \
+    MOCK_SERVICE_NAME=coinbase \
+    LOG_LEVEL=INFO \
+    SIMULATE_LATENCY=true \
+    SIMULATE_ERRORS=false \
+    ORDERBOOK_DEPTH=50 \
+    TICK_SIZE=0.01
+
+# Expose ports
+EXPOSE 8081 8084
+
+# Health check
+HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8081/health || exit 1
+
+# Start mock service
+CMD ["python", "coinbase_mock_service.py"]

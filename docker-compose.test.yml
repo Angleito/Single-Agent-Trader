@@ -1,0 +1,521 @@
+# Docker Compose for Comprehensive Orderbook Testing Environment
+#
+# This configuration sets up a complete testing environment for orderbook functionality
+# including unit tests, integration tests, mock services, and performance testing.
+#
+# Usage:
+#   docker-compose -f docker-compose.test.yml up --build
+#   docker-compose -f docker-compose.test.yml run test-runner
+#   docker-compose -f docker-compose.test.yml down
+#
+# Environment Variables:
+#   TEST_MODE=true
+#   LOG_LEVEL=DEBUG
+#   PYTHONPATH=/app
+#   TEST_TIMEOUT=300
+
+version: '3.8'
+
+services:
+  # =============================================================================
+  # CORE TEST SERVICES
+  # =============================================================================
+
+  # Main Test Runner - Orchestrates all orderbook tests
+  test-runner:
+    build:
+      context: .
+      dockerfile: tests/docker/Dockerfile.test
+      platforms:
+        - linux/amd64
+      args:
+        USER_ID: ${HOST_UID:-1000}
+        GROUP_ID: ${HOST_GID:-1000}
+        PYTHON_VERSION: "3.12"
+    image: orderbook-test-runner:latest
+    platform: linux/amd64
+    container_name: orderbook-test-runner
+
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONPATH=/app
+      - TEST_MODE=true
+      - LOG_LEVEL=DEBUG
+      - TEST_TIMEOUT=300
+      - PYTEST_WORKERS=4
+      - ORDERBOOK_TEST_SUITE=comprehensive
+
+      # Test database configuration
+      - TEST_DB_HOST=test-postgres
+      - TEST_DB_PORT=5432
+      - TEST_DB_NAME=orderbook_test
+      - TEST_DB_USER=test_user
+      - TEST_DB_PASSWORD=test_password
+
+      # Mock service URLs
+      - MOCK_BLUEFIN_URL=http://mock-bluefin:8080
+      - MOCK_COINBASE_URL=http://mock-coinbase:8081
+      - MOCK_EXCHANGE_WS_URL=ws://mock-exchange:8082/ws
+
+      # Test-specific overrides
+      - SYSTEM__DRY_RUN=true
+      - EXCHANGE__EXCHANGE_TYPE=mock
+      - MCP_ENABLED=false
+      - ENABLE_WEBSOCKET=true
+      - FP_RUNTIME_ENABLED=true
+      - FP_DEBUG_MODE=true
+
+    volumes:
+      - .:/app:ro
+      - ./tests:/app/tests:rw
+      - ./data/test:/app/data:rw
+      - ./logs/test:/app/logs:rw
+      - test-results:/app/test-results:rw
+      - test-cache:/app/.pytest_cache:rw
+
+    working_dir: /app
+    command: >
+      bash -c "
+        echo 'Starting comprehensive orderbook test suite...' &&
+        python -m pytest tests/integration/test_orderbook_integration.py -v --tb=short &&
+        python -m pytest tests/unit/fp/test_orderbook_functional.py -v --tb=short &&
+        python -m pytest tests/docker/test_orderbook_docker.py -v --tb=short &&
+        python -m pytest tests/performance/test_orderbook_performance.py -v --tb=short &&
+        echo 'All orderbook tests completed!'
+      "
+
+    depends_on:
+      test-postgres:
+        condition: service_healthy
+      mock-bluefin:
+        condition: service_healthy
+      mock-coinbase:
+        condition: service_healthy
+      mock-exchange:
+        condition: service_healthy
+      test-redis:
+        condition: service_healthy
+
+    networks:
+      - test-network
+
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+
+  # Unit Test Runner - Focused on isolated orderbook unit tests
+  unit-test-runner:
+    extends: test-runner
+    container_name: orderbook-unit-test-runner
+    command: >
+      bash -c "
+        echo 'Running orderbook unit tests...' &&
+        python -m pytest tests/unit/fp/test_orderbook_*.py -v --tb=short --cov=bot.fp.types.market --cov-report=html:/app/test-results/coverage/unit &&
+        echo 'Unit tests completed!'
+      "
+    profiles:
+      - unit-tests
+
+  # Integration Test Runner - Tests orderbook integration with other components
+  integration-test-runner:
+    extends: test-runner
+    container_name: orderbook-integration-test-runner
+    command: >
+      bash -c "
+        echo 'Running orderbook integration tests...' &&
+        python -m pytest tests/integration/test_orderbook_*.py -v --tb=short &&
+        echo 'Integration tests completed!'
+      "
+    profiles:
+      - integration-tests
+
+  # Performance Test Runner - Orderbook performance and benchmarking
+  performance-test-runner:
+    extends: test-runner
+    container_name: orderbook-performance-test-runner
+    environment:
+      - PERFORMANCE_TEST_MODE=true
+      - BENCHMARK_ITERATIONS=1000
+      - LOAD_TEST_DURATION=60
+    command: >
+      bash -c "
+        echo 'Running orderbook performance tests...' &&
+        python -m pytest tests/performance/test_orderbook_performance.py -v --tb=short --benchmark-only &&
+        echo 'Performance tests completed!'
+      "
+    profiles:
+      - performance-tests
+
+  # =============================================================================
+  # MOCK SERVICES
+  # =============================================================================
+
+  # Mock Bluefin Service - Simulates Bluefin DEX for testing
+  mock-bluefin:
+    build:
+      context: tests/docker/mocks
+      dockerfile: Dockerfile.mock-bluefin
+      platforms:
+        - linux/amd64
+    image: mock-bluefin-service:latest
+    platform: linux/amd64
+    container_name: mock-bluefin-service
+
+    environment:
+      - MOCK_SERVICE_PORT=8080
+      - MOCK_SERVICE_NAME=bluefin
+      - LOG_LEVEL=DEBUG
+      - SIMULATE_LATENCY=true
+      - SIMULATE_ERRORS=false
+      - ORDERBOOK_DEPTH=100
+      - PRICE_VOLATILITY=0.02
+
+    ports:
+      - "8080:8080"  # HTTP API
+      - "8083:8083"  # WebSocket
+
+    volumes:
+      - ./tests/data/mock-bluefin:/app/data:rw
+      - ./logs/test:/app/logs:rw
+
+    networks:
+      - test-network
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+
+  # Mock Coinbase Service - Simulates Coinbase Advanced Trade API
+  mock-coinbase:
+    build:
+      context: tests/docker/mocks
+      dockerfile: Dockerfile.mock-coinbase
+      platforms:
+        - linux/amd64
+    image: mock-coinbase-service:latest
+    platform: linux/amd64
+    container_name: mock-coinbase-service
+
+    environment:
+      - MOCK_SERVICE_PORT=8081
+      - MOCK_SERVICE_NAME=coinbase
+      - LOG_LEVEL=DEBUG
+      - SIMULATE_LATENCY=true
+      - SIMULATE_ERRORS=false
+      - ORDERBOOK_DEPTH=50
+      - TICK_SIZE=0.01
+
+    ports:
+      - "8081:8081"  # HTTP API
+      - "8084:8084"  # WebSocket
+
+    volumes:
+      - ./tests/data/mock-coinbase:/app/data:rw
+      - ./logs/test:/app/logs:rw
+
+    networks:
+      - test-network
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+
+  # Mock Exchange WebSocket - Generic orderbook WebSocket simulator
+  mock-exchange:
+    build:
+      context: tests/docker/mocks
+      dockerfile: Dockerfile.mock-exchange-ws
+      platforms:
+        - linux/amd64
+    image: mock-exchange-ws:latest
+    platform: linux/amd64
+    container_name: mock-exchange-ws
+
+    environment:
+      - WEBSOCKET_PORT=8082
+      - UPDATE_FREQUENCY=100  # Updates per second
+      - ORDERBOOK_LEVELS=20
+      - SYMBOLS=BTC-USD,ETH-USD,SOL-USD
+      - PRICE_VOLATILITY=0.015
+      - LOG_LEVEL=DEBUG
+
+    ports:
+      - "8082:8082"  # WebSocket
+
+    volumes:
+      - ./tests/data/mock-exchange:/app/data:rw
+      - ./logs/test:/app/logs:rw
+
+    networks:
+      - test-network
+
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8082"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+
+  # =============================================================================
+  # TEST INFRASTRUCTURE SERVICES
+  # =============================================================================
+
+  # Test PostgreSQL Database
+  test-postgres:
+    image: postgres:15-alpine
+    platform: linux/amd64
+    container_name: test-postgres
+
+    environment:
+      - POSTGRES_DB=orderbook_test
+      - POSTGRES_USER=test_user
+      - POSTGRES_PASSWORD=test_password
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+
+    ports:
+      - "5433:5432"  # Different port to avoid conflicts
+
+    volumes:
+      - test-postgres-data:/var/lib/postgresql/data
+      - ./tests/sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+    networks:
+      - test-network
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d orderbook_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+
+  # Test Redis Cache
+  test-redis:
+    image: redis:7-alpine
+    platform: linux/amd64
+    container_name: test-redis
+
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+
+    ports:
+      - "6380:6379"  # Different port to avoid conflicts
+
+    volumes:
+      - test-redis-data:/data
+
+    networks:
+      - test-network
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+
+  # Test Log Aggregator - Collects and analyzes test logs
+  test-log-aggregator:
+    build:
+      context: tests/docker/services
+      dockerfile: Dockerfile.log-aggregator
+      platforms:
+        - linux/amd64
+    image: test-log-aggregator:latest
+    platform: linux/amd64
+    container_name: test-log-aggregator
+
+    environment:
+      - LOG_AGGREGATOR_PORT=8090
+      - LOG_RETENTION_HOURS=24
+      - LOG_ANALYSIS_ENABLED=true
+
+    ports:
+      - "8090:8090"  # Log aggregator web UI
+
+    volumes:
+      - ./logs/test:/app/logs/input:ro
+      - test-log-analysis:/app/analysis:rw
+
+    networks:
+      - test-network
+
+    profiles:
+      - logging
+
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.1'
+
+  # Test Metrics Collector - Collects performance and test metrics
+  test-metrics:
+    build:
+      context: tests/docker/services
+      dockerfile: Dockerfile.metrics
+      platforms:
+        - linux/amd64
+    image: test-metrics:latest
+    platform: linux/amd64
+    container_name: test-metrics
+
+    environment:
+      - METRICS_PORT=8091
+      - METRICS_RETENTION_HOURS=48
+      - COLLECT_SYSTEM_METRICS=true
+
+    ports:
+      - "8091:8091"  # Metrics web UI
+
+    volumes:
+      - test-metrics-data:/app/metrics:rw
+
+    networks:
+      - test-network
+
+    profiles:
+      - metrics
+
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.1'
+
+  # =============================================================================
+  # SPECIALIZED TEST RUNNERS
+  # =============================================================================
+
+  # Stress Test Runner - High-load orderbook testing
+  stress-test-runner:
+    extends: test-runner
+    container_name: orderbook-stress-test-runner
+
+    environment:
+      - STRESS_TEST_MODE=true
+      - CONCURRENT_CONNECTIONS=100
+      - MESSAGES_PER_SECOND=1000
+      - TEST_DURATION=300  # 5 minutes
+      - MEMORY_LIMIT=4G
+
+    command: >
+      bash -c "
+        echo 'Running orderbook stress tests...' &&
+        python -m pytest tests/stress/test_orderbook_stress.py -v --tb=short &&
+        echo 'Stress tests completed!'
+      "
+
+    profiles:
+      - stress-tests
+
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+        reservations:
+          memory: 2G
+          cpus: '1.0'
+
+  # Property-Based Test Runner - Hypothesis testing for orderbook
+  property-test-runner:
+    extends: test-runner
+    container_name: orderbook-property-test-runner
+
+    environment:
+      - PROPERTY_TEST_MODE=true
+      - HYPOTHESIS_MAX_EXAMPLES=1000
+      - HYPOTHESIS_DEADLINE=60000  # 60 seconds
+
+    command: >
+      bash -c "
+        echo 'Running orderbook property-based tests...' &&
+        python -m pytest tests/property/test_orderbook_properties.py -v --tb=short &&
+        echo 'Property-based tests completed!'
+      "
+
+    profiles:
+      - property-tests
+
+# =============================================================================
+# VOLUMES
+# =============================================================================
+
+volumes:
+  test-results:
+    name: orderbook-test-results
+    driver: local
+
+  test-cache:
+    name: orderbook-test-cache
+    driver: local
+
+  test-postgres-data:
+    name: test-postgres-data
+    driver: local
+
+  test-redis-data:
+    name: test-redis-data
+    driver: local
+
+  test-log-analysis:
+    name: test-log-analysis
+    driver: local
+
+  test-metrics-data:
+    name: test-metrics-data
+    driver: local
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+
+networks:
+  test-network:
+    name: orderbook-test-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

@@ -1,0 +1,69 @@
+# Mock Bluefin Service Dockerfile
+# 
+# Creates a mock Bluefin DEX service for testing orderbook functionality
+# Simulates real Bluefin API endpoints and WebSocket feeds
+#
+# Build: docker build -t mock-bluefin-service -f tests/docker/mocks/Dockerfile.mock-bluefin .
+
+FROM python:3.12-slim-bullseye
+
+# Metadata
+LABEL maintainer="AI Trading Bot Team"
+LABEL description="Mock Bluefin DEX service for orderbook testing"
+LABEL service="mock-bluefin"
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    netcat \
+    jq \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+RUN pip install --no-cache-dir \
+    fastapi==0.104.1 \
+    uvicorn==0.24.0 \
+    websockets==12.0 \
+    pydantic==2.5.0 \
+    aiohttp==3.9.1 \
+    asyncio-mqtt==0.16.1 \
+    python-json-logger==2.0.7 \
+    faker==20.1.0
+
+# Create mock service user
+RUN useradd -m -s /bin/bash mockuser
+
+# Set working directory
+WORKDIR /app
+
+# Copy mock service implementation
+COPY tests/docker/mocks/bluefin_mock_service.py /app/bluefin_mock_service.py
+COPY tests/docker/mocks/common/ /app/common/
+
+# Create necessary directories
+RUN mkdir -p /app/data /app/logs && \
+    chown -R mockuser:mockuser /app
+
+# Switch to mock user
+USER mockuser
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    MOCK_SERVICE_PORT=8080 \
+    MOCK_SERVICE_NAME=bluefin \
+    LOG_LEVEL=INFO \
+    SIMULATE_LATENCY=true \
+    SIMULATE_ERRORS=false \
+    ORDERBOOK_DEPTH=100 \
+    PRICE_VOLATILITY=0.02
+
+# Expose ports
+EXPOSE 8080 8083
+
+# Health check
+HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+# Start mock service
+CMD ["python", "bluefin_mock_service.py"]
