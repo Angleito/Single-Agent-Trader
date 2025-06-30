@@ -1,0 +1,45 @@
+
+# Async & Utilities
+aiofiles==24.1.0
+aiohappyeyeballs==2.6.1
+aiohttp>=3.12.0,<4.0.0
+anyio>=4.0.0
+click==8.1.7
+
+# Exchange APIs & Crypto
+coinbase-advanced-py==1.7.0
+
+# Cryptographic (essential for order signatures)
+cryptography>=42.0.0
+
+# Web Framework (only if MCP server needed)
+fastapi>=0.115.0
+httpx>=0.28.0
+numpy==1.26.0
+# Minimal Production Requirements for Trading Bot
+# Core Trading & Data Processing
+pandas==2.2.0
+prometheus-client>=0.22.0
+
+# Basic Monitoring
+psutil==6.1.0
+
+# Configuration & Environment
+pydantic==2.9.0
+pydantic-settings==2.9.0
+python-dotenv==1.0.0
+python-json-logger>=3.0.0
+requests==2.32.0
+
+# Functional Programming (minimal subset)
+returns==0.22.0
+scipy==1.11.0
+toolz==0.12.0
+uvicorn[standard]>=0.34.0
+websockets>=15.0.0
+
+# Optional: Remove these if AI features not needed in production
+# openai==1.88.0
+# langchain==0.2.17
+# langchain-openai==0.1.25
+# langchain-community==0.2.19

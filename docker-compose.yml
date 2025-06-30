@@ -99,11 +99,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 768M      # Increased for Ubuntu optimization
-          cpus: '0.4'       # Increased for Ubuntu processes
+          memory: 512M      # Optimized for single-core deployment
+          cpus: '0.15'      # Single-core optimization: 15% allocation
         reservations:
-          memory: 384M      # Increased baseline for Ubuntu
-          cpus: '0.15'      # Higher baseline for Ubuntu
+          memory: 256M      # Reduced baseline for single-core
+          cpus: '0.05'      # Minimal baseline for single-core
 
     logging:
       driver: "json-file"
@@ -166,17 +166,33 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONWARNINGS=ignore::UserWarning,ignore::DeprecationWarning,ignore::SyntaxWarning,ignore::FutureWarning
       - CONFIG_FILE=${CONFIG_FILE:-}
-      # Functional Programming Runtime Configuration
+      # Functional Programming Runtime Configuration - Optimized for Resource Efficiency
       - FP_RUNTIME_ENABLED=${FP_RUNTIME_ENABLED:-true}
       - FP_RUNTIME_MODE=${FP_RUNTIME_MODE:-hybrid}
-      - FP_EFFECT_TIMEOUT=${FP_EFFECT_TIMEOUT:-30.0}
-      - FP_MAX_CONCURRENT_EFFECTS=${FP_MAX_CONCURRENT_EFFECTS:-100}
+      - FP_EFFECT_TIMEOUT=${FP_EFFECT_TIMEOUT:-20.0}  # Reduced timeout for faster recovery
+      - FP_MAX_CONCURRENT_EFFECTS=${FP_MAX_CONCURRENT_EFFECTS:-25}  # Reduced from 100 to optimize memory usage
       - FP_ERROR_RECOVERY=${FP_ERROR_RECOVERY:-true}
       - FP_METRICS_ENABLED=${FP_METRICS_ENABLED:-true}
       - FP_SCHEDULER_ENABLED=${FP_SCHEDULER_ENABLED:-true}
       - FP_ASYNC_RUNTIME=${FP_ASYNC_RUNTIME:-true}
       - FP_INTERPRETER_STATS=${FP_INTERPRETER_STATS:-true}
       - FP_DEBUG_MODE=${FP_DEBUG_MODE:-false}
+      # Performance Monitoring Configuration
+      - ENABLE_MONITORING=${ENABLE_MONITORING:-true}
+      - MONITOR_INTERVAL=${MONITOR_INTERVAL:-30}
+      - METRICS_PORT=${METRICS_PORT:-9091}
+      - CONTAINER_NAME=ai-trading-bot
+      - ALERT_CPU_WARNING=${ALERT_CPU_WARNING:-70}
+      - ALERT_CPU_CRITICAL=${ALERT_CPU_CRITICAL:-85}
+      - ALERT_MEMORY_WARNING=${ALERT_MEMORY_WARNING:-75}
+      - ALERT_MEMORY_CRITICAL=${ALERT_MEMORY_CRITICAL:-90}
+      - ALERT_DISK_WARNING=${ALERT_DISK_WARNING:-80}
+      - ALERT_DISK_CRITICAL=${ALERT_DISK_CRITICAL:-95}
+      # Additional Concurrency Optimization Settings
+      - SYSTEM__MAX_CONCURRENT_TASKS=${SYSTEM__MAX_CONCURRENT_TASKS:-4}
+      - SYSTEM__THREAD_POOL_SIZE=${SYSTEM__THREAD_POOL_SIZE:-2}
+      - SYSTEM__ASYNC_TIMEOUT=${SYSTEM__ASYNC_TIMEOUT:-15.0}
+      - SYSTEM__TASK_BATCH_SIZE=${SYSTEM__TASK_BATCH_SIZE:-2}
       # System Configuration
       - SYSTEM__DRY_RUN=${SYSTEM__DRY_RUN:-true}   # PAPER TRADING MODE - SAFE (MAINNET DATA)
       - SYSTEM__ENVIRONMENT=${SYSTEM__ENVIRONMENT:-development}  # Development environment for paper trading
@@ -240,15 +256,15 @@ services:
       retries: 3
       start_period: 30s
 
-    # Ubuntu-optimized resource limits
+    # Single-core optimized resource limits
     deploy:
       resources:
         limits:
-          memory: 1.5G      # Increased for Ubuntu optimization
-          cpus: '0.8'       # Increased for Ubuntu processes
+          memory: 1G        # Primary service gets largest allocation
+          cpus: '0.5'       # Single-core optimization: 50% allocation
         reservations:
-          memory: 768M      # Higher baseline for Ubuntu
-          cpus: '0.4'       # Higher baseline for Ubuntu processes
+          memory: 512M      # Reduced baseline for single-core
+          cpus: '0.2'       # Reasonable baseline for primary service
 
     # Logging configuration
     logging:
@@ -306,11 +322,16 @@ services:
       - TAVILY_API_KEY=${TAVILY_API_KEY:-}
       - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY:-}
       - KAGI_API_KEY=${KAGI_API_KEY:-}
-      - JINA_AI_API_KEY=${JINA_AI_API_KEY:-}
+      - JINA_AI_API_KEY=${JINA_AI_KEY:-}
       - BRAVE_API_KEY=${BRAVE_API_KEY:-}
       - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY:-}
       - MCP_SERVER_PORT=${MCP_SERVER_PORT:-8767}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Performance Monitoring Configuration
+      - ENABLE_MONITORING=${ENABLE_MONITORING:-true}
+      - MONITOR_INTERVAL=${MONITOR_INTERVAL:-30}
+      - METRICS_PORT=${METRICS_PORT:-9093}
+      - CONTAINER_NAME=mcp-omnisearch
 
     env_file:
       - path: .env
@@ -338,11 +359,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 768M      # Increased for Ubuntu optimization
-          cpus: '0.4'       # Increased for Ubuntu processes
+          memory: 384M      # Optimized for single-core deployment
+          cpus: '0.1'       # Single-core optimization: 10% allocation
         reservations:
-          memory: 384M      # Increased baseline for Ubuntu
-          cpus: '0.15'      # Higher baseline for Ubuntu
+          memory: 192M      # Reduced baseline for single-core
+          cpus: '0.03'      # Minimal baseline for single-core
 
     logging:
       driver: "json-file"
@@ -405,11 +426,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 768M      # Increased for Ubuntu optimization
-          cpus: '0.4'       # Increased for Ubuntu processes
+          memory: 384M      # Optimized for single-core deployment
+          cpus: '0.1'       # Single-core optimization: 10% allocation
         reservations:
-          memory: 384M      # Increased baseline for Ubuntu
-          cpus: '0.15'      # Higher baseline for Ubuntu
+          memory: 192M      # Reduced baseline for single-core
+          cpus: '0.03'      # Minimal baseline for single-core
 
     logging:
       driver: "json-file"
@@ -450,6 +471,8 @@ services:
       # Access to LLM completion logs for dashboard analytics
       - ./logs:/app/llm-logs:ro
       - ./logs:/app/decision-logs:ro
+      # Performance monitoring scripts
+      - ./scripts:/app/scripts:ro
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
@@ -473,6 +496,15 @@ services:
       - BLUEFIN_SERVICE_API_KEY=${BLUEFIN_SERVICE_API_KEY:-}
       # Exchange type for dashboard configuration (matches trading bot configuration)
       - EXCHANGE__EXCHANGE_TYPE=${EXCHANGE__EXCHANGE_TYPE:-bluefin}
+      # Performance Monitoring Configuration
+      - ENABLE_MONITORING=${ENABLE_MONITORING:-true}
+      - MONITOR_INTERVAL=${MONITOR_INTERVAL:-30}
+      - METRICS_PORT=${METRICS_PORT:-9092}
+      - CONTAINER_NAME=dashboard-backend
+      - ALERT_CPU_WARNING=${ALERT_CPU_WARNING:-70}
+      - ALERT_CPU_CRITICAL=${ALERT_CPU_CRITICAL:-85}
+      - ALERT_MEMORY_WARNING=${ALERT_MEMORY_WARNING:-75}
+      - ALERT_MEMORY_CRITICAL=${ALERT_MEMORY_CRITICAL:-90}
     restart: unless-stopped
     depends_on:
       bluefin-service:
@@ -492,11 +524,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 768M      # Increased for Ubuntu optimization
-          cpus: '0.4'       # Increased for Ubuntu processes
+          memory: 384M      # Optimized for single-core deployment
+          cpus: '0.1'       # Single-core optimization: 10% allocation
         reservations:
-          memory: 384M      # Increased baseline for Ubuntu
-          cpus: '0.15'      # Higher baseline for Ubuntu
+          memory: 192M      # Reduced baseline for single-core
+          cpus: '0.03'      # Minimal baseline for single-core
     logging:
       driver: "json-file"
       options:
@@ -547,11 +579,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
-          cpus: '0.5'
+          memory: 256M      # Optimized for single-core deployment
+          cpus: '0.08'      # Single-core optimization: 8% allocation
         reservations:
-          memory: 512M
-          cpus: '0.2'
+          memory: 128M      # Reduced baseline for single-core
+          cpus: '0.02'      # Minimal baseline for single-core
     logging:
       driver: "json-file"
       options:
@@ -604,11 +636,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
-          cpus: '0.2'
+          memory: 128M      # Optimized for single-core deployment
+          cpus: '0.05'      # Single-core optimization: 5% allocation
         reservations:
-          memory: 128M
-          cpus: '0.1'
+          memory: 64M       # Reduced baseline for single-core
+          cpus: '0.01'      # Minimal baseline for single-core
     logging:
       driver: "json-file"
       options:
@@ -663,11 +695,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 64M
-          cpus: '0.1'
+          memory: 32M       # Optimized for single-core deployment
+          cpus: '0.02'      # Single-core optimization: 2% allocation
         reservations:
-          memory: 32M
-          cpus: '0.05'
+          memory: 16M       # Reduced baseline for single-core
+          cpus: '0.005'     # Minimal baseline for single-core
     logging:
       driver: "json-file"
       options:

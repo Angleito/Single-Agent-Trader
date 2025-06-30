@@ -36,6 +36,18 @@ from .base import (
 )
 from .bluefin_fee_calculator import BluefinFeeCalculator, BluefinFees
 
+# Import volume-weighted calculations
+try:
+    from bot.fp.strategies.market_making import calculate_volume_weighted_spread
+
+    VOLUME_CALCULATIONS_AVAILABLE = True
+except ImportError:
+    VOLUME_CALCULATIONS_AVAILABLE = False
+
+    def calculate_volume_weighted_spread(*args, **kwargs):
+        return 0.0
+
+
 # Import order signature system
 try:
     from .bluefin_order_signature import (
@@ -2182,106 +2194,137 @@ class BluefinClient(BaseExchange):
         bluefin_symbol = self._convert_symbol(symbol)
 
         try:
-            # Try to get order book from service
-            if self._service_client and hasattr(self._service_client, "get_order_book"):
-                order_book = await self._service_client.get_order_book(
-                    bluefin_symbol, depth=levels
+            # Get order book from service client
+            if not self._service_client:
+                raise ExchangeConnectionError("Service client not available")
+
+            if not hasattr(self._service_client, "get_order_book"):
+                raise ExchangeConnectionError(
+                    "Service client does not support order book retrieval"
                 )
 
-                if order_book:
-                    bids = order_book.get("bids", [])[:levels]
-                    asks = order_book.get("asks", [])[:levels]
+            logger.debug(
+                "Fetching order book for %s with %d levels", bluefin_symbol, levels
+            )
 
-                    # Calculate depth metrics
-                    bid_volume = sum(Decimal(str(bid[1])) for bid in bids)
-                    ask_volume = sum(Decimal(str(ask[1])) for ask in asks)
-                    total_volume = bid_volume + ask_volume
+            order_book = await self._service_client.get_order_book(
+                bluefin_symbol, depth=levels
+            )
 
-                    # Calculate weighted average prices
-                    if bids:
-                        weighted_bid = (
-                            sum(
-                                Decimal(str(bid[0])) * Decimal(str(bid[1]))
-                                for bid in bids
-                            )
-                            / bid_volume
-                            if bid_volume > 0
-                            else Decimal(0)
-                        )
-                    else:
-                        weighted_bid = Decimal(0)
+            if not order_book:
+                raise ExchangeOrderError(
+                    f"No order book data received for {bluefin_symbol}"
+                )
 
-                    if asks:
-                        weighted_ask = (
-                            sum(
-                                Decimal(str(ask[0])) * Decimal(str(ask[1]))
-                                for ask in asks
-                            )
-                            / ask_volume
-                            if ask_volume > 0
-                            else Decimal(0)
-                        )
-                    else:
-                        weighted_ask = Decimal(0)
+            # Extract bids and asks from the standardized format
+            bids_data = order_book.get("bids", [])[:levels]
+            asks_data = order_book.get("asks", [])[:levels]
 
-                    # Cache the data
-                    self._order_book_cache[bluefin_symbol] = {
-                        "timestamp": datetime.now(UTC),
-                        "bids": bids,
-                        "asks": asks,
-                        "bid_volume": bid_volume,
-                        "ask_volume": ask_volume,
-                        "total_volume": total_volume,
-                        "weighted_bid": weighted_bid,
-                        "weighted_ask": weighted_ask,
-                        "imbalance": (
-                            (bid_volume - ask_volume) / total_volume
-                            if total_volume > 0
-                            else Decimal(0)
-                        ),
-                    }
+            # Convert to expected format [price, quantity] for compatibility
+            bids = []
+            asks = []
 
-                    return self._order_book_cache[bluefin_symbol]
+            for bid_entry in bids_data:
+                if isinstance(bid_entry, dict):
+                    bids.append([bid_entry["price"], bid_entry["quantity"]])
+                elif isinstance(bid_entry, (list, tuple)) and len(bid_entry) >= 2:
+                    bids.append([float(bid_entry[0]), float(bid_entry[1])])
 
-            # Fallback: create mock order book for paper trading
-            ticker = await self._service_client.get_market_ticker(bluefin_symbol)
-            current_price = Decimal(str(ticker.get("price", "100")))
+            for ask_entry in asks_data:
+                if isinstance(ask_entry, dict):
+                    asks.append([ask_entry["price"], ask_entry["quantity"]])
+                elif isinstance(ask_entry, (list, tuple)) and len(ask_entry) >= 2:
+                    asks.append([float(ask_entry[0]), float(ask_entry[1])])
 
-            # Generate mock order book around current price
-            mock_bids = []
-            mock_asks = []
+            if not bids and not asks:
+                raise ExchangeOrderError(
+                    f"Empty order book received for {bluefin_symbol}"
+                )
 
-            for i in range(levels):
-                bid_price = current_price * (
-                    1 - Decimal(str((i + 1) * 0.001))
-                )  # 0.1% increments
-                ask_price = current_price * (1 + Decimal(str((i + 1) * 0.001)))
+            # Calculate depth metrics
+            bid_volume = sum(Decimal(str(bid[1])) for bid in bids)
+            ask_volume = sum(Decimal(str(ask[1])) for ask in asks)
+            total_volume = bid_volume + ask_volume
 
-                # Mock volume decreasing with distance
-                volume = Decimal(str(100 / (i + 1)))
+            # Calculate weighted average prices
+            if bids and bid_volume > 0:
+                weighted_bid = (
+                    sum(Decimal(str(bid[0])) * Decimal(str(bid[1])) for bid in bids)
+                    / bid_volume
+                )
+            else:
+                weighted_bid = Decimal(0)
 
-                mock_bids.append([float(bid_price), float(volume)])
-                mock_asks.append([float(ask_price), float(volume)])
+            if asks and ask_volume > 0:
+                weighted_ask = (
+                    sum(Decimal(str(ask[0])) * Decimal(str(ask[1])) for ask in asks)
+                    / ask_volume
+                )
+            else:
+                weighted_ask = Decimal(0)
 
-            mock_data = {
-                "timestamp": datetime.now(UTC),
-                "bids": mock_bids,
-                "asks": mock_asks,
-                "bid_volume": Decimal(250),  # Mock total volumes
-                "ask_volume": Decimal(250),
-                "total_volume": Decimal(500),
-                "weighted_bid": current_price * Decimal("0.9995"),
-                "weighted_ask": current_price * Decimal("1.0005"),
-                "imbalance": Decimal(0),  # Balanced
+            # Calculate market imbalance
+            imbalance = (
+                (bid_volume - ask_volume) / total_volume
+                if total_volume > 0
+                else Decimal(0)
+            )
+
+            # Calculate volume-weighted spread if available
+            volume_weighted_spread = Decimal(0)
+            if VOLUME_CALCULATIONS_AVAILABLE and bids and asks:
+                try:
+                    # Convert to format expected by volume calculation function
+                    bid_tuples = [(float(bid[0]), float(bid[1])) for bid in bids]
+                    ask_tuples = [(float(ask[0]), float(ask[1])) for ask in asks]
+                    vw_spread = calculate_volume_weighted_spread(bid_tuples, ask_tuples)
+                    volume_weighted_spread = Decimal(str(vw_spread))
+                except Exception as e:
+                    logger.debug("Failed to calculate volume-weighted spread: %s", e)
+
+            # Use timestamp from order book or current time
+            timestamp = (
+                datetime.fromtimestamp(order_book.get("timestamp", time.time()), tz=UTC)
+                if order_book.get("timestamp")
+                else datetime.now(UTC)
+            )
+
+            # Cache the processed data with enhanced volume metrics
+            processed_data = {
+                "timestamp": timestamp,
+                "bids": bids,
+                "asks": asks,
+                "bid_volume": bid_volume,
+                "ask_volume": ask_volume,
+                "total_volume": total_volume,
+                "weighted_bid": weighted_bid,
+                "weighted_ask": weighted_ask,
+                "imbalance": imbalance,
+                "volume_weighted_spread": volume_weighted_spread,
+                "liquidity_score": min(
+                    float(total_volume) / 10000.0, 1.0
+                ),  # Normalize liquidity score
             }
 
-            self._order_book_cache[bluefin_symbol] = mock_data
-            return mock_data
+            self._order_book_cache[bluefin_symbol] = processed_data
 
-        except Exception:
-            logger.exception("Failed to get order book depth for %s", bluefin_symbol)
-            # Return empty order book on error
-            return {
+            logger.info(
+                "Order book depth retrieved for %s: %d bids, %d asks, total volume: %s",
+                bluefin_symbol,
+                len(bids),
+                len(asks),
+                total_volume,
+            )
+
+            return processed_data
+
+        except Exception as e:
+            logger.error(
+                "Failed to get order book depth for %s: %s", bluefin_symbol, str(e)
+            )
+
+            # Return empty order book on error to maintain interface compatibility
+            empty_data = {
                 "timestamp": datetime.now(UTC),
                 "bids": [],
                 "asks": [],
@@ -2292,6 +2335,9 @@ class BluefinClient(BaseExchange):
                 "weighted_ask": Decimal(0),
                 "imbalance": Decimal(0),
             }
+
+            # Don't cache empty data
+            return empty_data
 
     async def estimate_market_impact(self, symbol: str, quantity: Decimal) -> dict:
         """

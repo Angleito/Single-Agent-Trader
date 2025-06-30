@@ -1,13 +1,11 @@
 # Dockerfile for MCP Memory Server
-FROM --platform=linux/amd64 python:3.12-slim
+FROM python:3.12-alpine
 
 # Set working directory
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache curl
 
 # Copy requirements first for better caching
 COPY requirements.txt .
@@ -22,7 +20,8 @@ COPY . .
 RUN mkdir -p /app/data /app/logs
 
 # Create non-root user for security
-RUN useradd -m -u 1000 memoryserver && \
+RUN addgroup -g 1000 memoryserver && \
+    adduser -u 1000 -G memoryserver -s /bin/sh -D memoryserver && \
     chown -R memoryserver:memoryserver /app
 
 # Switch to non-root user

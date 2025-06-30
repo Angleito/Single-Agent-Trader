@@ -835,12 +835,64 @@ class BluefinMarketDataProvider:
 
         try:
             # Fetch real orderbook from Bluefin service
-            # TODO: Implement real orderbook fetching from Bluefin service
-            logger.warning("Real-time orderbook data not yet implemented for Bluefin")
-        except Exception:
-            logger.exception("Error fetching orderbook")
-            return None
-        else:
+            from bot.exchange.bluefin_service_client import BluefinServiceClient
+
+            # Get the correct service URL and API key for connection
+            service_url = os.getenv(
+                "BLUEFIN_SERVICE_URL", "http://bluefin-service:8080"
+            )
+            api_key = os.getenv("BLUEFIN_SERVICE_API_KEY")
+
+            logger.debug(
+                "🔗 Fetching orderbook from Bluefin service at %s (has_api_key: %s)",
+                service_url,
+                bool(api_key),
+            )
+
+            async with BluefinServiceClient(service_url, api_key) as service_client:
+                # Convert level to depth for service client
+                # (level 2 = depth 10 is reasonable default)
+                depth = max(10, level * 5)  # Ensure minimum useful depth
+
+                orderbook_data = await service_client.get_order_book(
+                    self.symbol, depth=depth
+                )
+
+                # Enhanced response validation
+                if not self._validate_api_response_structure(
+                    orderbook_data, "orderbook"
+                ):
+                    logger.warning(
+                        "Invalid orderbook response structure for %s: %s",
+                        self.symbol,
+                        orderbook_data,
+                    )
+                    return None
+
+                # Standardize orderbook format
+                standardized_orderbook = {
+                    "symbol": self.symbol,
+                    "bids": orderbook_data.get("bids", []),
+                    "asks": orderbook_data.get("asks", []),
+                    "timestamp": orderbook_data.get("timestamp", 0),
+                    "level": level,
+                }
+
+                # Cache the orderbook data with TTL
+                self._orderbook_cache[cache_key] = standardized_orderbook
+                self._cache_timestamps[cache_key] = datetime.now(UTC)
+
+                logger.debug(
+                    "✅ Successfully fetched orderbook for %s: %d bids, %d asks",
+                    self.symbol,
+                    len(standardized_orderbook["bids"]),
+                    len(standardized_orderbook["asks"]),
+                )
+
+                return standardized_orderbook
+
+        except Exception as e:
+            logger.exception("Error fetching orderbook for %s: %s", self.symbol, str(e))
             return None
 
     def get_latest_ohlcv(self, limit: int | None = None) -> list[MarketData]:
@@ -3033,6 +3085,44 @@ class BluefinMarketDataProvider:
                 ):
                     logger.error("Invalid ticker response: missing price information")
                     return False
+
+            elif endpoint_type == "orderbook":
+                # Expect dict with bids and asks
+                if not isinstance(response_data, dict):
+                    logger.error(
+                        "Invalid orderbook response: expected dict, got %s",
+                        type(response_data),
+                    )
+                    return False
+
+                # Check for essential orderbook fields
+                required_fields = ["bids", "asks"]
+                for field in required_fields:
+                    if field not in response_data:
+                        logger.error(
+                            "Invalid orderbook response: missing required field '%s'",
+                            field,
+                        )
+                        return False
+
+                # Validate bids and asks are lists
+                for side in ["bids", "asks"]:
+                    if not isinstance(response_data[side], list):
+                        logger.error(
+                            "Invalid orderbook response: '%s' should be a list, got %s",
+                            side,
+                            type(response_data[side]),
+                        )
+                        return False
+
+                # Check if at least one side has data (empty orderbook is still valid)
+                total_levels = len(response_data["bids"]) + len(response_data["asks"])
+                logger.debug(
+                    "Orderbook validation: %d bids, %d asks, %d total levels",
+                    len(response_data["bids"]),
+                    len(response_data["asks"]),
+                    total_levels,
+                )
 
             return True
 

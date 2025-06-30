@@ -1,0 +1,133 @@
+# Slim Trading Bot Dockerfile - Memory Optimized
+# Ultra-lightweight Alpine build for production deployment
+
+# Multi-stage build for minimal final image
+FROM --platform=linux/amd64 python:3.12-alpine AS builder
+
+# Build arguments
+ARG BUILD_DATE
+ARG VCS_REF
+ARG VERSION=0.1.0
+ARG EXCHANGE_TYPE=coinbase
+
+# Alpine environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
+# Install only essential build dependencies
+RUN apk add --no-cache --virtual .build-deps \
+    gcc \
+    g++ \
+    make \
+    musl-dev \
+    python3-dev \
+    libffi-dev \
+    openssl-dev \
+    # Math libraries for numpy (minimal)
+    openblas-dev \
+    # Compression for minimal image
+    zlib-dev
+
+# Set working directory
+WORKDIR /app
+
+# Copy minimal requirements
+COPY requirements-minimal.txt ./
+
+# Install Python dependencies with optimizations
+RUN pip install --no-cache-dir -r requirements-minimal.txt \
+    && find /usr/local/lib/python3.12/site-packages -name "*.pyc" -delete \
+    && find /usr/local/lib/python3.12/site-packages -name "__pycache__" -type d -exec rm -rf {} + \
+    && find /usr/local/lib/python3.12/site-packages -name "*.so" -exec strip {} + \
+    && apk del .build-deps
+
+# Production stage - minimal runtime
+FROM --platform=linux/amd64 python:3.12-alpine AS production
+
+# Copy build arguments
+ARG BUILD_DATE
+ARG VCS_REF
+ARG VERSION=0.1.0
+ARG EXCHANGE_TYPE=coinbase
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+
+# Minimal runtime environment
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    PYTHONPATH="/app" \
+    APP_VERSION=${VERSION} \
+    EXCHANGE__EXCHANGE_TYPE=${EXCHANGE_TYPE} \
+    # Memory optimization flags
+    MALLOC_TRIM_THRESHOLD_=100000 \
+    PYTHONMALLOC=malloc
+
+# Install only essential runtime libraries
+RUN apk add --no-cache \
+    ca-certificates \
+    libssl1.1 \
+    openblas \
+    libgcc \
+    libstdc++ \
+    # Minimal system utilities
+    curl
+
+# Create non-root user
+RUN addgroup -g ${GROUP_ID} botuser && \
+    adduser -u ${USER_ID} -G botuser -s /bin/sh -D botuser
+
+# Set working directory
+WORKDIR /app
+
+# Copy Python packages from builder
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy only essential application files
+COPY --chown=${USER_ID}:${GROUP_ID} bot/main.py ./bot/
+COPY --chown=${USER_ID}:${GROUP_ID} bot/config.py ./bot/
+COPY --chown=${USER_ID}:${GROUP_ID} bot/exchange/ ./bot/exchange/
+COPY --chown=${USER_ID}:${GROUP_ID} bot/trading_types.py ./bot/
+COPY --chown=${USER_ID}:${GROUP_ID} bot/risk/ ./bot/risk/
+COPY --chown=${USER_ID}:${GROUP_ID} bot/types/ ./bot/types/
+COPY --chown=${USER_ID}:${GROUP_ID} bot/utils/ ./bot/utils/
+COPY --chown=${USER_ID}:${GROUP_ID} bot/validation/ ./bot/validation/
+
+# Create minimal directory structure
+RUN mkdir -p \
+    /app/config \
+    /app/logs \
+    /app/data \
+    /app/tmp && \
+    chown -R ${USER_ID}:${GROUP_ID} /app && \
+    chmod 755 /app
+
+# Copy minimal health check
+COPY --chown=${USER_ID}:${GROUP_ID} healthcheck-slim.sh /app/healthcheck.sh
+RUN chmod +x /app/healthcheck.sh
+
+# Switch to non-root user
+USER ${USER_ID}:${GROUP_ID}
+
+# Health check
+HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
+    CMD ["/app/healthcheck.sh"]
+
+# Expose minimal port
+EXPOSE 8080
+
+# Optimized entry point
+CMD ["python", "-O", "-m", "bot.main", "live", "--dry-run"]
+
+# Minimal labels
+LABEL org.opencontainers.image.title="AI Trading Bot Slim" \
+      org.opencontainers.image.description="Memory-optimized trading bot" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      maintainer="ai-trading-bot-slim"

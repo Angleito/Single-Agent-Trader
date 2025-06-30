@@ -111,6 +111,7 @@ class BluefinWebSocketClient:
         on_account_update: Callable[[dict], None | Awaitable[None]] | None = None,
         on_position_update: Callable[[dict], None | Awaitable[None]] | None = None,
         on_order_update: Callable[[dict], None | Awaitable[None]] | None = None,
+        on_orderbook_update: Callable[[dict], None | Awaitable[None]] | None = None,
     ):
         """
         Initialize the Bluefin WebSocket client.
@@ -128,6 +129,7 @@ class BluefinWebSocketClient:
             on_account_update: Callback for account balance updates
             on_position_update: Callback for position updates
             on_order_update: Callback for order status updates
+            on_orderbook_update: Callback for orderbook/depth updates
         """
         self.symbol = symbol
         self.interval = interval
@@ -141,6 +143,7 @@ class BluefinWebSocketClient:
         self.on_account_update = on_account_update
         self.on_position_update = on_position_update
         self.on_order_update = on_order_update
+        self.on_orderbook_update = on_orderbook_update
         self._auth_token = auth_token  # Static token (deprecated)
 
         # Initialize authenticator if private key provided
@@ -221,6 +224,16 @@ class BluefinWebSocketClient:
         # Message validation tracking
         self._invalid_message_counter: dict[str, int] = {}
         self._rate_limit_invalid_messages = 10
+
+        # Orderbook state management
+        self._orderbook_bids: dict[str, dict[str, Any]] = (
+            {}
+        )  # price -> {size, timestamp}
+        self._orderbook_asks: dict[str, dict[str, Any]] = (
+            {}
+        )  # price -> {size, timestamp}
+        self._orderbook_snapshot_received = False
+        self._last_orderbook_update: datetime | None = None
 
         logger.info(
             "Initialized BluefinWebSocketClient for %s with %s candles on %s network (auth: %s, private: %s)",
@@ -835,6 +848,9 @@ class BluefinWebSocketClient:
                 # Still subscribe to trades for enhanced price updates
                 await self._subscribe_to_trades()
 
+            # Always subscribe to orderbook updates for market depth
+            await self._subscribe_to_orderbook()
+
         except Exception as e:
             exception_handler.log_exception_with_context(
                 e,
@@ -910,6 +926,32 @@ class BluefinWebSocketClient:
                 },
                 component="BluefinWebSocketClient",
                 operation="subscribe_to_trades",
+            )
+            raise
+
+    async def _subscribe_to_orderbook(self) -> None:
+        """Subscribe to orderbook/depth data for real-time order book updates using Socket.IO array format."""
+        try:
+            orderbook_subscription = [
+                "SUBSCRIBE",
+                [{"e": "orderbook", "p": self.symbol, "t": self.auth_token}],
+            ]
+            channel_key = f"orderbook:{self.symbol}"
+            self._subscribed_channels.add(channel_key)
+            await self._send_message(orderbook_subscription)
+            logger.info(
+                "Subscribing to orderbook data for %s using Socket.IO format",
+                self.symbol,
+            )
+        except Exception as e:
+            exception_handler.log_exception_with_context(
+                e,
+                {
+                    "symbol": self.symbol,
+                    "orderbook_subscription_error": True,
+                },
+                component="BluefinWebSocketClient",
+                operation="subscribe_to_orderbook",
             )
             raise
 
@@ -1286,7 +1328,31 @@ class BluefinWebSocketClient:
         self, data: dict[str, Any] | list[Any]
     ) -> None:
         """Handle Socket.IO orderbook updates."""
-        logger.debug("Received Socket.IO orderbook update for %s", self.symbol)
+        try:
+            logger.debug("Processing Socket.IO orderbook update for %s", self.symbol)
+
+            # Handle different data formats
+            orderbook_data = []
+            if isinstance(data, list):
+                orderbook_data = data
+            elif isinstance(data, dict):
+                # Check if data is wrapped in a 'data' field
+                if "data" in data:
+                    inner_data = data["data"]
+                    if isinstance(inner_data, list):
+                        orderbook_data = inner_data
+                    else:
+                        orderbook_data = [inner_data]
+                else:
+                    orderbook_data = [data]
+
+            # Process each orderbook update
+            for book_data in orderbook_data:
+                if isinstance(book_data, dict):
+                    await self._process_orderbook_data(book_data)
+
+        except Exception as e:
+            logger.exception("Error processing Socket.IO orderbook update: %s", e)
 
     async def _handle_socketio_user_updates(
         self, data: dict[str, Any] | list[Any]
@@ -1648,16 +1714,224 @@ class BluefinWebSocketClient:
                 operation="handle_ticker_update",
             )
 
-    async def _handle_orderbook_update(self, _data: dict[str, Any]) -> None:
+    async def _handle_orderbook_update(self, data: dict[str, Any]) -> None:
         """
         Handle orderbook updates.
 
         Args:
             data: Orderbook message data
         """
-        # For now, just log that we received orderbook data
-        # Full orderbook handling can be implemented if needed
-        logger.debug("Received orderbook update for %s", self.symbol)
+        try:
+            logger.debug("Processing orderbook update for %s", self.symbol)
+            await self._process_orderbook_data(data)
+        except Exception as e:
+            logger.exception("Error processing orderbook update: %s", e)
+
+    async def _process_orderbook_data(self, data: dict[str, Any]) -> None:
+        """
+        Process orderbook data and update internal state.
+
+        Args:
+            data: Orderbook update data
+        """
+        try:
+            # Validate symbol matches
+            symbol = data.get("symbol", data.get("s", data.get("p", "")))
+            if symbol and symbol != self.symbol:
+                logger.debug(
+                    "Ignoring orderbook update for different symbol: %s", symbol
+                )
+                return
+
+            # Extract orderbook data
+            bids = data.get("bids", data.get("b", []))
+            asks = data.get("asks", data.get("a", []))
+
+            # Check if this is a snapshot or update
+            is_snapshot = data.get("type") == "snapshot" or data.get("snapshot", False)
+
+            # Update timestamp
+            self._last_orderbook_update = datetime.now(UTC)
+
+            # Process bids and asks
+            if bids:
+                await self._update_orderbook_side(bids, "bids", is_snapshot)
+            if asks:
+                await self._update_orderbook_side(asks, "asks", is_snapshot)
+
+            # Mark snapshot as received
+            if is_snapshot:
+                self._orderbook_snapshot_received = True
+                logger.info("Received orderbook snapshot for %s", self.symbol)
+
+            # Create orderbook update structure
+            orderbook_update = {
+                "symbol": self.symbol,
+                "timestamp": self._last_orderbook_update.isoformat(),
+                "bids": self._get_top_orderbook_levels("bids", 10),
+                "asks": self._get_top_orderbook_levels("asks", 10),
+                "snapshot": is_snapshot,
+                "best_bid": self._get_best_bid(),
+                "best_ask": self._get_best_ask(),
+                "spread": self._calculate_spread(),
+            }
+
+            # Call orderbook callback if configured
+            if self.on_orderbook_update:
+                if asyncio.iscoroutinefunction(self.on_orderbook_update):
+                    await self.on_orderbook_update(orderbook_update)
+                else:
+                    self.on_orderbook_update(orderbook_update)
+
+            logger.debug(
+                "Processed orderbook update for %s - bids: %d, asks: %d, spread: %s",
+                self.symbol,
+                len(self._orderbook_bids),
+                len(self._orderbook_asks),
+                orderbook_update["spread"],
+            )
+
+        except Exception as e:
+            logger.exception("Error processing orderbook data: %s", e)
+
+    async def _update_orderbook_side(
+        self, levels: list[Any], side: str, is_snapshot: bool
+    ) -> None:
+        """
+        Update one side of the orderbook (bids or asks).
+
+        Args:
+            levels: List of price/size levels
+            side: "bids" or "asks"
+            is_snapshot: Whether this is a full snapshot
+        """
+        try:
+            target_dict = (
+                self._orderbook_bids if side == "bids" else self._orderbook_asks
+            )
+
+            # Clear existing data for snapshots
+            if is_snapshot:
+                target_dict.clear()
+
+            # Process each level
+            for level in levels:
+                price_str, size_str = None, None
+
+                # Handle different formats
+                if isinstance(level, list) and len(level) >= 2:
+                    price_str, size_str = str(level[0]), str(level[1])
+                elif isinstance(level, dict):
+                    price_str = str(level.get("price", level.get("p", "")))
+                    size_str = str(
+                        level.get(
+                            "size",
+                            level.get("s", level.get("quantity", level.get("q", ""))),
+                        )
+                    )
+
+                if price_str and size_str:
+                    try:
+                        size = float(size_str)
+
+                        # Remove level if size is 0
+                        if size == 0:
+                            target_dict.pop(price_str, None)
+                        else:
+                            # Update level
+                            target_dict[price_str] = {
+                                "size": size,
+                                "timestamp": datetime.now(UTC),
+                            }
+                    except (ValueError, TypeError):
+                        logger.debug(
+                            "Invalid price/size format: %s/%s", price_str, size_str
+                        )
+
+        except Exception as e:
+            logger.exception("Error updating orderbook side %s: %s", side, e)
+
+    def _get_top_orderbook_levels(
+        self, side: str, limit: int = 10
+    ) -> list[dict[str, Any]]:
+        """
+        Get top N levels from orderbook side.
+
+        Args:
+            side: "bids" or "asks"
+            limit: Maximum number of levels to return
+
+        Returns:
+            List of price/size levels
+        """
+        try:
+            source_dict = (
+                self._orderbook_bids if side == "bids" else self._orderbook_asks
+            )
+
+            # Sort prices (descending for bids, ascending for asks)
+            sorted_prices = sorted(
+                source_dict.keys(), key=lambda x: float(x), reverse=(side == "bids")
+            )
+
+            # Return top levels
+            levels = []
+            for price_str in sorted_prices[:limit]:
+                level_data = source_dict[price_str]
+                levels.append(
+                    {
+                        "price": float(price_str),
+                        "size": level_data["size"],
+                        "timestamp": level_data["timestamp"].isoformat(),
+                    }
+                )
+
+            return levels
+
+        except Exception as e:
+            logger.exception("Error getting top orderbook levels for %s: %s", side, e)
+            return []
+
+    def _get_best_bid(self) -> float | None:
+        """Get best bid price."""
+        try:
+            if not self._orderbook_bids:
+                return None
+            best_price_str = max(self._orderbook_bids.keys(), key=lambda x: float(x))
+            return float(best_price_str)
+        except (ValueError, TypeError):
+            return None
+
+    def _get_best_ask(self) -> float | None:
+        """Get best ask price."""
+        try:
+            if not self._orderbook_asks:
+                return None
+            best_price_str = min(self._orderbook_asks.keys(), key=lambda x: float(x))
+            return float(best_price_str)
+        except (ValueError, TypeError):
+            return None
+
+    def _calculate_spread(self) -> dict[str, Any]:
+        """Calculate bid-ask spread."""
+        try:
+            best_bid = self._get_best_bid()
+            best_ask = self._get_best_ask()
+
+            if best_bid is None or best_ask is None:
+                return {"absolute": None, "percentage": None}
+
+            absolute_spread = best_ask - best_bid
+            percentage_spread = (
+                (absolute_spread / best_ask) * 100 if best_ask > 0 else None
+            )
+
+            return {
+                "absolute": absolute_spread,
+                "percentage": percentage_spread,
+            }
+        except Exception:
+            return {"absolute": None, "percentage": None}
 
     async def _handle_bluefin_ticker_update(self, data: dict[str, Any]) -> None:
         """
@@ -2706,6 +2980,66 @@ class BluefinWebSocketClient:
 
         return ticks
 
+    def get_orderbook(self, limit: int = 10) -> dict[str, Any]:
+        """
+        Get current orderbook state.
+
+        Args:
+            limit: Maximum number of levels per side to return
+
+        Returns:
+            Orderbook dictionary with bids, asks, and spread information
+        """
+        return {
+            "symbol": self.symbol,
+            "timestamp": (
+                self._last_orderbook_update.isoformat()
+                if self._last_orderbook_update
+                else None
+            ),
+            "bids": self._get_top_orderbook_levels("bids", limit),
+            "asks": self._get_top_orderbook_levels("asks", limit),
+            "best_bid": self._get_best_bid(),
+            "best_ask": self._get_best_ask(),
+            "spread": self._calculate_spread(),
+            "snapshot_received": self._orderbook_snapshot_received,
+            "total_bid_levels": len(self._orderbook_bids),
+            "total_ask_levels": len(self._orderbook_asks),
+        }
+
+    def get_best_prices(self) -> dict[str, float | None]:
+        """
+        Get best bid and ask prices.
+
+        Returns:
+            Dictionary with best_bid and best_ask prices
+        """
+        return {
+            "best_bid": self._get_best_bid(),
+            "best_ask": self._get_best_ask(),
+        }
+
+    def get_spread_info(self) -> dict[str, Any]:
+        """
+        Get spread information.
+
+        Returns:
+            Dictionary with spread data
+        """
+        spread_data = self._calculate_spread()
+        best_bid = self._get_best_bid()
+        best_ask = self._get_best_ask()
+
+        return {
+            "best_bid": best_bid,
+            "best_ask": best_ask,
+            "absolute_spread": spread_data["absolute"],
+            "percentage_spread": spread_data["percentage"],
+            "mid_price": (
+                ((best_bid + best_ask) / 2) if (best_bid and best_ask) else None
+            ),
+        }
+
     async def refresh_authentication(self) -> bool:
         """
         Refresh authentication token and re-subscribe to private channels.
@@ -2842,6 +3176,17 @@ class BluefinWebSocketClient:
             "authentication_status": (
                 self._authenticator.get_status() if self._authenticator else None
             ),
+            # Orderbook status
+            "orderbook_snapshot_received": self._orderbook_snapshot_received,
+            "orderbook_bid_levels": len(self._orderbook_bids),
+            "orderbook_ask_levels": len(self._orderbook_asks),
+            "last_orderbook_update": (
+                self._last_orderbook_update.isoformat()
+                if self._last_orderbook_update
+                else None
+            ),
+            "best_bid": self._get_best_bid(),
+            "best_ask": self._get_best_ask(),
         }
 
     def _get_next_subscription_id(self) -> int:
@@ -2933,6 +3278,21 @@ class BluefinWebSocketClient:
         # Default to current time
         return datetime.now(UTC)
 
+    @property
+    def auth_token(self) -> str | None:
+        """
+        Get authentication token for WebSocket subscriptions.
+
+        Returns:
+            Authentication token (static or from authenticator)
+        """
+        # Prefer dynamic token from authenticator if available
+        if self._authenticator and self._authenticator.is_authenticated():
+            return self._authenticator.get_token()
+
+        # Fallback to static token
+        return self._auth_token
+
 
 # Integration with BluefinMarketDataProvider
 async def integrate_websocket_with_provider(
@@ -2941,6 +3301,7 @@ async def integrate_websocket_with_provider(
     interval: str,
     use_trade_aggregation: bool = True,
     auth_token: str | None = None,
+    on_orderbook_update: Callable[[dict], None | Awaitable[None]] | None = None,
 ) -> BluefinWebSocketClient:
     """
     Create and integrate WebSocket client with BluefinMarketDataProvider.
@@ -2951,6 +3312,7 @@ async def integrate_websocket_with_provider(
         interval: Candle interval
         use_trade_aggregation: Enable trade-to-candle aggregation
         auth_token: Authentication token for Socket.IO subscriptions
+        on_orderbook_update: Callback for orderbook updates
 
     Returns:
         Connected BluefinWebSocketClient instance
@@ -2982,6 +3344,7 @@ async def integrate_websocket_with_provider(
         network=getattr(provider, "network", None),  # Pass network if available
         use_trade_aggregation=use_trade_aggregation,
         auth_token=auth_token,
+        on_orderbook_update=on_orderbook_update,
     )
 
     await ws_client.connect()

@@ -1,0 +1,124 @@
+# Makefile for Slim Trading Bot Deployment
+.PHONY: help build-slim run-slim stop-slim clean-slim memory-report size-report
+
+# Variables
+DOCKER_IMAGE = ai-trading-bot-slim
+DOCKER_TAG = latest
+BUILD_DATE := $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
+VCS_REF := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+VERSION = 0.1.0
+
+help: ## Show this help message
+	@echo "Slim Trading Bot Deployment Commands:"
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+##@ Build Commands
+
+build-slim: ## Build the slim Docker image
+	@echo "Building slim trading bot image..."
+	docker build \
+		--file Dockerfile.slim \
+		--tag $(DOCKER_IMAGE):$(DOCKER_TAG) \
+		--build-arg BUILD_DATE="$(BUILD_DATE)" \
+		--build-arg VCS_REF="$(VCS_REF)" \
+		--build-arg VERSION="$(VERSION)" \
+		--no-cache \
+		.
+	@echo "Slim image built successfully!"
+
+build-slim-cache: ## Build the slim Docker image with cache
+	@echo "Building slim trading bot image (with cache)..."
+	docker build \
+		--file Dockerfile.slim \
+		--tag $(DOCKER_IMAGE):$(DOCKER_TAG) \
+		--build-arg BUILD_DATE="$(BUILD_DATE)" \
+		--build-arg VCS_REF="$(VCS_REF)" \
+		--build-arg VERSION="$(VERSION)" \
+		.
+
+##@ Deployment Commands
+
+run-slim: ## Run the slim trading bot
+	@echo "Starting slim trading bot..."
+	docker-compose -f docker-compose.slim.yml up -d
+	@echo "Slim trading bot started!"
+
+stop-slim: ## Stop the slim trading bot
+	@echo "Stopping slim trading bot..."
+	docker-compose -f docker-compose.slim.yml down
+	@echo "Slim trading bot stopped!"
+
+restart-slim: stop-slim run-slim ## Restart the slim trading bot
+
+##@ Monitoring Commands
+
+memory-report: ## Show memory usage of running container
+	@echo "Memory usage report:"
+	@docker stats --no-stream --format "table {{.Container}}\t{{.MemUsage}}\t{{.MemPerc}}\t{{.CPUPerc}}" $(DOCKER_IMAGE) || echo "Container not running"
+
+size-report: ## Show size comparison between images
+	@echo "Docker image size comparison:"
+	@docker images | grep -E "(ai-trading-bot|REPOSITORY)" | head -10
+
+logs-slim: ## Show logs from slim container
+	docker-compose -f docker-compose.slim.yml logs -f trading-bot-slim
+
+##@ Cleanup Commands
+
+clean-slim: ## Clean up slim images and containers
+	@echo "Cleaning up slim trading bot resources..."
+	docker-compose -f docker-compose.slim.yml down --rmi all --volumes --remove-orphans
+	docker image prune -f
+	@echo "Cleanup completed!"
+
+prune-all: ## Remove all unused Docker resources
+	@echo "Removing all unused Docker resources..."
+	docker system prune -af --volumes
+	@echo "Docker system pruned!"
+
+##@ Development Commands
+
+shell-slim: ## Open shell in slim container
+	docker-compose -f docker-compose.slim.yml exec trading-bot-slim sh
+
+inspect-slim: ## Inspect the slim image
+	docker inspect $(DOCKER_IMAGE):$(DOCKER_TAG)
+
+##@ Testing Commands
+
+test-memory: ## Test memory optimization
+	@echo "Testing memory optimization..."
+	docker run --rm -m 512m $(DOCKER_IMAGE):$(DOCKER_TAG) python -c "from bot.memory_optimizer import get_memory_optimizer; print(get_memory_optimizer().get_memory_report())"
+
+health-check: ## Check container health
+	@echo "Checking container health..."
+	docker-compose -f docker-compose.slim.yml exec trading-bot-slim /app/healthcheck.sh
+
+##@ Installation Commands
+
+install-slim-deps: ## Install only slim dependencies
+	poetry install --only=slim
+
+install-requirements-slim: ## Install from requirements-minimal.txt
+	pip install -r requirements-minimal.txt
+
+##@ Environment Commands
+
+env-example: ## Create example environment file for slim deployment
+	@echo "Creating example environment file..."
+	@printf '# Slim Trading Bot Environment Configuration\n\n# Build Configuration\nBUILD_DATE=\nVCS_REF=\nVERSION=0.1.0\nEXCHANGE_TYPE=coinbase\n\n# Memory Optimization\nENABLE_MEMORY_OPTIMIZATION=true\nMAX_MEMORY_MB=450\n\n# Trading Configuration\nTRADING_MODE=paper\nDRY_RUN=true\n\n# Coinbase API (for live trading)\nCOINBASE_API_KEY=your_api_key_here\nCOINBASE_API_SECRET=your_api_secret_here\n\n# OpenAI API (optional)\nOPENAI_API_KEY=your_openai_key_here\n\n# Logging\nLOG_LEVEL=INFO\n' > .env.slim.example
+	@echo "Example environment file created: .env.slim.example"
+
+##@ Info Commands
+
+info: ## Show build and runtime information
+	@echo "Slim Trading Bot Information:"
+	@echo "  Image: $(DOCKER_IMAGE):$(DOCKER_TAG)"
+	@echo "  Build Date: $(BUILD_DATE)"
+	@echo "  VCS Ref: $(VCS_REF)"
+	@echo "  Version: $(VERSION)"
+	@echo ""
+	@echo "Memory Limits:"
+	@echo "  Container Memory: 512MB"
+	@echo "  Application Threshold: 450MB"
+	@echo "  Reserved Memory: 256MB"

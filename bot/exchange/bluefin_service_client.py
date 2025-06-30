@@ -278,6 +278,128 @@ class BluefinServiceClient:
         """Get market data from Bluefin service."""
         return await self._make_request("GET", f"/market/{symbol}")
 
+    async def get_order_book(self, symbol: str, depth: int = 10) -> dict[str, Any]:
+        """
+        Get order book from Bluefin service.
+
+        Args:
+            symbol: Trading symbol (e.g., 'SUI-PERP')
+            depth: Number of levels to retrieve for bids and asks (default: 10)
+
+        Returns:
+            Standardized order book format:
+            {
+                'symbol': str,
+                'bids': [{'price': float, 'quantity': float}, ...],
+                'asks': [{'price': float, 'quantity': float}, ...],
+                'timestamp': int
+            }
+
+        Raises:
+            BluefinServiceUnavailable: If service is not available
+            BluefinServiceError: For other errors
+        """
+        try:
+            # Make request to the orderbook endpoint with depth parameter
+            endpoint = f"/orderbook/{symbol}"
+            if depth != 10:
+                endpoint += f"?depth={depth}"
+
+            response = await self._make_request("GET", endpoint)
+
+            # Validate response structure
+            if not isinstance(response, dict):
+                raise BluefinServiceError("Invalid order book response format")
+
+            # Ensure required fields exist
+            required_fields = ["bids", "asks"]
+            for field in required_fields:
+                if field not in response:
+                    raise BluefinServiceError(
+                        f"Missing required field '{field}' in order book response"
+                    )
+
+            # Standardize the response format
+            standardized_response = {
+                "symbol": symbol,
+                "bids": self._standardize_order_book_side(response.get("bids", [])),
+                "asks": self._standardize_order_book_side(response.get("asks", [])),
+                "timestamp": response.get("timestamp", 0),
+            }
+
+            logger.debug(
+                "Retrieved order book for %s: %d bids, %d asks",
+                symbol,
+                len(standardized_response["bids"]),
+                len(standardized_response["asks"]),
+            )
+
+            return standardized_response
+
+        except (BluefinServiceUnavailable, BluefinServiceError):
+            # Re-raise service-specific errors
+            raise
+        except Exception as e:
+            logger.error("Error retrieving order book for %s: %s", symbol, str(e))
+            raise BluefinServiceError(
+                f"Failed to retrieve order book for {symbol}: {e!s}"
+            ) from e
+
+    def _standardize_order_book_side(self, side_data: list) -> list[dict[str, float]]:
+        """
+        Standardize order book side data to consistent format.
+
+        Args:
+            side_data: Raw order book side data (bids or asks)
+
+        Returns:
+            List of standardized order entries with 'price' and 'quantity' keys
+        """
+        if not isinstance(side_data, list):
+            logger.warning("Invalid order book side data type: %s", type(side_data))
+            return []
+
+        standardized = []
+        for entry in side_data:
+            try:
+                if isinstance(entry, dict):
+                    # Handle different possible formats
+                    if "price" in entry and "quantity" in entry:
+                        # Already in standard format
+                        standardized.append(
+                            {
+                                "price": float(entry["price"]),
+                                "quantity": float(entry["quantity"]),
+                            }
+                        )
+                    elif "price" in entry and "size" in entry:
+                        # Alternative size field
+                        standardized.append(
+                            {
+                                "price": float(entry["price"]),
+                                "quantity": float(entry["size"]),
+                            }
+                        )
+                    elif len(entry) >= 2:
+                        # Dict with positional values
+                        values = list(entry.values())
+                        standardized.append(
+                            {"price": float(values[0]), "quantity": float(values[1])}
+                        )
+                elif isinstance(entry, (list, tuple)) and len(entry) >= 2:
+                    # Array format [price, quantity]
+                    standardized.append(
+                        {"price": float(entry[0]), "quantity": float(entry[1])}
+                    )
+                else:
+                    logger.warning("Skipping invalid order book entry: %s", entry)
+
+            except (ValueError, TypeError, IndexError) as e:
+                logger.warning("Error parsing order book entry %s: %s", entry, str(e))
+                continue
+
+        return standardized
+
     def is_available(self) -> bool:
         """Check if service is currently available (cached result)."""
         return self._service_available is True

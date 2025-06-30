@@ -1,18 +1,17 @@
-FROM python:3.12-slim
+FROM python:3.12-alpine
 
 # Set working directory
 WORKDIR /app
 
 # Create a non-root user with UID 1000 (matching docker-compose)
 # This prevents permission conflicts when docker-compose overrides the user
-RUN groupadd -g 1000 backend && \
-    useradd -u 1000 -g backend -m -s /bin/bash backend
+RUN addgroup -g 1000 backend && \
+    adduser -u 1000 -G backend -s /bin/sh -D backend
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
-    docker.io \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache \
+    docker-cli \
+    curl
 
 # Copy requirements first for better caching
 COPY requirements.txt .

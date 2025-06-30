@@ -186,6 +186,14 @@ except ImportError as e:
     console.print(f"❌ Essential trading component missing: {e}", style="red")
     _startup_errors.append(f"Essential trading component missing: {e}")
 
+# Memory optimization
+try:
+    from .memory_optimizer import get_memory_optimizer, monitor_memory_usage
+except ImportError:
+    console.print("⚠️  Memory optimizer not available", style="yellow")
+    get_memory_optimizer = None
+    monitor_memory_usage = lambda func: func  # No-op decorator
+
 # Market data providers - Using functional data layer
 MarketDataProvider = _safe_import(".fp.data", "MarketDataProvider", required=True)
 DominanceDataProvider = _safe_import(
@@ -338,6 +346,17 @@ class TradingEngine:
         self._background_tasks: list[asyncio.Task[Any]] = (
             []
         )  # Track background tasks for cleanup
+
+        # Initialize memory optimization
+        if get_memory_optimizer:
+            self._memory_optimizer = get_memory_optimizer()
+            self.logger = logging.getLogger(__name__)
+            self.logger.info(
+                "Memory optimizer initialized: %s",
+                self._memory_optimizer.get_memory_report(),
+            )
+        else:
+            self._memory_optimizer = None
 
         # Initialize market making integrator (will be set up after LLM agent)
         self.market_making_integrator: Any | None = None
@@ -2503,6 +2522,10 @@ class TradingEngine:
             loop_count += 1
 
             try:
+                # Memory optimization (every 20 iterations)
+                if self._memory_optimizer and loop_count % 20 == 0:
+                    self._memory_optimizer.check_memory_threshold()
+
                 # Pre-iteration health checks
                 if (
                     datetime.now(UTC) - last_health_check

@@ -22,6 +22,7 @@ from bot.fp.core import MarketState, Signal, SignalType, Strategy
 from bot.fp.indicators.volatility import (
     calculate_bollinger_bands,
 )
+from bot.fp.types.market import Candle
 
 from .base import BaseStrategy, StrategyConfig, StrategyMetadata, StrategyResult
 
@@ -980,3 +981,315 @@ class FunctionalMarketMakingStrategy(BaseStrategy):
             urgency_threshold=0.8,
             timeout_hours=4.0,
         )
+
+
+# ============================================================================
+# VOLUME-WEIGHTED CALCULATIONS FOR MARKET MAKING
+# ============================================================================
+
+
+@dataclass(frozen=True)
+class VolumeWeightedMetrics:
+    """Immutable volume-weighted analysis results."""
+
+    vwap: float
+    vwap_24h: float
+    volume_profile_support: float
+    volume_profile_resistance: float
+    volume_weighted_spread: float
+    volume_momentum: float
+    liquidity_score: float
+
+
+def calculate_vwap(candles: list[Candle], periods: int = 20) -> float:
+    """Calculate volume-weighted average price over specified periods.
+
+    Args:
+        candles: List of candle data (must have price and volume)
+        periods: Number of periods to calculate VWAP over
+
+    Returns:
+        Volume-weighted average price
+    """
+    if not candles or periods <= 0:
+        return 0.0
+
+    # Use last 'periods' candles
+    recent_candles = candles[-periods:] if len(candles) >= periods else candles
+
+    total_volume = 0.0
+    total_value = 0.0
+
+    for candle in recent_candles:
+        # Use typical price (HLC/3) for VWAP calculation
+        typical_price = float((candle.high + candle.low + candle.close) / 3)
+        volume = float(candle.volume)
+
+        total_value += typical_price * volume
+        total_volume += volume
+
+    return total_value / total_volume if total_volume > 0 else 0.0
+
+
+def calculate_vwap_bands(
+    candles: list[Candle], periods: int = 20, std_dev_multiplier: float = 2.0
+) -> tuple[float, float, float]:
+    """Calculate VWAP with upper and lower bands.
+
+    Args:
+        candles: Historical candle data
+        periods: Lookback period for VWAP
+        std_dev_multiplier: Standard deviation multiplier for bands
+
+    Returns:
+        Tuple of (vwap, upper_band, lower_band)
+    """
+    vwap = calculate_vwap(candles, periods)
+
+    if not candles or len(candles) < periods:
+        return vwap, vwap, vwap
+
+    # Calculate volume-weighted standard deviation
+    recent_candles = candles[-periods:] if len(candles) >= periods else candles
+    total_volume = 0.0
+    variance_sum = 0.0
+
+    for candle in recent_candles:
+        typical_price = float((candle.high + candle.low + candle.close) / 3)
+        volume = float(candle.volume)
+
+        price_deviation = (typical_price - vwap) ** 2
+        variance_sum += price_deviation * volume
+        total_volume += volume
+
+    if total_volume <= 0:
+        return vwap, vwap, vwap
+
+    volume_weighted_variance = variance_sum / total_volume
+    volume_weighted_std = math.sqrt(volume_weighted_variance)
+
+    upper_band = vwap + (volume_weighted_std * std_dev_multiplier)
+    lower_band = vwap - (volume_weighted_std * std_dev_multiplier)
+
+    return vwap, upper_band, lower_band
+
+
+def calculate_volume_profile(
+    candles: list[Candle], price_buckets: int = 20
+) -> dict[float, float]:
+    """Calculate volume profile showing volume distribution across price levels.
+
+    Args:
+        candles: Historical candle data
+        price_buckets: Number of price buckets for volume distribution
+
+    Returns:
+        Dictionary mapping price levels to volume percentages
+    """
+    if not candles:
+        return {}
+
+    # Find price range
+    all_prices = []
+    for candle in candles:
+        all_prices.extend([float(candle.high), float(candle.low)])
+
+    min_price = min(all_prices)
+    max_price = max(all_prices)
+    price_range = max_price - min_price
+
+    if price_range <= 0:
+        return {}
+
+    # Create price buckets
+    bucket_size = price_range / price_buckets
+    volume_by_bucket = {}
+    total_volume = 0.0
+
+    for candle in candles:
+        volume = float(candle.volume)
+        total_volume += volume
+
+        # Distribute volume across price range of the candle
+        candle_range = float(candle.high - candle.low)
+        if candle_range > 0:
+            # Distribute volume proportionally across the candle's price range
+            num_sub_buckets = max(1, int(candle_range / bucket_size))
+            volume_per_sub_bucket = volume / num_sub_buckets
+
+            for i in range(num_sub_buckets):
+                sub_price = float(candle.low) + (i * candle_range / num_sub_buckets)
+                bucket_index = int((sub_price - min_price) / bucket_size)
+                bucket_index = min(
+                    bucket_index, price_buckets - 1
+                )  # Clamp to valid range
+
+                bucket_price = min_price + (bucket_index * bucket_size)
+                volume_by_bucket[bucket_price] = (
+                    volume_by_bucket.get(bucket_price, 0) + volume_per_sub_bucket
+                )
+        else:
+            # Point candle, assign all volume to single bucket
+            bucket_index = int((float(candle.close) - min_price) / bucket_size)
+            bucket_index = min(bucket_index, price_buckets - 1)
+            bucket_price = min_price + (bucket_index * bucket_size)
+            volume_by_bucket[bucket_price] = (
+                volume_by_bucket.get(bucket_price, 0) + volume
+            )
+
+    # Convert to percentages
+    if total_volume > 0:
+        return {price: vol / total_volume for price, vol in volume_by_bucket.items()}
+
+    return {}
+
+
+def calculate_volume_weighted_spread(
+    orderbook_bids: list[tuple[float, float]],
+    orderbook_asks: list[tuple[float, float]],
+    depth_threshold: float = 0.1,
+) -> float:
+    """Calculate volume-weighted spread based on orderbook depth.
+
+    Args:
+        orderbook_bids: List of (price, size) tuples for bids
+        orderbook_asks: List of (price, size) tuples for asks
+        depth_threshold: Minimum depth percentage to consider
+
+    Returns:
+        Volume-weighted spread percentage
+    """
+    if not orderbook_bids or not orderbook_asks:
+        return 0.0
+
+    # Calculate total volumes
+    total_bid_volume = sum(size for _, size in orderbook_bids)
+    total_ask_volume = sum(size for _, size in orderbook_asks)
+
+    if total_bid_volume <= 0 or total_ask_volume <= 0:
+        return 0.0
+
+    # Calculate volume-weighted prices
+    cumulative_bid_volume = 0.0
+    cumulative_ask_volume = 0.0
+
+    vw_bid_price = 0.0
+    vw_ask_price = 0.0
+
+    # Process bids (descending price order)
+    for price, size in sorted(orderbook_bids, key=lambda x: x[0], reverse=True):
+        cumulative_bid_volume += size
+        weight = size / total_bid_volume
+        vw_bid_price += price * weight
+
+        # Stop when we've processed enough depth
+        if cumulative_bid_volume / total_bid_volume >= depth_threshold:
+            break
+
+    # Process asks (ascending price order)
+    for price, size in sorted(orderbook_asks, key=lambda x: x[0]):
+        cumulative_ask_volume += size
+        weight = size / total_ask_volume
+        vw_ask_price += price * weight
+
+        # Stop when we've processed enough depth
+        if cumulative_ask_volume / total_ask_volume >= depth_threshold:
+            break
+
+    # Calculate spread percentage
+    if vw_bid_price > 0 and vw_ask_price > 0:
+        mid_price = (vw_bid_price + vw_ask_price) / 2
+        spread = (vw_ask_price - vw_bid_price) / mid_price
+        return spread
+
+    return 0.0
+
+
+def analyze_volume_weighted_metrics(
+    candles: list[Candle],
+    orderbook_bids: list[tuple[float, float]] = None,
+    orderbook_asks: list[tuple[float, float]] = None,
+) -> VolumeWeightedMetrics:
+    """Comprehensive volume-weighted analysis for market making.
+
+    Args:
+        candles: Historical price/volume data
+        orderbook_bids: Current bid levels (price, size)
+        orderbook_asks: Current ask levels (price, size)
+
+    Returns:
+        Comprehensive volume-weighted metrics
+    """
+    if not candles:
+        return VolumeWeightedMetrics(
+            vwap=0.0,
+            vwap_24h=0.0,
+            volume_profile_support=0.0,
+            volume_profile_resistance=0.0,
+            volume_weighted_spread=0.0,
+            volume_momentum=0.0,
+            liquidity_score=0.0,
+        )
+
+    # Calculate VWAPs
+    vwap_20 = calculate_vwap(candles, 20)
+    vwap_24h = calculate_vwap(candles, min(1440, len(candles)))  # 24h in minutes
+
+    # Volume profile analysis
+    volume_profile = calculate_volume_profile(candles)
+
+    # Find support/resistance from volume profile
+    if volume_profile:
+        sorted_levels = sorted(volume_profile.items(), key=lambda x: x[1], reverse=True)
+        support_level = sorted_levels[0][0] if len(sorted_levels) > 0 else 0.0
+        resistance_level = (
+            sorted_levels[1][0] if len(sorted_levels) > 1 else support_level
+        )
+
+        # Ensure support < resistance
+        if support_level > resistance_level:
+            support_level, resistance_level = resistance_level, support_level
+    else:
+        support_level = resistance_level = 0.0
+
+    # Volume-weighted spread from orderbook
+    vw_spread = 0.0
+    if orderbook_bids and orderbook_asks:
+        vw_spread = calculate_volume_weighted_spread(orderbook_bids, orderbook_asks)
+
+    # Volume momentum (recent vs historical average)
+    volume_momentum = 0.0
+    if len(candles) >= 10:
+        recent_volume = sum(float(c.volume) for c in candles[-5:]) / 5  # Last 5 periods
+        avg_volume = sum(float(c.volume) for c in candles[-20:]) / min(20, len(candles))
+        volume_momentum = (
+            (recent_volume - avg_volume) / avg_volume if avg_volume > 0 else 0.0
+        )
+
+    # Liquidity score based on volume consistency and depth
+    liquidity_score = 0.5  # Default neutral score
+    if len(candles) >= 10:
+        volumes = [float(c.volume) for c in candles[-10:]]
+        avg_vol = sum(volumes) / len(volumes)
+        vol_std = math.sqrt(sum((v - avg_vol) ** 2 for v in volumes) / len(volumes))
+        consistency = 1.0 - min(vol_std / avg_vol, 1.0) if avg_vol > 0 else 0.0
+
+        # Factor in orderbook depth if available
+        depth_score = 0.5
+        if orderbook_bids and orderbook_asks:
+            total_depth = sum(size for _, size in orderbook_bids[:10]) + sum(
+                size for _, size in orderbook_asks[:10]
+            )
+            depth_score = min(total_depth / 10000.0, 1.0)  # Normalize to 0-1
+
+        liquidity_score = (consistency * 0.6) + (depth_score * 0.4)
+
+    return VolumeWeightedMetrics(
+        vwap=vwap_20,
+        vwap_24h=vwap_24h,
+        volume_profile_support=support_level,
+        volume_profile_resistance=resistance_level,
+        volume_weighted_spread=vw_spread,
+        volume_momentum=volume_momentum,
+        liquidity_score=liquidity_score,
+    )

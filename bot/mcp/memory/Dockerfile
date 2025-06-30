@@ -1,9 +1,10 @@
-FROM python:3.12-slim
+FROM python:3.12-alpine
 
 WORKDIR /app
 
 # Install minimal dependencies
-RUN pip install --no-cache-dir fastapi uvicorn python-dotenv structlog
+RUN apk add --no-cache curl && \
+    pip install --no-cache-dir fastapi uvicorn python-dotenv structlog requests
 
 # Copy memory server code
 COPY ../memory_server.py /app/memory_server.py

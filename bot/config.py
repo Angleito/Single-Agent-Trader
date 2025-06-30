@@ -590,6 +590,24 @@ class SystemSettings:
                 kwargs.get("update_frequency_seconds", 30.0),
             )
 
+            # Concurrency optimization settings
+            self.max_concurrent_tasks: int = parse_int_env(
+                "SYSTEM__MAX_CONCURRENT_TASKS",
+                kwargs.get("max_concurrent_tasks", 4),
+            )
+            self.thread_pool_size: int = parse_int_env(
+                "SYSTEM__THREAD_POOL_SIZE",
+                kwargs.get("thread_pool_size", 2),
+            )
+            self.async_timeout: float = parse_float_env(
+                "SYSTEM__ASYNC_TIMEOUT",
+                kwargs.get("async_timeout", 15.0),
+            )
+            self.task_batch_size: int = parse_int_env(
+                "SYSTEM__TASK_BATCH_SIZE",
+                kwargs.get("task_batch_size", 2),
+            )
+
             # Add missing logging attributes
             self.log_to_console: bool = parse_bool_env(
                 "SYSTEM__LOG_TO_CONSOLE",
@@ -737,6 +755,122 @@ class MCPSettings:
 
 
 @dataclass
+class OrderbookSettings:
+    """Orderbook configuration settings using functional types."""
+
+    def __init__(self, **kwargs):
+        # Maintain exact compatibility with environment variable loading
+        self.depth_levels: int = parse_int_env(
+            "MARKET_MAKING__ORDERBOOK__DEPTH_LEVELS", kwargs.get("depth_levels", 20)
+        )
+        self.refresh_interval_ms: int = parse_int_env(
+            "MARKET_MAKING__ORDERBOOK__REFRESH_INTERVAL_MS",
+            kwargs.get("refresh_interval_ms", 100),
+        )
+        self.max_age_ms: int = parse_int_env(
+            "MARKET_MAKING__ORDERBOOK__MAX_AGE_MS", kwargs.get("max_age_ms", 1000)
+        )
+        self.min_liquidity_threshold: str = os.getenv(
+            "MARKET_MAKING__ORDERBOOK__MIN_LIQUIDITY_THRESHOLD",
+            kwargs.get("min_liquidity_threshold", "500"),
+        )
+        self.max_spread_bps: int = parse_int_env(
+            "MARKET_MAKING__ORDERBOOK__MAX_SPREAD_BPS",
+            kwargs.get("max_spread_bps", 200),
+        )
+        self.quality_threshold: float = parse_float_env(
+            "MARKET_MAKING__ORDERBOOK__QUALITY_THRESHOLD",
+            kwargs.get("quality_threshold", 0.8),
+        )
+        self.staleness_threshold_ms: int = parse_int_env(
+            "MARKET_MAKING__ORDERBOOK__STALENESS_THRESHOLD_MS",
+            kwargs.get("staleness_threshold_ms", 2000),
+        )
+        self.aggregation_levels: list[int] = kwargs.get(
+            "aggregation_levels", [1, 5, 10, 20]
+        )
+        self.price_precision: int = parse_int_env(
+            "MARKET_MAKING__ORDERBOOK__PRICE_PRECISION",
+            kwargs.get("price_precision", 6),
+        )
+        self.size_precision: int = parse_int_env(
+            "MARKET_MAKING__ORDERBOOK__SIZE_PRECISION", kwargs.get("size_precision", 4)
+        )
+        self.enable_snapshot_recovery: bool = parse_bool_env(
+            "MARKET_MAKING__ORDERBOOK__ENABLE_SNAPSHOT_RECOVERY",
+            kwargs.get("enable_snapshot_recovery", True),
+        )
+        self.snapshot_recovery_interval_ms: int = parse_int_env(
+            "MARKET_MAKING__ORDERBOOK__SNAPSHOT_RECOVERY_INTERVAL_MS",
+            kwargs.get("snapshot_recovery_interval_ms", 5000),
+        )
+        self.enable_incremental_updates: bool = parse_bool_env(
+            "MARKET_MAKING__ORDERBOOK__ENABLE_INCREMENTAL_UPDATES",
+            kwargs.get("enable_incremental_updates", True),
+        )
+        self.buffer_size: int = parse_int_env(
+            "MARKET_MAKING__ORDERBOOK__BUFFER_SIZE", kwargs.get("buffer_size", 1000)
+        )
+        self.compression_enabled: bool = parse_bool_env(
+            "MARKET_MAKING__ORDERBOOK__COMPRESSION_ENABLED",
+            kwargs.get("compression_enabled", False),
+        )
+        self.websocket_timeout_ms: int = parse_int_env(
+            "MARKET_MAKING__ORDERBOOK__WEBSOCKET_TIMEOUT_MS",
+            kwargs.get("websocket_timeout_ms", 30000),
+        )
+        self.heartbeat_interval_ms: int = parse_int_env(
+            "MARKET_MAKING__ORDERBOOK__HEARTBEAT_INTERVAL_MS",
+            kwargs.get("heartbeat_interval_ms", 15000),
+        )
+        self.reconnect_delay_ms: int = parse_int_env(
+            "MARKET_MAKING__ORDERBOOK__RECONNECT_DELAY_MS",
+            kwargs.get("reconnect_delay_ms", 1000),
+        )
+        self.max_reconnect_attempts: int = parse_int_env(
+            "MARKET_MAKING__ORDERBOOK__MAX_RECONNECT_ATTEMPTS",
+            kwargs.get("max_reconnect_attempts", 10),
+        )
+        self.enable_order_flow_analysis: bool = parse_bool_env(
+            "MARKET_MAKING__ORDERBOOK__ENABLE_ORDER_FLOW_ANALYSIS",
+            kwargs.get("enable_order_flow_analysis", True),
+        )
+        self.imbalance_detection_threshold: float = parse_float_env(
+            "MARKET_MAKING__ORDERBOOK__IMBALANCE_DETECTION_THRESHOLD",
+            kwargs.get("imbalance_detection_threshold", 0.3),
+        )
+        # Market data validation settings
+        self.enable_price_validation: bool = parse_bool_env(
+            "MARKET_MAKING__ORDERBOOK__ENABLE_PRICE_VALIDATION",
+            kwargs.get("enable_price_validation", True),
+        )
+        self.max_price_deviation_pct: float = parse_float_env(
+            "MARKET_MAKING__ORDERBOOK__MAX_PRICE_DEVIATION_PCT",
+            kwargs.get("max_price_deviation_pct", 5.0),
+        )
+        self.enable_size_validation: bool = parse_bool_env(
+            "MARKET_MAKING__ORDERBOOK__ENABLE_SIZE_VALIDATION",
+            kwargs.get("enable_size_validation", True),
+        )
+        self.min_order_size: str = os.getenv(
+            "MARKET_MAKING__ORDERBOOK__MIN_ORDER_SIZE",
+            kwargs.get("min_order_size", "10"),
+        )
+        self.max_order_size: str = os.getenv(
+            "MARKET_MAKING__ORDERBOOK__MAX_ORDER_SIZE",
+            kwargs.get("max_order_size", "50000"),
+        )
+        self.enable_time_validation: bool = parse_bool_env(
+            "MARKET_MAKING__ORDERBOOK__ENABLE_TIME_VALIDATION",
+            kwargs.get("enable_time_validation", True),
+        )
+        self.max_timestamp_drift_ms: int = parse_int_env(
+            "MARKET_MAKING__ORDERBOOK__MAX_TIMESTAMP_DRIFT_MS",
+            kwargs.get("max_timestamp_drift_ms", 5000),
+        )
+
+
+@dataclass
 class OmniSearchSettings:
     """OmniSearch integration settings using functional types."""
 
@@ -808,6 +942,7 @@ class Settings:
                 functional_config.system, **overrides.get("monitoring", {})
             )
             self.mcp = MCPSettings(functional_config.system, **overrides.get("mcp", {}))
+            self.orderbook = OrderbookSettings(**overrides.get("orderbook", {}))
             self.omnisearch = OmniSearchSettings(**overrides.get("omnisearch", {}))
         else:
             # Fallback to environment/kwargs based initialization
@@ -823,6 +958,7 @@ class Settings:
             )
             self.monitoring = MonitoringSettings(**overrides.get("monitoring", {}))
             self.mcp = MCPSettings(**overrides.get("mcp", {}))
+            self.orderbook = OrderbookSettings(**overrides.get("orderbook", {}))
             self.omnisearch = OmniSearchSettings(**overrides.get("omnisearch", {}))
 
         # Store functional config for advanced use cases
@@ -868,6 +1004,7 @@ class Settings:
             "paper_trading": self.paper_trading.__dict__,
             "monitoring": self.monitoring.__dict__,
             "mcp": self.mcp.__dict__,
+            "orderbook": self.orderbook.__dict__,
             "omnisearch": self.omnisearch.__dict__,
         }
 
@@ -1088,6 +1225,44 @@ def validate_settings(settings: Settings) -> str | None:
             "Live trading mode with sandbox exchange - this may not be intended"
         )
 
+    # Orderbook validation
+    if settings.orderbook.depth_levels < 1 or settings.orderbook.depth_levels > 100:
+        warnings.append(
+            f"Orderbook depth levels {settings.orderbook.depth_levels} is outside reasonable range (1-100)"
+        )
+
+    if (
+        settings.orderbook.refresh_interval_ms < 10
+        or settings.orderbook.refresh_interval_ms > 10000
+    ):
+        warnings.append(
+            f"Orderbook refresh interval {settings.orderbook.refresh_interval_ms}ms is outside reasonable range (10-10000ms)"
+        )
+
+    if (
+        settings.orderbook.quality_threshold < 0.1
+        or settings.orderbook.quality_threshold > 1.0
+    ):
+        warnings.append(
+            f"Orderbook quality threshold {settings.orderbook.quality_threshold} is outside valid range (0.1-1.0)"
+        )
+
+    if (
+        settings.orderbook.imbalance_detection_threshold < 0.1
+        or settings.orderbook.imbalance_detection_threshold > 1.0
+    ):
+        warnings.append(
+            f"Orderbook imbalance detection threshold {settings.orderbook.imbalance_detection_threshold} is outside valid range (0.1-1.0)"
+        )
+
+    if (
+        settings.orderbook.max_price_deviation_pct < 0.1
+        or settings.orderbook.max_price_deviation_pct > 50.0
+    ):
+        warnings.append(
+            f"Orderbook max price deviation {settings.orderbook.max_price_deviation_pct}% is outside reasonable range (0.1-50%)"
+        )
+
     return "; ".join(warnings) if warnings else None
 
 
@@ -1174,6 +1349,36 @@ def get_config_template() -> dict[str, Any]:
             "report_time_utc": "23:59",
             "include_unrealized_pnl": True,
         },
+        "orderbook": {
+            "depth_levels": 20,
+            "refresh_interval_ms": 100,
+            "max_age_ms": 1000,
+            "min_liquidity_threshold": "500",
+            "max_spread_bps": 200,
+            "quality_threshold": 0.8,
+            "staleness_threshold_ms": 2000,
+            "aggregation_levels": [1, 5, 10, 20],
+            "price_precision": 6,
+            "size_precision": 4,
+            "enable_snapshot_recovery": True,
+            "snapshot_recovery_interval_ms": 5000,
+            "enable_incremental_updates": True,
+            "buffer_size": 1000,
+            "compression_enabled": False,
+            "websocket_timeout_ms": 30000,
+            "heartbeat_interval_ms": 15000,
+            "reconnect_delay_ms": 1000,
+            "max_reconnect_attempts": 10,
+            "enable_order_flow_analysis": True,
+            "imbalance_detection_threshold": 0.3,
+            "enable_price_validation": True,
+            "max_price_deviation_pct": 5.0,
+            "enable_size_validation": True,
+            "min_order_size": "10",
+            "max_order_size": "50000",
+            "enable_time_validation": True,
+            "max_timestamp_drift_ms": 5000,
+        },
         "omnisearch": {
             "enabled": False,
             "server_url": "http://localhost:8766",
@@ -1205,6 +1410,7 @@ __all__ = [
     "MCPSettings",
     "MonitoringSettings",
     "OmniSearchSettings",
+    "OrderbookSettings",
     "PaperTradingSettings",
     "RiskSettings",
     "Settings",

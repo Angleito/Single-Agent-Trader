@@ -1,0 +1,271 @@
+version: '3.8'
+
+# Docker Compose configuration for low-resource stress testing
+# This setup mimics a constrained production environment for testing
+
+services:
+  # AI Trading Bot - Main application with memory constraints
+  ai-trading-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.slim
+      args:
+        - PYTHON_VERSION=3.12
+        - BUILD_DATE=${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+        - VCS_REF=${VCS_REF:-$(git rev-parse --short HEAD)}
+        - VERSION=${VERSION:-0.1.0}
+    image: ai-trading-bot:stress-test
+    container_name: ai-trading-bot-stress
+    restart: unless-stopped
+    depends_on:
+      - bluefin-service
+      - dashboard-backend
+    volumes:
+      - ./logs:/app/logs:rw
+      - ./data:/app/data:rw
+      - ./.env:/app/.env:ro
+    working_dir: /app
+    environment:
+      # Stress test specific environment
+      - STRESS_TEST_ENV=low_resource
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - PYTHONOPTIMIZE=2
+      - MALLOC_TRIM_THRESHOLD_=100000
+
+      # Memory optimization
+      - ENABLE_MEMORY_OPTIMIZATION=true
+      - MAX_MEMORY_MB=200
+      - MEMORY_CHECK_INTERVAL=10
+
+      # Minimal features for stress testing
+      - SYSTEM__DRY_RUN=true
+      - TRADING_MODE=paper
+      - LOG_LEVEL=WARNING
+
+      # Disable non-essential features
+      - SYSTEM__ENABLE_DASHBOARD=false
+      - SYSTEM__ENABLE_MCP=false
+      - SYSTEM__ENABLE_OMNISEARCH=false
+    env_file:
+      - .env
+    networks:
+      - stress-test-network
+
+    # Strict memory and CPU limits for stress testing
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.25'
+
+    # Health check with shorter intervals for monitoring
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8080/health', timeout=5)"]
+      interval: 15s
+      timeout: 5s
+      retries: 2
+      start_period: 30s
+
+  # Bluefin Service - DEX Integration with constraints
+  bluefin-service:
+    build:
+      context: .
+      dockerfile: services/Dockerfile.bluefin
+      args:
+        - PYTHON_VERSION=3.12
+    image: bluefin-service:stress-test
+    container_name: bluefin-service-stress
+    restart: unless-stopped
+    ports:
+      - "${BLUEFIN_SERVICE_PORT:-8082}:8080"
+    environment:
+      # Stress test configuration
+      - STRESS_TEST_ENV=low_resource
+      - BLUEFIN_PRIVATE_KEY=${EXCHANGE__BLUEFIN_PRIVATE_KEY:-0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      - BLUEFIN_SERVICE_API_KEY=${BLUEFIN_SERVICE_API_KEY}
+      - EXCHANGE__BLUEFIN_NETWORK=testnet
+      - SYSTEM__DRY_RUN=true
+      - LOG_LEVEL=WARNING
+
+      # Performance tuning
+      - WORKER_PROCESSES=1
+      - MAX_CONNECTIONS=10
+    volumes:
+      - ./logs/bluefin:/app/logs:rw
+    networks:
+      - stress-test-network
+
+    # Very tight resource constraints
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.3'
+        reservations:
+          memory: 64M
+          cpus: '0.15'
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 2
+      start_period: 20s
+
+  # Dashboard Backend - Minimal configuration for testing
+  dashboard-backend:
+    build:
+      context: ./dashboard/backend
+      dockerfile: Dockerfile
+      target: production
+    image: dashboard-backend:stress-test
+    container_name: dashboard-backend-stress
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # Stress test specific
+      - STRESS_TEST_ENV=low_resource
+      - DASHBOARD_HOST=0.0.0.0
+      - DASHBOARD_PORT=8000
+      - CORS_ORIGINS=http://localhost:3000
+      - LOG_LEVEL=WARNING
+
+      # Performance constraints
+      - WORKER_PROCESSES=1
+      - MAX_WEBSOCKET_CONNECTIONS=5
+      - WEBSOCKET_QUEUE_SIZE=50
+      - REQUEST_TIMEOUT=10
+      - KEEPALIVE_TIMEOUT=5
+    volumes:
+      - ./logs:/app/logs:ro
+      - ./data:/app/data:ro
+    networks:
+      - stress-test-network
+
+    # Resource limits for stress testing
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.3'
+        reservations:
+          memory: 64M
+          cpus: '0.15'
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 2
+
+  # Stress Test Runner - Orchestrates the testing
+  stress-test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.stress-test
+    image: stress-test-runner:latest
+    container_name: stress-test-runner
+    depends_on:
+      - ai-trading-bot
+      - bluefin-service
+      - dashboard-backend
+    volumes:
+      - ./stress_test_low_resource.py:/app/stress_test.py:ro
+      - ./stress_test_results:/app/results:rw
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # For Docker monitoring
+    environment:
+      - STRESS_TEST_ENV=low_resource
+      - PYTHONUNBUFFERED=1
+
+      # Test configuration
+      - TEST_DURATION_SECONDS=180
+      - CONCURRENT_USERS=2
+      - OPERATIONS_PER_SECOND=3
+      - MEMORY_LIMIT_MB=512
+      - CPU_LIMIT_PERCENT=70
+
+      # Service endpoints
+      - BLUEFIN_ENDPOINT=http://bluefin-service-stress:8080
+      - DASHBOARD_ENDPOINT=http://dashboard-backend-stress:8000
+      - WEBSOCKET_ENDPOINT=ws://dashboard-backend-stress:8000/ws
+    networks:
+      - stress-test-network
+
+    # Resource allocation for the test runner itself
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+          cpus: '0.5'
+
+    # Override the default command to run stress tests
+    command: ["python", "/app/stress_test.py"]
+
+    profiles:
+      - stress-test  # Only start with --profile stress-test
+
+  # Resource Monitor - Monitors system resources during testing
+  resource-monitor:
+    image: prom/node-exporter:latest
+    container_name: resource-monitor-stress
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - stress-test-network
+
+    # Minimal resources for monitoring
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.1'
+        reservations:
+          memory: 32M
+          cpus: '0.05'
+
+    profiles:
+      - monitoring
+
+networks:
+  stress-test-network:
+    driver: bridge
+    driver_opts:
+      # Optimize for low latency
+      com.docker.network.driver.mtu: 1450
+      com.docker.network.bridge.name: stress-test-br
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  stress-test-logs:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=100m,uid=1000
+
+  stress-test-data:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=50m,uid=1000

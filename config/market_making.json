@@ -64,6 +64,44 @@
     "min_liquidity_threshold": "1000"
   },
 
+  "orderbook": {
+    "depth_levels": 20,
+    "refresh_interval_ms": 100,
+    "max_age_ms": 1000,
+    "min_liquidity_threshold": "500",
+    "max_spread_bps": 200,
+    "quality_threshold": 0.8,
+    "staleness_threshold_ms": 2000,
+    "aggregation_levels": [1, 5, 10, 20],
+    "price_precision": 6,
+    "size_precision": 4,
+    "enable_snapshot_recovery": true,
+    "snapshot_recovery_interval_ms": 5000,
+    "enable_incremental_updates": true,
+    "buffer_size": 1000,
+    "compression_enabled": false,
+    "websocket_timeout_ms": 30000,
+    "heartbeat_interval_ms": 15000,
+    "reconnect_delay_ms": 1000,
+    "max_reconnect_attempts": 10,
+    "enable_order_flow_analysis": true,
+    "imbalance_detection_threshold": 0.3,
+    "liquidity_bands": {
+      "tight": {"bps": 5, "min_size": "100"},
+      "normal": {"bps": 10, "min_size": "250"},
+      "wide": {"bps": 25, "min_size": "500"}
+    },
+    "market_data_validation": {
+      "enable_price_validation": true,
+      "max_price_deviation_pct": 5.0,
+      "enable_size_validation": true,
+      "min_order_size": "10",
+      "max_order_size": "50000",
+      "enable_time_validation": true,
+      "max_timestamp_drift_ms": 5000
+    }
+  },
+
   "_profiles": {
     "_description": "Configuration profiles for different risk levels",
 
@@ -87,6 +125,15 @@
         "min_fill_rate": 0.2,
         "max_negative_pnl_streak": 3,
         "max_drawdown_pct": 2.0
+      },
+      "orderbook": {
+        "depth_levels": 10,
+        "refresh_interval_ms": 200,
+        "max_spread_bps": 100,
+        "quality_threshold": 0.9,
+        "staleness_threshold_ms": 1000,
+        "imbalance_detection_threshold": 0.2,
+        "enable_order_flow_analysis": false
       }
     },
 
@@ -110,6 +157,15 @@
         "min_fill_rate": 0.3,
         "max_negative_pnl_streak": 5,
         "max_drawdown_pct": 3.0
+      },
+      "orderbook": {
+        "depth_levels": 20,
+        "refresh_interval_ms": 100,
+        "max_spread_bps": 200,
+        "quality_threshold": 0.8,
+        "staleness_threshold_ms": 2000,
+        "imbalance_detection_threshold": 0.3,
+        "enable_order_flow_analysis": true
       }
     },
 
@@ -133,6 +189,17 @@
         "min_fill_rate": 0.4,
         "max_negative_pnl_streak": 8,
         "max_drawdown_pct": 5.0
+      },
+      "orderbook": {
+        "depth_levels": 30,
+        "refresh_interval_ms": 50,
+        "max_spread_bps": 300,
+        "quality_threshold": 0.7,
+        "staleness_threshold_ms": 3000,
+        "imbalance_detection_threshold": 0.4,
+        "enable_order_flow_analysis": true,
+        "enable_incremental_updates": true,
+        "aggregation_levels": [1, 2, 5, 10, 15, 30]
       }
     }
   },
@@ -147,7 +214,12 @@
       "MARKET_MAKING__RISK__MAX_POSITION_VALUE=5000",
       "MARKET_MAKING__ORDERS__ORDER_TIMEOUT_SECONDS=60",
       "MARKET_MAKING__PERFORMANCE__MIN_FILL_RATE=0.4",
-      "MARKET_MAKING__BLUEFIN__NETWORK=testnet"
+      "MARKET_MAKING__BLUEFIN__NETWORK=testnet",
+      "MARKET_MAKING__ORDERBOOK__DEPTH_LEVELS=20",
+      "MARKET_MAKING__ORDERBOOK__REFRESH_INTERVAL_MS=100",
+      "MARKET_MAKING__ORDERBOOK__MAX_SPREAD_BPS=200",
+      "MARKET_MAKING__ORDERBOOK__QUALITY_THRESHOLD=0.8",
+      "MARKET_MAKING__ORDERBOOK__ENABLE_ORDER_FLOW_ANALYSIS=true"
     ],
     "_usage_examples": {
       "safe_testnet": "Conservative settings for testnet trading",
@@ -174,6 +246,13 @@
       "risk": {
         "daily_loss_limit_pct": 1.0,
         "emergency_threshold": 8.0
+      },
+      "orderbook": {
+        "depth_levels": 10,
+        "refresh_interval_ms": 250,
+        "max_spread_bps": 100,
+        "quality_threshold": 0.9,
+        "enable_order_flow_analysis": false
       }
     },
 
@@ -192,6 +271,14 @@
       "risk": {
         "daily_loss_limit_pct": 3.0,
         "max_position_value": "5000"
+      },
+      "orderbook": {
+        "depth_levels": 20,
+        "refresh_interval_ms": 100,
+        "max_spread_bps": 150,
+        "quality_threshold": 0.8,
+        "enable_order_flow_analysis": true,
+        "imbalance_detection_threshold": 0.3
       }
     },
 
@@ -213,6 +300,17 @@
       "risk": {
         "daily_loss_limit_pct": 6.0,
         "max_position_value": "15000"
+      },
+      "orderbook": {
+        "depth_levels": 30,
+        "refresh_interval_ms": 50,
+        "max_spread_bps": 250,
+        "quality_threshold": 0.75,
+        "enable_order_flow_analysis": true,
+        "imbalance_detection_threshold": 0.4,
+        "enable_incremental_updates": true,
+        "buffer_size": 2000,
+        "aggregation_levels": [1, 2, 5, 10, 20, 30]
       }
     }
   }

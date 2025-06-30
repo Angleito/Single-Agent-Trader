@@ -219,11 +219,15 @@ def traverse(items: list[A], f: Callable[[A], IO[B]]) -> IO[list[B]]:
     return sequence([f(item) for item in items])
 
 
-def parallel[A](ios: list[IO[A]], max_workers: int = 4) -> IO[list[A]]:
-    """Execute IOs in parallel using ThreadPoolExecutor"""
+def parallel[A](ios: list[IO[A]], max_workers: int = 2) -> IO[list[A]]:
+    """Execute IOs in parallel using ThreadPoolExecutor with optimized worker count"""
 
     def paralleled():
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Optimize worker count based on system resources and task characteristics
+        optimal_workers = min(
+            max_workers, len(ios), 2
+        )  # Cap at 2 for resource efficiency
+        with ThreadPoolExecutor(max_workers=optimal_workers) as executor:
             futures = [executor.submit(io.run) for io in ios]
             return [future.result() for future in futures]
 

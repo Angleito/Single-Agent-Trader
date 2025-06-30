@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 python:3.12-slim
+FROM --platform=linux/amd64 python:3.12-alpine
 
 # Build arguments for versioning
 ARG BUILD_DATE
@@ -13,39 +13,32 @@ LABEL maintainer="AI Trading Bot Team" \
       org.label-schema.version=$VERSION \
       org.label-schema.schema-version="1.0" \
       org.label-schema.platform="${TARGETPLATFORM}" \
-      ubuntu.optimized="true" \
-      ubuntu.compatible="22.04+" \
+      alpine.optimized="true" \
+      alpine.compatible="3.18+" \
       deployment.service="bluefin-service" \
       deployment.monitoring="enabled"
 
-# Ubuntu-optimized system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
+# Alpine-optimized system dependencies
+RUN apk add --no-cache \
+    build-base \
     curl \
     git \
     ca-certificates \
-    # Ubuntu networking tools
+    # Alpine networking tools
     netcat-openbsd \
-    dnsutils \
-    iputils-ping \
+    bind-tools \
+    iputils \
     # Process monitoring tools
     procps \
     htop \
     # Development libraries
     libffi-dev \
-    autotools-dev \
+    autoconf \
     automake \
     libtool \
-    pkg-config \
+    pkgconfig \
     # SSL/TLS support
-    openssl \
-    # Ubuntu-specific optimizations
-    software-properties-common \
-    apt-transport-https \
-    # Cleanup for smaller image size
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* \
-    && rm -rf /tmp/* /var/tmp/*
+    openssl
 
 # Create flexible user setup for both named users and UID/GID mapping
 # Support both built-in bluefin user and host user mapping via docker-compose
@@ -57,9 +50,9 @@ ARG USERNAME=bluefin
 # Skip user creation if USER_ID is 0 (root) to avoid conflicts
 RUN if [ "${USER_ID}" != "0" ]; then \
         # Create group if it doesn't already exist
-        (groupadd -g ${GROUP_ID} ${USERNAME} || true) && \
+        (addgroup -g ${GROUP_ID} ${USERNAME} || true) && \
         # Create user if it doesn't already exist
-        (useradd -r -u ${USER_ID} -g ${GROUP_ID} -m -s /bin/bash ${USERNAME} || \
+        (adduser -u ${USER_ID} -G ${USERNAME} -s /bin/sh -D ${USERNAME} || \
          echo "User with UID ${USER_ID} already exists, skipping creation"); \
     else \
         echo "Using root user (UID=0) - skipping user creation"; \

@@ -1,0 +1,75 @@
+{
+  "test_description": "Low-resource environment stress test configuration",
+  "environment": "low_resource",
+
+  "resource_constraints": {
+    "memory_limit_mb": 512,
+    "cpu_limit_percent": 80,
+    "max_concurrent_operations": 3
+  },
+
+  "test_parameters": {
+    "test_duration_seconds": 300,
+    "concurrent_users": 3,
+    "operations_per_second": 5,
+    "resource_check_interval": 5,
+    "stress_test_cycles": 3,
+    "recovery_time_seconds": 30
+  },
+
+  "service_endpoints": {
+    "bluefin_endpoint": "http://localhost:8082",
+    "dashboard_endpoint": "http://localhost:8000",
+    "websocket_endpoint": "ws://localhost:8000/ws"
+  },
+
+  "test_scenarios": {
+    "bluefin_load_test": {
+      "enabled": true,
+      "description": "High-frequency API calls to Bluefin service",
+      "max_error_rate_percent": 10,
+      "target_response_time_ms": 500
+    },
+
+    "websocket_load_test": {
+      "enabled": true,
+      "description": "Multiple WebSocket connections with sustained load",
+      "max_error_rate_percent": 15,
+      "max_connections": 2,
+      "message_size_bytes": 512
+    },
+
+    "memory_pressure_test": {
+      "enabled": true,
+      "description": "Service stability under memory pressure",
+      "max_pressure_mb": 200,
+      "pressure_increment_mb": 10,
+      "max_error_rate_percent": 20
+    },
+
+    "recovery_test": {
+      "enabled": true,
+      "description": "System recovery after stress",
+      "recovery_threshold_percent": 80,
+      "recovery_checks": 5
+    }
+  },
+
+  "monitoring": {
+    "resource_monitoring": true,
+    "health_check_interval": 30,
+    "performance_thresholds": {
+      "max_response_time_ms": 1000,
+      "max_error_rate_percent": 10,
+      "max_memory_growth_mb": 100,
+      "max_cpu_sustained_percent": 90
+    }
+  },
+
+  "reporting": {
+    "generate_json_report": true,
+    "generate_html_report": false,
+    "include_detailed_metrics": true,
+    "save_resource_snapshots": true
+  }
+}

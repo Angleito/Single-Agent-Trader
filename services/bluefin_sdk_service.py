@@ -2710,6 +2710,95 @@ class BluefinSDKService:
             "Unable to fetch real-time market data from any source"
         )
 
+    async def get_orderbook(self, symbol: str, depth: int = 10) -> dict[str, Any]:
+        """
+        Get orderbook data for a symbol.
+
+        Args:
+            symbol: Trading symbol (e.g., 'SUI-PERP')
+            depth: Number of price levels to return (default: 10)
+
+        Returns:
+            Dictionary containing bids and asks arrays
+        """
+        logger.info("🔍 Fetching orderbook for %s with depth %s", symbol, depth)
+
+        # Validate and normalize symbol first
+        try:
+            validated_symbol = self._validate_and_normalize_symbol(symbol)
+            if validated_symbol != symbol:
+                logger.info("Symbol normalized from %s to %s", symbol, validated_symbol)
+                symbol = validated_symbol
+        except Exception as e:
+            logger.warning(
+                "Symbol validation failed for %s: %s, proceeding with original",
+                symbol,
+                e,
+            )
+
+        # Convert symbol to market symbol enum value
+        market_symbol_value = self._get_market_symbol_value(symbol)
+        logger.info("Converted %s to %s", symbol, market_symbol_value)
+
+        # Validate depth parameter
+        if depth < 1:
+            depth = 1
+        elif depth > 100:
+            depth = 100
+
+        try:
+            # Create orderbook request
+            orderbook_request = GetOrderbookRequest(
+                symbol=market_symbol_value, limit=depth
+            )
+
+            # Get orderbook from SDK
+            orderbook = await self.client.get_orderbook(orderbook_request)
+            logger.info("Successfully fetched orderbook for %s", symbol)
+
+            # Format response
+            formatted_orderbook = {
+                "symbol": symbol,
+                "bids": [],
+                "asks": [],
+                "depth": depth,
+                "timestamp": int(time.time() * 1000),
+            }
+
+            # Process bids (buy orders)
+            if orderbook.get("bids"):
+                for bid in orderbook["bids"][:depth]:
+                    formatted_orderbook["bids"].append(
+                        {
+                            "price": str(bid.get("price", "0")),
+                            "quantity": str(bid.get("quantity", "0")),
+                            "size": str(bid.get("size", "0")),
+                        }
+                    )
+
+            # Process asks (sell orders)
+            if orderbook.get("asks"):
+                for ask in orderbook["asks"][:depth]:
+                    formatted_orderbook["asks"].append(
+                        {
+                            "price": str(ask.get("price", "0")),
+                            "quantity": str(ask.get("quantity", "0")),
+                            "size": str(ask.get("size", "0")),
+                        }
+                    )
+
+            logger.info(
+                "Orderbook formatted: %d bids, %d asks",
+                len(formatted_orderbook["bids"]),
+                len(formatted_orderbook["asks"]),
+            )
+
+            return formatted_orderbook
+
+        except Exception as e:
+            logger.exception("Failed to fetch orderbook for %s: %s", symbol, e)
+            raise BluefinAPIError(f"Failed to fetch orderbook: {e!s}")
+
     async def _get_candles_via_rest_api_with_retry(
         self, symbol: str, interval: str, limit: int, start_time: int, end_time: int
     ) -> list[list]:
@@ -3949,9 +4038,9 @@ async def performance_metrics(_request):
 
         # Performance metrics
         if hasattr(service, "_avg_response_time"):
-            metrics_data["performance"]["avg_response_time_ms"] = (
-                service._avg_response_time
-            )
+            metrics_data["performance"][
+                "avg_response_time_ms"
+            ] = service._avg_response_time
 
         # Resource metrics (if available)
         try:
@@ -3977,9 +4066,9 @@ async def performance_metrics(_request):
                 "available_memory_gb": psutil.virtual_memory().available / (1024**3),
             }
         except ImportError:
-            metrics_data["resources"]["note"] = (
-                "psutil not available for detailed metrics"
-            )
+            metrics_data["resources"][
+                "note"
+            ] = "psutil not available for detailed metrics"
 
         # Rate limiting metrics
         current_time = time.time()
@@ -4202,9 +4291,9 @@ async def service_diagnostics(_request):
                 diagnostics_data["recommendations"].append("High CPU usage detected")
 
         except ImportError:
-            perf_check["details"]["note"] = (
-                "psutil not available for performance metrics"
-            )
+            perf_check["details"][
+                "note"
+            ] = "psutil not available for performance metrics"
 
         diagnostics_data["checks"]["performance"] = perf_check
 
@@ -4306,21 +4395,96 @@ async def get_ticker(request):
 
         # Try to get market data from SDK first
         try:
-            # Try to get recent candles to get current price
+            # Try to get recent candles to get current price and volume data
             current_time = int(time.time() * 1000)
-            start_time = current_time - (60 * 1000)  # Last minute
+            start_time_1m = current_time - (60 * 1000)  # Last minute
+            start_time_24h = current_time - (24 * 60 * 60 * 1000)  # Last 24 hours
 
-            candles = await service.get_candlestick_data(
-                symbol, "1m", 1, start_time, current_time
+            # Get latest candle for current price
+            candles_1m = await service.get_candlestick_data(
+                symbol, "1m", 1, start_time_1m, current_time
             )
 
-            if candles and len(candles) > 0:
-                latest_candle = candles[-1]
-                if len(latest_candle) >= 5:
+            # Get 24h candles for volume calculation
+            candles_24h = await service.get_candlestick_data(
+                symbol, "1h", 24, start_time_24h, current_time
+            )
+
+            if candles_1m and len(candles_1m) > 0:
+                latest_candle = candles_1m[-1]
+                if len(latest_candle) >= 6:
                     current_price = float(
                         latest_candle[4]
                     )  # close price (already converted from 18 decimals)
-                    logger.info("Got current price from candles: %s", current_price)
+                    current_volume = float(latest_candle[5])  # volume
+
+                    # Calculate 24h volume with validation
+                    volume_24h = 0.0
+                    if candles_24h and len(candles_24h) > 0:
+                        try:
+                            from bot.utils.volume_validator import (
+                                safe_volume_conversion,
+                                validate_24h_volume,
+                            )
+
+                            raw_volumes = [
+                                float(candle[5])
+                                for candle in candles_24h
+                                if len(candle) >= 6
+                            ]
+                            volume_24h = float(
+                                sum(safe_volume_conversion(vol) for vol in raw_volumes)
+                            )
+
+                            # Validate the final 24h volume
+                            validation_result = validate_24h_volume(volume_24h)
+                            if not validation_result.is_valid:
+                                logger.warning(
+                                    "24h volume validation failed for %s: %s",
+                                    symbol,
+                                    validation_result.errors,
+                                )
+                                volume_24h = 0.0
+                            elif validation_result.warnings:
+                                logger.info(
+                                    "24h volume warnings for %s: %s",
+                                    symbol,
+                                    validation_result.warnings,
+                                )
+                        except ImportError:
+                            # Fallback if volume validator not available
+                            volume_24h = sum(
+                                float(candle[5])
+                                for candle in candles_24h
+                                if len(candle) >= 6
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                "Error calculating 24h volume for %s: %s", symbol, e
+                            )
+                            volume_24h = 0.0
+
+                    # Calculate 24h price change
+                    price_24h_ago = current_price
+                    change_24h = 0.0
+                    if candles_24h and len(candles_24h) > 0:
+                        first_candle = candles_24h[0]
+                        if len(first_candle) >= 2:
+                            price_24h_ago = float(
+                                first_candle[1]
+                            )  # open price of first candle
+                            change_24h = (
+                                ((current_price - price_24h_ago) / price_24h_ago) * 100
+                                if price_24h_ago > 0
+                                else 0.0
+                            )
+
+                    logger.info(
+                        "Got ticker data from candles: price=%s, volume_24h=%s, change_24h=%s%%",
+                        current_price,
+                        volume_24h,
+                        change_24h,
+                    )
 
                     return web.json_response(
                         {
@@ -4328,6 +4492,9 @@ async def get_ticker(request):
                             "price": str(current_price),
                             "bestBid": str(current_price * 0.999),  # Approximate bid
                             "bestAsk": str(current_price * 1.001),  # Approximate ask
+                            "volume_24h": str(volume_24h),
+                            "change_24h": str(round(change_24h, 2)),
+                            "price_24h_ago": str(price_24h_ago),
                         }
                     )
         except Exception as candle_error:
@@ -4344,6 +4511,105 @@ async def get_ticker(request):
             best_bid = orderbook["bids"][0]["price"] if orderbook.get("bids") else 0
             best_ask = orderbook["asks"][0]["price"] if orderbook.get("asks") else 0
 
+            # Calculate orderbook volume metrics with validation
+            bid_volume = 0
+            ask_volume = 0
+            try:
+                from bot.utils.volume_validator import (
+                    safe_volume_conversion,
+                    validate_orderbook_volume,
+                )
+
+                bids_data = (
+                    orderbook.get("bids", [])[:10] if orderbook.get("bids") else []
+                )
+                asks_data = (
+                    orderbook.get("asks", [])[:10] if orderbook.get("asks") else []
+                )
+
+                # Convert to tuples for validation
+                bid_tuples = [
+                    (float(bid.get("price", 0)), float(bid.get("size", 0)))
+                    for bid in bids_data
+                ]
+                ask_tuples = [
+                    (float(ask.get("price", 0)), float(ask.get("size", 0)))
+                    for ask in asks_data
+                ]
+
+                # Validate orderbook volumes
+                validation_result = validate_orderbook_volume(bid_tuples, ask_tuples)
+                if validation_result.is_valid:
+                    bid_volume = sum(
+                        float(safe_volume_conversion(bid.get("size", 0)))
+                        for bid in bids_data
+                    )
+                    ask_volume = sum(
+                        float(safe_volume_conversion(ask.get("size", 0)))
+                        for ask in asks_data
+                    )
+                elif validation_result.warnings:
+                    logger.info(
+                        "Orderbook volume warnings for %s: %s",
+                        symbol,
+                        validation_result.warnings,
+                    )
+                    bid_volume = sum(
+                        float(safe_volume_conversion(bid.get("size", 0)))
+                        for bid in bids_data
+                    )
+                    ask_volume = sum(
+                        float(safe_volume_conversion(ask.get("size", 0)))
+                        for ask in asks_data
+                    )
+                else:
+                    logger.warning(
+                        "Orderbook volume validation failed for %s: %s",
+                        symbol,
+                        validation_result.errors,
+                    )
+
+            except ImportError:
+                # Fallback if volume validator not available
+                bid_volume = (
+                    sum(
+                        float(bid.get("size", 0))
+                        for bid in orderbook.get("bids", [])[:10]
+                    )
+                    if orderbook.get("bids")
+                    else 0
+                )
+                ask_volume = (
+                    sum(
+                        float(ask.get("size", 0))
+                        for ask in orderbook.get("asks", [])[:10]
+                    )
+                    if orderbook.get("asks")
+                    else 0
+                )
+            except Exception as e:
+                logger.warning(
+                    "Error validating orderbook volumes for %s: %s", symbol, e
+                )
+                bid_volume = (
+                    sum(
+                        float(bid.get("size", 0))
+                        for bid in orderbook.get("bids", [])[:10]
+                    )
+                    if orderbook.get("bids")
+                    else 0
+                )
+                ask_volume = (
+                    sum(
+                        float(ask.get("size", 0))
+                        for ask in orderbook.get("asks", [])[:10]
+                    )
+                    if orderbook.get("asks")
+                    else 0
+                )
+
+            total_volume = bid_volume + ask_volume
+
             return web.json_response(
                 {
                     "symbol": symbol,
@@ -4354,6 +4620,11 @@ async def get_ticker(request):
                     ),
                     "bestBid": str(best_bid),
                     "bestAsk": str(best_ask),
+                    "bid_volume": str(bid_volume),
+                    "ask_volume": str(ask_volume),
+                    "orderbook_volume": str(total_volume),
+                    "volume_24h": "0",  # Not available from orderbook alone
+                    "change_24h": "0",  # Not available from orderbook alone
                 }
             )
         except Exception:
@@ -4409,12 +4680,22 @@ async def get_ticker(request):
                                     raw_price, price, symbol, "ticker_price"
                                 )
 
+                                # Extract additional ticker data if available
+                                volume_24h = data.get("volume_24h", "0")
+                                change_24h = data.get("change_24h", "0")
+                                high_24h = data.get("high_24h", str(price))
+                                low_24h = data.get("low_24h", str(price))
+
                                 return web.json_response(
                                     {
                                         "symbol": symbol,
                                         "price": str(price),
                                         "bestBid": str(price * 0.999),
                                         "bestAsk": str(price * 1.001),
+                                        "volume_24h": str(volume_24h),
+                                        "change_24h": str(change_24h),
+                                        "high_24h": str(high_24h),
+                                        "low_24h": str(low_24h),
                                     }
                                 )
                 finally:
@@ -4430,6 +4711,10 @@ async def get_ticker(request):
                 "price": "3.50",  # Default SUI price
                 "bestBid": "3.49",
                 "bestAsk": "3.51",
+                "volume_24h": "100000",  # Default volume
+                "change_24h": "0.0",  # Default change
+                "high_24h": "3.55",  # Default high
+                "low_24h": "3.45",  # Default low
                 "error": "Unable to fetch real-time data, using default",
             }
         )
@@ -4493,6 +4778,50 @@ async def get_market_candles(request):
         return web.json_response({"error": f"Invalid parameter: {e}"}, status=400)
     except Exception as e:
         logger.exception("Error in get_market_candles")
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def get_orderbook(request):
+    """Get orderbook data for a symbol."""
+    try:
+        # Extract symbol from path parameter or query parameter as fallback
+        symbol = request.match_info.get("symbol") or request.query.get(
+            "symbol", "SUI-PERP"
+        )
+        depth = int(request.query.get("depth", "10"))
+
+        logger.info(
+            "Orderbook request: symbol=%s, depth=%s",
+            symbol,
+            depth,
+        )
+
+        # Validate depth parameter
+        if depth < 1 or depth > 100:
+            return web.json_response(
+                {"error": "Depth must be between 1 and 100"}, status=400
+            )
+
+        # Get orderbook from service
+        orderbook_data = await service.get_orderbook(symbol, depth)
+
+        logger.info(
+            "Successfully retrieved orderbook for %s with %d bids and %d asks",
+            symbol,
+            len(orderbook_data.get("bids", [])),
+            len(orderbook_data.get("asks", [])),
+        )
+
+        return web.json_response(orderbook_data)
+
+    except ValueError as e:
+        logger.warning("Invalid parameter in orderbook request: %s", e)
+        return web.json_response({"error": f"Invalid parameter: {e}"}, status=400)
+    except BluefinAPIError as e:
+        logger.error("Bluefin API error in get_orderbook: %s", e)
+        return web.json_response({"error": str(e)}, status=500)
+    except Exception as e:
+        logger.exception("Error in get_orderbook")
         return web.json_response({"error": str(e)}, status=500)
 
 
@@ -4656,6 +4985,8 @@ def create_app():
     app.router.add_delete("/orders/{order_id}", cancel_order)
     app.router.add_get("/market/ticker", get_ticker)
     app.router.add_get("/market/candles", get_market_candles)
+    app.router.add_get("/orderbook/{symbol}", get_orderbook)
+    app.router.add_get("/orderbook", get_orderbook)  # Also support query param version
     app.router.add_post("/leverage", set_leverage)
 
     # Debug endpoints

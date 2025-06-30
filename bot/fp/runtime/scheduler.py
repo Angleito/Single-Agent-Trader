@@ -25,9 +25,11 @@ class SchedulerConfig:
     """Scheduler configuration"""
 
     trading_interval: timedelta = timedelta(minutes=1)
-    max_concurrent_tasks: int = 10
+    max_concurrent_tasks: int = 4  # Reduced from 10 to optimize resource usage
     health_check_interval: timedelta = timedelta(minutes=5)
     error_recovery_delay: timedelta = timedelta(seconds=30)
+    task_timeout: timedelta = timedelta(seconds=45)  # Add timeout for tasks
+    batch_size: int = 2  # Process tasks in smaller batches
 
 
 @dataclass

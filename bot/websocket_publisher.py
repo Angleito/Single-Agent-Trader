@@ -89,7 +89,9 @@ class WebSocketPublisher:
         )
         self.ping_interval = get_typed(settings.system, "websocket_ping_interval", 20.0)
         self.ping_timeout = get_typed(settings.system, "websocket_ping_timeout", 10.0)
-        self.queue_size = get_typed(settings.system, "websocket_queue_size", 500)
+        self.queue_size = get_typed(
+            settings.system, "websocket_queue_size", 200
+        )  # Reduced from 500
         self.health_check_interval = get_typed(
             settings.system, "websocket_health_check_interval", 45.0
         )

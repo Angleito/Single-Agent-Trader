@@ -1,0 +1,181 @@
+# Enhanced Logging Configuration for AI Trading Bot Containers
+# Provides structured logging with performance monitoring integration
+
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  detailed:
+    format: '%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(funcName)s() - %(message)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+
+  simple:
+    format: '%(asctime)s - %(levelname)s - %(message)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+
+  json:
+    format: '{"timestamp": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "module": "%(module)s", "function": "%(funcName)s", "line": %(lineno)d, "message": "%(message)s"}'
+    datefmt: '%Y-%m-%dT%H:%M:%S'
+
+  performance:
+    format: 'PERF|%(asctime)s|%(levelname)s|%(name)s|%(message)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+
+  alert:
+    format: 'ALERT|%(asctime)s|%(levelname)s|%(name)s|%(message)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+
+filters:
+  # Filter to only include performance-related logs
+  performance_filter:
+    (): scripts.log_filters.PerformanceFilter
+
+  # Filter to only include critical alerts
+  alert_filter:
+    (): scripts.log_filters.AlertFilter
+
+handlers:
+  # Console output for development and debugging
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: simple
+    stream: ext://sys.stdout
+
+  # Main application log file
+  app_file:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: detailed
+    filename: /app/logs/application.log
+    maxBytes: 10485760  # 10MB
+    backupCount: 5
+    encoding: utf8
+
+  # Performance monitoring logs
+  performance_file:
+    class: logging.handlers.RotatingFileHandler
+    level: INFO
+    formatter: performance
+    filename: /app/logs/performance.log
+    maxBytes: 5242880   # 5MB
+    backupCount: 3
+    encoding: utf8
+    filters: [performance_filter]
+
+  # Alert logs for critical issues
+  alert_file:
+    class: logging.handlers.RotatingFileHandler
+    level: WARNING
+    formatter: alert
+    filename: /app/logs/alerts.log
+    maxBytes: 2097152   # 2MB
+    backupCount: 5
+    encoding: utf8
+    filters: [alert_filter]
+
+  # JSON structured logs for external processing
+  json_file:
+    class: logging.handlers.RotatingFileHandler
+    level: INFO
+    formatter: json
+    filename: /app/logs/structured.log
+    maxBytes: 20971520  # 20MB
+    backupCount: 3
+    encoding: utf8
+
+  # Memory handler for buffering high-frequency logs
+  memory_handler:
+    class: logging.handlers.MemoryHandler
+    level: DEBUG
+    capacity: 1000
+    flushLevel: ERROR
+    target: app_file
+
+  # Syslog handler for container orchestration
+  syslog:
+    class: logging.handlers.SysLogHandler
+    level: WARNING
+    formatter: simple
+    address: ['localhost', 514]
+
+loggers:
+  # Main application logger
+  bot:
+    level: DEBUG
+    handlers: [console, app_file, json_file]
+    propagate: false
+
+  # Performance monitoring logger
+  performance:
+    level: INFO
+    handlers: [performance_file, console]
+    propagate: false
+
+  # Container monitoring logger
+  monitor:
+    level: INFO
+    handlers: [console, app_file, alert_file]
+    propagate: false
+
+  # Trading engine logger
+  trading:
+    level: INFO
+    handlers: [app_file, json_file, memory_handler]
+    propagate: false
+
+  # Exchange connector loggers
+  exchange:
+    level: INFO
+    handlers: [app_file, json_file]
+    propagate: false
+
+  # LLM and AI decision logging
+  llm:
+    level: INFO
+    handlers: [app_file, json_file]
+    propagate: false
+
+  # Dashboard logger
+  dashboard:
+    level: INFO
+    handlers: [console, app_file, json_file]
+    propagate: false
+
+  # MCP services logger
+  mcp:
+    level: INFO
+    handlers: [app_file, json_file]
+    propagate: false
+
+  # Alert logger for critical system events
+  alerts:
+    level: WARNING
+    handlers: [alert_file, console, syslog]
+    propagate: false
+
+  # External libraries - reduce verbosity
+  urllib3:
+    level: WARNING
+    handlers: [app_file]
+    propagate: false
+
+  requests:
+    level: WARNING
+    handlers: [app_file]
+    propagate: false
+
+  aiohttp:
+    level: INFO
+    handlers: [app_file]
+    propagate: false
+
+  websockets:
+    level: INFO
+    handlers: [app_file]
+    propagate: false
+
+# Root logger configuration
+root:
+  level: INFO
+  handlers: [console, app_file]
