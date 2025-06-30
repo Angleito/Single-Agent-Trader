@@ -94,9 +94,8 @@ RUN echo "Configuring Poetry for optimized Alpine environment..." \
     && poetry config virtualenvs.path $POETRY_VIRTUALENVS_PATH \
     && echo "Poetry configured successfully"
 
-# Install dependencies with enhanced caching and error handling
-RUN --mount=type=cache,target=/opt/poetry-cache \
-    echo "Installing dependencies with cache optimization..." \
+# Install dependencies without BuildKit cache mount for legacy Docker
+RUN echo "Installing dependencies..." \
     && (poetry install --only=main --no-root --no-dev || \
         (echo "Lock file out of sync, regenerating for Alpine..." && \
          poetry lock --no-update && \
