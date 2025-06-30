@@ -140,7 +140,7 @@ COPY bluefin_sdk_service.py /app/
 COPY scripts/validate_env.py /app/
 
 # Copy Docker entrypoint script (from services directory)
-COPY docker-entrypoint-bluefin.sh /app/docker-entrypoint.sh
+COPY ./docker-entrypoint-bluefin.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
 # Create necessary directories with flexible permissions that work with both approaches
