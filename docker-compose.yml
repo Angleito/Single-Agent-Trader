@@ -668,8 +668,20 @@ services:
 
   # Development service (optional) - use with: docker-compose --profile dev up
   ai-trading-bot-dev:
-    extends: ai-trading-bot
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
+        VCS_REF: ${VCS_REF:-$(git rev-parse --short HEAD)}
+        VERSION: ${VERSION:-0.1.0}
+        EXCHANGE_TYPE: ${EXCHANGE__EXCHANGE_TYPE:-bluefin}
+        USER_ID: ${HOST_UID:-1000}
+        GROUP_ID: ${HOST_GID:-1000}
+    image: ai-trading-bot:dev-${VERSION:-latest}
     container_name: ai-trading-bot-dev
+    restart: unless-stopped
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     profiles:
       - dev
     environment:
@@ -757,8 +769,20 @@ services:
   # VPS deployment service (optional) - use with: docker-compose --profile vps up
   # This service demonstrates VPS configuration within the main compose file
   ai-trading-bot-vps:
-    extends: ai-trading-bot
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
+        VCS_REF: ${VCS_REF:-$(git rev-parse --short HEAD)}
+        VERSION: ${VERSION:-0.1.0}
+        EXCHANGE_TYPE: ${EXCHANGE__EXCHANGE_TYPE:-bluefin}
+        USER_ID: ${HOST_UID:-1000}
+        GROUP_ID: ${HOST_GID:-1000}
+    image: ai-trading-bot:vps-${VERSION:-latest}
     container_name: ai-trading-bot-vps-demo
+    restart: unless-stopped
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     profiles:
       - vps
     environment:

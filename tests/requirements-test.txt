@@ -1,50 +1,89 @@
-# Test dependencies for OmniSearch integration tests
+# Test Dependencies for Orderbook Testing Environment
+# 
+# This file contains all dependencies needed for comprehensive orderbook testing
+# including unit tests, integration tests, performance tests, and stress tests.
 
+# Core testing framework
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+pytest-benchmark==4.0.0
+pytest-xdist==3.3.1
+pytest-mock==3.11.1
+pytest-timeout==2.1.0
+pytest-html==4.1.1
+pytest-json-report==1.5.0
+pytest-rerunfailures==12.0
 
-# Async testing utilities
-aioresponses>=0.7.4
+# Property-based testing
+hypothesis==6.88.1
+hypothesis-pytest==0.19.0
 
-# Test data validation
-cerberus>=1.3.0
+# Performance and profiling
+pytest-profiling==1.7.0
+memory-profiler==0.61.0
+psutil==5.9.6
 
-# Coverage reporting
-coverage[toml]>=7.0.0
+# Load and stress testing
+locust==2.17.0
 
 # Mock and testing utilities
-factory-boy>=3.3.0
+responses==0.24.1
+httpx==0.25.2
+aioresponses==0.7.4
+pytest-httpserver==1.0.8
+fakeredis==2.20.1
 
-# Test data generation
-faker>=20.0.0
-freezegun>=1.2.0
-httpx>=0.25.0
-jsonschema>=4.20.0
-line-profiler>=4.1.0
+# WebSocket testing
+websockets==12.0
+websocket-client==1.6.4
 
-# Performance profiling
-memory-profiler>=0.61.0
-# Core testing framework
-pytest>=8.0.0
-pytest-asyncio>=0.23.0
-pytest-benchmark>=4.0.0
-pytest-cov>=4.0.0
+# Database testing
+pytest-postgresql==5.0.0
+pytest-redis==3.0.2
+psycopg2-binary==2.9.9
 
-# Test reporting
-pytest-html>=4.1.0
-pytest-json-report>=1.5.0
-pytest-mock>=3.12.0
+# Container testing
+testcontainers==3.7.1
+docker==6.1.3
 
-# Parallel test execution
-pytest-xdist>=3.5.0
+# Data generation and factories
+factory-boy==3.3.1
+faker==20.1.0
 
-# Date parsing for financial data
-python-dateutil>=2.8.0
+# Mathematical and numerical
+numpy==1.26.2
+pandas==2.1.4
 
-# Additional HTTP testing utilities
-responses>=0.24.0
-scikit-learn>=1.3.0
+# Time and date utilities
+freezegun==1.2.2
+python-dateutil==2.8.2
 
-# Scientific computing (for market context analysis)
-scipy>=1.11.0
+# Serialization and validation
+pydantic==2.5.0
+jsonschema==4.20.0
 
-# Time-based testing
-time-machine>=2.13.0
+# Configuration and environment
+python-dotenv==1.0.0
+pyyaml==6.0.1
+
+# Logging and monitoring
+python-json-logger==2.0.7
+
+# Coverage and reporting
+coverage[toml]==7.3.2
+
+# API testing
+fastapi==0.104.1
+uvicorn==0.24.0
+
+# Development utilities
+rich==13.7.0
+click==8.1.7
+
+# Typing
+typing-extensions==4.8.0
+
+# Asyncio utilities
+aiofiles==23.2.1
+aiohttp==3.9.1
