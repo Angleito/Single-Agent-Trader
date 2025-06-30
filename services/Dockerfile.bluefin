@@ -96,11 +96,11 @@ RUN pip install --no-cache-dir numpy==1.24.3 && \
     (echo "ERROR: All bluefin-v2-client installation methods failed" && exit 1)
 
 # Copy service code (from services directory)
-COPY services/bluefin_sdk_service.py /app/
-COPY services/scripts/validate_env.py /app/
+COPY bluefin_sdk_service.py /app/
+COPY scripts/validate_env.py /app/
 
 # Copy Docker entrypoint script (from services directory)
-COPY services/docker-entrypoint-bluefin.sh /app/docker-entrypoint.sh
+COPY docker-entrypoint-bluefin.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
 # Create necessary directories with flexible permissions that work with both approaches
@@ -125,7 +125,7 @@ RUN mkdir -p /app/logs /app/data /app/tmp && \
 EXPOSE 8080
 
 # Health check script (from services directory)
-COPY services/healthcheck.sh /app/healthcheck.sh
+COPY healthcheck.sh /app/healthcheck.sh
 
 RUN chmod +x /app/healthcheck.sh && \
     if [ "${USER_ID}" != "0" ]; then \
@@ -133,7 +133,7 @@ RUN chmod +x /app/healthcheck.sh && \
     fi
 
 # Ubuntu-optimized extended health check endpoint (from services directory)
-COPY services/ubuntu-healthcheck.sh /app/ubuntu-healthcheck.sh
+COPY ubuntu-healthcheck.sh /app/ubuntu-healthcheck.sh
 
 RUN chmod +x /app/ubuntu-healthcheck.sh && \
     if [ "${USER_ID}" != "0" ]; then \
