@@ -44,70 +44,15 @@ COPY --from=builder /app/dist /app/dist-static
 # Copy optimized nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Create a simple nginx.conf that uses /tmp for all temporary directories
-RUN cat > /etc/nginx/nginx.conf << 'EOF'
-user nginx;
-worker_processes auto;
-error_log /var/log/nginx/error.log warn;
-pid /tmp/nginx.pid;
-
-events {
-    worker_connections 1024;
-}
-
-http {
-    include /etc/nginx/mime.types;
-    default_type application/octet-stream;
-
-    # Use /tmp for all temporary files to avoid permission issues
-    client_body_temp_path /tmp/nginx_client_body;
-    proxy_temp_path /tmp/nginx_proxy;
-    fastcgi_temp_path /tmp/nginx_fastcgi;
-    uwsgi_temp_path /tmp/nginx_uwsgi;
-    scgi_temp_path /tmp/nginx_scgi;
-
-    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
-                    '$status $body_bytes_sent "$http_referer" '
-                    '"$http_user_agent" "$http_x_forwarded_for"';
-
-    access_log /var/log/nginx/access.log main;
-
-    sendfile on;
-    tcp_nopush on;
-    tcp_nodelay on;
-    keepalive_timeout 65;
-    types_hash_max_size 2048;
-
-    # Disable server_tokens for security
-    server_tokens off;
-
-    # Include server configurations
-    include /etc/nginx/conf.d/*.conf;
-}
-EOF
+# Copy nginx main configuration
+COPY nginx-main.conf /etc/nginx/nginx.conf
 
 # Copy runtime environment injection script
 COPY inject-env.sh /docker-entrypoint.d/inject-env.sh
 RUN chmod +x /docker-entrypoint.d/inject-env.sh
 
-# Create startup script to copy assets to writable directory
-RUN cat > /docker-entrypoint.d/00-copy-assets.sh << 'EOF'
-#!/bin/sh
-set -e
-echo "📦 Copying static assets to writable directory..."
-HTML_DIR="/tmp/html"
-echo "Creating ${HTML_DIR} directory..."
-mkdir -p ${HTML_DIR}
-echo "Copying files from /app/dist-static to ${HTML_DIR}..."
-if [ -d "/app/dist-static" ] && [ "$(ls -A /app/dist-static)" ]; then
-    cp -r /app/dist-static/* ${HTML_DIR}/
-    echo "✅ Assets copied successfully"
-else
-    echo "❌ Source directory /app/dist-static is empty or doesn't exist"
-    ls -la /app/
-fi
-EOF
-
+# Copy startup script to copy assets to writable directory
+COPY copy-assets.sh /docker-entrypoint.d/00-copy-assets.sh
 RUN chmod +x /docker-entrypoint.d/00-copy-assets.sh
 
 # Set proper permissions for static assets
