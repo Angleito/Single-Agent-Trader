@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 python:3.12-alpine
+FROM --platform=linux/amd64 python:3.11-alpine
 
 # Build arguments for versioning
 ARG BUILD_DATE
@@ -18,7 +18,7 @@ LABEL maintainer="AI Trading Bot Team" \
       deployment.service="bluefin-service" \
       deployment.monitoring="enabled"
 
-# Alpine-optimized system dependencies
+# Alpine-optimized system dependencies with Python 3.11 compatibility
 RUN apk add --no-cache \
     build-base \
     curl \
@@ -31,14 +31,19 @@ RUN apk add --no-cache \
     # Process monitoring tools
     procps \
     htop \
-    # Development libraries
+    # Development libraries for Python C extensions
     libffi-dev \
     autoconf \
     automake \
     libtool \
     pkgconfig \
+    gcc \
+    musl-dev \
     # SSL/TLS support
-    openssl
+    openssl \
+    openssl-dev \
+    # Additional dependencies for crypto libraries
+    linux-headers
 
 # Create flexible user setup for both named users and UID/GID mapping
 # Support both built-in bluefin user and host user mapping via docker-compose
@@ -78,14 +83,16 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     && pip cache purge
 
 # Ubuntu-optimized dependency installation with better error handling
-# Install compatible aiohttp version first to avoid compilation issues
-RUN pip install --no-cache-dir aiohttp==3.9.5 || \
-    (echo "aiohttp installation failed, trying alternative..." && pip install --no-cache-dir httpx[http2])
+# Let bluefin-v2-client install its required aiohttp version (3.8.x) for compatibility
 
-# Install Bluefin client with precompiled wheels preferred
-RUN pip install --no-cache-dir bluefin-v2-client || \
-    pip install --no-cache-dir --force-reinstall bluefin-v2-client || \
-    pip install --no-cache-dir git+https://github.com/fireflyprotocol/bluefin-v2-client-python.git || \
+# Install Bluefin client with Python 3.11 compatibility optimizations
+# Install numpy and other dependencies first to avoid version conflicts
+RUN pip install --no-cache-dir numpy==1.24.3 && \
+    pip install --no-cache-dir bluefin-v2-client || \
+    (echo "Direct installation failed, trying with --no-build-isolation..." && \
+     pip install --no-cache-dir --no-build-isolation bluefin-v2-client) || \
+    (echo "Trying from source repository..." && \
+     pip install --no-cache-dir git+https://github.com/fireflyprotocol/bluefin-v2-client-python.git) || \
     (echo "ERROR: All bluefin-v2-client installation methods failed" && exit 1)
 
 # Copy service code (from services directory)
