@@ -1,5 +1,5 @@
 # Mock Coinbase Service Dockerfile
-# 
+#
 # Creates a mock Coinbase Advanced Trade API service for testing orderbook functionality
 # Simulates real Coinbase API endpoints and WebSocket feeds
 #

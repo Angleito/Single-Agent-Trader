@@ -42,29 +42,29 @@ print_header() {
 # Function to check prerequisites
 check_prerequisites() {
     print_status "Checking prerequisites..."
-    
+
     # Check if Docker is running
     if ! docker info >/dev/null 2>&1; then
         print_error "Docker is not running or not accessible"
         exit 1
     fi
-    
+
     # Check if Python 3 is available
     if ! command -v python3 &> /dev/null; then
         print_error "Python 3 is not installed or not in PATH"
         exit 1
     fi
-    
+
     # Check if required Python packages are available
     for package in docker flask requests pyyaml psutil; do
         if ! python3 -c "import $package" >/dev/null 2>&1; then
             print_warning "Python package '$package' not found. Install with: pip install $package"
         fi
     done
-    
+
     # Create logs directory if it doesn't exist
     mkdir -p "$LOGS_DIR"
-    
+
     print_status "Prerequisites check completed"
 }
 
@@ -82,14 +82,14 @@ setup_alert_config() {
 # Function to validate current logs
 validate_existing_logs() {
     print_status "Validating existing logs..."
-    
+
     if [ -d "$LOGS_DIR" ] && [ "$(ls -A $LOGS_DIR 2>/dev/null)" ]; then
         print_status "Found existing logs, running validation..."
         python3 ./scripts/log_analysis_validator.py \
             --logs-dir "$LOGS_DIR" \
             --format text \
             --output "$LOGS_DIR/initial_validation_report.md"
-        
+
         if [ $? -eq 0 ]; then
             print_status "Initial log validation completed. Report saved to: $LOGS_DIR/initial_validation_report.md"
         else
@@ -103,21 +103,21 @@ validate_existing_logs() {
 # Function to start the log monitor
 start_log_monitor() {
     print_status "Starting Docker log monitor..."
-    
+
     # Start log monitor in background
     python3 ./scripts/docker_log_monitor.py \
         --logs-dir "$LOGS_DIR" \
         --verbose \
         > "$LOGS_DIR/log_monitor.log" 2>&1 &
-    
+
     LOG_MONITOR_PID=$!
     echo $LOG_MONITOR_PID > "$LOGS_DIR/log_monitor.pid"
-    
+
     print_status "Log monitor started (PID: $LOG_MONITOR_PID)"
-    
+
     # Wait a moment for monitor to initialize
     sleep 3
-    
+
     # Check if monitor is still running
     if ! kill -0 $LOG_MONITOR_PID 2>/dev/null; then
         print_error "Log monitor failed to start. Check $LOGS_DIR/log_monitor.log for details"
@@ -128,22 +128,22 @@ start_log_monitor() {
 # Function to start the alert manager
 start_alert_manager() {
     print_status "Starting alert manager..."
-    
+
     # Start alert manager in background
     python3 ./scripts/alert_manager.py \
         --config "$ALERT_CONFIG" \
         --logs-dir "$LOGS_DIR" \
         --verbose \
         > "$LOGS_DIR/alert_manager.log" 2>&1 &
-    
+
     ALERT_MANAGER_PID=$!
     echo $ALERT_MANAGER_PID > "$LOGS_DIR/alert_manager.pid"
-    
+
     print_status "Alert manager started (PID: $ALERT_MANAGER_PID)"
-    
+
     # Wait a moment for alert manager to initialize
     sleep 2
-    
+
     # Check if alert manager is still running
     if ! kill -0 $ALERT_MANAGER_PID 2>/dev/null; then
         print_error "Alert manager failed to start. Check $LOGS_DIR/alert_manager.log for details"
@@ -154,7 +154,7 @@ start_alert_manager() {
 # Function to start the dashboard
 start_dashboard() {
     print_status "Starting test result dashboard..."
-    
+
     # Start dashboard in background
     python3 ./scripts/test_result_dashboard.py \
         --port "$DASHBOARD_PORT" \
@@ -162,15 +162,15 @@ start_dashboard() {
         --logs-dir "$LOGS_DIR" \
         --load-data \
         > "$LOGS_DIR/dashboard.log" 2>&1 &
-    
+
     DASHBOARD_PID=$!
     echo $DASHBOARD_PID > "$LOGS_DIR/dashboard.pid"
-    
+
     print_status "Dashboard started (PID: $DASHBOARD_PID)"
-    
+
     # Wait for dashboard to start
     sleep 5
-    
+
     # Check if dashboard is accessible
     if curl -f "http://localhost:$DASHBOARD_PORT" >/dev/null 2>&1; then
         print_status "Dashboard is accessible at: http://localhost:$DASHBOARD_PORT"
@@ -183,7 +183,7 @@ start_dashboard() {
 show_status() {
     print_status "Log Validation Suite Status:"
     echo ""
-    
+
     # Check log monitor
     if [ -f "$LOGS_DIR/log_monitor.pid" ]; then
         LOG_MONITOR_PID=$(cat "$LOGS_DIR/log_monitor.pid")
@@ -195,7 +195,7 @@ show_status() {
     else
         echo -e "  ${RED}✗${NC} Log Monitor (not started)"
     fi
-    
+
     # Check alert manager
     if [ -f "$LOGS_DIR/alert_manager.pid" ]; then
         ALERT_MANAGER_PID=$(cat "$LOGS_DIR/alert_manager.pid")
@@ -207,7 +207,7 @@ show_status() {
     else
         echo -e "  ${RED}✗${NC} Alert Manager (not started)"
     fi
-    
+
     # Check dashboard
     if [ -f "$LOGS_DIR/dashboard.pid" ]; then
         DASHBOARD_PID=$(cat "$LOGS_DIR/dashboard.pid")
@@ -219,20 +219,20 @@ show_status() {
     else
         echo -e "  ${RED}✗${NC} Dashboard (not started)"
     fi
-    
+
     echo ""
-    
+
     # Show recent container status
     print_status "Docker Containers:"
     docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || print_warning "Could not retrieve container status"
-    
+
     echo ""
-    
+
     # Show log file status
     if [ -d "$LOGS_DIR" ]; then
         LOG_COUNT=$(find "$LOGS_DIR" -name "*.log" -o -name "*.jsonl" | wc -l)
         print_status "Log Files: $LOG_COUNT files in $LOGS_DIR"
-        
+
         if [ $LOG_COUNT -gt 0 ]; then
             echo "Recent log files:"
             find "$LOGS_DIR" -name "*.log" -o -name "*.jsonl" | head -5 | while read file; do
@@ -245,7 +245,7 @@ show_status() {
 # Function to stop all services
 stop_services() {
     print_status "Stopping log validation suite..."
-    
+
     # Stop dashboard
     if [ -f "$LOGS_DIR/dashboard.pid" ]; then
         DASHBOARD_PID=$(cat "$LOGS_DIR/dashboard.pid")
@@ -255,7 +255,7 @@ stop_services() {
         fi
         rm -f "$LOGS_DIR/dashboard.pid"
     fi
-    
+
     # Stop alert manager
     if [ -f "$LOGS_DIR/alert_manager.pid" ]; then
         ALERT_MANAGER_PID=$(cat "$LOGS_DIR/alert_manager.pid")
@@ -265,7 +265,7 @@ stop_services() {
         fi
         rm -f "$LOGS_DIR/alert_manager.pid"
     fi
-    
+
     # Stop log monitor
     if [ -f "$LOGS_DIR/log_monitor.pid" ]; then
         LOG_MONITOR_PID=$(cat "$LOGS_DIR/log_monitor.pid")
@@ -275,26 +275,26 @@ stop_services() {
         fi
         rm -f "$LOGS_DIR/log_monitor.pid"
     fi
-    
+
     print_status "All services stopped"
 }
 
 # Function to run a quick log analysis
 run_analysis() {
     print_status "Running comprehensive log analysis..."
-    
+
     # Run analysis on current logs
     python3 ./scripts/log_analysis_validator.py \
         --logs-dir "$LOGS_DIR" \
         --format text \
         --output "$LOGS_DIR/analysis_report_$(date +%Y%m%d_%H%M%S).md"
-    
+
     if [ $? -eq 0 ]; then
         print_status "Analysis completed. Report saved to logs directory."
     else
         print_warning "Analysis completed with warnings"
     fi
-    
+
     # Show alert status
     python3 ./scripts/alert_manager.py --config "$ALERT_CONFIG" --status
 }
@@ -340,7 +340,7 @@ trap 'cleanup' INT TERM
 # Main execution
 main() {
     local command="${1:-start}"
-    
+
     case "$command" in
         "start")
             print_header

@@ -77,11 +77,11 @@ class OrderBookStateMachine(RuleBasedStateMachine):
     @rule()
     def add_bid_level(self):
         # Add new bid while maintaining ordering
-        
+
     @rule()
     def remove_top_bid(self):
         # Remove best bid and verify invariants
-        
+
     @invariant()
     def orderbook_always_valid(self):
         # Ensure orderbook remains valid after every operation
@@ -399,7 +399,7 @@ def your_domain_strategy(draw):
 
 ```python
 # Optimize generators
-@st.composite  
+@st.composite
 def optimized_strategy(draw):
     # Pre-generate common values
     common_prices = [Decimal('100.0'), Decimal('101.0'), Decimal('99.0')]

@@ -102,15 +102,15 @@ def test_orderbook_price_ordering(orderbook_data):
     """Bid prices must be in descending order, ask prices in ascending order."""
     bids = orderbook_data['bids']
     asks = orderbook_data['asks']
-    
+
     # Bids: highest price first
     for i in range(len(bids) - 1):
         assert bids[i]['price'] >= bids[i + 1]['price']
-    
-    # Asks: lowest price first  
+
+    # Asks: lowest price first
     for i in range(len(asks) - 1):
         assert asks[i]['price'] <= asks[i + 1]['price']
-    
+
     # Spread validation: best ask >= best bid
     if bids and asks:
         assert asks[0]['price'] >= bids[0]['price']
@@ -122,13 +122,13 @@ def test_orderbook_price_ordering(orderbook_data):
 def test_volume_conservation(orders):
     """Total volume must be conserved through order matching."""
     initial_volume = sum(order['size'] for order in orders)
-    
+
     # Process orders through matching engine
     remaining_orders, trades = process_orders(orders)
-    
+
     remaining_volume = sum(order['size'] for order in remaining_orders)
     traded_volume = sum(trade['size'] for trade in trades)
-    
+
     # Conservation law
     assert initial_volume == remaining_volume + traded_volume
 ```
@@ -151,7 +151,7 @@ def test_volume_conservation(orders):
 
 **Core Orderbook Operations:**
 - Order placement and cancellation
-- Market data subscription and processing  
+- Market data subscription and processing
 - Price level aggregation and sorting
 - Order matching and execution simulation
 - Balance and position tracking
@@ -215,7 +215,7 @@ async def test_sdk_service_orderbook_fetch():
         assert len(orderbook.asks) > 0
 
 # WebSocket data flow
-@pytest.mark.asyncio  
+@pytest.mark.asyncio
 async def test_websocket_orderbook_updates():
     async with WebSocketClient() as ws:
         await ws.subscribe("BTC-PERP")
@@ -237,12 +237,12 @@ async def test_websocket_orderbook_updates():
 def test_order_matching_properties(orders):
     """Price-time priority must be maintained."""
     result = match_orders(orders)
-    
+
     # Price improvement property
     for trade in result.trades:
         assert trade.price >= result.market_price
-    
-    # Time priority property  
+
+    # Time priority property
     earlier_orders = [o for o in orders if o.timestamp < trade.timestamp]
     assert all(o.price < trade.price for o in earlier_orders)
 
@@ -270,7 +270,7 @@ def test_orderbook_update_throughput():
     with performance_monitor() as monitor:
         for _ in range(10000):
             update_orderbook(generate_random_update())
-        
+
         assert monitor.throughput > 1000  # updates/sec
         assert monitor.p99_latency < 10   # milliseconds
 
@@ -279,10 +279,10 @@ def test_orderbook_update_throughput():
 def test_memory_usage_stability():
     """Memory usage must remain stable under sustained load."""
     initial_memory = get_memory_usage()
-    
+
     for _ in range(100000):
         process_orderbook_update(generate_update())
-    
+
     final_memory = get_memory_usage()
     memory_growth = final_memory - initial_memory
     assert memory_growth < 50_000_000  # 50MB max growth
@@ -291,7 +291,7 @@ def test_memory_usage_stability():
 ### 5. Security Tests (Vulnerability, Compliance)
 
 **Scope**: Security vulnerabilities and compliance
-**Execution Time**: 1s - 5min per test  
+**Execution Time**: 1s - 5min per test
 **Dependencies**: Security scanning tools
 
 **Examples:**
@@ -304,7 +304,7 @@ def test_sql_injection_protection():
         "1' OR '1'='1",
         "UNION SELECT * FROM users"
     ]
-    
+
     for payload in malicious_inputs:
         with pytest.raises(ValidationError):
             query_orderbook(symbol=payload)
@@ -313,7 +313,7 @@ def test_sql_injection_protection():
 def test_authentication_bypass():
     """Unauthenticated requests must be rejected."""
     client = BluefinClient(private_key=None)
-    
+
     with pytest.raises(AuthenticationError):
         client.place_order(symbol="BTC-PERP", price=50000, size=1.0)
 ```
@@ -330,7 +330,7 @@ def test_authentication_bypass():
 - **Volume**: ~100GB compressed historical data
 
 **Live Data:**
-- **Source**: Bluefin WebSocket feeds  
+- **Source**: Bluefin WebSocket feeds
 - **Coverage**: Real-time orderbook updates
 - **Latency**: < 50ms from exchange
 - **Backup**: Redundant data centers
@@ -342,12 +342,12 @@ def test_authentication_bypass():
 ```python
 class MarketSimulator:
     """Generates realistic market conditions for testing."""
-    
+
     def __init__(self, initial_price: Decimal, volatility: float):
         self.price = initial_price
         self.volatility = volatility
         self.orderbook = OrderBook()
-    
+
     def generate_realistic_updates(self, duration_minutes: int):
         """Generate market updates with realistic patterns."""
         # Brownian motion for price movement
@@ -355,11 +355,11 @@ class MarketSimulator:
         # Log-normal distribution for order sizes
         # Time-varying volatility patterns
         pass
-    
+
     def inject_market_stress(self):
         """Simulate extreme market conditions."""
         # Flash crashes, circuit breakers
-        # High frequency trading patterns  
+        # High frequency trading patterns
         # Market manipulation attempts
         pass
 ```
@@ -370,7 +370,7 @@ class MarketSimulator:
 extreme_scenarios = [
     "flash_crash_50_percent",      # 50% price drop in 1 second
     "liquidity_drought",           # Orderbook depth < 1% normal
-    "price_discovery_failure",     # No trades for 10+ minutes  
+    "price_discovery_failure",     # No trades for 10+ minutes
     "circuit_breaker_halt",        # Trading halt simulation
     "whale_order_impact",          # Single large order impact
     "network_partition",           # Connectivity loss scenarios
@@ -385,21 +385,21 @@ extreme_scenarios = [
 ```python
 def validate_test_data(dataset):
     """Comprehensive test data validation."""
-    
+
     # Schema validation
     assert all(validate_orderbook_schema(book) for book in dataset)
-    
+
     # Financial invariants
     assert all(book.spread >= 0 for book in dataset if book.has_data())
-    
-    # Temporal consistency  
+
+    # Temporal consistency
     timestamps = [book.timestamp for book in dataset]
     assert timestamps == sorted(timestamps)
-    
+
     # Volume sanity checks
     total_volume = sum(book.total_volume() for book in dataset)
     assert 0 < total_volume < MAX_REALISTIC_VOLUME
-    
+
     # Price range validation
     prices = [book.mid_price() for book in dataset if book.mid_price()]
     price_range = max(prices) / min(prices)
@@ -414,18 +414,18 @@ def validate_test_data(dataset):
 ```python
 class MockWebSocketClient:
     """Production-like WebSocket mock with configurable behavior."""
-    
+
     def __init__(self, latency_ms: int = 50, drop_rate: float = 0.001):
         self.latency = latency_ms / 1000.0
         self.drop_rate = drop_rate
         self.message_queue = asyncio.Queue()
         self.connected = False
-    
+
     async def connect(self):
         await asyncio.sleep(self.latency)
         self.connected = True
         asyncio.create_task(self._message_generator())
-    
+
     async def _message_generator(self):
         """Generate realistic message patterns."""
         while self.connected:
@@ -433,11 +433,11 @@ class MockWebSocketClient:
             if random.random() > self.drop_rate:
                 message = self._generate_orderbook_update()
                 await self.message_queue.put(message)
-            
+
             # Variable timing based on market activity
             delay = random.expovariate(1.0 / self.latency)
             await asyncio.sleep(delay)
-    
+
     def inject_fault(self, fault_type: str):
         """Inject specific fault conditions."""
         if fault_type == "connection_drop":
@@ -458,7 +458,7 @@ from unittest.mock import AsyncMock
 @responses.activate
 def setup_bluefin_api_mocks():
     """Configure realistic Bluefin API responses."""
-    
+
     # Successful orderbook response
     responses.add(
         responses.GET,
@@ -471,20 +471,20 @@ def setup_bluefin_api_mocks():
         },
         status=200
     )
-    
+
     # Rate limiting response
     responses.add(
-        responses.GET, 
+        responses.GET,
         "https://dapi.api.sui-mainnet.bluefin.io/orderbook",
         json={"error": "rate_limit_exceeded"},
         status=429,
         headers={"Retry-After": "5"}
     )
-    
+
     # Server error response
     responses.add(
         responses.GET,
-        "https://dapi.api.sui-mainnet.bluefin.io/orderbook", 
+        "https://dapi.api.sui-mainnet.bluefin.io/orderbook",
         json={"error": "internal_server_error"},
         status=500
     )
@@ -492,27 +492,27 @@ def setup_bluefin_api_mocks():
 # Stateful mocking for complex interactions
 class MockBluefinService:
     """Stateful mock maintaining orderbook state."""
-    
+
     def __init__(self):
         self.orderbooks = {}
         self.connection_state = "connected"
         self.request_count = 0
-        
+
     async def get_orderbook(self, symbol: str):
         self.request_count += 1
-        
+
         # Simulate rate limiting
         if self.request_count > 100:
             raise RateLimitError("Too many requests")
-            
+
         # Simulate connection issues
         if self.connection_state == "disconnected":
             raise ConnectionError("Service unavailable")
-            
+
         # Return cached or generate new orderbook
         if symbol not in self.orderbooks:
             self.orderbooks[symbol] = self._generate_orderbook(symbol)
-            
+
         return self.orderbooks[symbol]
 ```
 
@@ -525,11 +525,11 @@ from contextlib import contextmanager
 
 class MockDatabase:
     """In-memory database for testing persistence operations."""
-    
+
     def __init__(self):
         self.conn = sqlite3.connect(":memory:")
         self._setup_schema()
-        
+
     def _setup_schema(self):
         """Create test database schema."""
         self.conn.execute("""
@@ -542,7 +542,7 @@ class MockDatabase:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        
+
     @contextmanager
     def transaction(self):
         """Database transaction context manager."""
@@ -552,7 +552,7 @@ class MockDatabase:
         except Exception:
             self.conn.rollback()
             raise
-            
+
     def inject_failure(self, failure_type: str):
         """Simulate database failures."""
         if failure_type == "disk_full":
@@ -652,7 +652,7 @@ export PYTEST_TIMEOUT=300
 # Database configuration
 export DATABASE_URL=postgresql://test_user:test_password@test-database:5432/test_trading_bot
 
-# Mock service configuration  
+# Mock service configuration
 export BLUEFIN_SERVICE_URL=http://mock-bluefin-service:8080
 export MOCK_REALISTIC_LATENCY=true
 export MOCK_INJECT_ERRORS=true
@@ -668,7 +668,7 @@ export STRESS_TEST_CPU_LIMIT=2
 ```bash
 # Mount test data and results
 ./tests/data/:/app/test-data/          # Historical market data
-./tests/fixtures/:/app/fixtures/       # Test fixtures and mocks  
+./tests/fixtures/:/app/fixtures/       # Test fixtures and mocks
 ./test-results/:/app/test-results/     # Test outputs and reports
 ./logs/:/app/logs/                     # Application logs
 ```
@@ -691,7 +691,7 @@ deploy:
       cpus: '2.0'
       memory: 2G
     reservations:
-      cpus: '1.0'  
+      cpus: '1.0'
       memory: 1G
 ```
 
@@ -722,7 +722,7 @@ echo "🧪 Running unit tests..."
 docker-compose -f docker-compose.test.yml run --rm bluefin-orderbook-test \
     pytest tests/unit/ -v --maxfail=5
 
-echo "🔗 Running integration tests..."  
+echo "🔗 Running integration tests..."
 docker-compose -f docker-compose.test.yml run --rm bluefin-orderbook-test \
     pytest tests/integration/ -v --maxfail=3
 
@@ -761,7 +761,7 @@ hypothesis = "^6.125.0"
 hypothesis-pytest = "^0.19.0"
 faker = "^30.8.2"
 
-# Enhanced pytest functionality  
+# Enhanced pytest functionality
 pytest = "^8.4.0"
 pytest-asyncio = "^1.0.0"
 pytest-cov = "^6.2.0"
@@ -777,7 +777,7 @@ numpy-stubs = "^1.26.0"
 
 # API mocking and testing
 responses = "^0.25.4"             # HTTP request mocking
-aioresponses = "^0.7.7"          # Async HTTP mocking  
+aioresponses = "^0.7.7"          # Async HTTP mocking
 pytest-httpserver = "^1.1.0"     # Local HTTP server for testing
 websockets = "^15.0.0"           # WebSocket testing
 
@@ -785,7 +785,7 @@ websockets = "^15.0.0"           # WebSocket testing
 pytest-postgresql = "^6.1.1"     # PostgreSQL test fixtures
 pytest-redis = "^3.1.2"          # Redis test fixtures
 
-# Load and performance testing  
+# Load and performance testing
 locust = "^2.32.2"               # Load testing framework
 py-spy = "^0.3.14"               # Performance profiling
 memory-profiler = "^0.61.0"      # Memory usage profiling
@@ -931,15 +931,15 @@ psutil = "^6.1.0"                # System resource monitoring
 # Ensure test isolation
 class TestIsolation:
     """Ensure tests don't interfere with each other."""
-    
+
     @pytest.fixture(autouse=True)
     def isolate_test(self):
         # Reset global state
         reset_global_caches()
         clear_connection_pools()
-        
+
         yield
-        
+
         # Cleanup after test
         close_all_connections()
         reset_metrics_collectors()
@@ -953,7 +953,7 @@ def isolated_database():
     """Create isolated test database."""
     db_name = f"test_{uuid.uuid4().hex[:8]}"
     create_test_database(db_name)
-    
+
     try:
         yield get_database_connection(db_name)
     finally:
@@ -967,7 +967,7 @@ def isolated_database():
 # Monitor test suite health
 class TestHealthMonitor:
     """Monitor test suite performance and reliability."""
-    
+
     def track_test_metrics(self):
         return {
             "execution_time": self.measure_execution_time(),
@@ -975,12 +975,12 @@ class TestHealthMonitor:
             "coverage_percentage": self.get_coverage_percentage(),
             "flaky_test_count": self.count_flaky_tests()
         }
-    
+
     def alert_on_degradation(self, metrics):
         """Alert when test suite quality degrades."""
         if metrics["execution_time"] > EXECUTION_TIME_THRESHOLD:
             send_alert("Test suite execution time exceeded threshold")
-        
+
         if metrics["failure_rate"] > FAILURE_RATE_THRESHOLD:
             send_alert("Test failure rate too high")
 ```

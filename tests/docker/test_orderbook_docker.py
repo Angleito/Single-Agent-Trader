@@ -182,9 +182,9 @@ class TestOrderbookDockerIntegration:
             # Test test tables exist
             cursor.execute(
                 """
-                SELECT table_name 
-                FROM information_schema.tables 
-                WHERE table_schema = 'public' 
+                SELECT table_name
+                FROM information_schema.tables
+                WHERE table_schema = 'public'
                 AND table_name LIKE '%test%'
             """
             )

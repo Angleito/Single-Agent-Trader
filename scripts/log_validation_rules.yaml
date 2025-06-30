@@ -90,7 +90,7 @@ container_rules:
       - trading_latency
       - decision_time
       - market_data_lag
-  
+
   dashboard:
     required_loggers:
       - dashboard.app
@@ -102,7 +102,7 @@ container_rules:
     performance_metrics:
       - response_time
       - concurrent_users
-  
+
   mcp-memory:
     required_loggers:
       - mcp.memory
@@ -144,12 +144,12 @@ monitoring_rules:
     disk_critical: 95.0
     network_warning_mbps: 50.0
     network_critical_mbps: 100.0
-  
+
   alert_frequencies:
     max_alerts_per_minute: 10
     alert_cooldown_seconds: 300
     escalation_threshold: 5
-  
+
   metric_validation:
     required_metrics:
       - cpu_percent
@@ -165,7 +165,7 @@ test_monitoring:
     unit_test_timeout: 30.0
     integration_test_timeout: 300.0
     load_test_timeout: 1800.0
-  
+
   test_patterns:
     start_patterns:
       - "test started"
@@ -180,7 +180,7 @@ test_monitoring:
       - "test error"
       - "assertion failed"
       - "test timeout"
-  
+
   coverage_requirements:
     min_line_coverage: 80.0
     min_branch_coverage: 70.0
@@ -204,13 +204,13 @@ alerting:
     - console
     - file
     - webhook
-  
+
   severity_levels:
     INFO: 0
     WARNING: 1
     ERROR: 2
     CRITICAL: 3
-  
+
   escalation_rules:
     - condition: "error_count > 10"
       action: "notify_admin"
@@ -225,7 +225,7 @@ output_formatting:
   timezone: "UTC"
   decimal_precision: 2
   percentage_precision: 1
-  
+
   report_sections:
     - executive_summary
     - container_analysis

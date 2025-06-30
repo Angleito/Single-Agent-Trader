@@ -6,7 +6,7 @@ This comprehensive log validation system provides real-time monitoring, analysis
 
 ### 1. Log Analysis Validator (`log_analysis_validator.py`)
 - **Purpose**: Analyzes log files and Docker container logs for quality, coverage, and issues
-- **Features**: 
+- **Features**:
   - Pattern matching for different log formats (JSON, detailed, simple, performance)
   - Test result extraction from pytest and custom test formats
   - Performance metrics extraction
@@ -156,7 +156,7 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./scripts/logging-config.yaml:/app/logging-config.yaml
-    
+
   log-monitor:
     build: .
     command: python scripts/docker_log_monitor.py
@@ -280,7 +280,7 @@ Message: Test failure rate is 23.5% (4/17) in the last 1h, exceeding threshold o
    ```bash
    # Check Docker daemon is running
    docker ps
-   
+
    # Verify container names
    docker ps --format "table {{.Names}}\t{{.Status}}"
    ```
@@ -296,7 +296,7 @@ Message: Test failure rate is 23.5% (4/17) in the last 1h, exceeding threshold o
    ```bash
    # Manually load data from logs
    ./scripts/test_result_dashboard.py --load-data
-   
+
    # Check log file formats
    head -n 5 ./logs/*-tests.jsonl
    ```
@@ -305,7 +305,7 @@ Message: Test failure rate is 23.5% (4/17) in the last 1h, exceeding threshold o
    ```bash
    # Check alert status
    ./scripts/alert_manager.py --status
-   
+
    # Test with verbose output
    ./scripts/alert_manager.py --verbose
    ```
@@ -345,7 +345,7 @@ test_file.py::test_function FAILED [2.45s]
 - name: Analyze Test Logs
   run: |
     ./scripts/log_analysis_validator.py --format json --output test_analysis.json
-    
+
 - name: Upload Test Results
   uses: actions/upload-artifact@v3
   with:

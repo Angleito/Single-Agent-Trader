@@ -1,5 +1,5 @@
 # Mock Exchange WebSocket Dockerfile
-# 
+#
 # Creates a generic mock exchange WebSocket service for testing orderbook functionality
 # Provides high-frequency orderbook updates for stress testing
 #

@@ -1,5 +1,5 @@
 -- Test Database Initialization Script
--- 
+--
 -- This script sets up the test database schema for orderbook testing
 -- including tables for storing test results, performance metrics, and test data
 
@@ -207,7 +207,7 @@ CREATE INDEX idx_stress_throughput_run_id ON stress_test_throughput(test_run_id)
 
 -- Test summary view
 CREATE OR REPLACE VIEW test_summary AS
-SELECT 
+SELECT
     tr.id,
     tr.run_timestamp,
     tr.test_type,
@@ -228,7 +228,7 @@ GROUP BY tr.id, tr.run_timestamp, tr.test_type, tr.status, tr.duration_seconds,
 
 -- Performance benchmark summary
 CREATE OR REPLACE VIEW benchmark_summary AS
-SELECT 
+SELECT
     pb.benchmark_name,
     pb.operation_name,
     COUNT(*) AS run_count,
@@ -243,7 +243,7 @@ GROUP BY pb.benchmark_name, pb.operation_name;
 
 -- Recent test failures
 CREATE OR REPLACE VIEW recent_test_failures AS
-SELECT 
+SELECT
     tr.test_name,
     tr.test_module,
     tr.test_category,
@@ -270,23 +270,23 @@ DECLARE
     cutoff_date TIMESTAMP WITH TIME ZONE;
 BEGIN
     cutoff_date := NOW() - (days_to_keep || ' days')::INTERVAL;
-    
+
     -- Delete old test results
-    DELETE FROM test_results 
+    DELETE FROM test_results
     WHERE test_run_id IN (
         SELECT id FROM test_runs WHERE created_at < cutoff_date
     );
-    
+
     GET DIAGNOSTICS deleted_count = ROW_COUNT;
-    
+
     -- Delete old test runs
     DELETE FROM test_runs WHERE created_at < cutoff_date;
-    
+
     -- Delete old mock data
     DELETE FROM mock_orderbook_snapshots WHERE created_at < cutoff_date;
     DELETE FROM mock_trades WHERE created_at < cutoff_date;
     DELETE FROM mock_websocket_messages WHERE created_at < cutoff_date;
-    
+
     RETURN deleted_count;
 END;
 $$ LANGUAGE plpgsql;
@@ -297,7 +297,7 @@ $$ LANGUAGE plpgsql;
 
 -- Insert sample test run
 INSERT INTO test_runs (
-    test_type, status, duration_seconds, total_tests, 
+    test_type, status, duration_seconds, total_tests,
     passed_tests, failed_tests, skipped_tests,
     environment, metadata
 ) VALUES (

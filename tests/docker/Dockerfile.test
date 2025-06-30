@@ -1,5 +1,5 @@
 # Test Environment Dockerfile for Orderbook Testing
-# 
+#
 # This Dockerfile creates a comprehensive testing environment for orderbook functionality
 # including all necessary testing dependencies, tools, and optimizations.
 #

@@ -1,5 +1,5 @@
 # Mock Bluefin Service Dockerfile
-# 
+#
 # Creates a mock Bluefin DEX service for testing orderbook functionality
 # Simulates real Bluefin API endpoints and WebSocket feeds
 #

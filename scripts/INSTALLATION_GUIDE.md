@@ -223,7 +223,7 @@ spec:
    ```bash
    # Add user to docker group (Linux)
    sudo usermod -aG docker $USER
-   
+
    # Or use sudo for testing
    sudo python3 scripts/docker_log_monitor.py
    ```
@@ -233,7 +233,7 @@ spec:
    # Verify Python environment
    which python3
    python3 -m pip list
-   
+
    # Install missing packages
    python3 -m pip install <package_name>
    ```
@@ -242,7 +242,7 @@ spec:
    ```bash
    # Use different dashboard port
    DASHBOARD_PORT=8081 ./scripts/start_log_validation_suite.sh start
-   
+
    # Or find and kill process using port
    lsof -ti:8080 | xargs kill -9
    ```

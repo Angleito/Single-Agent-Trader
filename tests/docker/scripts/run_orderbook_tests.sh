@@ -73,17 +73,17 @@ log_error() {
 
 setup_environment() {
     log "Setting up test environment..."
-    
+
     # Create results directory
     mkdir -p "${RESULTS_DIR}"
     mkdir -p "${PROJECT_ROOT}/tests/data/mock-bluefin"
     mkdir -p "${PROJECT_ROOT}/tests/data/mock-coinbase"
     mkdir -p "${PROJECT_ROOT}/tests/data/mock-exchange"
     mkdir -p "${PROJECT_ROOT}/logs/test"
-    
+
     # Set permissions
     chmod -R 755 "${PROJECT_ROOT}/tests/docker/scripts"
-    
+
     # Create test environment file
     cat > "${PROJECT_ROOT}/.env.test" << EOF
 # Test Environment Configuration
@@ -132,9 +132,9 @@ EOF
 
 build_test_images() {
     log "Building test Docker images..."
-    
+
     cd "${PROJECT_ROOT}"
-    
+
     # Build test runner image
     log "Building test runner image..."
     docker build \
@@ -143,59 +143,59 @@ build_test_images() {
         --build-arg USER_ID=$(id -u) \
         --build-arg GROUP_ID=$(id -g) \
         .
-    
+
     # Build mock service images
     log "Building mock Bluefin service..."
     docker build \
         -f tests/docker/mocks/Dockerfile.mock-bluefin \
         -t mock-bluefin-service:latest \
         tests/docker/mocks/
-    
+
     log "Building mock Coinbase service..."
     docker build \
         -f tests/docker/mocks/Dockerfile.mock-coinbase \
         -t mock-coinbase-service:latest \
         tests/docker/mocks/
-    
+
     log "Building mock exchange WebSocket service..."
     docker build \
         -f tests/docker/mocks/Dockerfile.mock-exchange-ws \
         -t mock-exchange-ws:latest \
         tests/docker/mocks/
-    
+
     log_success "All test images built successfully"
 }
 
 start_test_services() {
     log "Starting test services..."
-    
+
     cd "${PROJECT_ROOT}"
-    
+
     # Start infrastructure services first
     docker-compose -f docker-compose.test.yml up -d test-postgres test-redis
-    
+
     # Wait for database to be ready
     log "Waiting for database to be ready..."
     timeout 60 bash -c 'until docker-compose -f docker-compose.test.yml exec test-postgres pg_isready -U test_user -d orderbook_test; do sleep 2; done'
-    
+
     # Start mock services
     docker-compose -f docker-compose.test.yml up -d mock-bluefin mock-coinbase mock-exchange
-    
+
     # Wait for mock services to be healthy
     log "Waiting for mock services to be ready..."
     for service in mock-bluefin mock-coinbase mock-exchange; do
         timeout 60 bash -c "until docker-compose -f docker-compose.test.yml ps ${service} | grep -q healthy; do sleep 2; done"
     done
-    
+
     log_success "All test services started successfully"
 }
 
 stop_test_services() {
     log "Stopping test services..."
-    
+
     cd "${PROJECT_ROOT}"
     docker-compose -f docker-compose.test.yml down -v
-    
+
     log_success "Test services stopped"
 }
 
@@ -205,9 +205,9 @@ stop_test_services() {
 
 run_unit_tests() {
     log "Running orderbook unit tests..."
-    
+
     cd "${PROJECT_ROOT}"
-    
+
     docker-compose -f docker-compose.test.yml run --rm \
         -e PYTEST_WORKERS=4 \
         -e COVERAGE_PROCESS_START="${PROJECT_ROOT}/pyproject.toml" \
@@ -222,23 +222,23 @@ run_unit_tests() {
                 --junit-xml=/app/test-results/unit-tests.xml \
                 --json-report --json-report-file=/app/test-results/unit-tests.json
         " 2>&1 | tee "${RESULTS_DIR}/unit-tests.log"
-    
+
     local exit_code=${PIPESTATUS[0]}
-    
+
     if [ $exit_code -eq 0 ]; then
         log_success "Unit tests completed successfully"
     else
         log_error "Unit tests failed with exit code $exit_code"
     fi
-    
+
     return $exit_code
 }
 
 run_integration_tests() {
     log "Running orderbook integration tests..."
-    
+
     cd "${PROJECT_ROOT}"
-    
+
     docker-compose -f docker-compose.test.yml run --rm \
         -e PYTEST_WORKERS=2 \
         test-runner \
@@ -249,23 +249,23 @@ run_integration_tests() {
                 --junit-xml=/app/test-results/integration-tests.xml \
                 --json-report --json-report-file=/app/test-results/integration-tests.json
         " 2>&1 | tee "${RESULTS_DIR}/integration-tests.log"
-    
+
     local exit_code=${PIPESTATUS[0]}
-    
+
     if [ $exit_code -eq 0 ]; then
         log_success "Integration tests completed successfully"
     else
         log_error "Integration tests failed with exit code $exit_code"
     fi
-    
+
     return $exit_code
 }
 
 run_performance_tests() {
     log "Running orderbook performance tests..."
-    
+
     cd "${PROJECT_ROOT}"
-    
+
     docker-compose -f docker-compose.test.yml run --rm \
         -e PERFORMANCE_TEST_MODE=true \
         -e BENCHMARK_ITERATIONS=1000 \
@@ -279,23 +279,23 @@ run_performance_tests() {
                 --junit-xml=/app/test-results/performance-tests.xml \
                 --json-report --json-report-file=/app/test-results/performance-tests.json
         " 2>&1 | tee "${RESULTS_DIR}/performance-tests.log"
-    
+
     local exit_code=${PIPESTATUS[0]}
-    
+
     if [ $exit_code -eq 0 ]; then
         log_success "Performance tests completed successfully"
     else
         log_error "Performance tests failed with exit code $exit_code"
     fi
-    
+
     return $exit_code
 }
 
 run_stress_tests() {
     log "Running orderbook stress tests..."
-    
+
     cd "${PROJECT_ROOT}"
-    
+
     docker-compose -f docker-compose.test.yml run --rm \
         -e STRESS_TEST_MODE=true \
         -e CONCURRENT_CONNECTIONS=100 \
@@ -309,23 +309,23 @@ run_stress_tests() {
                 --junit-xml=/app/test-results/stress-tests.xml \
                 --json-report --json-report-file=/app/test-results/stress-tests.json
         " 2>&1 | tee "${RESULTS_DIR}/stress-tests.log"
-    
+
     local exit_code=${PIPESTATUS[0]}
-    
+
     if [ $exit_code -eq 0 ]; then
         log_success "Stress tests completed successfully"
     else
         log_error "Stress tests failed with exit code $exit_code"
     fi
-    
+
     return $exit_code
 }
 
 run_property_tests() {
     log "Running orderbook property-based tests..."
-    
+
     cd "${PROJECT_ROOT}"
-    
+
     docker-compose -f docker-compose.test.yml run --rm \
         -e PROPERTY_TEST_MODE=true \
         -e HYPOTHESIS_MAX_EXAMPLES=1000 \
@@ -338,15 +338,15 @@ run_property_tests() {
                 --junit-xml=/app/test-results/property-tests.xml \
                 --json-report --json-report-file=/app/test-results/property-tests.json
         " 2>&1 | tee "${RESULTS_DIR}/property-tests.log"
-    
+
     local exit_code=${PIPESTATUS[0]}
-    
+
     if [ $exit_code -eq 0 ]; then
         log_success "Property-based tests completed successfully"
     else
         log_error "Property-based tests failed with exit code $exit_code"
     fi
-    
+
     return $exit_code
 }
 
@@ -356,28 +356,28 @@ run_property_tests() {
 
 collect_test_results() {
     log "Collecting test results..."
-    
+
     cd "${PROJECT_ROOT}"
-    
+
     # Copy test results from containers
     docker-compose -f docker-compose.test.yml run --rm \
         test-runner \
         bash -c "cp -r /app/test-results/* ${RESULTS_DIR}/ 2>/dev/null || true"
-    
+
     # Copy coverage reports
     docker-compose -f docker-compose.test.yml run --rm \
         test-runner \
         bash -c "cp -r /app/test-results/coverage ${RESULTS_DIR}/ 2>/dev/null || true"
-    
+
     # Generate summary report
     generate_test_summary_report
-    
+
     log_success "Test results collected in ${RESULTS_DIR}"
 }
 
 generate_test_summary_report() {
     log "Generating test summary report..."
-    
+
     cat > "${RESULTS_DIR}/test_summary.md" << EOF
 # Orderbook Testing Summary Report
 
@@ -400,7 +400,7 @@ EOF
             echo "" >> "${RESULTS_DIR}/test_summary.md"
         fi
     done
-    
+
     # Add system information
     cat >> "${RESULTS_DIR}/test_summary.md" << EOF
 
@@ -425,7 +425,7 @@ EOF
 
     # List all generated files
     find "${RESULTS_DIR}" -type f -exec basename {} \; | sort >> "${RESULTS_DIR}/test_summary.md"
-    
+
     log_success "Test summary report generated"
 }
 
@@ -436,32 +436,32 @@ EOF
 cleanup() {
     log "Performing cleanup..."
     stop_test_services
-    
+
     # Remove test environment file
     rm -f "${PROJECT_ROOT}/.env.test"
-    
+
     log_success "Cleanup completed"
 }
 
 main() {
     log "Starting orderbook testing suite (${TEST_TYPE})"
     log "Results will be saved to: ${RESULTS_DIR}"
-    
+
     # Setup trap for cleanup
     trap cleanup EXIT
-    
+
     # Setup environment
     setup_environment
-    
+
     # Build images
     build_test_images
-    
+
     # Start services
     start_test_services
-    
+
     # Run tests based on type
     local overall_exit_code=0
-    
+
     case "${TEST_TYPE}" in
         "unit")
             run_unit_tests || overall_exit_code=$?
@@ -491,10 +491,10 @@ main() {
             exit 1
             ;;
     esac
-    
+
     # Collect results
     collect_test_results
-    
+
     # Final status
     if [ $overall_exit_code -eq 0 ]; then
         log_success "All orderbook tests completed successfully!"
@@ -502,7 +502,7 @@ main() {
     else
         log_error "Some tests failed. Check logs in ${RESULTS_DIR}/"
     fi
-    
+
     exit $overall_exit_code
 }
 
@@ -515,7 +515,7 @@ if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
     echo "Test types:"
     echo "  all          - Run all tests (default)"
     echo "  unit         - Unit tests only"
-    echo "  integration  - Integration tests only"  
+    echo "  integration  - Integration tests only"
     echo "  performance  - Performance tests only"
     echo "  stress       - Stress tests only"
     echo "  property     - Property-based tests only"

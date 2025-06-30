@@ -34,7 +34,7 @@ class TestResultDatabase:
                     timestamp DATETIME NOT NULL,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 );
-                
+
                 CREATE TABLE IF NOT EXISTS performance_metrics (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     container TEXT NOT NULL,
@@ -45,7 +45,7 @@ class TestResultDatabase:
                     context TEXT,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 );
-                
+
                 CREATE TABLE IF NOT EXISTS log_events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     container TEXT NOT NULL,
@@ -55,7 +55,7 @@ class TestResultDatabase:
                     timestamp DATETIME NOT NULL,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 );
-                
+
                 CREATE TABLE IF NOT EXISTS container_status (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     container TEXT NOT NULL,
@@ -66,7 +66,7 @@ class TestResultDatabase:
                     timestamp DATETIME NOT NULL,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 );
-                
+
                 CREATE INDEX IF NOT EXISTS idx_test_results_timestamp ON test_results(timestamp);
                 CREATE INDEX IF NOT EXISTS idx_performance_metrics_timestamp ON performance_metrics(timestamp);
                 CREATE INDEX IF NOT EXISTS idx_log_events_timestamp ON log_events(timestamp);
@@ -149,14 +149,14 @@ class TestResultDatabase:
             # Overall stats
             stats = conn.execute(
                 """
-                SELECT 
+                SELECT
                     COUNT(*) as total_tests,
                     SUM(CASE WHEN status = 'PASSED' THEN 1 ELSE 0 END) as passed,
                     SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) as failed,
                     SUM(CASE WHEN status = 'SKIPPED' THEN 1 ELSE 0 END) as skipped,
                     AVG(duration) as avg_duration,
                     SUM(duration) as total_duration
-                FROM test_results 
+                FROM test_results
                 WHERE timestamp >= ?
             """,
                 (since,),
@@ -165,13 +165,13 @@ class TestResultDatabase:
             # Tests by container
             by_container = conn.execute(
                 """
-                SELECT 
+                SELECT
                     container,
                     COUNT(*) as total,
                     SUM(CASE WHEN status = 'PASSED' THEN 1 ELSE 0 END) as passed,
                     SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) as failed,
                     AVG(duration) as avg_duration
-                FROM test_results 
+                FROM test_results
                 WHERE timestamp >= ?
                 GROUP BY container
                 ORDER BY total DESC
@@ -183,7 +183,7 @@ class TestResultDatabase:
             failures = conn.execute(
                 """
                 SELECT test_name, container, error_message, timestamp, duration
-                FROM test_results 
+                FROM test_results
                 WHERE timestamp >= ? AND status = 'FAILED'
                 ORDER BY timestamp DESC
                 LIMIT 10
@@ -195,7 +195,7 @@ class TestResultDatabase:
             slow_tests = conn.execute(
                 """
                 SELECT test_name, container, duration, timestamp
-                FROM test_results 
+                FROM test_results
                 WHERE timestamp >= ? AND duration > 30
                 ORDER BY duration DESC
                 LIMIT 10
@@ -220,7 +220,7 @@ class TestResultDatabase:
             # Metrics by type
             metrics = conn.execute(
                 """
-                SELECT 
+                SELECT
                     metric_name,
                     container,
                     AVG(value) as avg_value,
@@ -228,7 +228,7 @@ class TestResultDatabase:
                     MIN(value) as min_value,
                     COUNT(*) as count,
                     unit
-                FROM performance_metrics 
+                FROM performance_metrics
                 WHERE timestamp >= ?
                 GROUP BY metric_name, container, unit
                 ORDER BY metric_name, container
@@ -240,7 +240,7 @@ class TestResultDatabase:
             cpu_series = conn.execute(
                 """
                 SELECT container, timestamp, value
-                FROM performance_metrics 
+                FROM performance_metrics
                 WHERE timestamp >= ? AND metric_name = 'cpu_usage'
                 ORDER BY timestamp
             """,
@@ -250,7 +250,7 @@ class TestResultDatabase:
             memory_series = conn.execute(
                 """
                 SELECT container, timestamp, value
-                FROM performance_metrics 
+                FROM performance_metrics
                 WHERE timestamp >= ? AND metric_name = 'memory_usage'
                 ORDER BY timestamp
             """,
@@ -273,11 +273,11 @@ class TestResultDatabase:
             # Log level distribution
             levels = conn.execute(
                 """
-                SELECT 
+                SELECT
                     level,
                     container,
                     COUNT(*) as count
-                FROM log_events 
+                FROM log_events
                 WHERE timestamp >= ?
                 GROUP BY level, container
                 ORDER BY count DESC
@@ -289,7 +289,7 @@ class TestResultDatabase:
             errors = conn.execute(
                 """
                 SELECT container, message, timestamp
-                FROM log_events 
+                FROM log_events
                 WHERE timestamp >= ? AND level IN ('ERROR', 'CRITICAL')
                 ORDER BY timestamp DESC
                 LIMIT 20
@@ -300,11 +300,11 @@ class TestResultDatabase:
             # Log activity timeline
             timeline = conn.execute(
                 """
-                SELECT 
+                SELECT
                     datetime(timestamp, 'localtime') as hour,
                     level,
                     COUNT(*) as count
-                FROM log_events 
+                FROM log_events
                 WHERE timestamp >= ?
                 GROUP BY hour, level
                 ORDER BY hour
@@ -592,11 +592,11 @@ class TestDashboard:
             try {
                 const response = await fetch('/api/test-summary');
                 const data = await response.json();
-                
+
                 const summary = data.summary;
-                const passRate = summary.total_tests > 0 ? 
+                const passRate = summary.total_tests > 0 ?
                     (summary.passed / summary.total_tests * 100).toFixed(1) : 0;
-                
+
                 document.getElementById('test-summary').innerHTML = `
                     <div class="metric">
                         <span>Total Tests</span>
@@ -627,11 +627,11 @@ class TestDashboard:
                 // Update container status
                 let containerHtml = '';
                 data.by_container.forEach(container => {
-                    const passRate = container.total > 0 ? 
+                    const passRate = container.total > 0 ?
                         (container.passed / container.total * 100).toFixed(1) : 0;
-                    const statusClass = passRate >= 90 ? 'status-online' : 
+                    const statusClass = passRate >= 90 ? 'status-online' :
                                        passRate >= 70 ? 'status-warning' : 'status-offline';
-                    
+
                     containerHtml += `
                         <div class="metric">
                             <span><span class="status-indicator ${statusClass}"></span>${container.container}</span>
@@ -675,14 +675,14 @@ class TestDashboard:
             try {
                 const response = await fetch('/api/performance-metrics');
                 const data = await response.json();
-                
+
                 // Update or create performance chart
                 const ctx = document.getElementById('performance-chart').getContext('2d');
-                
+
                 if (performanceChart) {
                     performanceChart.destroy();
                 }
-                
+
                 performanceChart = new Chart(ctx, {
                     type: 'line',
                     data: {
@@ -724,7 +724,7 @@ class TestDashboard:
                         }
                     }
                 });
-                
+
             } catch (error) {
                 console.error('Error loading performance metrics:', error);
             }
@@ -734,14 +734,14 @@ class TestDashboard:
             try {
                 const response = await fetch('/api/log-summary');
                 const data = await response.json();
-                
+
                 // Update or create log chart
                 const ctx = document.getElementById('log-chart').getContext('2d');
-                
+
                 if (logChart) {
                     logChart.destroy();
                 }
-                
+
                 // Group timeline data by level
                 const timelineData = {};
                 data.timeline.forEach(entry => {
@@ -750,7 +750,7 @@ class TestDashboard:
                     }
                     timelineData[entry.level][entry.hour] = entry.count;
                 });
-                
+
                 const hours = [...new Set(data.timeline.map(d => d.hour))].sort();
                 const datasets = Object.keys(timelineData).map(level => ({
                     label: level,
@@ -762,7 +762,7 @@ class TestDashboard:
                         'DEBUG': 'rgba(108, 117, 125, 0.8)'
                     }[level] || 'rgba(0, 0, 0, 0.8)'
                 }));
-                
+
                 logChart = new Chart(ctx, {
                     type: 'bar',
                     data: {
@@ -783,7 +783,7 @@ class TestDashboard:
                         }
                     }
                 });
-                
+
             } catch (error) {
                 console.error('Error loading log summary:', error);
             }
@@ -793,7 +793,7 @@ class TestDashboard:
             const button = document.querySelector('.refresh-btn');
             button.textContent = '🔄 Refreshing...';
             button.disabled = true;
-            
+
             try {
                 await fetch('/api/refresh');
                 await loadDashboard();
