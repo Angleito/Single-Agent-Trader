@@ -23,14 +23,11 @@ services:
     build:
       context: ./services
       dockerfile: Dockerfile.bluefin
-      platforms:
-        - linux/amd64
       args:
         USER_ID: ${HOST_UID:-1000}
         GROUP_ID: ${HOST_GID:-1000}
         USERNAME: bluefin
     image: bluefin-sdk-service:latest
-    platform: linux/amd64
     container_name: bluefin-service
     restart: unless-stopped
 
@@ -115,8 +112,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      platforms:
-        - linux/amd64
       args:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
         VCS_REF: ${VCS_REF:-$(git rev-parse --short HEAD)}
@@ -125,7 +120,6 @@ services:
         USER_ID: ${HOST_UID:-1000}
         GROUP_ID: ${HOST_GID:-1000}
     image: ai-trading-bot:${EXCHANGE__EXCHANGE_TYPE:-bluefin}-${VERSION:-latest}
-    platform: linux/amd64
     container_name: ai-trading-bot
     restart: unless-stopped
 
@@ -156,9 +150,7 @@ services:
     command: ["python", "-m", "bot.main", "live", "--force"]
 
     # Environment variables from .env file (optional - uses defaults if missing)
-    env_file:
-      - path: .env
-        required: false
+    env_file: .env
 
     # Docker-specific environment overrides (minimal set to avoid conflicts with .env)
     environment:
@@ -284,22 +276,15 @@ services:
     # Service dependencies with health check conditions for robust startup
     # Optional dependencies - services will start even if MCP services are unavailable
     depends_on:
-      mcp-omnisearch:
-        condition: service_healthy
-        required: false
-      mcp-memory:
-        condition: service_healthy
-        required: false
+      - mcp-omnisearch
+      - mcp-memory
 
   # MCP OmniSearch Server for Enhanced Market Intelligence
   mcp-omnisearch:
     build:
       context: ./bot/mcp/omnisearch-server
       dockerfile: Dockerfile
-      platforms:
-        - linux/amd64
     image: mcp-omnisearch-server:latest
-    platform: linux/amd64
     container_name: mcp-omnisearch-server
     restart: unless-stopped
 
@@ -333,9 +318,7 @@ services:
       - METRICS_PORT=${METRICS_PORT:-9093}
       - CONTAINER_NAME=mcp-omnisearch
 
-    env_file:
-      - path: .env
-        required: false
+    env_file: .env
 
     volumes:
       - ./logs/mcp:/app/logs
@@ -376,10 +359,7 @@ services:
     build:
       context: ./bot/mcp
       dockerfile: Dockerfile
-      platforms:
-        - linux/amd64
     image: mcp-memory-server:latest
-    platform: linux/amd64
     container_name: mcp-memory-server
     restart: unless-stopped
 
@@ -443,10 +423,7 @@ services:
     build:
       context: ./dashboard/backend
       dockerfile: Dockerfile
-      platforms:
-        - linux/amd64
     container_name: dashboard-backend
-    platform: linux/amd64
     ports:
       - "8000:8000"  # Allow external access for frontend connectivity
 
@@ -507,9 +484,7 @@ services:
       - ALERT_MEMORY_CRITICAL=${ALERT_MEMORY_CRITICAL:-90}
     restart: unless-stopped
     depends_on:
-      bluefin-service:
-        condition: service_started
-        required: false
+      - bluefin-service
     healthcheck:
       test: ["CMD", "curl", "-f", "--connect-timeout", "10", "http://localhost:8000/health"]
       interval: 45s
@@ -541,10 +516,7 @@ services:
       context: ./dashboard/frontend
       dockerfile: Dockerfile
       target: production
-      platforms:
-        - linux/amd64
     container_name: dashboard-frontend
-    platform: linux/amd64
     ports:
       - "3000:8080"  # Allow external access for frontend
 
@@ -573,9 +545,7 @@ services:
           - dashboard-frontend
           - frontend
     depends_on:
-      dashboard-backend:
-        condition: service_healthy
-        required: true
+      - dashboard-backend
     deploy:
       resources:
         limits:
@@ -596,10 +566,7 @@ services:
       context: ./dashboard/frontend
       dockerfile: Dockerfile
       target: production
-      platforms:
-        - linux/amd64
     container_name: dashboard-frontend-prod
-    platform: linux/amd64
     ports:
       - "3001:8080"  # Allow external access for frontend
 
@@ -628,9 +595,7 @@ services:
           - dashboard-frontend-prod
           - frontend-prod
     depends_on:
-      dashboard-backend:
-        condition: service_healthy
-        required: true
+      - dashboard-backend
     profiles:
       - production
     deploy:
@@ -651,7 +616,6 @@ services:
   dashboard-nginx:
     image: nginx:alpine
     container_name: dashboard-nginx
-    platform: linux/amd64
     ports:
       - "8080:80"  # Allow external access for nginx proxy
 
@@ -678,12 +642,8 @@ services:
           - nginx
           - proxy
     depends_on:
-      dashboard-backend:
-        condition: service_healthy
-        required: true
-      dashboard-frontend-prod:
-        condition: service_started
-        required: true
+      - dashboard-backend
+      - dashboard-frontend-prod
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
       interval: 30s
@@ -737,8 +697,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      platforms:
-        - linux/amd64
       args:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
         VCS_REF: ${VCS_REF:-$(git rev-parse --short HEAD)}
@@ -746,10 +704,9 @@ services:
         EXCHANGE_TYPE: ${EXCHANGE__EXCHANGE_TYPE:-bluefin}
         USER_ID: ${HOST_UID:-1000}
         GROUP_ID: ${HOST_GID:-1000}
-        FP_ENABLED: true
+        FP_ENABLED: "true"
         FP_RUNTIME_MODE: pure
     image: ai-trading-bot:fp-dev-${VERSION:-latest}
-    platform: linux/amd64
     container_name: ai-trading-bot-fp-dev
     restart: "no"
     profiles:

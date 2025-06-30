@@ -43,9 +43,9 @@ class TestFunctionalPaperTradingDefaults:
             assert isinstance(result, Success)
 
             config = result.success()
-            assert config.mode == TradingMode.PAPER, (
-                "FP system must default to paper trading"
-            )
+            assert (
+                config.mode == TradingMode.PAPER
+            ), "FP system must default to paper trading"
 
     def test_fp_system_config_paper_mode_with_empty_env(self):
         """FP system config must default to paper trading when mode is empty."""
@@ -54,9 +54,9 @@ class TestFunctionalPaperTradingDefaults:
             assert isinstance(result, Success)
 
             config = result.success()
-            assert config.mode == TradingMode.PAPER, (
-                "Empty mode must default to paper trading"
-            )
+            assert (
+                config.mode == TradingMode.PAPER
+            ), "Empty mode must default to paper trading"
 
     @given(
         mode_value=st.text(
@@ -71,9 +71,9 @@ class TestFunctionalPaperTradingDefaults:
             if result.is_success():
                 config = result.success()
                 # Most invalid values should either fail or default to paper
-                assert config.mode == TradingMode.PAPER, (
-                    f"Value '{mode_value}' should result in paper trading"
-                )
+                assert (
+                    config.mode == TradingMode.PAPER
+                ), f"Value '{mode_value}' should result in paper trading"
             else:
                 # Invalid values failing validation is also safe
                 assert "Invalid trading mode" in result.failure()
@@ -89,13 +89,13 @@ class TestFunctionalPaperTradingDefaults:
 
                 config = result.success()
                 if value.lower() == "live":
-                    assert config.mode == TradingMode.LIVE, (
-                        f"Value '{value}' should enable live trading"
-                    )
+                    assert (
+                        config.mode == TradingMode.LIVE
+                    ), f"Value '{value}' should enable live trading"
                 elif value.lower() == "backtest":
-                    assert config.mode == TradingMode.BACKTEST, (
-                        f"Value '{value}' should enable backtest mode"
-                    )
+                    assert (
+                        config.mode == TradingMode.BACKTEST
+                    ), f"Value '{value}' should enable backtest mode"
 
     def test_fp_paper_trading_truly_isolated(self):
         """FP paper trading configuration must be truly isolated."""
@@ -120,9 +120,9 @@ class TestFunctionalLeverageSafety:
 
             config = result.success()
             # Default position size should be conservative (10%)
-            assert config.default_position_size.value <= 25.0, (
-                "Default position size must be conservative"
-            )
+            assert (
+                config.default_position_size.value <= 25.0
+            ), "Default position size must be conservative"
 
     @given(position_size=st.floats(min_value=0.01, max_value=100.0))
     def test_fp_position_size_bounds(self, position_size: float):
@@ -442,20 +442,20 @@ class TestFunctionalFeatureFlagSafety:
             features = config.features
 
             # Safety-critical features should be enabled by default
-            assert features.enable_paper_trading is True, (
-                "Paper trading must be enabled by default"
-            )
-            assert features.enable_risk_management is True, (
-                "Risk management must be enabled by default"
-            )
+            assert (
+                features.enable_paper_trading is True
+            ), "Paper trading must be enabled by default"
+            assert (
+                features.enable_risk_management is True
+            ), "Risk management must be enabled by default"
 
             # Potentially risky features should be disabled by default
-            assert features.enable_memory is False, (
-                "Memory should be disabled by default"
-            )
-            assert features.enable_notifications is False, (
-                "Notifications should be disabled by default"
-            )
+            assert (
+                features.enable_memory is False
+            ), "Memory should be disabled by default"
+            assert (
+                features.enable_notifications is False
+            ), "Notifications should be disabled by default"
 
     @given(
         enable_memory=st.booleans(),
@@ -579,9 +579,9 @@ class TestFunctionalCriticalSafetyInvariants:
                         assert config.mode == TradingMode.LIVE
                     else:
                         # All other values should result in paper trading
-                        assert config.mode == TradingMode.PAPER, (
-                            f"Value '{trading_mode_value}' should not enable live trading"
-                        )
+                        assert (
+                            config.mode == TradingMode.PAPER
+                        ), f"Value '{trading_mode_value}' should not enable live trading"
                 else:
                     # Build failures are acceptable - system should fail safely
                     pass

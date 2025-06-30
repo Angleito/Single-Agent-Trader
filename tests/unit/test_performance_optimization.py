@@ -95,9 +95,9 @@ class TestLLMPerformanceOptimization:
         key3 = hasher.get_cache_key(mock_market_state)
 
         # Should generate different cache key
-        assert key1 != key3, (
-            "Different market states should generate different cache keys"
-        )
+        assert (
+            key1 != key3
+        ), "Different market states should generate different cache keys"
 
     def test_cache_performance(self, mock_market_state, mock_trade_action):
         """Test cache hit/miss performance."""
@@ -125,9 +125,9 @@ class TestLLMPerformanceOptimization:
 
             # Verify cache hit is significantly faster
             speedup_ratio = miss_time / hit_time
-            assert speedup_ratio > 10, (
-                f"Cache hit should be 10x faster, got {speedup_ratio}x"
-            )
+            assert (
+                speedup_ratio > 10
+            ), f"Cache hit should be 10x faster, got {speedup_ratio}x"
 
             # Verify cache statistics
             stats = cache.get_cache_stats()
@@ -284,9 +284,9 @@ class TestLLMPerformanceOptimization:
             # Cache hit should be significantly faster
             if second_call_time > 0:  # Avoid division by zero
                 speedup = first_call_time / second_call_time
-                assert speedup > 5, (
-                    f"Expected >5x speedup from cache, got {speedup:.1f}x"
-                )
+                assert (
+                    speedup > 5
+                ), f"Expected >5x speedup from cache, got {speedup:.1f}x"
 
             # Verify status includes optimization information
             status = agent.get_status()

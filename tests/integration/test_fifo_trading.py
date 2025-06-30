@@ -159,9 +159,9 @@ class FIFOTradingTest:
         logger.info("\nExpected P&L: $%s", expected_pnl)
         logger.info("Actual P&L: $%s", actual_pnl)
 
-        assert abs(actual_pnl - expected_pnl) < Decimal("0.01"), (
-            f"P&L mismatch: expected {expected_pnl}, got {actual_pnl}"
-        )
+        assert abs(actual_pnl - expected_pnl) < Decimal(
+            "0.01"
+        ), f"P&L mismatch: expected {expected_pnl}, got {actual_pnl}"
         logger.info("✅ Test 1 PASSED: Basic FIFO flow working correctly")
 
     def test_multiple_buys_partial_sells(self):
@@ -219,12 +219,12 @@ class FIFOTradingTest:
         # Should have sold: 2 ETH from lot 1, 1.5 ETH from lot 2, 0.5 ETH from lot 3
         # Remaining: 2.5 ETH from lot 3
         fifo_pos = self.position_manager.fifo_manager.get_fifo_position(symbol)
-        assert len(fifo_pos.lots) == 1, (
-            f"Expected 1 lot remaining, got {len(fifo_pos.lots)}"
-        )
-        assert fifo_pos.lots[0].remaining_quantity == Decimal("2.5"), (
-            "Incorrect remaining quantity"
-        )
+        assert (
+            len(fifo_pos.lots) == 1
+        ), f"Expected 1 lot remaining, got {len(fifo_pos.lots)}"
+        assert fifo_pos.lots[0].remaining_quantity == Decimal(
+            "2.5"
+        ), "Incorrect remaining quantity"
 
         logger.info(
             "✅ Test 2 PASSED: Multiple buys with partial sells working correctly"
@@ -285,9 +285,9 @@ class FIFOTradingTest:
         # Check total realized P&L includes previous trade
         total_pnl = self.position_manager.fifo_manager.get_realized_pnl(symbol)
         expected_pnl = Decimal(1000)  # 100 * (60 - 50)
-        assert total_pnl == expected_pnl, (
-            f"Expected total P&L ${expected_pnl}, got ${total_pnl}"
-        )
+        assert (
+            total_pnl == expected_pnl
+        ), f"Expected total P&L ${expected_pnl}, got ${total_pnl}"
 
         logger.info(
             "✅ Test 3 PASSED: Position closure and reopening working correctly"

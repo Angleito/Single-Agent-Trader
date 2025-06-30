@@ -28,9 +28,9 @@ class TestSymbolConversionFixes:
 
         for input_symbol, expected in test_cases:
             result = normalize_symbol(input_symbol, "PERP")
-            assert result == expected, (
-                f"Failed for {input_symbol}: got {result}, expected {expected}"
-            )
+            assert (
+                result == expected
+            ), f"Failed for {input_symbol}: got {result}, expected {expected}"
 
     def test_bluefin_symbol_converter_with_mock_enum(self):
         """Test BluefinSymbolConverter with various enum-like objects."""
@@ -189,9 +189,9 @@ class TestSymbolConversionFixes:
 
         for input_obj, expected in test_cases:
             result = safe_symbol_value_extraction(input_obj)
-            assert result == expected, (
-                f"Failed for {input_obj}: got {result}, expected {expected}"
-            )
+            assert (
+                result == expected
+            ), f"Failed for {input_obj}: got {result}, expected {expected}"
 
     @patch("services.bluefin_sdk_service.logger")
     def test_bluefin_service_symbol_methods(self, mock_logger):
@@ -361,9 +361,9 @@ class TestSymbolConversionFixes:
 
         for input_obj, expected in test_cases:
             result = test_from_market_symbol_pattern(input_obj)
-            assert result == expected, (
-                f"Failed for {input_obj}: got {result}, expected {expected}"
-            )
+            assert (
+                result == expected
+            ), f"Failed for {input_obj}: got {result}, expected {expected}"
 
 
 if __name__ == "__main__":

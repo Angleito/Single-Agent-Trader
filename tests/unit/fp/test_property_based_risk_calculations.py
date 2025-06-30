@@ -185,20 +185,20 @@ class TestPropertyBasedRiskCalculations(FPTestBase):
         position_value = calculate_position_value(position_size, current_price)
 
         # Property: Position value should always be non-negative
-        assert position_value >= 0, (
-            f"Position value should be non-negative: {position_value}"
-        )
+        assert (
+            position_value >= 0
+        ), f"Position value should be non-negative: {position_value}"
 
         # Property: Position value should be proportional to size and price
         double_size_value = calculate_position_value(position_size * 2, current_price)
-        assert abs(double_size_value - position_value * 2) < Decimal("0.01"), (
-            "Position value should scale linearly with size"
-        )
+        assert abs(double_size_value - position_value * 2) < Decimal(
+            "0.01"
+        ), "Position value should scale linearly with size"
 
         double_price_value = calculate_position_value(position_size, current_price * 2)
-        assert abs(double_price_value - position_value * 2) < Decimal("0.01"), (
-            "Position value should scale linearly with price"
-        )
+        assert abs(double_price_value - position_value * 2) < Decimal(
+            "0.01"
+        ), "Position value should scale linearly with price"
 
         # Property: Zero size should result in zero value
         zero_value = calculate_position_value(Decimal(0), current_price)
@@ -243,9 +243,9 @@ class TestPropertyBasedRiskCalculations(FPTestBase):
             )
             expected_double = pnl * 2
             tolerance = max(abs(expected_double) * Decimal("0.001"), Decimal("0.01"))
-            assert abs(double_pnl - expected_double) <= tolerance, (
-                f"P&L should scale linearly with size: {double_pnl} vs {expected_double}"
-            )
+            assert (
+                abs(double_pnl - expected_double) <= tolerance
+            ), f"P&L should scale linearly with size: {double_pnl} vs {expected_double}"
 
         # Property: LONG positions should profit when price increases
         if side == "LONG" and current_price > entry_price and position_size > 0:
@@ -262,9 +262,9 @@ class TestPropertyBasedRiskCalculations(FPTestBase):
                 opposite_side, position_size, entry_price, current_price
             )
             tolerance = max(abs(pnl) * Decimal("0.001"), Decimal("0.01"))
-            assert abs(pnl + opposite_pnl) <= tolerance, (
-                f"P&L should be symmetric for opposite sides: {pnl} vs {opposite_pnl}"
-            )
+            assert (
+                abs(pnl + opposite_pnl) <= tolerance
+            ), f"P&L should be symmetric for opposite sides: {pnl} vs {opposite_pnl}"
 
     @given(
         position_value=st.decimals(min_value=Decimal(1), max_value=Decimal(1000000)),
@@ -284,9 +284,9 @@ class TestPropertyBasedRiskCalculations(FPTestBase):
         assert margin >= 0, f"Margin should be non-negative: {margin}"
 
         # Property: Margin should be less than or equal to position value
-        assert margin <= position_value, (
-            f"Margin should not exceed position value: {margin} vs {position_value}"
-        )
+        assert (
+            margin <= position_value
+        ), f"Margin should not exceed position value: {margin} vs {position_value}"
 
         # Property: Higher leverage should require less margin
         if leverage > 1:
@@ -294,22 +294,22 @@ class TestPropertyBasedRiskCalculations(FPTestBase):
             higher_leverage_margin = calculate_margin_requirement_simple(
                 position_value, higher_leverage
             )
-            assert higher_leverage_margin <= margin, (
-                f"Higher leverage should require less margin: {higher_leverage_margin} vs {margin}"
-            )
+            assert (
+                higher_leverage_margin <= margin
+            ), f"Higher leverage should require less margin: {higher_leverage_margin} vs {margin}"
 
         # Property: Margin calculation should be inverse of leverage
         expected_margin = position_value / leverage
         tolerance = max(expected_margin * Decimal("0.001"), Decimal("0.01"))
-        assert abs(margin - expected_margin) <= tolerance, (
-            f"Margin should equal position_value / leverage: {margin} vs {expected_margin}"
-        )
+        assert (
+            abs(margin - expected_margin) <= tolerance
+        ), f"Margin should equal position_value / leverage: {margin} vs {expected_margin}"
 
         # Property: No leverage (leverage = 1) should require full position value as margin
         if leverage == Decimal(1):
-            assert abs(margin - position_value) <= Decimal("0.01"), (
-                "No leverage should require full position value as margin"
-            )
+            assert abs(margin - position_value) <= Decimal(
+                "0.01"
+            ), "No leverage should require full position value as margin"
 
     @given(
         position_value=st.decimals(min_value=Decimal(1), max_value=Decimal(1000000)),
@@ -329,9 +329,9 @@ class TestPropertyBasedRiskCalculations(FPTestBase):
         assert fees >= 0, f"Fees should be non-negative: {fees}"
 
         # Property: Fees should not exceed position value
-        assert fees <= position_value, (
-            f"Fees should not exceed position value: {fees} vs {position_value}"
-        )
+        assert (
+            fees <= position_value
+        ), f"Fees should not exceed position value: {fees} vs {position_value}"
 
         # Property: Zero fee rate should result in zero fees
         zero_fees = calculate_fees_simple(position_value, Decimal(0))
@@ -341,24 +341,24 @@ class TestPropertyBasedRiskCalculations(FPTestBase):
         double_value_fees = calculate_fees_simple(position_value * 2, fee_rate)
         expected_double = fees * 2
         tolerance = max(expected_double * Decimal("0.001"), Decimal("0.01"))
-        assert abs(double_value_fees - expected_double) <= tolerance, (
-            f"Fees should scale linearly with position value: {double_value_fees} vs {expected_double}"
-        )
+        assert (
+            abs(double_value_fees - expected_double) <= tolerance
+        ), f"Fees should scale linearly with position value: {double_value_fees} vs {expected_double}"
 
         # Property: Fees should scale linearly with fee rate
         double_rate_fees = calculate_fees_simple(position_value, fee_rate * 2)
         expected_double_rate = fees * 2
         tolerance = max(expected_double_rate * Decimal("0.001"), Decimal("0.01"))
-        assert abs(double_rate_fees - expected_double_rate) <= tolerance, (
-            f"Fees should scale linearly with fee rate: {double_rate_fees} vs {expected_double_rate}"
-        )
+        assert (
+            abs(double_rate_fees - expected_double_rate) <= tolerance
+        ), f"Fees should scale linearly with fee rate: {double_rate_fees} vs {expected_double_rate}"
 
         # Property: Fee calculation should be multiplicative
         expected_fees = position_value * fee_rate
         tolerance = max(expected_fees * Decimal("0.001"), Decimal("0.01"))
-        assert abs(fees - expected_fees) <= tolerance, (
-            f"Fees should equal position_value * fee_rate: {fees} vs {expected_fees}"
-        )
+        assert (
+            abs(fees - expected_fees) <= tolerance
+        ), f"Fees should equal position_value * fee_rate: {fees} vs {expected_fees}"
 
     @given(position_size=decimal_quantities())
     @settings(
@@ -373,13 +373,13 @@ class TestPropertyBasedRiskCalculations(FPTestBase):
 
         # Property: Positive sizes should be valid
         if position_size > 0:
-            assert validation_result.is_success(), (
-                f"Positive position size should be valid: {position_size}"
-            )
+            assert (
+                validation_result.is_success()
+            ), f"Positive position size should be valid: {position_size}"
             validated_size = validation_result.success()
-            assert validated_size == position_size, (
-                "Validated size should match input for valid sizes"
-            )
+            assert (
+                validated_size == position_size
+            ), "Validated size should match input for valid sizes"
 
         # Property: Zero size should be invalid
         zero_validation = validate_position_size_simple(Decimal(0))
@@ -387,9 +387,9 @@ class TestPropertyBasedRiskCalculations(FPTestBase):
 
         # Property: Negative sizes should be invalid
         negative_validation = validate_position_size_simple(-abs(position_size))
-        assert negative_validation.is_failure(), (
-            "Negative position size should be invalid"
-        )
+        assert (
+            negative_validation.is_failure()
+        ), "Negative position size should be invalid"
 
     @given(prices=price_series_strategy(min_length=5, max_length=50))
     @settings(
@@ -431,9 +431,9 @@ class TestPropertyBasedRiskCalculations(FPTestBase):
         amplified_volatility = math.sqrt(amplified_variance)
 
         if volatility > 1e-10:  # Only test if original volatility is significant
-            assert amplified_volatility >= volatility * 1.5, (
-                f"Amplified series should have higher volatility: {amplified_volatility} vs {volatility}"
-            )
+            assert (
+                amplified_volatility >= volatility * 1.5
+            ), f"Amplified series should have higher volatility: {amplified_volatility} vs {volatility}"
 
     @given(risk_params=risk_parameters_strategy())
     @settings(
@@ -450,9 +450,9 @@ class TestPropertyBasedRiskCalculations(FPTestBase):
         assert risk_params.max_position_size > 0, "Max position size should be positive"
         assert risk_params.max_leverage >= 1, "Max leverage should be at least 1"
         assert risk_params.stop_loss_pct > 0, "Stop loss percentage should be positive"
-        assert risk_params.take_profit_pct > 0, (
-            "Take profit percentage should be positive"
-        )
+        assert (
+            risk_params.take_profit_pct > 0
+        ), "Take profit percentage should be positive"
         assert risk_params.max_daily_loss > 0, "Max daily loss should be positive"
         assert risk_params.max_drawdown > 0, "Max drawdown should be positive"
 
@@ -490,24 +490,24 @@ class TestPropertyBasedRiskCalculations(FPTestBase):
             decimal_str = str(normalized)
             if "." in decimal_str:
                 actual_places = len(decimal_str.split(".")[1])
-                assert actual_places <= decimal_places, (
-                    f"Normalized value should have at most {decimal_places} decimal places: {normalized}"
-                )
+                assert (
+                    actual_places <= decimal_places
+                ), f"Normalized value should have at most {decimal_places} decimal places: {normalized}"
 
             # Property: Normalization should preserve magnitude
             relative_error = (
                 abs(normalized - value) / value if value > 0 else Decimal(0)
             )
             max_error = Decimal("0.5") * (Decimal(10) ** (-decimal_places))
-            assert relative_error <= max_error, (
-                f"Normalization error should be small: {relative_error} vs {max_error}"
-            )
+            assert (
+                relative_error <= max_error
+            ), f"Normalization error should be small: {relative_error} vs {max_error}"
 
             # Property: Double normalization should be idempotent
             double_normalized = normalize_decimal_precision(normalized, decimal_places)
-            assert double_normalized == normalized, (
-                "Double normalization should be idempotent"
-            )
+            assert (
+                double_normalized == normalized
+            ), "Double normalization should be idempotent"
 
     @given(
         base_amount=st.decimals(min_value=Decimal(1000), max_value=Decimal(100000)),
@@ -531,16 +531,16 @@ class TestPropertyBasedRiskCalculations(FPTestBase):
         actual_drawdown_pct = (loss_amount / base_amount) * 100
 
         # Property: Drawdown percentage should be between 0 and 100
-        assert 0 <= actual_drawdown_pct <= 100, (
-            f"Drawdown percentage should be between 0 and 100: {actual_drawdown_pct}"
-        )
+        assert (
+            0 <= actual_drawdown_pct <= 100
+        ), f"Drawdown percentage should be between 0 and 100: {actual_drawdown_pct}"
 
         # Property: Larger losses should result in larger drawdown percentages
         larger_loss = loss_amount * 2
         larger_drawdown_pct = (larger_loss / base_amount) * 100
-        assert larger_drawdown_pct >= actual_drawdown_pct, (
-            "Larger losses should result in larger drawdown percentages"
-        )
+        assert (
+            larger_drawdown_pct >= actual_drawdown_pct
+        ), "Larger losses should result in larger drawdown percentages"
 
         # Property: Drawdown limit violation check
         violates_limit = actual_drawdown_pct > max_drawdown_pct
@@ -586,23 +586,23 @@ class TestPropertyBasedRiskCalculations(FPTestBase):
 
         # Property: Distances should be positive
         assert sl_distance > 0, f"Stop loss distance should be positive: {sl_distance}"
-        assert tp_distance > 0, (
-            f"Take profit distance should be positive: {tp_distance}"
-        )
+        assert (
+            tp_distance > 0
+        ), f"Take profit distance should be positive: {tp_distance}"
 
         # Property: Distances should be proportional to percentages
-        assert sl_distance == entry_price * (stop_loss_pct / Decimal(100)), (
-            "Stop loss distance should be proportional to percentage"
-        )
-        assert tp_distance == entry_price * (take_profit_pct / Decimal(100)), (
-            "Take profit distance should be proportional to percentage"
-        )
+        assert sl_distance == entry_price * (
+            stop_loss_pct / Decimal(100)
+        ), "Stop loss distance should be proportional to percentage"
+        assert tp_distance == entry_price * (
+            take_profit_pct / Decimal(100)
+        ), "Take profit distance should be proportional to percentage"
 
         # Property: Larger percentages should result in larger distances
         if take_profit_pct > stop_loss_pct:
-            assert tp_distance > sl_distance, (
-                "Larger percentage should result in larger distance"
-            )
+            assert (
+                tp_distance > sl_distance
+            ), "Larger percentage should result in larger distance"
 
         # Property: Distances should scale with entry price
         double_price = entry_price * 2
@@ -612,12 +612,12 @@ class TestPropertyBasedRiskCalculations(FPTestBase):
         )
 
         tolerance = Decimal("0.01")
-        assert abs(double_sl_distance - sl_distance * 2) <= tolerance, (
-            "Stop loss distance should scale with entry price"
-        )
-        assert abs(double_tp_distance - tp_distance * 2) <= tolerance, (
-            "Take profit distance should scale with entry price"
-        )
+        assert (
+            abs(double_sl_distance - sl_distance * 2) <= tolerance
+        ), "Stop loss distance should scale with entry price"
+        assert (
+            abs(double_tp_distance - tp_distance * 2) <= tolerance
+        ), "Take profit distance should scale with entry price"
 
 
 class TestPropertyBasedRiskMetrics(FPTestBase):
@@ -670,9 +670,9 @@ class TestPropertyBasedRiskMetrics(FPTestBase):
         sharpe_ratio = excess_return / std_dev if std_dev > 0 else 0
 
         # Property: Sharpe ratio should be finite
-        assert math.isfinite(sharpe_ratio), (
-            f"Sharpe ratio should be finite: {sharpe_ratio}"
-        )
+        assert math.isfinite(
+            sharpe_ratio
+        ), f"Sharpe ratio should be finite: {sharpe_ratio}"
 
         # Property: Higher mean return (with same volatility) should improve Sharpe ratio
         higher_returns = [r + 0.01 for r in filtered_returns]  # Add 1% to all returns
@@ -683,15 +683,15 @@ class TestPropertyBasedRiskMetrics(FPTestBase):
         )
 
         if std_dev > 1e-6 and higher_std > 1e-6:
-            assert higher_sharpe >= sharpe_ratio, (
-                f"Higher returns should improve Sharpe ratio: {higher_sharpe} vs {sharpe_ratio}"
-            )
+            assert (
+                higher_sharpe >= sharpe_ratio
+            ), f"Higher returns should improve Sharpe ratio: {higher_sharpe} vs {sharpe_ratio}"
 
         # Property: Negative excess returns should result in negative Sharpe ratio
         if excess_return < 0 and std_dev > 0:
-            assert sharpe_ratio < 0, (
-                f"Negative excess return should result in negative Sharpe ratio: {sharpe_ratio}"
-            )
+            assert (
+                sharpe_ratio < 0
+            ), f"Negative excess return should result in negative Sharpe ratio: {sharpe_ratio}"
 
     @given(
         returns=st.lists(
@@ -739,9 +739,9 @@ class TestPropertyBasedRiskMetrics(FPTestBase):
         sortino_ratio = excess_return / downside_deviation
 
         # Property: Sortino ratio should be finite
-        assert math.isfinite(sortino_ratio), (
-            f"Sortino ratio should be finite: {sortino_ratio}"
-        )
+        assert math.isfinite(
+            sortino_ratio
+        ), f"Sortino ratio should be finite: {sortino_ratio}"
 
         # Property: Sortino ratio should be >= Sharpe ratio (or comparable)
         # Sortino typically gives better ratios since it only penalizes downside volatility
@@ -750,9 +750,9 @@ class TestPropertyBasedRiskMetrics(FPTestBase):
             sharpe_ratio = excess_return / std_dev
             # Sortino should generally be >= Sharpe (since downside deviation <= total deviation)
             if downside_deviation <= std_dev:
-                assert sortino_ratio >= sharpe_ratio * 0.8, (
-                    f"Sortino ratio should be comparable to or better than Sharpe: {sortino_ratio} vs {sharpe_ratio}"
-                )
+                assert (
+                    sortino_ratio >= sharpe_ratio * 0.8
+                ), f"Sortino ratio should be comparable to or better than Sharpe: {sortino_ratio} vs {sharpe_ratio}"
 
     @given(price_series=price_series_strategy(min_length=10, max_length=50))
     @settings(
@@ -783,22 +783,22 @@ class TestPropertyBasedRiskMetrics(FPTestBase):
         max_drawdown = max(drawdowns)
 
         # Property: Maximum drawdown should be non-negative
-        assert max_drawdown >= 0, (
-            f"Maximum drawdown should be non-negative: {max_drawdown}"
-        )
+        assert (
+            max_drawdown >= 0
+        ), f"Maximum drawdown should be non-negative: {max_drawdown}"
 
         # Property: Maximum drawdown should be <= 100%
-        assert max_drawdown <= 100, (
-            f"Maximum drawdown should be <= 100%: {max_drawdown}"
-        )
+        assert (
+            max_drawdown <= 100
+        ), f"Maximum drawdown should be <= 100%: {max_drawdown}"
 
         # Property: If prices only increase, max drawdown should be 0
         if all(
             price_series[i] >= price_series[i - 1] for i in range(1, len(price_series))
         ):
-            assert max_drawdown < 1e-6, (
-                "Monotonically increasing prices should have zero drawdown"
-            )
+            assert (
+                max_drawdown < 1e-6
+            ), "Monotonically increasing prices should have zero drawdown"
 
         # Property: Larger price drops should result in larger max drawdown
         # Create a version with an additional large drop
@@ -821,9 +821,9 @@ class TestPropertyBasedRiskMetrics(FPTestBase):
 
         if modified_drawdowns:
             modified_max_drawdown = max(modified_drawdowns)
-            assert modified_max_drawdown >= max_drawdown, (
-                "Adding a price drop should not decrease max drawdown"
-            )
+            assert (
+                modified_max_drawdown >= max_drawdown
+            ), "Adding a price drop should not decrease max drawdown"
 
     @given(
         correlation_data=st.lists(
@@ -876,32 +876,32 @@ class TestPropertyBasedRiskMetrics(FPTestBase):
         correlation = numerator / denominator if denominator > 0 else 0
 
         # Property: Correlation should be between -1 and 1
-        assert -1.01 <= correlation <= 1.01, (
-            f"Correlation should be between -1 and 1: {correlation}"
-        )
+        assert (
+            -1.01 <= correlation <= 1.01
+        ), f"Correlation should be between -1 and 1: {correlation}"
 
         # Property: Perfect positive correlation
         perfect_positive_y = [(x - mean_x) * 2 + mean_y for x in x_values]
         perfect_pos_corr = self._calculate_correlation(x_values, perfect_positive_y)
         if perfect_pos_corr is not None:
-            assert perfect_pos_corr > 0.99, (
-                f"Perfect positive correlation should be near 1: {perfect_pos_corr}"
-            )
+            assert (
+                perfect_pos_corr > 0.99
+            ), f"Perfect positive correlation should be near 1: {perfect_pos_corr}"
 
         # Property: Perfect negative correlation
         perfect_negative_y = [-(x - mean_x) * 2 + mean_y for x in x_values]
         perfect_neg_corr = self._calculate_correlation(x_values, perfect_negative_y)
         if perfect_neg_corr is not None:
-            assert perfect_neg_corr < -0.99, (
-                f"Perfect negative correlation should be near -1: {perfect_neg_corr}"
-            )
+            assert (
+                perfect_neg_corr < -0.99
+            ), f"Perfect negative correlation should be near -1: {perfect_neg_corr}"
 
         # Property: Correlation with self should be 1
         self_correlation = self._calculate_correlation(x_values, x_values)
         if self_correlation is not None:
-            assert abs(self_correlation - 1.0) < 0.01, (
-                f"Self-correlation should be 1: {self_correlation}"
-            )
+            assert (
+                abs(self_correlation - 1.0) < 0.01
+            ), f"Self-correlation should be 1: {self_correlation}"
 
     def _calculate_correlation(self, x_values, y_values):
         """Helper method to calculate correlation coefficient."""
@@ -964,21 +964,21 @@ class TestPropertyBasedRiskComposition(FPTestBase):
         # Property: Sum of individual values should equal calculated total
         calculated_total = sum(individual_values)
         tolerance = Decimal("0.01")
-        assert abs(total_value - calculated_total) <= tolerance, (
-            f"Portfolio total should equal sum of positions: {total_value} vs {calculated_total}"
-        )
+        assert (
+            abs(total_value - calculated_total) <= tolerance
+        ), f"Portfolio total should equal sum of positions: {total_value} vs {calculated_total}"
 
         # Property: Portfolio value should be non-negative
-        assert total_value >= 0, (
-            f"Portfolio value should be non-negative: {total_value}"
-        )
+        assert (
+            total_value >= 0
+        ), f"Portfolio value should be non-negative: {total_value}"
 
         # Property: Adding a position should increase or maintain portfolio value
         new_position_value = calculate_position_value(Decimal(1), Decimal(100))
         new_total = total_value + new_position_value
-        assert new_total >= total_value, (
-            "Adding a position should not decrease portfolio value"
-        )
+        assert (
+            new_total >= total_value
+        ), "Adding a position should not decrease portfolio value"
 
         # Property: Portfolio diversification (positions should be somewhat independent)
         if len(portfolios) > 1:
@@ -997,9 +997,9 @@ class TestPropertyBasedRiskComposition(FPTestBase):
                     math.sqrt(variance) / mean_value if mean_value > 0 else 0
                 )
                 # Allow for both diversified and concentrated portfolios
-                assert coefficient_of_variation >= 0, (
-                    "Coefficient of variation should be non-negative"
-                )
+                assert (
+                    coefficient_of_variation >= 0
+                ), "Coefficient of variation should be non-negative"
 
     @given(
         base_calculation=st.tuples(
@@ -1035,16 +1035,16 @@ class TestPropertyBasedRiskComposition(FPTestBase):
         # Property: Position value should scale linearly with size
         expected_scaled_value = base_position_value * scaling_factor
         tolerance = max(expected_scaled_value * Decimal("0.001"), Decimal("0.01"))
-        assert abs(scaled_position_value - expected_scaled_value) <= tolerance, (
-            f"Position value should scale linearly: {scaled_position_value} vs {expected_scaled_value}"
-        )
+        assert (
+            abs(scaled_position_value - expected_scaled_value) <= tolerance
+        ), f"Position value should scale linearly: {scaled_position_value} vs {expected_scaled_value}"
 
         # Property: P&L should scale linearly with size
         expected_scaled_pnl = base_pnl * scaling_factor
         tolerance = max(abs(expected_scaled_pnl) * Decimal("0.001"), Decimal("0.01"))
-        assert abs(scaled_pnl - expected_scaled_pnl) <= tolerance, (
-            f"P&L should scale linearly: {scaled_pnl} vs {expected_scaled_pnl}"
-        )
+        assert (
+            abs(scaled_pnl - expected_scaled_pnl) <= tolerance
+        ), f"P&L should scale linearly: {scaled_pnl} vs {expected_scaled_pnl}"
 
         # Property: Margin requirements should scale linearly
         leverage = Decimal(5)
@@ -1055,9 +1055,9 @@ class TestPropertyBasedRiskComposition(FPTestBase):
         expected_scaled_margin = base_margin * scaling_factor
 
         tolerance = max(expected_scaled_margin * Decimal("0.001"), Decimal("0.01"))
-        assert abs(scaled_margin - expected_scaled_margin) <= tolerance, (
-            f"Margin should scale linearly: {scaled_margin} vs {expected_scaled_margin}"
-        )
+        assert (
+            abs(scaled_margin - expected_scaled_margin) <= tolerance
+        ), f"Margin should scale linearly: {scaled_margin} vs {expected_scaled_margin}"
 
     @given(
         calculations=st.lists(
@@ -1104,15 +1104,15 @@ class TestPropertyBasedRiskComposition(FPTestBase):
 
         # Property: All groupings should give the same result (associativity)
         tolerance = Decimal("0.01")
-        assert abs(group1_total - group2_total) <= tolerance, (
-            f"Different calculation orders should give same result: {group1_total} vs {group2_total}"
-        )
-        assert abs(group1_total - group3_total) <= tolerance, (
-            f"Bulk calculation should match sequential: {group1_total} vs {group3_total}"
-        )
-        assert abs(group2_total - group3_total) <= tolerance, (
-            f"All calculation methods should agree: {group2_total} vs {group3_total}"
-        )
+        assert (
+            abs(group1_total - group2_total) <= tolerance
+        ), f"Different calculation orders should give same result: {group1_total} vs {group2_total}"
+        assert (
+            abs(group1_total - group3_total) <= tolerance
+        ), f"Bulk calculation should match sequential: {group1_total} vs {group3_total}"
+        assert (
+            abs(group2_total - group3_total) <= tolerance
+        ), f"All calculation methods should agree: {group2_total} vs {group3_total}"
 
         # Property: Commutativity (order shouldn't matter)
         shuffled_calculations = calculations.copy()
@@ -1128,9 +1128,9 @@ class TestPropertyBasedRiskComposition(FPTestBase):
             for size, entry_price, side in shuffled_calculations
         )
 
-        assert abs(group1_total - shuffled_total) <= tolerance, (
-            f"Order of calculations should not matter: {group1_total} vs {shuffled_total}"
-        )
+        assert (
+            abs(group1_total - shuffled_total) <= tolerance
+        ), f"Order of calculations should not matter: {group1_total} vs {shuffled_total}"
 
 
 if __name__ == "__main__":

@@ -477,9 +477,9 @@ class TestRiskManagementPerformanceCompatibility(FPTestBase):
 
         # FP should be competitive (within 2x of legacy performance)
         performance_ratio = fp_time / legacy_time if legacy_time > 0 else float("inf")
-        assert performance_ratio < 2.0, (
-            f"FP performance ratio too high: {performance_ratio}"
-        )
+        assert (
+            performance_ratio < 2.0
+        ), f"FP performance ratio too high: {performance_ratio}"
 
     def test_consistency_validation_performance(self):
         """Test performance of consistency validation between FP and legacy."""
@@ -500,9 +500,9 @@ class TestRiskManagementPerformanceCompatibility(FPTestBase):
         assert validation_result.is_success()
 
         # Validation should complete quickly (under 100ms for 100 positions)
-        assert validation_time < 0.1, (
-            f"Consistency validation too slow: {validation_time}s"
-        )
+        assert (
+            validation_time < 0.1
+        ), f"Consistency validation too slow: {validation_time}s"
 
     def test_comprehensive_report_generation_performance(self):
         """Test performance of comprehensive report generation."""
