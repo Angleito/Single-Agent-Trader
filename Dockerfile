@@ -237,7 +237,7 @@ COPY --chown=${USER_ID}:${GROUP_ID} healthcheck.sh /app/healthcheck.sh
 RUN chmod +x /app/healthcheck.sh
 
 # Copy and setup Docker entrypoint script with Alpine compatibility
-COPY --chown=${USER_ID}:${GROUP_ID} scripts/docker-entrypoint.sh /app/docker-entrypoint.sh
+COPY --chown=${USER_ID}:${GROUP_ID} scripts/docker-entrypoint-simple.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
 # Final verification of virtual environment before user switch
