@@ -132,8 +132,8 @@ def parse_env_var(key: str, default: str | None = None) -> str | None:
 def _get_functional_config():
     """Lazy load functional configuration types."""
     try:
-        from bot.fp.types.config import Config as FunctionalConfig  # noqa: PLC0415
-        from bot.fp.types.result import Failure, Result, Success  # noqa: PLC0415
+        from bot.fp.types.config import Config as FunctionalConfig
+        from bot.fp.types.result import Failure, Result, Success
 
         return (FunctionalConfig, Success, Failure, Result)
     except ImportError:
@@ -450,7 +450,9 @@ class ExchangeSettings:
         """
         try:
             # Import the converter utility
-            from bot.utils.sui_key_converter import auto_convert_private_key  # noqa: PLC0415
+            from bot.utils.sui_key_converter import (
+                auto_convert_private_key,
+            )
 
             converted_key, format_detected, message = auto_convert_private_key(
                 private_key_str
