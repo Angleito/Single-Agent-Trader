@@ -17,6 +17,13 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import SecretStr
 
+# Import SecureString for private key handling
+try:
+    from bot.security.memory import SecureString
+except ImportError:
+    # Fallback to string if SecureString not available
+    SecureString = str
+
 if TYPE_CHECKING:
     from bot.fp.types.result import Failure, Result, Success
 else:
@@ -125,8 +132,8 @@ def parse_env_var(key: str, default: str | None = None) -> str | None:
 def _get_functional_config():
     """Lazy load functional configuration types."""
     try:
-        from bot.fp.types.config import Config as FunctionalConfig
-        from bot.fp.types.result import Failure, Result, Success
+        from bot.fp.types.config import Config as FunctionalConfig  # noqa: PLC0415
+        from bot.fp.types.result import Failure, Result, Success  # noqa: PLC0415
 
         return (FunctionalConfig, Success, Failure, Result)
     except ImportError:
@@ -443,7 +450,7 @@ class ExchangeSettings:
         """
         try:
             # Import the converter utility
-            from bot.utils.sui_key_converter import auto_convert_private_key
+            from bot.utils.sui_key_converter import auto_convert_private_key  # noqa: PLC0415
 
             converted_key, format_detected, message = auto_convert_private_key(
                 private_key_str
@@ -465,21 +472,59 @@ class ExchangeSettings:
             ):
                 return f"0x{private_key_str}"
 
-            # Check if bech32 format
+            # Check if bech32 format and attempt automatic conversion
             if private_key_str.startswith("suiprivkey"):
+                # Try to automatically convert the bech32 key
+                try:
+                    from bot.utils.sui_key_converter import (
+                        bech32_to_hex,
+                    )
+
+                    print(
+                        "🔄 Bech32 format detected, attempting automatic conversion..."
+                    )
+                    converted_key = bech32_to_hex(private_key_str)
+                    if converted_key:
+                        print("✅ Successfully converted bech32 to hex format")
+                        return SecureString(converted_key)
+                    print("❌ Automatic conversion failed")
+                except ImportError:
+                    print("⚠️ Converter utility not available")
+
+                # If conversion failed, provide manual instructions
                 raise ValueError(
-                    "Bech32 format detected (suiprivkey...). Please convert to hex format:\n"
+                    "Bech32 format detected (suiprivkey...) but automatic conversion failed.\n"
+                    "Please convert manually:\n"
                     "1. Open your Sui wallet → Settings → Export Private Key\n"
                     "2. Choose 'Raw Private Key' or 'Hex Format'\n"
                     "3. Copy the hex string (should start with 0x)\n"
                     "4. Update your EXCHANGE__BLUEFIN_PRIVATE_KEY in .env with the hex format"
                 ) from None
 
-            # Check if mnemonic format
+            # Check if mnemonic format and attempt automatic conversion
             words = private_key_str.split()
             if len(words) in [12, 24] and all(word.isalpha() for word in words):
+                # Try to automatically convert the mnemonic
+                try:
+                    from bot.utils.sui_key_converter import (
+                        mnemonic_to_hex,
+                    )
+
+                    print(
+                        "🔄 Mnemonic phrase detected, attempting automatic conversion..."
+                    )
+                    converted_key = mnemonic_to_hex(private_key_str)
+                    if converted_key:
+                        print("✅ Successfully converted mnemonic to hex format")
+                        return SecureString(converted_key)
+                    print("❌ Automatic conversion failed")
+                except ImportError:
+                    print("⚠️ Converter utility not available")
+
+                # If conversion failed, provide manual instructions
                 raise ValueError(
-                    "Mnemonic phrase detected. Please convert to private key:\n"
+                    "Mnemonic phrase detected but automatic conversion failed.\n"
+                    "Please convert manually:\n"
                     '1. Use Sui CLI: sui keytool import "<your mnemonic>" ed25519\n'
                     "2. Then export as hex: sui keytool export <address> --key-scheme ed25519\n"
                     "3. Update your EXCHANGE__BLUEFIN_PRIVATE_KEY in .env with the hex format"

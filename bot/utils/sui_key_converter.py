@@ -43,7 +43,9 @@ def detect_key_format(private_key: Any) -> str:
 
     # Mnemonic phrase (12 or 24 words)
     words = key.split()
-    if len(words) in [12, 24] and all(word.isalpha() and 2 <= len(word) <= 15 for word in words):
+    if len(words) in [12, 24] and all(
+        word.isalpha() and 2 <= len(word) <= 15 for word in words
+    ):
         return "mnemonic"
 
     return "unknown"
