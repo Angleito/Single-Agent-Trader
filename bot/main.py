@@ -856,6 +856,7 @@ class TradingEngine:
                 self.market_making_integrator is not None
                 and self.market_making_integrator.status.market_making_enabled
             ),
+            "WebSocket Publisher": self.websocket_publisher is not None,
             "Command Consumer": self.command_consumer is not None,
             "OmniSearch Client": self.omnisearch_client is not None,
             "Dominance Provider": self.dominance_provider is not None,
@@ -939,15 +940,21 @@ class TradingEngine:
         except Exception:
             self.logger.exception("Error closing positions during emergency stop")
 
-        # Emergency stop status logged (websocket publisher removed)
+        # Publish emergency stop status
+        if self.websocket_publisher:
+            await self.websocket_publisher.publish_system_status(
+                status="emergency_stopped",
+                health=False,
+                message="Emergency stop activated from dashboard",
+            )
 
     async def _handle_pause_trading(self) -> None:
         """Handle pause trading command from dashboard."""
         self.logger.warning("📍 Trading paused from dashboard")
         self.trading_enabled = False
 
-        # WebSocket publisher removed
-        # WebSocket publisher removed
+        if self.websocket_publisher:
+            await self.websocket_publisher.publish_system_status(
                 status="trading_paused",
                 health=True,
                 message="Trading paused from dashboard",
@@ -959,8 +966,8 @@ class TradingEngine:
         self.trading_enabled = True
         self._shutdown_requested = False
 
-        # WebSocket publisher removed
-        # WebSocket publisher removed
+        if self.websocket_publisher:
+            await self.websocket_publisher.publish_system_status(
                 status="trading_active",
                 health=True,
                 message="Trading resumed from dashboard",
@@ -985,8 +992,8 @@ class TradingEngine:
 
             self.logger.info("Risk limits updated successfully")
 
-        # WebSocket publisher removed
-        # WebSocket publisher removed
+            if self.websocket_publisher:
+                await self.websocket_publisher.publish_system_status(
                     status="risk_limits_updated",
                     health=True,
                     message=f"Risk limits updated: {parameters}",
@@ -1015,8 +1022,8 @@ class TradingEngine:
 
             if success:
                 self.logger.info("Manual trade executed successfully")
-        # WebSocket publisher removed
-        # WebSocket publisher removed
+                if self.websocket_publisher:
+                    await self.websocket_publisher.publish_trade_execution(
                         {
                             "order_id": f"manual_{int(time.time())}",
                             "symbol": self.symbol,
@@ -1077,9 +1084,9 @@ class TradingEngine:
                     )
 
             # Publish alert to dashboard if available
-        # WebSocket publisher removed
+            if hasattr(self, "websocket_publisher") and self.websocket_publisher:
                 alert_task = asyncio.create_task(
-        # WebSocket publisher removed
+                    self.websocket_publisher.publish_system_status(
                         status="performance_alert",
                         health=alert.level.value != "critical",
                         message=alert.message,
@@ -1743,8 +1750,8 @@ class TradingEngine:
             )
 
             # Update component references from successful services
-        # WebSocket publisher removed
-        # WebSocket publisher removed
+            if "websocket_publisher" in service_instances:
+                self.websocket_publisher = service_instances["websocket_publisher"]
 
             if "bluefin_service" in service_instances:
                 self._bluefin_service_client = service_instances["bluefin_service"]
@@ -1862,10 +1869,10 @@ class TradingEngine:
         """Initialize dashboard-related components."""
         # WebSocket publisher should already be initialized in _connect_optional_services
         # Just log the status here
-        # WebSocket publisher removed
+        if self.websocket_publisher:
             console.print("    [green]✓ Dashboard WebSocket already connected[/green]")
             try:
-        # WebSocket publisher removed
+                await self.websocket_publisher.publish_system_status(
                     status="initialized", health=True
                 )
             except Exception as e:
@@ -2389,7 +2396,7 @@ class TradingEngine:
 
     async def _initialize_trading_loop(self) -> None:
         """Initialize the trading loop with performance metrics."""
-        # WebSocket publisher removed
+        if self.websocket_publisher and self.websocket_publisher.connected:
             # Get initial price if available
             initial_price = Decimal(0)
             try:
@@ -2734,8 +2741,8 @@ class TradingEngine:
             current_price = latest_data[-1].close
 
             # Publish market data to dashboard
-        # WebSocket publisher removed
-        # WebSocket publisher removed
+            if self.websocket_publisher:
+                await self.websocket_publisher.publish_market_data(
                     symbol=self.actual_trading_symbol,
                     price=float(current_price),
                     timestamp=latest_data[-1].timestamp,
@@ -2833,7 +2840,7 @@ class TradingEngine:
                 )
 
             # Publish indicator data
-        # WebSocket publisher removed
+            if self.websocket_publisher:
                 await self._publish_indicator_data(indicator_state)
 
             return indicator_state
@@ -2844,8 +2851,8 @@ class TradingEngine:
             )
             indicator_state = self._get_fallback_indicator_state()
 
-        # WebSocket publisher removed
-        # WebSocket publisher removed
+            if self.websocket_publisher:
+                await self.websocket_publisher.publish_indicator_data(
                     symbol=self.actual_trading_symbol,
                     indicators=indicator_state,
                 )
@@ -2854,7 +2861,7 @@ class TradingEngine:
 
     async def _publish_indicator_data(self, indicator_state: dict[str, Any]) -> None:
         """Publish indicator data to dashboard."""
-        # WebSocket publisher removed
+        await self.websocket_publisher.publish_indicator_data(
             symbol=self.actual_trading_symbol,
             indicators={
                 "cipher_a": indicator_state.get("cipher_a", {}),
@@ -3150,16 +3157,16 @@ class TradingEngine:
         self, trade_action, market_state, current_price
     ):
         """Publish trading decision to dashboard."""
-        # WebSocket publisher removed
+        if not self.websocket_publisher:
             return
 
-        # WebSocket publisher removed
+        await self.websocket_publisher.publish_ai_decision(
             action=trade_action.action,
             reasoning=trade_action.rationale,
             confidence=trade_action.size_pct / 100.0,
         )
 
-        # WebSocket publisher removed
+        await self.websocket_publisher.publish_trading_decision(
             trade_action=trade_action,
             symbol=self.symbol,
             current_price=float(current_price),
@@ -3740,8 +3747,8 @@ class TradingEngine:
                     self.successful_trades += 1
 
                     # Publish trade execution to dashboard
-        # WebSocket publisher removed
-        # WebSocket publisher removed
+                    if self.websocket_publisher:
+                        await self.websocket_publisher.publish_trade_execution(
                             {
                                 "order_id": order.id,
                                 "symbol": self.actual_trading_symbol,
@@ -3998,7 +4005,7 @@ class TradingEngine:
             self.current_position.unrealized_pnl = pnl
 
             # Publish position update to dashboard
-        # WebSocket publisher removed
+            if self.websocket_publisher:
                 # Create position object for the update
                 from .trading_types import Position
 
@@ -4010,7 +4017,7 @@ class TradingEngine:
                     unrealized_pnl=pnl,
                     timestamp=self.current_position.timestamp,
                 )
-        # WebSocket publisher removed
+                await self.websocket_publisher.publish_position_update(
                     position=position_update
                 )
 
@@ -4040,7 +4047,7 @@ class TradingEngine:
             else:
                 self._log_position_update(current_price, pnl)
                 self._last_position_log_time = datetime.now(UTC)
-        # WebSocket publisher removed
+        elif self.websocket_publisher:
             # Create flat position object for the update
             from .fp.types import Position
 
@@ -4052,7 +4059,7 @@ class TradingEngine:
                 unrealized_pnl=Decimal(0),
                 timestamp=datetime.now(UTC),
             )
-        # WebSocket publisher removed
+            await self.websocket_publisher.publish_position_update(
                 position=flat_position
             )
 
@@ -4168,7 +4175,7 @@ class TradingEngine:
 
     async def _publish_performance_metrics(self, current_price: Decimal) -> None:
         """Publish performance metrics to the dashboard via WebSocket."""
-        # WebSocket publisher removed
+        if not self.websocket_publisher or not self.websocket_publisher.connected:
             return
 
         try:
@@ -4242,7 +4249,7 @@ class TradingEngine:
             )
 
             # Publish to dashboard
-        # WebSocket publisher removed
+            await self.websocket_publisher.publish_performance_update(
                 performance_metrics
             )
 
@@ -4381,12 +4388,12 @@ class TradingEngine:
 
             # Close WebSocket publisher connection
             if (
-        # WebSocket publisher removed
-        # WebSocket publisher removed
+                hasattr(self, "websocket_publisher")
+                and self.websocket_publisher is not None
             ):
                 console.print("  • Disconnecting from dashboard WebSocket...")
                 websocket_task: Task[None] = asyncio.create_task(
-        # WebSocket publisher removed
+                    self.websocket_publisher.close()
                 )
                 cleanup_tasks.append(websocket_task)
 
@@ -4517,9 +4524,9 @@ class TradingEngine:
             self.dominance_provider._session = None
 
         # Cleanup WebSocket publisher
-        # WebSocket publisher removed
+        if hasattr(self, "websocket_publisher") and self.websocket_publisher:
             with contextlib.suppress(Exception):
-        # WebSocket publisher removed
+                await asyncio.wait_for(self.websocket_publisher.close(), timeout=2.0)
 
         # Cleanup Bluefin service client
         if hasattr(self, "_bluefin_service_client"):
