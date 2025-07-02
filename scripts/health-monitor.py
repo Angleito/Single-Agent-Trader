@@ -24,7 +24,6 @@ from pathlib import Path
 from typing import Any
 
 import aiohttp
-import docker
 import psutil
 from rich.console import Console
 from rich.layout import Layout
@@ -32,6 +31,8 @@ from rich.live import Live
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
+
+import docker
 
 # Add project root to path
 project_root = Path(__file__).parent.parent

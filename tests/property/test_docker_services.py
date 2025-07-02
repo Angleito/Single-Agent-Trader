@@ -13,12 +13,13 @@ from contextlib import contextmanager
 from datetime import timedelta
 from typing import Any
 
-import docker
 import hypothesis.strategies as st
 import pytest
 import requests
 from hypothesis import assume, given, settings
 from hypothesis.stateful import Bundle, RuleBasedStateMachine, rule
+
+import docker
 
 # Mark all tests in this module as requiring Docker
 pytestmark = pytest.mark.docker

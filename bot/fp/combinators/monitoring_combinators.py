@@ -120,9 +120,9 @@ def chain_io(io_a: IO[A], f: Callable[[A], IO[B]]) -> IO[B]:
     return IO(chained_operation)
 
 
-def filter_io[A](
-    predicate: Callable[[A], bool],
-) -> Callable[[IO[list[A]]], IO[list[A]]]:
+def filter_io[
+    A
+](predicate: Callable[[A], bool],) -> Callable[[IO[list[A]]], IO[list[A]]]:
     """Filter results of an IO operation"""
 
     def filter_operation(io_list: IO[list[A]]) -> IO[list[A]]:
@@ -538,9 +538,9 @@ def threshold_metric(
 # ==============================================================================
 
 
-def monitoring_pipeline[A, B](
-    stages: list[Callable[[A], IO[B]]],
-) -> Callable[[A], IO[B]]:
+def monitoring_pipeline[
+    A, B
+](stages: list[Callable[[A], IO[B]]],) -> Callable[[A], IO[B]]:
     """Create a monitoring pipeline from a list of transformation stages"""
 
     def pipeline(initial_input: A) -> IO[B]:
@@ -558,7 +558,9 @@ def monitoring_pipeline[A, B](
     return pipeline
 
 
-def circuit_breaker_monitoring[A](
+def circuit_breaker_monitoring[
+    A
+](
     operation: IO[A],
     failure_threshold: int = 5,
     recovery_timeout_seconds: float = 60.0,
@@ -817,9 +819,9 @@ def create_health_checker(
     return IO(health_check)
 
 
-def create_monitoring_scheduler[A](
-    operations: list[IO[A]], interval_seconds: float = 30.0
-) -> IO[None]:
+def create_monitoring_scheduler[
+    A
+](operations: list[IO[A]], interval_seconds: float = 30.0) -> IO[None]:
     """Create a simple monitoring scheduler (returns immediately)"""
 
     def setup_scheduler() -> None:

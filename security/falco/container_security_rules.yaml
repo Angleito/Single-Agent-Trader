@@ -1,0 +1,414 @@
+# Container Security Rules for AI Trading Bot
+# Advanced container runtime security monitoring for Docker-based trading infrastructure
+
+# ==============================================================================
+# Container Lifecycle Security Rules
+# ==============================================================================
+
+# Detect container runtime modifications
+- rule: Container Runtime Modification
+  desc: Detect unauthorized modifications to container runtime
+  condition: >
+    spawned_process and
+    (proc.name in (docker, dockerd, containerd, runc, crun) or
+     proc.args contains "docker" or
+     proc.args contains "containerd") and
+    not container.name in (ai-trading-bot, bluefin-service, dashboard-backend, 
+                          mcp-memory, mcp-omnisearch, dashboard-frontend, dashboard-nginx)
+  output: >
+    Container runtime modification detected 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [container, runtime, modification]
+
+# Detect container escape attempts via namespace manipulation
+- rule: Container Namespace Escape
+  desc: Detect attempts to escape container via namespace manipulation
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend, 
+                      mcp-memory, mcp-omnisearch) and
+    ((spawned_process and proc.name in (nsenter, unshare)) or
+     (open_write and (fd.name startswith "/proc/sys/" or 
+                      fd.name startswith "/proc/self/ns/" or
+                      fd.name startswith "/sys/fs/cgroup/")))
+  output: >
+    Container namespace escape attempt 
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [container, escape, namespace]
+
+# Detect unauthorized container image operations
+- rule: Unauthorized Container Image Operations
+  desc: Detect unauthorized container image pull/push operations
+  condition: >
+    spawned_process and
+    (proc.args contains "docker pull" or 
+     proc.args contains "docker push" or
+     proc.args contains "docker build" or
+     proc.args contains "docker commit") and
+    not proc.args contains "ai-trading-bot" and
+    not proc.args contains "bluefin-service" and
+    not proc.args contains "mcp-memory" and
+    not proc.args contains "mcp-omnisearch"
+  output: >
+    Unauthorized container image operation 
+    (user=%user.name command=%proc.cmdline)
+  priority: WARNING
+  tags: [container, image, unauthorized]
+
+# ==============================================================================
+# Volume and Mount Security Rules
+# ==============================================================================
+
+# Detect unauthorized host volume mounts
+- rule: Unauthorized Host Volume Mount
+  desc: Detect unauthorized mounting of host directories
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
+    spawned_process and
+    proc.name="mount" and
+    not proc.args contains "/app/logs" and
+    not proc.args contains "/app/data" and
+    not proc.args contains "/app/config" and
+    not proc.args contains "/app/tmp"
+  output: >
+    Unauthorized host volume mount 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [container, mount, unauthorized]
+
+# Detect Docker socket access
+- rule: Docker Socket Access
+  desc: Detect access to Docker socket from containers
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend, 
+                      mcp-memory, mcp-omnisearch) and
+    (open_read or open_write) and
+    fd.name="/var/run/docker.sock"
+  output: >
+    Docker socket access from container 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [container, docker-socket, security]
+
+# Detect unauthorized tmpfs modifications
+- rule: Unauthorized Tmpfs Modifications
+  desc: Detect unauthorized modifications to tmpfs mounts
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
+    (open_write or rename or unlink) and
+    (fd.name startswith "/tmp/" or fd.name startswith "/var/tmp/") and
+    not proc.name in (python, python3, node, nginx)
+  output: >
+    Unauthorized tmpfs modification 
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [container, tmpfs, modification]
+
+# ==============================================================================
+# Container Network Security Rules
+# ==============================================================================
+
+# Detect container network configuration changes
+- rule: Container Network Configuration Change
+  desc: Detect unauthorized network configuration changes in containers
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
+    ((spawned_process and proc.name in (iptables, netfilter, tc, ip)) or
+     (open_write and (fd.name startswith "/proc/net/" or 
+                      fd.name startswith "/sys/class/net/")))
+  output: >
+    Container network configuration change 
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
+  priority: ALERT
+  tags: [container, network, configuration]
+
+# Detect unauthorized container-to-container communication
+- rule: Unauthorized Container Communication
+  desc: Detect unauthorized communication between containers
+  condition: >
+    outbound and
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend, 
+                      mcp-memory, mcp-omnisearch) and
+    not ((container.name="ai-trading-bot" and 
+          fd.rip_name in (bluefin-service, mcp-memory, mcp-omnisearch, dashboard-backend)) or
+         (container.name="dashboard-backend" and 
+          fd.rip_name in (ai-trading-bot, bluefin-service)) or
+         (container.name="bluefin-service" and 
+          fd.rip_name in (ai-trading-bot, dashboard-backend))) and
+    fd.rip startswith "172." and
+    not fd.rport in (80, 443, 8000, 8080, 8765, 8767)
+  output: >
+    Unauthorized container communication 
+    (user=%user.name connection=%fd.rip:%fd.rport source=%container.name)
+  priority: WARNING
+  tags: [container, network, unauthorized]
+
+# ==============================================================================
+# Container Resource Security Rules
+# ==============================================================================
+
+# Detect container resource limit bypass attempts
+- rule: Container Resource Limit Bypass
+  desc: Detect attempts to bypass container resource limits
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
+    ((spawned_process and proc.args contains "ulimit") or
+     (open_write and (fd.name startswith "/sys/fs/cgroup/" or
+                      fd.name startswith "/proc/sys/vm/" or
+                      fd.name startswith "/proc/sys/kernel/")))
+  output: >
+    Container resource limit bypass attempt 
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [container, resource, bypass]
+
+# Detect excessive container memory usage
+- rule: Container Memory Exhaustion
+  desc: Detect potential memory exhaustion in trading containers
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
+    container.memory.used > 85 and
+    spawned_process
+  output: >
+    Container memory exhaustion detected 
+    (user=%user.name command=%proc.cmdline memory_used=%container.memory.used container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [container, memory, exhaustion]
+
+# Detect container CPU anomalies
+- rule: Container CPU Anomaly
+  desc: Detect unusual CPU usage patterns in containers
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service) and
+    container.cpu.usage > 90 and
+    not proc.name in (python, python3, node)
+  output: >
+    Container CPU anomaly detected 
+    (user=%user.name command=%proc.cmdline cpu_usage=%container.cpu.usage container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [container, cpu, anomaly]
+
+# ==============================================================================
+# Container Configuration Security Rules
+# ==============================================================================
+
+# Detect unauthorized container environment modifications
+- rule: Container Environment Modification
+  desc: Detect unauthorized modifications to container environment
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
+    spawned_process and
+    (proc.args contains "export" or 
+     proc.args contains "unset" or
+     proc.args contains "PYTHONPATH" or
+     proc.args contains "PATH=") and
+    not proc.name in (python, python3, sh, bash)
+  output: >
+    Container environment modification 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [container, environment, modification]
+
+# Detect container user/group modifications
+- rule: Container User Modification
+  desc: Detect unauthorized user/group modifications in containers
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
+    ((spawned_process and proc.name in (usermod, groupmod, passwd, chpasswd)) or
+     (open_write and (fd.name="/etc/passwd" or 
+                      fd.name="/etc/shadow" or 
+                      fd.name="/etc/group")))
+  output: >
+    Container user modification attempt 
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [container, user, modification]
+
+# ==============================================================================
+# Container Integrity Rules
+# ==============================================================================
+
+# Detect unauthorized binary modifications
+- rule: Container Binary Modification
+  desc: Detect unauthorized modifications to container binaries
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
+    (open_write or rename or unlink) and
+    (fd.name startswith "/usr/bin/" or 
+     fd.name startswith "/usr/local/bin/" or
+     fd.name startswith "/app/bot/" or
+     fd.name startswith "/app/bin/") and
+    not proc.name in (python, python3, pip, pip3)
+  output: >
+    Container binary modification 
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [container, binary, modification]
+
+# Detect unauthorized library modifications
+- rule: Container Library Modification
+  desc: Detect unauthorized modifications to container libraries
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
+    (open_write or rename or unlink) and
+    (fd.name startswith "/usr/lib/" or 
+     fd.name startswith "/lib/" or
+     fd.name contains ".so" or
+     fd.name contains "site-packages") and
+    not proc.name in (python, python3, pip, pip3)
+  output: >
+    Container library modification 
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
+  priority: ALERT
+  tags: [container, library, modification]
+
+# ==============================================================================
+# Container Orchestration Security Rules
+# ==============================================================================
+
+# Detect unauthorized Docker Compose operations
+- rule: Unauthorized Docker Compose Operations
+  desc: Detect unauthorized Docker Compose operations
+  condition: >
+    spawned_process and
+    (proc.name="docker-compose" or proc.args contains "docker-compose") and
+    not proc.args contains "logs" and
+    not proc.args contains "ps" and
+    not proc.args contains "exec"
+  output: >
+    Unauthorized Docker Compose operation 
+    (user=%user.name command=%proc.cmdline)
+  priority: WARNING
+  tags: [container, compose, unauthorized]
+
+# Detect container restart/stop operations
+- rule: Container Lifecycle Operations
+  desc: Monitor container lifecycle operations for audit
+  condition: >
+    spawned_process and
+    proc.args contains "docker" and
+    (proc.args contains "stop" or 
+     proc.args contains "start" or 
+     proc.args contains "restart" or
+     proc.args contains "kill") and
+    (proc.args contains "ai-trading-bot" or
+     proc.args contains "bluefin-service" or
+     proc.args contains "dashboard")
+  output: >
+    Container lifecycle operation 
+    (user=%user.name command=%proc.cmdline operation=%proc.args)
+  priority: INFORMATIONAL
+  tags: [container, lifecycle, audit]
+
+# ==============================================================================
+# Container Secret Management Rules
+# ==============================================================================
+
+# Detect secret exposure in container environment
+- rule: Container Secret Exposure
+  desc: Detect potential secret exposure in container environment
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
+    spawned_process and
+    (proc.args contains "API_KEY" or 
+     proc.args contains "SECRET" or
+     proc.args contains "PASSWORD" or
+     proc.args contains "TOKEN" or
+     proc.args contains "PRIVATE_KEY") and
+    not proc.args contains "***" and
+    not proc.name in (python, python3)
+  output: >
+    Potential secret exposure in container 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [container, secret, exposure]
+
+# Detect unauthorized secret file access
+- rule: Container Secret File Access
+  desc: Detect unauthorized access to secret files in containers
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
+    open_read and
+    (fd.name startswith "/run/secrets/" or
+     fd.name contains "secret" or
+     fd.name contains "key" or
+     fd.name contains ".env") and
+    not proc.name in (python, python3)
+  output: >
+    Unauthorized secret file access 
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
+  priority: ALERT
+  tags: [container, secret, unauthorized-access]
+
+# ==============================================================================
+# Container Performance Security Rules
+# ==============================================================================
+
+# Detect container performance degradation attacks
+- rule: Container Performance Attack
+  desc: Detect potential performance degradation attacks
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service) and
+    spawned_process and
+    (proc.name in (stress, stress-ng, dd, yes) or
+     proc.args contains "while true" or
+     proc.args contains "fork()" or
+     proc.args contains "infinite")
+  output: >
+    Potential container performance attack 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [container, performance, attack]
+
+# Detect container disk exhaustion attempts
+- rule: Container Disk Exhaustion
+  desc: Detect attempts to exhaust container disk space
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
+    spawned_process and
+    (proc.name="dd" or
+     proc.args contains "fallocate" or
+     proc.args contains "truncate") and
+    proc.args contains "/app/"
+  output: >
+    Container disk exhaustion attempt 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [container, disk, exhaustion]
+
+# ==============================================================================
+# Trading-Specific Container Security Rules
+# ==============================================================================
+
+# Detect unauthorized trading container spawning
+- rule: Unauthorized Trading Container Spawn
+  desc: Detect spawning of unauthorized trading containers
+  condition: >
+    spawned_process and
+    proc.args contains "docker run" and
+    (proc.args contains "trading" or
+     proc.args contains "bot" or
+     proc.args contains "exchange" or
+     proc.args contains "crypto") and
+    not proc.args contains "ai-trading-bot" and
+    not proc.args contains "bluefin-service"
+  output: >
+    Unauthorized trading container spawn attempt 
+    (user=%user.name command=%proc.cmdline)
+  priority: CRITICAL
+  tags: [container, trading, unauthorized]
+
+# Monitor container health check failures
+- rule: Trading Container Health Failure
+  desc: Monitor health check failures in trading containers
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
+    spawned_process and
+    proc.args contains "healthcheck" and
+    proc.args contains "fail"
+  output: >
+    Trading container health check failure 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [container, health, failure]

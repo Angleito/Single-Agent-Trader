@@ -1,0 +1,444 @@
+# Trading Bot Specific Falco Security Rules
+# Custom rules designed for AI Trading Bot runtime security monitoring
+
+# ==============================================================================
+# Trading Bot Critical Security Rules
+# ==============================================================================
+
+# Detect unauthorized access to trading credentials
+- rule: Trading Credentials Access
+  desc: Detect unauthorized access to trading API keys and private keys
+  condition: >
+    open_read and 
+    (fd.name contains "/run/secrets/" or 
+     fd.name contains "api_key" or 
+     fd.name contains "private_key" or
+     fd.name contains ".env") and
+    not proc.name in (python, python3, cat, head, tail, grep) and
+    not container.name in (ai-trading-bot, bluefin-service, dashboard-backend)
+  output: >
+    Unauthorized access to trading credentials 
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [trading, credentials, security]
+
+# Detect unauthorized modifications to trading configuration
+- rule: Trading Configuration Tampering
+  desc: Detect unauthorized modifications to trading bot configuration files
+  condition: >
+    (open_write or rename or unlink) and
+    (fd.name startswith "/app/config/" or
+     fd.name contains "trading" or
+     fd.name contains "exchange" or
+     fd.name contains ".json" and fd.name contains "config") and
+    not proc.name in (python, python3) and
+    not container.name in (ai-trading-bot, bluefin-service, dashboard-backend)
+  output: >
+    Unauthorized trading configuration modification 
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [trading, configuration, tampering]
+
+# Detect suspicious network connections from trading containers
+- rule: Trading Bot Suspicious Network Connection
+  desc: Detect network connections to unauthorized endpoints from trading bot
+  condition: >
+    outbound and
+    container.name in (ai-trading-bot, bluefin-service) and
+    not fd.rip in (api.coinbase.com, coinbase.com, bluefin.trade, api.bluefin.trade, 
+                   openai.com, api.openai.com, googleapis.com, github.com) and
+    not fd.rip startswith "172." and
+    not fd.rip startswith "10." and
+    not fd.rip startswith "192.168." and
+    not fd.rip="127.0.0.1" and
+    not fd.rport in (80, 443, 8080, 8765, 8767, 8000, 3000)
+  output: >
+    Trading bot suspicious network connection 
+    (user=%user.name command=%proc.cmdline connection=%fd.rip:%fd.rport container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [trading, network, suspicious]
+
+# Detect privilege escalation attempts in trading containers
+- rule: Trading Container Privilege Escalation
+  desc: Detect privilege escalation attempts in trading bot containers
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend, mcp-memory, mcp-omnisearch) and
+    ((spawned_process and proc.name in (su, sudo, doas)) or
+     (spawned_process and proc.args contains "chmod +s") or
+     (spawned_process and proc.args contains "setuid") or
+     (spawned_process and proc.args contains "setcap"))
+  output: >
+    Privilege escalation attempt in trading container 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [trading, privilege-escalation, container]
+
+# ==============================================================================
+# Financial Data Protection Rules
+# ==============================================================================
+
+# Detect unauthorized access to trading data
+- rule: Trading Data Unauthorized Access
+  desc: Detect unauthorized access to sensitive trading data files
+  condition: >
+    open_read and
+    (fd.name contains "/app/data/paper_trading/" or
+     fd.name contains "/app/data/positions/" or
+     fd.name contains "/app/data/orders/" or
+     fd.name contains "account.json" or
+     fd.name contains "positions.json" or
+     fd.name contains "trades.json") and
+    not proc.name in (python, python3) and
+    not container.name in (ai-trading-bot, dashboard-backend)
+  output: >
+    Unauthorized access to trading data 
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
+  priority: ALERT
+  tags: [trading, data, unauthorized-access]
+
+# Detect unauthorized modifications to position data
+- rule: Position Data Tampering
+  desc: Detect unauthorized modifications to trading position data
+  condition: >
+    (open_write or truncate) and
+    (fd.name contains "positions.json" or
+     fd.name contains "account.json" or
+     fd.name contains "fifo_positions.json") and
+    not proc.name in (python, python3) and
+    not container.name="ai-trading-bot"
+  output: >
+    Unauthorized modification of position data 
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [trading, positions, tampering]
+
+# Detect trading log tampering
+- rule: Trading Log Tampering
+  desc: Detect unauthorized modifications to trading logs
+  condition: >
+    (open_write or truncate or unlink) and
+    (fd.name contains "/app/logs/trading" or
+     fd.name contains "/app/logs/trades/" or
+     fd.name contains "decisions.log" or
+     fd.name contains "llm_completions.log") and
+    not proc.name in (python, python3, logrotate) and
+    not container.name in (ai-trading-bot, dashboard-backend)
+  output: >
+    Unauthorized trading log modification 
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
+  priority: ALERT
+  tags: [trading, logs, tampering]
+
+# ==============================================================================
+# Container Escape Detection Rules
+# ==============================================================================
+
+# Detect container escape attempts
+- rule: Trading Container Escape Attempt
+  desc: Detect attempts to escape from trading bot containers
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend, mcp-memory, mcp-omnisearch) and
+    ((spawned_process and proc.name in (docker, runc, ctr, crictl)) or
+     (open_write and fd.name startswith "/proc/") or
+     (open_write and fd.name startswith "/sys/") or
+     (spawned_process and proc.args contains "nsenter") or
+     (spawned_process and proc.args contains "unshare"))
+  output: >
+    Container escape attempt detected 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [trading, container-escape, security]
+
+# Detect mount operations in trading containers
+- rule: Trading Container Mount Operations
+  desc: Detect unauthorized mount operations in trading containers
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
+    spawned_process and
+    proc.name in (mount, umount) and
+    not proc.args contains "/app/logs" and
+    not proc.args contains "/app/data"
+  output: >
+    Unauthorized mount operation in trading container 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [trading, mount, unauthorized]
+
+# ==============================================================================
+# Process Injection and Code Execution Rules
+# ==============================================================================
+
+# Detect code injection attempts
+- rule: Trading Bot Code Injection
+  desc: Detect code injection attempts in trading bot processes
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service) and
+    ((spawned_process and proc.args contains "eval") or
+     (spawned_process and proc.args contains "exec") or
+     (spawned_process and proc.args contains "import os") or
+     (spawned_process and proc.args contains "__import__") or
+     (spawned_process and proc.name in (sh, bash, zsh, fish) and proc.args contains "-c"))
+  output: >
+    Code injection attempt in trading bot 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [trading, code-injection, security]
+
+# Detect reverse shell attempts
+- rule: Trading Container Reverse Shell
+  desc: Detect reverse shell attempts from trading containers
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
+    ((spawned_process and proc.name in (nc, ncat, netcat, socat)) or
+     (spawned_process and proc.args contains "/dev/tcp/") or
+     (spawned_process and proc.args contains "bash -i") or
+     (spawned_process and proc.args contains "sh -i"))
+  output: >
+    Reverse shell attempt from trading container 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [trading, reverse-shell, security]
+
+# ==============================================================================
+# API Security Rules
+# ==============================================================================
+
+# Detect suspicious API key usage patterns
+- rule: Trading API Key Abuse
+  desc: Detect suspicious patterns in API key usage
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service) and
+    spawned_process and
+    (proc.args contains "curl" or proc.args contains "wget" or proc.args contains "requests") and
+    proc.args contains "api" and
+    not proc.args contains "coinbase.com" and
+    not proc.args contains "bluefin.trade" and
+    not proc.args contains "openai.com"
+  output: >
+    Suspicious API key usage detected 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [trading, api, suspicious]
+
+# Detect unauthorized API endpoint access
+- rule: Trading Unauthorized API Access
+  desc: Detect access to unauthorized trading APIs
+  condition: >
+    outbound and
+    container.name in (ai-trading-bot, bluefin-service) and
+    fd.rip_name contains "api" and
+    not fd.rip_name in (api.coinbase.com, api.bluefin.trade, api.openai.com) and
+    fd.rport in (80, 443)
+  output: >
+    Unauthorized API access from trading container 
+    (user=%user.name connection=%fd.rip:%fd.rport container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [trading, api, unauthorized]
+
+# ==============================================================================
+# Memory and Resource Abuse Rules
+# ==============================================================================
+
+# Detect memory exhaustion attacks
+- rule: Trading Container Memory Exhaustion
+  desc: Detect potential memory exhaustion attacks in trading containers
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
+    container.memory.used > 90 and
+    spawned_process and
+    proc.name in (python, python3) and
+    proc.args contains "malloc" or proc.args contains "allocate"
+  output: >
+    Potential memory exhaustion attack 
+    (user=%user.name command=%proc.cmdline memory_used=%container.memory.used container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [trading, memory, exhaustion]
+
+# Detect CPU consumption spikes
+- rule: Trading Container CPU Spike
+  desc: Detect unusual CPU consumption spikes in trading containers
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service) and
+    container.cpu.usage > 95 and
+    spawned_process
+  output: >
+    Unusual CPU consumption spike 
+    (user=%user.name command=%proc.cmdline cpu_usage=%container.cpu.usage container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [trading, cpu, spike]
+
+# ==============================================================================
+# Network Security Rules
+# ==============================================================================
+
+# Detect port scanning from trading containers
+- rule: Trading Container Port Scanning
+  desc: Detect port scanning activities from trading containers
+  condition: >
+    outbound and
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
+    ((fd.rport < 1024 and not fd.rport in (80, 443, 22)) or
+     (spawned_process and proc.name in (nmap, masscan, zmap)))
+  output: >
+    Port scanning detected from trading container 
+    (user=%user.name command=%proc.cmdline connection=%fd.rip:%fd.rport container=%container.name image=%container.image.repository)
+  priority: ALERT
+  tags: [trading, port-scanning, network]
+
+# Detect DNS tunneling attempts
+- rule: Trading Container DNS Tunneling
+  desc: Detect DNS tunneling attempts from trading containers
+  condition: >
+    outbound and
+    container.name in (ai-trading-bot, bluefin-service) and
+    fd.rport=53 and
+    fd.rip != "127.0.0.53" and
+    not fd.rip_name in (cloudflare.com, google.com, quad9.net)
+  output: >
+    Potential DNS tunneling from trading container 
+    (user=%user.name connection=%fd.rip:%fd.rport container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [trading, dns-tunneling, network]
+
+# ==============================================================================
+# System Integrity Rules
+# ==============================================================================
+
+# Detect unauthorized system calls
+- rule: Trading Container Dangerous Syscalls
+  desc: Detect dangerous system calls from trading containers
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
+    syscall and
+    syscall.type in (ptrace, process_vm_readv, process_vm_writev, syslog, 
+                     init_module, delete_module, create_module)
+  output: >
+    Dangerous system call from trading container 
+    (user=%user.name syscall=%syscall.type command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [trading, syscall, dangerous]
+
+# Detect kernel module loading
+- rule: Trading Container Kernel Module Loading
+  desc: Detect kernel module loading attempts from trading containers
+  condition: >
+    container.name in (ai-trading-bot, bluefin-service) and
+    ((spawned_process and proc.name in (insmod, modprobe, rmmod)) or
+     (open_write and fd.name startswith "/lib/modules/"))
+  output: >
+    Kernel module loading attempt from trading container 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [trading, kernel-module, security]
+
+# ==============================================================================
+# Trading-Specific Business Logic Rules
+# ==============================================================================
+
+# Detect unauthorized trading decisions
+- rule: Unauthorized Trading Decision
+  desc: Detect trading decisions made outside normal bot process
+  condition: >
+    open_write and
+    (fd.name contains "trading_decisions.log" or
+     fd.name contains "decisions.log" or
+     fd.name contains "session_trades.json") and
+    not proc.name in (python, python3) and
+    not container.name="ai-trading-bot"
+  output: >
+    Unauthorized trading decision logged 
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [trading, decision, unauthorized]
+
+# Detect position manipulation attempts
+- rule: Position Manipulation Attempt
+  desc: Detect direct manipulation of position files
+  condition: >
+    (open_write or truncate) and
+    fd.name contains "positions" and
+    not proc.name in (python, python3) and
+    not proc.args contains "bot.main"
+  output: >
+    Direct position file manipulation detected 
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [trading, position, manipulation]
+
+# Detect emergency stop bypass attempts
+- rule: Emergency Stop Bypass
+  desc: Detect attempts to bypass emergency stop mechanisms
+  condition: >
+    container.name="ai-trading-bot" and
+    spawned_process and
+    (proc.args contains "SYSTEM__DRY_RUN=false" or
+     proc.args contains "emergency_stop" or
+     proc.args contains "force" or
+     proc.args contains "bypass")
+  output: >
+    Emergency stop bypass attempt 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [trading, emergency-stop, bypass]
+
+# ==============================================================================
+# Compliance and Audit Rules
+# ==============================================================================
+
+# Log all trading-related file access for audit
+- rule: Trading File Access Audit
+  desc: Audit all access to trading-related files
+  condition: >
+    (open_read or open_write) and
+    (fd.name contains "/app/data/" or
+     fd.name contains "/app/logs/trading" or
+     fd.name contains "/app/config/") and
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend)
+  output: >
+    Trading file access 
+    (user=%user.name command=%proc.cmdline file=%fd.name access=%evt.type container=%container.name image=%container.image.repository)
+  priority: INFORMATIONAL
+  tags: [trading, audit, file-access]
+
+# Log all network connections for compliance
+- rule: Trading Network Activity Audit
+  desc: Audit all network connections from trading containers
+  condition: >
+    (inbound or outbound) and
+    container.name in (ai-trading-bot, bluefin-service)
+  output: >
+    Trading network activity 
+    (user=%user.name connection=%fd.rip:%fd.rport direction=%evt.type container=%container.name image=%container.image.repository)
+  priority: INFORMATIONAL
+  tags: [trading, audit, network]
+
+# ==============================================================================
+# Performance Monitoring Rules
+# ==============================================================================
+
+# Monitor trading bot startup
+- rule: Trading Bot Startup
+  desc: Monitor trading bot container startup
+  condition: >
+    container.name="ai-trading-bot" and
+    spawned_process and
+    proc.name in (python, python3) and
+    proc.args contains "bot.main"
+  output: >
+    Trading bot startup detected 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: INFORMATIONAL
+  tags: [trading, startup, monitoring]
+
+# Monitor trading bot shutdown
+- rule: Trading Bot Shutdown
+  desc: Monitor trading bot container shutdown
+  condition: >
+    container.name="ai-trading-bot" and
+    proc.name in (python, python3) and
+    evt.type=procexit
+  output: >
+    Trading bot shutdown detected 
+    (user=%user.name command=%proc.cmdline exit_code=%proc.exitcode container=%container.name image=%container.image.repository)
+  priority: INFORMATIONAL
+  tags: [trading, shutdown, monitoring]

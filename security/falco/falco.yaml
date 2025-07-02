@@ -1,0 +1,418 @@
+# Falco Runtime Security Configuration for AI Trading Bot
+# Optimized for Digital Ocean VPS with trading bot specific monitoring
+
+# ------------------------------------------------------------------------------
+# Basic Configuration
+# ------------------------------------------------------------------------------
+
+json_output: true
+json_include_output_property: true
+json_include_tags_property: true
+http_output:
+  enabled: true
+  url: "http://falco-alertmanager:9093/api/v1/alerts"
+
+# Logging configuration
+log_stderr: true
+log_syslog: false
+log_level: info
+
+# Output configuration
+stdout_output:
+  enabled: true
+
+# ------------------------------------------------------------------------------
+# Trading Bot Specific Configuration
+# ------------------------------------------------------------------------------
+
+# Trading application tags
+syscall_event_drops:
+  actions:
+    - log
+    - alert
+  rate: 0.03333
+  max_burst: 1000
+
+# Tune for financial application workloads
+syscall_event_timeouts:
+  max_consecutives: 100
+
+# Trading bot specific metadata
+metadata:
+  - name: "application"
+    value: "ai-trading-bot"
+  - name: "environment"
+    value: "${ENVIRONMENT:-production}"
+  - name: "exchange"
+    value: "${EXCHANGE_TYPE:-bluefin}"
+
+# ------------------------------------------------------------------------------
+# Performance Optimization for Trading Workloads
+# ------------------------------------------------------------------------------
+
+# Optimize for high-frequency operations
+base_syscalls:
+  custom_set:
+    - close
+    - dup
+    - dup2
+    - dup3
+    - eventfd
+    - eventfd2
+    - fchdir
+    - fchmod
+    - fchown
+    - fcntl
+    - fdatasync
+    - fgetxattr
+    - fstat
+    - fstatfs
+    - fsync
+    - ftruncate
+    - futex
+    - getdents
+    - getrlimit
+    - ioctl
+    - lseek
+    - openat
+    - pipe
+    - pipe2
+    - poll
+    - pread64
+    - pwrite64
+    - read
+    - readv
+    - recvfrom
+    - recvmsg
+    - select
+    - sendmsg
+    - sendto
+    - stat
+    - statfs
+    - write
+    - writev
+    - accept
+    - accept4
+    - bind
+    - connect
+    - listen
+    - socket
+    - socketpair
+
+# Buffer sizing for trading bot workloads
+syscall_buf_size_preset: 1
+
+# Enable modern BPF probe for better performance
+modern_bpf:
+  cpus_for_each_syscall_buffer: 2
+
+# ------------------------------------------------------------------------------
+# Rules Configuration
+# ------------------------------------------------------------------------------
+
+rules_file:
+  - /etc/falco/falco_rules.yaml
+  - /etc/falco/falco_rules.local.yaml
+  - /etc/falco/trading_bot_rules.yaml
+  - /etc/falco/financial_security_rules.yaml
+  - /etc/falco/container_security_rules.yaml
+
+# Load custom rules
+load_plugins:
+  - k8saudit
+  - cloudtrail
+  - json
+
+# ------------------------------------------------------------------------------
+# Output Channels Configuration
+# ------------------------------------------------------------------------------
+
+# Slack notifications for critical alerts
+slack_webhook:
+  enabled: true
+  webhook_url: "${SLACK_WEBHOOK_URL}"
+  channel: "#trading-security-alerts"
+  username: "Falco-TradingBot"
+  template: |
+    {
+      "text": "🚨 Trading Bot Security Alert",
+      "attachments": [
+        {
+          "color": "danger",
+          "fields": [
+            {
+              "title": "Rule",
+              "value": "%rule%",
+              "short": true
+            },
+            {
+              "title": "Priority",
+              "value": "%priority%",
+              "short": true
+            },
+            {
+              "title": "Container",
+              "value": "%container.name%",
+              "short": true
+            },
+            {
+              "title": "Time",
+              "value": "%time%",
+              "short": true
+            },
+            {
+              "title": "Details",
+              "value": "%output%",
+              "short": false
+            }
+          ]
+        }
+      ]
+    }
+
+# File output for logging and analysis
+file_output:
+  enabled: true
+  keep_alive: false
+  filename: /var/log/falco/falco_events.log
+
+# Program output for integration with external tools
+program_output:
+  enabled: true
+  keep_alive: true
+  program: |
+    jq -r '{"timestamp": .time, "rule": .rule, "priority": .priority, "container": .output_fields.container_name, "message": .output}' | \
+    curl -X POST http://trading-bot-security-processor:8080/security-event \
+         -H "Content-Type: application/json" \
+         -d @-
+
+# ------------------------------------------------------------------------------
+# Security Tuning for Trading Environment
+# ------------------------------------------------------------------------------
+
+# Tune for containerized trading environment
+tune:
+  # Syscall buffer size (trading bots generate many syscalls)
+  syscall_buf_size: 8388608  # 8MB
+  
+  # Increase event drops threshold for high-frequency trading
+  syscall_drops_threshold: 0.1
+  
+  # Trading bot specific timeouts
+  syscall_drops_timeout: 30
+  
+  # Network tuning for API calls
+  syscall_drops_rate: 1
+  syscall_drops_max_burst: 1000
+
+# ------------------------------------------------------------------------------
+# Container Runtime Security
+# ------------------------------------------------------------------------------
+
+# Docker-specific settings
+container_runtime:
+  docker:
+    socket_path: /var/run/docker.sock
+  
+# Kubernetes integration (if using k8s in future)
+k8s_audit:
+  enabled: false
+
+# ------------------------------------------------------------------------------
+# Plugin Configuration
+# ------------------------------------------------------------------------------
+
+plugins:
+  - name: k8saudit
+    library_path: libk8saudit.so
+    init_config:
+      maxEventSize: 262144
+      webhookMaxBatchSize: 12582912
+    open_params: "http://:9765/k8s-audit"
+
+  - name: cloudtrail
+    library_path: libcloudtrail.so
+    init_config:
+      maxEventSize: 262144
+    open_params: ""
+
+  - name: json
+    library_path: libjson.so
+    init_config:
+      maxEventSize: 262144
+
+# ------------------------------------------------------------------------------
+# Watchdog Configuration
+# ------------------------------------------------------------------------------
+
+watchdog:
+  enabled: true
+  timeout_ms: 60000  # 60 seconds timeout for trading environment
+
+# ------------------------------------------------------------------------------
+# Engine Configuration
+# ------------------------------------------------------------------------------
+
+engine:
+  kind: modern_ebpf
+  ebpf:
+    probe: ""
+    buf_size_preset: 1
+    drop_failed_exit: false
+
+# ------------------------------------------------------------------------------
+# gRPC Configuration for Integration
+# ------------------------------------------------------------------------------
+
+grpc:
+  enabled: true
+  bind_address: "0.0.0.0:5060"
+  
+grpc_output:
+  enabled: true
+
+# ------------------------------------------------------------------------------
+# Web UI Configuration
+# ------------------------------------------------------------------------------
+
+webserver:
+  enabled: true
+  listen_port: 8765
+  k8s_healthz_endpoint: /healthz
+  
+# ------------------------------------------------------------------------------
+# Priority Configuration for Trading Bot
+# ------------------------------------------------------------------------------
+
+priority:
+  # Critical: Immediate threat to trading operations
+  critical: "Critical"
+  
+  # Emergency: Container escape, privilege escalation
+  emergency: "Emergency"
+  
+  # Alert: Suspicious activity, policy violation
+  alert: "Alert"
+  
+  # Warning: Unusual but not necessarily malicious
+  warning: "Warning"
+  
+  # Notice: Informational events
+  notice: "Notice"
+  
+  # Informational: Debug information
+  informational: "Informational"
+  
+  # Debug: Detailed debugging information
+  debug: "Debug"
+
+# Trading bot specific minimum priority
+minimum_priority: warning
+
+# ------------------------------------------------------------------------------
+# Advanced Security Features
+# ------------------------------------------------------------------------------
+
+# Enable advanced syscall monitoring
+advanced_syscall_monitoring:
+  enabled: true
+  
+# File integrity monitoring
+file_integrity:
+  enabled: true
+  paths:
+    - /app/config
+    - /app/bot
+    - /run/secrets
+    - /etc/passwd
+    - /etc/shadow
+    - /etc/group
+
+# Network monitoring
+network_monitoring:
+  enabled: true
+  suspicious_ports:
+    - 22    # SSH
+    - 23    # Telnet
+    - 3389  # RDP
+    - 4444  # Common backdoor
+    - 1337  # Common backdoor
+  
+  allowed_outbound_ports:
+    - 80    # HTTP
+    - 443   # HTTPS
+    - 8080  # Internal services
+    - 8765  # MCP Memory
+    - 8767  # MCP OmniSearch
+    - 8000  # Dashboard backend
+
+# Process monitoring
+process_monitoring:
+  enabled: true
+  suspicious_processes:
+    - nc
+    - netcat
+    - ncat
+    - socat
+    - /bin/sh
+    - /bin/bash
+    - python -c
+    - perl -e
+    - ruby -e
+    - node -e
+    - php -r
+  
+  allowed_processes:
+    - python
+    - python3
+    - gunicorn
+    - uvicorn
+    - node
+    - nginx
+    - curl
+    - wget
+
+# Memory monitoring for trading bot performance
+memory_monitoring:
+  enabled: true
+  thresholds:
+    warning: 75    # 75% memory usage warning
+    critical: 90   # 90% memory usage critical
+    
+# Trading-specific monitoring
+trading_monitoring:
+  enabled: true
+  api_endpoints:
+    - coinbase.com
+    - api.coinbase.com
+    - bluefin.trade
+    - api.bluefin.trade
+    - openai.com
+    - api.openai.com
+  
+  critical_files:
+    - /app/data/paper_trading/account.json
+    - /app/data/positions/positions.json
+    - /app/logs/trading_decisions.log
+    - /run/secrets/coinbase_api_key
+    - /run/secrets/openai_api_key
+
+# ------------------------------------------------------------------------------
+# Alert Rate Limiting
+# ------------------------------------------------------------------------------
+
+rate_limiting:
+  enabled: true
+  max_events_per_second: 100
+  max_burst: 1000
+
+# Suppress noisy rules in trading environment
+suppression:
+  - rule: "Read sensitive file trusted after startup"
+    condition: "and proc.name in (python, python3)"
+  
+  - rule: "Write below etc"
+    condition: "and container.name startswith ai-trading-bot"
+    
+  - rule: "DB program spawned process"
+    condition: "and proc.pname in (python, python3)"

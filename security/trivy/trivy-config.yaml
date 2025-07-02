@@ -1,0 +1,175 @@
+# Trivy Configuration for AI Trading Bot Security Scanning
+# This configuration provides comprehensive vulnerability scanning for container images and filesystems
+
+# Database configuration
+db:
+  # Keep vulnerability database updated
+  repository: "ghcr.io/aquasecurity/trivy-db"
+  # Use cache for faster scans
+  cache-dir: "/tmp/trivy-cache"
+  # Download timeout
+  download-timeout: "5m"
+
+# Vulnerability configuration
+vulnerability:
+  # Vulnerability types to scan for
+  type:
+    - "os"           # OS packages
+    - "library"      # Language-specific libraries
+    - "secret"       # Secrets in code
+    - "config"       # Configuration issues
+    - "license"      # License compliance
+  
+  # Severity levels to report
+  severity:
+    - "CRITICAL"
+    - "HIGH" 
+    - "MEDIUM"
+    - "LOW"
+    - "UNKNOWN"
+  
+  # Exit codes for CI/CD integration
+  exit-code: 1  # Fail build on vulnerabilities
+  
+  # Skip specific vulnerabilities if needed
+  skip-update: false
+  skip-files:
+    - "**/*test*"           # Skip test files
+    - "**/*mock*"           # Skip mock files
+    - "node_modules/**/*"   # Skip node modules
+    - ".git/**/*"           # Skip git directory
+
+# Secret scanning configuration
+secret:
+  # Secret types to scan for
+  config: |
+    rules:
+      - id: "trading-api-keys"
+        category: "crypto-trading"
+        title: "Trading API Keys"
+        regex: '(?i)(coinbase|bluefin)[\w\-_]*[\s=:]+["\']?([a-z0-9]{32,})["\']?'
+        keywords:
+          - "COINBASE_API_KEY"
+          - "BLUEFIN_PRIVATE_KEY"
+          - "CDP_API_KEY"
+          - "api_key"
+          - "private_key"
+      
+      - id: "openai-api-key"
+        category: "llm-services"
+        title: "OpenAI API Key"
+        regex: 'sk-[a-zA-Z0-9]{48}'
+        keywords:
+          - "OPENAI_API_KEY"
+          - "LLM_OPENAI_API_KEY"
+          - "sk-"
+      
+      - id: "database-urls"
+        category: "database"
+        title: "Database Connection Strings"
+        regex: '(?i)(postgresql|mysql|mongodb)://[^\s]+'
+        keywords:
+          - "postgresql://"
+          - "mysql://"
+          - "mongodb://"
+      
+      - id: "generic-passwords"
+        category: "authentication"
+        title: "Generic Passwords"
+        regex: '(?i)(password|passwd|pwd)[\s=:]+["\']?([^\s"\']{8,})["\']?'
+        keywords:
+          - "password"
+          - "passwd"
+          - "pwd"
+
+# Misconfiguration scanning
+misconfig:
+  # Include Dockerfile scanning
+  include-non-failures: false
+  trace: false
+  
+  # Policy settings
+  policy:
+    - "appshield"    # Application security policies
+    - "kubernetes"   # Kubernetes security policies
+    - "docker"       # Docker security policies
+
+# License scanning configuration
+license:
+  # License types to flag
+  full: true
+  ignored:
+    - "MIT"
+    - "Apache-2.0"
+    - "BSD-3-Clause"
+    - "BSD-2-Clause"
+    - "ISC"
+  
+  # Prohibited licenses
+  prohibited:
+    - "GPL-3.0"
+    - "AGPL-3.0"
+    - "LGPL-3.0"
+
+# Output configuration
+format: "table"  # Default format: table, json, sarif, template
+template: "@contrib/html.tpl"  # HTML template for reports
+
+# Timeout settings
+timeout: "10m"
+
+# Cache configuration
+cache:
+  clear: false
+  backend: "fs"  # filesystem cache
+
+# Server configuration (for server mode)
+server:
+  listen: "0.0.0.0:8080"
+  cache-dir: "/tmp/trivy-cache"
+  token: ""  # Authentication token if needed
+
+# Compliance standards
+compliance:
+  # Security frameworks to check against
+  spec:
+    - "docker-cis"      # Docker CIS Benchmark
+    - "k8s-cis"         # Kubernetes CIS Benchmark
+    - "k8s-pss"         # Kubernetes Pod Security Standards
+
+# Custom checks for trading bot
+custom:
+  # Trading-specific security checks
+  trading-security:
+    - name: "API Key Exposure"
+      description: "Check for exposed trading API keys"
+      severity: "CRITICAL"
+    
+    - name: "Privileged Containers"
+      description: "Trading containers should not run privileged"
+      severity: "HIGH"
+    
+    - name: "Network Policies"
+      description: "Ensure proper network isolation"
+      severity: "MEDIUM"
+    
+    - name: "Resource Limits"
+      description: "Containers should have resource limits"
+      severity: "MEDIUM"
+
+# Ignore policies for known false positives
+ignore:
+  # File patterns to ignore
+  paths:
+    - "**/.git/**"
+    - "**/node_modules/**"
+    - "**/venv/**"
+    - "**/__pycache__/**"
+  
+  # CVEs to ignore (with justification)
+  cves:
+    # Example: Ignore specific CVE if not applicable
+    # - "CVE-2021-1234" # Not applicable to our use case
+  
+  # Unfixed vulnerabilities to ignore
+  unfixed: false  # Set to true to ignore unfixed vulns

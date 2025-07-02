@@ -1,0 +1,163 @@
+{
+  "name": "ai-trading-bot-firewall",
+  "inbound_rules": [
+    {
+      "protocol": "tcp",
+      "ports": "22",
+      "sources": {
+        "addresses": [
+          "0.0.0.0/0"
+        ],
+        "tags": [],
+        "droplet_ids": []
+      }
+    },
+    {
+      "protocol": "tcp", 
+      "ports": "3000",
+      "sources": {
+        "addresses": [
+          "0.0.0.0/0"
+        ],
+        "tags": [],
+        "droplet_ids": []
+      }
+    },
+    {
+      "protocol": "tcp",
+      "ports": "8000", 
+      "sources": {
+        "addresses": [
+          "0.0.0.0/0"
+        ],
+        "tags": [],
+        "droplet_ids": []
+      }
+    },
+    {
+      "protocol": "tcp",
+      "ports": "8080",
+      "sources": {
+        "addresses": [
+          "0.0.0.0/0"
+        ],
+        "tags": [],
+        "droplet_ids": []
+      }
+    },
+    {
+      "protocol": "tcp",
+      "ports": "80",
+      "sources": {
+        "addresses": [
+          "0.0.0.0/0"
+        ],
+        "tags": [],
+        "droplet_ids": []
+      }
+    },
+    {
+      "protocol": "tcp",
+      "ports": "443",
+      "sources": {
+        "addresses": [
+          "0.0.0.0/0"
+        ],
+        "tags": [],
+        "droplet_ids": []
+      }
+    },
+    {
+      "protocol": "icmp",
+      "ports": "",
+      "sources": {
+        "addresses": [
+          "0.0.0.0/0"
+        ],
+        "tags": [],
+        "droplet_ids": []
+      }
+    }
+  ],
+  "outbound_rules": [
+    {
+      "protocol": "tcp",
+      "ports": "53",
+      "destinations": {
+        "addresses": [
+          "0.0.0.0/0"
+        ],
+        "tags": [],
+        "droplet_ids": []
+      }
+    },
+    {
+      "protocol": "udp",
+      "ports": "53", 
+      "destinations": {
+        "addresses": [
+          "0.0.0.0/0"
+        ],
+        "tags": [],
+        "droplet_ids": []
+      }
+    },
+    {
+      "protocol": "tcp",
+      "ports": "80",
+      "destinations": {
+        "addresses": [
+          "0.0.0.0/0"
+        ],
+        "tags": [],
+        "droplet_ids": []
+      }
+    },
+    {
+      "protocol": "tcp",
+      "ports": "443",
+      "destinations": {
+        "addresses": [
+          "0.0.0.0/0"
+        ],
+        "tags": [],
+        "droplet_ids": []
+      }
+    },
+    {
+      "protocol": "udp",
+      "ports": "123",
+      "destinations": {
+        "addresses": [
+          "0.0.0.0/0"
+        ],
+        "tags": [],
+        "droplet_ids": []
+      }
+    },
+    {
+      "protocol": "tcp",
+      "ports": "587",
+      "destinations": {
+        "addresses": [
+          "0.0.0.0/0"
+        ],
+        "tags": [],
+        "droplet_ids": []
+      }
+    },
+    {
+      "protocol": "tcp",
+      "ports": "25",
+      "destinations": {
+        "addresses": [
+          "0.0.0.0/0"
+        ],
+        "tags": [],
+        "droplet_ids": []
+      }
+    }
+  ],
+  "droplet_ids": [],
+  "tags": ["trading-bot"]
+}

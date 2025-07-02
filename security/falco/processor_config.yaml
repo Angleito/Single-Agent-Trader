@@ -1,0 +1,275 @@
+# Falco Security Event Processor Configuration
+# Configures event processing, threat scoring, and response actions
+
+# Severity scoring configuration
+severity_scoring:
+  EMERGENCY: 100      # Immediate threat to trading operations
+  CRITICAL: 90        # Severe security breach requiring immediate action
+  ALERT: 70          # Significant security event requiring prompt attention
+  WARNING: 40        # Moderate security concern for investigation
+  NOTICE: 20         # Minor security event for awareness
+  INFORMATIONAL: 10  # Audit and compliance logging
+
+# Threat category mapping
+threat_categories:
+  container_escape: "Container Security"
+  privilege_escalation: "Access Control"
+  data_exfiltration: "Data Protection"
+  credential_theft: "Authentication Security"
+  malware: "Malicious Activity"
+  network_anomaly: "Network Security"
+  file_tampering: "File Integrity"
+  api_abuse: "API Security"
+  trading_manipulation: "Trading Security"
+  financial_fraud: "Financial Security"
+
+# Trading impact assessment rules
+trading_impact_rules:
+  ai-trading-bot: "CRITICAL"        # Main trading engine
+  bluefin-service: "HIGH"           # Exchange integration
+  mcp-memory: "MEDIUM"              # Learning and memory
+  mcp-omnisearch: "LOW"             # Market intelligence
+  dashboard-backend: "LOW"          # Monitoring interface
+  dashboard-frontend: "MINIMAL"     # User interface
+  falco: "MEDIUM"                   # Security monitoring
+
+# Auto-containment configuration
+auto_containment:
+  enabled: true
+  critical_threshold: 90
+  emergency_threshold: 95
+  
+  # Actions to take for different severity levels
+  actions:
+    critical:
+      - "isolate_container"
+      - "alert_admin"
+      - "preserve_evidence"
+    emergency:
+      - "stop_trading"
+      - "isolate_container"
+      - "alert_admin"
+      - "preserve_evidence"
+      - "initiate_incident_response"
+  
+  # Container-specific containment rules
+  container_rules:
+    ai-trading-bot:
+      max_severity_before_stop: 95
+      actions: ["stop_trading", "isolate_container"]
+    bluefin-service:
+      max_severity_before_stop: 90
+      actions: ["isolate_container", "rotate_credentials"]
+    dashboard-backend:
+      max_severity_before_stop: 85
+      actions: ["isolate_container"]
+
+# Notification configuration
+notifications:
+  slack:
+    enabled: true
+    channels:
+      critical: "#trading-security-critical"
+      alert: "#trading-security-alerts"
+      warning: "#trading-security"
+      audit: "#trading-audit"
+    
+    # Rate limiting to prevent spam
+    rate_limiting:
+      enabled: true
+      max_alerts_per_minute: 5
+      max_alerts_per_hour: 30
+  
+  email:
+    enabled: true
+    recipients:
+      critical: ["security@trading-bot.local", "admin@trading-bot.local"]
+      alert: ["security@trading-bot.local"]
+      audit: ["audit@trading-bot.local"]
+    
+    # Email templates
+    templates:
+      critical: "critical_alert_template.html"
+      alert: "security_alert_template.html"
+      audit: "audit_log_template.html"
+  
+  pagerduty:
+    enabled: false  # Enable in production
+    service_key: "${PAGERDUTY_INTEGRATION_KEY}"
+    escalation_policy: "trading-bot-security"
+
+# Event correlation rules
+correlation:
+  enabled: true
+  
+  # Time window for event correlation
+  time_window_minutes: 30
+  
+  # Correlation patterns
+  patterns:
+    # Multiple failed authentication attempts
+    - name: "credential_brute_force"
+      rules: ["Trading Credentials Access", "Unauthorized Trading API Access"]
+      threshold: 3
+      time_window: 5
+      severity_boost: 20
+    
+    # Container escape followed by network activity
+    - name: "escape_and_exfiltration"
+      rules: ["Container Escape", "Suspicious Network Connection"]
+      threshold: 2
+      time_window: 10
+      severity_boost: 30
+    
+    # Multiple container compromises
+    - name: "lateral_movement"
+      rules: ["Container Privilege Escalation", "Unauthorized Container Communication"]
+      threshold: 2
+      time_window: 15
+      severity_boost: 25
+
+# Threat intelligence integration
+threat_intelligence:
+  enabled: true
+  
+  # Known attack patterns specific to trading bots
+  trading_attack_patterns:
+    - "api_key_harvesting"
+    - "position_manipulation"
+    - "order_spoofing"
+    - "price_feed_manipulation"
+    - "wallet_draining"
+    - "arbitrage_exploitation"
+  
+  # Suspicious file patterns
+  suspicious_files:
+    - "*.py.bak"
+    - "*.env.backup"
+    - "*api_key*"
+    - "*private_key*"
+    - "*.wallet"
+    - "positions.json.bak"
+  
+  # Known malicious indicators
+  iocs:
+    - "cryptocurrency mining tools"
+    - "network scanners"
+    - "credential dumpers"
+    - "backdoor shells"
+
+# Response automation
+response_automation:
+  enabled: true
+  
+  # Automated responses based on rule types
+  rule_responses:
+    "Trading Credentials Access":
+      - action: "rotate_api_keys"
+        delay_seconds: 60
+      - action: "audit_trading_history"
+        delay_seconds: 300
+    
+    "Container Escape Attempt":
+      - action: "isolate_container"
+        delay_seconds: 0
+      - action: "preserve_container_state"
+        delay_seconds: 30
+    
+    "Position Data Tampering":
+      - action: "backup_position_data"
+        delay_seconds: 0
+      - action: "verify_position_integrity"
+        delay_seconds: 60
+      - action: "stop_trading"
+        delay_seconds: 120
+
+# Security metrics and reporting
+metrics:
+  enabled: true
+  
+  # Metrics collection intervals
+  collection_interval_seconds: 15
+  
+  # Security score calculation
+  security_scoring:
+    weights:
+      event_frequency: 0.3
+      severity_trend: 0.4
+      containment_effectiveness: 0.2
+      false_positive_rate: 0.1
+    
+    # Baseline security scores by container
+    baseline_scores:
+      ai-trading-bot: 95
+      bluefin-service: 90
+      mcp-memory: 85
+      mcp-omnisearch: 85
+      dashboard-backend: 80
+  
+  # Alerting thresholds for security scores
+  score_thresholds:
+    critical: 50
+    warning: 70
+    healthy: 85
+
+# Event storage and retention
+storage:
+  enabled: true
+  
+  # Event retention periods
+  retention:
+    critical_events: "365 days"
+    alert_events: "180 days"
+    warning_events: "90 days"
+    informational_events: "30 days"
+  
+  # Database configuration (optional)
+  database:
+    enabled: false
+    type: "sqlite"  # or "postgresql"
+    connection_string: "sqlite:///app/data/security_events.db"
+  
+  # File-based storage
+  file_storage:
+    enabled: true
+    directory: "/app/data/events"
+    rotation_size_mb: 100
+    max_files: 50
+
+# Integration endpoints
+integrations:
+  # Trading bot integration
+  trading_bot:
+    enabled: true
+    endpoint: "http://ai-trading-bot:9091"
+    api_key: "${TRADING_BOT_API_KEY}"
+    actions:
+      emergency_stop: "/api/emergency/stop"
+      status_check: "/api/status"
+      position_backup: "/api/positions/backup"
+  
+  # AlertManager integration
+  alertmanager:
+    enabled: true
+    endpoint: "http://falco-alertmanager:9093"
+    api_version: "v2"
+  
+  # Prometheus integration
+  prometheus:
+    enabled: true
+    endpoint: "http://prometheus-falco:9090"
+    push_gateway: "http://prometheus-falco:9091"
+
+# Development and testing
+development:
+  # Enable debug logging
+  debug_logging: false
+  
+  # Simulate events for testing
+  simulate_events: false
+  
+  # Test mode (doesn't trigger real actions)
+  test_mode: false
+  
+  # Mock external services
+  mock_integrations: false

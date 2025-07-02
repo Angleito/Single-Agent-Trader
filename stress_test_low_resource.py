@@ -28,9 +28,10 @@ from pathlib import Path
 from typing import Any
 
 import aiohttp
-import docker
 import psutil
 import websockets
+
+import docker
 
 # Setup logging
 logging.basicConfig(

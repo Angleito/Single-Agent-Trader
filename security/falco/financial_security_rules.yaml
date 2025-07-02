@@ -1,0 +1,447 @@
+# Financial Security Rules for AI Trading Bot
+# Advanced security rules specific to financial applications and trading systems
+
+# ==============================================================================
+# Financial Data Classification and Protection
+# ==============================================================================
+
+# Detect access to PII and financial data patterns
+- rule: Financial PII Access
+  desc: Detect access to files containing potential financial PII
+  condition: >
+    open_read and
+    (fd.name contains "account" or
+     fd.name contains "balance" or
+     fd.name contains "wallet" or
+     fd.name contains "portfolio" or
+     fd.name contains "transaction") and
+    not proc.name in (python, python3) and
+    not container.name in (ai-trading-bot, dashboard-backend)
+  output: >
+    Financial PII file access detected 
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
+  priority: ALERT
+  tags: [financial, pii, compliance]
+
+# Detect cryptocurrency private key patterns
+- rule: Cryptocurrency Private Key Exposure
+  desc: Detect potential exposure of cryptocurrency private keys
+  condition: >
+    spawned_process and
+    (proc.args contains "0x" and proc.args rcontains "64" or
+     proc.args contains "xprv" or
+     proc.args contains "-----BEGIN PRIVATE KEY-----" or
+     proc.args contains "private_key" or
+     proc.args contains "mnemonic") and
+    not container.name in (ai-trading-bot, bluefin-service)
+  output: >
+    Potential cryptocurrency private key exposure 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [financial, crypto, private-key]
+
+# ==============================================================================
+# Trading API Security Rules
+# ==============================================================================
+
+# Detect high-frequency API calls (potential abuse)
+- rule: High Frequency API Calls
+  desc: Detect unusually high frequency of API calls that might indicate abuse
+  condition: >
+    outbound and
+    container.name in (ai-trading-bot, bluefin-service) and
+    fd.rip_name in (api.coinbase.com, api.bluefin.trade) and
+    fd.rport in (80, 443)
+  output: >
+    High frequency API call detected 
+    (user=%user.name connection=%fd.rip:%fd.rport container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [financial, api, high-frequency]
+  exceptions:
+    - name: allow_normal_trading_frequency
+      condition: proc.name in (python, python3) and container.name="ai-trading-bot"
+
+# Detect API key rotation events
+- rule: Trading API Key Rotation
+  desc: Detect API key rotation or credential changes
+  condition: >
+    (open_write or rename) and
+    (fd.name contains "api_key" or
+     fd.name contains "private_key" or
+     fd.name contains ".env") and
+    container.name in (ai-trading-bot, bluefin-service)
+  output: >
+    Trading API key rotation detected 
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
+  priority: INFORMATIONAL
+  tags: [financial, api-key, rotation]
+
+# Detect unauthorized trading API endpoints
+- rule: Unauthorized Trading API Endpoint
+  desc: Detect connections to unauthorized or suspicious trading API endpoints
+  condition: >
+    outbound and
+    container.name in (ai-trading-bot, bluefin-service) and
+    (fd.rip_name contains "binance" or
+     fd.rip_name contains "kraken" or
+     fd.rip_name contains "bitfinex" or
+     fd.rip_name contains "ftx" or
+     fd.rip_name contains "dydx") and
+    not fd.rip_name in (api.coinbase.com, api.bluefin.trade)
+  output: >
+    Connection to unauthorized trading API 
+    (user=%user.name connection=%fd.rip:%fd.rport api=%fd.rip_name container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [financial, api, unauthorized]
+
+# ==============================================================================
+# Market Data Integrity Rules
+# ==============================================================================
+
+# Detect market data feed manipulation
+- rule: Market Data Feed Manipulation
+  desc: Detect potential manipulation of market data feeds
+  condition: >
+    (open_write or truncate) and
+    (fd.name contains "market_data" or
+     fd.name contains "price" or
+     fd.name contains "orderbook" or
+     fd.name contains "ticker") and
+    not proc.name in (python, python3) and
+    not container.name in (ai-trading-bot, bluefin-service)
+  output: >
+    Market data feed manipulation detected 
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [financial, market-data, manipulation]
+
+# Detect price oracle tampering
+- rule: Price Oracle Tampering
+  desc: Detect attempts to tamper with price oracle data
+  condition: >
+    open_write and
+    fd.name contains "oracle" and
+    not container.name="ai-trading-bot"
+  output: >
+    Price oracle tampering attempt 
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [financial, oracle, tampering]
+
+# ==============================================================================
+# Risk Management Security Rules
+# ==============================================================================
+
+# Detect risk limit bypassing attempts
+- rule: Risk Limit Bypass Attempt
+  desc: Detect attempts to bypass risk management limits
+  condition: >
+    spawned_process and
+    (proc.args contains "max_position" or
+     proc.args contains "leverage" or
+     proc.args contains "risk_limit" or
+     proc.args contains "stop_loss" or
+     proc.args contains "position_size") and
+    (proc.args contains "override" or
+     proc.args contains "bypass" or
+     proc.args contains "disable") and
+    container.name="ai-trading-bot"
+  output: >
+    Risk limit bypass attempt 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [financial, risk-management, bypass]
+
+# Detect position size manipulation
+- rule: Position Size Manipulation
+  desc: Detect unauthorized position size modifications
+  condition: >
+    open_write and
+    (fd.name contains "position_size" or
+     fd.name contains "max_size" or
+     fd.name contains "leverage") and
+    not proc.name in (python, python3) and
+    not container.name="ai-trading-bot"
+  output: >
+    Position size manipulation detected 
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [financial, position, manipulation]
+
+# ==============================================================================
+# Regulatory Compliance Rules
+# ==============================================================================
+
+# Detect potential market manipulation patterns
+- rule: Market Manipulation Pattern
+  desc: Detect patterns that might indicate market manipulation
+  condition: >
+    spawned_process and
+    container.name="ai-trading-bot" and
+    (proc.args contains "wash_trading" or
+     proc.args contains "pump_dump" or
+     proc.args contains "spoofing" or
+     proc.args contains "layering" or
+     proc.args contains "fake_order")
+  output: >
+    Potential market manipulation pattern detected 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [financial, manipulation, compliance]
+
+# Log all order placement for audit trail
+- rule: Order Placement Audit
+  desc: Audit all order placement activities for regulatory compliance
+  condition: >
+    spawned_process and
+    container.name="ai-trading-bot" and
+    (proc.args contains "place_order" or
+     proc.args contains "submit_order" or
+     proc.args contains "create_order")
+  output: >
+    Order placement activity 
+    (user=%user.name command=%proc.cmdline timestamp=%evt.time container=%container.name image=%container.image.repository)
+  priority: INFORMATIONAL
+  tags: [financial, order, audit]
+
+# Detect insider trading prevention bypass
+- rule: Insider Trading Prevention Bypass
+  desc: Detect attempts to bypass insider trading prevention mechanisms
+  condition: >
+    spawned_process and
+    container.name="ai-trading-bot" and
+    (proc.args contains "insider" or
+     proc.args contains "material_info" or
+     proc.args contains "non_public")
+  output: >
+    Insider trading prevention bypass attempt 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [financial, insider-trading, compliance]
+
+# ==============================================================================
+# Liquidity and Slippage Security Rules
+# ==============================================================================
+
+# Detect liquidity manipulation attempts
+- rule: Liquidity Manipulation
+  desc: Detect attempts to manipulate liquidity pools
+  condition: >
+    spawned_process and
+    container.name in (ai-trading-bot, bluefin-service) and
+    (proc.args contains "liquidity" and
+     (proc.args contains "drain" or
+      proc.args contains "manipulate" or
+      proc.args contains "flash_loan"))
+  output: >
+    Liquidity manipulation attempt 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [financial, liquidity, manipulation]
+
+# Detect abnormal slippage patterns
+- rule: Abnormal Slippage Pattern
+  desc: Detect abnormal slippage patterns that might indicate front-running
+  condition: >
+    spawned_process and
+    container.name="ai-trading-bot" and
+    proc.args contains "slippage" and
+    (proc.args contains "excessive" or
+     proc.args contains "front_run" or
+     proc.args contains "sandwich")
+  output: >
+    Abnormal slippage pattern detected 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [financial, slippage, front-running]
+
+# ==============================================================================
+# Smart Contract and DeFi Security Rules
+# ==============================================================================
+
+# Detect smart contract interaction monitoring
+- rule: Smart Contract Interaction
+  desc: Monitor all smart contract interactions for security
+  condition: >
+    outbound and
+    container.name="bluefin-service" and
+    (fd.rip_name contains "mainnet" or
+     fd.rip_name contains "testnet" or
+     fd.rip_name contains "sui") and
+    fd.rport in (80, 443, 8080, 9000)
+  output: >
+    Smart contract interaction detected 
+    (user=%user.name connection=%fd.rip:%fd.rport container=%container.name image=%container.image.repository)
+  priority: INFORMATIONAL
+  tags: [financial, smart-contract, defi]
+
+# Detect potential reentrancy attack patterns
+- rule: Reentrancy Attack Pattern
+  desc: Detect potential reentrancy attack patterns in DeFi interactions
+  condition: >
+    spawned_process and
+    container.name="bluefin-service" and
+    (proc.args contains "reentrancy" or
+     proc.args contains "recursive_call" or
+     proc.args contains "callback_loop")
+  output: >
+    Potential reentrancy attack pattern 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [financial, reentrancy, defi]
+
+# ==============================================================================
+# Financial Analytics and ML Security
+# ==============================================================================
+
+# Detect model poisoning attempts
+- rule: ML Model Poisoning Attempt
+  desc: Detect attempts to poison machine learning models
+  condition: >
+    (open_write or truncate) and
+    (fd.name contains "model" or
+     fd.name contains "training" or
+     fd.name contains "weights" or
+     fd.name contains ".pkl" or
+     fd.name contains ".h5") and
+    not proc.name in (python, python3) and
+    not container.name="ai-trading-bot"
+  output: >
+    ML model poisoning attempt detected 
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [financial, ml, poisoning]
+
+# Detect trading strategy leakage
+- rule: Trading Strategy Leakage
+  desc: Detect potential leakage of proprietary trading strategies
+  condition: >
+    (open_read or open_write) and
+    (fd.name contains "strategy" or
+     fd.name contains "algorithm" or
+     fd.name contains "signal" or
+     fd.name contains "indicator") and
+    not container.name in (ai-trading-bot, dashboard-backend) and
+    not proc.name in (python, python3)
+  output: >
+    Trading strategy file access 
+    (user=%user.name command=%proc.cmdline file=%fd.name access=%evt.type container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [financial, strategy, leakage]
+
+# ==============================================================================
+# Cross-Exchange Arbitrage Security
+# ==============================================================================
+
+# Detect unauthorized cross-exchange activities
+- rule: Unauthorized Cross Exchange Activity
+  desc: Detect unauthorized cross-exchange arbitrage activities
+  condition: >
+    outbound and
+    container.name in (ai-trading-bot, bluefin-service) and
+    (fd.rip_name contains "binance" or
+     fd.rip_name contains "kraken" or
+     fd.rip_name contains "uniswap" or
+     fd.rip_name contains "curve") and
+    not proc.args contains "authorized_arbitrage"
+  output: >
+    Unauthorized cross-exchange activity 
+    (user=%user.name connection=%fd.rip:%fd.rport exchange=%fd.rip_name container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [financial, cross-exchange, unauthorized]
+
+# ==============================================================================
+# Financial Stress Testing Security
+# ==============================================================================
+
+# Detect stress testing abuse
+- rule: Financial Stress Testing Abuse
+  desc: Detect abuse of financial stress testing capabilities
+  condition: >
+    spawned_process and
+    container.name="ai-trading-bot" and
+    (proc.args contains "stress_test" and
+     (proc.args contains "production" or
+      proc.args contains "live" or
+      proc.args contains "real_money"))
+  output: >
+    Stress testing abuse detected 
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [financial, stress-test, abuse]
+
+# ==============================================================================
+# Financial Communication Security
+# ==============================================================================
+
+# Detect financial data exfiltration
+- rule: Financial Data Exfiltration
+  desc: Detect potential exfiltration of financial data
+  condition: >
+    outbound and
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
+    not fd.rip_name in (api.coinbase.com, api.bluefin.trade, api.openai.com, 
+                        slack.com, discord.com, telegram.org) and
+    not fd.rip startswith "172." and
+    not fd.rip startswith "10." and
+    not fd.rip="127.0.0.1" and
+    fd.rport in (80, 443, 21, 22, 25, 587, 993, 995)
+  output: >
+    Potential financial data exfiltration 
+    (user=%user.name connection=%fd.rip:%fd.rport protocol=%fd.rport container=%container.name image=%container.image.repository)
+  priority: ALERT
+  tags: [financial, exfiltration, data]
+
+# Detect unauthorized financial reporting
+- rule: Unauthorized Financial Reporting
+  desc: Detect unauthorized generation of financial reports
+  condition: >
+    (open_write or rename) and
+    (fd.name contains "report" or
+     fd.name contains "summary" or
+     fd.name contains "statement" or
+     fd.name contains ".pdf" or
+     fd.name contains ".xlsx") and
+    not container.name in (ai-trading-bot, dashboard-backend) and
+    not proc.name in (python, python3)
+  output: >
+    Unauthorized financial report generation 
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [financial, reporting, unauthorized]
+
+# ==============================================================================
+# Real-Time Monitoring Rules
+# ==============================================================================
+
+# Monitor real-time trading decisions
+- rule: Real Time Trading Decision
+  desc: Monitor real-time trading decisions for audit and compliance
+  condition: >
+    spawned_process and
+    container.name="ai-trading-bot" and
+    (proc.args contains "LONG" or
+     proc.args contains "SHORT" or
+     proc.args contains "BUY" or
+     proc.args contains "SELL" or
+     proc.args contains "HOLD")
+  output: >
+    Real-time trading decision 
+    (user=%user.name command=%proc.cmdline decision=%proc.args container=%container.name image=%container.image.repository)
+  priority: INFORMATIONAL
+  tags: [financial, trading, real-time]
+
+# Monitor emergency stop activations
+- rule: Emergency Stop Activation
+  desc: Monitor emergency stop mechanism activations
+  condition: >
+    spawned_process and
+    container.name="ai-trading-bot" and
+    (proc.args contains "emergency_stop" or
+     proc.args contains "circuit_breaker" or
+     proc.args contains "kill_switch")
+  output: >
+    Emergency stop mechanism activated 
+    (user=%user.name command=%proc.cmdline reason=%proc.args container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [financial, emergency-stop, safety]

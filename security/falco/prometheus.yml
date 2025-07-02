@@ -1,0 +1,121 @@
+# Prometheus Configuration for Falco Security Monitoring
+# Collects security metrics and provides alerting for trading bot infrastructure
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+  external_labels:
+    environment: '${ENVIRONMENT:-production}'
+    application: 'ai-trading-bot'
+    monitor: 'falco-security'
+
+# Rule files for security alerting
+rule_files:
+  - "falco_security_rules.yml"
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - falco-alertmanager:9093
+      timeout: 10s
+      api_version: v2
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus-falco'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Falco security monitoring metrics
+  - job_name: 'falco-security'
+    static_configs:
+      - targets: ['falco:8765']
+    scrape_interval: 15s
+    metrics_path: /metrics
+    params:
+      format: ['prometheus']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: falco:8765
+
+  # Trading bot container metrics
+  - job_name: 'trading-bot-containers'
+    static_configs:
+      - targets: 
+        - 'ai-trading-bot:9091'
+        - 'bluefin-service:9091'
+        - 'dashboard-backend:9092'
+        - 'mcp-memory:9091'
+        - 'mcp-omnisearch:9093'
+    scrape_interval: 30s
+    metrics_path: /metrics
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: '([^:]+):.*'
+        target_label: container_name
+        replacement: '${1}'
+
+  # Docker container metrics (if available)
+  - job_name: 'docker-containers'
+    static_configs:
+      - targets: ['localhost:9323']  # Docker daemon metrics
+    scrape_interval: 30s
+    metrics_path: /metrics
+    scheme: http
+
+  # AlertManager metrics
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['falco-alertmanager:9093']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Falco security event processor metrics
+  - job_name: 'falco-processor'
+    static_configs:
+      - targets: ['falco-security-processor:8080']
+    scrape_interval: 15s
+    metrics_path: /metrics
+
+  # Host system metrics (if node_exporter is available)
+  - job_name: 'host-system'
+    static_configs:
+      - targets: ['host.docker.internal:9100']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: host.docker.internal:9100
+
+# Remote write configuration (optional - for external monitoring)
+# Uncomment and configure if using external Prometheus/monitoring service
+# remote_write:
+#   - url: "https://your-prometheus-remote-write-endpoint"
+#     basic_auth:
+#       username: "your-username"
+#       password: "your-password"
+#     write_relabel_configs:
+#       - source_labels: [__name__]
+#         regex: 'falco_.*'
+#         action: keep
+
+# Storage configuration
+storage:
+  tsdb:
+    retention.time: 7d
+    retention.size: 1GB
+    wal-compression: true

@@ -1,0 +1,391 @@
+version: '3.8'
+
+services:
+  # Redis for messaging and caching
+  redis:
+    image: redis:7-alpine
+    container_name: optimize-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - optimize-network
+
+  # PostgreSQL for persistent data storage
+  postgres:
+    image: postgres:15-alpine
+    container_name: optimize-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-optimize_security}
+      POSTGRES_USER: ${POSTGRES_USER:-optimize}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password_change_me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-optimize} -d ${POSTGRES_DB:-optimize_security}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - optimize-network
+
+  # Correlation Engine
+  correlation-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile.correlation
+    container_name: optimize-correlation-engine
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://${POSTGRES_USER:-optimize}:${POSTGRES_PASSWORD:-secure_password_change_me}@postgres:5432/${POSTGRES_DB:-optimize_security}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      CORRELATION_WINDOW_MINUTES: ${CORRELATION_WINDOW_MINUTES:-30}
+      BATCH_SIZE: ${BATCH_SIZE:-100}
+      PROCESSING_INTERVAL: ${PROCESSING_INTERVAL:-10}
+    volumes:
+      - correlation_logs:/app/logs
+      - ./config:/app/config:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8765/health', timeout=5)"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+    networks:
+      - optimize-network
+
+  # Alert Orchestrator
+  alert-orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile.alerts
+    container_name: optimize-alert-orchestrator
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://${POSTGRES_USER:-optimize}:${POSTGRES_PASSWORD:-secure_password_change_me}@postgres:5432/${POSTGRES_DB:-optimize_security}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      MAX_CONCURRENT_RESPONSES: ${MAX_CONCURRENT_RESPONSES:-5}
+      # Notification Configuration
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+      SMTP_SERVER: ${SMTP_SERVER:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      PAGERDUTY_INTEGRATION_KEY: ${PAGERDUTY_INTEGRATION_KEY:-}
+    volumes:
+      - alert_logs:/app/logs
+      - ./config:/app/config:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8766/health', timeout=5)"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+    networks:
+      - optimize-network
+
+  # Performance Monitor
+  performance-monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile.performance
+    container_name: optimize-performance-monitor
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://${POSTGRES_USER:-optimize}:${POSTGRES_PASSWORD:-secure_password_change_me}@postgres:5432/${POSTGRES_DB:-optimize_security}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      COLLECTION_INTERVAL: ${COLLECTION_INTERVAL:-30}
+      MONITORING_ENABLED: ${MONITORING_ENABLED:-true}
+    volumes:
+      - performance_logs:/app/logs
+      - ./config:/app/config:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    privileged: true  # Required for system monitoring
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8767/health', timeout=5)"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+    networks:
+      - optimize-network
+
+  # Response Automation
+  response-automation:
+    build:
+      context: .
+      dockerfile: Dockerfile.response
+    container_name: optimize-response-automation
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://${POSTGRES_USER:-optimize}:${POSTGRES_PASSWORD:-secure_password_change_me}@postgres:5432/${POSTGRES_DB:-optimize_security}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      MAX_CONCURRENT_RESPONSES: ${MAX_CONCURRENT_RESPONSES:-5}
+      RESPONSE_TIMEOUT_MINUTES: ${RESPONSE_TIMEOUT_MINUTES:-60}
+      ENABLE_AUTO_RESPONSE: ${ENABLE_AUTO_RESPONSE:-false}
+    volumes:
+      - response_logs:/app/logs
+      - evidence_storage:/var/log/security/evidence
+      - ./config:/app/config:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    privileged: true  # Required for container management and network operations
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8768/health', timeout=5)"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+    networks:
+      - optimize-network
+
+  # Executive Reporting
+  executive-reporting:
+    build:
+      context: .
+      dockerfile: Dockerfile.reporting
+    container_name: optimize-executive-reporting
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://${POSTGRES_USER:-optimize}:${POSTGRES_PASSWORD:-secure_password_change_me}@postgres:5432/${POSTGRES_DB:-optimize_security}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      REPORT_GENERATION_ENABLED: ${REPORT_GENERATION_ENABLED:-true}
+      TEMPLATE_DIR: /app/templates
+    volumes:
+      - reporting_logs:/app/logs
+      - report_storage:/app/reports
+      - ./templates:/app/templates:ro
+      - ./config:/app/config:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8769/health', timeout=5)"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+    networks:
+      - optimize-network
+
+  # Security Dashboard
+  security-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    container_name: optimize-security-dashboard
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://${POSTGRES_USER:-optimize}:${POSTGRES_PASSWORD:-secure_password_change_me}@postgres:5432/${POSTGRES_DB:-optimize_security}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DASHBOARD_HOST: ${DASHBOARD_HOST:-0.0.0.0}
+      DASHBOARD_PORT: ${DASHBOARD_PORT:-8080}
+      SECRET_KEY: ${SECRET_KEY:-change_this_secret_key_in_production}
+    volumes:
+      - dashboard_logs:/app/logs
+      - ./config:/app/config:ro
+    ports:
+      - "${DASHBOARD_PORT:-8080}:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      correlation-engine:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - optimize-network
+
+  # Nginx Reverse Proxy (Optional)
+  nginx:
+    image: nginx:alpine
+    container_name: optimize-nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-80}:80"
+      - "${NGINX_SSL_PORT:-443}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - nginx_logs:/var/log/nginx
+      - ssl_certs:/etc/nginx/ssl:ro
+    depends_on:
+      - security-dashboard
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - optimize-network
+    profiles:
+      - nginx
+
+  # Log Aggregation (Optional)
+  loki:
+    image: grafana/loki:latest
+    container_name: optimize-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - optimize-network
+    profiles:
+      - logging
+
+  # Log Collection (Optional)
+  promtail:
+    image: grafana/promtail:latest
+    container_name: optimize-promtail
+    restart: unless-stopped
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - correlation_logs:/var/log/correlation:ro
+      - alert_logs:/var/log/alerts:ro
+      - performance_logs:/var/log/performance:ro
+      - response_logs:/var/log/response:ro
+      - reporting_logs:/var/log/reporting:ro
+      - dashboard_logs:/var/log/dashboard:ro
+      - /var/log:/var/log:ro
+    depends_on:
+      - loki
+    networks:
+      - optimize-network
+    profiles:
+      - logging
+
+  # Metrics Collection (Optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: optimize-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - optimize-network
+    profiles:
+      - metrics
+
+  # Metrics Visualization (Optional)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: optimize-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_INSTALL_PLUGINS: grafana-piechart-panel,grafana-worldmap-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - optimize-network
+    profiles:
+      - metrics
+
+volumes:
+  redis_data:
+    driver: local
+  postgres_data:
+    driver: local
+  correlation_logs:
+    driver: local
+  alert_logs:
+    driver: local
+  performance_logs:
+    driver: local
+  response_logs:
+    driver: local
+  reporting_logs:
+    driver: local
+  dashboard_logs:
+    driver: local
+  nginx_logs:
+    driver: local
+  evidence_storage:
+    driver: local
+  report_storage:
+    driver: local
+  ssl_certs:
+    driver: local
+  loki_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  optimize-network:
+    driver: bridge
+    name: optimize-security-network
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

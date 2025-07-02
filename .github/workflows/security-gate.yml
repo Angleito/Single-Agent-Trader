@@ -1,0 +1,439 @@
+name: Security Gate - Docker Bench Security
+
+on:
+  push:
+    branches: [ main, develop, 'feature/*', 'hotfix/*' ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run daily security scan at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      gate_mode:
+        description: 'Security gate mode'
+        required: false
+        default: 'enforcing'
+        type: choice
+        options:
+          - enforcing
+          - permissive
+          - disabled
+      enable_remediation:
+        description: 'Enable automated remediation'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  # Security gate configuration
+  GATE_MODE: ${{ inputs.gate_mode || 'enforcing' }}
+  ENABLE_AUTO_REMEDIATION: ${{ inputs.enable_remediation || 'true' }}
+  FAIL_ON_CRITICAL: true
+  FAIL_ON_HIGH: true
+  MAX_CRITICAL_ISSUES: 0
+  MAX_HIGH_ISSUES: 2
+  MAX_MEDIUM_ISSUES: 5
+  
+  # CI/CD integration
+  CI_ENVIRONMENT: github-actions
+  BUILD_ID: ${{ github.run_id }}
+  COMMIT_SHA: ${{ github.sha }}
+  BRANCH_NAME: ${{ github.ref_name }}
+  PIPELINE_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+  
+  # Notification settings
+  SLACK_SECURITY_CHANNEL: "#security-alerts"
+
+jobs:
+  security-gate:
+    name: Docker Security Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    outputs:
+      gate-status: ${{ steps.security-gate.outputs.status }}
+      critical-issues: ${{ steps.security-gate.outputs.critical }}
+      high-issues: ${{ steps.security-gate.outputs.high }}
+      report-url: ${{ steps.security-gate.outputs.report-url }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl wget
+          python -m pip install --upgrade pip
+      
+      - name: Configure Docker daemon for security
+        run: |
+          sudo mkdir -p /etc/docker
+          sudo tee /etc/docker/daemon.json << EOF
+          {
+            "live-restore": true,
+            "userland-proxy": false,
+            "no-new-privileges": true,
+            "security-opts": ["no-new-privileges:true"]
+          }
+          EOF
+          sudo systemctl restart docker
+          
+      - name: Set up security gate environment
+        run: |
+          # Create required directories
+          mkdir -p security/docker-bench/{logs,reports,config,remediation}
+          
+          # Set proper permissions
+          chmod +x security/docker-bench/install-docker-bench.sh
+          chmod +x security/docker-bench/scripts/*.sh
+          chmod +x security/docker-bench/remediation/*.sh
+          chmod +x security/docker-bench/cicd/*.sh
+          
+          # Install Docker Bench Security
+          cd security/docker-bench
+          ./install-docker-bench.sh
+      
+      - name: Build Docker images for security scanning
+        run: |
+          # Build images that will be scanned
+          docker build -t ai-trading-bot:security-test .
+          docker build -t bluefin-sdk-service:security-test -f services/Dockerfile.bluefin services/
+          docker build -t dashboard-backend:security-test -f dashboard/backend/Dockerfile dashboard/backend/
+      
+      - name: Start containers for security analysis
+        run: |
+          # Create .env file for testing
+          cat > .env << EOF
+          # Security test configuration
+          SYSTEM__DRY_RUN=true
+          EXCHANGE__EXCHANGE_TYPE=coinbase
+          EXCHANGE__CB_SANDBOX=true
+          LOG_LEVEL=INFO
+          HOST_UID=1000
+          HOST_GID=1000
+          
+          # Mock credentials for testing
+          COINBASE_API_KEY=test-api-key
+          COINBASE_PRIVATE_KEY=test-private-key
+          LLM_OPENAI_API_KEY=test-openai-key
+          EOF
+          
+          # Start containers for analysis (detached mode)
+          docker-compose up -d --build
+          
+          # Wait for containers to be fully up
+          sleep 30
+          
+          # Verify containers are running
+          docker-compose ps
+      
+      - name: Run pre-deployment security checks
+        id: pre-checks
+        run: |
+          cd security/docker-bench/cicd
+          
+          # Run pre-deployment checks
+          if ./security-gate.sh check-config; then
+            echo "pre-checks=passed" >> $GITHUB_OUTPUT
+          else
+            echo "pre-checks=failed" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+      
+      - name: Execute Docker Bench Security scan
+        id: security-scan
+        run: |
+          cd security/docker-bench
+          
+          # Run comprehensive security scan
+          if timeout 10m ./scripts/run-security-scan.sh; then
+            echo "scan-status=completed" >> $GITHUB_OUTPUT
+            
+            # Get scan results
+            LATEST_REPORT=$(ls -t reports/security-analysis-*.json | head -1)
+            if [ -f "$LATEST_REPORT" ]; then
+              CRITICAL=$(jq -r '.summary.critical_issues // 0' "$LATEST_REPORT")
+              HIGH=$(jq -r '.summary.high_issues // 0' "$LATEST_REPORT")
+              MEDIUM=$(jq -r '.summary.medium_issues // 0' "$LATEST_REPORT")
+              LOW=$(jq -r '.summary.low_issues // 0' "$LATEST_REPORT")
+              
+              echo "critical-issues=$CRITICAL" >> $GITHUB_OUTPUT
+              echo "high-issues=$HIGH" >> $GITHUB_OUTPUT
+              echo "medium-issues=$MEDIUM" >> $GITHUB_OUTPUT
+              echo "low-issues=$LOW" >> $GITHUB_OUTPUT
+              echo "report-file=$LATEST_REPORT" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "scan-status=failed" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+      
+      - name: Run automated remediation
+        id: remediation
+        if: steps.security-scan.outputs.scan-status == 'completed' && env.ENABLE_AUTO_REMEDIATION == 'true'
+        run: |
+          cd security/docker-bench
+          
+          # Check if remediation is needed
+          CRITICAL=${{ steps.security-scan.outputs.critical-issues }}
+          HIGH=${{ steps.security-scan.outputs.high-issues }}
+          
+          if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+            echo "Running automated remediation for $CRITICAL critical and $HIGH high issues..."
+            
+            # Run remediation with timeout
+            if timeout 5m ./remediation/auto-remediate.sh "${{ steps.security-scan.outputs.report-file }}"; then
+              echo "remediation-status=completed" >> $GITHUB_OUTPUT
+              
+              # Re-run security scan to verify fixes
+              echo "Re-scanning after remediation..."
+              ./scripts/run-security-scan.sh
+              
+              # Get updated results
+              LATEST_REPORT=$(ls -t reports/security-analysis-*.json | head -1)
+              if [ -f "$LATEST_REPORT" ]; then
+                CRITICAL_AFTER=$(jq -r '.summary.critical_issues // 0' "$LATEST_REPORT")
+                HIGH_AFTER=$(jq -r '.summary.high_issues // 0' "$LATEST_REPORT")
+                
+                echo "critical-after-remediation=$CRITICAL_AFTER" >> $GITHUB_OUTPUT
+                echo "high-after-remediation=$HIGH_AFTER" >> $GITHUB_OUTPUT
+                echo "updated-report-file=$LATEST_REPORT" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "remediation-status=failed" >> $GITHUB_OUTPUT
+              echo "Automated remediation failed"
+            fi
+          else
+            echo "remediation-status=not-needed" >> $GITHUB_OUTPUT
+            echo "No critical or high issues found - remediation not needed"
+          fi
+      
+      - name: Generate compliance report
+        id: compliance-report
+        run: |
+          cd security/docker-bench
+          
+          # Generate comprehensive compliance report
+          if ./scripts/compliance-reporting.sh generate; then
+            echo "compliance-report=generated" >> $GITHUB_OUTPUT
+            
+            # Get latest compliance report
+            COMPLIANCE_REPORT=$(ls -t reports/compliance-*.json | head -1)
+            if [ -f "$COMPLIANCE_REPORT" ]; then
+              echo "compliance-report-file=$COMPLIANCE_REPORT" >> $GITHUB_OUTPUT
+              
+              # Extract compliance scores
+              CIS_SCORE=$(jq -r '.compliance_scores.cis_docker_benchmark.score // 0' "$COMPLIANCE_REPORT")
+              OVERALL_SCORE=$(jq -r '.compliance_scores.overall_security_posture.score // 0' "$COMPLIANCE_REPORT")
+              
+              echo "cis-compliance-score=$CIS_SCORE" >> $GITHUB_OUTPUT
+              echo "overall-security-score=$OVERALL_SCORE" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "compliance-report=failed" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Evaluate security gate
+        id: security-gate
+        run: |
+          cd security/docker-bench/cicd
+          
+          # Set final issue counts (after remediation if applied)
+          CRITICAL=${{ steps.remediation.outputs.critical-after-remediation || steps.security-scan.outputs.critical-issues }}
+          HIGH=${{ steps.remediation.outputs.high-after-remediation || steps.security-scan.outputs.high-issues }}
+          
+          echo "Final security assessment: Critical=$CRITICAL, High=$HIGH"
+          
+          # Export for security gate script
+          export CRITICAL_ISSUES=$CRITICAL
+          export HIGH_ISSUES=$HIGH
+          export MEDIUM_ISSUES=${{ steps.security-scan.outputs.medium-issues }}
+          export LOW_ISSUES=${{ steps.security-scan.outputs.low-issues }}
+          
+          # Run security gate evaluation
+          if ./security-gate.sh run; then
+            echo "status=PASSED" >> $GITHUB_OUTPUT
+            echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+            echo "high=$HIGH" >> $GITHUB_OUTPUT
+            echo "Security gate PASSED ✅"
+          else
+            EXIT_CODE=$?
+            echo "status=FAILED" >> $GITHUB_OUTPUT
+            echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+            echo "high=$HIGH" >> $GITHUB_OUTPUT
+            echo "Security gate FAILED ❌"
+            
+            # In enforcing mode, fail the workflow
+            if [ "$GATE_MODE" = "enforcing" ]; then
+              exit $EXIT_CODE
+            else
+              echo "Continuing due to permissive mode"
+            fi
+          fi
+      
+      - name: Upload security reports as artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: security-reports-${{ github.run_id }}
+          path: |
+            security/docker-bench/reports/
+            security/docker-bench/logs/
+          retention-days: 30
+      
+      - name: Create security summary
+        if: always()
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          # 🔒 Security Gate Results
+          
+          ## Gate Status: ${{ steps.security-gate.outputs.status || 'UNKNOWN' }}
+          
+          ### Security Issues Found
+          - **Critical**: ${{ steps.security-gate.outputs.critical || 0 }} ⚠️
+          - **High**: ${{ steps.security-gate.outputs.high || 0 }} ⚠️
+          - **Medium**: ${{ steps.security-scan.outputs.medium-issues || 0 }}
+          - **Low**: ${{ steps.security-scan.outputs.low-issues || 0 }}
+          
+          ### Compliance Scores
+          - **CIS Docker Benchmark**: ${{ steps.compliance-report.outputs.cis-compliance-score || 'N/A' }}%
+          - **Overall Security Posture**: ${{ steps.compliance-report.outputs.overall-security-score || 'N/A' }}%
+          
+          ### Remediation
+          - **Status**: ${{ steps.remediation.outputs.remediation-status || 'Not applicable' }}
+          - **Auto-remediation**: ${{ env.ENABLE_AUTO_REMEDIATION }}
+          
+          ### Configuration
+          - **Gate Mode**: ${{ env.GATE_MODE }}
+          - **Max Critical Issues**: ${{ env.MAX_CRITICAL_ISSUES }}
+          - **Max High Issues**: ${{ env.MAX_HIGH_ISSUES }}
+          
+          ### Pipeline Information
+          - **Build ID**: ${{ github.run_id }}
+          - **Branch**: ${{ github.ref_name }}
+          - **Commit**: ${{ github.sha }}
+          
+          ---
+          📊 **Reports**: Available in workflow artifacts
+          🔗 **Pipeline**: [${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          EOF
+      
+      - name: Post security status to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const status = '${{ steps.security-gate.outputs.status }}';
+            const critical = '${{ steps.security-gate.outputs.critical }}';
+            const high = '${{ steps.security-gate.outputs.high }}';
+            const gateMode = '${{ env.GATE_MODE }}';
+            
+            const statusIcon = status === 'PASSED' ? '✅' : status === 'FAILED' ? '❌' : '⚠️';
+            
+            const body = `## ${statusIcon} Security Gate Report
+            
+            **Status**: ${status}
+            **Mode**: ${gateMode}
+            
+            ### Issues Found
+            - Critical: ${critical}
+            - High: ${high}
+            
+            ### Assessment
+            ${status === 'PASSED' ? 
+              '🟢 All security checks passed. Deployment approved.' : 
+              status === 'FAILED' ?
+                '🔴 Security issues found. Review and remediate before merging.' :
+                '🟡 Security gate completed with warnings.'
+            }
+            
+            **Build**: [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+      
+      - name: Clean up test environment
+        if: always()
+        run: |
+          # Stop and remove containers
+          docker-compose down -v || true
+          
+          # Clean up test images
+          docker rmi ai-trading-bot:security-test || true
+          docker rmi bluefin-sdk-service:security-test || true
+          docker rmi dashboard-backend:security-test || true
+          
+          # Clean up volumes
+          docker volume prune -f || true
+
+  notify-security-team:
+    name: Notify Security Team
+    runs-on: ubuntu-latest
+    needs: security-gate
+    if: always() && (needs.security-gate.outputs.gate-status == 'FAILED' || needs.security-gate.outputs.critical-issues > '0')
+    
+    steps:
+      - name: Send security alert
+        if: env.SLACK_WEBHOOK_URL
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{
+              "channel": "#security-alerts",
+              "username": "Security Gate Bot",
+              "icon_emoji": ":rotating_light:",
+              "attachments": [
+                {
+                  "color": "danger",
+                  "title": "🚨 Critical Security Issues Detected",
+                  "text": "AI Trading Bot security gate detected critical issues requiring immediate attention.",
+                  "fields": [
+                    {
+                      "title": "Critical Issues",
+                      "value": "${{ needs.security-gate.outputs.critical-issues }}",
+                      "short": true
+                    },
+                    {
+                      "title": "High Issues", 
+                      "value": "${{ needs.security-gate.outputs.high-issues }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Branch",
+                      "value": "${{ github.ref_name }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Gate Status",
+                      "value": "${{ needs.security-gate.outputs.gate-status }}",
+                      "short": true
+                    }
+                  ],
+                  "actions": [
+                    {
+                      "type": "button",
+                      "text": "View Pipeline",
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }' \
+            $SLACK_WEBHOOK_URL

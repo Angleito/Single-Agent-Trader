@@ -1,0 +1,339 @@
+# AI Trading Bot - Secure Docker Network Configuration
+# This file extends the main docker-compose.yml with enhanced network security
+
+version: '3.8'
+
+# Enhanced network definitions with security constraints
+networks:
+  # Primary trading network with security hardening
+  trading-network:
+    name: trading-network-secure
+    driver: bridge
+    driver_opts:
+      # Disable inter-container communication by default
+      com.docker.network.enable_icc: "false"
+      # Enable IP masquerading for outbound traffic
+      com.docker.network.enable_ip_masquerade: "true"
+      # Disable IP forwarding for security
+      com.docker.network.bridge.enable_ip_forward: "false"
+      # Custom bridge name for identification
+      com.docker.network.bridge.name: "trading-br0"
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
+          ip_range: 172.20.1.0/24
+    labels:
+      - "security.isolation=high"
+      - "purpose=trading-bot"
+      - "monitoring=enabled"
+
+  # Isolated network for emergency situations
+  isolated-network:
+    name: trading-isolated
+    driver: bridge
+    internal: true  # No external internet access
+    driver_opts:
+      com.docker.network.enable_icc: "true"  # Allow inter-container communication in isolation
+      com.docker.network.bridge.name: "isolated-br0"
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.21.0.0/16
+          gateway: 172.21.0.1
+    labels:
+      - "security.isolation=maximum"
+      - "purpose=emergency"
+
+  # Management network for monitoring and debugging
+  management-network:
+    name: trading-mgmt
+    driver: bridge
+    driver_opts:
+      com.docker.network.enable_icc: "false"
+      com.docker.network.bridge.name: "mgmt-br0"
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.22.0.0/16
+          gateway: 172.22.0.1
+          ip_range: 172.22.1.0/24
+    labels:
+      - "security.isolation=medium"
+      - "purpose=management"
+
+services:
+  # Network security monitoring container
+  network-security-monitor:
+    image: alpine:latest
+    container_name: network-security-monitor
+    restart: unless-stopped
+    command: |
+      sh -c '
+        apk add --no-cache curl netcat-openbsd tcpdump iptables
+        while true; do
+          echo "$$(date): Monitoring network security..."
+          # Check container connectivity
+          for container in ai-trading-bot bluefin-service dashboard-backend; do
+            if nc -z $$container 8080 2>/dev/null; then
+              echo "$$(date): $$container:8080 accessible"
+            fi
+          done
+          sleep 60
+        done
+      '
+    networks:
+      management-network:
+        ipv4_address: 172.22.1.10
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW  # For tcpdump
+      - NET_ADMIN  # For network monitoring
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=50m
+    labels:
+      - "security.monitoring=enabled"
+      - "security.role=monitor"
+
+  # Network policy enforcer
+  network-policy-enforcer:
+    image: alpine:latest
+    container_name: network-policy-enforcer
+    restart: unless-stopped
+    privileged: true  # Required for iptables manipulation
+    network_mode: host
+    command: |
+      sh -c '
+        apk add --no-cache iptables
+        
+        # Apply network policies
+        while true; do
+          # Ensure Docker chains exist
+          iptables -t filter -N DOCKER-TRADING 2>/dev/null || true
+          
+          # Apply rate limiting rules
+          iptables -C DOCKER-TRADING -p tcp --dport 3000 -m limit --limit 25/min --limit-burst 100 -j ACCEPT 2>/dev/null || \
+            iptables -A DOCKER-TRADING -p tcp --dport 3000 -m limit --limit 25/min --limit-burst 100 -j ACCEPT
+          
+          iptables -C DOCKER-TRADING -p tcp --dport 8000 -m limit --limit 50/min --limit-burst 200 -j ACCEPT 2>/dev/null || \
+            iptables -A DOCKER-TRADING -p tcp --dport 8000 -m limit --limit 50/min --limit-burst 200 -j ACCEPT
+          
+          # Log policy enforcements
+          echo "$$(date): Network policies enforced"
+          sleep 300  # Check every 5 minutes
+        done
+      '
+    volumes:
+      - /var/log/trading-bot:/var/log/trading-bot
+    labels:
+      - "security.role=enforcer"
+      - "security.privileged=true"
+
+# Enhanced service configurations with network security
+x-common-security: &common-security
+  security_opt:
+    - no-new-privileges:true
+    - seccomp:unconfined
+    - apparmor:unconfined
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE
+  read_only: true
+
+# Service overrides for enhanced network security
+services:
+  ai-trading-bot:
+    <<: *common-security
+    networks:
+      trading-network:
+        ipv4_address: 172.20.1.10
+        aliases:
+          - trading-bot-secure
+    extra_hosts:
+      - "coinbase-api.internal:172.20.1.50"
+      - "bluefin-api.internal:172.20.1.20"
+    sysctls:
+      - net.ipv4.ip_forward=0
+      - net.ipv4.conf.all.send_redirects=0
+      - net.ipv4.conf.all.accept_redirects=0
+    labels:
+      - "security.network.isolation=high"
+      - "security.network.profile=trading-primary"
+      - "security.monitoring=enabled"
+
+  bluefin-service:
+    <<: *common-security
+    networks:
+      trading-network:
+        ipv4_address: 172.20.1.20
+        aliases:
+          - bluefin-secure
+    labels:
+      - "security.network.isolation=high"
+      - "security.network.profile=exchange-service"
+      - "security.monitoring=enabled"
+
+  dashboard-backend:
+    <<: *common-security
+    networks:
+      trading-network:
+        ipv4_address: 172.20.1.40
+        aliases:
+          - dashboard-api-secure
+    labels:
+      - "security.network.isolation=medium"
+      - "security.network.profile=dashboard-api"
+      - "security.monitoring=enabled"
+      - "security.external.access=true"
+
+  dashboard-frontend:
+    <<: *common-security
+    networks:
+      trading-network:
+        ipv4_address: 172.20.1.41
+        aliases:
+          - dashboard-ui-secure
+    labels:
+      - "security.network.isolation=medium"
+      - "security.network.profile=dashboard-ui"
+      - "security.monitoring=enabled"
+      - "security.external.access=true"
+
+  mcp-memory:
+    <<: *common-security
+    networks:
+      trading-network:
+        ipv4_address: 172.20.1.30
+        aliases:
+          - mcp-memory-secure
+    labels:
+      - "security.network.isolation=high"
+      - "security.network.profile=mcp-service"
+      - "security.monitoring=enabled"
+
+  mcp-omnisearch:
+    <<: *common-security
+    networks:
+      trading-network:
+        ipv4_address: 172.20.1.31
+        aliases:
+          - mcp-omnisearch-secure
+    labels:
+      - "security.network.isolation=high"
+      - "security.network.profile=mcp-service"
+      - "security.monitoring=enabled"
+
+# Additional security containers
+services:
+  # Traffic analyzer for security monitoring
+  traffic-analyzer:
+    image: alpine:latest
+    container_name: traffic-analyzer
+    restart: unless-stopped
+    command: |
+      sh -c '
+        apk add --no-cache tcpdump tshark
+        mkdir -p /var/log/traffic
+        while true; do
+          echo "$$(date): Starting traffic capture..."
+          timeout 300 tcpdump -i any -w /var/log/traffic/capture-$$(date +%s).pcap \
+            "not host 127.0.0.1 and not net 172.20.0.0/16" || true
+          # Keep only last 10 captures
+          ls -t /var/log/traffic/capture-*.pcap | tail -n +11 | xargs rm -f
+          sleep 60
+        done
+      '
+    networks:
+      management-network:
+        ipv4_address: 172.22.1.20
+    volumes:
+      - ./logs/traffic:/var/log/traffic
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+    labels:
+      - "security.role=analyzer"
+      - "security.monitoring=enabled"
+
+  # Connection limiter
+  connection-limiter:
+    image: alpine:latest
+    container_name: connection-limiter
+    restart: unless-stopped
+    network_mode: host
+    privileged: true
+    command: |
+      sh -c '
+        apk add --no-cache iptables
+        while true; do
+          # Limit connections per IP
+          iptables -A INPUT -p tcp --dport 3000 -m connlimit --connlimit-above 10 --connlimit-mask 32 -j REJECT 2>/dev/null || true
+          iptables -A INPUT -p tcp --dport 8000 -m connlimit --connlimit-above 20 --connlimit-mask 32 -j REJECT 2>/dev/null || true
+          iptables -A INPUT -p tcp --dport 8080 -m connlimit --connlimit-above 15 --connlimit-mask 32 -j REJECT 2>/dev/null || true
+          
+          echo "$$(date): Connection limits enforced"
+          sleep 600  # Check every 10 minutes
+        done
+      '
+    labels:
+      - "security.role=limiter"
+      - "security.privileged=true"
+
+# Healthcheck services for network security validation
+services:
+  security-healthcheck:
+    image: alpine:latest
+    container_name: security-healthcheck
+    restart: unless-stopped
+    command: |
+      sh -c '
+        apk add --no-cache curl netcat-openbsd
+        while true; do
+          echo "$$(date): Running security health checks..."
+          
+          # Test internal connectivity
+          if nc -z ai-trading-bot 8080 2>/dev/null; then
+            echo "✓ Trading bot internal connectivity OK"
+          else
+            echo "✗ Trading bot internal connectivity FAILED"
+          fi
+          
+          # Test external access restrictions
+          if ! nc -z 8.8.8.8 80 2>/dev/null; then
+            echo "✓ External access restriction OK"
+          else
+            echo "✗ External access restriction BYPASSED"
+          fi
+          
+          # Test network isolation
+          if ! nc -z 172.21.1.1 80 2>/dev/null; then
+            echo "✓ Network isolation OK"
+          else
+            echo "✗ Network isolation COMPROMISED"
+          fi
+          
+          sleep 120
+        done
+      '
+    networks:
+      management-network:
+        ipv4_address: 172.22.1.30
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=25m
+    labels:
+      - "security.role=healthcheck"
+      - "security.monitoring=enabled"
